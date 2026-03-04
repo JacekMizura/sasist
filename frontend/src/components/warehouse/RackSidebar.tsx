@@ -1,0 +1,512 @@
+import { useState } from "react";
+import type { LayoutState, CustomRackTemplate, CatalogItem, VisualElementType } from "../../types/warehouse";
+import { formatVolume, getLevelConfig, getTotalLocations, getRackDisplayId } from "./warehouseUtils";
+
+function sameCatalogItem(a: CatalogItem | null, b: CatalogItem): boolean {
+  if (!a) return false;
+  if (a.type !== b.type) return false;
+  if (a.type === "custom" && b.type === "custom") return a.template.id === b.template.id;
+  if (a.type === "preset" && b.type === "preset") return a.id === b.id;
+  return false;
+}
+import { TemplateCreator, RackPreview } from "./TemplateCreator";
+import { UI_STRINGS } from "../../constants/uiStrings";
+
+const DEFAULT_ADDRESS_PATTERN = "{Row}{Section}-{Bin}-{Level}";
+
+export type RackSidebarProps = {
+  layout: LayoutState;
+  selectedRackId: number | string | null;
+  selectedRackIds: Array<number | string>;
+  setSelectedRackId: (id: number | string | null) => void;
+  setSelectedRackIds: React.Dispatch<React.SetStateAction<Array<number | string>>>;
+  setDraggingFromCatalog: (item: CatalogItem | null) => void;
+  setCatalogGhostPosition: (pos: { x: number; y: number } | null) => void;
+  customTemplates: CustomRackTemplate[];
+  setCustomTemplates: (t: CustomRackTemplate[] | ((prev: CustomRackTemplate[]) => CustomRackTemplate[])) => void;
+  editingTemplateId: string | null;
+  setEditingTemplateId: React.Dispatch<React.SetStateAction<string | null>>;
+  onSaveEditTemplate: (templateId: string, template: CustomRackTemplate, updateExistingRacks: boolean) => void;
+  onSaveNewTemplate?: (payload: CustomRackTemplate) => Promise<CustomRackTemplate | null>;
+  /** Called when user confirms delete of a template. Parent should remove from state and optionally call API. */
+  onDeleteTemplate?: (template: CustomRackTemplate) => void | Promise<void>;
+  setLayout: React.Dispatch<React.SetStateAction<LayoutState>>;
+  rowToolActive: boolean;
+  rowToolTemplate: CatalogItem | null;
+  setRowToolTemplate: (item: CatalogItem | null) => void;
+  rowGapCm: number;
+  setRowGapCm: (v: number) => void;
+  draggingVisualType: VisualElementType | null;
+  setDraggingVisualType: (t: VisualElementType | null) => void;
+  setVisualGhostPosition: (p: { x: number; y: number } | null) => void;
+  saveLayout: () => void;
+  saving: boolean;
+  selectedWarehouseId: number | null;
+  totalUsed: number;
+  totalCapacity: number;
+  onExportPdf?: () => void | Promise<void>;
+  onExportCsv?: () => void;
+  onExportJson?: () => void;
+  /** Export every slot: locationUUID, name, capacity_dm3 (map of locations CSV) */
+  onExportLocationsMapCsv?: () => void;
+  currentRowPrefix: string;
+  setCurrentRowPrefix: (v: string) => void;
+  /** Re-index the row: by selected rack (geometric row) when rackId is set, else by prefix. */
+  onReindexRow?: (rackId: number | string | null, prefix: string) => void;
+  /** When true (e.g. Magazyn tab), show only catalog; hide Visual elements and layout-focused actions. */
+  showOnlyCatalog?: boolean;
+};
+
+export function RackSidebar({
+  layout,
+  selectedRackId,
+  selectedRackIds,
+  setSelectedRackId,
+  setSelectedRackIds,
+  setDraggingFromCatalog,
+  setCatalogGhostPosition,
+  customTemplates,
+  setCustomTemplates,
+  editingTemplateId,
+  setEditingTemplateId,
+  onSaveEditTemplate,
+  onSaveNewTemplate,
+  onDeleteTemplate,
+  setLayout: _setLayout,
+  rowToolActive,
+  rowToolTemplate,
+  setRowToolTemplate,
+  rowGapCm,
+  setRowGapCm,
+  draggingVisualType: _draggingVisualType,
+  setDraggingVisualType,
+  setVisualGhostPosition,
+  saveLayout,
+  saving,
+  selectedWarehouseId,
+  totalUsed,
+  totalCapacity,
+  onExportPdf,
+  onExportCsv,
+  onExportJson,
+  onExportLocationsMapCsv,
+  currentRowPrefix,
+  setCurrentRowPrefix,
+  onReindexRow,
+  showOnlyCatalog = false,
+}: RackSidebarProps) {
+  const [activeTab, setActiveTab] = useState<"catalog" | "visuals">("catalog");
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [catalogCollapsed, setCatalogCollapsed] = useState(false);
+  const [rackListCollapsed, setRackListCollapsed] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
+  const editingTemplate = editingTemplateId ? customTemplates.find((t) => t.id === editingTemplateId) ?? null : null;
+  const showTemplateCreator = showTemplateModal || editingTemplateId != null;
+  const VISUAL_ITEMS: { type: VisualElementType; label: string; size: string }[] = [
+    { type: "column", label: UI_STRINGS.warehouse.visuals.column, size: "2×2" },
+    { type: "mezzanine", label: UI_STRINGS.warehouse.visuals.mezzanine, size: "20×15" },
+    { type: "packing_station", label: UI_STRINGS.warehouse.visuals.packingStation, size: "6×4" },
+    { type: "cart", label: UI_STRINGS.warehouse.visuals.cart, size: "3×3" },
+    { type: "wall", label: UI_STRINGS.warehouse.visuals.wall, size: "10×1" },
+    { type: "door", label: UI_STRINGS.warehouse.visuals.door, size: "2×3" },
+    { type: "zone", label: UI_STRINGS.warehouse.visuals.zone, size: "8×6" },
+  ];
+  const sectionTitleClass = "text-[12px] font-semibold text-[#374151] mb-2";
+  return (
+    <aside
+      className={`${showOnlyCatalog ? "w-[250px]" : "w-56"} shrink-0 flex flex-col overflow-y-auto`}
+      style={{ background: "#ffffff", borderRight: "1px solid #e5e7eb", padding: "16px" }}
+    >
+      {!showOnlyCatalog && (
+      <div className="flex rounded-lg bg-[#f3f4f6] p-0.5 mb-4">
+        <button type="button" onClick={() => setActiveTab("catalog")} className={`flex-1 py-1 text-[10px] font-medium rounded-md transition-colors ${activeTab === "catalog" ? "bg-white text-[#1d4ed8] shadow-sm" : "text-[#374151] hover:bg-[#e5e7eb]"}`}>{UI_STRINGS.warehouse.rackSidebar.catalog}</button>
+        <button type="button" onClick={() => setActiveTab("visuals")} className={`flex-1 py-1 text-[10px] font-medium rounded-md transition-colors ${activeTab === "visuals" ? "bg-white text-[#1d4ed8] shadow-sm" : "text-[#374151] hover:bg-[#e5e7eb]"}`}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</button>
+      </div>
+      )}
+      {(showOnlyCatalog || activeTab === "catalog") && (
+        <>
+      <div className="rounded-lg p-3 overflow-hidden mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: "8px" }}>
+          <button
+            type="button"
+            onClick={() => setCatalogCollapsed(!catalogCollapsed)}
+            className={sectionTitleClass + " hover:text-slate-800 text-left"}
+          >
+            {UI_STRINGS.warehouse.rackSidebar.catalog} {catalogCollapsed ? "▶" : "▼"}
+          </button>
+          {!showOnlyCatalog && (
+            <button
+              type="button"
+              onClick={() => setShowTemplateModal(true)}
+              className="px-2 py-1 rounded-lg bg-cyan-600 text-white text-[10px] font-semibold hover:bg-cyan-500"
+            >
+              {UI_STRINGS.warehouse.rackSidebar.newTemplate}
+            </button>
+          )}
+        </div>
+        {!catalogCollapsed && (
+          <>
+      {!showOnlyCatalog && (
+      <div className="mb-2 flex flex-col gap-1">
+        <label className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.currentRow}</label>
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={currentRowPrefix}
+            onChange={(e) => setCurrentRowPrefix(e.target.value)}
+            placeholder="A"
+            className="w-12 px-2 py-1 text-xs border border-slate-200 rounded-lg"
+            maxLength={4}
+          />
+          {onReindexRow != null && (
+            <button
+              type="button"
+              onClick={() => onReindexRow(selectedRackId ?? null, (currentRowPrefix || "A").trim() || "A")}
+              className="px-2 py-1 text-[10px] font-medium rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200"
+            >
+              Re-index
+            </button>
+          )}
+        </div>
+      </div>
+      )}
+      {!showOnlyCatalog && rowToolActive && (
+        <div className="mb-2 flex items-center gap-2">
+          <label className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.gapCm}</label>
+          <input
+            type="number"
+            min={0}
+            step={5}
+            value={rowGapCm}
+            onChange={(e) => setRowGapCm(Number(e.target.value) || 0)}
+            className="w-14 rounded-lg border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-1 py-0.5 text-xs input-focus"
+          />
+        </div>
+      )}
+      {!showOnlyCatalog && (
+      <p className="text-[10px] text-slate-500 mb-2">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
+      )}
+      {!showOnlyCatalog && rowToolTemplate && (
+        <p className="text-[10px] text-emerald-700 mb-1 font-medium">Kliknij w pusty slot na planie, aby wypełnić szablonem</p>
+      )}
+      {!showOnlyCatalog && rowToolActive && !rowToolTemplate && (
+        <p className="text-[10px] text-amber-700 mb-1">{UI_STRINGS.warehouse.rackSidebar.rowToolHint}</p>
+      )}
+      <div className="space-y-2 mb-4">
+        {customTemplates.length === 0 && (
+          <p className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.noTemplatesHint}</p>
+        )}
+        {customTemplates.map((t) => {
+          const item: CatalogItem = { type: "custom", template: t };
+          const isRowSelected = !showOnlyCatalog && sameCatalogItem(rowToolTemplate, item);
+          return (
+            <div
+              key={t.id}
+              draggable={!showOnlyCatalog}
+              onDragStart={!showOnlyCatalog ? (e) => {
+                if ((e.target as HTMLElement).closest("[data-no-row-select]")) {
+                  e.preventDefault();
+                  return;
+                }
+                setDraggingFromCatalog(item);
+                e.dataTransfer.setData("application/x-warehouse-catalog", JSON.stringify(item));
+                e.dataTransfer.effectAllowed = "copy";
+              } : undefined}
+              onDragEnd={!showOnlyCatalog ? () => {
+                setDraggingFromCatalog(null);
+                setCatalogGhostPosition(null);
+              } : undefined}
+              onClick={!showOnlyCatalog ? (e) => {
+                if ((e.target as HTMLElement).closest("[data-no-row-select]")) return;
+                if (sameCatalogItem(rowToolTemplate, item)) {
+                  setRowToolTemplate(null);
+                  return;
+                }
+                setRowToolTemplate(item);
+              } : () => setPreviewTemplateId(t.id)}
+              className={`rounded-lg border p-3 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:opacity-90 ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
+              style={showOnlyCatalog ? { borderColor: "#e5e7eb", backgroundColor: "#f9fafb" } : { borderColor: isRowSelected ? "#3b82f6" : "#e5e7eb", backgroundColor: isRowSelected ? "#eff6ff" : "#f9fafb", boxShadow: "none" }}
+            >
+              <div className={`flex items-center gap-2 ${showOnlyCatalog ? "" : "justify-between gap-1"}`}>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                  <span className="font-semibold text-[#1E293B] text-sm truncate">{t.name}</span>
+                  <span className="shrink-0 rounded-md bg-cyan-100 text-cyan-800 text-[10px] font-bold px-1.5 py-0.5" title={showOnlyCatalog ? undefined : `Liczba regałów tego typu na mapie: ${layout.racks.filter((r) => r.templateId === t.id).length}`}>
+                    ({layout.racks.filter((r) => r.templateId === t.id).length})
+                  </span>
+                </div>
+                {!showOnlyCatalog && (
+                <div className="flex items-center gap-0.5 shrink-0" data-no-row-select>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setEditingTemplateId(t.id); }}
+                    className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700"
+                    title="Edytuj"
+                    aria-label="Edytuj"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (!window.confirm(UI_STRINGS.warehouse.rackSidebar.deleteTemplateConfirm)) return;
+                      if (onDeleteTemplate) {
+                        onDeleteTemplate(t);
+                      } else {
+                        setCustomTemplates((prev) => prev.filter((x) => x.id !== t.id));
+                        setEditingTemplateId((id: string | null) => (id === t.id ? null : id));
+                      }
+                    }}
+                    className="p-1 rounded hover:bg-red-100 text-slate-500 hover:text-red-600"
+                    title="Usuń"
+                    aria-label="Usuń"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                </div>
+                )}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5">
+                {t.width_cm}×{t.depth_cm} cm, {(() => {
+                  const lc = getLevelConfig(t);
+                  const total = getTotalLocations(lc);
+                  const uniform = lc.length === 0 || lc.every((r) => r.locations === lc[0].locations);
+                  return uniform
+                    ? `${lc.length || t.levels} poziomy, ${lc[0]?.locations ?? (t.bins_per_level && t.bins_per_level > 0 ? t.bins_per_level : 1)} ${UI_STRINGS.warehouse.rackSidebar.locationsPerLevelShort}`
+                    : `${lc.length} poziomy, Suma: ${total} lok.`;
+                })()}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      </>
+        )}
+      </div>
+        </>
+      )}
+      {!showOnlyCatalog && activeTab === "visuals" && (
+        <div className="space-y-2 rounded-lg p-3 mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
+          <h2 className={sectionTitleClass}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</h2>
+          <p className="text-[10px] text-slate-500 mb-2">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
+          {VISUAL_ITEMS.map(({ type, label, size }) => (
+            <div
+              key={type}
+              draggable
+              onDragStart={() => setDraggingVisualType(type)}
+              onDragEnd={() => { setDraggingVisualType(null); setVisualGhostPosition(null); }}
+              className="cursor-grab active:cursor-grabbing rounded-lg border border-amber-300 bg-amber-50/80 p-2 hover:bg-amber-100/80"
+            >
+              <div className="font-semibold text-[#1E293B] text-sm">{label}</div>
+              <div className="text-[10px] text-slate-500">{size} kom.</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {!showOnlyCatalog && (
+      <div className="rounded-lg p-3 flex flex-col min-h-0" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
+        <button
+          type="button"
+          onClick={() => setRackListCollapsed(!rackListCollapsed)}
+          className={"w-full flex items-center justify-between text-left rounded py-1 -mx-1 px-1 hover:bg-white/60 " + sectionTitleClass}
+        >
+          <span>{UI_STRINGS.warehouse.rackSidebar.rackList}</span>
+          <span className="text-slate-400">{rackListCollapsed ? "▶" : "▼"}</span>
+        </button>
+        {!rackListCollapsed && (
+          <>
+      {onExportLocationsMapCsv && (
+        <button
+          type="button"
+          onClick={onExportLocationsMapCsv}
+          className="w-full mt-2 px-3 py-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-200 flex items-center justify-center gap-2"
+        >
+          <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          Pobierz Mapę Lokalizacji (CSV)
+        </button>
+      )}
+      {(onExportPdf || onExportCsv || onExportJson) && (
+        <div className="relative mt-2">
+          <button
+            type="button"
+            onClick={() => setExportOpen(!exportOpen)}
+            className="w-full px-3 py-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-200 flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            {UI_STRINGS.warehouse.export.button} ▾
+          </button>
+          {exportOpen && (
+            <>
+              <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-100 bg-white shadow-lg py-1 overflow-hidden">
+                {onExportPdf && (
+                  <button type="button" onClick={() => { onExportPdf(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    {UI_STRINGS.warehouse.export.pdf}
+                  </button>
+                )}
+                {onExportCsv && (
+                  <button type="button" onClick={() => { onExportCsv(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    {UI_STRINGS.warehouse.export.csv}
+                  </button>
+                )}
+                {onExportJson && (
+                  <button type="button" onClick={() => { onExportJson(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                    {UI_STRINGS.warehouse.export.json}
+                  </button>
+                )}
+              </div>
+              <div className="fixed inset-0 z-0" onClick={() => setExportOpen(false)} aria-hidden="true" />
+            </>
+          )}
+        </div>
+      )}
+      <div className="flex-1 overflow-y-auto space-y-1 min-h-0 max-h-40 mt-2">
+        {layout.racks.length === 0 ? (
+          <p className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.noRacks}</p>
+        ) : (
+          layout.racks.map((r) => {
+            const rid = r.id ?? r.rack_index;
+            const cap = r.total_capacity_dm3 ?? r.bins.reduce((s, b) => s + b.volume_dm3, 0);
+            const used = r.used_dm3 ?? r.bins.reduce((s, b) => s + (b.current_load_dm3 ?? 0), 0);
+            const pct = cap > 0 ? (used / cap) * 100 : 0;
+            const isSel = selectedRackIds.includes(rid);
+            return (
+              <button
+                key={rid}
+                type="button"
+                onClick={(e) => {
+                  if (e.ctrlKey || e.metaKey) {
+                    setSelectedRackIds((prev: (string | number)[]) => (isSel ? prev.filter((id: string | number) => id !== rid) : [...prev, rid]));
+                  } else {
+                    setSelectedRackId(rid);
+                    setSelectedRackIds([rid]);
+                  }
+                }}
+                className={`w-full text-left px-3 py-2 rounded-lg text-[11px] border transition-colors ${
+                  isSel ? "border-cyan-500 bg-cyan-50 text-[#1E293B]" : "border-[#E2E8F0] bg-slate-50 text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {getRackDisplayId(r)} · {formatVolume(pct)}%
+              </button>
+            );
+          })
+        )}
+      </div>
+      <div className="border-t border-slate-100 pt-2 mt-2 space-y-2">
+        <p className="text-[10px] text-slate-600 leading-relaxed">
+          {formatVolume(totalUsed)} / {formatVolume(totalCapacity)} {UI_STRINGS.warehouse.rackSidebar.dm3}
+        </p>
+        <button
+          type="button"
+          onClick={saveLayout}
+          disabled={saving || selectedWarehouseId == null}
+          className="w-full px-3 py-2 rounded-lg bg-cyan-600 text-white text-xs font-semibold hover:bg-cyan-500 disabled:opacity-50 transition-colors"
+        >
+          {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
+        </button>
+      </div>
+      </>
+        )}
+      </div>
+      )}
+
+      {showOnlyCatalog && previewTemplateId != null && (() => {
+        const template = customTemplates.find((t) => t.id === previewTemplateId) ?? null;
+        if (!template) return null;
+        const lc = getLevelConfig(template);
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-auto"
+            onClick={() => setPreviewTemplateId(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rack-preview-title"
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 w-[95vw] max-w-[900px] max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+                <h2 id="rack-preview-title" className="text-base font-bold text-slate-800">
+                  Podgląd szablonu — {template.name}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setPreviewTemplateId(null)}
+                  className="p-2 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
+                  aria-label="Zamknij"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-hidden p-4">
+                <RackPreview
+                  width_cm={template.width_cm}
+                  depth_cm={template.depth_cm}
+                  height_cm={template.height_cm}
+                  levels={template.levels}
+                  bins_per_level={template.bins_per_level}
+                  levelConfig={lc}
+                  addressPattern={(template.addressPattern ?? DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN}
+                  rowId={(template.rowId ?? template.aisle_letter ?? "A").trim() || "A"}
+                  sectionStartIndex={template.sectionStartIndex ?? 1}
+                  binNamingType={template.binNamingType ?? "numeric"}
+                  reserveBinKeys={new Set(template.reserve_bin_keys ?? [])}
+                  color={template.color}
+                  title="Podgląd regału — na żywo"
+                  className="h-full min-h-[400px]"
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {showTemplateCreator && !showOnlyCatalog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-hidden" onClick={() => { setShowTemplateModal(false); setEditingTemplateId(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-100 w-[95vw] max-w-[1600px] h-[92vh] max-h-[92vh]" onClick={(e) => e.stopPropagation()}>
+            <TemplateCreator
+              onSave={async (t) => {
+                if (onSaveNewTemplate) {
+                  const saved = await onSaveNewTemplate(t);
+                  if (saved != null) {
+                    setCustomTemplates((prev) => [...prev, saved]);
+                    setShowTemplateModal(false);
+                    setEditingTemplateId(null);
+                    setRowToolTemplate({ type: "custom", template: saved });
+                  } else {
+                    return false;
+                  }
+                } else {
+                  setCustomTemplates((prev) => [...prev, t]);
+                  setShowTemplateModal(false);
+                  setEditingTemplateId(null);
+                  setRowToolTemplate({ type: "custom", template: t });
+                }
+              }}
+              initialTemplate={editingTemplate}
+              onCancelEdit={() => { setShowTemplateModal(false); setEditingTemplateId(null); }}
+              onSaveEdit={editingTemplateId && onSaveNewTemplate ? async (templateId, template, updateExistingRacks) => {
+                const saved = await onSaveNewTemplate(template);
+                if (saved == null) throw new Error("Nie udało się zapisać szablonu.");
+                setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? saved : t)));
+                onSaveEditTemplate(templateId, template, updateExistingRacks);
+                // Modal is closed by TemplateCreator via onCancelEdit after success message
+              } : editingTemplateId ? (templateId, template, updateExistingRacks) => {
+                setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? template : t)));
+                onSaveEditTemplate(templateId, template, updateExistingRacks);
+                setShowTemplateModal(false);
+                setEditingTemplateId(null);
+              } : undefined}
+            />
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}
