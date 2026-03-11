@@ -6,7 +6,6 @@ import { GRID_UNIT_CM } from "../types/warehouse";
 import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexRowByPrefix, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks } from "../components/warehouse/warehouseUtils";
 import { RackSidebar } from "../components/warehouse/RackSidebar";
 import { RackSideViewGrid } from "../components/warehouse/RackSideViewGrid";
-import type { EditProductModalProps } from "../components/warehouse/EditProductModal";
 import { WarehouseModals } from "../components/warehouse/WarehouseModals";
 import { WarehouseFullMap } from "../components/warehouse/WarehouseFullMap";
 import { WarehouseLegend } from "../components/warehouse/WarehouseLegend";
@@ -48,6 +47,9 @@ import { useDesignerRackPlacement } from "./WarehouseDesigner/useDesignerRackPla
 import { useDesignerPath } from "./WarehouseDesigner/useDesignerPath";
 import { useDesignerCanvas } from "./WarehouseDesigner/useDesignerCanvas";
 import { useDesignerDimensions } from "./WarehouseDesigner/useDesignerDimensions";
+import { useDesignerProductModal } from "./WarehouseDesigner/useDesignerProductModal";
+import { useDesignerMagazynState } from "./WarehouseDesigner/useDesignerMagazynState";
+import { useDesignerTemplateSummary } from "./WarehouseDesigner/useDesignerTemplateSummary";
 
 export default function WarehouseDesigner() {
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -265,92 +267,20 @@ export default function WarehouseDesigner() {
     setSelectedObjectId(selectedObjectIdDerived);
   }, [selectedObjectIdDerived]);
 
-  /** Selected rack for Magazyn view (for product/location and display rack). */
-  const selectedRackForMagazyn = useMemo(
-    () => (selectedRackIdForSideView != null ? layout.racks.find((r) => String(r.id ?? r.rack_index) === String(selectedRackIdForSideView)) ?? null : null),
-    [layout.racks, selectedRackIdForSideView]
-  );
-  /** Set of location_id / label values for bins in the selected rack (for filtering products to this rack only). */
-  const selectedRackBinLabels = useMemo(() => {
-    if (!selectedRackForMagazyn) return new Set<string>();
-    return new Set(
-      selectedRackForMagazyn.bins
-        .map((b) => (b.label ?? b.location_id ?? "").trim())
-        .filter(Boolean)
-    );
-  }, [selectedRackForMagazyn]);
-  /** Set of locationUUIDs for bins in the selected rack (for filtering by assignedLocations). */
-  const selectedRackBinUUIDs = useMemo(() => {
-    if (!selectedRackForMagazyn) return new Set<string>();
-    return new Set(
-      selectedRackForMagazyn.bins
-        .map((b) => b.locationUUID)
-        .filter((u): u is string => Boolean(u))
-    );
-  }, [selectedRackForMagazyn]);
-  /** Helper: used volume (dm³) at a bin from products (location_id or assignedLocations by locationUUID). Uses safe parsing for decimals. */
-  const usedVolumeAtBin = useCallback(
-    (bin: BinState) => {
-      const locId = (bin.label ?? bin.location_id ?? "").trim();
-      const uuid = bin.locationUUID;
-      let used = 0;
-      for (const p of products) {
-        const vol = safeVolumeDm3(p.volume_dm3);
-        if (uuid && p.assignedLocations?.length) {
-          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
-          if (a) used += safeQuantity(a.quantity) * vol;
-        } else if (locId && p.location_id === locId) {
-          used += safeQuantity(p.quantity) * vol;
-        }
-      }
-      return used;
-    },
-    [products]
-  );
-  /** Rack with bins' used_volume_dm3 derived from products (for occupancy bar). */
-  const displayRack = useMemo(() => {
-    if (!selectedRackForMagazyn) return null;
-    const bins = selectedRackForMagazyn.bins.map((b) => {
-      const used = usedVolumeAtBin(b);
-      return { ...b, used_volume_dm3: used, current_load_dm3: used };
-    });
-    return { ...selectedRackForMagazyn, bins };
-  }, [selectedRackForMagazyn, products, usedVolumeAtBin]);
-  /** Per-bin total quantity (szt.) and unique product count for grid display. */
-  const binItemCounts = useMemo(() => {
-    if (!selectedRackForMagazyn) return {};
-    const out: Record<string, number> = {};
-    for (const b of selectedRackForMagazyn.bins) {
-      const locId = (b.label ?? b.location_id ?? "").trim();
-      const uuid = b.locationUUID;
-      let qty = 0;
-      for (const p of products) {
-        if (uuid && p.assignedLocations?.length) {
-          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
-          if (a) qty += safeQuantity(a.quantity);
-        } else if (locId && p.location_id === locId) qty += safeQuantity(p.quantity);
-      }
-      out[`${b.level_index}-${b.segment_index}`] = qty;
-    }
-    return out;
-  }, [selectedRackForMagazyn, products]);
-  /** Per-bin count of different products (unique product rows in that bin). */
-  const binUniqueProductCounts = useMemo(() => {
-    if (!selectedRackForMagazyn) return {};
-    const out: Record<string, number> = {};
-    for (const b of selectedRackForMagazyn.bins) {
-      const locId = (b.label ?? b.location_id ?? "").trim();
-      const uuid = b.locationUUID;
-      const seen = new Set<string>();
-      for (const p of products) {
-        if (uuid && p.assignedLocations?.length) {
-          if (p.assignedLocations.some((a) => a.locationUUID === uuid)) seen.add(p.id);
-        } else if (locId && p.location_id === locId) seen.add(p.id);
-      }
-      out[`${b.level_index}-${b.segment_index}`] = seen.size;
-    }
-    return out;
-  }, [selectedRackForMagazyn, products]);
+  const {
+    selectedRackForMagazyn,
+    selectedRackBinLabels,
+    selectedRackBinUUIDs,
+    displayRack,
+    binItemCounts,
+    binUniqueProductCounts,
+    usedVolumeAtBin,
+  } = useDesignerMagazynState({
+    layout,
+    products,
+    selectedRackIdForSideView,
+  });
+
   const deleteObject = useCallback((objectId: string | null) => {
     if (!objectId) return;
     if (objectId.startsWith("pathNode:")) {
@@ -1218,36 +1148,10 @@ export default function WarehouseDesigner() {
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
   const isMultiSelect = selectedRackIds.length > 1;
 
-  const summaryByTemplate = useMemo(() => {
-    const keyToRacks = new Map<string, RackState[]>();
-    for (const r of layout.racks) {
-      const key = r.templateId ?? "__preset__";
-      if (!keyToRacks.has(key)) keyToRacks.set(key, []);
-      keyToRacks.get(key)!.push(r);
-    }
-    return Array.from(keyToRacks.entries()).map(([templateKey, racks]) => {
-      const first = racks[0]!;
-      const template = templateKey !== "__preset__" ? customTemplates.find((t) => t.id === templateKey) : null;
-      const templateName = template?.name ?? UI_STRINGS.warehouse.summary.presetLabel;
-      const color = template?.color ?? first.color ?? "#3b82f6";
-      const totalRacks = racks.length;
-      const totalBins = racks.reduce((n, r) => n + (r.bins?.length ?? 0), 0);
-      const reserveCount = racks.reduce((n, r) => n + (r.bins?.filter((b) => b.storage_type === "reserve").length ?? 0), 0);
-      const capacityDm3 = racks.reduce((sum, r) => sum + (r.total_capacity_dm3 ?? r.bins.reduce((s, b) => s + (b.volume_dm3 ?? 0), 0)), 0);
-      return {
-        templateKey,
-        templateName,
-        color,
-        width_cm: first.width_cm,
-        depth_cm: first.length_cm,
-        height_cm: first.height_cm,
-        totalRacks,
-        totalBins,
-        reserveCount,
-        capacityDm3,
-      };
-    });
-  }, [layout.racks, customTemplates]);
+  const { summaryByTemplate } = useDesignerTemplateSummary({
+    layout,
+    customTemplates,
+  });
 
   const onSaveInternalLayout = useCallback(
     (internal_structure: InternalStructure, bins: BinState[] | undefined) => {
@@ -1264,120 +1168,20 @@ export default function WarehouseDesigner() {
     [internalLayoutRackId]
   );
 
-  const editProductModalProps = useMemo((): EditProductModalProps | null => {
-    if (mainView !== "layout" || editingProductId == null || showElevationForRackId == null) return null;
-    const rackForModal = layout.racks.find((r) => String(r.id ?? r.rack_index) === String(showElevationForRackId)) ?? null;
-    if (!rackForModal) return null;
-    return {
-      product: editingProductId === "new" ? null : products.find((p) => p.id === editingProductId) ?? null,
-      locationOptions: rackForModal.bins.map((b) => ({ value: b.label ?? b.location_id ?? "", label: b.label ?? b.location_id ?? "" })),
-      positionsForPicker: getAllPositionsFromRacks(layout.racks),
-      initialLocationId: undefined,
-      getBinCapacityDm3: (locId) => {
-        const b = rackForModal.bins.find((bin) => (bin.label ?? bin.location_id) === locId);
-        return b ? binVolumeDm3(b, rackForModal) : 0;
-      },
-      getBinUsedVolumeDm3: (locId, excludeProductId) =>
-        products
-          .filter((p) => p.location_id === locId && p.id !== excludeProductId)
-          .reduce((s, p) => s + safeQuantity(p.quantity) * safeVolumeDm3(p.volume_dm3), 0),
-      getMaxQuantityByUUID: (locationUUID, excludeProductId, volumePerUnitDm3) => {
-        const rack = layout.racks.find((r) =>
-          (r.rackLevels ?? binsToLevels(r.bins ?? [])).some((lev) =>
-            lev.positions.some((pos) => pos.locationUUID === locationUUID)
-          )
-        );
-        if (!rack) return undefined;
-        const bin = rack.bins.find((b) => b.locationUUID === locationUUID);
-        if (!bin) return undefined;
-        const capacityDm3 = binVolumeDm3(bin, rack);
-        if (capacityDm3 <= 0) return undefined;
-        let usedDm3 = 0;
-        for (const p of products) {
-          if (p.id === excludeProductId) continue;
-          const vol = safeVolumeDm3(p.volume_dm3);
-          if (p.assignedLocations?.length) {
-            const a = p.assignedLocations.find((a) => a.locationUUID === locationUUID);
-            if (a) usedDm3 += safeQuantity(a.quantity) * vol;
-          } else if ((p.location_id && bin.label === p.location_id) || (bin.location_id && p.location_id === bin.location_id))
-            usedDm3 += safeQuantity(p.quantity) * vol;
-        }
-        const freeDm3 = Math.max(0, capacityDm3 - usedDm3);
-        if (volumePerUnitDm3 == null || volumePerUnitDm3 <= 0) return undefined;
-        return Math.floor(freeDm3 / volumePerUnitDm3);
-      },
-      getUsedVolumeDm3ByUUID: (locationUUID) => {
-        const excludeProductId = editingProductId === "new" ? undefined : editingProductId;
-        let usedDm3 = 0;
-        for (const p of products) {
-          if (p.id === excludeProductId) continue;
-          const vol = safeVolumeDm3(p.volume_dm3);
-          if (p.assignedLocations?.length) {
-            const a = p.assignedLocations.find((a) => a.locationUUID === locationUUID);
-            if (a) usedDm3 += safeQuantity(a.quantity) * vol;
-          } else {
-            const rack = layout.racks.find((r) =>
-              (r.rackLevels ?? binsToLevels(r.bins ?? [])).some((lev) =>
-                lev.positions.some((pos) => pos.locationUUID === locationUUID)
-              )
-            );
-            const bin = rack?.bins.find((b) => b.locationUUID === locationUUID);
-            if (bin && ((p.location_id && bin.label === p.location_id) || (bin.location_id && p.location_id === bin.location_id)))
-              usedDm3 += safeQuantity(p.quantity) * vol;
-          }
-        }
-        return usedDm3;
-      },
-      getAvailableQuantity: (key, excludeProductId) => {
-        const sameProduct = (p: WarehouseProduct) => {
-          if (p.name.trim().toLowerCase() !== key.name.trim().toLowerCase()) return false;
-          if (key.sku?.trim()) return p.sku?.trim() === key.sku.trim();
-          if (key.ean?.trim()) return p.ean?.trim() === key.ean.trim();
-          return true;
-        };
-        const assigned = products
-          .filter((p) => sameProduct(p) && p.id !== excludeProductId)
-          .reduce((s, p) => s + (p.assignedLocations?.reduce((t, a) => t + a.quantity, 0) ?? p.quantity), 0);
-        return Math.max(0, 999999 - assigned);
-      },
-      onSave: (payload) => {
-        const next = {
-          ...payload,
-          location_id: payload.location_id || null,
-          assignedLocations: payload.assignedLocations,
-          image_url: payload.image_url ?? undefined,
-        };
-        if (editingProductId !== "new" && editingProductId != null) {
-          setProducts((prev) => prev.map((q) => (q.id === editingProductId ? { ...q, ...next } : q)));
-          const numericId = Number(editingProductId);
-          if (Number.isInteger(numericId) && numericId > 0) {
-            api.put(`/products/${numericId}/`, {
-              name: next.name,
-              ean: next.ean ?? "",
-              symbol: next.sku ?? "",
-              assigned_locations: next.assignedLocations ?? [],
-              tenant_id: TENANT_ID,
-            }, { params: { tenant_id: TENANT_ID } }).catch(() => {});
-          }
-        } else {
-          setProducts((prev) => [...prev, { ...next, id: `p${Date.now()}` }]);
-        }
-        setEditingProductId(null);
-      },
-      onClose: () => setEditingProductId(null),
-    };
-  }, [
+  const { editProductModalProps } = useDesignerProductModal({
     mainView,
     editingProductId,
     showElevationForRackId,
-    layout.racks,
+    layout,
     products,
+    setProducts,
+    setEditingProductId,
     safeQuantity,
     safeVolumeDm3,
     binVolumeDm3,
     binsToLevels,
     getAllPositionsFromRacks,
-  ]);
+  });
 
   return (
     <PageLayout
