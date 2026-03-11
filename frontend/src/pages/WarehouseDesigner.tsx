@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import api from "../api/axios";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
-import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexRowByPrefix, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, pathDistanceMeters, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks } from "../components/warehouse/warehouseUtils";
+import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexRowByPrefix, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks } from "../components/warehouse/warehouseUtils";
 import { RackSidebar } from "../components/warehouse/RackSidebar";
 import { RackSideViewGrid } from "../components/warehouse/RackSideViewGrid";
 import type { EditProductModalProps } from "../components/warehouse/EditProductModal";
@@ -44,6 +44,8 @@ import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
 import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
 import { useDesignerMouseHandlers } from "./WarehouseDesigner/useDesignerMouseHandlers";
 import { useDesignerRowOperations } from "./WarehouseDesigner/useDesignerRowOperations";
+import { useDesignerRackPlacement } from "./WarehouseDesigner/useDesignerRackPlacement";
+import { useDesignerPath } from "./WarehouseDesigner/useDesignerPath";
 
 export default function WarehouseDesigner() {
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -210,7 +212,6 @@ export default function WarehouseDesigner() {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const lastMouseRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const rafIdRef = useRef<number>(0);
-  const CELLS_PER_METER_FOR_PATH = 10;
   const rowDrawTemplateRef = useRef<CatalogItem | null>(null);
   const rowDrawEndPendingRef = useRef<{ x: number; y: number } | null>(null);
   const rowDrawEndRafRef = useRef<number | null>(null);
@@ -778,48 +779,24 @@ export default function WarehouseDesigner() {
     }
   }, [layout, selectedWarehouseId, loadLayout, manualPathPoints]);
 
-  const ghostW = rackRotation === "horizontal" ? cmToCells(template.depth_cm) : cmToCells(template.width_cm);
-  const ghostH = rackRotation === "horizontal" ? cmToCells(template.width_cm) : cmToCells(template.depth_cm);
-
-  const stampRackAt = useCallback((cell: { x: number; y: number }) => {
-    const w = ghostW;
-    const h = ghostH;
-    const x = Math.max(0, Math.min(layout.grid_cols - w, cell.x));
-    const y = Math.max(0, Math.min(layout.grid_rows - h, cell.y));
-    const volPerBin = volumePerBin(template.width_cm, template.depth_cm, template.height_cm, template.levels, template.bins_per_level);
-    const prefix = (template.aisle_letter || "A").trim() || "A";
-    setLayout((prev) => {
-      const rackIndex = prev.racks.length + 1;
-      const indexInRow = getNextIndexInRow(prev.racks, prefix);
-      const rackLabel = `${prefix}${indexInRow}`;
-      const bins = createBinsForRack(template.aisle_letter, rackIndex, template.levels, template.bins_per_level, volPerBin, undefined, undefined, template.width_cm, template.depth_cm, template.height_cm);
-      return {
-        ...prev,
-        racks: [
-          ...prev.racks,
-          {
-            x,
-            y,
-            width: w,
-            height: h,
-            orientation: rackRotation,
-            levels: template.levels,
-            bins_per_level: template.bins_per_level,
-            length_cm: template.depth_cm,
-            width_cm: template.width_cm,
-            height_cm: template.height_cm,
-            aisle_letter: template.aisle_letter,
-            rack_index: rackIndex,
-            bins,
-            color: "#3b82f6",
-            name: rackLabel,
-            rowPrefix: prefix,
-            indexInRow,
-          } as RackState,
-        ],
-      };
-    });
-  }, [template, rackRotation, layout.racks.length, layout.grid_cols, layout.grid_rows, ghostW, ghostH]);
+  const {
+    ghostW,
+    ghostH,
+    stampRackAt,
+    stampRackIntoSlot,
+    stampRackFromCatalogItem,
+    getCatalogDropCell,
+  } = useDesignerRackPlacement({
+    layout,
+    template,
+    rackRotation,
+    currentRowPrefix,
+    aisleWidthCm,
+    setLayout,
+    setDraggingFromCatalog,
+    setCatalogGhostPosition,
+    setCatalogHoveredSlot,
+  });
 
   const {
     getCellFromEvent,
@@ -945,247 +922,6 @@ export default function WarehouseDesigner() {
       aisleToolActive,
     },
   });
-
-  /** Place a rack from catalog into a specific row slot. Slot may be split; positions recomputed so racks sit side-by-side. */
-  const stampRackIntoSlot = useCallback(
-    (rowId: string, slotIndex: number, item: CatalogItem) => {
-      const row = (layout.row_containers ?? []).find((rc) => rc.id === rowId);
-      if (!row || slotIndex < 0 || slotIndex >= row.slots.length) return;
-      const slot0 = row.slots[slotIndex];
-      if (!slot0 || slot0.rackId != null) return;
-      const spec = getCatalogItemSpec(item);
-      const lc = getLevelConfig(spec);
-      const totalBins = getTotalLocations(lc);
-      const volPerBin = totalBins > 0
-        ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
-        : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
-      const reqW = cmToCells(spec.width_cm);
-      const reqD = cmToCells(spec.depth_cm);
-      const isVertical = (row.orientation ?? "horizontal") === "vertical";
-
-      // Unlock all templates: if needed, consume multiple contiguous empty slots to fit the rack.
-      // Horizontal rows grow along X (slot.w). Vertical rows grow along Y (slot.h).
-      let consumedEnd = slotIndex;
-      let consumedSpan = 0;
-      if (isVertical) {
-        // Rack rotates 90°: footprint is (depth × width) = (reqD × reqW).
-        while (consumedEnd < row.slots.length) {
-          const s = row.slots[consumedEnd];
-          if (!s || s.rackId != null) break;
-          if (s.w < reqD) break;
-          consumedSpan += s.h;
-          if (consumedSpan >= reqW) break;
-          consumedEnd += 1;
-        }
-        if (consumedSpan < reqW) return;
-      } else {
-        // Footprint is (width × depth) = (reqW × reqD).
-        while (consumedEnd < row.slots.length) {
-          const s = row.slots[consumedEnd];
-          if (!s || s.rackId != null) break;
-          if (s.h < reqD) break;
-          consumedSpan += s.w;
-          if (consumedSpan >= reqW) break;
-          consumedEnd += 1;
-        }
-        if (consumedSpan < reqW) return;
-      }
-      const prefix = ((row.rowPrefix ?? currentRowPrefix) || "A").trim() || "A";
-      const indexInRow = 1 + row.slots.filter((s) => s.rackId != null).length;
-      const rackIndex = layout.racks.length + 1;
-      const rackLabel = `${prefix}${indexInRow}`;
-      const bins = createBinsForRack(
-        spec.aisle_letter,
-        rackIndex,
-        spec.levels,
-        spec.bins_per_level,
-        volPerBin,
-        "M1",
-        undefined,
-        spec.width_cm,
-        spec.depth_cm,
-        spec.height_cm,
-        spec.reserve_bin_keys,
-        ROW_LABEL_ADDRESS_PATTERN,
-        rackLabel,
-        1,
-        spec.binNamingType ?? "numeric",
-        lc
-      );
-      const templateColor = item.type === "custom" ? item.template.color : spec.color;
-      const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
-      const { x: startX, y: startY } = getRowStart(row);
-
-      // Keep the row thickness (cross-axis) unchanged for visuals; only consume along the row axis.
-      const thickness = isVertical ? slot0.w : slot0.h;
-      const filledSlot: EmptyRowSlot = isVertical
-        ? { x: 0, y: startY, w: thickness, h: reqW, rackId: rackIndex }
-        : { x: 0, y: startY, w: reqW, h: thickness, rackId: rackIndex };
-      const remainder = Math.max(0, consumedSpan - reqW);
-      const remainderSlot: EmptyRowSlot | null = remainder > 0
-        ? (isVertical
-            ? { x: 0, y: startY, w: thickness, h: remainder }
-            : { x: 0, y: startY, w: remainder, h: thickness })
-        : null;
-
-      const newSlotsRaw: EmptyRowSlot[] = [
-        ...row.slots.slice(0, slotIndex),
-        filledSlot,
-        ...(remainderSlot ? [remainderSlot] : []),
-        ...row.slots.slice(consumedEnd + 1),
-      ];
-      const trimSize = reqW;
-      let trimmedRaw = newSlotsRaw;
-      while (
-        trimmedRaw.length > 0 &&
-        trimmedRaw[trimmedRaw.length - 1]?.rackId == null &&
-        (isVertical ? (trimmedRaw[trimmedRaw.length - 1]?.h ?? 0) < trimSize : (trimmedRaw[trimmedRaw.length - 1]?.w ?? 0) < trimSize)
-      ) {
-        trimmedRaw = trimmedRaw.slice(0, -1);
-      }
-      const newSlots = computeRowSlotPositions(trimmedRaw, startX, startY, row.orientation ?? "horizontal");
-      const filledSlotWithPos = newSlots.find((s) => s.rackId === rackIndex);
-      const rackWidthCells = isVertical ? reqD : reqW;
-      const rackHeightCells = isVertical ? reqW : reqD;
-      const newRack: RackState = {
-        x: filledSlotWithPos?.x ?? slot0.x,
-        y: filledSlotWithPos?.y ?? slot0.y,
-        width: rackWidthCells,
-        height: rackHeightCells,
-        orientation: "vertical",
-        levels: lc.length,
-        bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
-        levelConfig: lc,
-        length_cm: spec.depth_cm,
-        width_cm: spec.width_cm,
-        height_cm: spec.height_cm,
-        aisle_letter: spec.aisle_letter,
-        rack_index: rackIndex,
-        bins,
-        rackLevels: binsToLevels(bins),
-        color: rackColor,
-        name: rackLabel,
-        rowPrefix: prefix,
-        indexInRow,
-        ...(isVertical ? { rotationDegrees: 90 as const } : {}),
-        ...(item.type === "custom" ? { templateId: item.template.id } : {}),
-      };
-      setLayout((prev) => {
-        const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((s) => s.rackId === (r.id ?? r.rack_index));
-          if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
-          return r;
-        });
-        const nextRacks = [...updatedRacks, newRack];
-        return {
-          ...prev,
-          racks: reindexGeometricRow(nextRacks, newRack.rack_index),
-          row_containers: (prev.row_containers ?? []).map((rc) => (rc.id === rowId ? { ...rc, slots: newSlots } : rc)),
-        };
-      });
-      setDraggingFromCatalog(null);
-      setCatalogGhostPosition(null);
-      setCatalogHoveredSlot(null);
-    },
-    [layout.racks, layout.row_containers, currentRowPrefix]
-  );
-
-  const stampRackFromCatalogItem = useCallback((cell: { x: number; y: number }, item: CatalogItem) => {
-    const emptySlot = findEmptySlotAt(layout.row_containers, cell);
-    if (emptySlot) {
-      stampRackIntoSlot(emptySlot.rowContainer.id, emptySlot.slotIndex, item);
-      setDraggingFromCatalog(null);
-      setCatalogGhostPosition(null);
-      setCatalogHoveredSlot(null);
-      return;
-    }
-    const spec = getCatalogItemSpec(item);
-    const lc = getLevelConfig(spec);
-    const totalBins = getTotalLocations(lc);
-    const volPerBin = totalBins > 0
-      ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
-      : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
-    const w = cmToCells(spec.width_cm);
-    const h = cmToCells(spec.depth_cm);
-    const snap = findSnapToRowPosition(layout.racks, cell.x, cell.y, w, h);
-    const x = snap ? Math.max(0, Math.min(layout.grid_cols - w, snap.x)) : Math.max(0, Math.min(layout.grid_cols - w, cell.x));
-    const y = snap ? Math.max(0, Math.min(layout.grid_rows - h, snap.y)) : Math.max(0, Math.min(layout.grid_rows - h, cell.y));
-    const prefix = snap ? snap.rowPrefix : (currentRowPrefix || "A").trim() || "A";
-    const indexInRow = snap ? snap.indexInRow : getNextIndexInRow(layout.racks, prefix);
-    const rackIndex = layout.racks.length + 1;
-    const rackLabel = `${prefix}${indexInRow}`;
-    const bins = createBinsForRack(
-      spec.aisle_letter,
-      rackIndex,
-      spec.levels,
-      spec.bins_per_level,
-      volPerBin,
-      "M1",
-      undefined,
-      spec.width_cm,
-      spec.depth_cm,
-      spec.height_cm,
-      spec.reserve_bin_keys,
-      ROW_LABEL_ADDRESS_PATTERN,
-      rackLabel,
-      1,
-      spec.binNamingType ?? "numeric",
-      lc
-    );
-    const templateColor = item.type === "custom" ? item.template.color : spec.color;
-    const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
-    const newRack: RackState = {
-      x,
-      y,
-      width: w,
-      height: h,
-      orientation: "vertical",
-      levels: lc.length,
-      bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
-      levelConfig: lc,
-      length_cm: spec.depth_cm,
-      width_cm: spec.width_cm,
-      height_cm: spec.height_cm,
-      aisle_letter: spec.aisle_letter,
-      rack_index: rackIndex,
-      bins,
-      color: rackColor,
-      name: rackLabel,
-      rowPrefix: prefix,
-      indexInRow,
-      ...(item.type === "custom" ? { templateId: item.template.id } : {}),
-    };
-    setLayout((prev) => ({ ...prev, racks: reindexGeometricRow([...prev.racks, newRack], newRack.rack_index) }));
-    setDraggingFromCatalog(null);
-    setCatalogGhostPosition(null);
-    setCatalogHoveredSlot(null);
-  }, [layout.racks, layout.row_containers, layout.grid_cols, layout.grid_rows, currentRowPrefix, stampRackIntoSlot]);
-
-  /** Resolve catalog drop/ghost position: snap to empty row slot if over one and slot fits the rack, else snap to row or grid. */
-  const getCatalogDropCell = useCallback(
-    (cell: { x: number; y: number }, item: CatalogItem) => {
-      const empty = findEmptySlotAt(layout.row_containers, cell);
-      if (empty) {
-        const spec = getCatalogItemSpec(item);
-        const reqW = cmToCells(spec.width_cm);
-        const reqD = cmToCells(spec.depth_cm);
-        const isVert = (empty.rowContainer.orientation ?? "horizontal") === "vertical";
-        // Conservative snap: if thickness fits, allow snapping to slot origin and let stampRackIntoSlot decide span.
-        if (isVert) {
-          if (empty.slot.w >= reqD && empty.slot.h >= Math.min(reqW, empty.slot.h)) return { x: empty.slot.x, y: empty.slot.y };
-        } else {
-          if (empty.slot.h >= reqD && empty.slot.w >= Math.min(reqW, empty.slot.w)) return { x: empty.slot.x, y: empty.slot.y };
-        }
-      }
-      const spec = getCatalogItemSpec(item);
-      const w = cmToCells(spec.width_cm);
-      const h = cmToCells(spec.depth_cm);
-      const snap = findSnapToRowPosition(layout.racks, cell.x, cell.y, w, h);
-      if (snap) return { x: Math.max(0, Math.min(layout.grid_cols - w, snap.x)), y: Math.max(0, Math.min(layout.grid_rows - h, snap.y)) };
-      return snapPosition(cell, w, h, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm);
-    },
-    [layout.row_containers, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm]
-  );
 
   const {
     deleteSelectedRow,
@@ -1566,39 +1302,16 @@ export default function WarehouseDesigner() {
     return { dimensionLines: lines, aisleHighlights };
   }, [showDimensions, layout.row_containers, layout.racks, layout.grid_cols, layout.grid_rows, selectedRowContainerId, selectedRowContainerIds, selectedRackIds, draggingRowId, rowDragPreviewStart, rackDragPreviewPositions]);
 
-  /** S-shape (snake) ordering: sort by row (y), then within each row alternate x direction. */
-  const sShapePathPoints = useMemo(() => {
-    if (manualPathPoints.length < 2) return [...manualPathPoints];
-    const byY = new Map<number, { x: number; y: number }[]>();
-    for (const p of manualPathPoints) {
-      const row = byY.get(p.y) ?? [];
-      row.push({ x: p.x, y: p.y });
-      byY.set(p.y, row);
-    }
-    const sortedY = Array.from(byY.keys()).sort((a, b) => a - b);
-    const out: { x: number; y: number }[] = [];
-    sortedY.forEach((y, rowIndex) => {
-      const row = byY.get(y)!;
-      row.sort((a, b) => a.x - b.x);
-      if (rowIndex % 2 === 1) row.reverse();
-      out.push(...row);
-    });
-    return out;
-  }, [manualPathPoints]);
-
-  const effectivePathPoints = manualPathPoints;
-  const pickingPathPoints = effectivePathPoints;
-  const pathDistanceM = useMemo(
-    () => (pickingPathPoints.length < 2 ? 0 : pathDistanceMeters(pickingPathPoints, CELLS_PER_METER_FOR_PATH)),
-    [pickingPathPoints]
-  );
-
-  const handleMagicWand = useCallback(() => {
-    if (sShapePathPoints.length === 0) return;
-    setManualPathPoints([...sShapePathPoints]);
-    setShowPickingPath(true);
-    setSnackbar({ message: "Ścieżka zoptymalizowana (S-Shape)." });
-  }, [sShapePathPoints, setShowPickingPath, setSnackbar]);
+  const {
+    pickingPathPoints,
+    pathDistanceM,
+    handleMagicWand,
+  } = useDesignerPath({
+    manualPathPoints,
+    setManualPathPoints,
+    setShowPickingPath,
+    setSnackbar,
+  });
 
   const selectedRack = layout.racks.find((r) => (r.id != null && r.id === selectedRackId) || r.rack_index === selectedRackId);
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
