@@ -1,7 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
 import api from "../api/axios";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
@@ -10,298 +8,42 @@ import { RackSidebar } from "../components/warehouse/RackSidebar";
 import { RackSideViewGrid } from "../components/warehouse/RackSideViewGrid";
 import type { EditProductModalProps } from "../components/warehouse/EditProductModal";
 import { WarehouseModals } from "../components/warehouse/WarehouseModals";
-import { WarehouseMainView } from "../components/warehouse/WarehouseMainView";
 import { WarehouseFullMap } from "../components/warehouse/WarehouseFullMap";
 import { WarehouseLegend } from "../components/warehouse/WarehouseLegend";
 import { UI_STRINGS } from "../constants/uiStrings";
 import PageLayout from "../components/layout/PageLayout";
 import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
-
-const CELLS_PER_METER = 10;
-const BASE_PX_PER_CELL = 5;
-const GRID_COLS = 240;
-const GRID_ROWS = 160;
-const TENANT_ID = 1;
-/** Backend special locations use cm; 1 grid cell = 100 cm for API. */
-const SPECIAL_LOCATION_CELL_CM = 100;
-/** Default slot size (cells) for "Draw Row" when no template is selected. 120×80 cm. */
-const DEFAULT_ROW_SLOT_W = 12;
-const DEFAULT_ROW_SLOT_H = 8;
-
-function snapToGrid(val: number, gridStep: number = 1): number {
-  return Math.round(val / gridStep) * gridStep;
-}
-
-/** Row start position (from first slot). Used to recompute slot positions. */
-function getRowStart(row: RowContainer): { x: number; y: number } {
-  const first = row.slots[0];
-  if (!first) return { x: 0, y: 0 };
-  return { x: first.x, y: first.y };
-}
-
-/** Recompute slot x,y. Horizontal: x increases, y = startY. Vertical: x = startX, y increases. */
-function computeRowSlotPositions(
-  slots: EmptyRowSlot[],
-  startX: number,
-  startY: number,
-  orientation: "horizontal" | "vertical" = "horizontal"
-): EmptyRowSlot[] {
-  if (orientation === "vertical") {
-    let y = startY;
-    return slots.map((s) => {
-      const out: EmptyRowSlot = { ...s, x: startX, y };
-      y += s.h;
-      return out;
-    });
-  }
-  let x = startX;
-  return slots.map((s) => {
-    const out: EmptyRowSlot = { ...s, x, y: startY };
-    x += s.w;
-    return out;
-  });
-}
-
-/** Bounding box of a row (from its slots) in cell coordinates. */
-function getRowBounds(rc: RowContainer): { x: number; y: number; w: number; h: number } | null {
-  if (!rc.slots.length) return null;
-  let minX = rc.slots[0]!.x, minY = rc.slots[0]!.y, maxX = rc.slots[0]!.x + rc.slots[0]!.w, maxY = rc.slots[0]!.y + rc.slots[0]!.h;
-  for (const s of rc.slots) {
-    minX = Math.min(minX, s.x); minY = Math.min(minY, s.y);
-    maxX = Math.max(maxX, s.x + s.w); maxY = Math.max(maxY, s.y + s.h);
-  }
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-}
-
-const SNAP_DISTANCES_CM = [100, 200, 300];
-const SNAP_DISTANCE_THRESHOLD_CM = 15;
-
-/** Optionally snap row drag position so distance to nearest obstacle is 100/200/300 cm. */
-function snapRowPreviewToDistance(
-  row: RowContainer,
-  candidate: { x: number; y: number },
-  layout: LayoutState
-): { x: number; y: number } {
-  const orient = row.orientation ?? "horizontal";
-  let w = 0, h = 0;
-  for (const s of row.slots) {
-    if (orient === "horizontal") { w += s.w; h = Math.max(h, s.h); } else { w = Math.max(w, s.w); h += s.h; }
-  }
-  const sel = { x: candidate.x, y: candidate.y, w, h };
-  const rows = layout.row_containers ?? [];
-  const racks = layout.racks;
-  const obstacles: Array<{ y0: number; y1: number; x0: number; x1: number }> = [];
-  for (const rc of rows) {
-    if (rc.id === row.id) continue;
-    const b = getRowBounds(rc);
-    if (b) obstacles.push({ y0: b.y, y1: b.y + b.h, x0: b.x, x1: b.x + b.w });
-  }
-  for (const r of racks) {
-    const inRow = rows.some((rc) => rc.slots.some((s) => s.rackId === (r.id ?? r.rack_index)));
-    if (inRow) continue;
-    obstacles.push({ y0: r.y, y1: r.y + r.height, x0: r.x, x1: r.x + r.width });
-  }
-  const gridRows = layout.grid_rows;
-  const gridCols = layout.grid_cols;
-  if (orient === "horizontal") {
-    const selTop = sel.y, selBottom = sel.y + sel.h;
-    let nearestAbove = 0, nearestBelow = gridRows;
-    for (const o of obstacles) {
-      if (o.x1 <= sel.x || o.x0 >= sel.x + sel.w) continue;
-      if (o.y1 <= selTop) nearestAbove = Math.max(nearestAbove, o.y1);
-      if (o.y0 >= selBottom) nearestBelow = Math.min(nearestBelow, o.y0);
-    }
-    const distAboveCm = (selTop - nearestAbove) * GRID_UNIT_CM;
-    const distBelowCm = (nearestBelow - selBottom) * GRID_UNIT_CM;
-    for (const target of SNAP_DISTANCES_CM) {
-      if (Math.abs(distAboveCm - target) <= SNAP_DISTANCE_THRESHOLD_CM) {
-        const newY = nearestAbove + target / GRID_UNIT_CM;
-        if (newY >= 0 && newY + sel.h <= gridRows) return { x: candidate.x, y: Math.round(newY) };
-      }
-      if (Math.abs(distBelowCm - target) <= SNAP_DISTANCE_THRESHOLD_CM) {
-        const newY = nearestBelow - target / GRID_UNIT_CM - sel.h;
-        if (newY >= 0 && newY + sel.h <= gridRows) return { x: candidate.x, y: Math.round(newY) };
-      }
-    }
-  } else {
-    const selLeft = sel.x, selRight = sel.x + sel.w;
-    let nearestLeft = 0, nearestRight = gridCols;
-    for (const o of obstacles) {
-      if (o.y1 <= sel.y || o.y0 >= sel.y + sel.h) continue;
-      if (o.x1 <= selLeft) nearestLeft = Math.max(nearestLeft, o.x1);
-      if (o.x0 >= selRight) nearestRight = Math.min(nearestRight, o.x0);
-    }
-    const distLeftCm = (selLeft - nearestLeft) * GRID_UNIT_CM;
-    const distRightCm = (nearestRight - selRight) * GRID_UNIT_CM;
-    for (const target of SNAP_DISTANCES_CM) {
-      if (Math.abs(distLeftCm - target) <= SNAP_DISTANCE_THRESHOLD_CM) {
-        const newX = nearestLeft + target / GRID_UNIT_CM;
-        if (newX >= 0 && newX + sel.w <= gridCols) return { x: Math.round(newX), y: candidate.y };
-      }
-      if (Math.abs(distRightCm - target) <= SNAP_DISTANCE_THRESHOLD_CM) {
-        const newX = nearestRight - target / GRID_UNIT_CM - sel.w;
-        if (newX >= 0 && newX + sel.w <= gridCols) return { x: Math.round(newX), y: candidate.y };
-      }
-    }
-  }
-  return candidate;
-}
-
-/** Remove row containers that have no racks (all slots empty). Prevents ghost rows. */
-function filterEmptyRowContainers(rows: RowContainer[] | undefined): RowContainer[] {
-  if (!rows?.length) return [];
-  return rows.filter((rc) => rc.slots.some((s) => s.rackId != null));
-}
-
-/** Find an empty slot (no rackId) that contains the given cell. Slots must have x,y set (e.g. via computeRowSlotPositions). */
-function findEmptySlotAt(
-  rowContainers: RowContainer[] | undefined,
-  cell: { x: number; y: number }
-): { rowContainer: RowContainer; slotIndex: number; slot: EmptyRowSlot } | null {
-  if (!rowContainers?.length) return null;
-  for (const row of rowContainers) {
-    for (let i = 0; i < row.slots.length; i++) {
-      const s = row.slots[i]!;
-      if (s.rackId != null) continue;
-      if (cell.x >= s.x && cell.x < s.x + s.w && cell.y >= s.y && cell.y < s.y + s.h) return { rowContainer: row, slotIndex: i, slot: s };
-    }
-  }
-  return null;
-}
-
-/** Find which row and slot index contain the given rack (by rackId). */
-function findRowAndSlotForRack(
-  rowContainers: RowContainer[] | undefined,
-  rackId: number | string
-): { rowContainer: RowContainer; slotIndex: number } | null {
-  if (!rowContainers?.length) return null;
-  const id = String(rackId);
-  for (const row of rowContainers) {
-    for (let i = 0; i < row.slots.length; i++) {
-      if (row.slots[i]?.rackId != null && String(row.slots[i].rackId) === id) return { rowContainer: row, slotIndex: i };
-    }
-  }
-  return null;
-}
-
-function rectsOverlap(
-  a: { x: number; y: number; width: number; height: number },
-  b: { x: number; y: number; width: number; height: number }
-): boolean {
-  return !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
-}
-
-/** Check if a set of rack positions (id -> {x,y}) is valid: in bounds, no overlap with non-group racks or row slots. */
-function canPlaceGroup(
-  layout: LayoutState,
-  groupIds: Set<number | string>,
-  positions: Map<number | string, { x: number; y: number }>
-): boolean {
-  const gridCols = layout.grid_cols;
-  const gridRows = layout.grid_rows;
-  const otherRacks = layout.racks.filter((r) => !groupIds.has(r.id ?? r.rack_index));
-  const rects: { rect: { x: number; y: number; width: number; height: number } }[] = [];
-  for (const [id, pos] of positions) {
-    const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === id);
-    if (!rack) return false;
-    const rect = { x: pos.x, y: pos.y, width: rack.width, height: rack.height };
-    if (rect.x < 0 || rect.y < 0 || rect.x + rect.width > gridCols || rect.y + rect.height > gridRows) return false;
-    rects.push({ rect });
-  }
-  for (const { rect } of rects) {
-    for (const r of otherRacks) {
-      if (rectsOverlap(rect, { x: r.x, y: r.y, width: r.width, height: r.height })) return false;
-    }
-    for (const rc of layout.row_containers ?? []) {
-      for (const s of rc.slots) {
-        if (rectsOverlap(rect, { x: s.x, y: s.y, width: s.w, height: s.h })) return false;
-      }
-    }
-  }
-  for (let i = 0; i < rects.length; i++) {
-    for (let j = i + 1; j < rects.length; j++) {
-      if (rectsOverlap(rects[i]!.rect, rects[j]!.rect)) return false;
-    }
-  }
-  return true;
-}
-
-const API_BASE_FOR_IMAGES = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? undefined;
-
-/** Parse numeric value (volume dm³ or quantity); accepts comma as decimal separator. */
-function safeVolumeDm3(v: unknown): number {
-  if (v == null) return 0;
-  const n = parseFloat(String(v).replace(",", "."));
-  return Number.isFinite(n) ? Math.max(0, n) : 0;
-}
-/** Parse quantity (szt.); accepts comma as decimal separator. */
-function safeQuantity(v: unknown): number {
-  if (v == null) return 0;
-  const n = parseFloat(String(v).replace(",", "."));
-  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
-}
-
-/** Resolve product image URL: support image_url, imageUrl; semicolon-separated → first. Relative paths (e.g. /uploads/x) get API base prepended when VITE_API_URL is set. */
-function getProductImageUrl(p: { image_url?: string | null; imageUrl?: string | null }): string | null {
-  const raw = (p.image_url ?? (p as { imageUrl?: string }).imageUrl ?? "").trim();
-  if (!raw) return null;
-  const first = raw.split(";").map((s) => s.trim()).find(Boolean) ?? null;
-  if (!first) return null;
-  if (first.startsWith("/") && API_BASE_FOR_IMAGES) return API_BASE_FOR_IMAGES.replace(/\/$/, "") + first;
-  return first;
-}
-
-/** Aisle width in cm for "magnetic" snap (new row exactly this distance from existing rack/row) */
-const DEFAULT_AISLE_WIDTH_CM = 250;
-
-/** Snap position to 10cm grid, warehouse walls, existing racks, and aisle-width offset (magnetic edges) */
-function snapPosition(
-  desired: { x: number; y: number },
-  ghostW: number,
-  ghostH: number,
-  racks: { x: number; y: number; width: number; height: number }[],
-  gridCols: number,
-  gridRows: number,
-  aisleWidthCm: number = DEFAULT_AISLE_WIDTH_CM
-): { x: number; y: number } {
-  const aisleCells = Math.round(aisleWidthCm / GRID_UNIT_CM);
-  const candX = new Set<number>([0, gridCols - ghostW, snapToGrid(desired.x)]);
-  const candY = new Set<number>([0, gridRows - ghostH, snapToGrid(desired.y)]);
-  racks.forEach((r) => {
-    candX.add(r.x);
-    candX.add(r.x + r.width);
-    candX.add(Math.max(0, r.x - ghostW));
-    candX.add(Math.min(gridCols - ghostW, r.x + r.width));
-    candX.add(Math.max(0, r.x + r.width + aisleCells));
-    candX.add(Math.min(gridCols - ghostW, r.x - ghostW - aisleCells));
-  });
-  racks.forEach((r) => {
-    candY.add(r.y);
-    candY.add(r.y + r.height);
-    candY.add(Math.max(0, r.y - ghostH));
-    candY.add(Math.min(gridRows - ghostH, r.y + r.height));
-    candY.add(Math.max(0, r.y + r.height + aisleCells));
-    candY.add(Math.min(gridRows - ghostH, r.y - ghostH - aisleCells));
-  });
-  let best = { x: Math.max(0, Math.min(gridCols - ghostW, snapToGrid(desired.x))), y: Math.max(0, Math.min(gridRows - ghostH, snapToGrid(desired.y))) };
-  let bestDist = Infinity;
-  const otherRacks = racks;
-  for (const x of candX) {
-    for (const y of candY) {
-      const xx = Math.max(0, Math.min(gridCols - ghostW, x));
-      const yy = Math.max(0, Math.min(gridRows - ghostH, y));
-      const overlaps = otherRacks.some((r) => rectsOverlap({ x: xx, y: yy, width: ghostW, height: ghostH }, r));
-      if (overlaps) continue;
-      const dist = (desired.x - xx) ** 2 + (desired.y - yy) ** 2;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = { x: xx, y: yy };
-      }
-    }
-  }
-  return best;
-}
+import {
+  CELLS_PER_METER,
+  BASE_PX_PER_CELL,
+  GRID_COLS,
+  GRID_ROWS,
+  TENANT_ID,
+  SPECIAL_LOCATION_CELL_CM,
+  DEFAULT_ROW_SLOT_W,
+  DEFAULT_ROW_SLOT_H,
+  getRowStart,
+  computeRowSlotPositions,
+  getRowBounds,
+  snapRowPreviewToDistance,
+  filterEmptyRowContainers,
+  findEmptySlotAt,
+  findRowAndSlotForRack,
+  rectsOverlap,
+  canPlaceGroup,
+  safeVolumeDm3,
+  safeQuantity,
+  getProductImageUrl,
+  DEFAULT_AISLE_WIDTH_CM,
+  snapPosition,
+} from "./WarehouseDesigner/DesignerRackPlacement";
+import { exportPdf, exportCsv, exportLocationsMapCsv, exportJson } from "./WarehouseDesigner/DesignerExport";
+import { useDesignerKeyboard } from "./WarehouseDesigner/DesignerKeyboard";
+import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
+import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
+import { useDesignerMouseHandlers } from "./WarehouseDesigner/useDesignerMouseHandlers";
+import { useDesignerRowOperations } from "./WarehouseDesigner/useDesignerRowOperations";
 
 export default function WarehouseDesigner() {
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -458,7 +200,7 @@ export default function WarehouseDesigner() {
   const [draggingPathPointIndex, setDraggingPathPointIndex] = useState<number | null>(null);
   const [selectedPathPointIndex, setSelectedPathPointIndex] = useState<number | null>(null);
   const [selectedPathLine, setSelectedPathLine] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   /** Single view mode: Magazyn (live) | Projektant Layoutu */
   const [mainView, setMainView] = useState<"magazyn" | "layout">(() =>
     searchParams.get("view") === "layout" ? "layout" : "layout"
@@ -474,6 +216,11 @@ export default function WarehouseDesigner() {
   const rowDrawEndRafRef = useRef<number | null>(null);
   const cursorPendingRef = useRef<{ x: number; y: number } | null>(null);
   const cursorRafRef = useRef<number | null>(null);
+  const placeRowWithTemplateRef = useRef<((start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem) => void) | null>(null);
+  const placeEmptyRowRef = useRef<((start: { x: number; y: number }, end: { x: number; y: number }) => void) | null>(null);
+  const canMoveRowToRef = useRef<((rowId: string, newStart: { x: number; y: number }) => boolean) | null>(null);
+  const moveRowToPositionRef = useRef<((rowId: string, newStartX: number, newStartY: number) => void) | null>(null);
+  const moveRackWithinRowRef = useRef<((rowId: string, rackId: number | string, fromSlotIndex: number, toSlotIndex: number) => void) | null>(null);
 
   /** When "Rysuj Rząd" is turned off, clear all temp row-draw state so no extra slot can leak into rows. */
   useEffect(() => {
@@ -827,27 +574,6 @@ export default function WarehouseDesigner() {
   }, []);
 
   useEffect(() => {
-    const onWindowMouseUp = () => {
-      setIsPanning(false);
-      panStartRef.current = null;
-    };
-    window.addEventListener("mouseup", onWindowMouseUp);
-    return () => window.removeEventListener("mouseup", onWindowMouseUp);
-  }, []);
-
-  useEffect(() => {
-    if (!isPanning) return;
-    const onWindowMouseMove = (e: MouseEvent) => {
-      const movX = typeof e.movementX === "number" ? e.movementX : (panStartRef.current ? e.clientX - panStartRef.current.x : 0);
-      const movY = typeof e.movementY === "number" ? e.movementY : (panStartRef.current ? e.clientY - panStartRef.current.y : 0);
-      setPan((p) => ({ x: p.x + movX, y: p.y + movY }));
-      panStartRef.current = { x: e.clientX, y: e.clientY };
-    };
-    window.addEventListener("mousemove", onWindowMouseMove);
-    return () => window.removeEventListener("mousemove", onWindowMouseMove);
-  }, [isPanning]);
-
-  useEffect(() => {
     if (selectedWarehouseId != null) loadLayout(selectedWarehouseId);
   }, [selectedWarehouseId, loadLayout]);
 
@@ -1052,17 +778,6 @@ export default function WarehouseDesigner() {
     }
   }, [layout, selectedWarehouseId, loadLayout, manualPathPoints]);
 
-  const getCellFromEvent = useCallback((e: { clientX: number; clientY: number }) => {
-    const svg = svgRef.current;
-    if (!svg) return null;
-    const rect = svg.getBoundingClientRect();
-    const col = (e.clientX - rect.left) / rect.width * layout.grid_cols;
-    const row = (e.clientY - rect.top) / rect.height * layout.grid_rows;
-    const x = Math.max(0, Math.min(layout.grid_cols - 1, Math.round(col)));
-    const y = Math.max(0, Math.min(layout.grid_rows - 1, Math.round(row)));
-    return { x, y };
-  }, [layout.grid_cols, layout.grid_rows]);
-
   const ghostW = rackRotation === "horizontal" ? cmToCells(template.depth_cm) : cmToCells(template.width_cm);
   const ghostH = rackRotation === "horizontal" ? cmToCells(template.width_cm) : cmToCells(template.depth_cm);
 
@@ -1105,6 +820,131 @@ export default function WarehouseDesigner() {
       };
     });
   }, [template, rackRotation, layout.racks.length, layout.grid_cols, layout.grid_rows, ghostW, ghostH]);
+
+  const {
+    getCellFromEvent,
+    handleCanvasMouseMove,
+    handleCanvasMouseDown,
+    handleCanvasMouseUp,
+    handleCanvasMouseLeave,
+  } = useDesignerMouseHandlers({
+    layout,
+    refs: {
+      svgRef,
+      panStartRef,
+      lastMouseRef,
+      cursorPendingRef,
+      cursorRafRef,
+      rafIdRef,
+      rowDragPointerOffsetRef,
+      rowDragPreviewStartRef,
+      rowDrawEndPendingRef,
+      rowDrawEndRafRef,
+      rowDrawTemplateRef,
+      placeRowWithTemplateRef,
+      placeEmptyRowRef,
+      canMoveRowToRef,
+      moveRowToPositionRef,
+      moveRackWithinRowRef,
+    },
+    state: {
+      layout,
+      isPanning,
+      placementMode,
+      draggingRackId,
+      dragOffset,
+      draggingVisualId,
+      dragOffsetVisual,
+      draggingWallEnd,
+      draggingPathPointIndex,
+      marqueeStart,
+      marqueeEnd,
+      rowToolActive,
+      rowDrawStart,
+      rowDrawEnd,
+      rowToolTemplate,
+      aisleDrawStart,
+      draggingRowId,
+      rowDragPreviewStart,
+      rackDragPreviewPosition,
+      manualPathPoints,
+      showPickingPath,
+      pathToolActive,
+      isLiveView,
+      mainView,
+      layoutMode,
+      selectedWarehouseId,
+      selectedRackIds,
+      selectedVisualIds,
+      showDimensions,
+      snapToGrid,
+      aisleWidthCm,
+      ghostW,
+      ghostH,
+    },
+    setters: {
+      setIsPanning,
+      setPan,
+      setCursorCm,
+      setGhostPosition,
+      setRowDragPreviewStart,
+      setRowPreviewCursor,
+      setRowDrawEnd,
+      setMarqueeEnd,
+      setRackDragPreviewPosition,
+      setLayout,
+      setManualPathPoints,
+      setSelectedRackId,
+      setSelectedRackIds,
+      setSelectedVisualId,
+      setSelectedVisualIds,
+      setSelectedPathPointIndex,
+      setSelectedPathLine,
+      setSelectedAisleIndex,
+      setShowElevationForRackId,
+      setDraggingRackId,
+      setDragOffset,
+      setDraggingVisualId,
+      setDragOffsetVisual,
+      setDraggingWallEnd,
+      setDraggingPathPointIndex,
+      setRowDrawStart,
+      setMarqueeStart,
+      setAisleDrawStart,
+      setShowPickingPath,
+      setSelectedRowContainerId,
+      setSelectedRowContainerIds,
+      setDraggingRowId,
+      setMainView,
+      setSelectedRackIdForSideView,
+      setSelectedLocationForProducts,
+      setProductSearchQuery,
+      setShowAllProductsInSidebar,
+      setRowToolTemplate,
+    },
+    callbacks: {
+      stampRackAt,
+      addSpecialLocation,
+    },
+    helpers: {
+      findSnapToRowPosition,
+      snapPosition,
+      snapRowPreviewToDistance,
+      findEmptySlotAt,
+      findRowAndSlotForRack,
+      canPlaceGroup,
+      getRowStart,
+      computeRowSlotPositions,
+      filterEmptyRowContainers,
+      reindexGeometricRow,
+    },
+    options: {
+      ghostW,
+      ghostH,
+      panMode,
+      aisleToolActive,
+    },
+  });
 
   /** Place a rack from catalog into a specific row slot. Slot may be split; positions recomputed so racks sit side-by-side. */
   const stampRackIntoSlot = useCallback(
@@ -1347,312 +1187,48 @@ export default function WarehouseDesigner() {
     [layout.row_containers, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm]
   );
 
-  /** Remove the selected empty row (and any racks placed in its slots) from the layout. */
-  const deleteSelectedRow = useCallback(() => {
-    if (!selectedRowContainerId) return;
-    const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
-    if (!row) return;
-    const rackIdsInRow = new Set(row.slots.map((s) => s.rackId).filter((id): id is number | string => id != null));
-    setLayout((prev) => ({
-      ...prev,
-      row_containers: (prev.row_containers ?? []).filter((rc) => rc.id !== selectedRowContainerId),
-      racks: prev.racks.filter((r) => !rackIdsInRow.has(r.id ?? r.rack_index)),
-    }));
-    setSelectedRowContainerId(null);
-  }, [selectedRowContainerId, layout.row_containers]);
-
-  /** Toggle the selected row between horizontal and vertical orientation. */
-  const rotateSelectedRow = useCallback(() => {
-    if (!selectedRowContainerId) return;
-    const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
-    if (!row?.slots.length) return;
-    const nextOrientation = row.orientation === "vertical" ? "horizontal" : "vertical";
-    const { x: startX, y: startY } = getRowStart(row);
-    const newSlots = computeRowSlotPositions(row.slots, startX, startY, nextOrientation);
-    setLayout((prev) => ({
-      ...prev,
-      row_containers: (prev.row_containers ?? []).map((rc) =>
-        rc.id === selectedRowContainerId ? { ...rc, orientation: nextOrientation, slots: newSlots } : rc
-      ),
-    }));
-  }, [selectedRowContainerId, layout.row_containers]);
-
-  /** Remove trailing empty slots from the selected row (trim row end). */
-  const trimSelectedRowEnd = useCallback(() => {
-    if (!selectedRowContainerId) return;
-    const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
-    if (!row?.slots.length) return;
-    const trimmed = [...row.slots];
-    while (trimmed.length > 0 && trimmed[trimmed.length - 1]?.rackId == null) trimmed.pop();
-    if (trimmed.length === row.slots.length) return;
-    const { x: startX, y: startY } = getRowStart(row);
-    const newSlots = computeRowSlotPositions(trimmed, startX, startY, row.orientation ?? "horizontal");
-    setLayout((prev) => ({
-      ...prev,
-      row_containers: (prev.row_containers ?? []).map((rc) => (rc.id === selectedRowContainerId ? { ...rc, slots: newSlots } : rc)),
-    }));
-  }, [selectedRowContainerId, layout.row_containers]);
-
-  /** Check if moving the row to (newStartX, newStartY) is valid: no overlap with other rows/racks, within grid. */
-  const canMoveRowTo = useCallback(
-    (rowId: string, newStart: { x: number; y: number }) => {
-      const row = (layout.row_containers ?? []).find((rc) => rc.id === rowId);
-      if (!row?.slots.length) return false;
-      const newSlots = computeRowSlotPositions(row.slots, newStart.x, newStart.y, row.orientation ?? "horizontal");
-      const rackIdsInRow = new Set(row.slots.map((s) => s.rackId).filter((id): id is number | string => id != null));
-      const otherRows = (layout.row_containers ?? []).filter((rc) => rc.id !== rowId);
-      const otherRacks = layout.racks.filter((r) => !rackIdsInRow.has(r.id ?? r.rack_index));
-      const gridCols = layout.grid_cols;
-      const gridRows = layout.grid_rows;
-      for (const s of newSlots) {
-        const rect = { x: s.x, y: s.y, width: s.w, height: s.h };
-        if (rect.x < 0 || rect.y < 0 || rect.x + rect.width > gridCols || rect.y + rect.height > gridRows) return false;
-        for (const rc of otherRows) {
-          for (const os of rc.slots) {
-            if (rectsOverlap(rect, { x: os.x, y: os.y, width: os.w, height: os.h })) return false;
-          }
-        }
-        for (const r of otherRacks) {
-          if (rectsOverlap(rect, { x: r.x, y: r.y, width: r.width, height: r.height })) return false;
-        }
-      }
-      for (const slot of newSlots) {
-        if (slot.rackId == null) continue;
-        const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === slot.rackId);
-        if (!rack) continue;
-        const rect = { x: slot.x, y: slot.y, width: rack.width, height: rack.height };
-        if (rect.x < 0 || rect.y < 0 || rect.x + rect.width > gridCols || rect.y + rect.height > gridRows) return false;
-        for (const rc of otherRows) {
-          for (const os of rc.slots) {
-            if (rectsOverlap(rect, { x: os.x, y: os.y, width: os.w, height: os.h })) return false;
-          }
-        }
-        for (const r of otherRacks) {
-          if (rectsOverlap(rect, { x: r.x, y: r.y, width: r.width, height: r.height })) return false;
-        }
-      }
-      return true;
-    },
-    [layout.row_containers, layout.racks, layout.grid_cols, layout.grid_rows]
-  );
-
-  /** Move the entire row (all slots and racks) to a new start position. Call only when canMoveRowTo returned true. */
-  const moveRowToPosition = useCallback(
-    (rowId: string, newStartX: number, newStartY: number) => {
-      const row = (layout.row_containers ?? []).find((rc) => rc.id === rowId);
-      if (!row?.slots.length) return;
-      const newSlots = computeRowSlotPositions(row.slots, newStartX, newStartY, row.orientation ?? "horizontal");
-      setLayout((prev) => {
-        const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((s) => s.rackId != null && String(s.rackId) === String(r.id ?? r.rack_index));
-          if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
-          return r;
-        });
-        const updatedRows = (prev.row_containers ?? []).map((rc) => (rc.id === rowId ? { ...rc, slots: newSlots } : rc));
-        return {
-          ...prev,
-          racks: updatedRacks,
-          row_containers: filterEmptyRowContainers(updatedRows),
-        };
-      });
-    },
-    [layout.row_containers, layout.racks]
-  );
-
-  /** Select a row container (e.g. when clicking an empty slot overlay). Clears rack/aisle/visual selection. */
-  const onSelectRowContainer = useCallback((rowId: string) => {
-    setSelectedRowContainerId(rowId);
-    setSelectedRackId(null);
-    setSelectedRackIds([]);
-    setSelectedAisleIndex(null);
-    setSelectedVisualId(null);
-    setSelectedVisualIds([]);
-    setSelectedPathPointIndex(null);
-    setSelectedPathLine(false);
-  }, []);
-
-  /** Start dragging the selected row by its handle. Call on mousedown on the drag handle. */
-  const onStartRowDrag = useCallback(
-    (e: React.MouseEvent | { clientX: number; clientY: number }) => {
-      if (!selectedRowContainerId) return;
-      const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
-      if (!row?.slots.length) return;
-      const rowStart = getRowStart(row);
-      const cell = getCellFromEvent(e as { clientX: number; clientY: number });
-      if (!cell) return;
-      setDraggingRowId(selectedRowContainerId);
-      setRowDragPreviewStart(rowStart);
-      rowDragPointerOffsetRef.current = { dx: cell.x - rowStart.x, dy: cell.y - rowStart.y };
-      rowDragPreviewStartRef.current = rowStart;
-    },
-    [selectedRowContainerId, layout.row_containers, getCellFromEvent]
-  );
-
-  /** Move an already-placed rack within the same row from one slot index to another. Frees the source slot and inserts into the target (splits if needed). */
-  const moveRackWithinRow = useCallback(
-    (rowId: string, rackId: number | string, fromSlotIndex: number, toSlotIndex: number) => {
-      const row = (layout.row_containers ?? []).find((rc) => rc.id === rowId);
-      if (!row || fromSlotIndex < 0 || fromSlotIndex >= row.slots.length || toSlotIndex < 0 || toSlotIndex >= row.slots.length) return;
-      const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === rackId);
-      if (!rack) return;
-      const w = rack.width;
-      const h = rack.height;
-      const fromSlot = row.slots[fromSlotIndex];
-      const toSlot = row.slots[toSlotIndex];
-      if (!fromSlot || fromSlot.rackId == null || String(fromSlot.rackId) !== String(rackId)) return;
-      const isVertical = row.orientation === "vertical";
-      const targetFits = isVertical ? (toSlot?.h >= h) : (toSlot?.w >= w);
-      if (toSlot?.rackId != null) return; // target must be empty
-      if (!toSlot || !targetFits) return;
-      const { x: startX, y: startY } = getRowStart(row);
-      const afterRemove: EmptyRowSlot[] = row.slots.map((s, i) =>
-        i === fromSlotIndex ? { x: 0, y: startY, w: s.w, h: s.h } : s
-      );
-      const filled: EmptyRowSlot = { x: 0, y: startY, w, h, rackId };
-      const remainder = isVertical
-        ? (toSlot.h > h ? [{ x: 0, y: startY, w: toSlot.w, h: toSlot.h - h }] : [])
-        : (toSlot.w > w ? [{ x: 0, y: startY, w: toSlot.w - w, h: toSlot.h }] : []);
-      const newSlotsRaw: EmptyRowSlot[] = [
-        ...afterRemove.slice(0, toSlotIndex),
-        filled,
-        ...remainder,
-        ...afterRemove.slice(toSlotIndex + 1),
-      ];
-      const newSlots = computeRowSlotPositions(newSlotsRaw, startX, startY, row.orientation ?? "horizontal");
-      setLayout((prev) => {
-        const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((s) => s.rackId != null && String(s.rackId) === String(r.id ?? r.rack_index));
-          if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
-          return r;
-        });
-        return {
-          ...prev,
-          racks: reindexGeometricRow(updatedRacks, rackId),
-          row_containers: (prev.row_containers ?? []).map((rc) => (rc.id === rowId ? { ...rc, slots: newSlots } : rc)),
-        };
-      });
-    },
-    [layout.row_containers, layout.racks]
-  );
-
-  /** Report which empty slot is under the cursor during catalog drag (for blue highlight). */
-  const setCatalogHoveredSlotFromCell = useCallback(
-    (cell: { x: number; y: number } | null) => {
-      if (!cell) {
-        setCatalogHoveredSlot(null);
-        return;
-      }
-      const empty = findEmptySlotAt(layout.row_containers, cell);
-      setCatalogHoveredSlot(empty ? { rowId: empty.rowContainer.id, slotIndex: empty.slotIndex } : null);
-    },
-    [layout.row_containers]
-  );
-
-  /** Fill all empty slots in the selected row with the given template. Horizontal: split by width. Vertical: split by height. */
-  const fillSelectedRowWithTemplate = useCallback(
-    (item: CatalogItem) => {
-      if (!selectedRowContainerId) return;
-      const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
-      if (!row) return;
-      const spec = getCatalogItemSpec(item);
-      const lc = getLevelConfig(spec);
-      const totalBins = getTotalLocations(lc);
-      const volPerBin = totalBins > 0
-        ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
-        : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
-      const w = cmToCells(spec.width_cm);
-      const h = cmToCells(spec.depth_cm);
-      const prefix = ((row.rowPrefix ?? currentRowPrefix) || "A").trim() || "A";
-      const templateColor = item.type === "custom" ? item.template.color : spec.color;
-      const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
-      const { x: startX, y: startY } = getRowStart(row);
-      const isVertical = row.orientation === "vertical";
-      const slotFits = (s: EmptyRowSlot) => isVertical ? (s.w >= h && s.h >= w) : (s.w >= w);
-      const remainderSlot = (s: EmptyRowSlot): EmptyRowSlot => isVertical
-        ? { x: 0, y: startY, w: s.w, h: s.h - w }
-        : { x: 0, y: startY, w: s.w - w, h: s.h };
-      setLayout((prev) => {
-        const rc = (prev.row_containers ?? []).find((r) => r.id === selectedRowContainerId);
-        if (!rc) return prev;
-        const newSlotsRaw: EmptyRowSlot[] = [];
-        const newRacks: RackState[] = [];
-        let nextRackIndex = prev.racks.length + 1;
-        let indexInRow = 1 + rc.slots.filter((s) => s.rackId != null).length;
-        for (const s of rc.slots) {
-          if (s.rackId != null) {
-            newSlotsRaw.push(s);
-            continue;
-          }
-          if (!slotFits(s)) {
-            newSlotsRaw.push(s);
-            continue;
-          }
-          newSlotsRaw.push({ x: 0, y: startY, w: isVertical ? h : w, h: isVertical ? w : h, rackId: nextRackIndex });
-          const rackLabel = `${prefix}${indexInRow}`;
-          const bins = createBinsForRack(
-            spec.aisle_letter,
-            nextRackIndex,
-            spec.levels,
-            spec.bins_per_level,
-            volPerBin,
-            "M1",
-            undefined,
-            spec.width_cm,
-            spec.depth_cm,
-            spec.height_cm,
-            spec.reserve_bin_keys,
-            ROW_LABEL_ADDRESS_PATTERN,
-            rackLabel,
-            1,
-            spec.binNamingType ?? "numeric",
-            lc
-          );
-          newRacks.push({
-            x: 0,
-            y: startY,
-            width: isVertical ? h : w,
-            height: isVertical ? w : h,
-            orientation: "vertical",
-            levels: lc.length,
-            bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
-            levelConfig: lc,
-            length_cm: spec.depth_cm,
-            width_cm: spec.width_cm,
-            height_cm: spec.height_cm,
-            aisle_letter: spec.aisle_letter,
-            rack_index: nextRackIndex,
-            bins,
-            color: rackColor,
-            name: rackLabel,
-            rowPrefix: prefix,
-            indexInRow,
-            ...(isVertical ? { rotationDegrees: 90 as const } : {}),
-            ...(item.type === "custom" ? { templateId: item.template.id } : {}),
-          } as RackState);
-          nextRackIndex += 1;
-          indexInRow += 1;
-          if (isVertical ? (s.h > w) : s.w > w) newSlotsRaw.push(remainderSlot(s));
-        }
-        const newSlots = computeRowSlotPositions(newSlotsRaw, startX, startY, rc.orientation ?? "horizontal");
-        const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((sl) => sl.rackId === (r.id ?? r.rack_index));
-          if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
-          return r;
-        });
-        const newRacksWithPos = newRacks.map((rack) => {
-          const slotForRack = newSlots.find((sl) => sl.rackId === rack.rack_index);
-          return { ...rack, x: slotForRack?.x ?? 0, y: slotForRack?.y ?? startY };
-        });
-        let nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
-        return {
-          ...prev,
-          racks: nextRacks,
-          row_containers: (prev.row_containers ?? []).map((r) => (r.id === selectedRowContainerId ? { ...r, slots: newSlots } : r)),
-        };
-      });
-    },
-    [selectedRowContainerId, layout.row_containers, currentRowPrefix]
-  );
+  const {
+    deleteSelectedRow,
+    rotateSelectedRow,
+    trimSelectedRowEnd,
+    canMoveRowTo,
+    moveRowToPosition,
+    onSelectRowContainer,
+    onStartRowDrag,
+    moveRackWithinRow,
+    setCatalogHoveredSlotFromCell,
+    fillSelectedRowWithTemplate,
+    placeEmptyRow,
+    placeRowWithTemplate,
+  } = useDesignerRowOperations({
+    layout,
+    selectedRowContainerId,
+    currentRowPrefix,
+    rowGapCm,
+    setLayout,
+    setSelectedRowContainerId,
+    setSelectedRackId,
+    setSelectedRackIds,
+    setSelectedAisleIndex,
+    setSelectedVisualId,
+    setSelectedVisualIds,
+    setSelectedPathPointIndex,
+    setSelectedPathLine,
+    setDraggingRowId,
+    setRowDragPreviewStart,
+    setCatalogHoveredSlot,
+    setRowDrawStart,
+    setRowDrawEnd,
+    rowDragPointerOffsetRef,
+    rowDragPreviewStartRef,
+    getCellFromEvent,
+    setCustomTemplates,
+  });
+  canMoveRowToRef.current = canMoveRowTo;
+  moveRowToPositionRef.current = moveRowToPosition;
+  moveRackWithinRowRef.current = moveRackWithinRow;
+  placeEmptyRowRef.current = placeEmptyRow;
+  placeRowWithTemplateRef.current = placeRowWithTemplate;
 
   const getDefaultVisualSize = useCallback((type: VisualElementType): { w: number; h: number } => {
     switch (type) {
@@ -1732,1243 +1308,61 @@ export default function WarehouseDesigner() {
     []
   );
 
-  /** Place a row of racks from cell A to cell B. Template properties (color, reserve bins, dimensions, rowId) are strictly inherited from the selected template. Section numbering is per-template (no global counter). */
-  const _placeRowFromCatalogItem = useCallback(
-    (start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem) => {
-      const spec = getCatalogItemSpec(item);
-      // Use a local copy of the template so we never fall back to another template (e.g. Template A) or stale state.
-      const templateToApply: {
-        color: string;
-        rowId: string;
-        aisle_letter: string;
-        sectionStartIndex: number;
-        nextSectionIndex?: number;
-        templateId: string | null;
-        levels: number;
-        bins_per_level: number;
-        levelConfig?: { level: number; locations: number }[];
-        length_cm: number;
-        width_cm: number;
-        height_cm: number;
-        naming_pattern?: string;
-        addressPattern?: string;
-        binNamingType?: "numeric" | "alpha";
-        reserve_bin_keys?: string[];
-      } = item.type === "custom"
-        ? (JSON.parse(JSON.stringify({
-          color: item.template.color ?? spec.color ?? "#3b82f6",
-          rowId: item.template.rowId ?? item.template.aisle_letter,
-          aisle_letter: item.template.aisle_letter,
-          sectionStartIndex: item.template.sectionStartIndex ?? 1,
-          nextSectionIndex: item.template.nextSectionIndex ?? item.template.sectionStartIndex ?? 1,
-          templateId: item.template.id,
-          levels: item.template.levels,
-          bins_per_level: item.template.bins_per_level,
-          levelConfig: item.template.levelConfig,
-          length_cm: item.template.depth_cm,
-          width_cm: item.template.width_cm,
-          height_cm: item.template.height_cm,
-          naming_pattern: item.template.naming_pattern,
-          addressPattern: item.template.addressPattern,
-          binNamingType: item.template.binNamingType ?? "numeric",
-          reserve_bin_keys: item.template.reserve_bin_keys ? [...item.template.reserve_bin_keys] : undefined,
-        })) as typeof templateToApply)
-        : {
-          color: spec.color ?? "#3b82f6",
-          rowId: spec.rowId ?? spec.aisle_letter,
-          aisle_letter: spec.aisle_letter,
-          sectionStartIndex: spec.sectionStartIndex ?? 1,
-          nextSectionIndex: spec.sectionStartIndex ?? 1,
-          templateId: null,
-          levels: spec.levels,
-          bins_per_level: spec.bins_per_level,
-          levelConfig: spec.levelConfig,
-          length_cm: spec.depth_cm,
-          width_cm: spec.width_cm,
-          height_cm: spec.height_cm,
-          naming_pattern: spec.naming_pattern,
-          addressPattern: spec.addressPattern,
-          binNamingType: spec.binNamingType ?? "numeric",
-          reserve_bin_keys: spec.reserve_bin_keys ? [...spec.reserve_bin_keys] : undefined,
-        };
-
-      // Section numbering: use only templateToApply's section (independent per template/row). No global counter.
-      const startSection = templateToApply.nextSectionIndex ?? templateToApply.sectionStartIndex;
-
-      const pw = cmToCells(templateToApply.width_cm);
-      const ph = cmToCells(templateToApply.length_cm);
-      const gapCells = cmToCells(rowGapCm);
-      const stepW = pw + gapCells;
-      const stepH = ph + gapCells;
-      const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
-      let count: number;
-      let positions: { x: number; y: number }[];
-      if (isHorizontal) {
-        const x0 = Math.min(start.x, end.x);
-        const x1 = Math.max(start.x, end.x);
-        const span = x1 - x0;
-        count = stepW > 0 ? Math.max(0, Math.floor(span / stepW)) : 0;
-        positions = Array.from({ length: count }, (_, i) => ({ x: x0 + i * stepW, y: start.y }));
-      } else {
-        const y0 = Math.min(start.y, end.y);
-        const y1 = Math.max(start.y, end.y);
-        const span = y1 - y0;
-        count = stepH > 0 ? Math.max(0, Math.floor(span / stepH)) : 0;
-        positions = Array.from({ length: count }, (_, i) => ({ x: start.x, y: y0 + i * stepH }));
-      }
-      const lcRow = getLevelConfig(templateToApply);
-      const totalBinsRow = getTotalLocations(lcRow);
-      const volPerBin = totalBinsRow > 0
-        ? volumePerBinFromTotal(templateToApply.width_cm, templateToApply.length_cm, templateToApply.height_cm, totalBinsRow)
-        : volumePerBin(templateToApply.width_cm, templateToApply.length_cm, templateToApply.height_cm, templateToApply.levels, templateToApply.bins_per_level);
-      const rackStubs: { x: number; y: number }[] = [];
-      for (const pos of positions) {
-        const x = Math.max(0, Math.min(layout.grid_cols - pw, pos.x));
-        const y = Math.max(0, Math.min(layout.grid_rows - ph, pos.y));
-        const rect = { x, y, width: pw, height: ph };
-        const overlapsExisting = layout.racks.some((r) => rectsOverlap(rect, r));
-        const overlapsNew = rackStubs.some((s) => rectsOverlap(rect, { ...s, width: pw, height: ph }));
-        if (overlapsExisting || overlapsNew) continue;
-        rackStubs.push({ x, y });
-      }
-      if (rackStubs.length > 0) {
-        const prefix = (currentRowPrefix || "A").trim() || "A";
-        setLayout((prev) => {
-          const nextRackIndexBase = prev.racks.length + 1;
-          const startIndexInRow = getNextIndexInRow(prev.racks, prefix);
-          const newRacks: RackState[] = rackStubs.map((pos, i) => {
-            const rackIndex = nextRackIndexBase + i;
-            const indexInRow = startIndexInRow + i;
-            const rackLabel = `${prefix}${indexInRow}`;
-            const bins = createBinsForRack(
-              templateToApply.aisle_letter,
-              rackIndex,
-              templateToApply.levels,
-              templateToApply.bins_per_level,
-              volPerBin,
-              "M1",
-              undefined,
-              templateToApply.width_cm,
-              templateToApply.length_cm,
-              templateToApply.height_cm,
-              templateToApply.reserve_bin_keys,
-              ROW_LABEL_ADDRESS_PATTERN,
-              rackLabel,
-              1,
-              templateToApply.binNamingType ?? "numeric",
-              lcRow
-            );
-            return {
-              x: pos.x,
-              y: pos.y,
-              width: pw,
-              height: ph,
-              orientation: "vertical",
-              levels: lcRow.length,
-              bins_per_level: lcRow[0]?.locations ?? templateToApply.bins_per_level,
-              levelConfig: lcRow,
-              length_cm: templateToApply.length_cm,
-              width_cm: templateToApply.width_cm,
-              height_cm: templateToApply.height_cm,
-              aisle_letter: templateToApply.aisle_letter,
-              rack_index: rackIndex,
-              bins,
-              color: templateToApply.color,
-              name: rackLabel,
-              rowPrefix: prefix,
-              indexInRow,
-              ...(templateToApply.templateId != null ? { templateId: templateToApply.templateId } : {}),
-            } as RackState;
-          });
-          return { ...prev, racks: [...prev.racks, ...newRacks] };
-        });
-        if (templateToApply.templateId != null) {
-          setCustomTemplates((prev) =>
-            prev.map((t) =>
-              t.id === templateToApply.templateId ? { ...t, nextSectionIndex: startSection + rackStubs.length } : t
-            )
-          );
-        }
-      }
-      setRowDrawStart(null);
-      setRowDrawEnd(null);
-      return rackStubs.length;
-    },
-    [layout.racks, layout.grid_cols, layout.grid_rows, rowGapCm, currentRowPrefix, setCustomTemplates]
-  );
-  void _placeRowFromCatalogItem;
-
-  /** Create an empty row as one container of available space (one big slot). Racks placed later will split it and push slots right. */
-  const placeEmptyRow = useCallback(
-    (start: { x: number; y: number }, end: { x: number; y: number }) => {
-      const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
-      const gapCells = Math.max(0, cmToCells(rowGapCm));
-
-      const slotW = isHorizontal ? DEFAULT_ROW_SLOT_W : DEFAULT_ROW_SLOT_H;
-      const slotH = isHorizontal ? DEFAULT_ROW_SLOT_H : DEFAULT_ROW_SLOT_W;
-      const step = (isHorizontal ? slotW : slotH) + gapCells;
-
-      const x0 = Math.min(start.x, end.x);
-      const x1 = Math.max(start.x, end.x);
-      const y0 = Math.min(start.y, end.y);
-      const y1 = Math.max(start.y, end.y);
-
-      const startX = Math.max(0, Math.min(layout.grid_cols - slotW, isHorizontal ? x0 : start.x));
-      const startY = Math.max(0, Math.min(layout.grid_rows - slotH, isHorizontal ? start.y : y0));
-
-      const span = isHorizontal ? (x1 - x0) : (y1 - y0);
-      // Strictly match drag distance (no implicit extra slot at the end).
-      const desiredCount = step > 0 ? Math.max(1, Math.floor(span / step)) : 1;
-      const maxCount = step > 0
-        ? Math.max(
-            0,
-            Math.floor((isHorizontal ? (layout.grid_cols - slotW - startX) : (layout.grid_rows - slotH - startY)) / step) + 1
-          )
-        : 0;
-      const count = Math.max(0, Math.min(desiredCount, maxCount || desiredCount));
-      if (count <= 0) return;
-
-      const slots: EmptyRowSlot[] = Array.from({ length: count }, (_, i) => {
-        const x = isHorizontal ? startX + i * step : startX;
-        const y = isHorizontal ? startY : startY + i * step;
-        return { x, y, w: slotW, h: slotH };
-      });
-
-      const overlapsExisting = slots.some((s) =>
-        layout.racks.some((r) => rectsOverlap({ x: s.x, y: s.y, width: s.w, height: s.h }, r))
-      );
-      const overlapsOther = slots.some((s) =>
-        (layout.row_containers ?? []).some((rc) =>
-          rc.slots.some((o) => rectsOverlap({ x: s.x, y: s.y, width: s.w, height: s.h }, { x: o.x, y: o.y, width: o.w, height: o.h }))
-        )
-      );
-      if (overlapsExisting || overlapsOther) return;
-
-      const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const rowPrefix = (currentRowPrefix || "A").trim() || "A";
-      const orientation: "horizontal" | "vertical" = isHorizontal ? "horizontal" : "vertical";
-      const newRow: RowContainer = { id, rowPrefix, orientation, slots };
-      setLayout((prev) => ({ ...prev, row_containers: [...(prev.row_containers ?? []), newRow] }));
-      setRowDrawStart(null);
-      setRowDrawEnd(null);
-    },
-    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, rowGapCm]
-  );
-
-  /** Create a row with orientation from drag and immediately fill it with the given template (vertical → swapped dims + rotation). */
-  const placeRowWithTemplate = useCallback(
-    (start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem) => {
-      const ph = DEFAULT_ROW_SLOT_H;
-      const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
-      let x0: number, y0: number, span: number;
-      if (isHorizontal) {
-        x0 = Math.min(start.x, end.x);
-        const x1 = Math.max(start.x, end.x);
-        y0 = start.y;
-        span = Math.max(1, x1 - x0);
-      } else {
-        x0 = start.x;
-        y0 = Math.min(start.y, end.y);
-        const y1 = Math.max(start.y, end.y);
-        span = Math.max(1, y1 - y0);
-      }
-      const clampedX = Math.max(0, Math.min(layout.grid_cols - 1, x0));
-      const clampedY = Math.max(0, Math.min(layout.grid_rows - (isHorizontal ? ph : span), y0));
-      const w = isHorizontal ? Math.min(span, layout.grid_cols - clampedX) : DEFAULT_ROW_SLOT_H;
-      const h = isHorizontal ? ph : Math.min(span, layout.grid_rows - clampedY);
-      const rect = { x: clampedX, y: clampedY, width: w, height: h };
-      const overlapsExisting = layout.racks.some((r) => rectsOverlap(rect, r));
-      const overlapsOther = layout.row_containers?.some((rc) =>
-        rc.slots.some((s) => rectsOverlap(rect, { x: s.x, y: s.y, width: s.w, height: s.h }))
-      );
-      if (overlapsExisting || overlapsOther) return;
-      const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const rowPrefix = (currentRowPrefix || "A").trim() || "A";
-      const orientation: "horizontal" | "vertical" = isHorizontal ? "horizontal" : "vertical";
-      const spec = getCatalogItemSpec(item);
-      const lc = getLevelConfig(spec);
-      const totalBins = getTotalLocations(lc);
-      const volPerBin = totalBins > 0
-        ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
-        : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
-      const cellW = cmToCells(spec.width_cm);
-      const cellH = cmToCells(spec.depth_cm);
-      const templateColor = item.type === "custom" ? item.template.color : spec.color;
-      const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
-      const startX = clampedX;
-      const startY = clampedY;
-      const isVertical = orientation === "vertical";
-      const slotFits = (s: EmptyRowSlot) => isVertical ? (s.w >= cellH && s.h >= cellW) : (s.w >= cellW);
-      const remainderSlot = (s: EmptyRowSlot): EmptyRowSlot => isVertical
-        ? { x: 0, y: startY, w: s.w, h: s.h - cellW }
-        : { x: 0, y: startY, w: s.w - cellW, h: s.h };
-      setLayout((prev) => {
-        const initialSlots: EmptyRowSlot[] = [{ x: clampedX, y: clampedY, w, h }];
-        const newSlotsRaw: EmptyRowSlot[] = [];
-        const newRacks: RackState[] = [];
-        let nextRackIndex = prev.racks.length + 1;
-        let indexInRow = 1;
-        const toProcess = [...initialSlots];
-        while (toProcess.length > 0) {
-          const s = toProcess.shift()!;
-          if (s.rackId != null) {
-            newSlotsRaw.push(s);
-            continue;
-          }
-          if (!slotFits(s)) {
-            newSlotsRaw.push(s);
-            continue;
-          }
-          newSlotsRaw.push({ x: 0, y: startY, w: isVertical ? cellH : cellW, h: isVertical ? cellW : cellH, rackId: nextRackIndex });
-          const rackLabel = `${rowPrefix}${indexInRow}`;
-          const bins = createBinsForRack(
-            spec.aisle_letter,
-            nextRackIndex,
-            spec.levels,
-            spec.bins_per_level,
-            volPerBin,
-            "M1",
-            undefined,
-            spec.width_cm,
-            spec.depth_cm,
-            spec.height_cm,
-            spec.reserve_bin_keys,
-            ROW_LABEL_ADDRESS_PATTERN,
-            rackLabel,
-            1,
-            spec.binNamingType ?? "numeric",
-            lc
-          );
-          newRacks.push({
-            x: 0,
-            y: startY,
-            width: isVertical ? cellH : cellW,
-            height: isVertical ? cellW : cellH,
-            orientation: "vertical",
-            levels: lc.length,
-            bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
-            levelConfig: lc,
-            length_cm: spec.depth_cm,
-            width_cm: spec.width_cm,
-            height_cm: spec.height_cm,
-            aisle_letter: spec.aisle_letter,
-            rack_index: nextRackIndex,
-            bins,
-            rackLevels: binsToLevels(bins),
-            color: rackColor,
-            name: rackLabel,
-            rowPrefix,
-            indexInRow,
-            ...(isVertical ? { rotationDegrees: 90 as const } : {}),
-            ...(item.type === "custom" ? { templateId: item.template.id } : {}),
-          } as RackState);
-          nextRackIndex += 1;
-          indexInRow += 1;
-          if (isVertical ? (s.h > cellW) : (s.w > cellW)) toProcess.unshift(remainderSlot(s));
-        }
-        // Lock row length: do not leave a trailing "ghost" empty slot smaller than one rack (no extra kafelki on tool/template deselection).
-        const minSlotAlongRow = isVertical ? cellW : cellW;
-        while (
-          newSlotsRaw.length > 0 &&
-          newSlotsRaw[newSlotsRaw.length - 1]?.rackId == null &&
-          (isVertical ? (newSlotsRaw[newSlotsRaw.length - 1]?.h ?? 0) < minSlotAlongRow : (newSlotsRaw[newSlotsRaw.length - 1]?.w ?? 0) < minSlotAlongRow)
-        ) {
-          newSlotsRaw.pop();
-        }
-        const newSlots = computeRowSlotPositions(newSlotsRaw, startX, startY, orientation);
-        const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((sl) => sl.rackId === (r.id ?? r.rack_index));
-          if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
-          return r;
-        });
-        const newRacksWithPos = newRacks.map((rack) => {
-          const slotForRack = newSlots.find((sl) => sl.rackId === rack.rack_index);
-          return { ...rack, x: slotForRack?.x ?? 0, y: slotForRack?.y ?? startY };
-        });
-        const nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
-        return {
-          ...prev,
-          row_containers: [...(prev.row_containers ?? []), { id, rowPrefix, orientation, slots: newSlots }],
-          racks: nextRacks,
-        };
-      });
-      setRowDrawStart(null);
-      setRowDrawEnd(null);
-    },
-    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, currentRowPrefix]
-  );
-
-  const handleCanvasMouseMove = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      lastMouseRef.current = { clientX: e.clientX, clientY: e.clientY };
-      const cell = getCellFromEvent(e);
-      if (cell) {
-        const x = cell.x * GRID_UNIT_CM;
-        const y = cell.y * GRID_UNIT_CM;
-        cursorPendingRef.current = { x, y };
-        if (cursorRafRef.current == null) {
-          cursorRafRef.current = requestAnimationFrame(() => {
-            cursorRafRef.current = null;
-            const pending = cursorPendingRef.current;
-            if (pending) setCursorCm((prev) => (prev != null && prev.x === pending.x && prev.y === pending.y ? prev : pending));
-          });
-        }
-      }
-      if (isPanning) {
-        const ne = e.nativeEvent as MouseEvent;
-        const movX = typeof ne.movementX === "number" ? ne.movementX : (panStartRef.current ? e.clientX - panStartRef.current.x : 0);
-        const movY = typeof ne.movementY === "number" ? ne.movementY : (panStartRef.current ? e.clientY - panStartRef.current.y : 0);
-        setPan((p) => ({ x: p.x + movX, y: p.y + movY }));
-        panStartRef.current = { x: e.clientX, y: e.clientY };
-      }
-      if (placementMode && cell) {
-        if (rafIdRef.current === 0) {
-          rafIdRef.current = requestAnimationFrame(() => {
-            rafIdRef.current = 0;
-            const last = lastMouseRef.current;
-            if (last && svgRef.current) {
-              const c = getCellFromEvent(last);
-              if (c) {
-                const x = Math.max(0, Math.min(layout.grid_cols - ghostW, c.x));
-                const y = Math.max(0, Math.min(layout.grid_rows - ghostH, c.y));
-                setGhostPosition((p) => (p?.x === x && p?.y === y ? p : { x, y }));
-              }
-            }
-          });
-        }
-      }
-      if (draggingRowId != null && rowDragPointerOffsetRef.current && cell) {
-        const { dx, dy } = rowDragPointerOffsetRef.current;
-        let px = Math.max(0, Math.min(layout.grid_cols - 1, Math.round(cell.x - dx)));
-        let py = Math.max(0, Math.min(layout.grid_rows - 1, Math.round(cell.y - dy)));
-        if (showDimensions) {
-          const row = layout.row_containers?.find((rc) => rc.id === draggingRowId);
-          if (row) {
-            const snapped = snapRowPreviewToDistance(row, { x: px, y: py }, layout);
-            px = snapped.x;
-            py = snapped.y;
-          }
-        }
-        setRowDragPreviewStart((prev) => (prev?.x === px && prev?.y === py ? prev : { x: px, y: py }));
-        rowDragPreviewStartRef.current = { x: px, y: py };
-      }
-      if (rowToolActive && rowDrawStart && cell) {
-        setRowPreviewCursor({ x: e.clientX, y: e.clientY });
-        rowDrawEndPendingRef.current = cell;
-        if (rowDrawEndRafRef.current == null) {
-          rowDrawEndRafRef.current = requestAnimationFrame(() => {
-            rowDrawEndRafRef.current = null;
-            const pending = rowDrawEndPendingRef.current;
-            if (pending) setRowDrawEnd((prev) => (prev?.x === pending.x && prev?.y === pending.y ? prev : pending));
-          });
-        }
-      }
-      if (marqueeStart != null && cell && draggingRackId == null && draggingRowId == null && !rowToolActive && !aisleDrawStart && !placementMode) {
-        setMarqueeEnd((prev) => (prev?.x === cell.x && prev?.y === cell.y ? prev : cell));
-      }
-      if (draggingRackId != null && dragOffset != null && cell) {
-        const desired = { x: cell.x - dragOffset.dx, y: cell.y - dragOffset.dy };
-        const anchorRack = layout.racks.find((r) => (r.id ?? r.rack_index) === draggingRackId);
-        const w = anchorRack?.width ?? 1;
-        const h = anchorRack?.height ?? 1;
-        if (selectedRackIds.length > 1 && anchorRack) {
-          const snappedAnchor = {
-            x: Math.round(desired.x),
-            y: Math.round(desired.y),
-          };
-          setRackDragPreviewPosition(snappedAnchor);
-        } else {
-          const excludeIds = selectedRackIds.length > 1 ? selectedRackIds : [draggingRackId];
-          const rowSnap = findSnapToRowPosition(layout.racks, desired.x, desired.y, w, h, draggingRackId);
-          const freeSnap = snapToGrid
-            ? snapPosition(desired, w, h, layout.racks.filter((r) => !excludeIds.includes(r.id ?? r.rack_index)), layout.grid_cols, layout.grid_rows, aisleWidthCm)
-            : { x: Math.max(0, Math.min(layout.grid_cols - w, Math.round(desired.x))), y: Math.max(0, Math.min(layout.grid_rows - h, Math.round(desired.y))) };
-          const SNAP_THRESHOLD = 2.5;
-          const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
-          let pos: { x: number; y: number };
-          if (rowSnap && dist(desired, rowSnap) <= SNAP_THRESHOLD * SNAP_THRESHOLD) {
-            pos = { x: rowSnap.x, y: rowSnap.y };
-          } else if (dist(desired, freeSnap) <= SNAP_THRESHOLD * SNAP_THRESHOLD) {
-            pos = freeSnap;
-          } else {
-            pos = { x: Math.max(0, Math.min(layout.grid_cols - w, Math.round(desired.x))), y: Math.max(0, Math.min(layout.grid_rows - h, Math.round(desired.y))) };
-          }
-          setRackDragPreviewPosition(pos);
-        }
-      }
-      if (draggingVisualId != null && dragOffsetVisual != null && cell) {
-        const ve = layout.visual_elements?.find((v) => v.id === draggingVisualId);
-        if (ve) {
-          const desired = { x: cell.x - dragOffsetVisual.dx, y: cell.y - dragOffsetVisual.dy };
-          const w = ve.width;
-          const h = ve.height;
-          const pos = {
-            x: Math.max(0, Math.min(layout.grid_cols - w, Math.round(desired.x))),
-            y: Math.max(0, Math.min(layout.grid_rows - h, Math.round(desired.y))),
-          };
-          setLayout((prev) => ({
-            ...prev,
-            visual_elements: (prev.visual_elements ?? []).map((el) => (el.id === draggingVisualId ? { ...el, x: pos.x, y: pos.y } : el)),
-          }));
-        }
-      }
-      if (draggingPathPointIndex !== null && cell) {
-        setManualPathPoints((prev) => prev.map((p, i) => (i === draggingPathPointIndex ? { x: Math.max(0, Math.min(layout.grid_cols - 1, cell.x)), y: Math.max(0, Math.min(layout.grid_rows - 1, cell.y)) } : p)));
-      }
-      if (draggingWallEnd != null && cell) {
-        const ve = (layout.visual_elements ?? []).find((v) => v.id === draggingWallEnd.visualId);
-        if (ve && ve.type === "wall") {
-          const len = ve.length ?? ve.width;
-          if (draggingWallEnd.end === 0) {
-            const newX = Math.max(0, Math.min(ve.x + len - 1, Math.round(cell.x)));
-            const newLen = ve.x + len - newX;
-            setLayout((prev) => ({
-              ...prev,
-              visual_elements: (prev.visual_elements ?? []).map((el) => (el.id === ve.id ? { ...el, x: newX, width: Math.max(1, newLen), length: Math.max(1, newLen) } : el)),
-            }));
-          } else {
-            const newLen = Math.max(1, Math.round(cell.x - ve.x));
-            setLayout((prev) => ({
-              ...prev,
-              visual_elements: (prev.visual_elements ?? []).map((el) => (el.id === ve.id ? { ...el, width: newLen, length: newLen } : el)),
-            }));
-          }
-        }
-      }
-    },
-    [placementMode, draggingRackId, dragOffset, draggingVisualId, dragOffsetVisual, draggingWallEnd, draggingPathPointIndex, getCellFromEvent, layout.racks, layout.visual_elements, layout.grid_cols, layout.grid_rows, ghostW, ghostH, isPanning, marqueeStart, rowToolActive, rowDrawStart, snapToGrid, aisleWidthCm, draggingRowId, selectedRackIds]
-  );
-
-  const handleCanvasMouseDown = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      const cell = getCellFromEvent(e);
-      if (e.button === 1) {
-        e.preventDefault();
-        panStartRef.current = { x: e.clientX, y: e.clientY };
-        setIsPanning(true);
-        return;
-      }
-      if (panMode && e.button === 0) {
-        panStartRef.current = { x: e.clientX, y: e.clientY };
-        setIsPanning(true);
-        return;
-      }
-      if (!cell) {
-        if (e.button === 0) {
-          setSelectedRackId(null);
-          setSelectedRackIds([]);
-          setSelectedVisualId(null);
-          setSelectedVisualIds([]);
-          setSelectedPathPointIndex(null);
-          setSelectedPathLine(false);
-          setSelectedAisleIndex(null);
-        }
-        return;
-      }
-      if (e.button === 0 && selectedWarehouseId != null && (layoutMode === LayoutMode.ADD_START || layoutMode === LayoutMode.ADD_PACK || layoutMode === LayoutMode.ADD_DOCK)) {
-        const type = layoutMode === LayoutMode.ADD_START ? "PICK_START" : layoutMode === LayoutMode.ADD_PACK ? "PACKING" : "DOCK";
-        addSpecialLocation(cell, type);
-        return;
-      }
-      if (isLiveView && e.button === 0) {
-        const hit = layout.racks.find((r) => cell.x >= r.x && cell.x < r.x + r.width && cell.y >= r.y && cell.y < r.y + r.height);
-        if (hit) {
-          setSelectedRackId(hit.id ?? hit.rack_index);
-          setSelectedRackIds([hit.id ?? hit.rack_index]);
-          setShowElevationForRackId(hit.id ?? hit.rack_index);
-          setSelectedVisualId(null);
-          setSelectedVisualIds([]);
-          setSelectedAisleIndex(null);
-        } else {
-          const aisleIndex = layout.aisles.findIndex((a) => cell.x >= a.x && cell.x < a.x + a.width && cell.y >= a.y && cell.y < a.y + a.height);
-          if (aisleIndex >= 0) {
-            setSelectedAisleIndex(aisleIndex);
-            setSelectedRackId(null);
-            setSelectedRackIds([]);
-            setShowElevationForRackId(null);
-          } else {
-            setSelectedRackId(null);
-            setSelectedRackIds([]);
-            setSelectedAisleIndex(null);
-            setShowElevationForRackId(null);
-          }
-        }
-        return;
-      }
-      if (e.button === 0 && showPickingPath && manualPathPoints.length > 0) {
-        const pathPoints = manualPathPoints.map((p) => ({ x: p.x + 0.5, y: p.y + 0.5 }));
-        const pathPointIndex = manualPathPoints.length > 0 ? manualPathPoints.findIndex((p) => Math.abs(p.x + 0.5 - (cell.x + 0.5)) <= 1 && Math.abs(p.y + 0.5 - (cell.y + 0.5)) <= 1) : -1;
-        if (pathPointIndex >= 0) {
-          setSelectedPathPointIndex(pathPointIndex);
-          setSelectedPathLine(false);
-          setSelectedRackId(null);
-          setSelectedRackIds([]);
-          setSelectedVisualId(null);
-          setSelectedVisualIds([]);
-          setSelectedAisleIndex(null);
-          if (pathToolActive) setDraggingPathPointIndex(pathPointIndex);
-          return;
-        }
-        const cx = cell.x + 0.5;
-        const cy = cell.y + 0.5;
-        let lineHitSegmentIndex = -1;
-        let insertAt: { x: number; y: number } | null = null;
-        if (manualPathPoints.length >= 2) {
-          for (let i = 0; i < manualPathPoints.length - 1; i++) {
-            const ax = pathPoints[i].x;
-            const ay = pathPoints[i].y;
-            const bx = pathPoints[i + 1].x;
-            const by = pathPoints[i + 1].y;
-            const t = Math.max(0, Math.min(1, ((cx - ax) * (bx - ax) + (cy - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2 || 1)));
-            const px = ax + t * (bx - ax);
-            const py = ay + t * (by - ay);
-            if (Math.hypot(cx - px, cy - py) <= 1.5) {
-              lineHitSegmentIndex = i;
-              insertAt = { x: Math.round(px - 0.5), y: Math.round(py - 0.5) };
-              break;
-            }
-          }
-        }
-        if (pathToolActive && lineHitSegmentIndex >= 0 && insertAt) {
-          setManualPathPoints((prev) => {
-            const next = [...prev.slice(0, lineHitSegmentIndex + 1), insertAt!, ...prev.slice(lineHitSegmentIndex + 1)];
-            return next;
-          });
-          setSelectedPathPointIndex(lineHitSegmentIndex + 1);
-          setSelectedPathLine(false);
-          setSelectedRackId(null);
-          setSelectedRackIds([]);
-          setSelectedVisualId(null);
-          setSelectedVisualIds([]);
-          setSelectedAisleIndex(null);
-          setDraggingPathPointIndex(lineHitSegmentIndex + 1);
-          return;
-        }
-        if (lineHitSegmentIndex >= 0) {
-          setSelectedPathLine(true);
-          setSelectedPathPointIndex(null);
-          setSelectedRackId(null);
-          setSelectedRackIds([]);
-          setSelectedVisualId(null);
-          setSelectedVisualIds([]);
-          setSelectedAisleIndex(null);
-          return;
-        }
-      }
-      setSelectedPathPointIndex(null);
-      setSelectedPathLine(false);
-      if (pathToolActive && e.button === 0) {
-        const pathPointIndex = manualPathPoints.findIndex((p) => Math.abs(p.x - cell.x) <= 1 && Math.abs(p.y - cell.y) <= 1);
-        if (pathPointIndex >= 0) {
-          setDraggingPathPointIndex(pathPointIndex);
-          return;
-        }
-        const aisleIdx = layout.aisles.findIndex((a) => cell.x >= a.x && cell.x < a.x + a.width && cell.y >= a.y && cell.y < a.y + a.height);
-        const hitRack = layout.racks.find((r) => cell.x >= r.x && cell.x < r.x + r.width && cell.y >= r.y && cell.y < r.y + r.height);
-        const vs = [...(layout.visual_elements ?? [])].sort((a, b) => b.zIndex - a.zIndex);
-        const hitV = vs.find((ve) => cell.x >= ve.x && cell.x < ve.x + ve.width && cell.y >= ve.y && cell.y < ve.y + ve.height);
-        if (aisleIdx < 0 && !hitRack && !hitV) {
-          setManualPathPoints((prev) => [...prev, { x: cell.x, y: cell.y }]);
-          setShowPickingPath(true);
-          return;
-        }
-      }
-      if (placementMode) {
-        stampRackAt(cell);
-        return;
-      }
-      if (rowToolActive && e.button === 0) {
-        if (!rowDrawStart) {
-          rowDrawTemplateRef.current = rowToolTemplate?.type === "custom"
-            ? { type: "custom" as const, template: { ...rowToolTemplate.template } }
-            : rowToolTemplate ?? null;
-          setRowDrawStart(cell);
-          setRowDrawEnd(cell);
-        }
-        return;
-      }
-      if (aisleToolActive && e.button === 0) {
-        setAisleDrawStart(cell);
-        return;
-      }
-      const aisleIndex = layout.aisles.findIndex(
-        (a) => cell.x >= a.x && cell.x < a.x + a.width && cell.y >= a.y && cell.y < a.y + a.height
-      );
-      if (aisleIndex >= 0 && e.button === 0) {
-        setSelectedAisleIndex(aisleIndex);
-        setSelectedRackId(null);
-        setSelectedRackIds([]);
-        setSelectedVisualId(null);
-        setSelectedVisualIds([]);
-        setSelectedPathPointIndex(null);
-        setSelectedPathLine(false);
-        return;
-      }
-      if (e.button === 0 && selectedVisualIds.length > 0) {
-        for (const vid of selectedVisualIds) {
-          const ve = (layout.visual_elements ?? []).find((v) => v.id === vid);
-          if (ve?.type !== "wall") continue;
-          const len = ve.length ?? ve.width;
-          const th = ve.thickness ?? ve.height;
-          const leftEnd = { x: ve.x, y: ve.y + th / 2 };
-          const rightEnd = { x: ve.x + len, y: ve.y + th / 2 };
-          if (Math.abs(cell.x - leftEnd.x) <= 1.5 && Math.abs(cell.y - leftEnd.y) <= 1.5) {
-            setDraggingWallEnd({ visualId: ve.id, end: 0 });
-            return;
-          }
-          if (Math.abs(cell.x - rightEnd.x) <= 1.5 && Math.abs(cell.y - rightEnd.y) <= 1.5) {
-            setDraggingWallEnd({ visualId: ve.id, end: 1 });
-            return;
-          }
-        }
-      }
-      const visuals = [...(layout.visual_elements ?? [])].sort((a, b) => b.zIndex - a.zIndex);
-      const hitVisual = visuals.find((ve) => cell.x >= ve.x && cell.x < ve.x + ve.width && cell.y >= ve.y && cell.y < ve.y + ve.height);
-      if (hitVisual && e.button === 0) {
-        setSelectedPathPointIndex(null);
-        setSelectedPathLine(false);
-        if (e.shiftKey) {
-          setSelectedVisualIds((prev) =>
-            prev.includes(hitVisual.id) ? prev.filter((id) => id !== hitVisual.id) : [...prev, hitVisual.id]
-          );
-          setSelectedVisualId(hitVisual.id);
-          setSelectedRackId(null);
-          setSelectedRackIds([]);
-          setSelectedAisleIndex(null);
-          setDraggingVisualId(hitVisual.id);
-          setDragOffsetVisual({ dx: cell.x - hitVisual.x, dy: cell.y - hitVisual.y });
-        } else {
-          setSelectedVisualIds([hitVisual.id]);
-          setSelectedVisualId(hitVisual.id);
-          setSelectedRackId(null);
-          setSelectedRackIds([]);
-          setSelectedAisleIndex(null);
-          setDraggingVisualId(hitVisual.id);
-          setDragOffsetVisual({ dx: cell.x - hitVisual.x, dy: cell.y - hitVisual.y });
-        }
-        return;
-      }
-      const hit = layout.racks.find(
-        (r) => cell.x >= r.x && cell.x < r.x + r.width && cell.y >= r.y && cell.y < r.y + r.height
-      );
-      if (hit) {
-        setSelectedPathPointIndex(null);
-        setSelectedPathLine(false);
-        const rid = hit.id ?? hit.rack_index;
-        if (e.ctrlKey || e.metaKey) {
-          setSelectedRackIds((prev) => (prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]));
-          setSelectedRackId(rid);
-        } else {
-          setSelectedRackId(rid);
-          setSelectedRackIds((prev) => (prev.includes(rid) ? prev : [rid]));
-          setDraggingRackId(rid);
-          setDragOffset({ dx: cell.x - hit.x, dy: cell.y - hit.y });
-          setRackDragPreviewPosition({ x: hit.x, y: hit.y });
-          if (mainView !== "layout") {
-            setMainView("magazyn");
-            setSelectedRackIdForSideView(rid);
-            setSelectedLocationForProducts(null);
-            setProductSearchQuery("");
-            setShowAllProductsInSidebar(false);
-            setDraggingRackId(null);
-          }
-        }
-      } else {
-        const emptySlotHit = findEmptySlotAt(layout.row_containers, cell);
-        if (emptySlotHit && e.button === 0 && !(e.ctrlKey || e.metaKey)) {
-          setSelectedRowContainerId(emptySlotHit.rowContainer.id);
-          setSelectedRowContainerIds([emptySlotHit.rowContainer.id]);
-          setSelectedRackId(null);
-          setSelectedRackIds([]);
-          setSelectedAisleIndex(null);
-          setSelectedVisualId(null);
-          setSelectedVisualIds([]);
-          setSelectedPathPointIndex(null);
-          setSelectedPathLine(false);
-          return;
-        }
-        if (!(e.ctrlKey || e.metaKey)) {
-          setSelectedRackId(null);
-          setSelectedRackIds([]);
-          setSelectedRowContainerId(null);
-          setSelectedRowContainerIds([]);
-          setSelectedAisleIndex(null);
-          setSelectedVisualId(null);
-          setSelectedVisualIds([]);
-          setSelectedPathPointIndex(null);
-          setSelectedPathLine(false);
-          if (e.button === 0) setRowToolTemplate(null);
-        }
-        setMarqueeStart(cell);
-        setMarqueeEnd(cell);
-      }
-    },
-    [getCellFromEvent, placementMode, layout.racks, layout.aisles, layout.visual_elements, layout.row_containers, stampRackAt, panMode, aisleToolActive, rowToolActive, rowToolTemplate, rowDrawStart, pathToolActive, manualPathPoints, isLiveView, mainView, setMainView, setSelectedRackIdForSideView, setSelectedLocationForProducts, setDraggingRackId, layoutMode, selectedWarehouseId, addSpecialLocation]
-  );
-
-  const handleCanvasMouseUp = useCallback(() => {
-    const templateAtDrawStart = rowDrawTemplateRef.current;
-    if (rowToolActive && rowDrawStart) {
-      let end = rowDrawEndPendingRef.current ?? rowDrawEnd;
-      if (end == null && lastMouseRef.current && svgRef.current) {
-        const rect = svgRef.current.getBoundingClientRect();
-        const col = (lastMouseRef.current.clientX - rect.left) / rect.width * layout.grid_cols;
-        const row = (lastMouseRef.current.clientY - rect.top) / rect.height * layout.grid_rows;
-        end = { x: Math.max(0, Math.min(layout.grid_cols - 1, Math.round(col))), y: Math.max(0, Math.min(layout.grid_rows - 1, Math.round(row))) };
-      }
-      if (end) {
-        const activeTemplate = templateAtDrawStart ?? rowToolTemplate;
-        if (activeTemplate) {
-          placeRowWithTemplate(rowDrawStart, end, activeTemplate);
-        } else {
-          placeEmptyRow(rowDrawStart, end);
-        }
-      }
-      rowDrawTemplateRef.current = null;
-      rowDrawEndPendingRef.current = null;
-      if (rowDrawEndRafRef.current != null) {
-        cancelAnimationFrame(rowDrawEndRafRef.current);
-        rowDrawEndRafRef.current = null;
-      }
-      setRowDrawStart(null);
-      setRowDrawEnd(null);
-      setRowPreviewCursor(null);
-    }
-    if (marqueeStart && marqueeEnd) {
-      const x0 = Math.min(marqueeStart.x, marqueeEnd.x);
-      const y0 = Math.min(marqueeStart.y, marqueeEnd.y);
-      const x1 = Math.max(marqueeStart.x, marqueeEnd.x);
-      const y1 = Math.max(marqueeStart.y, marqueeEnd.y);
-      const hasExtent = marqueeStart.x !== marqueeEnd.x || marqueeStart.y !== marqueeEnd.y;
-      if (hasExtent) {
-        const inBoxRacks = layout.racks.filter((r) => r.x < x1 + r.width && r.x + r.width > x0 && r.y < y1 + r.height && r.y + r.height > y0);
-        const rowIdsInBox = new Set<string>();
-        for (const rc of layout.row_containers ?? []) {
-          const intersects = rc.slots.some((s) => !(s.x + s.w <= x0 || x1 <= s.x || s.y + s.h <= y0 || y1 <= s.y));
-          if (intersects) rowIdsInBox.add(rc.id);
-        }
-        setSelectedRackIds(inBoxRacks.map((r) => r.id ?? r.rack_index));
-        setSelectedRackId(inBoxRacks.length > 0 ? inBoxRacks[0].id ?? inBoxRacks[0].rack_index : null);
-        setSelectedRowContainerIds(Array.from(rowIdsInBox));
-        setSelectedRowContainerId(rowIdsInBox.size > 0 ? Array.from(rowIdsInBox)[0] ?? null : null);
-      }
-      setMarqueeStart(null);
-      setMarqueeEnd(null);
-    }
-    if (aisleDrawStart) {
-      let end: { x: number; y: number } | null = aisleDrawStart;
-      if (lastMouseRef.current && svgRef.current) {
-        const rect = svgRef.current.getBoundingClientRect();
-        const col = (lastMouseRef.current.clientX - rect.left) / rect.width * layout.grid_cols;
-        const row = (lastMouseRef.current.clientY - rect.top) / rect.height * layout.grid_rows;
-        end = { x: Math.max(0, Math.min(layout.grid_cols - 1, Math.round(col))), y: Math.max(0, Math.min(layout.grid_rows - 1, Math.round(row))) };
-      }
-      if (end) {
-        const x = Math.min(aisleDrawStart.x, end.x);
-        const y = Math.min(aisleDrawStart.y, end.y);
-        const w = Math.max(1, Math.abs(end.x - aisleDrawStart.x) + 1);
-        const h = Math.max(1, Math.abs(end.y - aisleDrawStart.y) + 1);
-        setLayout((prev) => ({
-          ...prev,
-          aisles: [...prev.aisles, { x, y, width: w, height: h, two_way: true, name: `Alejka ${prev.aisles.length + 1}` }],
-        }));
-      }
-      setAisleDrawStart(null);
-    }
-    setIsPanning(false);
-    panStartRef.current = null;
-    if (draggingRowId != null && rowDragPreviewStart != null) {
-      if (canMoveRowTo(draggingRowId, rowDragPreviewStart)) {
-        moveRowToPosition(draggingRowId, rowDragPreviewStart.x, rowDragPreviewStart.y);
-      }
-      setDraggingRowId(null);
-      setRowDragPreviewStart(null);
-      rowDragPointerOffsetRef.current = null;
-    }
-    if (draggingRackId != null) {
-      const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === draggingRackId);
-      const finalPos = rackDragPreviewPosition ?? (rack ? { x: rack.x, y: rack.y } : { x: 0, y: 0 });
-      if (selectedRackIds.length > 1 && rack) {
-        const groupIds = new Set(selectedRackIds);
-        const positions = new Map<number | string, { x: number; y: number }>();
-        for (const id of selectedRackIds) {
-          const r = layout.racks.find((ra) => (ra.id ?? ra.rack_index) === id);
-          if (!r) continue;
-          positions.set(id, {
-            x: finalPos.x + (r.x - rack.x),
-            y: finalPos.y + (r.y - rack.y),
-          });
-        }
-        if (canPlaceGroup(layout, groupIds, positions)) {
-          setLayout((prev) => {
-            const clearedRowSlots = (prev.row_containers ?? []).map((rc) => ({
-              ...rc,
-              slots: rc.slots.map((s) =>
-                s.rackId != null && groupIds.has(s.rackId) ? { ...s, rackId: undefined } : s
-              ),
-            }));
-            const newSlotsByRow = clearedRowSlots.map((rc) => {
-              const { x: startX, y: startY } = getRowStart(rc);
-              return { ...rc, slots: computeRowSlotPositions(rc.slots, startX, startY, rc.orientation ?? "horizontal") };
-            });
-            const updatedRacks = prev.racks.map((r) => {
-              const pos = positions.get(r.id ?? r.rack_index);
-              if (pos) return { ...r, x: pos.x, y: pos.y };
-              const slotForRack = newSlotsByRow.flatMap((rc) => rc.slots).find((s) => s.rackId != null && String(s.rackId) === String(r.id ?? r.rack_index));
-              if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
-              return r;
-            });
-            return {
-              ...prev,
-              racks: updatedRacks,
-              row_containers: filterEmptyRowContainers(newSlotsByRow),
-            };
-          });
-        }
-        setRackDragPreviewPosition(null);
-      } else {
-        const rowSlot = findRowAndSlotForRack(layout.row_containers, draggingRackId);
-        const emptyAtDrop = findEmptySlotAt(layout.row_containers, finalPos);
-        const sameRowDrop = rowSlot && emptyAtDrop && emptyAtDrop.rowContainer.id === rowSlot.rowContainer.id
-          && (emptyAtDrop.slot.w >= (rack?.width ?? 0)) && rowSlot.slotIndex !== emptyAtDrop.slotIndex;
-        if (sameRowDrop && moveRackWithinRow) {
-          moveRackWithinRow(rowSlot!.rowContainer.id, draggingRackId, rowSlot!.slotIndex, emptyAtDrop!.slotIndex);
-        } else if (rowSlot) {
-          const currentSlot = rowSlot.rowContainer.slots[rowSlot.slotIndex];
-          const stayedInSlot = currentSlot && finalPos.x >= currentSlot.x && finalPos.x < currentSlot.x + currentSlot.w
-            && finalPos.y >= currentSlot.y && finalPos.y < currentSlot.y + currentSlot.h;
-          if (!stayedInSlot) {
-            setLayout((prev) => {
-              const rc = prev.row_containers ?? [];
-              const row = rc.find((r) => r.id === rowSlot.rowContainer.id);
-              if (!row) return prev;
-              const { x: startX, y: startY } = getRowStart(row);
-              const cleared = row.slots.map((s, i) =>
-                i === rowSlot.slotIndex ? { x: 0, y: startY, w: s.w, h: s.h } : s
-              );
-              const newSlots = computeRowSlotPositions(cleared, startX, startY, row.orientation ?? "horizontal");
-              const updatedRacks = prev.racks.map((r) => {
-                if ((r.id ?? r.rack_index) === draggingRackId) return { ...r, x: finalPos.x, y: finalPos.y };
-                const slotForRack = newSlots.find((s) => s.rackId != null && String(s.rackId) === String(r.id ?? r.rack_index));
-                if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
-                return r;
-              });
-              return {
-                ...prev,
-                racks: reindexGeometricRow(updatedRacks, draggingRackId),
-                row_containers: rc.map((r) => (r.id === rowSlot.rowContainer.id ? { ...r, slots: newSlots } : r)),
-              };
-            });
-          }
-        } else {
-          setLayout((prev) => {
-            const withPosition = { ...prev, racks: prev.racks.map((r) => (r.id ?? r.rack_index) === draggingRackId ? { ...r, x: finalPos.x, y: finalPos.y } : r) };
-            return { ...withPosition, racks: reindexGeometricRow(withPosition.racks, draggingRackId) };
-          });
-        }
-        setRackDragPreviewPosition(null);
-      }
-    }
-    setDraggingRackId(null);
-    setDragOffset(null);
-    setDraggingVisualId(null);
-    setDragOffsetVisual(null);
-    setDraggingWallEnd(null);
-    setDraggingPathPointIndex(null);
-  }, [marqueeStart, marqueeEnd, layout.racks, layout.row_containers, aisleDrawStart, layout.grid_cols, layout.grid_rows, rowToolActive, rowDrawStart, rowDrawEnd, rowToolTemplate, placeRowWithTemplate, placeEmptyRow, draggingRackId, rackDragPreviewPosition, moveRackWithinRow, draggingRowId, rowDragPreviewStart, canMoveRowTo, moveRowToPosition, selectedRackIds, showDimensions]);
-
-  // When dragging a row, listen to window mouse move/up so drag works and ends even when pointer leaves the canvas.
-  useEffect(() => {
-    if (!draggingRowId) return;
-    const onWindowMouseMove = (ev: MouseEvent) => {
-      const cell = getCellFromEvent(ev);
-      if (!cell || !rowDragPointerOffsetRef.current) return;
-      const { dx, dy } = rowDragPointerOffsetRef.current;
-      let px = Math.max(0, Math.min(layout.grid_cols - 1, Math.round(cell.x - dx)));
-      let py = Math.max(0, Math.min(layout.grid_rows - 1, Math.round(cell.y - dy)));
-      if (showDimensions) {
-        const row = layout.row_containers?.find((rc) => rc.id === draggingRowId);
-        if (row) {
-          const snapped = snapRowPreviewToDistance(row, { x: px, y: py }, layout);
-          px = snapped.x;
-          py = snapped.y;
-        }
-      }
-      setRowDragPreviewStart((prev) => (prev?.x === px && prev?.y === py ? prev : { x: px, y: py }));
-      rowDragPreviewStartRef.current = { x: px, y: py };
-    };
-    const onWindowMouseUp = () => {
-      const preview = rowDragPreviewStartRef.current;
-      if (draggingRowId && preview != null) {
-        if (canMoveRowTo(draggingRowId, preview)) {
-          moveRowToPosition(draggingRowId, preview.x, preview.y);
-        }
-        setDraggingRowId(null);
-        setRowDragPreviewStart(null);
-        rowDragPointerOffsetRef.current = null;
-        rowDragPreviewStartRef.current = null;
-      }
-    };
-    window.addEventListener("mousemove", onWindowMouseMove);
-    window.addEventListener("mouseup", onWindowMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", onWindowMouseMove);
-      window.removeEventListener("mouseup", onWindowMouseUp);
-    };
-  }, [draggingRowId, getCellFromEvent, layout.grid_cols, layout.grid_rows, layout.row_containers, canMoveRowTo, moveRowToPosition, showDimensions]);
-
-  const sShapePathPoints = (() => {
-    if (!layout.aisles?.length) return null;
-    const packing = (layout.visual_elements ?? []).find((ve) => ve.type === "packing_station");
-    const start = packing
-      ? { x: packing.x + packing.width / 2, y: packing.y + packing.height / 2 }
-      : { x: 0, y: 0 };
-    const aisleCenters = layout.aisles.map((a) => ({
-      cx: a.x + a.width / 2,
-      cy: a.y + a.height / 2,
-      index: 0,
-    }));
-    const rowTolerance = 2;
-    const rows: { cx: number; cy: number }[][] = [];
-    const sorted = [...aisleCenters].sort((a, b) => a.cy - b.cy || a.cx - b.cx);
-    for (const a of sorted) {
-      const row = rows.find((r) => r.length && Math.abs(r[0].cy - a.cy) <= rowTolerance);
-      if (row) row.push(a);
-      else rows.push([a]);
-    }
-    const sOrder: { x: number; y: number }[] = [];
-    rows.forEach((row, ri) => {
-      const byX = [...row].sort((a, b) => a.cx - b.cx);
-      const ordered = ri % 2 === 1 ? byX.reverse() : byX;
-      ordered.forEach((a) => sOrder.push({ x: a.cx, y: a.cy }));
+  const handleExportPdf = useCallback(() => {
+    exportPdf({
+      canvasEl: canvasContainerRef.current,
+      layout,
+      gridUnitCm: GRID_UNIT_CM,
+      pdfFailedMessage: "Failed to export PDF",
     });
-    return [start, ...sOrder, start];
-  })();
-
-  const pickingPathPoints = showPickingPath ? (manualPathPoints.length > 0
-    ? manualPathPoints.map((p) => ({ x: p.x + 0.5, y: p.y + 0.5 }))
-    : sShapePathPoints)
-    : null;
-
-  const effectivePathPoints = manualPathPoints.length > 0
-    ? manualPathPoints.map((p) => ({ x: p.x + 0.5, y: p.y + 0.5 }))
-    : sShapePathPoints;
-  const pathDistanceM = effectivePathPoints ? pathDistanceMeters(effectivePathPoints, CELLS_PER_METER_FOR_PATH) : 0;
-
-  const handleMagicWand = useCallback(() => {
-    if (!sShapePathPoints || sShapePathPoints.length < 2) return;
-    if (manualPathPoints.length > 0) {
-      const manualDist = pathDistanceMeters(manualPathPoints.map((p) => ({ x: p.x + 0.5, y: p.y + 0.5 })), CELLS_PER_METER_FOR_PATH);
-      const sShapeDist = pathDistanceMeters(sShapePathPoints, CELLS_PER_METER_FOR_PATH);
-      if (sShapeDist < manualDist) {
-        setSnackbar({
-          message: `Sugerowana optymalizacja: ${(manualDist - sShapeDist).toFixed(1)} m krócej`,
-          undo: () => {
-            setManualPathPoints(sShapePathPoints.map((p) => ({ x: Math.floor(p.x), y: Math.floor(p.y) })));
-            setSnackbar(null);
-          },
-          undoLabel: "Zastosuj",
-        });
-        return;
-      }
-    }
-    setManualPathPoints(sShapePathPoints.map((p) => ({ x: Math.floor(p.x), y: Math.floor(p.y) })));
-    setShowPickingPath(true);
-  }, [sShapePathPoints, manualPathPoints.length]);
-
-  const handleExportPdf = useCallback(async () => {
-    const el = canvasContainerRef.current;
-    if (!el) return;
-    try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#0f172a" });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const w = pdf.internal.pageSize.getWidth();
-      const h = pdf.internal.pageSize.getHeight();
-      const imgH = (canvas.height / canvas.width) * w;
-      const fitH = Math.min(imgH, h - 42);
-      pdf.addImage(imgData, "PNG", 0, 0, w, fitH);
-      pdf.setFontSize(9);
-      pdf.setTextColor(60, 60, 60);
-      const yLeg = fitH + 8;
-      pdf.text(`Magazyn: ${layout.warehouse_name || layout.name || "—"}  |  Data eksportu: ${new Date().toLocaleString("pl-PL")}`, 10, yLeg);
-      pdf.text(`Skala: 1 komórka = ${GRID_UNIT_CM} cm`, 10, yLeg + 6);
-      pdf.text("Legenda: Zielony = niska zajętość (0–50%), Żółty = średnia (50–80%), Czerwony = wysoka (80–100%)  |  Niebieski = strefa pakowania  |  Szary = słupy/ściany/drzwi", 10, yLeg + 12);
-      pdf.save(`plan-${(layout.name || "export").replace(/\s+/g, "-")}.pdf`);
-    } catch (err) {
-      console.error(err);
-      alert(UI_STRINGS.warehouse.export.pdfFailed);
-    }
-  }, [layout.warehouse_name, layout.name]);
-
-  const handleExportCsv = useCallback(() => {
-    const escape = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const headers = ["id", "aisle_letter", "rack_index", "x", "y", "width", "height", "width_cm", "length_cm", "height_cm", "levels", "bins_per_level"];
-    const rows = layout.racks.map((r) =>
-      headers.map((h) => escape(String((r as Record<string, unknown>)[h] ?? ""))).join(",")
-    );
-    const csv = "\uFEFF" + headers.join(",") + "\r\n" + rows.join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `layout-${(layout.name || "export").replace(/\s+/g, "-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [layout.racks, layout.name]);
-
-  const handleExportLocationsMapCsv = useCallback(() => {
-    const escape = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const headers = ["locationUUID", "name", "capacity_dm3"];
-    const rows: string[] = [];
-    for (const rack of layout.racks) {
-      for (const bin of rack.bins ?? []) {
-        const uuid = (bin as { locationUUID?: string }).locationUUID ?? (bin as { location_uuid?: string }).location_uuid ?? "";
-        const name = (bin as { label?: string }).label ?? (bin as { location_id?: string }).location_id ?? uuid;
-        const capacity = (bin as { volume_dm3?: number }).volume_dm3 ?? 0;
-        rows.push([escape(uuid), escape(String(name)), String(capacity)].join(","));
-      }
-    }
-    const csv = "\uFEFF" + headers.join(",") + "\r\n" + rows.join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `mapa-lokalizacji-${(layout.name || "export").replace(/\s+/g, "-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [layout.racks, layout.name]);
-
-  const handleExportJson = useCallback(() => {
-    const json = JSON.stringify({ ...layout, updatedAt: new Date().toISOString() }, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `layout-${(layout.name || "export").replace(/\s+/g, "-")}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
   }, [layout]);
 
-  const handleCanvasMouseLeave = useCallback(() => {
-    setCursorCm(null);
-    setGhostPosition(null);
-    setDraggingRackId(null);
-    setDragOffset(null);
-    setDraggingVisualId(null);
-    setDragOffsetVisual(null);
-    setRowDrawEnd(null);
-  }, []);
+  const handleExportCsv = useCallback(() => {
+    exportCsv(layout);
+  }, [layout]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Delete" || e.key === "Backspace") {
-        const inInput = document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || (document.activeElement as HTMLElement).isContentEditable);
-        if (inInput) return;
-        if (mainView === "layout" && selectedRowContainerId && deleteSelectedRow) {
-          e.preventDefault();
-          deleteSelectedRow();
-          return;
-        }
-        if (!selectedObjectId) return;
-        if (mainView !== "magazyn") {
-          e.preventDefault();
-          deleteObject(selectedObjectId);
-        }
-      }
-      if (e.code === "Space" || e.key === "r" || e.key === "R") {
-        e.preventDefault();
-        if (placementMode) setRackRotation((prev) => (prev === "vertical" ? "horizontal" : "vertical"));
-      }
-      if (e.key === "Escape") {
-        setPlacementMode(false);
-        setLayoutMode(LayoutMode.SELECT);
-        setGhostPosition(null);
-        setRowToolTemplate(null);
-        setRowDrawStart(null);
-        setRowDrawEnd(null);
-        setSelectedRowContainerId(null);
-        setSelectedRowContainerIds([]);
-        setSelectedRackId(null);
-        setSelectedRackIds([]);
-        setSelectedVisualId(null);
-        setSelectedVisualIds([]);
-        setSelectedPathPointIndex(null);
-        setSelectedPathLine(false);
-        setMarqueeStart(null);
-        setMarqueeEnd(null);
-        setAisleDrawStart(null);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
-        if (selectedRackIds.length > 0) {
-          e.preventDefault();
-          setClipboard(layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index)));
-        }
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
-        if (clipboard.length > 0 && cursorCm != null) {
-          e.preventDefault();
-          const cx = Math.round(cursorCm.x / GRID_UNIT_CM);
-          const cy = Math.round(cursorCm.y / GRID_UNIT_CM);
-          setLayout((prev) => ({
-            ...prev,
-            racks: [
-              ...prev.racks,
-              ...clipboard.map((r, i) => {
-                const lc = getLevelConfig(r);
-                const total = getTotalLocations(lc);
-                const volPerBin = total > 0 ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total) : volumePerBin(r.width_cm, r.length_cm, r.height_cm, r.levels, r.bins_per_level);
-                const bins = createBinsForRack(r.aisle_letter, prev.racks.length + i + 1, r.levels, r.bins_per_level, volPerBin, undefined, undefined, r.width_cm, r.length_cm, r.height_cm, undefined, undefined, undefined, undefined, undefined, lc);
-                return { ...r, id: undefined, x: cx + (i % 3) * (r.width + 1), y: cy + Math.floor(i / 3) * (r.height + 1), rack_index: prev.racks.length + i + 1, bins };
-              }),
-            ],
-          }));
-        }
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "d") {
-        e.preventDefault();
-        if (mainView !== "magazyn" && selectedRackIds.length > 0) {
-          const toDup = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
-          if (toDup.length > 0 && cursorCm != null) {
-            const cx = Math.round(cursorCm.x / GRID_UNIT_CM);
-            const cy = Math.round(cursorCm.y / GRID_UNIT_CM);
-            setLayout((prev) => ({
-              ...prev,
-              racks: [
-                ...prev.racks,
-                ...toDup.map((r, i) => {
-                  const lc = getLevelConfig(r);
-                  const total = getTotalLocations(lc);
-                  const volPerBin = total > 0 ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total) : volumePerBin(r.width_cm, r.length_cm, r.height_cm, r.levels, r.bins_per_level);
-                  const bins = createBinsForRack(r.aisle_letter, prev.racks.length + i + 1, r.levels, r.bins_per_level, volPerBin, undefined, undefined, r.width_cm, r.length_cm, r.height_cm, undefined, undefined, undefined, undefined, undefined, lc);
-                  return { ...r, id: undefined, x: cx + (i % 3) * (r.width + 1), y: cy + Math.floor(i / 3) * (r.height + 1), rack_index: prev.racks.length + i + 1, bins };
-                }),
-              ],
-            }));
-            setSnackbar({ message: "Sklonowano regały.", undo: () => setSnackbar(null) });
-          }
-        } else if (mainView !== "magazyn" && selectedVisualIds.length > 0) {
-          const toDup = (layout.visual_elements ?? []).filter((ve) => selectedVisualIds.includes(ve.id));
-          if (toDup.length > 0 && cursorCm != null) {
-            const cx = Math.round(cursorCm.x / GRID_UNIT_CM);
-            const cy = Math.round(cursorCm.y / GRID_UNIT_CM);
-            const newEls: VisualElementState[] = toDup.map((ve, i) => ({
-              ...ve,
-              id: `ve-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 9)}`,
-              x: cx + (i % 2) * 2,
-              y: cy + Math.floor(i / 2) * 2,
-            }));
-            setLayout((prev) => ({ ...prev, visual_elements: [...(prev.visual_elements ?? []), ...newEls] }));
-            setSelectedVisualIds(newEls.map((e) => e.id));
-            setSelectedVisualId(newEls[0]?.id ?? null);
-            setSnackbar({ message: "Sklonowano elementy.", undo: () => setSnackbar(null) });
-          }
-        }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [placementMode, selectedObjectId, deleteObject, deleteSelectedRow, clipboard, cursorCm, layout.racks, layout.visual_elements, mainView, selectedRackIds.length, selectedRowContainerId, selectedVisualIds.length]);
+  const handleExportLocationsMapCsv = useCallback(() => {
+    exportLocationsMapCsv(layout);
+  }, [layout]);
+
+  const handleExportJson = useCallback(() => {
+    exportJson(layout);
+  }, [layout]);
+
+  useDesignerKeyboard({
+    placementMode,
+    setRackRotation,
+    setPlacementMode,
+    setLayoutMode,
+    setGhostPosition,
+    setRowToolTemplate,
+    setRowDrawStart,
+    setRowDrawEnd,
+    setSelectedRowContainerId,
+    setSelectedRowContainerIds,
+    setSelectedRackId,
+    setSelectedRackIds,
+    setSelectedVisualId,
+    setSelectedVisualIds,
+    setSelectedPathPointIndex,
+    setSelectedPathLine,
+    setMarqueeStart,
+    setMarqueeEnd,
+    setAisleDrawStart,
+    setClipboard,
+    setLayout,
+    setSnackbar,
+    mainView,
+    selectedRowContainerId,
+    deleteSelectedRow,
+    selectedObjectId,
+    deleteObject,
+    clipboard,
+    cursorCm,
+    layout,
+    selectedRackIds,
+    selectedVisualIds,
+  });
 
   const deleteSelectedRack = useCallback(() => {
     if (selectedRackId == null) return;
@@ -3172,6 +1566,40 @@ export default function WarehouseDesigner() {
     return { dimensionLines: lines, aisleHighlights };
   }, [showDimensions, layout.row_containers, layout.racks, layout.grid_cols, layout.grid_rows, selectedRowContainerId, selectedRowContainerIds, selectedRackIds, draggingRowId, rowDragPreviewStart, rackDragPreviewPositions]);
 
+  /** S-shape (snake) ordering: sort by row (y), then within each row alternate x direction. */
+  const sShapePathPoints = useMemo(() => {
+    if (manualPathPoints.length < 2) return [...manualPathPoints];
+    const byY = new Map<number, { x: number; y: number }[]>();
+    for (const p of manualPathPoints) {
+      const row = byY.get(p.y) ?? [];
+      row.push({ x: p.x, y: p.y });
+      byY.set(p.y, row);
+    }
+    const sortedY = Array.from(byY.keys()).sort((a, b) => a - b);
+    const out: { x: number; y: number }[] = [];
+    sortedY.forEach((y, rowIndex) => {
+      const row = byY.get(y)!;
+      row.sort((a, b) => a.x - b.x);
+      if (rowIndex % 2 === 1) row.reverse();
+      out.push(...row);
+    });
+    return out;
+  }, [manualPathPoints]);
+
+  const effectivePathPoints = manualPathPoints;
+  const pickingPathPoints = effectivePathPoints;
+  const pathDistanceM = useMemo(
+    () => (pickingPathPoints.length < 2 ? 0 : pathDistanceMeters(pickingPathPoints, CELLS_PER_METER_FOR_PATH)),
+    [pickingPathPoints]
+  );
+
+  const handleMagicWand = useCallback(() => {
+    if (sShapePathPoints.length === 0) return;
+    setManualPathPoints([...sShapePathPoints]);
+    setShowPickingPath(true);
+    setSnackbar({ message: "Ścieżka zoptymalizowana (S-Shape)." });
+  }, [sShapePathPoints, setShowPickingPath, setSnackbar]);
+
   const selectedRack = layout.racks.find((r) => (r.id != null && r.id === selectedRackId) || r.rack_index === selectedRackId);
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
   const isMultiSelect = selectedRackIds.length > 1;
@@ -3342,42 +1770,16 @@ export default function WarehouseDesigner() {
       fillHeight
       title={UI_STRINGS.warehouse.title}
       actions={
-        <>
-          <nav className="flex rounded-xl bg-slate-100 p-0.5 border border-slate-100 shadow-sm" aria-label="Tryby">
-            <button
-              type="button"
-              onClick={() => { setMainView("magazyn"); setEditingProductId(null); const next = new URLSearchParams(searchParams); next.delete("view"); setSearchParams(next); }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${mainView === "magazyn" ? "bg-cyan-600 text-white" : "text-slate-600 hover:bg-slate-200"}`}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.magazyn}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMainView("layout"); const next = new URLSearchParams(searchParams); next.set("view", "layout"); setSearchParams(next); }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${mainView === "layout" ? "bg-cyan-600 text-white" : "text-slate-600 hover:bg-slate-200"}`}
-            >
-              {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
-            </button>
-          </nav>
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedWarehouseId ?? ""}
-              onChange={(e) => setSelectedWarehouseId(e.target.value ? Number(e.target.value) : null)}
-              className="rounded-lg border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2 min-w-[200px] focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400"
-            >
-              <option value="">{UI_STRINGS.warehouse.selector.selectWarehouse}</option>
-              {warehouses.map((wh) => (
-                <option key={wh.id} value={wh.id}>{wh.name}</option>
-              ))}
-            </select>
-            {layout.warehouse_name ? (
-              <span className="text-sm text-slate-600">{layout.warehouse_name}</span>
-            ) : null}
-            <span className={`text-xs font-mono px-2 py-1 rounded ${lastSavedAt != null ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
-              {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
-            </span>
-          </div>
-        </>
+        <DesignerToolbar
+          mainView={mainView}
+          setMainView={setMainView}
+          setEditingProductId={setEditingProductId}
+          warehouses={warehouses}
+          selectedWarehouseId={selectedWarehouseId}
+          setSelectedWarehouseId={setSelectedWarehouseId}
+          warehouseName={layout.warehouse_name}
+          lastSavedAt={lastSavedAt}
+        />
       }
     >
       <WarehouseModals
@@ -3476,7 +1878,7 @@ export default function WarehouseDesigner() {
             onExportLocationsMapCsv={handleExportLocationsMapCsv}
             currentRowPrefix={currentRowPrefix}
             setCurrentRowPrefix={setCurrentRowPrefix}
-            onReindexRow={(rackId, prefix) => setLayout((prev) => ({ ...prev, racks: rackId != null ? reindexGeometricRow(prev.racks, rackId) : reindexRowByPrefix(prev.racks, prefix) }))}
+            onReindexRow={(rackId: number | string | null, prefix: string) => setLayout((prev) => ({ ...prev, racks: rackId != null ? reindexGeometricRow(prev.racks, rackId) : reindexRowByPrefix(prev.racks, prefix) }))}
             showOnlyCatalog
           />
           </div>
@@ -3516,7 +1918,7 @@ export default function WarehouseDesigner() {
             onExportLocationsMapCsv={handleExportLocationsMapCsv}
             currentRowPrefix={currentRowPrefix}
             setCurrentRowPrefix={setCurrentRowPrefix}
-            onReindexRow={(rackId, prefix) => setLayout((prev) => ({ ...prev, racks: rackId != null ? reindexGeometricRow(prev.racks, rackId) : reindexRowByPrefix(prev.racks, prefix) }))}
+            onReindexRow={(rackId: number | string | null, prefix: string) => setLayout((prev) => ({ ...prev, racks: rackId != null ? reindexGeometricRow(prev.racks, rackId) : reindexRowByPrefix(prev.racks, prefix) }))}
           />
         ) : null}
 
@@ -3714,125 +2116,127 @@ export default function WarehouseDesigner() {
             )}
           </>
         ) : mainView === "layout" ? (
-          <WarehouseMainView
-            layout={layout}
-            selectedWarehouseId={selectedWarehouseId}
-            loading={loading}
-            zoom={zoom}
-            setZoom={setZoom}
-            pan={pan}
-            setPan={setPan}
-            placementMode={placementMode}
-            ghostPosition={ghostPosition}
-            ghostW={ghostW}
-            ghostH={ghostH}
-            ghostCollision={ghostCollision ?? false}
-            draggingFromCatalog={draggingFromCatalog}
-            catalogGhostPosition={catalogGhostPosition}
-            setCatalogGhostPosition={setCatalogGhostPosition}
-            stampRackFromCatalogItem={stampRackFromCatalogItem}
-            stampRackIntoSlot={stampRackIntoSlot}
-            getCatalogDropCell={getCatalogDropCell}
-            setCatalogHoveredSlotFromCell={setCatalogHoveredSlotFromCell}
-            setCatalogHoveredSlot={setCatalogHoveredSlot}
-            catalogHoveredSlot={catalogHoveredSlot}
-            getCellFromEvent={getCellFromEvent}
-            minEmptySlotWidthCells={rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).width_cm) : undefined}
-            minEmptySlotDepthCells={rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).depth_cm) : undefined}
-            snapPosition={snapPosition}
-            rectsOverlap={rectsOverlap}
-            cellPx={cellPx}
-            width={width}
-            height={height}
-            svgRef={svgRef}
-            canvasContainerRef={canvasContainerRef}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseDown={handleCanvasMouseDown}
-            onMouseUp={handleCanvasMouseUp}
-            onMouseLeave={handleCanvasMouseLeave}
-            panMode={panMode}
-            isPanning={isPanning}
-            selectedRackIds={selectedRackIds}
-            collisionRackId={collisionRackId}
-            collisionRackIds={collisionRackIds}
-            selectedRack={selectedRack}
-            isMultiSelect={isMultiSelect}
-            setInternalLayoutRackId={setInternalLayoutRackId}
-            setShowElevationForRackId={setShowElevationForRackId}
-            setLayout={setLayout}
-            setSelectedRackId={setSelectedRackId}
-            setSelectedRackIds={setSelectedRackIds}
-            marqueeStart={marqueeStart}
-            marqueeEnd={marqueeEnd}
-            cursorCm={cursorCm}
-            draggingRackId={draggingRackId}
-            rackDragPreviewPosition={rackDragPreviewPosition}
-            rackDragPreviewPositions={rackDragPreviewPositions}
-            dragSlotHighlights={dragSlotHighlights}
-            defaultRowSlotW={DEFAULT_ROW_SLOT_W}
-            defaultRowSlotH={DEFAULT_ROW_SLOT_H}
-            selectedRowContainerId={selectedRowContainerId}
-            selectedRowContainerIds={selectedRowContainerIds}
-            onSelectRowContainer={onSelectRowContainer}
-            fillSelectedRowWithTemplate={fillSelectedRowWithTemplate}
-            deleteSelectedRow={deleteSelectedRow}
-            trimSelectedRowEnd={trimSelectedRowEnd}
-            rotateSelectedRow={rotateSelectedRow}
-            draggingRowId={draggingRowId}
-            rowDragPreviewStart={rowDragPreviewStart}
-            onStartRowDrag={onStartRowDrag}
-            aisleToolActive={aisleToolActive}
-            setAisleToolActive={setAisleToolActive}
-            rowToolActive={rowToolActive}
-            setRowToolActive={setRowToolActive}
-            setRowToolTemplate={setRowToolTemplate}
-            rowToolTemplate={rowToolTemplate}
-            rowDrawStart={rowDrawStart}
-            rowDrawEnd={rowDrawEnd}
-            rowPreviewCursor={rowPreviewCursor}
-            rowGapCm={rowGapCm}
-            setRowGapCm={setRowGapCm}
-            aisleWidthCm={aisleWidthCm}
-            setAisleWidthCm={setAisleWidthCm}
-            showGrid={showGrid}
-            setShowGrid={setShowGrid}
-            showDimensions={showDimensions}
-            setShowDimensions={setShowDimensions}
-            dimensionLines={dimensionData.dimensionLines}
-            aisleHighlights={dimensionData.aisleHighlights}
-            snapToGrid={snapToGrid}
-            setSnapToGrid={setSnapToGrid}
-            showRackLabels={showRackLabels}
-            setShowRackLabels={setShowRackLabels}
-            selectedAisleIndex={selectedAisleIndex}
-            draggingVisualType={draggingVisualType}
-            setDraggingVisualType={setDraggingVisualType}
-            visualGhostPosition={visualGhostPosition}
-            setVisualGhostPosition={setVisualGhostPosition}
-            addVisualElement={addVisualElement}
-            getDefaultVisualSize={getDefaultVisualSize}
-            selectedVisualId={selectedVisualId}
-            showPickingPath={showPickingPath}
-            setShowPickingPath={setShowPickingPath}
-            pickingPathPoints={pickingPathPoints}
-            pathToolActive={pathToolActive}
-            setPathToolActive={setPathToolActive}
-            setLayoutMode={setLayoutMode}
-            specialLocations={specialLocations}
-            layoutModeLabel={layoutModeDisplay.modeLabel}
-            layoutModeColor={layoutModeDisplay.modeColor}
-            layoutMode={layoutMode}
-            manualPathPoints={manualPathPoints}
-            pathDistanceM={pathDistanceM}
-            onMagicWand={handleMagicWand}
-            selectedVisualIds={selectedVisualIds}
-            isLiveView={isLiveView}
-            setSelectedVisualId={setSelectedVisualId}
-            setSelectedVisualIds={setSelectedVisualIds}
-            setSelectedAisleIndex={setSelectedAisleIndex}
-            selectedRacks={selectedRacks}
-            setClipboard={setClipboard}
-            clipboard={clipboard}
+          <DesignerGrid
+            mainViewProps={{
+              layout,
+              selectedWarehouseId,
+              loading,
+              zoom,
+              setZoom,
+              pan,
+              setPan,
+              placementMode,
+              ghostPosition,
+              ghostW,
+              ghostH,
+              ghostCollision: ghostCollision ?? false,
+              draggingFromCatalog,
+              catalogGhostPosition,
+              setCatalogGhostPosition,
+              stampRackFromCatalogItem,
+              stampRackIntoSlot,
+              getCatalogDropCell,
+              setCatalogHoveredSlotFromCell,
+              setCatalogHoveredSlot,
+              catalogHoveredSlot,
+              getCellFromEvent,
+              minEmptySlotWidthCells: rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).width_cm) : undefined,
+              minEmptySlotDepthCells: rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).depth_cm) : undefined,
+              snapPosition,
+              rectsOverlap,
+              cellPx,
+              width,
+              height,
+              svgRef,
+              canvasContainerRef,
+              onMouseMove: handleCanvasMouseMove,
+              onMouseDown: handleCanvasMouseDown,
+              onMouseUp: handleCanvasMouseUp,
+              onMouseLeave: handleCanvasMouseLeave,
+              panMode,
+              isPanning,
+              selectedRackIds,
+              collisionRackId,
+              collisionRackIds,
+              selectedRack,
+              isMultiSelect,
+              setInternalLayoutRackId,
+              setShowElevationForRackId,
+              setLayout,
+              setSelectedRackId,
+              setSelectedRackIds,
+              marqueeStart,
+              marqueeEnd,
+              cursorCm,
+              draggingRackId,
+              rackDragPreviewPosition,
+              rackDragPreviewPositions,
+              dragSlotHighlights,
+              defaultRowSlotW: DEFAULT_ROW_SLOT_W,
+              defaultRowSlotH: DEFAULT_ROW_SLOT_H,
+              selectedRowContainerId,
+              selectedRowContainerIds,
+              onSelectRowContainer,
+              fillSelectedRowWithTemplate,
+              deleteSelectedRow,
+              trimSelectedRowEnd,
+              rotateSelectedRow,
+              draggingRowId,
+              rowDragPreviewStart,
+              onStartRowDrag,
+              aisleToolActive,
+              setAisleToolActive,
+              rowToolActive,
+              setRowToolActive,
+              setRowToolTemplate,
+              rowToolTemplate,
+              rowDrawStart,
+              rowDrawEnd,
+              rowPreviewCursor,
+              rowGapCm,
+              setRowGapCm,
+              aisleWidthCm,
+              setAisleWidthCm,
+              showGrid,
+              setShowGrid,
+              showDimensions,
+              setShowDimensions,
+              dimensionLines: dimensionData.dimensionLines,
+              aisleHighlights: dimensionData.aisleHighlights,
+              snapToGrid,
+              setSnapToGrid,
+              showRackLabels,
+              setShowRackLabels,
+              selectedAisleIndex,
+              draggingVisualType,
+              setDraggingVisualType,
+              visualGhostPosition,
+              setVisualGhostPosition,
+              addVisualElement,
+              getDefaultVisualSize,
+              selectedVisualId,
+              showPickingPath,
+              setShowPickingPath,
+              pickingPathPoints,
+              pathToolActive,
+              setPathToolActive,
+              setLayoutMode,
+              specialLocations,
+              layoutModeLabel: layoutModeDisplay.modeLabel,
+              layoutModeColor: layoutModeDisplay.modeColor,
+              layoutMode,
+              manualPathPoints,
+              pathDistanceM,
+              onMagicWand: handleMagicWand,
+              selectedVisualIds,
+              isLiveView,
+              setSelectedVisualId,
+              setSelectedVisualIds,
+              setSelectedAisleIndex,
+              selectedRacks,
+              setClipboard,
+              clipboard,
+            }}
           />
         ) : null}
       </div>
