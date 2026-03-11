@@ -197,6 +197,14 @@ export type WarehouseCanvasProps = {
   layoutModeColor?: string;
   /** Current layout mode (drives cursor on canvas) */
   layoutMode?: LayoutMode;
+  /** Set layout mode (for Add Start / Pack / Dock tools) */
+  setLayoutMode?: (mode: LayoutMode | ((prev: LayoutMode) => LayoutMode)) => void;
+  /** Special warehouse nodes (PICK_START, PACKING, DOCK) for rendering above shelves */
+  specialLocations?: {
+    pick_start: { id: number; x: number; y: number } | null;
+    packing: { id: number; x: number; y: number } | null;
+    dock: { id: number; x: number; y: number } | null;
+  };
 };
 
 function WarehouseCanvasInner({
@@ -311,7 +319,10 @@ function WarehouseCanvasInner({
   layoutModeLabel,
   layoutModeColor,
   layoutMode,
+  setLayoutMode,
+  specialLocations = { pick_start: null, packing: null, dock: null },
 }: WarehouseCanvasProps) {
+  const SPECIAL_CELL_CM = 100;
   const visualIdSet = new Set(selectedVisualIds);
   const isVisualSelected = (id: string) => selectedVisualId === id || visualIdSet.has(id);
   const rowGhostPositions = (() => {
@@ -445,6 +456,13 @@ function WarehouseCanvasInner({
                 <button type="button" onClick={() => setSnapToGrid((g) => !g)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${snapToGrid ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Przyciągnij do siatki">Przyciągnij do siatki</button>
                 {setPathToolActive && (
                   <button type="button" onClick={() => setPathToolActive((v) => !v)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${pathToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Kliknij na siatce, aby dodać punkty ścieżki">Narzędzie ścieżki</button>
+                )}
+                {setLayoutMode && (
+                  <>
+                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_START ? "bg-[#dcfce7] text-[#166534]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Punkt startowy kompletacji">Add Start Point</button>
+                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_PACK)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_PACK ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Stacja pakowania">Add Packing Station</button>
+                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_DOCK)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_DOCK ? "bg-[#e5e7eb] text-[#374151]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Rampa / dok wysyłkowy">Add Dock</button>
+                  </>
                 )}
                 {onMagicWand && (
                   <button type="button" onClick={onMagicWand} className="px-2.5 py-1 rounded text-xs font-medium bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]" title="Optymalizuj ścieżkę (S-Shape)">Optymalizuj (S)</button>
@@ -874,6 +892,41 @@ function WarehouseCanvasInner({
                       </g>
                     );
                   })}
+                  {/* Special warehouse nodes (above shelves) */}
+                  {specialLocations.pick_start && (() => {
+                    const px = (specialLocations.pick_start.x / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
+                    const py = (specialLocations.pick_start.y / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
+                    const r = cellPx * 0.45;
+                    return (
+                      <g key="special-pick_start" pointerEvents="none">
+                        <circle cx={px} cy={py} r={r} fill="#22c55e" stroke="#166534" strokeWidth={2} />
+                        <text x={px} y={py + 1} textAnchor="middle" fontSize={Math.max(8, cellPx * 0.3)} fill="#fff" fontWeight="bold">START</text>
+                      </g>
+                    );
+                  })()}
+                  {specialLocations.packing && (() => {
+                    const px = (specialLocations.packing.x / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
+                    const py = (specialLocations.packing.y / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
+                    const s = cellPx * 0.7;
+                    return (
+                      <g key="special-packing" pointerEvents="none">
+                        <rect x={px - s / 2} y={py - s / 2} width={s} height={s} fill="#3b82f6" stroke="#1d4ed8" strokeWidth={2} rx={2} />
+                        <text x={px} y={py + 1} textAnchor="middle" fontSize={Math.max(8, cellPx * 0.3)} fill="#fff" fontWeight="bold">PACK</text>
+                      </g>
+                    );
+                  })()}
+                  {specialLocations.dock && (() => {
+                    const px = (specialLocations.dock.x / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
+                    const py = (specialLocations.dock.y / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
+                    const size = cellPx * 0.5;
+                    const points = `${px},${py - size} ${px + size},${py} ${px},${py + size} ${px - size},${py}`;
+                    return (
+                      <g key="special-dock" pointerEvents="none">
+                        <polygon points={points} fill="#6b7280" stroke="#4b5563" strokeWidth={2} />
+                        <text x={px} y={py + 1} textAnchor="middle" fontSize={Math.max(8, cellPx * 0.3)} fill="#fff" fontWeight="bold">DOCK</text>
+                      </g>
+                    );
+                  })()}
                   {([...(layout.visual_elements ?? [])].sort((a, b) => a.zIndex - b.zIndex)).map((ve) => {
                     const isSelected = isVisualSelected(ve.id);
                     const defaultFill: Record<VisualElementType, string> = {

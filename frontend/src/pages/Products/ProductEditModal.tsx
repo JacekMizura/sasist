@@ -8,6 +8,7 @@ import type { SelectablePosition } from "../../components/warehouse/warehouseUti
 
 export type ProductForm = {
   id?: number;
+  tenant_id?: number;
   name: string;
   ean: string;
   symbol: string;
@@ -18,21 +19,30 @@ export type ProductForm = {
   volume?: number;
   image_url?: string;
   assignedLocations?: AssignedLocation[];
+  label_template_id?: number | null;
+  purchase_price?: number | null;
+  manufacturer?: string | null;
+  unit?: string | null;
+  stock_quantity?: number;
 };
+
+type Tenant = { id: number; name: string };
 
 type ProductEditModalProps = {
   product: ProductForm | null;
+  tenants: Tenant[];
   onSave: (p: ProductForm) => void;
   onClose: () => void;
 };
 
-export function ProductEditModal({ product, onSave, onClose }: ProductEditModalProps) {
+export function ProductEditModal({ product, tenants, onSave, onClose }: ProductEditModalProps) {
   const isNew = product == null;
   const { warehouse } = useWarehouse();
   const [positions, setPositions] = useState<SelectablePosition[]>([]);
   const [layoutLoading, setLayoutLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [tenantId, setTenantId] = useState<number | null>(product?.tenant_id ?? null);
   const [name, setName] = useState(product?.name ?? "");
   const [ean, setEan] = useState(product?.ean ?? "");
   const [symbol, setSymbol] = useState(product?.symbol ?? "");
@@ -74,6 +84,16 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
   const [assignedLocations, setAssignedLocations] = useState<AssignedLocation[]>(
     product?.assignedLocations ?? []
   );
+  const [labelTemplateId, setLabelTemplateId] = useState<number | null>(
+    product?.label_template_id ?? null
+  );
+  const [purchasePrice, setPurchasePrice] = useState<number | "">(product?.purchase_price ?? "");
+  const [manufacturer, setManufacturer] = useState(product?.manufacturer ?? "");
+  const [unit, setUnit] = useState(product?.unit ?? "");
+  const [stockQuantity, setStockQuantity] = useState<number | "">(product?.stock_quantity ?? "");
+  const [productTemplates, setProductTemplates] = useState<{ id: number; name: string }[]>([]);
+  const [templatePreviewSvg, setTemplatePreviewSvg] = useState<string | null>(null);
+  const [templatePreviewLoading, setTemplatePreviewLoading] = useState(false);
 
   const productDimensions =
     typeof length === "number" && typeof width === "number" && typeof height === "number" &&
@@ -99,6 +119,7 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
 
   useEffect(() => {
     if (product != null) {
+      setTenantId(product.tenant_id ?? null);
       setName(product.name ?? "");
       setEan(product.ean ?? "");
       setSymbol(product.symbol ?? "");
@@ -106,11 +127,40 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
       setWidth(product.width ?? "");
       setHeight(product.height ?? "");
       setWeight(product.weight ?? "");
-      setVolume(product.volume ?? "");
+      setVolume(product.volume != null ? round2(Number(product.volume)) : "");
       setImageUrl(product.image_url ?? "");
       setAssignedLocations(product.assignedLocations ?? []);
+      setLabelTemplateId(product.label_template_id ?? null);
+      setPurchasePrice(product.purchase_price ?? "");
+      setManufacturer(product.manufacturer ?? "");
+      setUnit(product.unit ?? "");
+      setStockQuantity(product.stock_quantity ?? "");
     }
   }, [product?.id]);
+
+  useEffect(() => {
+    api
+      .get<{ id: number; name: string }[]>("/labels/templates/by-type/product", {
+        params: { tenant_id: 1 },
+      })
+      .then((res) => setProductTemplates(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setProductTemplates([]));
+  }, []);
+
+  useEffect(() => {
+    if (labelTemplateId == null) {
+      setTemplatePreviewSvg(null);
+      setTemplatePreviewLoading(false);
+      return;
+    }
+    setTemplatePreviewLoading(true);
+    setTemplatePreviewSvg(null);
+    api
+      .get<{ svg: string }>(`/label-templates/${labelTemplateId}/preview`, { params: { tenant_id: 1 } })
+      .then((res) => setTemplatePreviewSvg(res.data?.svg ?? null))
+      .catch(() => setTemplatePreviewSvg(null))
+      .finally(() => setTemplatePreviewLoading(false));
+  }, [labelTemplateId]);
 
   const fetchLayout = useCallback(async () => {
     if (!warehouse?.id) {
@@ -138,8 +188,11 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isNew && (tenantId == null || tenantId < 1)) {
+      alert("Wybierz tenant przy tworzeniu produktu.");
+      return;
+    }
     setSaving(true);
-    const tenantId = 1;
     try {
       const enriched = assignedLocations.length > 0
         ? assignedLocations.map((a) => {
@@ -157,6 +210,8 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
       const hei = parseDecimal(height);
       const wgt = parseDecimal(weight);
       const vol = parseDecimal(volume);
+      const purchasePriceVal = purchasePrice === "" ? undefined : (typeof purchasePrice === "number" ? purchasePrice : parseDecimal(String(purchasePrice)));
+      const stockQtyVal = stockQuantity === "" ? undefined : (typeof stockQuantity === "number" ? stockQuantity : (Number.isInteger(Number(stockQuantity)) ? Number(stockQuantity) : undefined));
       const payload: ProductForm = {
         name: name.trim(),
         ean: ean.trim(),
@@ -168,8 +223,13 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
         volume: vol != null ? round2(vol) : undefined,
         image_url: image_url.trim() || undefined,
         assignedLocations: enriched,
+        label_template_id: labelTemplateId ?? undefined,
+        purchase_price: purchasePriceVal,
+        manufacturer: manufacturer.trim() || undefined,
+        unit: unit.trim() || undefined,
+        stock_quantity: stockQtyVal,
       };
-      const body = {
+      const body: Record<string, unknown> = {
         name: payload.name,
         ean: payload.ean ?? "",
         symbol: payload.symbol ?? "",
@@ -181,6 +241,10 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
         image_url: payload.image_url,
         tenant_id: tenantId,
         assigned_locations: enriched ?? assignedLocations,
+        label_template_id: labelTemplateId ?? undefined,
+        purchase_price: payload.purchase_price,
+        manufacturer: payload.manufacturer ?? null,
+        unit: payload.unit ?? null,
       };
       if (isNew) {
         const res = await api.post("/products/", body, { params: { tenant_id: tenantId } });
@@ -191,8 +255,9 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
           alert("Błąd: nieprawidłowy ID produktu.");
           return;
         }
-        await api.put(`/products/${productId}/`, body, { params: { tenant_id: tenantId } });
-        onSave({ ...payload, id: product!.id });
+        if (stockQtyVal !== undefined) (body as Record<string, unknown>).stock_quantity = stockQtyVal;
+        const res = await api.put(`/products/${productId}/`, body, { params: { tenant_id: tenantId } });
+        onSave({ ...payload, id: product!.id, stock_quantity: res.data?.stock_quantity ?? payload.stock_quantity });
       }
       onClose();
     } catch (err: unknown) {
@@ -223,123 +288,260 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
           onSubmit={handleSubmit}
           className="flex flex-col min-h-0 flex-1 overflow-hidden [&_input[type=number]]:appearance-[textfield] [&_input[type=number]]:[&::-webkit-outer-spin-button]:appearance-none [&_input[type=number]]:[&::-webkit-inner-spin-button]:appearance-none"
         >
-          <div className="p-6 space-y-4 overflow-y-auto">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nazwa</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="p-6 overflow-y-auto space-y-6">
+            {/* Tenant */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 border-b border-slate-200 pb-1.5">Tenant</h3>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">EAN</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tenant</label>
+                <select
+                  value={tenantId ?? ""}
+                  onChange={(e) => setTenantId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  required={isNew}
+                >
+                  <option value="">— Select tenant —</option>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                {isNew && (
+                  <p className="text-xs text-slate-500 mt-1">Przy tworzeniu produktu tenant jest wymagany.</p>
+                )}
+              </div>
+            </section>
+            {/* SECTION 1 — Dane produktu */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 border-b border-slate-200 pb-1.5">Dane produktu</h3>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nazwa</label>
                 <input
                   type="text"
-                  value={ean}
-                  onChange={(e) => setEan(e.target.value)}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">EAN</label>
+                  <input
+                    type="text"
+                    value={ean}
+                    onChange={(e) => setEan(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Symbol / SKU</label>
+                  <input
+                    type="text"
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">URL zdjęcia</label>
+                <input
+                  type="url"
+                  value={image_url}
+                  onChange={(e) => setImageUrl(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
+            </section>
+
+            {/* SECTION — Dane handlowe */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 border-b border-slate-200 pb-1.5">Dane handlowe</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Cena zakupu</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={purchasePrice === "" ? "" : purchasePrice}
+                    onChange={(e) => {
+                      const s = String(e.target.value).trim().replace(",", ".");
+                      if (s === "") setPurchasePrice("");
+                      else {
+                        const n = parseFloat(s);
+                        if (Number.isFinite(n)) setPurchasePrice(n);
+                      }
+                    }}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Producent</label>
+                  <input
+                    type="text"
+                    value={manufacturer}
+                    onChange={(e) => setManufacturer(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Jednostka</label>
+                  <input
+                    type="text"
+                    list="unit-list"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="np. szt., opak., kg"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  />
+                  <datalist id="unit-list">
+                    <option value="szt." />
+                    <option value="opak." />
+                    <option value="para" />
+                    <option value="kg" />
+                    <option value="m" />
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Stan magazynowy</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={stockQuantity === "" ? "" : stockQuantity}
+                    onChange={(e) => {
+                      const s = String(e.target.value).trim();
+                      if (s === "") setStockQuantity("");
+                      else {
+                        const n = parseInt(s, 10);
+                        if (Number.isInteger(n) && n >= 0) setStockQuantity(n);
+                      }
+                    }}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* SECTION 2 — Wymiary i waga */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 border-b border-slate-200 pb-1.5">Wymiary i waga</h3>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs text-slate-600 mb-0.5">Długość (cm)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={length === "" ? "" : length}
+                    onChange={(e) => updateDimension("length", e.target.value)}
+                    className="product-edit-numeric w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-600 mb-0.5">Szerokość (cm)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={width === "" ? "" : width}
+                    onChange={(e) => updateDimension("width", e.target.value)}
+                    className="product-edit-numeric w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-600 mb-0.5">Wysokość (cm)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={height === "" ? "" : height}
+                    onChange={(e) => updateDimension("height", e.target.value)}
+                    className="product-edit-numeric w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Waga (kg)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.001}
+                    value={weight === "" ? "" : weight}
+                    onChange={(e) => {
+                      const s = String(e.target.value).trim().replace(",", ".");
+                      if (s === "") setWeight("");
+                      else {
+                        const n = parseFloat(s);
+                        if (Number.isFinite(n)) setWeight(n);
+                      }
+                    }}
+                    className="product-edit-numeric w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Objętość (dm³)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    readOnly
+                    value={volume === "" ? "" : (typeof volume === "number" ? round2(volume) : volume)}
+                    className={`product-edit-numeric w-full rounded-lg border px-3 py-2 text-slate-700 bg-slate-50 cursor-not-allowed ${
+                      hasVolumeOverflow ? "border-red-500 bg-red-50" : "border-slate-200"
+                    }`}
+                    aria-label="Obliczana z wymiarów"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* SECTION 3 — Etykiety */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 border-b border-slate-200 pb-1.5">Etykiety</h3>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Symbol / SKU</label>
-                <input
-                  type="text"
-                  value={symbol}
-                  onChange={(e) => setSymbol(e.target.value)}
+                <label className="block text-sm font-medium text-slate-700 mb-1">Szablon etykiety</label>
+                <select
+                  value={labelTemplateId ?? ""}
+                  onChange={(e) => setLabelTemplateId(e.target.value === "" ? null : Number(e.target.value))}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
-                />
+                >
+                  <option value="">Brak</option>
+                  {productTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-0.5">Używany przy generowaniu etykiet produktu.</p>
+                {labelTemplateId != null && (
+                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                    {productTemplates.find((t) => t.id === labelTemplateId)?.name ?? ""}
+                  </p>
+                )}
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-slate-600 mb-1">Podgląd</p>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 min-h-[80px] flex items-center justify-center p-3">
+                    {templatePreviewLoading ? (
+                      <p className="text-sm text-slate-500">Ładowanie podglądu…</p>
+                    ) : templatePreviewSvg ? (
+                      <div
+                        className="max-w-full max-h-40 overflow-auto [&_svg]:max-h-40 [&_svg]:w-auto [&_svg]:h-auto"
+                        dangerouslySetInnerHTML={{ __html: templatePreviewSvg }}
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-500">Brak podglądu szablonu</p>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-xs text-slate-600 mb-0.5">D (cm)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={length === "" ? "" : length}
-                  onChange={(e) => updateDimension("length", e.target.value)}
-                  className="product-edit-numeric w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-0.5">S (cm)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={width === "" ? "" : width}
-                  onChange={(e) => updateDimension("width", e.target.value)}
-                  className="product-edit-numeric w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-0.5">W (cm)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={height === "" ? "" : height}
-                  onChange={(e) => updateDimension("height", e.target.value)}
-                  className="product-edit-numeric w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Waga (kg)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.001}
-                  value={weight === "" ? "" : weight}
-                  onChange={(e) => {
-                    const s = String(e.target.value).trim().replace(",", ".");
-                    if (s === "") setWeight("");
-                    else {
-                      const n = parseFloat(s);
-                      if (Number.isFinite(n)) setWeight(n);
-                    }
-                  }}
-                  className="product-edit-numeric w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Objętość (dm³)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={volume === "" ? "" : volume}
-                  onChange={(e) => {
-                    const s = String(e.target.value).trim().replace(",", ".");
-                    if (s === "") setVolume("");
-                    else {
-                      const n = parseFloat(s);
-                      if (Number.isFinite(n)) setVolume(n);
-                    }
-                  }}
-                  className={`product-edit-numeric w-full rounded-lg border px-3 py-2 text-slate-800 focus:ring-2 ${
-                    hasVolumeOverflow ? "border-red-500 bg-red-50 focus:ring-red-500" : "border-slate-200 focus:ring-cyan-500"
-                  }`}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">URL zdjęcia</label>
-              <input
-                type="url"
-                value={image_url}
-                onChange={(e) => setImageUrl(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-cyan-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Lokalizacje magazynowe</label>
+            </section>
+
+            {/* SECTION 4 — Lokalizacje magazynowe */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 border-b border-slate-200 pb-1.5">Lokalizacje magazynowe</h3>
               {layoutLoading ? (
                 <p className="text-sm text-slate-500">Ładowanie planu magazynu…</p>
               ) : positions.length === 0 ? (
@@ -362,7 +564,7 @@ export function ProductEditModal({ product, onSave, onClose }: ProductEditModalP
                   )}
                 </>
               )}
-            </div>
+            </section>
           </div>
           <div className="px-6 py-4 border-t border-slate-100 flex gap-2 justify-end shrink-0">
             <button

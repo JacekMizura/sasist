@@ -1,11 +1,18 @@
 import { NavLink } from "react-router-dom";
 import { UI_STRINGS } from "../constants/uiStrings";
+import { WarehouseIcon, CartIcon, type IconProps } from "../icons";
 
-const menu = [
-  { name: UI_STRINGS.navigation.dashboard, path: "/" },
+type MenuItem = {
+  name: string;
+  path: string;
+  Icon?: React.ComponentType<IconProps> | null;
+};
+
+const menu: MenuItem[] = [
+  { name: UI_STRINGS.navigation.dashboard, path: "/", Icon: WarehouseIcon },
   { name: UI_STRINGS.navigation.orders, path: "/orders" },
   { name: UI_STRINGS.navigation.products, path: "/products" },
-  { name: UI_STRINGS.navigation.carts, path: "/carts" },
+  { name: UI_STRINGS.navigation.carts, path: "/carts", Icon: CartIcon },
   { name: UI_STRINGS.navigation.import, path: "/import" },
 ];
 
@@ -22,13 +29,14 @@ export default function Sidebar() {
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `block px-4 py-2 rounded-xl text-sm font-medium ${
+              `flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium ${
                 isActive
                   ? "bg-blue-600 text-white"
                   : "text-slate-700 hover:bg-slate-100"
               }`
             }
           >
+            {item.Icon && <item.Icon size={20} className="shrink-0" aria-hidden />}
             {item.name}
           </NavLink>
         ))}

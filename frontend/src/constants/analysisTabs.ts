@@ -1,0 +1,25 @@
+import type { TabItem } from "../components/TopTabsNavigation";
+
+export const ANALYSIS_TABS: TabItem[] = [
+  { path: "/analysis/dashboard", label: "Dashboard" },
+  { path: "/analysis/inventory-value", label: "Wartość magazynowa" },
+  { path: "/analysis/dead-stock", label: "Zalegający towar" },
+  { path: "/analysis/product-rotation", label: "Rotacja produktów" },
+  { path: "/analysis/hot-products", label: "Gorące produkty" },
+  { path: "/analysis/product-pairs", label: "Produkty kupowane razem" },
+  { path: "/analysis/walking-cost", label: "Koszt chodzenia" },
+  { path: "/analysis/pick-heatmap", label: "Gorące lokalizacje" },
+  { path: "/analysis/batch-picking", label: "Batch picking" },
+  { path: "/analysis/warehouse-map", label: "Mapa magazynu" },
+  { path: "/analysis/pick-path-simulation", label: "Symulacja trasy" },
+  { path: "/analysis/warehouse-day-simulation", label: "Symulacja dnia" },
+  { path: "/analysis/slotting", label: "Slotting" },
+  { path: "/analysis/picking-strategy", label: "Strategia kompletacji" },
+  { path: "/analysis/sales-forecast", label: "Prognoza sprzedaży" },
+  { path: "/analysis/pick-density", label: "Gęstość kompletacji" },
+  { path: "/analysis/pick-time-simulation", label: "Czas kompletacji" },
+  { path: "/analysis/worker-flow-simulation", label: "Ruch magazynierów" },
+  { path: "/analysis/picking-issues-dead-stock", label: "Problemy i dead stock" },
+  { path: "/analysis/layout-optimization", label: "Optymalizacja layoutu" },
+  { path: "/analysis/warehouse-throughput", label: "Przepustowość" },
+];

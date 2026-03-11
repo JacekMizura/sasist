@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import type { AssignedLocation } from "../../types/warehouse";
 import type { SelectablePosition, ProductDimensionsCm } from "./warehouseUtils";
 import { positionFitsDimensions } from "./warehouseUtils";
+import { formatLocationWithQuantity, isReserveLocation, RESERVE_BG, RESERVE_BORDER, ReserveLockIcon } from "./reserveLocationStyle";
 
 export type LocationPickerProps = {
   /** All positions from warehouse layout (e.g. from getAllPositionsFromRacks). */
@@ -32,6 +33,8 @@ export function LocationPicker({
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [addQty, setAddQty] = useState("1");
+  const [editingLocationUUID, setEditingLocationUUID] = useState<string | null>(null);
+  const [editQtyInput, setEditQtyInput] = useState("");
 
   const positionFits = useMemo(() => {
     if (!productDimensions) return () => true;
@@ -72,7 +75,8 @@ export function LocationPicker({
     const max = getMaxQuantity?.(locationUUID);
     const finalQty = max != null ? Math.min(qty, max) : qty;
     if (finalQty <= 0) return;
-    onChange([...value, { locationUUID, quantity: finalQty }]);
+    const pos = positions.find((p) => p.locationUUID === locationUUID);
+    onChange([...value, { locationUUID, quantity: finalQty, storageType: pos?.storageType }]);
     setAddQty("1");
   };
 
@@ -88,6 +92,24 @@ export function LocationPicker({
     );
   };
 
+  const startEditQty = (a: AssignedLocation) => {
+    setEditingLocationUUID(a.locationUUID);
+    setEditQtyInput(String(a.quantity));
+  };
+
+  const saveEditQty = () => {
+    if (editingLocationUUID == null) return;
+    const qty = Math.floor(Number(editQtyInput) || 0);
+    updateQuantity(editingLocationUUID, qty);
+    setEditingLocationUUID(null);
+    setEditQtyInput("");
+  };
+
+  const cancelEditQty = () => {
+    setEditingLocationUUID(null);
+    setEditQtyInput("");
+  };
+
   const getAddress = (uuid: string) =>
     positions.find((p) => p.locationUUID === uuid)?.locationAddress ?? uuid;
 
@@ -100,31 +122,62 @@ export function LocationPicker({
             const pos = positions.find((p) => p.locationUUID === a.locationUUID);
             const fitsDims = !pos || positionFits(pos);
             const volumeOver = assignedVolumeOverflow.has(a.locationUUID);
+            const isReserve = isReserveLocation(a) || pos?.storageType === "reserve";
+            const address = getAddress(a.locationUUID);
+            const isEditing = editingLocationUUID === a.locationUUID;
             return (
             <li
               key={a.locationUUID}
               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                volumeOver ? "border-red-300 bg-red-50/50" : "border-slate-200 bg-slate-50/50"
+                volumeOver ? "border-red-300 bg-red-50/50" : isReserve ? "" : "border-slate-200 bg-slate-50/50"
               }`}
+              style={isReserve && !volumeOver ? { backgroundColor: RESERVE_BG, borderColor: RESERVE_BORDER, borderWidth: 1 } : undefined}
             >
-              <span className="font-mono text-slate-800 flex-1 truncate" title={a.locationUUID}>
-                {getAddress(a.locationUUID)}
-              </span>
-              {!fitsDims && (
-                <span className="shrink-0 text-amber-600" title="Produkt nie mieści się w wymiarach tej lokalizacji">⚠</span>
+              {isReserve && (
+                <span className="shrink-0 text-amber-800" title="Lokalizacja zapasowa (Rezerwa)" aria-label="Rezerwa">
+                  <ReserveLockIcon size={14} />
+                </span>
               )}
-              <input
-                type="number"
-                min={0}
-                max={getMaxQuantity?.(a.locationUUID)}
-                value={a.quantity}
-                onChange={(e) => updateQuantity(a.locationUUID, Number(e.target.value) || 0)}
-                className="w-16 rounded border border-slate-200 px-2 py-1 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                disabled={disabled}
-              />
-              <span className="text-slate-500 text-xs shrink-0">szt.</span>
-              {volumeOver && (
-                <span className="shrink-0 text-red-600 text-xs" title="Przekroczono pojemność (dm³)">dm³</span>
+              {isEditing ? (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="font-mono text-slate-600 text-xs shrink-0">{address}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={getMaxQuantity?.(a.locationUUID)}
+                    value={editQtyInput}
+                    onChange={(e) => setEditQtyInput(e.target.value)}
+                    className="w-16 rounded border border-slate-200 px-2 py-1 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    disabled={disabled}
+                    autoFocus
+                  />
+                  <span className="text-slate-500 text-xs shrink-0">szt.</span>
+                  <button type="button" onClick={saveEditQty} className="text-xs font-medium text-cyan-600 hover:text-cyan-700 shrink-0">Zapisz</button>
+                  <button type="button" onClick={cancelEditQty} className="text-xs font-medium text-slate-500 hover:text-slate-700 shrink-0">Anuluj</button>
+                </div>
+              ) : (
+                <>
+                  <span className="font-mono text-slate-800 flex-1 truncate" title={a.locationUUID}>
+                    {formatLocationWithQuantity(address, a.quantity)}
+                    {isReserve && <span className="ml-1 text-amber-800 text-xs font-medium">Rezerwa</span>}
+                  </span>
+                  {!fitsDims && (
+                    <span className="shrink-0 text-amber-600" title="Produkt nie mieści się w wymiarach tej lokalizacji">⚠</span>
+                  )}
+                  {volumeOver && (
+                    <span className="shrink-0 text-red-600 text-xs" title="Przekroczono pojemność (dm³)">dm³</span>
+                  )}
+                  {!disabled && (
+                    <button
+                      type="button"
+                      onClick={() => startEditQty(a)}
+                      className="text-xs text-slate-500 hover:text-slate-700 shrink-0"
+                      title="Zmień ilość"
+                    >
+                      Zmień ilość
+                    </button>
+                  )}
+                </>
               )}
               <button
                 type="button"
@@ -177,15 +230,23 @@ export function LocationPicker({
                 <ul className="divide-y divide-slate-100">
                   {availableToAdd.slice(0, 50).map((p) => {
                     const fits = positionFits(p);
+                    const isReserve = p.storageType === "reserve";
                     return (
                       <li
                         key={p.locationUUID}
-                        className={`flex items-center justify-between gap-2 px-2 py-1.5 ${fits ? "hover:bg-slate-50" : "opacity-60 bg-slate-50"}`}
-                        title={!fits ? "Produkt nie mieści się w wymiarach tej lokalizacji" : undefined}
+                        className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded border ${isReserve ? "" : "border-transparent"} ${fits ? (isReserve ? "hover:opacity-95" : "hover:bg-slate-50") : "opacity-60"} ${!fits && !isReserve ? "bg-slate-50" : ""}`}
+                        style={isReserve ? { backgroundColor: RESERVE_BG, borderColor: RESERVE_BORDER } : undefined}
+                        title={!fits ? "Produkt nie mieści się w wymiarach tej lokalizacji" : isReserve ? "Lokalizacja zapasowa (Rezerwa)" : undefined}
                       >
-                        <span className="font-mono text-sm text-slate-800 truncate flex items-center gap-1">
+                        <span className={`font-mono text-sm truncate flex items-center gap-1 min-w-0 ${isReserve ? "text-amber-900" : "text-slate-800"}`}>
+                          {isReserve && (
+                            <span className="shrink-0 text-amber-800" title="Rezerwa" aria-label="Rezerwa">
+                              <ReserveLockIcon size={12} />
+                            </span>
+                          )}
                           {!fits && <span className="text-amber-600 shrink-0">⚠</span>}
                           {p.locationAddress}
+                          {isReserve && <span className="text-amber-800 text-xs font-medium shrink-0">(Rezerwa)</span>}
                         </span>
                         <button
                           type="button"

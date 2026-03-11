@@ -12,14 +12,17 @@ export const UI_STRINGS = {
   navigation: {
     dashboard: "Dashboard",
     products: "Produkty",
+    inventory: "Stan magazynowy",
     orders: "Zamówienia",
     carts: "Wózki",
     import: "Import",
     fleetPlanner: "Planer floty",
+    pickingWaves: "Fale kompletacji",
     warehouseDesigner: "Projektant Magazynu",
     barcodeManagement: "Etykiety / Kody kreskowe",
     labelSystem: "System Etykiet",
     setup: "Setup",
+    analysis: "Analiza",
   },
 
   warehouse: {
@@ -105,6 +108,8 @@ export const UI_STRINGS = {
     visuals: {
       toFront: "Na wierzch",
       toBack: "Na dół",
+      bringForward: "Do przodu",
+      sendBackward: "Do tyłu",
       delete: "Usuń",
       deleteAisle: "Usuń alejkę",
       name: "Nazwa",
@@ -136,8 +141,16 @@ export const UI_STRINGS = {
     categories: {
       warehouse: "Magazyn",
       fleet: "Wózki",
+      cart: "Cart",
+      basket: "Basket",
       products: "Produkty",
       orders: "Zamówienia",
+    },
+    templateType: "Template type",
+    previewData: "Preview data",
+    presets: {
+      cartLabel: "Cart label preset",
+      basketLabel: "Basket label preset",
     },
     panel: {
       variables: "Zmienne",

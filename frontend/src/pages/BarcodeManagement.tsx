@@ -94,7 +94,7 @@ export default function BarcodeManagement() {
       const text = loc.barcode_data || loc.label;
       if (format === "Code128") {
         const canvas = document.createElement("canvas");
-        JsBarcode(canvas, text, { format: "CODE128", width: 1.2, height: 28, displayValue: true });
+        JsBarcode(canvas, text, { format: "CODE128", width: 1.2, height: 28, displayValue: false });
         const img = canvas.toDataURL("image/png");
         pdf.addImage(img, "PNG", x, y, 55, 18);
       } else {
@@ -242,7 +242,7 @@ function BarcodePreview({ format, value }: { format: BarcodeFormat; value: strin
     if (!value || !canvasRef.current) return;
     if (format === "Code128") {
       try {
-        JsBarcode(canvasRef.current, value, { format: "CODE128", width: 1, height: 32, displayValue: true });
+        JsBarcode(canvasRef.current, value, { format: "CODE128", width: 1, height: 32, displayValue: false });
       } catch {}
     }
   }, [format, value]);

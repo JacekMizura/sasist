@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from starlette import status
 
@@ -67,6 +68,81 @@ def delete_cart_group(
     return service.delete_group(group_id)
 
 # ==========================================================
+# BARCODES / LABELS: PDF z kodami kreskowymi (Code128)
+# ==========================================================
+def _pdf_response(pdf_bytes: bytes, filename: str) -> Response:
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{cart_id}/labels")
+def get_cart_labels(
+    cart_id: int,
+    tenant_id: int = 1,
+    db: Session = Depends(get_db),
+):
+    """Download PDF with cart label using default cart template. Falls back to legacy barcode-only PDF if no template set."""
+    service = CartService(db)
+    pdf_bytes = service.get_cart_labels_pdf(cart_id, tenant_id)
+    return _pdf_response(pdf_bytes, f"cart-{cart_id}-labels.pdf")
+
+
+@router.get("/{cart_id}/barcode")
+def get_cart_barcode(cart_id: int, db: Session = Depends(get_db)):
+    """Download PDF with cart barcode only. Code128. Returns application/pdf."""
+    service = CartService(db)
+    pdf_bytes = service.get_cart_barcode_pdf(cart_id)
+    return _pdf_response(pdf_bytes, f"cart-{cart_id}-barcode.pdf")
+
+
+@router.get("/{cart_id}/basket-labels")
+def get_cart_basket_labels(
+    cart_id: int,
+    tenant_id: int = 1,
+    db: Session = Depends(get_db),
+):
+    """Download PDF with one page per basket using default basket template. Falls back to legacy barcode-only PDF if no template set."""
+    service = CartService(db)
+    pdf_bytes = service.get_basket_labels_pdf(cart_id, tenant_id)
+    return _pdf_response(pdf_bytes, f"cart-{cart_id}-basket-labels.pdf")
+
+
+@router.get("/{cart_id}/basket-barcodes")
+def get_cart_basket_barcodes(cart_id: int, db: Session = Depends(get_db)):
+    """Download PDF with basket barcodes only. Code128. Returns application/pdf."""
+    service = CartService(db)
+    pdf_bytes = service.get_basket_barcodes_pdf(cart_id)
+    return _pdf_response(pdf_bytes, f"cart-{cart_id}-basket-barcodes.pdf")
+
+
+@router.get("/{cart_id}/all-barcodes")
+def get_cart_all_barcodes(cart_id: int, db: Session = Depends(get_db)):
+    """Download PDF with cart barcode + all basket barcodes. Code128. Returns application/pdf."""
+    service = CartService(db)
+    pdf_bytes = service.get_barcodes_pdf(cart_id)
+    return _pdf_response(pdf_bytes, f"cart-{cart_id}-all-barcodes.pdf")
+
+
+@router.get("/{cart_id}/barcodes")
+def get_cart_barcodes(cart_id: int, db: Session = Depends(get_db)):
+    """Legacy: same as GET /carts/{cart_id}/all-barcodes."""
+    service = CartService(db)
+    pdf_bytes = service.get_barcodes_pdf(cart_id)
+    return _pdf_response(pdf_bytes, f"cart-{cart_id}-barcodes.pdf")
+
+
+@router.get("/{cart_id}/barcodes/pdf")
+def get_cart_barcodes_pdf(cart_id: int, db: Session = Depends(get_db)):
+    """Legacy alias: same as GET /carts/{cart_id}/all-barcodes."""
+    service = CartService(db)
+    pdf_bytes = service.get_barcodes_pdf(cart_id)
+    return _pdf_response(pdf_bytes, f"cart-{cart_id}-barcodes.pdf")
+
+
+# ==========================================================
 # GET DETAILS: Pobiera pełne dane wózka wraz z jego koszykami
 # ==========================================================
 @router.get("/{cart_id}/")
@@ -84,6 +160,7 @@ def _cart_to_response_item(cart):
     return {
         "id": cart.id,
         "name": cart.name,
+        "barcode": getattr(cart, "barcode", None),
         "type": clean_type,
         "status": clean_status,
         "group_id": cart.group_id,

@@ -2,13 +2,14 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import type { RackState, BinState } from "../../types/warehouse";
 import { getLevelConfig } from "./warehouseUtils";
 import { binUsedVolumeDm3, binVolumeDm3 } from "./warehouseUtils";
+import { RESERVE_BG, RESERVE_BORDER } from "./reserveLocationStyle";
 
 const UPRIGHT_BLUE = "#2563eb";
 const SHELF_ORANGE = "#ea580c";
 const SHELF_GREY = "#64748b";
 const CELL_STROKE = "#cbd5e1";
-const RESERVE_FILL = "#fed7aa";
-const RESERVE_STROKE = "#ea580c";
+const RESERVE_FILL = RESERVE_BG;
+const RESERVE_STROKE = RESERVE_BORDER;
 
 function getBinAt(rack: RackState, levelIndex: number, segmentIndex: number): BinState | undefined {
   return rack.bins.find((b) => b.level_index === levelIndex && b.segment_index === segmentIndex);

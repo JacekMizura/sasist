@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from "react";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
@@ -62,7 +62,22 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
   const [addRowWidth, setAddRowWidth] = useState(40);
   const [addRowHeight, setAddRowHeight] = useState(40);
 
-  const cmToPx = 4;
+  const [capacityMode, setCapacityMode] = useState<"volume" | "orders" | "mixed">("volume");
+  const [maxOrders, setMaxOrders] = useState<number | "">("");
+  const [maxVolumeDm3, setMaxVolumeDm3] = useState<number | "">("");
+
+  const rowContainerRef = useRef<HTMLDivElement>(null);
+  const [containerWidthPx, setContainerWidthPx] = useState(900);
+
+  useLayoutEffect(() => {
+    const el = rowContainerRef.current;
+    if (!el) return;
+    const update = () => setContainerWidthPx(el.offsetWidth ?? 900);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // -------------------------------------------------------------------------
   // Initialization: cart details + groups; set groupId from API (cast to Number)
@@ -116,6 +131,11 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
           });
           setRows(newRows);
 
+          const capMode = (data.capacity_mode ?? "volume") as "volume" | "orders" | "mixed";
+          setCapacityMode(capMode);
+          setMaxOrders(data.max_orders != null ? data.max_orders : "");
+          setMaxVolumeDm3(data.max_volume_dm3 != null ? data.max_volume_dm3 : "");
+
           if (data.warehouse_id && resWarehouses.data) {
             const wh = resWarehouses.data.find((w: { id: number }) => w.id === data.warehouse_id);
             if (wh) setWarehouse(wh);
@@ -130,7 +150,7 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
     return () => {
       cancelled = true;
     };
-  }, [cartId, setWarehouse]);
+  }, [cartId]);
 
   // -------------------------------------------------------------------------
   // Validation
@@ -207,14 +227,22 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
         }))
       );
 
-      const payload = {
+      const vol = Number(totalVolume(rows).toFixed(2));
+      const payload: Record<string, unknown> = {
         name: cartName.trim(),
         warehouse_id: warehouse!.id,
         group_id: groupId,
         image_url: imageUrl.trim() || null,
         baskets: basketsPayload,
-        total_volume_dm3: Number(totalVolume(rows).toFixed(2)),
+        total_volume_dm3: vol,
+        capacity_mode: capacityMode,
       };
+      if (capacityMode === "orders" || capacityMode === "mixed") {
+        payload.max_orders = maxOrders === "" ? null : Number(maxOrders);
+      }
+      if (capacityMode === "volume" || capacityMode === "mixed") {
+        payload.max_volume_dm3 = maxVolumeDm3 === "" ? vol : Number(maxVolumeDm3);
+      }
 
       let res;
       if (cartId) {
@@ -276,6 +304,54 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
               {totalVolume(rows).toFixed(1)} <span className="text-sm uppercase text-blue-400">dm³</span>
             </div>
           </div>
+        </div>
+
+        {/* CAPACITY MODE */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <h3 className="text-xs font-black uppercase mb-4 text-slate-400 border-b pb-3 tracking-widest">
+            CAPACITY MODE
+          </h3>
+          <div className="flex flex-wrap gap-4 p-1">
+            {(["volume", "orders", "mixed"] as const).map((mode) => (
+              <label key={mode} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="capacityMode"
+                  checked={capacityMode === mode}
+                  onChange={() => setCapacityMode(mode)}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm font-bold capitalize">{mode}</span>
+              </label>
+            ))}
+          </div>
+          {(capacityMode === "volume" || capacityMode === "mixed") && (
+            <div className="mt-4">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_volume_dm3</label>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                className="w-full max-w-xs bg-slate-50 rounded-xl px-4 py-2 font-bold outline-none border border-slate-200"
+                value={maxVolumeDm3 === "" ? "" : maxVolumeDm3}
+                onChange={(e) => setMaxVolumeDm3(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder={String(totalVolume(rows).toFixed(1))}
+              />
+            </div>
+          )}
+          {(capacityMode === "orders" || capacityMode === "mixed") && (
+            <div className="mt-4">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_orders</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full max-w-xs bg-slate-50 rounded-xl px-4 py-2 font-bold outline-none border border-slate-200"
+                value={maxOrders === "" ? "" : maxOrders}
+                onChange={(e) => setMaxOrders(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="e.g. 10"
+              />
+            </div>
+          )}
         </div>
 
         {/* Sekcja: Tworzenie całego rzędu – numer rzędu, liczba koszyków, wymiary; przycisk dodaje cały rząd naraz. */}
@@ -346,11 +422,25 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
         </div>
 
         {/* Lista poziomów (rzędów) z koszykami – każdy poziom ma etykietę i przycisk + do pojedynczego koszyka. */}
-        <div className="bg-slate-200 rounded-[3rem] p-10 flex flex-col-reverse gap-6 border-4 border-slate-300 overflow-auto max-h-[70vh] shadow-inner relative custom-scrollbar">
-          {rows.map((row, rIdx) => (
+        <div
+          ref={rowContainerRef}
+          className="bg-slate-200 rounded-[3rem] p-10 flex flex-col-reverse gap-6 border-4 border-slate-300 overflow-auto max-h-[70vh] shadow-inner relative custom-scrollbar"
+        >
+          {(() => {
+            const gapPx = 16;
+            const rowPaddingPx = 32;
+            const buttonAreaPx = 64;
+            const MIN_WIDTH = 90;
+            const BASKET_HEIGHT = 90;
+            const containerPx = containerWidthPx ?? 900;
+            return rows.map((row, rIdx) => {
+              const rowTotalWidthCm = row.baskets.reduce((sum, b) => sum + (Number(b.width) || 0), 0);
+              const availableWidthPx = Math.max(100, containerPx - rowPaddingPx - (row.baskets.length > 0 ? (row.baskets.length - 1) * gapPx + buttonAreaPx : 0));
+              const scale = rowTotalWidthCm > 0 ? availableWidthPx / rowTotalWidthCm : 1;
+              return (
             <div
               key={rIdx}
-              className="flex gap-4 items-end bg-white/30 p-6 rounded-3xl border border-slate-300/50 relative min-w-max transition-all"
+              className="flex gap-4 items-end bg-white/30 p-4 rounded-2xl border border-slate-300/50 relative min-w-max transition-all"
             >
               <div className="absolute -left-12 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] font-black text-slate-500 uppercase tracking-tighter">
                 {t.level} {rIdx + 1}
@@ -359,44 +449,55 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
                 const isSelected = selectedBasket?.r === rIdx && selectedBasket?.b === bIdx;
                 const isInvalid =
                   !b.name || b.length <= 0 || b.width <= 0 || b.height <= 0;
+                const widthPx = (Number(b.width) || 0) * scale;
+                const finalWidth = Math.max(widthPx, MIN_WIDTH);
+                const dimensionsText = `${b.width ?? "?"} × ${b.length ?? "?"} × ${b.height ?? "?"}`;
                 return (
-                  <div
-                    key={bIdx}
-                    onClick={() => setSelectedBasket({ r: rIdx, b: bIdx })}
-                    className={`cursor-pointer rounded-[2rem] border-4 flex flex-col items-center justify-center p-4 transition-all relative shadow-lg ${
-                      isSelected
-                        ? "bg-orange-500 border-white scale-105 shadow-2xl z-20"
-                        : isInvalid
-                          ? "bg-red-500 border-red-700 animate-pulse"
-                          : "bg-blue-600 border-white hover:bg-blue-700"
-                    }`}
-                    style={{
-                      width: `${Math.max(Number(b.width), 25) * cmToPx}px`,
-                      height: `${Math.max(Number(b.length), 25) * cmToPx}px`,
-                      minWidth: "140px",
-                      minHeight: "110px",
-                    }}
-                  >
-                    <span className="text-[13px] font-black text-white uppercase truncate w-full text-center px-2">
-                      {b.name || t.noName}
-                    </span>
-                    <span className="text-[10px] font-bold text-blue-100 mt-1">
-                      {b.width ?? "?"}x{b.length ?? "?"}x{b.height ?? "?"}
-                    </span>
-                    <div className="mt-2 bg-black/20 px-3 py-1 rounded-xl text-[10px] font-black text-white italic">
-                      {basketVolume(b).toFixed(1)} dm³
+                  <div key={bIdx} className="flex flex-col items-center shrink-0">
+                    <div
+                      onClick={() => setSelectedBasket({ r: rIdx, b: bIdx })}
+                      className={`cursor-pointer rounded-2xl border-4 flex flex-col items-center justify-center gap-1.5 p-3 transition-all relative shadow-lg shrink-0 text-center ${
+                        isSelected
+                          ? "bg-orange-500 border-white scale-105 shadow-2xl z-20"
+                          : isInvalid
+                            ? "bg-red-500 border-red-700 animate-pulse"
+                            : "border-white hover:opacity-95"
+                      }`}
+                      style={{
+                        width: `${finalWidth}px`,
+                        height: `${BASKET_HEIGHT}px`,
+                        ...(!isSelected && !isInvalid && { background: "linear-gradient(180deg, #3568e2 0%, #2c5cd1 100%)" }),
+                      }}
+                    >
+                      <span
+                        className="text-sm font-semibold text-white uppercase truncate max-w-full text-center rounded-[10px] py-1 px-2.5 min-w-[48px] inline-block"
+                        style={{ background: "rgba(0,0,0,0.15)" }}
+                      >
+                        {b.name || t.noName}
+                      </span>
+                      <span
+                        className="rounded-full text-xs font-medium text-white py-1 px-2.5 whitespace-nowrap"
+                        style={{ background: "rgba(0,0,0,0.2)", fontSize: "12px" }}
+                      >
+                        {basketVolume(b).toFixed(1)} dm³
+                      </span>
                     </div>
+                    <span className="text-[11px] text-slate-600 mt-1.5 whitespace-nowrap text-center">
+                      {dimensionsText}
+                    </span>
                   </div>
                 );
               })}
               <button
                 onClick={() => handleAddBasket(rIdx)}
-                className="w-12 h-12 rounded-2xl bg-white border-2 border-slate-300 text-slate-400 font-black text-2xl hover:text-blue-600 hover:border-blue-600 transition-all shadow-sm flex items-center justify-center"
+                className="w-12 h-12 rounded-2xl bg-white border-2 border-slate-300 text-slate-400 font-black text-2xl hover:text-blue-600 hover:border-blue-600 transition-all shadow-sm flex items-center justify-center shrink-0"
               >
                 +
               </button>
             </div>
-          ))}
+            );
+          });
+          })()}
           <button
             onClick={handleAddLevel}
             className="py-6 border-4 border-dashed border-slate-400 rounded-[2rem] text-slate-500 font-black text-xs uppercase hover:bg-slate-300 transition-all tracking-[0.2em] shadow-sm"
@@ -435,6 +536,7 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2">{t.imageUrlLabel}</label>
             <input
+              type="text"
               className="w-full bg-slate-50 rounded-2xl px-5 py-4 border border-slate-100 font-black text-slate-700 outline-none transition-all focus:border-blue-500"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}

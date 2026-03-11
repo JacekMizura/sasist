@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../../api/axios";
 import { useTranslation } from "../../locales";
 import type { Translations } from "../../locales";
@@ -436,8 +436,8 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
           <h1 className="text-2xl font-bold text-slate-800 mb-1">{t.import_title}</h1>
           <p className="text-sm text-slate-500 mb-6">{t.import_subtitle}</p>
 
-          {/* Typ importu */}
-          <div className="flex gap-3 mb-6">
+          {/* Typ importu + Historia importów */}
+          <div className="flex flex-wrap items-center gap-3 mb-6">
             <button
               type="button"
               className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
@@ -460,6 +460,12 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
             >
               {t.import_orders}
             </button>
+            <Link
+              to="/import/history"
+              className="px-4 py-2 rounded-lg font-semibold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200"
+            >
+              Historia importów
+            </Link>
           </div>
 
           {/* Plik i przyciski */}

@@ -3,6 +3,7 @@ import { useTranslation } from "../locales";
 import { useWarehouse } from "../context/WarehouseContext";
 import { useCartsRefresh } from "../context/CartsRefreshContext";
 import api from "../api/axios";
+import PageLayout from "../components/layout/PageLayout";
 
 type AnalyzeResult = {
   orders_to_serve: number;
@@ -63,26 +64,24 @@ export default function FleetPlanner() {
   };
 
   return (
-    <div className="min-h-full bg-slate-50 rounded-lg p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
-          <h1 className="text-xl font-black text-slate-800 uppercase tracking-wide mb-2">
-            {t.optimizer_fleet_planner ?? "Planer floty"}
-          </h1>
-          <p className="text-sm text-slate-500 mb-6">
-            {t.optimizer_analyze_subtitle ?? "Oblicz minimalne zapotrzebowanie na wózki dla zamówień NEW."}
-          </p>
-          <button
-            type="button"
-            onClick={handleAnalyze}
-            disabled={loading}
-            className="px-6 py-3 rounded-lg bg-violet-600 text-white font-bold uppercase text-sm hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie na wózki")}
-          </button>
-        </div>
+    <PageLayout
+      title={t.optimizer_fleet_planner ?? "Planer floty"}
+      actions={
+        <button
+          type="button"
+          onClick={handleAnalyze}
+          disabled={loading}
+          className="px-6 py-3 rounded-lg bg-violet-600 text-white font-bold uppercase text-sm hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie na wózki")}
+        </button>
+      }
+    >
+      <p className="text-sm text-slate-500">
+        {t.optimizer_analyze_subtitle ?? "Oblicz minimalne zapotrzebowanie na wózki dla zamówień NEW."}
+      </p>
 
-        {/* Dashboard stub cards */}
+      {/* Dashboard stub cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
             <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
@@ -160,7 +159,6 @@ export default function FleetPlanner() {
             </ul>
           </div>
         )}
-      </div>
-    </div>
+    </PageLayout>
   );
 }

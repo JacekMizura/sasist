@@ -112,8 +112,6 @@ export default function Products() {
 
   return (
     <div className="space-y-6">
-      <div className="text-2xl font-semibold">Produkty</div>
-
       {/* Pasek filtrów */}
       <div className="bg-white rounded-xl shadow p-4">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end">

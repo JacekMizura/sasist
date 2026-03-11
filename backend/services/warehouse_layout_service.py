@@ -1,12 +1,23 @@
 import json
+import logging
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 
 from ..models.warehouse import Warehouse, WarehouseLayout, Rack, Bin, Aisle, StorageLocation, GRID_UNIT_CM
+from ..models.tenant import Tenant
+from ..models.location import Location
+from .warehouse_service import WarehouseService
+from .graph_location_service import assign_locations_to_graph_nodes
+from ..models.label_template import SavedLabelTemplate
+from .barcode_generation import location_barcode_unique
+from .label_render_service import render_label_template
+
+logger = logging.getLogger(__name__)
 
 
 def _bin_label(aisle_letter: str, rack_index: int, level: int, segment: int) -> str:
-    return f"{aisle_letter}-{rack_index:02d}-{level + 1:02d}-{segment + 1:02d}"
+    """Canonical location code without leading zeros, e.g. A1-1-3."""
+    return f"{aisle_letter}{rack_index}-{level + 1}-{segment + 1}"
 
 
 def _bin_volume_dm3(length_cm: float, width_cm: float, height_cm: float, levels: int, bins_per_level: int) -> float:
@@ -46,6 +57,48 @@ def _bin_coords_cm(rack, level_index: int, segment_index: int, internal_structur
     return (round(x_cm, 2), round(y_cm, 2), round(z_cm, 2))
 
 
+def _bin_center_and_dimensions_cm(rack, level_index: int, segment_index: int, internal_structure: dict) -> tuple:
+    """
+    Return (center_x_cm, center_y_cm, z_cm, width_cm, depth_cm, height_cm) for a storage slot.
+    Center point is used for walking-cost, route simulation, heatmaps, slotting.
+    Rack x,y are in 10cm units; dimensions come from internal_structure or rack defaults.
+    """
+    base_x = rack.x * GRID_UNIT_CM
+    base_y = rack.y * GRID_UNIT_CM
+    levels_data = (internal_structure or {}).get("levels") if isinstance(internal_structure, dict) else []
+    # z_cm (floor of bin) and level height
+    if levels_data and level_index < len(levels_data):
+        z_cm = sum(float(l.get("height_cm", 0)) for l in levels_data[:level_index])
+        level_height_cm = float(levels_data[level_index].get("height_cm", 0)) if level_index < len(levels_data) else (rack.height_cm / max(1, rack.levels))
+    else:
+        z_cm = (rack.height_cm / max(1, rack.levels)) * level_index
+        level_height_cm = rack.height_cm / max(1, rack.levels)
+    # segment width and offset along rack
+    if levels_data and level_index < len(levels_data):
+        locs = levels_data[level_index].get("locations") or []
+        if segment_index < len(locs):
+            width_cm = float(locs[segment_index].get("width_cm", 0))
+        else:
+            width_cm = rack.width_cm / max(1, rack.bins_per_level)
+        offset_along = sum(float(locs[i].get("width_cm", 0)) for i in range(segment_index)) if segment_index < len(locs) else (rack.width_cm / max(1, rack.bins_per_level)) * segment_index
+    else:
+        width_cm = rack.width_cm / max(1, rack.bins_per_level)
+        offset_along = width_cm * segment_index
+    # depth = rack extent perpendicular to segment direction (length_cm)
+    depth_cm = float(rack.length_cm) if getattr(rack, "length_cm", None) is not None else (rack.width_cm or 80.0)
+    # center = base + segment_offset + (width/2) along segment, and (depth/2) along the other axis
+    if rack.orientation == "horizontal":
+        center_x = base_x + offset_along + (width_cm / 2)
+        center_y = base_y + (depth_cm / 2)
+    else:
+        center_x = base_x + (depth_cm / 2)
+        center_y = base_y + offset_along + (width_cm / 2)
+    return (
+        round(center_x, 2), round(center_y, 2), round(z_cm, 2),
+        round(width_cm, 2), round(depth_cm, 2), round(level_height_cm, 2),
+    )
+
+
 class WarehouseLayoutService:
     def __init__(self, db: Session):
         self.db = db
@@ -68,11 +121,42 @@ class WarehouseLayoutService:
                 z_cm=z_cm,
             ))
 
+    def _sync_locations_from_bins(
+        self, warehouse_id: int, rack: Rack, internal_structure: dict, bin_rows: list
+    ) -> None:
+        """
+        Create operational Location rows (locations table) from layout bins when missing.
+        Each location receives coordinates (x, y, z) representing the center of the storage slot,
+        and dimensions (width, depth, height) for walking-cost, route simulation, heatmaps, slotting.
+        Existing locations (same warehouse_id + name) are left unchanged.
+        """
+        for b, lev, seg in bin_rows:
+            center_x, center_y, z_cm, width_cm, depth_cm, height_cm = _bin_center_and_dimensions_cm(
+                rack, lev, seg, internal_structure
+            )
+            loc = (
+                self.db.query(Location)
+                .filter(Location.warehouse_id == warehouse_id, Location.name == b.label)
+                .first()
+            )
+            if loc is None:
+                self.db.add(Location(
+                    warehouse_id=warehouse_id,
+                    name=b.label,
+                    type="pick",
+                    width=float(width_cm),
+                    depth=float(depth_cm),
+                    height=float(height_cm),
+                    x=float(center_x),
+                    y=float(center_y),
+                    z=float(z_cm),
+                ))
+
     def get_layout(self, tenant_id: int, warehouse_id: int) -> dict:
-        wh = self.db.query(Warehouse).filter(
-            Warehouse.tenant_id == tenant_id,
-            Warehouse.id == warehouse_id,
-        ).first()
+        ws = WarehouseService(self.db)
+        if not ws.can_tenant_access_warehouse(tenant_id, warehouse_id):
+            raise HTTPException(status_code=404, detail="Magazyn nie istnieje")
+        wh = self.db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
         if not wh:
             raise HTTPException(status_code=404, detail="Magazyn nie istnieje")
         layout = self.db.query(WarehouseLayout).options(
@@ -99,6 +183,7 @@ class WarehouseLayoutService:
                 {
                     "id": b.id,
                     "label": b.label,
+                    "barcode_data": getattr(b, "barcode", None) or b.label,
                     "level_index": b.level_index,
                     "segment_index": b.segment_index,
                     "volume_dm3": round(b.volume_dm3, 2),
@@ -159,11 +244,93 @@ class WarehouseLayoutService:
             "row_containers": row_containers,
         }
 
+    def get_location_label_records(self, tenant_id: int, warehouse_id: int) -> list[dict]:
+        """Build one record per bin for template rendering. Includes loc_name, loc_barcode, zone for template renderer."""
+        layout_data = self.get_layout(tenant_id, warehouse_id)
+        zone = "Magazyn"
+        for ve in (layout_data.get("visual_elements") or []):
+            if ve.get("type") == "zone" and ve.get("name"):
+                zone = ve.get("name")
+                break
+        records = []
+        seen = set()
+        for rack in layout_data.get("racks") or []:
+            aisle = (rack.get("aisle_letter") or "A").strip().upper()[:1]
+            r_idx = int(rack.get("rack_index") or 1)
+            rack_str = f"{aisle}{r_idx}"
+            for bin_data in rack.get("bins") or []:
+                lev = int(bin_data.get("level_index", 0))
+                seg = int(bin_data.get("segment_index", 0))
+                location_code = _bin_label(aisle, r_idx, lev, seg)
+                if location_code in seen:
+                    continue
+                seen.add(location_code)
+                location_barcode = bin_data.get("barcode_data") or bin_data.get("label") or location_code
+                level_num = lev + 1
+                position_num = seg + 1
+                records.append({
+                    "loc_name": location_code,
+                    "loc_barcode": location_barcode,
+                    "zone": zone,
+                    "location_code": location_code,
+                    "location_barcode": location_barcode,
+                    "rack": rack_str,
+                    "level": level_num,
+                    "position": position_num,
+                    "barcode_data": location_barcode,
+                    "location_name": location_code,
+                    "rack_id": rack_str,
+                    "level_num": level_num,
+                    "zone_name": zone,
+                    "{loc_name}": location_code,
+                    "{loc_barcode}": location_barcode,
+                    "{rack_id}": rack_str,
+                    "{level_num}": level_num,
+                    "{bin_pos}": str(position_num),
+                    "{zone}": zone,
+                })
+        return records
+
+    def get_location_labels_pdf(self, tenant_id: int, warehouse_id: int, template_id: int | None = None) -> bytes:
+        """Generate location labels PDF via template system. Uses template_id if provided, else default location template."""
+        records = self.get_location_label_records(tenant_id, warehouse_id)
+        if not records:
+            logger.error("Location labels: no location records for tenant_id=%s warehouse_id=%s", tenant_id, warehouse_id)
+            raise HTTPException(
+                status_code=400,
+                detail="No locations in layout. Load a warehouse layout with racks and bins first.",
+            )
+        if template_id is None:
+            tenant = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
+            template_id = getattr(tenant, "default_location_template_id", None) if tenant else None
+            if not template_id:
+                row = (
+                    self.db.query(SavedLabelTemplate)
+                    .filter(
+                        SavedLabelTemplate.tenant_id == tenant_id,
+                        SavedLabelTemplate.template_type == "location",
+                    )
+                    .order_by(SavedLabelTemplate.updated_at.desc())
+                    .first()
+                )
+                if not row:
+                    logger.error("Location labels: no template with template_type=location for tenant_id=%s", tenant_id)
+                    raise HTTPException(
+                        status_code=404,
+                        detail="No location label template found. Create and save a template with type 'Location' in the label designer.",
+                    )
+                template_id = row.id
+        try:
+            return render_label_template(self.db, template_id, records, tenant_id)
+        except ValueError as e:
+            logger.error("Location labels: %s", e)
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
     def save_layout(self, tenant_id: int, warehouse_id: int, data: dict) -> dict:
-        wh = self.db.query(Warehouse).filter(
-            Warehouse.tenant_id == tenant_id,
-            Warehouse.id == warehouse_id,
-        ).first()
+        ws = WarehouseService(self.db)
+        if not ws.can_tenant_access_warehouse(tenant_id, warehouse_id):
+            raise HTTPException(status_code=404, detail="Magazyn nie istnieje")
+        wh = self.db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
         if not wh:
             raise HTTPException(status_code=404, detail="Magazyn nie istnieje")
 
@@ -277,9 +444,11 @@ class WarehouseLayoutService:
                         self.db.add(b)
                         bin_rows.append((b, lev, seg))
             self.db.flush()
-            for b, _lev, _seg in bin_rows:
+            for b, lev, seg in bin_rows:
+                b.barcode = location_barcode_unique(rack.id, lev, seg)
                 self.db.refresh(b)
             self._sync_storage_locations(warehouse_id, rack, r_data.get("internal_structure"), bin_rows)
+            self._sync_locations_from_bins(warehouse_id, rack, r_data.get("internal_structure"), bin_rows)
         for a_data in data.get("aisles", []):
             self.db.add(Aisle(
                 layout_id=layout.id,
@@ -292,4 +461,5 @@ class WarehouseLayoutService:
             ))
         self.db.commit()
         self.db.refresh(layout)
+        assign_locations_to_graph_nodes(self.db, warehouse_id)
         return self.get_layout(tenant_id, warehouse_id)

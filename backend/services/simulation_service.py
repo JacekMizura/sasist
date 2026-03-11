@@ -1,11 +1,13 @@
 """
 Simulation Service
 
-- assign_orders_to_cart: przypisuje zamówienia NEW do wolnych koszyków wózka (po objętości i wymiarach).
+- assign_orders_to_cart: przypisuje zamówienia NEW do wolnych koszyków wózka.
+  Uses: order clustering by main SKU, sort within clusters (items + volume), FFD + best-fit basket assignment.
 - simulate: legacy – pobranie infrastruktury i wywołanie silnika symulacji.
 """
 
 import logging
+from collections import defaultdict
 from sqlalchemy.orm import Session, joinedload
 
 from ..models.cart import Cart
@@ -18,8 +20,8 @@ from ..models.enums import CartStatus, CartType
 logger = logging.getLogger(__name__)
 
 
-# 1×1×1 cm = 1 cm³ = 0.001 dm³ gdy produkt nie ma wymiarów
-FALLBACK_VOLUME_DM3 = 0.001
+# Fallback when product volume is missing or zero (avoid 0% fill for assigned orders)
+FALLBACK_VOLUME_DM3 = 0.05
 DEFAULT_DIM_CM = 1.0
 
 
@@ -91,6 +93,85 @@ def _fits_in_basket(
     )
 
 
+def _can_assign_order(
+    cart: Cart,
+    orders_count: int,
+    used_volume_dm3: float,
+    order_volume_dm3: float,
+) -> bool:
+    """
+    Returns True if assigning one more order (with order_volume_dm3) is allowed
+    given current orders_count and used_volume_dm3, according to cart.capacity_mode.
+    """
+    mode = (getattr(cart, "capacity_mode", None) or "volume").lower()
+    max_vol = cart.total_volume or 0
+    max_ord = getattr(cart, "max_orders", None)
+
+    if mode == "volume":
+        return (used_volume_dm3 + order_volume_dm3) <= max_vol
+    if mode == "orders":
+        if max_ord is None:
+            return True
+        return (orders_count + 1) <= max_ord
+    if mode == "mixed":
+        vol_ok = (used_volume_dm3 + order_volume_dm3) <= max_vol
+        ord_ok = (max_ord is None) or ((orders_count + 1) <= max_ord)
+        return vol_ok and ord_ok
+    return (used_volume_dm3 + order_volume_dm3) <= max_vol
+
+
+def _sku_frequency(orders: list) -> dict:
+    """SKU frequency across all orders: product_id -> sum of quantities."""
+    freq = defaultdict(int)
+    for order in orders:
+        for item in getattr(order, "items", []) or []:
+            pid = getattr(item, "product_id", None)
+            if pid is not None:
+                freq[pid] += int(getattr(item, "quantity", 0) or 0)
+    return freq
+
+
+def _order_main_sku(order, sku_frequency: dict):
+    """Main SKU = product_id in this order with highest global frequency. Returns product_id or None."""
+    items = getattr(order, "items", []) or []
+    if not items:
+        return None
+    return max(items, key=lambda item: sku_frequency.get(getattr(item, "product_id", None), 0)).product_id
+
+
+def _cluster_orders_by_main_sku(orders: list, sku_frequency: dict) -> list:
+    """Group orders by main_sku; return list of clusters sorted by size (largest first)."""
+    clusters_map = defaultdict(list)
+    for order in orders:
+        main_sku = _order_main_sku(order, sku_frequency)
+        clusters_map[main_sku].append(order)
+    # Sort clusters by number of orders descending
+    clusters_sorted = sorted(clusters_map.values(), key=lambda c: -len(c))
+    return clusters_sorted
+
+
+def _sort_orders_for_assignment(orders: list) -> list:
+    """
+    Cluster orders by main SKU, then within each cluster sort by (items_count DESC, volume_dm3 DESC).
+    Returns a single flat list of orders in assignment order.
+    """
+    if not orders:
+        return []
+    sku_freq = _sku_frequency(orders)
+    clusters = _cluster_orders_by_main_sku(orders, sku_freq)
+    result = []
+    for cluster in clusters:
+        # Within cluster: sort by items_count DESC, then volume DESC
+        with_vol_items = []
+        for o in cluster:
+            vol, _, _, _ = _order_total_volume_and_dimensions(o)
+            items_count = len(getattr(o, "items", []) or [])
+            with_vol_items.append((o, vol, items_count))
+        with_vol_items.sort(key=lambda x: (-x[2], -x[1]))  # items_count DESC, volume DESC
+        result.extend([x[0] for x in with_vol_items])
+    return result
+
+
 class SimulationService:
     def __init__(self, db: Session):
         self.db = db
@@ -107,9 +188,11 @@ class SimulationService:
         tenant_id: int,
         warehouse_id: int,
         cart_id: int,
+        wave_id: int | None = None,
     ) -> dict:
         """
         Przypisuje zamówienia ze statusem NEW do wózka.
+        Gdy wave_id podane: tylko zamówienia z tej fali (Order.wave_id == wave_id).
         - MULTI: do wolnych koszyków (basket.order_id IS NULL).
         - BULK: cały wózek jako jeden pojemnik; sum(order_volumes) <= total_volume.
         Zwraca: assigned_orders_count, unassigned_orders_count, cart_utilization_percent, status.
@@ -132,7 +215,7 @@ class SimulationService:
             is_multi = (cart.type == CartType.MULTI or
                         str(getattr(cart.type, "value", cart.type) or "").upper() == "MULTI")
 
-            # Zamówienia NEW; dla BULK tylko te bez przypisanego wózka
+            # Zamówienia NEW; opcjonalnie tylko z fali (wave_id)
             orders_q = (
                 self.db.query(Order)
                 .options(joinedload(Order.items).joinedload(OrderItem.product))
@@ -142,26 +225,39 @@ class SimulationService:
                     Order.status == "NEW",
                 )
             )
+            if wave_id is not None:
+                orders_q = orders_q.filter(Order.wave_id == wave_id)
             if not is_multi:
                 orders_q = orders_q.filter(Order.cart_id == None)
-            orders_new = orders_q.order_by(Order.id).all()
+            orders_all = orders_q.all()
+
+            # Order clustering + sort: cluster by main SKU, then within cluster by (items_count DESC, volume DESC)
+            orders_new = _sort_orders_for_assignment(orders_all)
 
             assigned_count = 0
             unassigned_count = 0
 
             if is_multi:
-                baskets = sorted(
-                    [b for b in (cart.baskets or []) if b.order_id is None],
-                    key=lambda b: (b.row, b.column),
-                )
+                # Best-fit: track remaining capacity per basket; sort by remaining ASC before each assignment
+                empty_baskets = [b for b in (cart.baskets or []) if b.order_id is None]
+                basket_remaining = {b.id: (b.usable_volume or 0) / 1000.0 for b in empty_baskets}
+                running_orders = 0
+                running_used_vol = float(cart.used_volume or 0)
+
                 for order in orders_new:
                     order_volume, max_l, max_w, max_h = _order_total_volume_and_dimensions(order)
+                    if not _can_assign_order(cart, running_orders, running_used_vol, order_volume):
+                        unassigned_count += 1
+                        continue
+                    # Sort baskets by remaining capacity ASC (best fit: try smallest that fits first)
+                    basket_ids_sorted = sorted(
+                        (bid for bid, rem in basket_remaining.items() if rem >= order_volume),
+                        key=lambda bid: basket_remaining[bid],
+                    )
                     placed = False
-                    for basket in baskets:
-                        if basket.order_id is not None:
-                            continue
-                        basket_dm3 = (basket.usable_volume or 0) / 1000.0
-                        if basket_dm3 < order_volume:
+                    for basket_id in basket_ids_sorted:
+                        basket = next((b for b in (cart.baskets or []) if b.id == basket_id), None)
+                        if not basket or basket.order_id is not None:
                             continue
                         bl = basket.inner_length or 0
                         bw = basket.inner_width or 0
@@ -175,6 +271,11 @@ class SimulationService:
                         order.total_volume_dm3 = round(order_volume, 2)
                         order.status = "ASSIGNED"
                         assigned_count += 1
+                        running_orders += 1
+                        running_used_vol += order_volume
+                        basket_remaining[basket_id] = basket_remaining.get(basket_id, 0) - order_volume
+                        if basket_remaining[basket_id] <= 0:
+                            del basket_remaining[basket_id]
                         placed = True
                         break
                     if not placed:
@@ -187,13 +288,14 @@ class SimulationService:
                     total_vol = (float(cart.length) * float(cart.width) * float(cart.height)) / 1000.0
                     cart.total_volume = round(total_vol, 2)
                 used = cart.used_volume or 0
+                running_orders = len(getattr(cart, "assigned_orders", None) or [])
                 cl = float(cart.length or 0)
                 cw = float(cart.width or 0)
                 ch = float(cart.height or 0)
                 assigned_volumes = []
                 for order in orders_new:
                     order_volume, max_l, max_w, max_h = _order_total_volume_and_dimensions(order)
-                    if used + order_volume > total_vol:
+                    if not _can_assign_order(cart, running_orders, used, order_volume):
                         unassigned_count += 1
                         continue
                     if cl and cw and ch and not _fits_in_basket(max_l, max_w, max_h, cl, cw, ch):
@@ -203,6 +305,7 @@ class SimulationService:
                     order.total_volume_dm3 = round(order_volume, 2)
                     order.status = "ASSIGNED"
                     used += order_volume
+                    running_orders += 1
                     assigned_volumes.append(order_volume)
                     assigned_count += 1
                 # used_volume set below from assigned orders

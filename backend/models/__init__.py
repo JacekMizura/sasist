@@ -9,8 +9,17 @@ from .order import Order
 from .order_item import OrderItem
 from .storage_unit import StorageUnit
 from .picking_zone import PickingZone, order_zone_association  # noqa: F401 - register table
-from .consolidation_rack import ConsolidationRack, RackLevel, RackSegment
+from .consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
 from .warehouse_map import WarehouseMap, MapElement, StorageBin
 from .warehouse import StorageLocation  # noqa: F401 - register table
 from .label_template import SavedLabelTemplate  # noqa: F401
 from .warehouse_template import WarehouseTemplate  # noqa: F401
+from .location import Location
+from .warehouse_graph import WarehouseNode, WarehouseEdge, LocationNode  # noqa: F401
+from .inventory_unit import InventoryUnit
+from .inventory_movement import InventoryMovement
+from .wave import Wave
+from .pick import Pick
+from .pick_task import PickTask
+from .pick_wave import PickWave, PickWaveItem, PickWaveTask  # noqa: F401 - register for relationships
+from .import_log import ImportLog  # noqa: F401

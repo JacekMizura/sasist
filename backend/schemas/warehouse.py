@@ -2,7 +2,7 @@
 SCHEMATY Warehouse
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class WarehouseCreate(BaseModel):
@@ -12,7 +12,8 @@ class WarehouseCreate(BaseModel):
 class WarehouseRead(BaseModel):
     id: int
     name: str
-    tenant_id: int
+    address: str | None = None
+    type: str | None = None
+    tenant_id: int | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
+import PageLayout from "../../components/layout/PageLayout";
 
 export default function OrdersLayout() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-6 border-b border-gray-200 pb-4">
-        <h1 className="text-2xl font-semibold text-gray-800">Zamówienia</h1>
+    <PageLayout
+      title="Zamówienia"
+      actions={
         <nav className="flex gap-2">
           <NavLink
             to="/orders/list"
@@ -32,8 +33,9 @@ export default function OrdersLayout() {
             Import
           </NavLink>
         </nav>
-      </div>
+      }
+    >
       <Outlet />
-    </div>
+    </PageLayout>
   );
 }

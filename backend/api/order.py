@@ -6,8 +6,10 @@ Lista zwraca total_volume (suma L×W×H/1000 po pozycjach), is_multi_item, total
 Obsługa filtrów status/order_type oraz paginacji limit/offset.
 """
 
+import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
@@ -20,6 +22,7 @@ router = APIRouter(
     prefix="/orders",
     tags=["Orders"]
 )
+logger = logging.getLogger(__name__)
 
 FALLBACK_VOLUME_DM3 = 0.001
 
@@ -65,8 +68,8 @@ def _order_total_volume_and_multi(order: Order) -> tuple[float, bool, int, int]:
 @router.get("/", response_model=List[OrderListRead])
 def get_orders(
     response: Response,
-    tenant_id: int,
-    warehouse_id: int,
+    tenant_id: Optional[int] = Query(None, description="Filter by tenant; if omitted, no tenant filter"),
+    warehouse_id: Optional[int] = Query(None, description="Filter by warehouse; if omitted, no warehouse filter"),
     db: Session = Depends(get_db),
     status: Optional[str] = None,
     order_type: Optional[str] = None,
@@ -75,24 +78,40 @@ def get_orders(
     volume_max: Optional[float] = None,
     sort_by: Optional[str] = None,
     sort_dir: Optional[str] = None,
+    sort_direction: Optional[str] = None,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
+    search: Optional[str] = Query(None, description="Search by order number, product name, or SKU"),
 ):
     """
     Zamówienia z total_volume (dm³), is_multi_item, total_items.
-    Filtry: status, order_type (single|multi), order_id (id lub number), volume_min, volume_max (dm³).
-    Sortowanie: sort_by (id|status|total_volume|total_items), sort_dir (asc|desc).
+    Filtry: tenant_id, warehouse_id (opcjonalne – bez nich zwracane są wszystkie zamówienia), status, order_type, volume_min, volume_max.
+    Sortowanie: sort_by (id|status|total_volume|total_items), sort_dir lub sort_direction (asc|desc).
     """
+    logger.info("ORDERS QUERY tenant_id=%s warehouse_id=%s", tenant_id, warehouse_id)
+    # DB debug: total count and last 10 orders
+    try:
+        total_in_db = db.query(func.count(Order.id)).scalar() or 0
+        sample = (
+            db.query(Order.id, Order.tenant_id, Order.warehouse_id, Order.number)
+            .order_by(Order.id.desc())
+            .limit(10)
+            .all()
+        )
+        logger.info("ORDERS DB: total count=%s, sample (id, tenant_id, warehouse_id, number)=%s", total_in_db, [(r.id, r.tenant_id, r.warehouse_id, r.number) for r in sample])
+    except Exception as e:
+        logger.warning("ORDERS DB debug query failed: %s", e)
+
     q = (
         db.query(Order)
         .options(
             joinedload(Order.items).joinedload(OrderItem.product),
         )
-        .filter(
-            Order.tenant_id == tenant_id,
-            Order.warehouse_id == warehouse_id,
-        )
     )
+    if tenant_id is not None:
+        q = q.filter(Order.tenant_id == tenant_id)
+    if warehouse_id is not None:
+        q = q.filter(Order.warehouse_id == warehouse_id)
     if status and status.strip():
         q = q.filter(Order.status == status.strip())
     if order_id and order_id.strip():
@@ -101,6 +120,33 @@ def get_orders(
             q = q.filter(Order.id == int(oid))
         else:
             q = q.filter(Order.number.ilike(f"%{oid}%"))
+    if search and search.strip():
+        term = search.strip()
+        from sqlalchemy import or_
+        # Filter: order number / id OR any order_item's product name or SKU/symbol
+        q = q.outerjoin(OrderItem, Order.id == OrderItem.order_id).outerjoin(
+            Product, OrderItem.product_id == Product.id
+        )
+        if term.isdigit():
+            q = q.filter(
+                or_(
+                    Order.id == int(term),
+                    Order.number.ilike(f"%{term}%"),
+                    Product.name.ilike(f"%{term}%"),
+                    Product.sku.ilike(f"%{term}%"),
+                    Product.symbol.ilike(f"%{term}%"),
+                )
+            )
+        else:
+            q = q.filter(
+                or_(
+                    Order.number.ilike(f"%{term}%"),
+                    Product.name.ilike(f"%{term}%"),
+                    Product.sku.ilike(f"%{term}%"),
+                    Product.symbol.ilike(f"%{term}%"),
+                )
+            )
+        q = q.distinct()
     orders = q.all()
 
     built = []
@@ -117,8 +163,9 @@ def get_orders(
     if volume_max is not None:
         built = [(o, tv, im, ti, pc) for o, tv, im, ti, pc in built if tv <= volume_max]
 
+    sort_d = sort_dir or sort_direction
     if sort_by and sort_by in ("id", "number", "status", "total_volume", "total_items", "order_type", "position_count"):
-        reverse = (sort_dir or "asc").lower() == "desc"
+        reverse = (sort_d or "asc").lower() == "desc"
         if sort_by == "id":
             built.sort(key=lambda x: x[0].id, reverse=reverse)
         elif sort_by == "number":
@@ -147,6 +194,12 @@ def get_orders(
             city=o.city,
             country=o.country,
             status=o.status,
+            order_date=o.order_date,
+            value=o.value,
+            created_at=o.created_at,
+            source=o.source,
+            shipping_method=o.shipping_method,
+            currency=o.currency,
             total_volume=total_volume,
             is_multi_item=is_multi_item,
             total_items=total_items,
@@ -156,7 +209,25 @@ def get_orders(
     ]
     if limit is not None or offset is not None:
         response.headers["X-Total-Count"] = str(total_count)
+    logger.info("ORDERS LIST: returned %s orders (tenant_id=%s warehouse_id=%s)", len(result), tenant_id, warehouse_id)
     return result
+
+
+# Debug: raw DB check (call GET /orders/debug/db to verify orders table)
+@router.get("/debug/db")
+def orders_debug_db(db: Session = Depends(get_db)):
+    """Returns total count and last 10 orders (id, tenant_id, warehouse_id, number) for debugging."""
+    total = db.query(func.count(Order.id)).scalar() or 0
+    rows = (
+        db.query(Order.id, Order.tenant_id, Order.warehouse_id, Order.number)
+        .order_by(Order.id.desc())
+        .limit(10)
+        .all()
+    )
+    return {
+        "total_count": total,
+        "sample": [{"id": r.id, "tenant_id": r.tenant_id, "warehouse_id": r.warehouse_id, "number": r.number} for r in rows],
+    }
 
 
 @router.delete("/bulk")
@@ -234,6 +305,7 @@ def get_order_details(
     order_id: int,
     db: Session = Depends(get_db)
 ):
+    logger.info("ORDERS GET order_id=%s", order_id)
     order = (
         db.query(Order)
         .options(
@@ -244,6 +316,7 @@ def get_order_details(
     )
 
     if not order:
+        logger.warning("ORDERS GET order_id=%s not found", order_id)
         raise HTTPException(status_code=404, detail="Order not found")
 
     total_volume, is_multi_item, _, _ = _order_total_volume_and_multi(order)

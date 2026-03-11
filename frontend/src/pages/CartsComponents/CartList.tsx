@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 import CartCard from "./ui/CartCard";
+import { CartLabelPrintModal } from "./CartLabelPrintModal";
 import GroupHeader from "./ui/GroupHeader";
 import SummaryDashboard from "./ui/SummaryDashboard";
 import { useTranslation } from "../../locales";
@@ -27,7 +28,14 @@ type CartItemType = {
   order_numbers?: string[];
   total_weight_kg?: number;
   image_url?: string | null;
+  updated_at?: string | number | null;
   total_baskets?: number;
+  total_orders?: number;
+  total_products?: number;
+  baskets_used?: number;
+  capacity_mode?: string;
+  max_orders?: number | null;
+  max_volume_dm3?: number;
 };
 
 type GroupType = { id: number; name: string; items: CartItemType[] };
@@ -47,6 +55,7 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
   const [newGroupName, setNewGroupName] = useState("");
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
+  const [printCart, setPrintCart] = useState<{ id: number; name: string } | null>(null);
 
   // Pobieranie listy wózków sekcyjnych z API (grupy z przypisanymi wózkami).
   const fetchData = async () => {
@@ -317,7 +326,14 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
                           assigned_orders={c.assigned_orders}
                           order_numbers={c.order_numbers}
                           total_weight_kg={c.total_weight_kg}
+                          total_orders={c.total_orders}
+                          total_products={c.total_products}
+                          baskets_used={c.baskets_used}
+                          capacity_mode={c.capacity_mode}
+                          max_orders={c.max_orders}
+                          max_volume_dm3={c.max_volume_dm3}
                           image_url={c.image_url}
+                          updated_at={c.updated_at}
                           total_baskets={c.total_baskets}
                           tenant_id={TENANT_ID}
                           warehouse_id={warehouse?.id}
@@ -325,6 +341,7 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
                           onClearSuccess={fetchData}
                           onEdit={onEdit}
                           onDelete={handleDeleteCart}
+                          onPrintLabel={setPrintCart}
                         />
                       ))
                     )}
@@ -335,6 +352,11 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
           })}
         </div>
       )}
+      <CartLabelPrintModal
+        open={printCart != null}
+        cart={printCart}
+        onClose={() => setPrintCart(null)}
+      />
     </div>
   );
 }

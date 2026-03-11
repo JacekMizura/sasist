@@ -15,6 +15,7 @@ class CartBasket(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=True)
+    barcode = Column(String(64), unique=True, nullable=True, index=True)  # e.g. CART-0001-B01
 
     # =============================
     # RELACJA DO WÓZKA

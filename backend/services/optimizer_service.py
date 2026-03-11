@@ -12,7 +12,13 @@ from ..models.cart_basket import CartBasket
 from ..models.order import Order
 from ..models.order_item import OrderItem
 from ..models.enums import CartType, CartStatus
-from .simulation_service import _order_total_volume_and_dimensions, _fits_in_basket, FALLBACK_VOLUME_DM3
+from .simulation_service import (
+    _order_total_volume_and_dimensions,
+    _fits_in_basket,
+    _can_assign_order,
+    _sort_orders_for_assignment,
+    FALLBACK_VOLUME_DM3,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +44,16 @@ def _analyze_fleet(
         .all()
     )
 
-    # Objętości i wymiary zamówień (dm³, cm)
+    # Order clustering + sort (main SKU clusters, then items_count DESC, volume DESC within cluster)
+    orders_sorted = _sort_orders_for_assignment(orders)
     order_specs = []
-    for o in orders:
+    for o in orders_sorted:
         vol, max_l, max_w, max_h = _order_total_volume_and_dimensions(o)
-        order_specs.append({"order_id": o.id, "volume": vol, "max_l": max_l, "max_w": max_w, "max_h": max_h})
-    order_specs.sort(key=lambda x: -x["volume"])
+        items_count = len(getattr(o, "items", []) or [])
+        order_specs.append({
+            "order_id": o.id, "volume": vol, "max_l": max_l, "max_w": max_w, "max_h": max_h,
+            "items_count": items_count,
+        })
 
     # Wózki MULTI: lista wolnych pojemności koszyków (dm³) + wymiary
     multi_carts = (
@@ -56,6 +66,7 @@ def _analyze_fleet(
         )
         .all()
     )
+    multi_cart_by_id = {c.id: c for c in multi_carts}
     multi_slots = []
     for c in multi_carts:
         for b in c.baskets or []:
@@ -69,7 +80,10 @@ def _analyze_fleet(
                 "vol": vol_dm3,
                 "l": b.inner_length or 0, "w": b.inner_width or 0, "h": b.inner_height or 0,
             })
-    multi_slots.sort(key=lambda x: -x["vol"])
+    # Best-fit: sort slots by capacity ASC (smallest first)
+    multi_slots.sort(key=lambda x: x["vol"])
+    cart_orders = {c.id: len(getattr(c, "assigned_orders", None) or []) for c in multi_carts}
+    cart_used = {c.id: float(c.used_volume or 0) for c in multi_carts}
 
     bulk_carts = (
         db.query(Cart)
@@ -94,20 +108,29 @@ def _analyze_fleet(
             "initial_used": used,
             "free": max(0, total - used),
             "l": float(c.length or 0), "w": float(c.width or 0), "h": float(c.height or 0),
+            "orders_count": len(getattr(c, "assigned_orders", None) or []),
         })
 
     multi_used = [False] * len(multi_slots)
     unassigned = 0
+    slot_indices_by_vol = sorted(range(len(multi_slots)), key=lambda i: multi_slots[i]["vol"])
     for spec in order_specs:
         placed = False
-        for i, slot in enumerate(multi_slots):
+        for i in slot_indices_by_vol:
             if multi_used[i]:
+                continue
+            slot = multi_slots[i]
+            cid = slot["cart_id"]
+            cart = multi_cart_by_id.get(cid)
+            if cart and not _can_assign_order(cart, cart_orders.get(cid, 0), cart_used.get(cid, 0), spec["volume"]):
                 continue
             if slot["vol"] < spec["volume"]:
                 continue
             if not _fits_in_basket(spec["max_l"], spec["max_w"], spec["max_h"], slot["l"], slot["w"], slot["h"]):
                 continue
             multi_used[i] = True
+            cart_orders[cid] = cart_orders.get(cid, 0) + 1
+            cart_used[cid] = cart_used.get(cid, 0) + spec["volume"]
             placed = True
             break
         if not placed:
@@ -116,8 +139,12 @@ def _analyze_fleet(
                     if (bc["l"] and bc["w"] and bc["h"] and
                             not _fits_in_basket(spec["max_l"], spec["max_w"], spec["max_h"], bc["l"], bc["w"], bc["h"])):
                         continue
+                    cc = bc["cart"]
+                    if not _can_assign_order(cc, bc.get("orders_count", 0), bc["used"], spec["volume"]):
+                        continue
                     bc["free"] -= spec["volume"]
                     bc["used"] += spec["volume"]
+                    bc["orders_count"] = bc.get("orders_count", 0) + 1
                     placed = True
                     break
         if not placed:
@@ -181,11 +208,16 @@ def _apply_fleet(db: Session, tenant_id: int, warehouse_id: int) -> dict:
     )
     order_by_id = {o.id: o for o in orders}
 
+    # Order clustering + sort (main SKU clusters, then items_count DESC, volume DESC within cluster)
+    orders_sorted = _sort_orders_for_assignment(orders)
     order_specs = []
-    for o in orders:
+    for o in orders_sorted:
         vol, max_l, max_w, max_h = _order_total_volume_and_dimensions(o)
-        order_specs.append({"order_id": o.id, "volume": vol, "max_l": max_l, "max_w": max_w, "max_h": max_h})
-    order_specs.sort(key=lambda x: -x["volume"])
+        items_count = len(getattr(o, "items", []) or [])
+        order_specs.append({
+            "order_id": o.id, "volume": vol, "max_l": max_l, "max_w": max_w, "max_h": max_h,
+            "items_count": items_count,
+        })
 
     multi_carts = (
         db.query(Cart)
@@ -197,6 +229,7 @@ def _apply_fleet(db: Session, tenant_id: int, warehouse_id: int) -> dict:
         )
         .all()
     )
+    multi_cart_by_id = {c.id: c for c in multi_carts}
     multi_slots = []
     for c in multi_carts:
         for b in c.baskets or []:
@@ -210,7 +243,9 @@ def _apply_fleet(db: Session, tenant_id: int, warehouse_id: int) -> dict:
                 "vol": vol_dm3,
                 "l": b.inner_length or 0, "w": b.inner_width or 0, "h": b.inner_height or 0,
             })
-    multi_slots.sort(key=lambda x: -x["vol"])
+    multi_slots.sort(key=lambda x: x["vol"])
+    cart_orders = {c.id: len(getattr(c, "assigned_orders", None) or []) for c in multi_carts}
+    cart_used = {c.id: float(c.used_volume or 0) for c in multi_carts}
 
     bulk_carts = (
         db.query(Cart)
@@ -235,22 +270,31 @@ def _apply_fleet(db: Session, tenant_id: int, warehouse_id: int) -> dict:
             "initial_used": used,
             "free": max(0, total - used),
             "l": float(c.length or 0), "w": float(c.width or 0), "h": float(c.height or 0),
+            "orders_count": len(getattr(c, "assigned_orders", None) or []),
         })
 
     multi_used = [False] * len(multi_slots)
     affected_cart_ids = set()
     unassigned = 0
+    slot_indices_by_vol = sorted(range(len(multi_slots)), key=lambda i: multi_slots[i]["vol"])
 
     for spec in order_specs:
         placed = False
-        for i, slot in enumerate(multi_slots):
+        for i in slot_indices_by_vol:
             if multi_used[i]:
+                continue
+            slot = multi_slots[i]
+            cid = slot["cart_id"]
+            cart = multi_cart_by_id.get(cid)
+            if cart and not _can_assign_order(cart, cart_orders.get(cid, 0), cart_used.get(cid, 0), spec["volume"]):
                 continue
             if slot["vol"] < spec["volume"]:
                 continue
             if not _fits_in_basket(spec["max_l"], spec["max_w"], spec["max_h"], slot["l"], slot["w"], slot["h"]):
                 continue
             multi_used[i] = True
+            cart_orders[cid] = cart_orders.get(cid, 0) + 1
+            cart_used[cid] = cart_used.get(cid, 0) + spec["volume"]
             order = order_by_id.get(spec["order_id"])
             if order:
                 order.cart_id = slot["cart_id"]
@@ -268,8 +312,11 @@ def _apply_fleet(db: Session, tenant_id: int, warehouse_id: int) -> dict:
                     if (bc["l"] and bc["w"] and bc["h"] and
                             not _fits_in_basket(spec["max_l"], spec["max_w"], spec["max_h"], bc["l"], bc["w"], bc["h"])):
                         continue
+                    if not _can_assign_order(bc["cart"], bc.get("orders_count", 0), bc["used"], spec["volume"]):
+                        continue
                     bc["free"] -= spec["volume"]
                     bc["used"] += spec["volume"]
+                    bc["orders_count"] = bc.get("orders_count", 0) + 1
                     order = order_by_id.get(spec["order_id"])
                     if order:
                         order.cart_id = bc["cart_id"]

@@ -95,3 +95,35 @@ export function ClearIcon({ className }: IconProps) {
   );
 }
 
+/** Barcode – download barcode labels. */
+export function BarcodeIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 5v14" />
+      <path d="M8 5v14" />
+      <path d="M12 5v14" />
+      <path d="M17 5v14" />
+      <path d="M21 5v14" />
+      <path d="M5 8h2" />
+      <path d="M5 16h2" />
+      <path d="M10 8h1" />
+      <path d="M10 16h1" />
+      <path d="M14 8h1" />
+      <path d="M14 16h1" />
+      <path d="M19 8h2" />
+      <path d="M19 16h2" />
+    </svg>
+  );
+}
+
+/** Printer – print label. */
+export function PrinterIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M6 9V2h12v7" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <path d="M6 14h12v8H6z" />
+    </svg>
+  );
+}
+

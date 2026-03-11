@@ -14,6 +14,7 @@ import { WarehouseMainView } from "../components/warehouse/WarehouseMainView";
 import { WarehouseFullMap } from "../components/warehouse/WarehouseFullMap";
 import { WarehouseLegend } from "../components/warehouse/WarehouseLegend";
 import { UI_STRINGS } from "../constants/uiStrings";
+import PageLayout from "../components/layout/PageLayout";
 import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
 
@@ -22,6 +23,8 @@ const BASE_PX_PER_CELL = 5;
 const GRID_COLS = 240;
 const GRID_ROWS = 160;
 const TENANT_ID = 1;
+/** Backend special locations use cm; 1 grid cell = 100 cm for API. */
+const SPECIAL_LOCATION_CELL_CM = 100;
 /** Default slot size (cells) for "Draw Row" when no template is selected. 120×80 cm. */
 const DEFAULT_ROW_SLOT_W = 12;
 const DEFAULT_ROW_SLOT_H = 8;
@@ -412,6 +415,8 @@ export default function WarehouseDesigner() {
   }, []);
   useLayoutModeShortcuts(layoutMode, setLayoutMode);
   const layoutModeDisplay = useLayoutModeDisplay(layoutMode);
+  type SpecialLocationsState = { pick_start: { id: number; x: number; y: number } | null; packing: { id: number; x: number; y: number } | null; dock: { id: number; x: number; y: number } | null };
+  const [specialLocations, setSpecialLocations] = useState<SpecialLocationsState>({ pick_start: null, packing: null, dock: null });
   const [aisleDrawStart, setAisleDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [rowToolTemplate, setRowToolTemplate] = useState<CatalogItem | null>(null);
   const [rowDrawStart, setRowDrawStart] = useState<{ x: number; y: number } | null>(null);
@@ -894,6 +899,34 @@ export default function WarehouseDesigner() {
       // Keep existing products
     }
   }, [selectedWarehouseId]);
+
+  useEffect(() => {
+    if (selectedWarehouseId == null) {
+      setSpecialLocations({ pick_start: null, packing: null, dock: null });
+      return;
+    }
+    api
+      .get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`)
+      .then((res) => setSpecialLocations(res.data ?? { pick_start: null, packing: null, dock: null }))
+      .catch(() => setSpecialLocations({ pick_start: null, packing: null, dock: null }));
+  }, [selectedWarehouseId]);
+
+  const addSpecialLocation = useCallback(
+    async (cell: { x: number; y: number }, type: "PICK_START" | "PACKING" | "DOCK") => {
+      if (selectedWarehouseId == null) return;
+      const x_cm = cell.x * SPECIAL_LOCATION_CELL_CM;
+      const y_cm = cell.y * SPECIAL_LOCATION_CELL_CM;
+      try {
+        await api.post("/warehouse/special-location", { warehouse_id: selectedWarehouseId, x: x_cm, y: y_cm, type });
+        const { data } = await api.get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`);
+        setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });
+        setLayoutMode(LayoutMode.SELECT);
+      } catch (err) {
+        console.error("Add special location:", err);
+      }
+    },
+    [selectedWarehouseId]
+  );
 
   useEffect(() => {
     if (isLiveView && layout.racks.length > 0) fetchProductsForMap();
@@ -2232,6 +2265,11 @@ export default function WarehouseDesigner() {
         }
         return;
       }
+      if (e.button === 0 && selectedWarehouseId != null && (layoutMode === LayoutMode.ADD_START || layoutMode === LayoutMode.ADD_PACK || layoutMode === LayoutMode.ADD_DOCK)) {
+        const type = layoutMode === LayoutMode.ADD_START ? "PICK_START" : layoutMode === LayoutMode.ADD_PACK ? "PACKING" : "DOCK";
+        addSpecialLocation(cell, type);
+        return;
+      }
       if (isLiveView && e.button === 0) {
         const hit = layout.racks.find((r) => cell.x >= r.x && cell.x < r.x + r.width && cell.y >= r.y && cell.y < r.y + r.height);
         if (hit) {
@@ -2465,7 +2503,7 @@ export default function WarehouseDesigner() {
         setMarqueeEnd(cell);
       }
     },
-    [getCellFromEvent, placementMode, layout.racks, layout.aisles, layout.visual_elements, layout.row_containers, stampRackAt, panMode, aisleToolActive, rowToolActive, rowToolTemplate, rowDrawStart, pathToolActive, manualPathPoints, isLiveView, mainView, setMainView, setSelectedRackIdForSideView, setSelectedLocationForProducts, setDraggingRackId]
+    [getCellFromEvent, placementMode, layout.racks, layout.aisles, layout.visual_elements, layout.row_containers, stampRackAt, panMode, aisleToolActive, rowToolActive, rowToolTemplate, rowDrawStart, pathToolActive, manualPathPoints, isLiveView, mainView, setMainView, setSelectedRackIdForSideView, setSelectedLocationForProducts, setDraggingRackId, layoutMode, selectedWarehouseId, addSpecialLocation]
   );
 
   const handleCanvasMouseUp = useCallback(() => {
@@ -3300,13 +3338,11 @@ export default function WarehouseDesigner() {
   ]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
-      {/* Header: Three sub-tabs + Warehouse selector + Sync status */}
-      <header className="shrink-0 flex flex-wrap items-center justify-between gap-4 px-4 py-3 bg-white border-b border-slate-100 shadow-sm rounded-b-xl">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-black uppercase tracking-widest text-[#1E293B]">
-            {UI_STRINGS.warehouse.title}
-          </h1>
+    <PageLayout
+      fillHeight
+      title={UI_STRINGS.warehouse.title}
+      actions={
+        <>
           <nav className="flex rounded-xl bg-slate-100 p-0.5 border border-slate-100 shadow-sm" aria-label="Tryby">
             <button
               type="button"
@@ -3323,27 +3359,27 @@ export default function WarehouseDesigner() {
               {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
             </button>
           </nav>
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={selectedWarehouseId ?? ""}
-            onChange={(e) => setSelectedWarehouseId(e.target.value ? Number(e.target.value) : null)}
-            className="rounded-lg border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2 min-w-[200px] focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400"
-          >
-            <option value="">{UI_STRINGS.warehouse.selector.selectWarehouse}</option>
-            {warehouses.map((wh) => (
-              <option key={wh.id} value={wh.id}>{wh.name}</option>
-            ))}
-          </select>
-          {layout.warehouse_name ? (
-            <span className="text-sm text-slate-600">{layout.warehouse_name}</span>
-          ) : null}
-          <span className={`text-xs font-mono px-2 py-1 rounded ${lastSavedAt != null ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
-            {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
-          </span>
-        </div>
-      </header>
-
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedWarehouseId ?? ""}
+              onChange={(e) => setSelectedWarehouseId(e.target.value ? Number(e.target.value) : null)}
+              className="rounded-lg border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2 min-w-[200px] focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400"
+            >
+              <option value="">{UI_STRINGS.warehouse.selector.selectWarehouse}</option>
+              {warehouses.map((wh) => (
+                <option key={wh.id} value={wh.id}>{wh.name}</option>
+              ))}
+            </select>
+            {layout.warehouse_name ? (
+              <span className="text-sm text-slate-600">{layout.warehouse_name}</span>
+            ) : null}
+            <span className={`text-xs font-mono px-2 py-1 rounded ${lastSavedAt != null ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
+              {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
+            </span>
+          </div>
+        </>
+      }
+    >
       <WarehouseModals
         showCreateWarehouse={showCreateWarehouse}
         onCloseCreateWarehouse={() => setShowCreateWarehouse(false)}
@@ -3366,7 +3402,7 @@ export default function WarehouseDesigner() {
         setSnackbar={setSnackbar}
       />
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 -mx-6 -mb-6">
         {mainView === "magazyn" ? (
           <div className="w-[250px] shrink-0 flex flex-col min-h-0 overflow-hidden gap-3">
             <div className="shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -3781,6 +3817,8 @@ export default function WarehouseDesigner() {
             pickingPathPoints={pickingPathPoints}
             pathToolActive={pathToolActive}
             setPathToolActive={setPathToolActive}
+            setLayoutMode={setLayoutMode}
+            specialLocations={specialLocations}
             layoutModeLabel={layoutModeDisplay.modeLabel}
             layoutModeColor={layoutModeDisplay.modeColor}
             layoutMode={layoutMode}
@@ -3799,6 +3837,6 @@ export default function WarehouseDesigner() {
         ) : null}
       </div>
 
-    </div>
+    </PageLayout>
   );
 }

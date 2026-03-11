@@ -1,0 +1,38 @@
+-- Migration: Warehouse graph (nodes, edges, location_nodes)
+-- Tables are created automatically by Base.metadata.create_all() when new models are registered.
+-- For reference / manual application (e.g. SQLite):
+
+-- CREATE TABLE warehouse_nodes (
+--   id INTEGER NOT NULL PRIMARY KEY,
+--   created_at DATETIME NOT NULL,
+--   updated_at DATETIME NOT NULL,
+--   warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+--   x REAL NOT NULL,
+--   y REAL NOT NULL,
+--   type VARCHAR(32) NOT NULL DEFAULT 'intersection'
+-- );
+-- CREATE INDEX ix_warehouse_nodes_warehouse_id ON warehouse_nodes(warehouse_id);
+
+-- CREATE TABLE warehouse_edges (
+--   id INTEGER NOT NULL PRIMARY KEY,
+--   created_at DATETIME NOT NULL,
+--   updated_at DATETIME NOT NULL,
+--   warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+--   node_from_id INTEGER NOT NULL REFERENCES warehouse_nodes(id) ON DELETE CASCADE,
+--   node_to_id INTEGER NOT NULL REFERENCES warehouse_nodes(id) ON DELETE CASCADE,
+--   distance_m REAL NOT NULL
+-- );
+-- CREATE INDEX ix_warehouse_edges_warehouse_id ON warehouse_edges(warehouse_id);
+-- CREATE INDEX ix_warehouse_edges_node_from_id ON warehouse_edges(node_from_id);
+-- CREATE INDEX ix_warehouse_edges_node_to_id ON warehouse_edges(node_to_id);
+
+-- CREATE TABLE location_nodes (
+--   id INTEGER NOT NULL PRIMARY KEY,
+--   created_at DATETIME NOT NULL,
+--   updated_at DATETIME NOT NULL,
+--   location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+--   node_id INTEGER NOT NULL REFERENCES warehouse_nodes(id) ON DELETE CASCADE,
+--   CONSTRAINT uq_location_nodes_location_id UNIQUE (location_id)
+-- );
+-- CREATE INDEX ix_location_nodes_location_id ON location_nodes(location_id);
+-- CREATE INDEX ix_location_nodes_node_id ON location_nodes(node_id);

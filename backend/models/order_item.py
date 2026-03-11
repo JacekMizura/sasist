@@ -6,7 +6,7 @@ Reprezentuje pozycję w zamówieniu.
 Order 1 ---< OrderItem >--- 1 Product
 """
 
-from sqlalchemy import Column, Integer, Float, ForeignKey
+from sqlalchemy import Column, Integer, Float, ForeignKey, String
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -42,12 +42,21 @@ class OrderItem(Base):
     )
 
     product = relationship("Product")
+    picks = relationship("Pick", back_populates="order_item")
 
     # ================================
     # ILOŚĆ
     # ================================
 
     quantity = Column(Integer, nullable=False)
+
+    # ================================
+    # CENNIK (dla importu i analityki)
+    # ================================
+
+    unit_price = Column(Float, nullable=True)
+    total_price = Column(Float, nullable=True)
+    unit = Column(String, nullable=True)
 
     # ================================
     # CACHE OBJĘTOŚCI (opcjonalne)

@@ -1,4 +1,5 @@
 import logging
+import re
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
@@ -8,10 +9,82 @@ from ..models.cart_basket import CartBasket
 from ..models.cart_group import CartGroup
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from ..models.tenant import Tenant
+from ..models.label_template import SavedLabelTemplate
 from ..models.enums import CartType, CartStatus
 from ..schemas.cart import CartBulkCreate, CartUpdate
+from .barcode_pdf_service import build_barcodes_pdf
+from .label_render_service import build_label_pdf, template_json_to_dict
 
 logger = logging.getLogger(__name__)
+
+# Fallback volume per unit when product volume is missing (avoid 0% fill for assigned orders)
+
+
+def _norm_capacity_mode(val):  # Enum or str -> str
+    if val is None:
+        return "volume"
+    if hasattr(val, "value"):
+        return str(val.value).lower()
+    return str(val).lower() if str(val).lower() in ("volume", "orders", "mixed") else "volume"
+
+
+_ORDER_VOLUME_FALLBACK_DM3 = 0.05
+
+
+def _order_used_volume_dm3_from_items(order) -> float:
+    """Sum of (volume_dm3 * quantity) per item; uses product.volume or item.total_volume or L×W×H/1000 or fallback."""
+    total = 0.0
+    for item in getattr(order, "items", []) or []:
+        product = getattr(item, "product", None)
+        qty = int(item.quantity or 0)
+        if qty <= 0:
+            continue
+        vol_per_unit = None
+        if getattr(item, "total_volume", None) is not None and float(item.total_volume or 0) > 0:
+            vol_per_unit = float(item.total_volume)
+        if vol_per_unit is None and product and getattr(product, "volume", None) is not None and float(product.volume or 0) > 0:
+            vol_per_unit = float(product.volume)
+        if vol_per_unit is None and product:
+            l_ = float(getattr(product, "length", None) or 0)
+            w_ = float(getattr(product, "width", None) or 0)
+            h_ = float(getattr(product, "height", None) or 0)
+            if l_ and w_ and h_:
+                vol_per_unit = (l_ * w_ * h_) / 1000.0
+        if vol_per_unit is None or vol_per_unit <= 0:
+            logger.warning(
+                "Basket fill: product volume missing or zero (order_id=%s, product_id=%s); using fallback %.2f dm³",
+                getattr(order, "id", None),
+                getattr(product, "id", None) if product else None,
+                _ORDER_VOLUME_FALLBACK_DM3,
+            )
+            vol_per_unit = _ORDER_VOLUME_FALLBACK_DM3
+        total += vol_per_unit * qty
+    if total <= 0 and getattr(order, "items", None):
+        total = _ORDER_VOLUME_FALLBACK_DM3
+    return round(total, 2)
+
+
+def _cart_stats(cart, assigned, baskets_iter):
+    """
+    Single source of truth for cart statistics.
+    Returns total_orders, total_products (sum of item quantities), baskets_used, used_volume_dm3, used_weight_kg.
+    """
+    total_orders = len(assigned)
+    total_products = sum(
+        sum(int(getattr(item, "quantity", 0) or 0) for item in (getattr(o, "items", None) or []))
+        for o in assigned
+    )
+    baskets_used = sum(1 for b in baskets_iter if getattr(b, "order_id", None) is not None)
+    used_volume_dm3 = round(sum(getattr(o, "total_volume_dm3", 0) or 0 for o in assigned), 2)
+    used_weight_kg = round(sum(_order_total_weight_kg(o) for o in assigned), 3)
+    return {
+        "total_orders": total_orders,
+        "total_products": total_products,
+        "baskets_used": baskets_used,
+        "used_volume_dm3": used_volume_dm3,
+        "used_weight_kg": used_weight_kg,
+    }
 
 
 def _order_total_weight_kg(order) -> float:
@@ -24,12 +97,49 @@ def _order_total_weight_kg(order) -> float:
         total += w * qty
     return round(total, 3)
 
+
+def _generate_cart_barcode(db: Session, tenant_id: int, warehouse_id: int) -> str:
+    """Next CART-NNNN for tenant/warehouse (e.g. CART-0001)."""
+    rows = (
+        db.query(Cart.barcode)
+        .filter(
+            Cart.tenant_id == tenant_id,
+            Cart.warehouse_id == warehouse_id,
+            Cart.barcode != None,
+            Cart.barcode.like("CART-%"),
+        )
+        .all()
+    )
+    numbers = []
+    for (barcode,) in rows:
+        if barcode:
+            m = re.match(r"CART-(\d+)", barcode)
+            if m:
+                numbers.append(int(m.group(1)))
+    next_num = (max(numbers) + 1) if numbers else 1
+    return f"CART-{next_num:04d}"
+
+
+def _assign_basket_barcodes(cart):
+    """Set basket.barcode = cart.barcode + '-B' + index (01, 02, ...) by row, column, id."""
+    if not getattr(cart, "barcode", None):
+        return
+    baskets = sorted(
+        getattr(cart, "baskets", None) or [],
+        key=lambda b: (getattr(b, "row", 0), getattr(b, "column", 0), getattr(b, "id", 0)),
+    )
+    for i, basket in enumerate(baskets, 1):
+        basket.barcode = f"{cart.barcode}-B{i:02d}"
+
+
 class CartService:
     def __init__(self, db: Session):
         self.db = db
 
     def create_bulk_cart(self, data: CartBulkCreate):
-        vol = (data.length * data.width * data.height) / 1000
+        vol = getattr(data, "max_volume_dm3", None)
+        if vol is None:
+            vol = (data.length * data.width * data.height) / 1000
         new_cart = Cart(
             name=data.name.upper(),
             tenant_id=data.tenant_id,
@@ -39,11 +149,15 @@ class CartService:
             length=data.length,
             width=data.width,
             height=data.height,
-            total_volume=vol,
+            total_volume=round(vol, 2),
             type=CartType.BULK,
-            status=CartStatus.AVAILABLE
+            status=CartStatus.AVAILABLE,
+            capacity_mode=_norm_capacity_mode(getattr(data, "capacity_mode", None)),
+            max_orders=getattr(data, "max_orders", None),
         )
         self.db.add(new_cart)
+        self.db.flush()
+        new_cart.barcode = _generate_cart_barcode(self.db, data.tenant_id, data.warehouse_id)
         try:
             self.db.commit()
             self.db.refresh(new_cart)
@@ -63,10 +177,13 @@ class CartService:
             image_url=getattr(data, 'image_url', None),
             type=CartType.MULTI,
             total_volume=0,
-            status=CartStatus.AVAILABLE
+            status=CartStatus.AVAILABLE,
+            capacity_mode=_norm_capacity_mode(getattr(data, "capacity_mode", None)),
+            max_orders=getattr(data, "max_orders", None),
         )
         self.db.add(cart)
         self.db.flush()
+        cart.barcode = _generate_cart_barcode(self.db, data.tenant_id, data.warehouse_id)
 
         baskets_data = data.baskets if hasattr(data, 'baskets') else data.get('baskets', [])
         for b_info in baskets_data:
@@ -75,7 +192,7 @@ class CartService:
             w = get_val(b_info, 'width', 0)
             h = get_val(b_info, 'height', 0)
             vol_cm3 = (l * w * h)
-            
+
             basket = CartBasket(
                 cart_id=cart.id,
                 name=get_val(b_info, 'name', f"S-{get_val(b_info, 'row', 0)}/{get_val(b_info, 'column', 0)}"),
@@ -89,7 +206,15 @@ class CartService:
             self.db.add(basket)
 
         self.db.flush()
+        _assign_basket_barcodes(cart)
         cart.recalculate_total_volume()
+        if getattr(data, "max_volume_dm3", None) is not None:
+            try:
+                mv = float(data.max_volume_dm3)
+                if mv > 0:
+                    cart.total_volume = round(mv, 2)
+            except (TypeError, ValueError):
+                pass
         try:
             self.db.commit()
             self.db.refresh(cart)
@@ -148,29 +273,36 @@ class CartService:
             raw_status = cart.status.value if hasattr(cart.status, 'value') else str(cart.status)
             clean_status = raw_status.split('.')[-1].upper()
             assigned = getattr(cart, "assigned_orders", None) or []
+            baskets_iter = getattr(cart, "baskets", None) or []
+            stats = _cart_stats(cart, assigned, baskets_iter)
             assigned_orders = [
                 {"order_id": o.id, "total_volume_dm3": round(getattr(o, "total_volume_dm3", 0) or 0, 2)}
                 for o in assigned
             ]
             order_numbers = [str(o.number) for o in assigned if getattr(o, "number", None) not in (None, "")]
-            total_weight_kg = round(sum(_order_total_weight_kg(o) for o in assigned), 3)
-            used_volume = round(sum(getattr(o, "total_volume_dm3", 0) or 0 for o in assigned), 2)
             return {
                 "id": cart.id,
                 "name": cart.name,
+                "barcode": getattr(cart, "barcode", None),
                 "type": clean_type,
                 "status": clean_status,
                 "group_id": cart.group_id,
                 "image_url": cart.image_url,
                 "total_baskets": len(cart.baskets) if clean_type == "MULTI" else 1,
                 "total_volume_dm3": round(cart.total_volume or 0, 2),
-                "used_volume": used_volume,
+                "max_volume_dm3": round(cart.total_volume or 0, 2),
+                "used_volume": stats["used_volume_dm3"],
                 "assigned_orders": assigned_orders,
                 "order_numbers": order_numbers,
-                "total_weight_kg": total_weight_kg,
+                "total_weight_kg": stats["used_weight_kg"],
                 "width": cart.width or 0,
                 "length": cart.length or 0,
-                "height": cart.height or 0
+                "height": cart.height or 0,
+                "total_orders": stats["total_orders"],
+                "total_products": stats["total_products"],
+                "baskets_used": stats["baskets_used"],
+                "capacity_mode": getattr(cart, "capacity_mode", None) or "volume",
+                "max_orders": getattr(cart, "max_orders", None),
             }
 
         result = []
@@ -204,20 +336,31 @@ class CartService:
         if not cart:
             raise HTTPException(status_code=404, detail="Wózek nie istnieje")
 
+        if not getattr(cart, "barcode", None):
+            cart.barcode = _generate_cart_barcode(self.db, cart.tenant_id, cart.warehouse_id)
+            _assign_basket_barcodes(cart)
+            self.db.commit()
+            self.db.refresh(cart)
+
         raw_type = cart.type.value if hasattr(cart.type, 'value') else str(cart.type)
         clean_type = raw_type.split('.')[-1].upper()
         assigned = getattr(cart, "assigned_orders", None) or []
-        used_volume = round(sum(getattr(o, "total_volume_dm3", 0) or 0 for o in assigned), 2)
+        baskets_iter = getattr(cart, "baskets", None) or []
+        stats = _cart_stats(cart, assigned, baskets_iter)
         order_numbers = [str(o.number) for o in assigned if getattr(o, "number", None) not in (None, "")]
-        total_weight_kg = round(sum(_order_total_weight_kg(o) for o in assigned), 3)
 
         baskets_out = []
         for b in cart.baskets or []:
             o = getattr(b, "order", None)
             w = round(_order_total_weight_kg(o), 3) if o else 0.0
+            if o:
+                used_dm3 = _order_used_volume_dm3_from_items(o)
+            else:
+                used_dm3 = round(getattr(b, "used_volume", None) or 0, 2)
             baskets_out.append({
                 "id": b.id,
                 "name": b.name,
+                "barcode": getattr(b, "barcode", None),
                 "row": b.row,
                 "column": b.column,
                 "length": b.inner_length,
@@ -225,13 +368,14 @@ class CartService:
                 "height": b.inner_height,
                 "order_id": b.order_id,
                 "order_number": o.number if o else None,
-                "used_volume_dm3": round(getattr(b, "used_volume", None) or 0, 2),
+                "used_volume_dm3": used_dm3,
                 "total_weight_kg": w,
             })
 
         return {
             "id": cart.id,
             "name": cart.name,
+            "barcode": getattr(cart, "barcode", None),
             "type": clean_type,
             "tenant_id": cart.tenant_id,
             "warehouse_id": cart.warehouse_id,
@@ -241,11 +385,161 @@ class CartService:
             "width": cart.width or 0,
             "height": cart.height or 0,
             "baskets": baskets_out,
-            "used_volume": used_volume,
+            "used_volume": stats["used_volume_dm3"],
             "total_volume_dm3": round(cart.total_volume or 0, 2),
+            "max_volume_dm3": round(cart.total_volume or 0, 2),
             "order_numbers": order_numbers,
-            "total_weight_kg": total_weight_kg,
+            "total_weight_kg": stats["used_weight_kg"],
+            "total_orders": stats["total_orders"],
+            "total_products": stats["total_products"],
+            "baskets_used": stats["baskets_used"],
+            "capacity_mode": getattr(cart, "capacity_mode", None) or "volume",
+            "max_orders": getattr(cart, "max_orders", None),
         }
+
+    def _ensure_cart_barcodes(self, cart) -> None:
+        """Ensure cart and its baskets have barcodes; commit if updated."""
+        if not getattr(cart, "barcode", None):
+            cart.barcode = _generate_cart_barcode(self.db, cart.tenant_id, cart.warehouse_id)
+            _assign_basket_barcodes(cart)
+            self.db.commit()
+            self.db.refresh(cart)
+
+    def get_cart_barcode_pdf(self, cart_id: int) -> bytes:
+        """Return PDF bytes with Code128: cart barcode only (one label)."""
+        cart = self.db.query(Cart).options(joinedload(Cart.baskets)).filter(Cart.id == cart_id).first()
+        if not cart:
+            raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+        self._ensure_cart_barcodes(cart)
+        return build_barcodes_pdf([cart.barcode])
+
+    def get_basket_barcodes_pdf(self, cart_id: int) -> bytes:
+        """Return PDF bytes with Code128: basket barcodes only (no cart)."""
+        cart = self.db.query(Cart).options(joinedload(Cart.baskets)).filter(Cart.id == cart_id).first()
+        if not cart:
+            raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+        self._ensure_cart_barcodes(cart)
+        baskets = sorted(
+            getattr(cart, "baskets", None) or [],
+            key=lambda b: (getattr(b, "row", 0), getattr(b, "column", 0), getattr(b, "id", 0)),
+        )
+        labels = [b.barcode for b in baskets if getattr(b, "barcode", None)]
+        return build_barcodes_pdf(labels) if labels else build_barcodes_pdf([])
+
+    def get_barcodes_pdf(self, cart_id: int) -> bytes:
+        """Return PDF bytes with Code128 barcodes: cart barcode + all basket barcodes."""
+        cart = self.db.query(Cart).options(joinedload(Cart.baskets)).filter(Cart.id == cart_id).first()
+        if not cart:
+            raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+        self._ensure_cart_barcodes(cart)
+        labels = [cart.barcode]
+        baskets = sorted(
+            getattr(cart, "baskets", None) or [],
+            key=lambda b: (getattr(b, "row", 0), getattr(b, "column", 0), getattr(b, "id", 0)),
+        )
+        for b in baskets:
+            if getattr(b, "barcode", None):
+                labels.append(b.barcode)
+        return build_barcodes_pdf(labels)
+
+    def _get_default_template(self, tenant_id: int, template_type: str):
+        """Load default template for tenant by type (cart, basket, location). Returns SavedLabelTemplate or None."""
+        tenant = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            return None
+        template_id = None
+        if template_type == "cart":
+            template_id = getattr(tenant, "default_cart_template_id", None)
+        elif template_type == "basket":
+            template_id = getattr(tenant, "default_basket_template_id", None)
+        elif template_type == "location":
+            template_id = getattr(tenant, "default_location_template_id", None)
+        if not template_id:
+            return None
+        return self.db.query(SavedLabelTemplate).filter(
+            SavedLabelTemplate.id == template_id,
+            SavedLabelTemplate.tenant_id == tenant_id,
+        ).first()
+
+    def _cart_record(self, cart) -> dict:
+        """Build label record dict for a cart (variables for cart template)."""
+        barcode = getattr(cart, "barcode", None) or f"CART-{cart.id}"
+        n_baskets = len(getattr(cart, "baskets", None) or [])
+        return {
+            "cart_id": str(cart.id),
+            "cart_name": getattr(cart, "name", "") or "",
+            "cart_barcode": barcode,
+            "barcode_data": barcode,
+            "cart_capacity": str(round(getattr(cart, "total_volume", 0) or 0, 2)) + " dm³",
+            "cart_weight": "",
+            "cart_sections": str(n_baskets),
+            "{cart_id}": str(cart.id),
+            "{cart_name}": getattr(cart, "name", "") or "",
+            "{cart_barcode}": barcode,
+            "{cart_capacity}": str(round(getattr(cart, "total_volume", 0) or 0, 2)) + " dm³",
+            "{cart_weight}": "",
+            "{cart_sections}": str(n_baskets),
+        }
+
+    def _basket_record(self, basket, cart) -> dict:
+        """Build label record dict for a basket (variables for basket template)."""
+        code = (getattr(basket, "name", None) or "").strip() or f"S-{getattr(basket, 'row', 0) + 1}-{getattr(basket, 'column', 0) + 1}"
+        barcode = getattr(basket, "barcode", None) or f"CART-{cart.id}-B{getattr(basket, 'id', 0):02d}"
+        return {
+            "basket_id": str(getattr(basket, "id", 0)),
+            "basket_code": code,
+            "basket_barcode": barcode,
+            "basket_level": str(getattr(basket, "row", 0) + 1),
+            "basket_position": str(getattr(basket, "column", 0) + 1),
+            "cart_id": str(cart.id),
+            "barcode_data": barcode,
+            "{basket_id}": str(getattr(basket, "id", 0)),
+            "{basket_code}": code,
+            "{basket_barcode}": barcode,
+            "{basket_level}": str(getattr(basket, "row", 0) + 1),
+            "{basket_position}": str(getattr(basket, "column", 0) + 1),
+            "{cart_id}": str(cart.id),
+        }
+
+    def get_cart_labels_pdf(self, cart_id: int, tenant_id: int) -> bytes:
+        """Return PDF with cart label using default cart template, or legacy barcode-only PDF if no template."""
+        cart = self.db.query(Cart).options(joinedload(Cart.baskets)).filter(Cart.id == cart_id).first()
+        if not cart:
+            raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+        self._ensure_cart_barcodes(cart)
+        template_row = self._get_default_template(tenant_id, "cart")
+        if not template_row or not getattr(template_row, "template_json", None):
+            return self.get_cart_barcode_pdf(cart_id)
+        try:
+            template = template_json_to_dict(template_row.template_json)
+        except Exception as e:
+            logger.warning("Invalid cart template JSON for template id=%s: %s", getattr(template_row, "id", None), e)
+            return self.get_cart_barcode_pdf(cart_id)
+        record = self._cart_record(cart)
+        return build_label_pdf(template, [record], one_page_per_label=True)
+
+    def get_basket_labels_pdf(self, cart_id: int, tenant_id: int) -> bytes:
+        """Return PDF with one page per basket using default basket template, or legacy barcode-only PDF if no template."""
+        cart = self.db.query(Cart).options(joinedload(Cart.baskets)).filter(Cart.id == cart_id).first()
+        if not cart:
+            raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+        self._ensure_cart_barcodes(cart)
+        template_row = self._get_default_template(tenant_id, "basket")
+        if not template_row or not getattr(template_row, "template_json", None):
+            return self.get_basket_barcodes_pdf(cart_id)
+        try:
+            template = template_json_to_dict(template_row.template_json)
+        except Exception as e:
+            logger.warning("Invalid basket template JSON for template id=%s: %s", getattr(template_row, "id", None), e)
+            return self.get_basket_barcodes_pdf(cart_id)
+        baskets = sorted(
+            getattr(cart, "baskets", None) or [],
+            key=lambda b: (getattr(b, "row", 0), getattr(b, "column", 0), getattr(b, "id", 0)),
+        )
+        records = [self._basket_record(b, cart) for b in baskets]
+        if not records:
+            return build_label_pdf(template, [{"barcode_data": "", "{basket_code}": "No baskets"}], one_page_per_label=True)
+        return build_label_pdf(template, records, one_page_per_label=True)
 
     def clear_cart(self, cart_id: int) -> dict:
         """Unassign ALL orders from this cart and all its baskets: order.cart_id/basket_id = NULL,
@@ -424,20 +718,47 @@ class CartService:
                 setattr(cart, model_attr, new_val)
                 changes.append((model_attr, old_val, new_val))
 
-        # total_volume_dm3 from payload -> cart.total_volume
-        if "total_volume_dm3" in update_data:
-            new_vol = update_data["total_volume_dm3"]
-            if new_vol is not None:
+        # total_volume_dm3 / max_volume_dm3 from payload -> cart.total_volume
+        for key in ("total_volume_dm3", "max_volume_dm3"):
+            if key in update_data:
+                new_vol = update_data[key]
+                if new_vol is not None:
+                    try:
+                        new_vol = float(new_vol)
+                    except (TypeError, ValueError):
+                        logger.warning("[update_cart] cannot parse %s=%r", key, new_vol)
+                    else:
+                        old_vol = cart.total_volume
+                        if old_vol != new_vol:
+                            logger.info("[update_cart] total_volume: %s -> %s", old_vol, new_vol)
+                            cart.total_volume = new_vol
+                            changes.append(("total_volume", old_vol, new_vol))
+                break
+
+        # capacity_mode, max_orders
+        if "capacity_mode" in update_data:
+            val = update_data["capacity_mode"]
+            if val is not None:
+                new_m = _norm_capacity_mode(val)
+                old_m = getattr(cart, "capacity_mode", None) or "volume"
+                if old_m != new_m:
+                    cart.capacity_mode = new_m
+                    changes.append(("capacity_mode", old_m, new_m))
+        if "max_orders" in update_data:
+            val = update_data["max_orders"]
+            old_max_ord = getattr(cart, "max_orders", None)
+            if val is not None:
                 try:
-                    new_vol = float(new_vol)
+                    n = int(val)
+                    if n >= 0 and old_max_ord != n:
+                        cart.max_orders = n
+                        changes.append(("max_orders", old_max_ord, n))
                 except (TypeError, ValueError):
-                    logger.warning("[update_cart] cannot parse total_volume_dm3=%r", new_vol)
-                else:
-                    old_vol = cart.total_volume
-                    if old_vol != new_vol:
-                        logger.info("[update_cart] total_volume: %s -> %s", old_vol, new_vol)
-                        cart.total_volume = new_vol
-                        changes.append(("total_volume", old_vol, new_vol))
+                    pass
+            else:
+                if old_max_ord is not None:
+                    cart.max_orders = None
+                    changes.append(("max_orders", old_max_ord, None))
 
         # --- Replace basket structure when provided (MULTI carts) ---
         if "baskets" in update_data and update_data["baskets"] is not None:
@@ -478,6 +799,10 @@ class CartService:
                 self.db.add(basket)
 
             self.db.flush()
+            self.db.refresh(cart)
+            if not getattr(cart, "barcode", None):
+                cart.barcode = _generate_cart_barcode(self.db, cart.tenant_id, cart.warehouse_id)
+            _assign_basket_barcodes(cart)
             cart.recalculate_total_volume()
             changes.append(("baskets", "replaced", f"{len(new_baskets)} items"))
 

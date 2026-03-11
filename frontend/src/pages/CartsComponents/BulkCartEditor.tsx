@@ -12,6 +12,8 @@ type BulkFormState = {
   height: number;
 };
 
+type CapacityMode = "volume" | "orders" | "mixed";
+
 type CartGroup = { id: number; name: string };
 
 export default function BulkCartEditor({
@@ -33,6 +35,9 @@ export default function BulkCartEditor({
   const [imageUrl, setImageUrl] = useState<string>("");
   const [groupId, setGroupId] = useState<number | null>(null);
   const [availableGroups, setAvailableGroups] = useState<CartGroup[]>([]);
+  const [capacityMode, setCapacityMode] = useState<CapacityMode>("volume");
+  const [maxOrders, setMaxOrders] = useState<number | "">("");
+  const [maxVolumeDm3, setMaxVolumeDm3] = useState<number | "">("");
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +75,9 @@ export default function BulkCartEditor({
               ? Number(rawGroupId)
               : null;
           setGroupId(initialGroupId);
+          setCapacityMode((data.capacity_mode ?? "volume") as CapacityMode);
+          setMaxOrders(data.max_orders != null ? data.max_orders : "");
+          setMaxVolumeDm3(data.max_volume_dm3 != null ? data.max_volume_dm3 : "");
         }
       } catch (err) {
         if (!cancelled) console.error("BulkCartEditor init error:", err);
@@ -86,7 +94,8 @@ export default function BulkCartEditor({
     if (!warehouse) return;
     setLoading(true);
     try {
-      const payload = {
+      const vol = (Number(formData.length) * Number(formData.width) * Number(formData.height)) / 1000;
+      const payload: Record<string, unknown> = {
         name: formData.name.toUpperCase(),
         tenant_id: 1,
         warehouse_id: warehouse.id,
@@ -95,7 +104,14 @@ export default function BulkCartEditor({
         length: Number(formData.length),
         width: Number(formData.width),
         height: Number(formData.height),
+        capacity_mode: capacityMode,
       };
+      if (capacityMode === "orders" || capacityMode === "mixed") {
+        payload.max_orders = maxOrders === "" ? null : Number(maxOrders);
+      }
+      if (capacityMode === "volume" || capacityMode === "mixed") {
+        payload.max_volume_dm3 = maxVolumeDm3 === "" ? vol : Number(maxVolumeDm3);
+      }
 
       let res;
       if (cartId) {
@@ -153,11 +169,57 @@ export default function BulkCartEditor({
           ))}
         </div>
 
+        <div className="border-t border-slate-100 pt-6">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">CAPACITY MODE</h3>
+          <div className="flex flex-wrap gap-4 p-1 mb-4">
+            {(["volume", "orders", "mixed"] as const).map((mode) => (
+              <label key={mode} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="capacityMode"
+                  checked={capacityMode === mode}
+                  onChange={() => setCapacityMode(mode)}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm font-bold capitalize">{mode}</span>
+              </label>
+            ))}
+          </div>
+          {(capacityMode === "volume" || capacityMode === "mixed") && (
+            <div className="mb-4">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_volume_dm3</label>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                className="w-full bg-slate-50 rounded-2xl px-4 py-2 font-bold outline-none border border-slate-200"
+                value={maxVolumeDm3 === "" ? "" : maxVolumeDm3}
+                onChange={(e) => setMaxVolumeDm3(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder={String(((formData.length * formData.width * formData.height) / 1000).toFixed(1))}
+              />
+            </div>
+          )}
+          {(capacityMode === "orders" || capacityMode === "mixed") && (
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_orders</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full bg-slate-50 rounded-2xl px-4 py-2 font-bold outline-none border border-slate-200"
+                value={maxOrders === "" ? "" : maxOrders}
+                onChange={(e) => setMaxOrders(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="e.g. 10"
+              />
+            </div>
+          )}
+        </div>
+
         <div className="flex flex-col gap-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
             {t.imageUrlLabel}
           </label>
           <input
+            type="text"
             className="w-full bg-slate-50 rounded-2xl px-6 py-4 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 transition-all"
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}

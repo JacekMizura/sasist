@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { CustomRackTemplate, LevelConfigItem } from "../../types/warehouse";
+import { RESERVE_BG, RESERVE_BORDER } from "./reserveLocationStyle";
 import { snapCm, expandAddressPattern } from "./warehouseUtils";
 
 const DEFAULT_ADDRESS_PATTERN = "{Row}{Section}-{Bin}-{Level}";
@@ -9,8 +10,8 @@ const DEFAULT_COLORS = ["#3b82f6", "#22c55e", "#eab308", "#ef4444", "#8b5cf6", "
 const UPRIGHT_BLUE = "#2563eb";
 const SHELF_ORANGE = "#ea580c";
 const SHELF_GREY = "#64748b";
-const RESERVE_FILL = "#fed7aa";
-const RESERVE_STROKE = "#ea580c";
+const RESERVE_FILL = RESERVE_BG;
+const RESERVE_STROKE = RESERVE_BORDER;
 const CELL_STROKE = "#cbd5e1";
 
 function cellKey(levelIndex: number, binIndex: number): string {

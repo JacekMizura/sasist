@@ -30,6 +30,16 @@ class BasketCreate(BaseModel):
 
 
 # ================================
+# CAPACITY MODE
+# ================================
+
+class CapacityMode(str, Enum):
+    volume = "volume"
+    orders = "orders"
+    mixed = "mixed"
+
+
+# ================================
 # MULTI CREATE
 # ================================
 
@@ -41,6 +51,10 @@ class CartMultiCreate(BaseModel):
     image_url: Optional[str] = None
 
     baskets: List[BasketCreate]
+
+    capacity_mode: Optional[CapacityMode] = CapacityMode.volume
+    max_orders: Optional[int] = None
+    max_volume_dm3: Optional[float] = None
 
 
 # ================================
@@ -58,6 +72,10 @@ class CartBulkCreate(BaseModel):
     width: float = Field(gt=0)
     height: float = Field(gt=0)
 
+    capacity_mode: Optional[CapacityMode] = CapacityMode.volume
+    max_orders: Optional[int] = None
+    max_volume_dm3: Optional[float] = None
+
 
 # ================================
 # UPDATE
@@ -73,6 +91,9 @@ class CartUpdate(BaseModel):
     height: Optional[float] = None
     baskets: Optional[List[BasketCreate]] = None
     total_volume_dm3: Optional[float] = None
+    capacity_mode: Optional[str] = None
+    max_orders: Optional[int] = None
+    max_volume_dm3: Optional[float] = None
 
 
 # ================================

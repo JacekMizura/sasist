@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 
-export type ElementType = "rack" | "zone" | "aisle" | "workstation";
+export type ElementType = "rack" | "zone" | "aisle" | "workstation" | "pick_start" | "packing";
 
 export type RackProps = {
   levels: number;

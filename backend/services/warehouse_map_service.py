@@ -15,6 +15,7 @@ from ..models.warehouse_map import (
     ELEMENT_TYPE_ZONE,
     RACK_TYPE_PICKING,
 )
+from ..models.location import Location
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,11 @@ def _dump_props(props: Dict[str, Any] | None) -> str | None:
 
 def _address(aisle_letter: str, rack_num: int, level: int, bin_idx: int) -> str:
     return f"{aisle_letter}-{rack_num:02d}-{level:02d}-{bin_idx:02d}"
+
+
+def _location_name(aisle_letter: str, rack_index: int, level_index: int, bin_index: int) -> str:
+    """Same pattern as warehouse layout generator: A1-1-1, A1-1-2, etc."""
+    return f"{aisle_letter}{rack_index}-{level_index + 1}-{bin_index + 1}"
 
 
 class WarehouseMapService:
@@ -153,6 +159,7 @@ class WarehouseMapService:
         self.db.flush()
         if type == ELEMENT_TYPE_RACK and props:
             self._create_bins_for_rack(el, m, props)
+            self._sync_locations_from_map(m.warehouse_id, map_id)
         self.db.commit()
         self.db.refresh(el)
         return self._element_to_read(el)
@@ -184,6 +191,60 @@ class WarehouseMapService:
                     pos_y=center_y,
                 )
                 self.db.add(b)
+
+    def _sync_locations_from_map(self, warehouse_id: int, map_id: int) -> None:
+        """
+        Create or update Location records for every StorageBin in this map (rack elements only).
+        Coordinates from StorageBin.pos_x, pos_y; z=0. Dimensions from rack props (width_cm, depth_cm, height_cm).
+        Location name uses layout-style pattern (e.g. A1-1-1). Does not delete any locations.
+        """
+        m = (
+            self.db.query(WarehouseMap)
+            .options(joinedload(WarehouseMap.elements).joinedload(MapElement.bins))
+            .filter(WarehouseMap.id == map_id, WarehouseMap.warehouse_id == warehouse_id)
+            .first()
+        )
+        if not m or not m.elements:
+            return
+        rack_elements = sorted(
+            [e for e in m.elements if e.type == ELEMENT_TYPE_RACK],
+            key=lambda e: (e.id or 0),
+        )
+        for rack_index_one_based, el in enumerate(rack_elements, start=1):
+            props = _parse_props(el.props)
+            width_cm = float(props.get("width_cm", 30))
+            depth_cm = float(props.get("depth_cm", 40))
+            height_cm = float(props.get("height_cm", 25))
+            aisle_letter = str(props.get("aisle_letter", "A"))
+            for b in el.bins or []:
+                name = _location_name(aisle_letter, rack_index_one_based, b.level_index, b.bin_index)
+                loc = (
+                    self.db.query(Location)
+                    .filter(Location.warehouse_id == warehouse_id, Location.name == name)
+                    .first()
+                )
+                x_val = float(b.pos_x) if b.pos_x is not None else 0.0
+                y_val = float(b.pos_y) if b.pos_y is not None else 0.0
+                if loc is None:
+                    loc = Location(
+                        warehouse_id=warehouse_id,
+                        name=name,
+                        type="pick",
+                        width=width_cm,
+                        depth=depth_cm,
+                        height=height_cm,
+                        x=x_val,
+                        y=y_val,
+                        z=0.0,
+                    )
+                    self.db.add(loc)
+                else:
+                    loc.x = x_val
+                    loc.y = y_val
+                    loc.z = 0.0
+                    loc.width = width_cm
+                    loc.depth = depth_cm
+                    loc.height = height_cm
 
     def _element_to_read(self, el: MapElement) -> dict:
         return {
@@ -220,6 +281,17 @@ class WarehouseMapService:
         self.db.add(el)
         self.db.commit()
         self.db.refresh(el)
+        if el.type == ELEMENT_TYPE_RACK:
+            position_or_size_changed = x is not None or y is not None or width is not None or height is not None
+            if position_or_size_changed:
+                for b in self.db.query(StorageBin).filter(StorageBin.element_id == element_id).all():
+                    b.pos_x = float(el.x) + float(el.width) / 2.0
+                    b.pos_y = float(el.y) + float(el.height) / 2.0
+                    self.db.add(b)
+            m = self.db.query(WarehouseMap).filter(WarehouseMap.id == el.map_id).first()
+            if m:
+                self._sync_locations_from_map(m.warehouse_id, el.map_id)
+            self.db.commit()
         return self._element_to_read(el)
 
     def delete_element(self, element_id: int) -> dict:

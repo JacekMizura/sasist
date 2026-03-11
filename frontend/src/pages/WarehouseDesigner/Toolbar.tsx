@@ -5,6 +5,8 @@ const tools: { id: ElementType | "path"; label: string }[] = [
   { id: "zone", label: "Strefa (gabaryty)" },
   { id: "aisle", label: "Przejście" },
   { id: "workstation", label: "Stanowisko" },
+  { id: "pick_start", label: "Punkt startowy (START)" },
+  { id: "packing", label: "Stacja pakowania (PACK)" },
   { id: "path", label: "Ścieżka (2 punkty)" },
 ];
 

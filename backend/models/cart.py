@@ -25,6 +25,7 @@ class Cart(Base):
     # DANE PODSTAWOWE WÓZKA
     # ==========================================================
     name = Column(String, nullable=False)
+    barcode = Column(String(64), unique=True, nullable=True, index=True)  # e.g. CART-0001 (Code128)
     type = Column(Enum(CartType), nullable=False)
     image_url = Column(String, nullable=True)
 
@@ -34,6 +35,10 @@ class Cart(Base):
 
     total_volume = Column(Float, default=0)
     used_volume = Column(Float, default=0)
+
+    # Capacity limits: "volume" | "orders" | "mixed" (default volume)
+    capacity_mode = Column(String(20), nullable=False, default="volume")
+    max_orders = Column(Integer, nullable=True)  # used when capacity_mode is "orders" or "mixed"
 
     status = Column(Enum(CartStatus), default=CartStatus.AVAILABLE)
 
@@ -51,6 +56,12 @@ class Cart(Base):
         "Order",
         back_populates="cart",
         foreign_keys="Order.cart_id",
+    )
+
+    pick_tasks = relationship(
+        "PickTask",
+        back_populates="cart",
+        cascade="all, delete-orphan",
     )
 
     # ==========================================================

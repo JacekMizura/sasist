@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import axios from "axios";
 import api from "../../api/axios";
 import { useTranslation } from "../../locales";
 
@@ -14,12 +15,27 @@ type Order = {
   id: number;
   number?: string;
   status?: string;
+  order_date?: string | null;
   total_volume?: number | null;
   is_multi_item?: boolean;
   total_items?: number;
   position_count?: number;
   items?: OrderItemDetail[];
 };
+
+function formatOrderDate(isoDate: string | null | undefined): string {
+  if (!isoDate) return "—";
+  try {
+    const d = new Date(isoDate);
+    if (Number.isNaN(d.getTime())) return "—";
+    return new Intl.DateTimeFormat("pl-PL", {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(d);
+  } catch {
+    return "—";
+  }
+}
 
 function firstImageUrl(imageUrl: string | null | undefined): string | null {
   if (!imageUrl || typeof imageUrl !== "string") return null;
@@ -30,7 +46,7 @@ function firstImageUrl(imageUrl: string | null | undefined): string | null {
 const tenantId = 1;
 const warehouseId = 1;
 const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200, 500] as const;
-type SortKey = "id" | "number" | "status" | "total_volume" | "order_type" | "total_items";
+type SortKey = "id" | "number" | "status" | "order_date" | "total_volume" | "order_type" | "total_items";
 
 export default function OrderList() {
   const t = useTranslation();
@@ -39,15 +55,15 @@ export default function OrderList() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortKey>("number");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState<SortKey>("order_date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [filterStatus, setFilterStatus] = useState("");
   const [filterOrderType, setFilterOrderType] = useState("");
   const [filterOrderId, setFilterOrderId] = useState("");
-  const [filterVolumeMin, setFilterVolumeMin] = useState("");
-  const [filterVolumeMax, setFilterVolumeMax] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
@@ -65,8 +81,8 @@ export default function OrderList() {
     if (filterStatus.trim()) params.set("status", filterStatus.trim());
     if (filterOrderType.trim()) params.set("order_type", filterOrderType.trim());
     if (filterOrderId.trim()) params.set("order_id", filterOrderId.trim());
-    if (filterVolumeMin.trim()) params.set("volume_min", filterVolumeMin.trim());
-    if (filterVolumeMax.trim()) params.set("volume_max", filterVolumeMax.trim());
+    if (filterDateFrom.trim()) params.set("date_from", filterDateFrom.trim());
+    if (filterDateTo.trim()) params.set("date_to", filterDateTo.trim());
 
     api
       .get(`/orders/?${params.toString()}`)
@@ -82,7 +98,7 @@ export default function OrderList() {
         setFetchError(err?.message ?? "Błąd pobierania listy zamówień");
       })
       .finally(() => setLoading(false));
-  }, [page, rowsPerPage, filterStatus, filterOrderType, filterOrderId, filterVolumeMin, filterVolumeMax, sortBy, sortDir]);
+  }, [page, rowsPerPage, filterStatus, filterOrderType, filterOrderId, filterDateFrom, filterDateTo, sortBy, sortDir]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -119,7 +135,11 @@ export default function OrderList() {
     if (selectedIds.size === 0) return;
     setDeleting(true);
     try {
-      await api.delete(`/orders/bulk?tenant_id=${tenantId}&warehouse_id=${warehouseId}&ids=${Array.from(selectedIds).join(",")}`);
+      // Backend expects DELETE /orders/bulk (no trailing slash). api interceptor adds slash and causes 405.
+      const baseURL = api.defaults.baseURL ?? "http://127.0.0.1:8010";
+      await axios.delete(
+        `${baseURL.replace(/\/$/, "")}/orders/bulk?tenant_id=${tenantId}&warehouse_id=${warehouseId}&ids=${Array.from(selectedIds).join(",")}`
+      );
       setSelectedIds(new Set());
       setSelectedOrder(null);
       fetchOrders();
@@ -156,17 +176,28 @@ export default function OrderList() {
             <select value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(1); }} className="border rounded px-2 py-1.5 text-sm">
               {ROWS_PER_PAGE_OPTIONS.map((n) => (<option key={n} value={n}>{n}</option>))}
             </select>
-            <span className="text-sm text-gray-500">{t.orderId ?? "ID zamówienia"}</span>
+            <span className="text-sm text-gray-500">ID zamówienia / numer</span>
             <input
               type="text"
               value={filterOrderId}
               onChange={(e) => { setFilterOrderId(e.target.value); setPage(1); }}
-              placeholder="ID lub numer"
-              className="border rounded px-2 py-1.5 text-sm w-32"
+              placeholder="ID, numer (częściowe)"
+              className="border rounded px-2 py-1.5 text-sm w-36"
             />
-            <span className="text-sm text-gray-500">Objętość (dm³)</span>
-            <input type="number" min={0} step={0.01} value={filterVolumeMin} onChange={(e) => { setFilterVolumeMin(e.target.value); setPage(1); }} placeholder="Min" className="border rounded px-2 py-1.5 text-sm w-20" />
-            <input type="number" min={0} step={0.01} value={filterVolumeMax} onChange={(e) => { setFilterVolumeMax(e.target.value); setPage(1); }} placeholder="Max" className="border rounded px-2 py-1.5 text-sm w-20" />
+            <span className="text-sm text-gray-500">Data od</span>
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => { setFilterDateFrom(e.target.value); setPage(1); }}
+              className="border rounded px-2 py-1.5 text-sm"
+            />
+            <span className="text-sm text-gray-500">Data do</span>
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => { setFilterDateTo(e.target.value); setPage(1); }}
+              className="border rounded px-2 py-1.5 text-sm"
+            />
             <span className="text-sm text-gray-500">{t.typ ?? "Typ"}</span>
             <select value={filterOrderType} onChange={(e) => { setFilterOrderType(e.target.value); setPage(1); }} className="border rounded px-2 py-1.5 text-sm">
               <option value="">Wszystkie</option>
@@ -200,6 +231,7 @@ export default function OrderList() {
                   <input type="checkbox" checked={orders.length > 0 && selectedIds.size === orders.length} onChange={toggleSelectAll} className="rounded" />
                 </th>
                 <Th label="Numer zamówienia" sortKey="number" />
+                <Th label="Data zamówienia" sortKey="order_date" />
                 <Th label="Status" sortKey="status" />
                 <Th label={t.orderVolume} sortKey="total_volume" />
                 <Th label={t.orderType} sortKey="order_type" />
@@ -208,7 +240,7 @@ export default function OrderList() {
             </thead>
             <tbody>
               {orders.length === 0 && !loading ? (
-                <tr><td colSpan={6} className="p-8 text-center text-slate-500">Brak zamówień do wyświetlenia.</td></tr>
+                <tr><td colSpan={7} className="p-8 text-center text-slate-500">Brak zamówień do wyświetlenia.</td></tr>
               ) : (
                 orders.map((o) => (
                   <tr
@@ -220,6 +252,7 @@ export default function OrderList() {
                       <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelect(o.id)} className="rounded" />
                     </td>
                     <td className="p-4">{o.number ?? o.id}</td>
+                    <td className="p-4 text-slate-600">{formatOrderDate(o.order_date)}</td>
                     <td className="p-4">
                       <span className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded">{o.status ?? "NEW"}</span>
                     </td>

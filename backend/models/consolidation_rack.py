@@ -16,11 +16,11 @@ class ConsolidationRack(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
     name = Column(String, nullable=False)
 
-    levels = relationship("RackLevel", back_populates="rack", cascade="all, delete-orphan")
+    levels = relationship("ConsolidationRackLevel", back_populates="rack", cascade="all, delete-orphan")
 
 
-class RackLevel(Base):
-    __tablename__ = "rack_levels"
+class ConsolidationRackLevel(Base):
+    __tablename__ = "consolidation_rack_levels"
 
     id = Column(Integer, primary_key=True)
     rack_id = Column(Integer, ForeignKey("consolidation_racks.id", ondelete="CASCADE"), nullable=False)
@@ -36,9 +36,9 @@ class RackSegment(Base):
     __tablename__ = "rack_segments"
 
     id = Column(Integer, primary_key=True)
-    level_id = Column(Integer, ForeignKey("rack_levels.id", ondelete="CASCADE"), nullable=False)
+    level_id = Column(Integer, ForeignKey("consolidation_rack_levels.id", ondelete="CASCADE"), nullable=False)
     segment_index = Column(Integer, nullable=False)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
     fill_percent = Column(Float, default=0)  # 0–100
 
-    level = relationship("RackLevel", back_populates="segments")
+    level = relationship("ConsolidationRackLevel", back_populates="segments")

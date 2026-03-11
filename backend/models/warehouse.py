@@ -21,16 +21,25 @@ class Warehouse(Base, BaseModelMixin):
     __tablename__ = "warehouses"
 
     name = Column(String, nullable=False)
+    address = Column(String, nullable=True)
+    type = Column(String(20), nullable=True, default="own")  # own | fulfilment
 
+    # Optional legacy/primary tenant; access control is via tenant_warehouses (many-to-many).
     tenant_id = Column(
-        ForeignKey("tenants.id"),
-        nullable=False,
-        index=True
+        ForeignKey("tenants.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
-    tenant = relationship(
-        "Tenant",
-        back_populates="warehouses"
+    # Picking start position (packing station / picker start). Used for walking-cost simulation.
+    start_x = Column(Float, nullable=True, default=0)
+    start_y = Column(Float, nullable=True, default=0)
+
+    tenant_warehouses = relationship(
+        "TenantWarehouse",
+        back_populates="warehouse",
+        cascade="all, delete-orphan",
+        foreign_keys="TenantWarehouse.warehouse_id",
     )
 
     carts = relationship(
@@ -49,6 +58,42 @@ class Warehouse(Base, BaseModelMixin):
         "WarehouseLayout",
         back_populates="warehouse",
         cascade="all, delete"
+    )
+
+    locations = relationship(
+        "Location",
+        back_populates="warehouse",
+        cascade="all, delete-orphan",
+        foreign_keys="Location.warehouse_id",
+    )
+
+    inventory = relationship(
+        "Inventory",
+        back_populates="warehouse",
+        cascade="all, delete-orphan",
+    )
+
+    inventory_units = relationship(
+        "InventoryUnit",
+        back_populates="warehouse",
+        cascade="all, delete-orphan",
+    )
+
+    pick_waves = relationship(
+        "PickWave",
+        back_populates="warehouse",
+        cascade="all, delete-orphan",
+    )
+
+    picks = relationship(
+        "Pick",
+        back_populates="warehouse",
+    )
+
+    stock = relationship(
+        "Stock",
+        back_populates="warehouse",
+        cascade="all, delete-orphan",
     )
 
 
@@ -116,6 +161,7 @@ class Bin(Base, BaseModelMixin):
 
     rack_id = Column(Integer, ForeignKey("warehouse_layout_racks.id", ondelete="CASCADE"), nullable=False)
     label = Column(String, nullable=False)
+    barcode = Column(String(64), unique=True, nullable=True, index=True)  # LOC-{rack}-{level}-{bin} e.g. LOC-A01-03-02
     level_index = Column(Integer, nullable=False)
     segment_index = Column(Integer, nullable=False)
     volume_dm3 = Column(Float, nullable=False, default=0)

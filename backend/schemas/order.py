@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -49,6 +50,12 @@ class OrderListRead(BaseModel):
     city: Optional[str] = None
     country: Optional[str] = None
     status: Optional[str] = None
+    order_date: Optional[datetime] = None
+    value: Optional[float] = None
+    created_at: Optional[datetime] = None
+    source: Optional[str] = None
+    shipping_method: Optional[str] = None
+    currency: Optional[str] = None
     total_volume: Optional[float] = None
     is_multi_item: bool = False
     total_items: int = 0  # suma quantity (sztuk)

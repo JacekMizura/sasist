@@ -3,6 +3,13 @@ import api from "../../api/axios";
 import { useWarehouseDesigner, type MapElement } from "../../context/WarehouseDesignerContext";
 
 const CELL_PX = 32;
+/** Backend stores special location coordinates in cm; 1 cell = 100 cm */
+const CELL_CM = 100;
+
+type SpecialLocations = {
+  pick_start: { id: number; x: number; y: number } | null;
+  packing: { id: number; x: number; y: number } | null;
+};
 
 function elementColor(el: MapElement): string {
   switch (el.type) {
@@ -36,6 +43,7 @@ export default function WarehouseGrid() {
 
   const [placing, setPlacing] = useState(false);
   const [selectedElementId, setSelectedElementId] = useState<number | null>(null);
+  const [specialLocations, setSpecialLocations] = useState<SpecialLocations>({ pick_start: null, packing: null });
 
   const cols = layout?.grid_cols ?? 20;
   const rows = layout?.grid_rows ?? 15;
@@ -69,6 +77,25 @@ export default function WarehouseGrid() {
         if (!pathEnd) {
           setPathEnd(cell);
           return;
+        }
+        return;
+      }
+
+      if ((selectedTool as string) === "pick_start" || (selectedTool as string) === "packing") {
+        setPlacing(true);
+        try {
+          await api.post("/warehouse/special-location", {
+            warehouse_id: layout.warehouse_id,
+            x: cell.x * CELL_CM,
+            y: cell.y * CELL_CM,
+            type: selectedTool === "pick_start" ? "PICK_START" : "PACKING",
+          });
+          const { data } = await api.get<SpecialLocations>(`/warehouse/${layout.warehouse_id}/special-locations`);
+          setSpecialLocations(data ?? { pick_start: null, packing: null });
+        } catch (err) {
+          console.error("Place special location:", err);
+        } finally {
+          setPlacing(false);
         }
         return;
       }
@@ -117,6 +144,25 @@ export default function WarehouseGrid() {
       refreshLayout,
     ]
   );
+
+  useEffect(() => {
+    if (!layout?.warehouse_id) {
+      setSpecialLocations({ pick_start: null, packing: null });
+      return;
+    }
+    let cancelled = false;
+    api
+      .get<SpecialLocations>(`/warehouse/${layout.warehouse_id}/special-locations`)
+      .then((res) => {
+        if (!cancelled && res.data) setSpecialLocations(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setSpecialLocations({ pick_start: null, packing: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [layout?.warehouse_id]);
 
   useEffect(() => {
     if (!layout || !pathStart || !pathEnd) {
@@ -201,6 +247,29 @@ export default function WarehouseGrid() {
             />
           </g>
         ))}
+
+        {/* Special locations: START (green), PACK (blue) – render above shelves */}
+        {specialLocations.pick_start && (() => {
+          const px = (specialLocations.pick_start.x / CELL_CM) * CELL_PX + CELL_PX / 2;
+          const py = (specialLocations.pick_start.y / CELL_CM) * CELL_PX + CELL_PX / 2;
+          return (
+            <g key="pick_start">
+              <circle cx={px} cy={py} r={CELL_PX / 2 - 2} fill="#22c55e" stroke="#166534" strokeWidth={2} />
+              <text x={px} y={py + 1} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold">START</text>
+            </g>
+          );
+        })()}
+        {specialLocations.packing && (() => {
+          const px = (specialLocations.packing.x / CELL_CM) * CELL_PX + CELL_PX / 2;
+          const py = (specialLocations.packing.y / CELL_CM) * CELL_PX + CELL_PX / 2;
+          const s = CELL_PX * 0.6;
+          return (
+            <g key="packing">
+              <rect x={px - s / 2} y={py - s / 2} width={s} height={s} fill="#3b82f6" stroke="#1d4ed8" strokeWidth={2} rx={2} />
+              <text x={px} y={py + 1} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold">PACK</text>
+            </g>
+          );
+        })()}
 
         {/* Path preview */}
         {pathStart && (

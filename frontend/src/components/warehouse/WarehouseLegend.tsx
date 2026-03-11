@@ -2,12 +2,14 @@
  * Legend for the Warehouse Map (Magazyn) view.
  * Full Map: rack occupancy colors + summary stats.
  * Rack (side) view: slot-level legend (podręczna, rezerwa, wybrany slot, zajętość slotu).
- * Uses the same hex colors as the map and RackSideViewGrid.
+ * Uses the same hex colors as the map and RackSideViewGrid (shared reserve style).
  */
 
+import { RESERVE_BG, RESERVE_BORDER } from "./reserveLocationStyle";
+
 const CELL_STROKE = "#cbd5e1";
-const RESERVE_FILL = "#FFCC99";
-const RESERVE_STROKE = "#ea580c";
+const RESERVE_FILL = RESERVE_BG;
+const RESERVE_STROKE = RESERVE_BORDER;
 const SELECTED_FILL = "#eff6ff";
 const SELECTED_STROKE = "#1d4ed8";
 const OCCUPANCY_BG = "#e2e8f0";

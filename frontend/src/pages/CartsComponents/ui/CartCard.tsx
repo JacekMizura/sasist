@@ -3,10 +3,11 @@ import StatusPill from "./StatusPill";
 import ImagePreviewModal from "./ImagePreviewModal";
 import SimulationResultModal from "./SimulationResultModal";
 import OrderProductPreviewModal from "./OrderProductPreviewModal";
-import { CubeIcon, PencilIcon, TrashIcon, MagicWandIcon, ScaleIcon, PackageIcon, ClearIcon } from "./Icons";
-import { useState, useEffect } from "react";
+import { CubeIcon, PencilIcon, TrashIcon, MagicWandIcon, ScaleIcon, PackageIcon, ClearIcon, PrinterIcon } from "./Icons";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "../../../locales";
 import api from "../../../api/axios";
+import { calculateCartStats } from "../cartStats";
 
 type BasketDetail = {
   id: number;
@@ -42,6 +43,7 @@ type CartCardProps = {
   /** Fallback: if used_volume missing, sum from here; progress bar shows purple (simulated) */
   assigned_orders?: AssignedOrderRef[];
   image_url?: string | null;
+  updated_at?: string | number | null;
   // Multi-specific
   total_baskets?: number;
   // Bulk-specific
@@ -53,11 +55,20 @@ type CartCardProps = {
   warehouse_id?: number;
   order_numbers?: string[];
   total_weight_kg?: number;
+  /** Unified stats from backend (list/detail); prefer over deriving */
+  total_orders?: number;
+  total_products?: number;
+  baskets_used?: number;
+  capacity_mode?: string;
+  max_orders?: number | null;
+  max_volume_dm3?: number;
   onSimulateSuccess?: () => void;
   onClearSuccess?: () => void;
   // Actions
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
+  /** Open cart label print modal (optional). When set, "Drukuj etykietę" button is shown. */
+  onPrintLabel?: (cart: { id: number; name: string }) => void;
 };
 
 export default function CartCard(props: CartCardProps) {
@@ -69,6 +80,7 @@ export default function CartCard(props: CartCardProps) {
     total_volume_dm3,
     assigned_orders,
     image_url,
+    updated_at,
     total_baskets,
     length,
     width,
@@ -77,10 +89,17 @@ export default function CartCard(props: CartCardProps) {
     warehouse_id,
     order_numbers = [],
     total_weight_kg,
+    total_orders: total_orders_prop,
+    total_products: total_products_prop,
+    baskets_used: baskets_used_prop,
+    capacity_mode: capacity_mode_prop,
+    max_orders: max_orders_prop,
+    max_volume_dm3: max_volume_dm3_prop,
     onSimulateSuccess,
     onClearSuccess,
     onEdit,
     onDelete,
+    onPrintLabel,
   } = props;
 
   const isSectional = total_baskets != null && total_baskets > 0;
@@ -96,21 +115,44 @@ export default function CartCard(props: CartCardProps) {
   const [clearingCart, setClearingCart] = useState(false);
   const [clearingBasketId, setClearingBasketId] = useState<number | null>(null);
   const [orderPreviewOrderId, setOrderPreviewOrderId] = useState<number | null>(null);
+  const [basketToConfirmClear, setBasketToConfirmClear] = useState<BasketDetail | null>(null);
+  const [detailData, setDetailData] = useState<{
+    baskets?: BasketDetail[];
+    total_orders?: number;
+    total_products?: number;
+    baskets_used?: number;
+    used_volume?: number;
+    total_weight_kg?: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!showContent || !isSectional || !id) {
       setBaskets([]);
+      setDetailData(null);
       return;
     }
     let cancelled = false;
     setContentLoading(true);
     api
-      .get<{ baskets: BasketDetail[] }>(`/carts/${id}/`)
+      .get<{
+        baskets: BasketDetail[];
+        total_orders?: number;
+        total_products?: number;
+        baskets_used?: number;
+        used_volume?: number;
+        total_weight_kg?: number;
+      }>(`/carts/${id}/`)
       .then((res) => {
-        if (!cancelled) setBaskets(res.data.baskets || []);
+        if (!cancelled) {
+          setBaskets(res.data.baskets || []);
+          setDetailData(res.data);
+        }
       })
       .catch(() => {
-        if (!cancelled) setBaskets([]);
+        if (!cancelled) {
+          setBaskets([]);
+          setDetailData(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setContentLoading(false);
@@ -120,17 +162,35 @@ export default function CartCard(props: CartCardProps) {
     };
   }, [showContent, isSectional, id]);
 
-  const totalVol = Number(total_volume_dm3 ?? 0);
-  const fallbackFromAssigned = Array.isArray(assigned_orders) && assigned_orders.length > 0
-    ? assigned_orders.reduce((sum, o) => sum + Number((o as AssignedOrderRef).total_volume_dm3 ?? 0), 0)
-    : 0;
-  const usedVol = (used_volume != null && used_volume > 0)
-    ? Number(used_volume)
-    : fallbackFromAssigned;
-  const isSimulated = (used_volume == null || used_volume === 0) && fallbackFromAssigned > 0;
-  const occupancyPercent = totalVol > 0 ? Math.min(100, (usedVol / totalVol) * 100) : 0;
+  const listCart = useMemo(
+    () => ({
+      assigned_orders,
+      used_volume,
+      total_volume_dm3,
+      total_weight_kg,
+      total_orders: total_orders_prop,
+      total_products: total_products_prop,
+      baskets_used: baskets_used_prop,
+    }),
+    [assigned_orders, used_volume, total_volume_dm3, total_weight_kg, total_orders_prop, total_products_prop, baskets_used_prop]
+  );
+  const cardStats = useMemo(() => calculateCartStats(listCart), [listCart]);
+  const contentStats = useMemo(
+    () => (detailData ? calculateCartStats(detailData) : null),
+    [detailData]
+  );
 
+  const usedVol = cardStats.used_volume_dm3;
+  const isSimulated =
+    (used_volume == null || used_volume === 0) &&
+    Array.isArray(assigned_orders) &&
+    assigned_orders.length > 0 &&
+    assigned_orders.reduce((s, o) => s + Number((o as AssignedOrderRef).total_volume_dm3 ?? 0), 0) > 0;
   const hasImage = Boolean(image_url);
+  const imageSrc = useMemo(
+    () => (hasImage && image_url ? `${image_url}?v=${updated_at ?? Date.now()}` : null),
+    [image_url, updated_at, hasImage]
+  );
   const canSimulate = isSectional && tenant_id != null && warehouse_id != null;
 
   const handleSimulate = async () => {
@@ -160,11 +220,11 @@ export default function CartCard(props: CartCardProps) {
 
   const orderNumbersList = Array.isArray(order_numbers) ? order_numbers : [];
   const orderLabel =
-    orderNumbersList.length === 0
+    cardStats.total_orders === 0
       ? null
-      : orderNumbersList.length <= 3
-        ? `#${orderNumbersList.join(", #")}`
-        : `${orderNumbersList.length} szt.`;
+      : cardStats.total_orders <= 3
+        ? `#${orderNumbersList.slice(0, 3).join(", #")}`
+        : `${cardStats.total_orders} szt.`;
 
   const handleClearCart = async () => {
     setClearingCart(true);
@@ -178,12 +238,32 @@ export default function CartCard(props: CartCardProps) {
     }
   };
 
-  const handleClearBasket = async (basketId: number) => {
-    setClearingBasketId(basketId);
+  const handleClearBasketClick = (b: BasketDetail) => {
+    setBasketToConfirmClear(b);
+  };
+
+  const handleClearBasketConfirm = async () => {
+    const b = basketToConfirmClear;
+    setBasketToConfirmClear(null);
+    if (!b) return;
+    setClearingBasketId(b.id);
     try {
-      await api.post(`/carts/basket/${basketId}/clear/`);
-      const res = await api.get<{ baskets: BasketDetail[] }>(`/carts/${id}/`);
-      setBaskets(res.data.baskets || []);
+      await api.post(`/carts/basket/${b.id}/clear/`);
+      setBaskets((prev) =>
+        prev.map((x) =>
+          x.id === b.id
+            ? { ...x, order_id: null, order_number: null, used_volume_dm3: 0, total_weight_kg: 0 }
+            : x
+        )
+      );
+      const detailRes = await api.get<{
+        baskets: BasketDetail[];
+        total_orders?: number;
+        total_products?: number;
+        baskets_used?: number;
+      }>(`/carts/${id}/`);
+      setBaskets(detailRes.data.baskets || []);
+      setDetailData(detailRes.data);
       onClearSuccess?.();
     } finally {
       setClearingBasketId(null);
@@ -191,33 +271,28 @@ export default function CartCard(props: CartCardProps) {
   };
 
   const renderBasketCell = (b: BasketDetail) => {
+    const basketName = b.name && String(b.name).trim() ? b.name : `S-${b.row}-${b.column}`;
+    const hasOrders = Boolean(b.order_id);
     const cap = (Number(b.length || 0) * Number(b.width || 0) * Number(b.height || 0)) / 1000;
-    const occupancyPct = cap > 0 ? (b.used_volume_dm3 / cap) * 100 : 0;
-    const fillColor =
-      occupancyPct > 100
-        ? "bg-red-500 animate-pulse"
-        : occupancyPct >= 81
-          ? "bg-red-500"
-          : occupancyPct >= 51
-            ? "bg-amber-500"
-            : "bg-emerald-500";
-    const basketName = b.name && String(b.name).trim() ? b.name : `R${b.row}/K${b.column}`;
-    const occupancyLabel = `${occupancyPct.toFixed(2)}%${occupancyPct > 100 ? " (przepełnienie)" : ""}`;
-    const orderLabel = b.order_id ? (b.order_number ? `#${b.order_number}` : `#${b.order_id}`) : "—";
+    const usedDm3 = Number(b.used_volume_dm3 ?? 0);
+    const occupancyPct = cap > 0 ? Math.min(100, (usedDm3 / cap) * 100) : 0;
+    const displayPct = hasOrders && cap > 0 && occupancyPct === 0 ? 1 : occupancyPct;
+    const displayUsed = hasOrders && usedDm3 === 0 && cap > 0 ? 0.05 : usedDm3;
+    const orderLabel = hasOrders ? (b.order_number ? `#${b.order_number}` : `#${b.order_id}`) : null;
     return (
       <div
         key={b.id}
         className={`rounded-lg border p-2 flex flex-col gap-1 relative min-h-[4rem] ${
-          b.order_id ? "bg-violet-50 border-violet-300 text-violet-800" : "bg-slate-100 border-slate-200 text-slate-500"
+          hasOrders ? "bg-[#ECFDF5] border-slate-200/80" : "bg-[#EEF4FF] border-[#BFDBFE]"
         }`}
-        title={b.order_id ? t.cart_basket_occupied : t.cart_basket_empty}
+        title={hasOrders ? t.cart_basket_occupied : t.cart_basket_empty}
       >
-        {b.order_id && (
+        {hasOrders && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleClearBasket(b.id);
+              handleClearBasketClick(b);
             }}
             disabled={clearingBasketId === b.id}
             className="absolute top-1 right-1 w-5 h-5 rounded bg-white/90 hover:bg-amber-200 flex items-center justify-center text-slate-500 hover:text-amber-700 border border-slate-200"
@@ -227,34 +302,35 @@ export default function CartCard(props: CartCardProps) {
             <ClearIcon className="w-3 h-3" />
           </button>
         )}
-        <div className="font-black text-[10px] uppercase text-slate-700 truncate">{basketName}</div>
-        <div className="flex items-center gap-1 text-[10px]">
-          <PackageIcon className="w-3 h-3 text-slate-400 shrink-0" />
-          {b.order_id ? (
+        <div className="font-bold text-xs text-slate-800 truncate">{basketName}</div>
+        {hasOrders ? (
+          <>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setOrderPreviewOrderId(b.order_id!); }}
-              className="font-semibold truncate hover:underline text-left"
+              className="text-[11px] font-medium text-emerald-700 hover:underline text-left truncate"
             >
               {orderLabel}
             </button>
-          ) : (
-            <span className="font-semibold truncate">{orderLabel}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1 text-[10px]">
-          <ScaleIcon className="w-3 h-3 text-slate-400 shrink-0" />
-          <span className="truncate">{(b.total_weight_kg ?? 0) > 0 ? `${Number(b.total_weight_kg).toFixed(2)} kg` : "—"}</span>
-        </div>
-        <div className="mt-1 flex items-center gap-1.5">
-          <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden min-w-0">
-            <div
-              className={`h-full ${fillColor} rounded-full transition-all`}
-              style={{ width: `${Math.min(100, occupancyPct)}%` }}
-            />
-          </div>
-          <span className="text-[9px] font-bold text-slate-500 shrink-0">{occupancyLabel}</span>
-        </div>
+            <div className="mt-1 space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden min-w-0">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      displayPct > 100 ? "bg-red-500" : displayPct >= 81 ? "bg-red-500" : displayPct >= 51 ? "bg-amber-500" : "bg-emerald-500"
+                    }`}
+                    style={{ width: `${Math.min(100, displayPct)}%` }}
+                  />
+                </div>
+                <span className="text-[9px] font-bold text-slate-500 shrink-0">
+                  {displayPct.toFixed(0)}%{cap > 0 ? ` • ${displayUsed.toFixed(1)} / ${cap.toFixed(1)} dm³` : ""}
+                </span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-[11px] text-slate-500 italic">Empty</div>
+        )}
       </div>
     );
   };
@@ -268,8 +344,8 @@ export default function CartCard(props: CartCardProps) {
           aria-label="Open image preview"
           type="button"
         >
-          {hasImage ? (
-            <img src={image_url!} alt={name} className="w-full h-full object-cover" />
+          {hasImage && imageSrc ? (
+            <img src={imageSrc} alt={name} className="w-full h-full object-cover" />
           ) : (
             <span className="text-[10px] font-black uppercase">{t.imageAbbr}</span>
           )}
@@ -321,6 +397,17 @@ export default function CartCard(props: CartCardProps) {
                   <MagicWandIcon className="w-4 h-4" />
                 </button>
               )}
+              {onPrintLabel != null && (
+                <button
+                  onClick={() => onPrintLabel({ id, name })}
+                  className="w-9 h-9 rounded-full bg-slate-50 hover:bg-cyan-600 text-slate-500 hover:text-white border border-slate-200 hover:border-cyan-600 transition-colors flex items-center justify-center"
+                  aria-label="Drukuj etykietę"
+                  type="button"
+                  title="Drukuj etykietę"
+                >
+                  <PrinterIcon className="w-4 h-4" />
+                </button>
+              )}
               <button
                 onClick={() => onEdit(id)}
                 className="w-9 h-9 rounded-full bg-slate-50 hover:bg-blue-600 text-slate-500 hover:text-white border border-slate-200 hover:border-blue-600 transition-colors flex items-center justify-center"
@@ -341,23 +428,52 @@ export default function CartCard(props: CartCardProps) {
           </div>
 
           <div className="mt-4" key={`${id}-${usedVol}`}>
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="text-xs font-medium text-slate-500">
-                {usedVol.toFixed(1)} / {totalVol > 0 ? totalVol.toFixed(1) : "0"} dm³
-              </span>
-            </div>
-            <ProgressBar percent={occupancyPercent} isSimulated={isSimulated} />
+            {(() => {
+              const mode = (capacity_mode_prop ?? "volume").toLowerCase();
+              const maxVol = Number(max_volume_dm3_prop ?? total_volume_dm3 ?? 0);
+              const maxOrd = max_orders_prop != null ? Number(max_orders_prop) : null;
+              const volPercent = maxVol > 0 ? Math.min(100, (usedVol / maxVol) * 100) : 0;
+              const ordPercent = maxOrd != null && maxOrd > 0 ? Math.min(100, (cardStats.total_orders / maxOrd) * 100) : 0;
+              const displayPercent = mode === "orders" ? ordPercent : mode === "mixed" ? Math.min(volPercent, ordPercent) : volPercent;
+              return (
+                <>
+                  <div className="flex flex-col gap-1 mb-1">
+                    {mode === "volume" && (
+                      <span className="text-xs font-medium text-slate-500">
+                        {usedVol.toFixed(1)} / {maxVol > 0 ? maxVol.toFixed(1) : "0"} dm³
+                      </span>
+                    )}
+                    {mode === "orders" && (
+                      <span className="text-xs font-medium text-slate-500">
+                        {cardStats.total_orders} / {maxOrd != null ? maxOrd : "—"} orders
+                      </span>
+                    )}
+                    {mode === "mixed" && (
+                      <>
+                        <span className="text-xs font-medium text-slate-500">
+                          Orders: {cardStats.total_orders} / {maxOrd != null ? maxOrd : "—"}
+                        </span>
+                        <span className="text-xs font-medium text-slate-500">
+                          Volume: {usedVol.toFixed(1)} / {maxVol > 0 ? maxVol.toFixed(1) : "0"} dm³
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <ProgressBar percent={displayPercent} isSimulated={isSimulated} />
+                </>
+              );
+            })()}
           </div>
 
-          {(Number(total_weight_kg ?? 0) > 0 || orderNumbersList.length > 0) && (
+          {(cardStats.used_weight > 0 || cardStats.total_orders > 0) && (
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-              {Number(total_weight_kg ?? 0) > 0 && (
+              {cardStats.used_weight > 0 && (
                 <span className="flex items-center gap-1.5" title={t.weight}>
                   <ScaleIcon className="w-4 h-4 text-slate-400" />
-                  {t.current_weight ?? "Aktualna waga"}: {Number(total_weight_kg).toFixed(2)} kg
+                  {t.current_weight ?? "Aktualna waga"}: {cardStats.used_weight.toFixed(2)} kg
                 </span>
               )}
-              {orderNumbersList.length > 0 && !isBulk && (
+              {cardStats.total_orders > 0 && !isBulk && (
                 <span
                   className="flex items-center gap-1.5"
                   title={orderNumbersList.length > 3 ? orderNumbersList.map((n) => `#${n}`).join(", ") : undefined}
@@ -408,20 +524,28 @@ export default function CartCard(props: CartCardProps) {
                     <div className="h-24 flex items-center justify-center text-slate-400 text-xs">Ładowanie...</div>
                   ) : (
                     <div className="flex flex-col gap-3 w-full">
-                      {/* Top = first row (8 narrow), Middle = second (4), Bottom = third (2). flex-col = column, no reverse. */}
+                      {baskets.length > 0 && (() => {
+                        const stats = contentStats ?? cardStats;
+                        return (
+                          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600 border-b border-slate-200 pb-2">
+                            <span>Orders: {stats.total_orders}</span>
+                            <span>Products: {stats.total_products}</span>
+                            <span>Baskets used: {stats.baskets_used} / {baskets.length}</span>
+                          </div>
+                        );
+                      })()}
                       {(() => {
-                        const sortedRows = [...new Set(baskets.map((b) => b.row))].sort((a, b) => a - b).slice(0, 3);
-                        const colCounts = [8, 4, 2];
-                        return sortedRows.map((rowNum, idx) => {
+                        const sortedRows = [...new Set(baskets.map((b) => b.row))].sort((a, b) => b - a);
+                        return sortedRows.map((rowNum) => {
                           const rowBaskets = baskets
                             .filter((b) => b.row === rowNum)
                             .sort((a, b) => a.column - b.column);
-                          const cols = colCounts[idx] ?? 8;
+                          const cols = rowBaskets.length;
                           return (
                             <div
                               key={rowNum}
                               className="grid gap-2 w-full"
-                              style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+                              style={{ gridTemplateColumns: cols > 0 ? `repeat(${cols}, minmax(0, 1fr))` : "1fr" }}
                             >
                               {rowBaskets.map((b) => renderBasketCell(b))}
                             </div>
@@ -475,7 +599,7 @@ export default function CartCard(props: CartCardProps) {
 
       <ImagePreviewModal
         open={previewOpen}
-        imageUrl={image_url ?? null}
+        imageUrl={imageSrc ?? null}
         title={name}
         onClose={() => setPreviewOpen(false)}
       />
@@ -493,6 +617,38 @@ export default function CartCard(props: CartCardProps) {
         orderId={orderPreviewOrderId}
         onClose={() => setOrderPreviewOrderId(null)}
       />
+
+      {basketToConfirmClear && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setBasketToConfirmClear(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-sm w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-slate-800 mb-4">
+              Remove order {basketToConfirmClear.order_number ? `#${basketToConfirmClear.order_number}` : `#${basketToConfirmClear.order_id}`} from basket {basketToConfirmClear.name && String(basketToConfirmClear.name).trim() ? basketToConfirmClear.name : `S-${basketToConfirmClear.row}-${basketToConfirmClear.column}`}?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBasketToConfirmClear(null)}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearBasketConfirm}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+              >
+                Remove order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

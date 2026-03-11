@@ -2,12 +2,13 @@
 SERVICE: Warehouse
 
 Logika biznesowa magazynów.
-Brak logiki w routerze.
+Many-to-many with tenants via tenant_warehouses.
 """
 
 from sqlalchemy.orm import Session
 from ..models.warehouse import Warehouse
 from ..models.tenant import Tenant
+from ..models.tenant_warehouse import TenantWarehouse
 
 
 class WarehouseService:
@@ -16,34 +17,82 @@ class WarehouseService:
         self.db = db
 
     def create_warehouse(self, tenant_id: int, name: str):
-        """
-        Tworzy magazyn przypisany do konkretnego tenanta.
-        """
-
-        # Sprawdzamy czy tenant istnieje
-        tenant = self.db.query(Tenant).filter(
-            Tenant.id == tenant_id
-        ).first()
-
+        """Create warehouse and assign it to the tenant as owner (default). Backward compat."""
+        tenant = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
             raise ValueError("Tenant nie istnieje")
-
-        warehouse = Warehouse(
-            name=name,
-            tenant_id=tenant_id
-        )
-
+        warehouse = Warehouse(name=name, tenant_id=tenant_id)
         self.db.add(warehouse)
         self.db.commit()
         self.db.refresh(warehouse)
-
+        # Ensure assignment exists
+        self._ensure_assignment(tenant_id, warehouse.id, "owner", is_default=True)
         return warehouse
 
-    def get_warehouses(self, tenant_id: int):
-        """
-        Zwraca wszystkie magazyny danego tenanta.
-        """
+    def create_warehouse_standalone(self, name: str, owner_tenant_id: int | None = None):
+        """Create warehouse (no tenant required). Optionally assign owner via tenant_warehouses."""
+        warehouse = Warehouse(name=name, tenant_id=owner_tenant_id)
+        self.db.add(warehouse)
+        self.db.commit()
+        self.db.refresh(warehouse)
+        if owner_tenant_id is not None:
+            self._ensure_assignment(owner_tenant_id, warehouse.id, "owner", is_default=True)
+        return warehouse
 
-        return self.db.query(Warehouse).filter(
-            Warehouse.tenant_id == tenant_id
-        ).all()
+    def _ensure_assignment(
+        self, tenant_id: int, warehouse_id: int, role: str, *, is_default: bool = False
+    ) -> TenantWarehouse:
+        existing = (
+            self.db.query(TenantWarehouse)
+            .filter(
+                TenantWarehouse.tenant_id == tenant_id,
+                TenantWarehouse.warehouse_id == warehouse_id,
+            )
+            .first()
+        )
+        if existing:
+            existing.role = role
+            existing.is_default = 1 if is_default else 0
+            self.db.commit()
+            self.db.refresh(existing)
+            return existing
+        tw = TenantWarehouse(
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            role=role,
+            is_default=1 if is_default else 0,
+        )
+        self.db.add(tw)
+        self.db.commit()
+        self.db.refresh(tw)
+        return tw
+
+    def get_warehouses(self, tenant_id: int):
+        """Return warehouses the tenant has access to (via tenant_warehouses)."""
+        return (
+            self.db.query(Warehouse)
+            .join(TenantWarehouse, TenantWarehouse.warehouse_id == Warehouse.id)
+            .filter(TenantWarehouse.tenant_id == tenant_id)
+            .all()
+        )
+
+    def get_all_warehouses(self):
+        """Return all warehouses (for Setup / admin)."""
+        return self.db.query(Warehouse).all()
+
+    def can_tenant_access_warehouse(self, tenant_id: int, warehouse_id: int) -> bool:
+        """True if tenant has access to warehouse (via tenant_warehouses or legacy tenant_id)."""
+        wh = self.db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+        if not wh:
+            return False
+        if wh.tenant_id == tenant_id:
+            return True
+        return (
+            self.db.query(TenantWarehouse)
+            .filter(
+                TenantWarehouse.tenant_id == tenant_id,
+                TenantWarehouse.warehouse_id == warehouse_id,
+            )
+            .first()
+            is not None
+        )

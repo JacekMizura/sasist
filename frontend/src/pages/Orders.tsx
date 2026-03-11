@@ -144,8 +144,6 @@ export default function Orders() {
   return (
     <div className="flex gap-6">
       <div className="flex-1 space-y-6">
-        <div className="text-2xl font-semibold">Zamówienia</div>
-
         {fetchError && (
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
             {fetchError}

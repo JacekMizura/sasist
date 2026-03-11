@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 
-from ..models.consolidation_rack import ConsolidationRack, RackLevel, RackSegment
+from ..models.consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
 from ..models.order import Order
 
 
@@ -13,7 +13,7 @@ class ConsolidationRackService:
         racks = (
             self.db.query(ConsolidationRack)
             .options(
-                joinedload(ConsolidationRack.levels).joinedload(RackLevel.segments),
+                joinedload(ConsolidationRack.levels).joinedload(ConsolidationRackLevel.segments),
             )
             .filter(
                 ConsolidationRack.tenant_id == tenant_id,
@@ -68,7 +68,7 @@ class ConsolidationRackService:
             level_index = lv.get("level_index", len(rack.levels or []))
             is_segmented = lv.get("is_segmented", False)
             segs = lv.get("segments", [])
-            level = RackLevel(
+            level = ConsolidationRackLevel(
                 rack_id=rack.id,
                 level_index=level_index,
                 name=lv.get("name"),
@@ -96,7 +96,7 @@ class ConsolidationRackService:
         rack = (
             self.db.query(ConsolidationRack)
             .options(
-                joinedload(ConsolidationRack.levels).joinedload(RackLevel.segments),
+                joinedload(ConsolidationRack.levels).joinedload(ConsolidationRackLevel.segments),
             )
             .filter(ConsolidationRack.id == rack_id)
             .first()

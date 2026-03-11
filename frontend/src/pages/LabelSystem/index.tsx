@@ -1,78 +1,117 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Routes, Route, useNavigate, useParams, Link } from "react-router-dom";
 import type { LabelTemplate } from "../../types/labelSystem";
+import { LabelTemplatesList } from "./LabelTemplatesList";
 import { LabelTemplateDesigner } from "./LabelTemplateDesigner";
 import { LabelPrintQueue } from "./LabelPrintQueue";
+import api from "../../api/axios";
 
 const DEFAULT_TEMPLATE: LabelTemplate = {
-  id: "default",
+  id: "new",
   name: "Nowy szablon",
   widthMm: 50,
   heightMm: 30,
   dpi: 300,
   elements: [],
+  template_type: "location",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
 
-export default function LabelSystem() {
-  const [activeTab, setActiveTab] = useState<"designer" | "queue">("designer");
-  const [template, setTemplate] = useState<LabelTemplate>(() => {
-    try {
-      const raw = localStorage.getItem("label-system-current-template");
-      if (raw) {
-        const t = JSON.parse(raw) as LabelTemplate;
-        if (t?.elements && Array.isArray(t.elements)) return t;
-      }
-    } catch {}
-    return DEFAULT_TEMPLATE;
-  });
+function DesignerWrapper() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [template, setTemplate] = useState<LabelTemplate>(DEFAULT_TEMPLATE);
+  const [loading, setLoading] = useState(!!id && id !== "new");
 
-  const persistTemplate = (next: LabelTemplate) => {
+  useEffect(() => {
+    if (!id || id === "new") {
+      setTemplate({ ...DEFAULT_TEMPLATE, id: "new" });
+      setLoading(false);
+      return;
+    }
+    const numId = parseInt(id, 10);
+    if (Number.isNaN(numId)) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    api
+      .get(`/label-templates/`, { params: { tenant_id: 1 } })
+      .then((res) => {
+        const row = (res.data as { id: number; name: string; template_type?: string; template_json: string }[]).find((r) => r.id === numId);
+        if (row) {
+          const t = JSON.parse(row.template_json) as LabelTemplate;
+          setTemplate({
+            ...t,
+            id: String(row.id),
+            name: row.name,
+            template_type: (row.template_type || t.template_type) as LabelTemplate["template_type"],
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const onTemplateChange = (next: LabelTemplate) => {
     setTemplate(next);
-    try {
-      localStorage.setItem("label-system-current-template", JSON.stringify(next));
-    } catch {}
   };
 
+  const onBack = () => navigate("/labels");
+
+  if (loading) return <div className="p-6 text-slate-500">Loading…</div>;
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-[#1E293B]">
-      <header className="shrink-0 flex items-center justify-between gap-4 px-4 py-3 bg-white border-b border-[#E2E8F0]">
-        <h1 className="text-lg font-black uppercase tracking-widest text-[#1E293B]">
-          System Etykiet
-        </h1>
+    <LabelTemplateDesigner
+      template={template}
+      onTemplateChange={onTemplateChange}
+      templateId={id === "new" ? null : id ? parseInt(id, 10) : null}
+      onBack={onBack}
+    />
+  );
+}
+
+import PageLayout from "../../components/layout/PageLayout";
+
+export default function LabelSystem() {
+  return (
+    <PageLayout
+      title="System etykiet"
+      actions={
         <nav className="flex rounded-lg bg-slate-100 p-0.5 border border-[#E2E8F0]" aria-label="Moduły">
-          <button
-            type="button"
-            onClick={() => setActiveTab("designer")}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
-              activeTab === "designer" ? "bg-cyan-600 text-white" : "text-slate-600 hover:bg-slate-200"
-            }`}
+          <Link
+            to="/labels"
+            className="px-4 py-2 rounded-md text-sm font-semibold transition-colors text-slate-600 hover:bg-slate-200"
           >
-            Projektant szablonów
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("queue")}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
-              activeTab === "queue" ? "bg-cyan-600 text-white" : "text-slate-600 hover:bg-slate-200"
-            }`}
+            Szablony
+          </Link>
+          <Link
+            to="/labels/queue"
+            className="px-4 py-2 rounded-md text-sm font-semibold transition-colors text-slate-600 hover:bg-slate-200"
           >
             Kolejka druku
-          </button>
+          </Link>
         </nav>
-      </header>
-
-      <main className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === "designer" && (
-          <LabelTemplateDesigner
-            template={template}
-            onTemplateChange={persistTemplate}
-          />
-        )}
-        {activeTab === "queue" && (
-          <LabelPrintQueue template={template} onTemplateChange={persistTemplate} />
-        )}
-      </main>
-    </div>
+      }
+    >
+      <div className="min-h-[60vh]">
+        <Routes>
+          <Route index element={<LabelTemplatesList />} />
+          <Route path="designer/:id" element={<DesignerWrapper />} />
+          <Route path="designer" element={<DesignerWrapper />} />
+          <Route path="queue" element={<LabelPrintQueueStandalone />} />
+        </Routes>
+      </div>
+    </PageLayout>
   );
+}
+
+function LabelPrintQueueStandalone() {
+  const [template] = useState<LabelTemplate>(() => ({
+    ...DEFAULT_TEMPLATE,
+    id: "queue-default",
+  }));
+  return <LabelPrintQueue template={template} onTemplateChange={() => {}} />;
 }
