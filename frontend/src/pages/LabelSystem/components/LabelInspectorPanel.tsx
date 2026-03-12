@@ -7,12 +7,7 @@ import type {
 } from "../../../types/labelSystem";
 import { UI_STRINGS } from "../../../constants/uiStrings";
 import { ElementProperties } from "./ElementProperties";
-
-const GRID_SIZE_MM = 1;
-
-function snapToGrid(mm: number): number {
-  return Math.round(mm / GRID_SIZE_MM) * GRID_SIZE_MM;
-}
+import { snapToGrid } from "../utils/grid";
 
 export type LabelInspectorPanelProps = {
   template: LabelTemplate;

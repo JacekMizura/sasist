@@ -3,6 +3,7 @@ import api from "../../../api/axios";
 import type { LabelTemplate, TemplateType } from "../../../types/labelSystem";
 import { UI_STRINGS } from "../../../constants/uiStrings";
 import { generatePreset, PRESET_TYPES, PRESET_LABELS, type PresetType } from "../../../services/labelPresets";
+import { generateId } from "../utils/id";
 
 const STORAGE_KEY = "label-system-templates";
 
@@ -15,10 +16,6 @@ export type SavedTemplateServer = {
   created_at: string | null;
   updated_at: string | null;
 };
-
-function generateId() {
-  return `el-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
 
 export function TemplateLibrary({
   current,
