@@ -34,7 +34,6 @@ import {
   safeVolumeDm3,
   safeQuantity,
   getProductImageUrl,
-  DEFAULT_AISLE_WIDTH_CM,
   snapPosition,
 } from "./WarehouseDesigner/DesignerRackPlacement";
 import { exportPdf, exportCsv, exportLocationsMapCsv, exportJson } from "./WarehouseDesigner/DesignerExport";
@@ -50,6 +49,7 @@ import { useDesignerDimensions } from "./WarehouseDesigner/useDesignerDimensions
 import { useDesignerProductModal } from "./WarehouseDesigner/useDesignerProductModal";
 import { useDesignerMagazynState } from "./WarehouseDesigner/useDesignerMagazynState";
 import { useDesignerTemplateSummary } from "./WarehouseDesigner/useDesignerTemplateSummary";
+import { useDesignerRowState } from "./WarehouseDesigner/useDesignerRowState";
 
 export default function WarehouseDesigner() {
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -171,25 +171,38 @@ export default function WarehouseDesigner() {
   const layoutModeDisplay = useLayoutModeDisplay(layoutMode);
   type SpecialLocationsState = { pick_start: { id: number; x: number; y: number } | null; packing: { id: number; x: number; y: number } | null; dock: { id: number; x: number; y: number } | null };
   const [specialLocations, setSpecialLocations] = useState<SpecialLocationsState>({ pick_start: null, packing: null, dock: null });
-  const [aisleDrawStart, setAisleDrawStart] = useState<{ x: number; y: number } | null>(null);
-  const [rowToolTemplate, setRowToolTemplate] = useState<CatalogItem | null>(null);
-  const [rowDrawStart, setRowDrawStart] = useState<{ x: number; y: number } | null>(null);
-  const [rowDrawEnd, setRowDrawEnd] = useState<{ x: number; y: number } | null>(null);
-  const [rowPreviewCursor, setRowPreviewCursor] = useState<{ x: number; y: number } | null>(null);
-  const [rowGapCm, setRowGapCm] = useState(0);
-  const [selectedRowContainerId, setSelectedRowContainerId] = useState<string | null>(null);
-  const [selectedRowContainerIds, setSelectedRowContainerIds] = useState<string[]>([]);
-  /** When dragging the whole row by its handle: row id and preview position (cell) for ghost. */
-  const [draggingRowId, setDraggingRowId] = useState<string | null>(null);
-  const [rowDragPreviewStart, setRowDragPreviewStart] = useState<{ x: number; y: number } | null>(null);
+  const {
+    aisleDrawStart,
+    setAisleDrawStart,
+    rowToolTemplate,
+    setRowToolTemplate,
+    rowDrawStart,
+    setRowDrawStart,
+    rowDrawEnd,
+    setRowDrawEnd,
+    rowPreviewCursor,
+    setRowPreviewCursor,
+    rowGapCm,
+    setRowGapCm,
+    selectedRowContainerId,
+    setSelectedRowContainerId,
+    selectedRowContainerIds,
+    setSelectedRowContainerIds,
+    draggingRowId,
+    setDraggingRowId,
+    rowDragPreviewStart,
+    setRowDragPreviewStart,
+    catalogHoveredSlot,
+    setCatalogHoveredSlot,
+    currentRowPrefix,
+    setCurrentRowPrefix,
+    aisleWidthCm,
+    setAisleWidthCm,
+  } = useDesignerRowState();
   /** Offset from pointer (cell) to row start when drag started, so we can compute preview from current cell. */
   const rowDragPointerOffsetRef = useRef<{ dx: number; dy: number } | null>(null);
   /** Latest preview position for row drag (so window mouseup can read it). */
   const rowDragPreviewStartRef = useRef<{ x: number; y: number } | null>(null);
-  const [catalogHoveredSlot, setCatalogHoveredSlot] = useState<{ rowId: string; slotIndex: number } | null>(null);
-  /** When dragging a template from catalog, the empty slot under the cursor (for blue highlight). */
-  const [currentRowPrefix, setCurrentRowPrefix] = useState("A");
-  const [aisleWidthCm, setAisleWidthCm] = useState(DEFAULT_AISLE_WIDTH_CM);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [showRackLabels, setShowRackLabels] = useState(true);
   const [selectedAisleIndex, setSelectedAisleIndex] = useState<number | null>(null);

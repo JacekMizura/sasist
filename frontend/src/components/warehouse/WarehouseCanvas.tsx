@@ -1,11 +1,16 @@
 import React, { type RefObject } from "react";
-import type { LayoutState, RackState } from "../../types/warehouse";
+import type { LayoutState } from "../../types/warehouse";
 import type { CatalogItem, VisualElementType } from "../../types/warehouse";
-import { formatVolume, cmToCells, getCatalogItemSpec, binVolumeDm3, binUsedVolumeDm3, getRackDisplayId, getRackLabelStyle, canShowRackLabel } from "./warehouseUtils";
+import { cmToCells, getCatalogItemSpec, binVolumeDm3 } from "./warehouseUtils";
 import { DimensionOverlay } from "./DimensionOverlay";
 import { RowPreviewOverlay } from "./RowPreviewOverlay";
 import { LayoutModeBadge, LayoutMode, LAYOUT_MODE_CURSORS } from "../warehouse-layout";
 import { colors, radius } from "../../layout/designTokens";
+import { RackLayer } from "./WarehouseCanvas/RackLayer";
+import { RowLayer } from "./WarehouseCanvas/RowLayer";
+import { VisualLayer } from "./WarehouseCanvas/VisualLayer";
+import { PathLayer } from "./WarehouseCanvas/PathLayer";
+import { SelectionOverlay } from "./WarehouseCanvas/SelectionOverlay";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 
@@ -19,32 +24,6 @@ const FIT_MIN_ZOOM = 0.7;
 const FIT_MAX_ZOOM = 1.4;
 
 const VIEWPORT_TRANSITION_MS = 200;
-
-/** Default fill only when a rack has no valid color. Never override rack.color. */
-const DEFAULT_RACK_FILL = "#3b82f6";
-
-/** Use rack's color if it's a non-empty string; otherwise default. No global/template override. */
-function rackFillColor(rack: RackState): string {
-  const c = rack.color;
-  if (typeof c !== "string" || c.trim() === "") return DEFAULT_RACK_FILL;
-  return c.trim();
-}
-
-/** Relative luminance of hex (0–1). Used for contrast-based label color. */
-function hexLuminance(hex: string): number {
-  const n = hex.replace("#", "");
-  if (n.length !== 6) return 0.5;
-  const r = parseInt(n.slice(0, 2), 16) / 255;
-  const g = parseInt(n.slice(2, 4), 16) / 255;
-  const b = parseInt(n.slice(4, 6), 16) / 255;
-  const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-}
-
-/** Contrast-based text color: dark on light backgrounds, white on dark. */
-function labelColorForBackground(hex: string): string {
-  return hexLuminance(hex) > 0.6 ? "#111827" : "#ffffff";
-}
 
 export type WarehouseCanvasProps = {
   layout: LayoutState;
@@ -691,98 +670,24 @@ function WarehouseCanvasInner({
                   onMouseLeave={onMouseLeave}
                 >
                   {dragSlotHighlights && (
-                    <>
-                      {dragSlotHighlights.validSlots.map((slot, i) => (
-                        <rect
-                          key={`valid-${i}`}
-                          x={slot.x * cellPx + 1}
-                          y={slot.y * cellPx + 1}
-                          width={slot.width * cellPx - 2}
-                          height={slot.height * cellPx - 2}
-                          fill="rgba(34,197,94,0.35)"
-                          stroke="#22c55e"
-                          strokeWidth={1}
-                          rx={RACK_RADIUS_PX}
-                          pointerEvents="none"
-                        />
-                      ))}
-                      {dragSlotHighlights.invalidSlots.map((slot, i) => (
-                        <rect
-                          key={`invalid-${i}`}
-                          x={slot.x * cellPx + 1}
-                          y={slot.y * cellPx + 1}
-                          width={slot.width * cellPx - 2}
-                          height={slot.height * cellPx - 2}
-                          fill="rgba(239,68,68,0.25)"
-                          stroke="#ef4444"
-                          strokeWidth={1}
-                          rx={RACK_RADIUS_PX}
-                          pointerEvents="none"
-                        />
-                      ))}
-                    </>
+                    <SelectionOverlay
+                      part="dragSlots"
+                      dragSlotHighlights={dragSlotHighlights}
+                      cellPx={cellPx}
+                    />
                   )}
-                  {(layout.row_containers ?? []).flatMap((rc) =>
-                    rc.slots.map((slot, i) => {
-                      if (slot.rackId != null) return null;
-                      const isVerticalRow = (rc.orientation ?? "horizontal") === "vertical";
-                      if (isVerticalRow) {
-                        if (minEmptySlotDepthCells != null && slot.w < minEmptySlotDepthCells) return null;
-                        if (minEmptySlotWidthCells != null && slot.h < minEmptySlotWidthCells) return null;
-                      } else if (minEmptySlotWidthCells != null && slot.w < minEmptySlotWidthCells) return null;
-                      const isHoveredByCatalog = catalogHoveredSlot?.rowId === rc.id && catalogHoveredSlot?.slotIndex === i;
-                      const isRowSelected = (selectedRowContainerId != null && rc.id === selectedRowContainerId) || (selectedRowContainerIds?.includes(rc.id) ?? false);
-                      const fillColor = isHoveredByCatalog
-                        ? "rgba(34,197,94,0.18)"
-                        : isRowSelected
-                          ? "rgba(6,182,212,0.10)"
-                          : "rgba(148,163,184,0.08)";
-                      const strokeColor = isHoveredByCatalog
-                        ? "#22c55e"
-                        : isRowSelected
-                          ? "#06b6d4"
-                          : "rgba(100,116,139,0.65)";
-                      const strokeW = isHoveredByCatalog || isRowSelected ? 2 : 1;
-                      return (
-                        <g
-                          key={`${rc.id}-${i}`}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.dataTransfer.dropEffect = "copy";
-                            setCatalogHoveredSlot?.({ rowId: rc.id, slotIndex: i });
-                          }}
-                          onDragLeave={() => setCatalogHoveredSlot?.(null)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            let item: CatalogItem | null = null;
-                            try {
-                              const raw = e.dataTransfer.getData("application/x-warehouse-catalog");
-                              if (raw) item = JSON.parse(raw) as CatalogItem;
-                            } catch {}
-                            if (item && stampRackIntoSlot) {
-                              stampRackIntoSlot(rc.id, i, item);
-                            }
-                          }}
-                          style={{ cursor: isHoveredByCatalog ? "copy" : "pointer" }}
-                        >
-                          <rect
-                            x={slot.x * cellPx + 1}
-                            y={slot.y * cellPx + 1}
-                            width={slot.w * cellPx - 2}
-                            height={slot.h * cellPx - 2}
-                            fill={fillColor}
-                            stroke={strokeColor}
-                            strokeWidth={strokeW}
-                            rx={RACK_RADIUS_PX}
-                            strokeDasharray={isHoveredByCatalog ? undefined : "4 3"}
-                            pointerEvents="auto"
-                          />
-                        </g>
-                      );
-                    })
-                  )}
+                  <RowLayer
+                    part="emptySlots"
+                    layout={layout}
+                    cellPx={cellPx}
+                    minEmptySlotWidthCells={minEmptySlotWidthCells}
+                    minEmptySlotDepthCells={minEmptySlotDepthCells}
+                    catalogHoveredSlot={catalogHoveredSlot ?? null}
+                    selectedRowContainerId={selectedRowContainerId ?? null}
+                    selectedRowContainerIds={selectedRowContainerIds ?? []}
+                    setCatalogHoveredSlot={setCatalogHoveredSlot}
+                    stampRackIntoSlot={stampRackIntoSlot}
+                  />
                   {layout.aisles.map((a, i) => {
                     const isSelected = selectedAisleIndex === i;
                     return (
@@ -799,99 +704,19 @@ function WarehouseCanvasInner({
                       />
                     );
                   })}
-                  {layout.racks.map((r) => {
-                    const rid = r.id ?? r.rack_index;
-                    const isDragging = draggingRackId != null && selectedRackIds.includes(rid);
-                    const drawAt = rackDragPreviewPositions?.[String(rid)] ?? (isDragging && rackDragPreviewPosition ? rackDragPreviewPosition : { x: r.x, y: r.y });
-                    const isCollision = (collisionRackIds != null && collisionRackIds.includes(rid)) || rid === collisionRackId;
-                    const isSelected = selectedRackIds.includes(rid);
-                    // Dynamic styling: fill must come from the rack object only (saved color). No hardcoded override.
-                    const displayColor = rackFillColor(r);
-                    const showLabel = showRackLabels && (r.show_label !== false);
-                    const label = getRackDisplayId(r);
-                    const used = r.used_dm3 ?? r.bins?.reduce((s, b) => s + binUsedVolumeDm3(b), 0) ?? 0;
-                    const total = r.total_capacity_dm3 ?? r.bins?.reduce((s, b) => s + binVolumeDm3(b, r), 0) ?? 0;
-                    const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
-                    const tooltip = `${label} · Zajętość: ${formatVolume(used)} / ${formatVolume(total)} dm³ (${pct.toFixed(0)}%)`;
-                    const rectX = drawAt.x * cellPx + 1;
-                    const rectY = drawAt.y * cellPx + 1;
-                    const rectW = r.width * cellPx - 2;
-                    const rectH = r.height * cellPx - 2;
-                    // In vertical rows we store swapped dimensions (depth×width), so rect is already 80×120-style; no rotation.
-                    const cx = drawAt.x * cellPx + (r.width * cellPx) / 2;
-                    const cy = drawAt.y * cellPx + (r.height * cellPx) / 2;
-                    const showLabelHere = showLabel && canShowRackLabel(rectW, rectH);
-                    const { displayText, fontSize: fontSizeBase } = getRackLabelStyle(rectW, rectH, label, false);
-                    const labelFontSize = fontSizeBase + 1;
-                    const clipInset = 0.05;
-                    const clipW = rectW * (1 - 2 * clipInset);
-                    const clipH = rectH * (1 - 2 * clipInset);
-                    const clipX = rectX + rectW * clipInset;
-                    const clipY = rectY + rectH * clipInset;
-                    const layoutClipId = `layout-rack-clip-${rid}`;
-                    const isHovered = hoveredRackId === rid && !isDragging;
-                    const rackStrokeColor = isCollision ? "#ef4444" : isSelected ? "#3b82f6" : colors.rackBorder;
-                    const rackStrokeWidth = 1;
-                    const rackBgHex = isCollision ? "#ef4444" : isSelected ? "#0ea5e9" : displayColor;
-                    const labelFill = labelColorForBackground(rackBgHex);
-                    const outlineOffset = 1;
-                    return (
-                      <g
-                        key={rid}
-                        style={isDragging ? { pointerEvents: "none" } : undefined}
-                        onMouseEnter={() => setHoveredRackId(rid)}
-                        onMouseLeave={() => setHoveredRackId(null)}
-                      >
-                        {isHovered && (
-                          <rect
-                            x={rectX - outlineOffset}
-                            y={rectY - outlineOffset}
-                            width={rectW + outlineOffset * 2}
-                            height={rectH + outlineOffset * 2}
-                            fill="none"
-                            stroke="rgba(59,130,246,0.4)"
-                            strokeWidth={2}
-                            rx={RACK_RADIUS_PX + outlineOffset}
-                            pointerEvents="none"
-                          />
-                        )}
-                        <rect
-                          x={rectX}
-                          y={rectY}
-                          width={rectW}
-                          height={rectH}
-                          fill={isCollision ? "#ef4444" : isSelected ? "#0ea5e9" : displayColor}
-                          stroke={rackStrokeColor}
-                          strokeWidth={rackStrokeWidth}
-                          rx={RACK_RADIUS_PX}
-                          fillOpacity={isDragging ? 0.9 : 1}
-                          strokeDasharray={isDragging ? "4 2" : undefined}
-                          {...(tooltip ? { "aria-label": tooltip } : {})}
-                        />
-                        {showLabelHere && (
-                          <g clipPath={`url(#${layoutClipId})`}>
-                            <defs>
-                              <clipPath id={layoutClipId}>
-                                <rect x={clipX} y={clipY} width={clipW} height={clipH} />
-                              </clipPath>
-                            </defs>
-                            <text
-                              x={cx}
-                              y={cy}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              fill={labelFill}
-                              fontSize={labelFontSize}
-                              fontWeight={600}
-                              style={{ pointerEvents: "none", userSelect: "none" }}
-                            >
-                              {displayText}
-                            </text>
-                          </g>
-                        )}
-                      </g>
-                    );
-                  })}
+                  <RackLayer
+                    racks={layout.racks}
+                    cellPx={cellPx}
+                    draggingRackId={draggingRackId}
+                    selectedRackIds={selectedRackIds}
+                    rackDragPreviewPositions={rackDragPreviewPositions}
+                    rackDragPreviewPosition={rackDragPreviewPosition}
+                    collisionRackId={collisionRackId}
+                    collisionRackIds={collisionRackIds}
+                    showRackLabels={showRackLabels}
+                    hoveredRackId={hoveredRackId}
+                    setHoveredRackId={setHoveredRackId}
+                  />
                   {/* Special warehouse nodes (above shelves) */}
                   {specialLocations.pick_start && (() => {
                     const px = (specialLocations.pick_start.x / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
@@ -927,152 +752,22 @@ function WarehouseCanvasInner({
                       </g>
                     );
                   })()}
-                  {([...(layout.visual_elements ?? [])].sort((a, b) => a.zIndex - b.zIndex)).map((ve) => {
-                    const isSelected = isVisualSelected(ve.id);
-                    const defaultFill: Record<VisualElementType, string> = {
-                      column: "#64748b", mezzanine: "rgba(100,116,139,0.5)", packing_station: "#475569", cart: "#94a3b8",
-                      wall: "#64748b", door: "#94a3b8", zone: "rgba(59,130,246,0.25)",
-                    };
-                    const fill = ve.color ?? defaultFill[ve.type];
-                    const cx = ve.x * cellPx + (ve.width * cellPx) / 2;
-                    const cy = ve.y * cellPx + (ve.height * cellPx) / 2;
-                    const rot = ve.rotation ?? 0;
-                    const strokeColor = isSelected ? "#e0f2fe" : "#475569";
-                    const drawColumn = () => {
-                      if (ve.type !== "column") return null;
-                      if ((ve.columnShape === "circle") && (ve.diameter != null && ve.diameter > 0)) {
-                        const r = (ve.diameter / 2) * cellPx;
-                        return (
-                          <circle cx={cx} cy={cy} r={Math.max(2, r - 1)} fill={fill} stroke={strokeColor} strokeWidth={isSelected ? 2 : 0.5} />
-                        );
-                      }
-                      return (
-                        <rect x={ve.x * cellPx + 1} y={ve.y * cellPx + 1} width={ve.width * cellPx - 2} height={ve.height * cellPx - 2} fill={fill} stroke={strokeColor} strokeWidth={isSelected ? 2 : 0.5} rx={0} />
-                      );
-                    };
-                    const drawCart = () => {
-                      if (ve.type !== "cart") return null;
-                      const w = ve.width * cellPx - 2;
-                      const h = ve.height * cellPx - 2;
-                      const scale = Math.min(w, h) / 22;
-                      const content = (
-                        <>
-                          <rect x={ve.x * cellPx + 1} y={ve.y * cellPx + 1} width={w} height={h} fill={fill} stroke={strokeColor} strokeWidth={isSelected ? 2 : 0.5} rx={2} />
-                          <g transform={`translate(${cx},${cy}) scale(${scale}) translate(-12,-12)`} style={{ transformOrigin: "12px 12px" }}>
-                            <path fill="none" stroke="#1e293b" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" d="M2 10h2l1-4h6l1 4h2M2 10v6a1 1 0 001 1h14a1 1 0 001-1v-6M6 17a1 1 0 11-2 0 1 1 0 012 0zM18 17a1 1 0 11-2 0 1 1 0 012 0z" />
-                          </g>
-                        </>
-                      );
-                      if (rot !== 0) return <g transform={`rotate(${rot} ${cx} ${cy})`}>{content}</g>;
-                      return <g>{content}</g>;
-                    };
-                    const drawWall = () => {
-                      if (ve.type !== "wall") return null;
-                      const len = (ve.length ?? ve.width) * cellPx;
-                      const th = (ve.thickness ?? ve.height) * cellPx;
-                      const content = (
-                        <>
-                          <rect x={ve.x * cellPx + 1} y={ve.y * cellPx + 1} width={len - 2} height={Math.max(2, th - 2)} fill={fill} stroke={strokeColor} strokeWidth={isSelected ? 2 : 0.5} />
-                          {isSelected && (
-                            <>
-                              <circle cx={ve.x * cellPx + cellPx / 2} cy={ve.y * cellPx + th / 2} r={cellPx / 2} fill="#22d3ee" stroke="#e0f2fe" strokeWidth={1} opacity={0.9} />
-                              <circle cx={ve.x * cellPx + len - cellPx / 2} cy={ve.y * cellPx + th / 2} r={cellPx / 2} fill="#22d3ee" stroke="#e0f2fe" strokeWidth={1} opacity={0.9} />
-                            </>
-                          )}
-                        </>
-                      );
-                      if (rot !== 0) return <g transform={`rotate(${rot} ${ve.x * cellPx + len/2} ${ve.y * cellPx + th/2})`}>{content}</g>;
-                      return <g>{content}</g>;
-                    };
-                    const drawDoor = () => {
-                      if (ve.type !== "door") return null;
-                      const w = ve.width * cellPx - 2;
-                      const h = ve.height * cellPx - 2;
-                      const content = (
-                        <>
-                          <rect x={ve.x * cellPx + 1} y={ve.y * cellPx + 1} width={w} height={h} fill={fill} stroke={strokeColor} strokeWidth={isSelected ? 2 : 0.5} rx={1} />
-                          {ve.doorStyle === "sliding" ? (
-                            <path stroke="#1e293b" strokeWidth={1} fill="none" d={`M${ve.x * cellPx + 4} ${cy} h${w - 8} M${ve.x * cellPx + w/2 - 4} ${cy - 4} v8 M${ve.x * cellPx + w/2 + 4} ${cy - 4} v8`} />
-                          ) : (
-                            <path stroke="#1e293b" strokeWidth={1} fill="none" d={`M${ve.x * cellPx + 2} ${ve.y * cellPx + 2} L${ve.x * cellPx + 2} ${ve.y * cellPx + h} L${ve.x * cellPx + w/2} ${ve.y * cellPx + h/2} Z`} />
-                          )}
-                        </>
-                      );
-                      if (rot !== 0) return <g transform={`rotate(${rot} ${cx} ${cy})`}>{content}</g>;
-                      return <g>{content}</g>;
-                    };
-                    const drawZone = () => {
-                      if (ve.type !== "zone") return null;
-                      return (
-                        <rect x={ve.x * cellPx + 1} y={ve.y * cellPx + 1} width={ve.width * cellPx - 2} height={ve.height * cellPx - 2} fill={fill} stroke={strokeColor} strokeWidth={isSelected ? 2 : 0.5} rx={4} />
-                      );
-                    };
-                    const drawGeneric = () => {
-                      if (["column", "cart", "wall", "door", "zone"].includes(ve.type)) return null;
-                      const content = (
-                        <rect x={ve.x * cellPx + 1} y={ve.y * cellPx + 1} width={ve.width * cellPx - 2} height={ve.height * cellPx - 2} fill={fill} stroke={strokeColor} strokeWidth={isSelected ? 2 : 0.5} rx={2} />
-                      );
-                      if (rot !== 0) return <g transform={`rotate(${rot} ${cx} ${cy})`}>{content}</g>;
-                      return <g>{content}</g>;
-                    };
-                    const showLabel = showRackLabels && (ve.label ?? ve.name);
-                    return (
-                      <g key={ve.id}>
-                        {ve.type === "column" && drawColumn()}
-                        {ve.type === "cart" && drawCart()}
-                        {ve.type === "wall" && drawWall()}
-                        {ve.type === "door" && drawDoor()}
-                        {ve.type === "zone" && drawZone()}
-                        {drawGeneric()}
-                        {showLabel && (
-                          <text
-                            x={ve.x * cellPx + (ve.width * cellPx) / 2}
-                            y={ve.y * cellPx + ve.height * cellPx + 10}
-                            textAnchor="middle"
-                            fill="#e0f2fe"
-                            fontSize={Math.max(8, Math.min(10, (ve.width * cellPx) / 10))}
-                            style={{ pointerEvents: "none", userSelect: "none" }}
-                          >
-                            {ve.label ?? ve.name}
-                          </text>
-                        )}
-                      </g>
-                    );
-                  })}
+                  <VisualLayer
+                    visualElements={layout.visual_elements ?? []}
+                    cellPx={cellPx}
+                    showRackLabels={showRackLabels}
+                    isVisualSelected={isVisualSelected}
+                    draggingVisualType={draggingVisualType}
+                    visualGhostPosition={visualGhostPosition}
+                    getDefaultVisualSize={getDefaultVisualSize}
+                  />
                   {pickingPathPoints && pickingPathPoints.length >= 2 && (
-                    <g>
-                      <polyline
-                        points={pickingPathPoints.map((p) => `${p.x * cellPx + cellPx / 2},${p.y * cellPx + cellPx / 2}`).join(" ")}
-                        fill="none"
-                        stroke="#22d3ee"
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                        opacity={0.9}
-                      />
-                      {manualPathPoints.length > 0 && manualPathPoints.map((p, i) => (
-                        <g key={i}>
-                          <circle cx={p.x * cellPx + cellPx / 2} cy={p.y * cellPx + cellPx / 2} r={cellPx / 2 - 1} fill="rgba(34,211,238,0.3)" stroke="#22d3ee" strokeWidth={1} />
-                          <text x={p.x * cellPx + cellPx / 2} y={p.y * cellPx + cellPx / 2} textAnchor="middle" dominantBaseline="middle" fill="#0f172a" fontSize={Math.max(10, cellPx / 2)} fontWeight="bold" style={{ pointerEvents: "none" }}>{i + 1}</text>
-                        </g>
-                      ))}
-                    </g>
+                    <PathLayer
+                      pickingPathPoints={pickingPathPoints}
+                      manualPathPoints={manualPathPoints}
+                      cellPx={cellPx}
+                    />
                   )}
-                  {draggingVisualType && visualGhostPosition && (() => {
-                    const { w, h } = getDefaultVisualSize(draggingVisualType);
-                    return (
-                      <rect
-                        x={visualGhostPosition.x * cellPx + 2}
-                        y={visualGhostPosition.y * cellPx + 2}
-                        width={w * cellPx - 4}
-                        height={h * cellPx - 4}
-                        fill="rgba(251,191,36,0.35)"
-                        stroke="#f59e0b"
-                        strokeWidth={2}
-                        strokeDasharray="4 2"
-                        rx={RACK_RADIUS_PX}
-                      />
-                    );
-                  })()}
                   {placementMode && ghostPosition && (
                     <rect
                       x={ghostPosition.x * cellPx + 2}
@@ -1155,69 +850,20 @@ function WarehouseCanvasInner({
                       );
                     })()}
                   {marqueeStart && marqueeEnd && (
-                    <rect
-                      x={Math.min(marqueeStart.x, marqueeEnd.x) * cellPx}
-                      y={Math.min(marqueeStart.y, marqueeEnd.y) * cellPx}
-                      width={Math.abs(marqueeEnd.x - marqueeStart.x) * cellPx || cellPx}
-                      height={Math.abs(marqueeEnd.y - marqueeStart.y) * cellPx || cellPx}
-                      fill="rgba(59,130,246,0.25)"
-                      stroke="#3b82f6"
-                      strokeWidth={1.5}
-                      strokeDasharray="3 2"
+                    <SelectionOverlay
+                      part="marquee"
+                      marqueeStart={marqueeStart}
+                      marqueeEnd={marqueeEnd}
+                      cellPx={cellPx}
                     />
                   )}
-                  {/* Ghost row when dragging entire row by handle */}
-                  {draggingRowId && rowDragPreviewStart != null && (() => {
-                    const row = (layout.row_containers ?? []).find((rc) => rc.id === draggingRowId);
-                    if (!row?.slots.length) return null;
-                    const isVertical = (row.orientation ?? "horizontal") === "vertical";
-                    let gx = rowDragPreviewStart.x;
-                    let gy = rowDragPreviewStart.y;
-                    const ghostSlots = row.slots.map((s) => {
-                      const out = { ...s, x: gx, y: gy };
-                      if (isVertical) gy += s.h; else gx += s.w;
-                      return out;
-                    });
-                    return (
-                      <g key="row-ghost" pointerEvents="none" fillOpacity={0.5} strokeOpacity={0.8}>
-                        {ghostSlots.map((slot, i) => (
-                          <rect
-                            key={`ghost-slot-${i}`}
-                            x={slot.x * cellPx + 1}
-                            y={slot.y * cellPx + 1}
-                            width={slot.w * cellPx - 2}
-                            height={slot.h * cellPx - 2}
-                            fill="rgba(148,163,184,0.6)"
-                            stroke="#64748b"
-                            strokeWidth={1}
-                            rx={RACK_RADIUS_PX}
-                          />
-                        ))}
-                        {ghostSlots.map((slot, i) => {
-                          if (slot.rackId == null) return null;
-                          const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === slot.rackId);
-                          if (!rack) return null;
-                          const rx = slot.x * cellPx + 1;
-                          const ry = slot.y * cellPx + 1;
-                          const rw = rack.width * cellPx - 2;
-                          const rh = rack.height * cellPx - 2;
-                          return (
-                            <rect
-                              key={`ghost-rack-${i}`}
-                              x={rx}
-                              y={ry}
-                              width={rw}
-                              height={rh}
-                              fill={rackFillColor(rack)}
-                              stroke="#64748b"
-                              strokeWidth={1}
-                              rx={RACK_RADIUS_PX}
-                            />
-                          );
-                        })}
-                      </g>
-                    );
-                  })()}
+                  <RowLayer
+                    part="rowDragGhost"
+                    layout={layout}
+                    cellPx={cellPx}
+                    draggingRowId={draggingRowId ?? null}
+                    rowDragPreviewStart={rowDragPreviewStart ?? null}
+                  />
                 </svg>
                 {/* Visual-only overlay: dimension lines and aisle width. Does not modify layout or slots. */}
                 {showDimensions && (
@@ -1293,33 +939,18 @@ function WarehouseCanvasInner({
                     })
                   )}
                 </div>
-                {selectedRack && !isMultiSelect && (
-                  <div
-                    className="absolute z-20 flex gap-0.5 shadow-lg rounded overflow-hidden border border-cyan-500/50 bg-slate-800"
-                    style={{ left: selectedRack.x * cellPx, top: selectedRack.y * cellPx - 32 }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button type="button" onClick={() => setInternalLayoutRackId(selectedRack.id ?? selectedRack.rack_index)} className="p-1.5 bg-slate-700 hover:bg-cyan-600 text-cyan-100" title="Układ wewnętrzny">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
-                    </button>
-                    <button type="button" onClick={() => setShowElevationForRackId(selectedRack.id ?? selectedRack.rack_index)} className="p-1.5 bg-slate-700 hover:bg-cyan-600 text-cyan-100" title="Widok z boku">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const ids = new Set(selectedRackIds);
-                        setLayout((prev) => ({ ...prev, racks: prev.racks.filter((r) => !ids.has(r.id ?? r.rack_index)) }));
-                        setSelectedRackId(null);
-                        setSelectedRackIds([]);
-                      }}
-                      className="p-1.5 bg-slate-700 hover:bg-red-600 text-red-200"
-                      title="Usuń"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
-                    </button>
-                  </div>
-                )}
+                <SelectionOverlay
+                  part="toolbar"
+                  selectedRack={selectedRack}
+                  isMultiSelect={isMultiSelect}
+                  cellPx={cellPx}
+                  setInternalLayoutRackId={setInternalLayoutRackId}
+                  setShowElevationForRackId={setShowElevationForRackId}
+                  setLayout={setLayout}
+                  setSelectedRackId={setSelectedRackId}
+                  setSelectedRackIds={setSelectedRackIds}
+                  selectedRackIds={selectedRackIds}
+                />
               </div>
             </div>
             {cursorCm != null && (placementMode || draggingRackId != null) && (
