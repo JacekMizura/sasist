@@ -22,6 +22,7 @@ import { useLabelSelection } from "./hooks/useLabelSelection";
 import { useLabelDrag } from "./hooks/useLabelDrag";
 import { useLabelResize } from "./hooks/useLabelResize";
 import { importSvgTemplate } from "../../labelImporter/svgImporter";
+import { importPngTemplate } from "../../labelImporter/imageImporter";
 
 const BASE_PX_PER_MM = 8;
 const GRID_PX = 5;
@@ -37,10 +38,6 @@ const BARCODE_VARIABLE_TOKENS = new Set([
 
 function snapToGridPx(px: number): number {
   return Math.round(px / GRID_PX) * GRID_PX;
-}
-
-function pxToMm(px: number, dpi: number): number {
-  return (px * 25.4) / dpi;
 }
 
 function clampElementToLabel(
@@ -92,6 +89,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
   const [saving, setSaving] = useState(false);
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [autoSliceStrip, setAutoSliceStrip] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const draftingTableRef = useRef<HTMLDivElement>(null);
   const middlePanRef = useRef<{ startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
@@ -144,7 +142,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
   );
 
   const handleImportBackgroundImageChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
@@ -155,65 +153,19 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
         return;
       }
 
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const img = new Image();
-        img.onload = () => {
-          const widthPx = img.width;
-          const heightPx = img.height;
-          const dpi = template.dpi ?? 300;
-          const widthMm = pxToMm(widthPx, dpi);
-          const heightMm = pxToMm(heightPx, dpi);
-
-          const id =
-            typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : generateId();
-
-          const backgroundElement: LabelElement = {
-            id,
-            type: "image",
-            x: 0,
-            y: 0,
-            width: widthMm,
-            height: heightMm,
-            src: dataUrl,
-            zIndex: -1000,
-          } as LabelElement;
-
-          const withoutBackground = template.elements.filter(
-            (el) => !(el.type === "image" && (el as LabelElement).zIndex === -1000)
-          );
-
-          const updatedTemplate: LabelTemplate = {
-            ...template,
-            widthMm,
-            heightMm,
-            elements: [backgroundElement, ...withoutBackground],
-            updatedAt: new Date().toISOString(),
-          };
-
-          onTemplateChange(updatedTemplate);
-          const container = draftingTableRef.current;
-          if (container) {
-            container.scrollLeft = 0;
-            container.scrollTop = 0;
-          }
-        };
-        img.onerror = () => {
-          // eslint-disable-next-line no-alert
-          alert("Invalid image file");
-        };
-        img.src = dataUrl;
-      };
-      reader.onerror = () => {
+      try {
+        const importedTemplate = await importPngTemplate(file, {
+          autoSlice: autoSliceStrip,
+        });
+        onTemplateChange(importedTemplate);
+      } catch (err) {
         // eslint-disable-next-line no-alert
         alert("Invalid image file");
-      };
+      }
 
       e.target.value = "";
     },
-    [template, onTemplateChange]
+    [onTemplateChange, autoSliceStrip]
   );
 
   const handleImportSvgFileChange = useCallback(
@@ -400,7 +352,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
           onBack={onBack}
           setPresetModalOpen={setPresetModalOpen}
         />
-        <div className="flex items-center gap-4 px-4 py-2 bg-white border-b border-[#E2E8F0] border-t-0">
+        <div className="flex items-center gap-6 px-4 py-2 bg-white border-b border-[#E2E8F0] border-t-0">
           <div className="flex items-center gap-2">
             <label className="text-[10px] text-slate-500 uppercase">Import SVG</label>
             <input
@@ -419,6 +371,14 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
               className="text-xs"
             />
           </div>
+          <label className="flex items-center gap-2 text-[11px] text-slate-600">
+            <input
+              type="checkbox"
+              checked={autoSliceStrip}
+              onChange={(e) => setAutoSliceStrip(e.target.checked)}
+            />
+            <span>Auto slice label strip</span>
+          </label>
         </div>
       </div>
 
