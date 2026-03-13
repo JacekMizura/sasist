@@ -9,6 +9,10 @@ import { renderText } from "./renderText";
 import { renderBarcode } from "./renderBarcode";
 import { renderRectangle } from "./renderRectangle";
 import { renderArrow } from "./renderArrow";
+import { renderImage } from "./renderImage";
+import { renderIcon } from "./renderIcon";
+import { renderTriangle } from "./renderTriangle";
+import { renderPolygon } from "./renderPolygon";
 
 function escapeAttr(s: string): string {
   return String(s)
@@ -47,6 +51,18 @@ async function renderElement(item: LayoutItem): Promise<string> {
       break;
     case "arrow":
       fragment = renderArrow(item);
+      break;
+    case "image":
+      fragment = renderImage(item);
+      break;
+    case "icon":
+      fragment = renderIcon(item);
+      break;
+    case "triangle":
+      fragment = renderTriangle(item);
+      break;
+    case "polygon":
+      fragment = renderPolygon(item);
       break;
     case "line": {
       const w = item.width_mm;

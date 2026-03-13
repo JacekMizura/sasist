@@ -21,8 +21,9 @@ import { useLabelPreview } from "./hooks/useLabelPreview";
 import { useLabelSelection } from "./hooks/useLabelSelection";
 import { useLabelDrag } from "./hooks/useLabelDrag";
 import { useLabelResize } from "./hooks/useLabelResize";
+import { importSvgTemplate } from "../../labelImporter/svgImporter";
 
-const PX_PER_MM = 8;
+const BASE_PX_PER_MM = 8;
 const GRID_PX = 5;
 const GRID_LINE_STEP_MM = 5;
 
@@ -36,6 +37,10 @@ const BARCODE_VARIABLE_TOKENS = new Set([
 
 function snapToGridPx(px: number): number {
   return Math.round(px / GRID_PX) * GRID_PX;
+}
+
+function pxToMm(px: number, dpi: number): number {
+  return (px * 25.4) / dpi;
 }
 
 function clampElementToLabel(
@@ -86,6 +91,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [presetModalOpen, setPresetModalOpen] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const canvasRef = useRef<HTMLDivElement>(null);
   const draftingTableRef = useRef<HTMLDivElement>(null);
   const middlePanRef = useRef<{ startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
@@ -101,6 +107,8 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
     handleCanvasMouseDown,
     deleteElement,
   } = useLabelSelection(template, onTemplateChange);
+
+  const PX_PER_MM = BASE_PX_PER_MM * zoom;
 
   const updateElement = useCallback(
     (id: string, patch: Partial<TemplateElement>) => {
@@ -133,6 +141,99 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
       setSelectedId(el.id);
     },
     [template, onTemplateChange, setSelectedId]
+  );
+
+  const handleImportBackgroundImageChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (!file.type.startsWith("image/")) {
+        // eslint-disable-next-line no-alert
+        alert("Invalid image file");
+        e.target.value = "";
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const widthPx = img.width;
+          const heightPx = img.height;
+          const dpi = template.dpi ?? 300;
+          const widthMm = pxToMm(widthPx, dpi);
+          const heightMm = pxToMm(heightPx, dpi);
+
+          const id =
+            typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : generateId();
+
+          const backgroundElement: LabelElement = {
+            id,
+            type: "image",
+            x: 0,
+            y: 0,
+            width: widthMm,
+            height: heightMm,
+            src: dataUrl,
+            zIndex: -1000,
+          } as LabelElement;
+
+          const withoutBackground = template.elements.filter(
+            (el) => !(el.type === "image" && (el as LabelElement).zIndex === -1000)
+          );
+
+          const updatedTemplate: LabelTemplate = {
+            ...template,
+            widthMm,
+            heightMm,
+            elements: [backgroundElement, ...withoutBackground],
+            updatedAt: new Date().toISOString(),
+          };
+
+          onTemplateChange(updatedTemplate);
+          const container = draftingTableRef.current;
+          if (container) {
+            container.scrollLeft = 0;
+            container.scrollTop = 0;
+          }
+        };
+        img.onerror = () => {
+          // eslint-disable-next-line no-alert
+          alert("Invalid image file");
+        };
+        img.src = dataUrl;
+      };
+      reader.onerror = () => {
+        // eslint-disable-next-line no-alert
+        alert("Invalid image file");
+      };
+
+      e.target.value = "";
+    },
+    [template, onTemplateChange]
+  );
+
+  const handleImportSvgFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const svgText = await file.text();
+        const importedTemplate = importSvgTemplate(svgText);
+        onTemplateChange(importedTemplate);
+      } catch (err) {
+        console.error("SVG import failed:", err);
+        // eslint-disable-next-line no-alert
+        alert("Invalid SVG template");
+      } finally {
+        e.target.value = "";
+      }
+    },
+    [onTemplateChange]
   );
 
   const { handleElementMouseDown } = useLabelDrag({
@@ -272,16 +373,54 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
   const variableCategoryIds = TEMPLATE_TYPE_CATEGORIES[template.template_type ?? "location"];
   const variableCategories = LABEL_VARIABLE_CATEGORIES.filter((c) => variableCategoryIds.includes(c.id));
 
+  useEffect(() => {
+    const container = draftingTableRef.current;
+    if (!container) return;
+    const containerWidth = container.clientWidth || 1;
+    const containerHeight = container.clientHeight || 1;
+    const desiredWidthPx = template.widthMm * BASE_PX_PER_MM;
+    const desiredHeightPx = template.heightMm * BASE_PX_PER_MM;
+    if (desiredWidthPx <= 0 || desiredHeightPx <= 0) return;
+    const scaleX = containerWidth / desiredWidthPx;
+    const scaleY = containerHeight / desiredHeightPx;
+    const nextZoom = Math.min(scaleX, scaleY);
+    setZoom(nextZoom);
+    container.scrollLeft = 0;
+    container.scrollTop = 0;
+  }, [template.widthMm, template.heightMm]);
+
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden bg-[#F8FAFC]">
-      <LabelToolbar
-        template={template}
-        onTemplateChange={onTemplateChange}
-        saving={saving}
-        handleSave={handleSave}
-        onBack={onBack}
-        setPresetModalOpen={setPresetModalOpen}
-      />
+      <div className="shrink-0 flex flex-col">
+        <LabelToolbar
+          template={template}
+          onTemplateChange={onTemplateChange}
+          saving={saving}
+          handleSave={handleSave}
+          onBack={onBack}
+          setPresetModalOpen={setPresetModalOpen}
+        />
+        <div className="flex items-center gap-4 px-4 py-2 bg-white border-b border-[#E2E8F0] border-t-0">
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] text-slate-500 uppercase">Import SVG</label>
+            <input
+              type="file"
+              accept=".svg"
+              onChange={handleImportSvgFileChange}
+              className="text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] text-slate-500 uppercase">Import background image</label>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/jpg"
+              onChange={handleImportBackgroundImageChange}
+              className="text-xs"
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <LabelLeftPanel
