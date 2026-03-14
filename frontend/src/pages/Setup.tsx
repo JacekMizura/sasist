@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import api from "../api/axios";
 import {
   warehouseService,
@@ -82,6 +83,19 @@ export default function Setup() {
   return (
     <div className="space-y-8 max-w-3xl">
       <h1 className="text-2xl font-semibold text-gray-800">Ustawienia systemu</h1>
+
+      <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+        <h2 className="text-lg font-medium text-gray-700 border-b border-gray-100 pb-3">Etykiety i drukarki</h2>
+        <p className="text-sm text-gray-600">
+          Zarządzaj drukarkami i profilami kalibracji używanych przy eksporcie i drukowaniu etykiet.
+        </p>
+        <Link
+          to="/setup/printers"
+          className="inline-block px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 transition-colors"
+        >
+          Drukarki
+        </Link>
+      </section>
 
       {/* Tenants */}
       <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">

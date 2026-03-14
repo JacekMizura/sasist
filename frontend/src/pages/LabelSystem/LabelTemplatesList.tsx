@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye } from "lucide-react";
 import api from "../../api/axios";
+import { formatMm } from "../../utils/formatMm";
+import { TemplatePreview } from "../../components/labels/TemplatePreview";
 
 const TENANT_ID = 1;
 const PREVIEW_MAX_HEIGHT_PX = 260;
@@ -66,14 +68,13 @@ export function LabelTemplatesList() {
   const [page, setPage] = useState(1);
   const [newGroupName, setNewGroupName] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [movingToGroupId, setMovingToGroupId] = useState<number | null>(null);
   const [previewState, setPreviewState] = useState<{
-    templateId: number;
     template: TemplateWithMeta;
     left: number;
     top: number;
+    width: number;
   } | null>(null);
-  const [previewSvgCache, setPreviewSvgCache] = useState<Record<number, string>>({});
-  const [previewLoading, setPreviewLoading] = useState(false);
   const previewLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -142,24 +143,6 @@ export function LabelTemplatesList() {
     fetchTemplates();
   }, [fetchTemplates]);
 
-  const previewType = previewState?.template.template_type === "cart" ? "cart" : "product";
-
-  useEffect(() => {
-    if (!previewState) return;
-    const id = previewState.templateId;
-    if (previewSvgCache[id]) return;
-    setPreviewLoading(true);
-    api
-      .get<{ svg: string }>(`/label-templates/${id}/preview`, {
-        params: { tenant_id: TENANT_ID, preview_type: previewType },
-      })
-      .then((res) => {
-        setPreviewSvgCache((prev) => ({ ...prev, [id]: res.data?.svg ?? "" }));
-      })
-      .catch(() => {})
-      .finally(() => setPreviewLoading(false));
-  }, [previewState?.templateId, previewType]); // eslint-disable-line react-hooks/exhaustive-deps -- cache is intentional
-
   const clearPreviewLeaveTimer = useCallback(() => {
     if (previewLeaveTimerRef.current) {
       clearTimeout(previewLeaveTimerRef.current);
@@ -181,10 +164,10 @@ export function LabelTemplatesList() {
       clearPreviewLeaveTimer();
       const rect = el.getBoundingClientRect();
       setPreviewState({
-        templateId: template.id,
         template,
-        left: rect.right + 10,
-        top: rect.top,
+        left: rect.left,
+        top: rect.bottom + 8,
+        width: rect.width,
       });
     },
     [clearPreviewLeaveTimer]
@@ -298,6 +281,27 @@ export function LabelTemplatesList() {
     }
   };
 
+  const handleMoveToGroup = useCallback(
+    async (t: TemplateWithMeta, groupId: number | null) => {
+      if (t.group_id === groupId) return;
+      setMovingToGroupId(t.id);
+      try {
+        await api.put(`/label-templates/${t.id}/`, {
+          name: t.name,
+          template_type: t.template_type ?? "location",
+          template_json: t.template_json,
+          group_id: groupId,
+        });
+        await fetchTemplates();
+      } catch (e) {
+        console.error("Move to group failed:", e);
+      } finally {
+        setMovingToGroupId(null);
+      }
+    },
+    [fetchTemplates]
+  );
+
   const templateCard = (t: TemplateWithMeta) => (
     <div
       key={t.id}
@@ -310,7 +314,7 @@ export function LabelTemplatesList() {
           <div className="min-w-0 flex-1">
             <div className="font-semibold text-slate-800 truncate text-sm">{t.name}</div>
             <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span>{t.widthMm} × {t.heightMm} mm</span>
+              <span>{formatMm(t.widthMm)} × {formatMm(t.heightMm)} mm</span>
               <span
                 className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-600 cursor-default"
                 title="Powiększ podgląd"
@@ -360,6 +364,25 @@ export function LabelTemplatesList() {
               {deletingId === t.id ? "…" : "Usuń"}
             </button>
         </div>
+        {groups.length > 0 && (
+          <div className="pt-1 border-t border-slate-100">
+            <label className="text-[10px] text-slate-500 block mb-1">Przenieś do grupy</label>
+            <select
+              value={t.group_id ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                handleMoveToGroup(t, v === "" ? null : Number(v));
+              }}
+              disabled={movingToGroupId === t.id}
+              className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700"
+            >
+              <option value="">Bez grupy</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -367,16 +390,33 @@ export function LabelTemplatesList() {
   const templateRow = (t: TemplateWithMeta) => (
     <div
       key={t.id}
-      className="flex items-center justify-between gap-4 py-2 px-3 rounded-lg hover:bg-slate-50 border-b border-slate-100 last:border-0"
+      className="template-row flex items-center justify-between gap-4 py-2 px-3 rounded-lg hover:bg-slate-50 border-b border-slate-100 last:border-0"
     >
       <div className="min-w-0">
         <div className="font-medium text-slate-800 truncate">{t.name}</div>
         <div className="text-xs text-slate-500">
-          {t.widthMm} × {t.heightMm} mm
+          {formatMm(t.widthMm)} × {formatMm(t.heightMm)} mm
           {t.is_default && " · Domyślny"}
         </div>
       </div>
-      <div className="flex gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
+        <span
+          className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-700 cursor-pointer"
+          title="Podgląd"
+          onMouseEnter={(e) => {
+            clearPreviewLeaveTimer();
+            if (previewHoverTimerRef.current) {
+              clearTimeout(previewHoverTimerRef.current);
+              previewHoverTimerRef.current = null;
+            }
+            const row = (e.currentTarget as HTMLElement).closest(".template-row") as HTMLElement;
+            if (row) showPreview(t, row);
+          }}
+          onMouseLeave={schedulePreviewHide}
+        >
+          <Eye className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+          <span className="text-xs">Podgląd</span>
+        </span>
         <button
           type="button"
           onClick={() => handleEdit(t.id)}
@@ -600,32 +640,41 @@ export function LabelTemplatesList() {
 
     {previewState && (
       <div
-        className="fixed z-[100] w-max max-w-[90vw] rounded-xl border border-slate-200 bg-white p-3 shadow-lg"
+        className="fixed z-[100] rounded-xl border border-slate-200 bg-white shadow-lg"
         style={{
           left: previewState.left,
           top: previewState.top,
+          width: previewState.width,
+          maxWidth: previewState.width,
+          padding: 12,
+          boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
+          borderRadius: 12,
         }}
         onMouseEnter={handlePreviewPanelMouseEnter}
         onMouseLeave={handlePreviewPanelMouseLeave}
       >
         <div
-          className="flex items-center justify-center overflow-hidden"
-          style={{ maxHeight: PREVIEW_MAX_HEIGHT_PX }}
+          style={{
+            width: "100%",
+            height: 140,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+          }}
         >
-          {previewLoading ? (
-            <div className="flex items-center justify-center py-12 px-8 text-slate-400 text-sm">
-              <span className="w-5 h-5 border-2 border-slate-300 border-t-cyan-600 rounded-full animate-spin" />
-              <span className="ml-2">Ładowanie…</span>
-            </div>
-          ) : previewSvgCache[previewState.templateId] ? (
-            <div
-              className="[&_svg]:max-h-[260px] [&_svg]:w-auto [&_svg]:h-auto [&_svg]:block"
-              style={{ maxHeight: PREVIEW_MAX_HEIGHT_PX }}
-              dangerouslySetInnerHTML={{
-                __html: previewSvgCache[previewState.templateId],
-              }}
-            />
-          ) : null}
+          <TemplatePreview
+            templateId={previewState.template.id}
+            template={(() => {
+              try {
+                return JSON.parse(previewState.template.template_json) as Record<string, unknown>;
+              } catch {
+                return {};
+              }
+            })()}
+            containerWidthPx={Math.max(1, previewState.width - 24)}
+            containerHeightPx={140}
+          />
         </div>
       </div>
     )}

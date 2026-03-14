@@ -61,7 +61,7 @@ export function getRecordsFromLayout(
       const barcode_data = b.barcode_data ?? b.location_id ?? b.label ?? locationCode;
 
       if (selectionMode === "reserve_only" && b.storage_type !== "reserve") continue;
-      if (selectionMode === "manual" && manualLocationIds.length > 0 && !manualLocationIds.includes(barcode_data) && !manualLocationIds.includes(locationCode)) continue;
+      if (selectionMode === "manual" && !manualLocationIds.includes(barcode_data) && !manualLocationIds.includes(locationCode)) continue;
 
       const zoneName = layout.visual_elements?.find((ve) => ve.type === "zone")?.name ?? "Magazyn";
       const levelNum = levelIndex + 1;

@@ -1,9 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import api from "../../api/axios";
 import type {
   LabelTemplate,
   LabelElement,
   TemplateElement,
+  GroupElement,
+  RepeaterElement,
   BarcodeElement,
   DynamicTextElement,
   DynamicBinding,
@@ -15,7 +17,11 @@ import {
 import { generateId } from "./utils/id";
 import { LabelToolbar } from "./components/LabelToolbar";
 import { LabelInspectorPanel } from "./components/LabelInspectorPanel";
+import { VariableInspectorPanel } from "./components/VariableInspectorPanel";
 import { LabelCanvas } from "./components/LabelCanvas";
+import { useTemplateVariableAnalysis } from "../../labelSystem/hooks/useTemplateVariableAnalysis";
+import { useTemplateValidation } from "../../labelSystem/validation/useTemplateValidation";
+import { TemplateValidationPanel } from "../../labelSystem/validation/TemplateValidationPanel";
 import { LabelLeftPanel } from "./components/LabelLeftPanel";
 import { useLabelPreview } from "./hooks/useLabelPreview";
 import { useLabelSelection } from "./hooks/useLabelSelection";
@@ -77,14 +83,87 @@ function isBarcodeVariable(token: string): boolean {
   return BARCODE_VARIABLE_TOKENS.has(tokenToBinding(token));
 }
 
+function findSelectedRepeater(
+  template: LabelTemplate,
+  selectedId: string | null
+): RepeaterElement | null {
+  if (!selectedId) return null;
+
+  function walk(elements: TemplateElement[]): RepeaterElement | null {
+    for (const el of elements) {
+      if (el.id === selectedId && el.type === "repeater") return el as RepeaterElement;
+      if (el.type === "group") {
+        const group = el as GroupElement;
+        const found = walk(group.elements ?? []);
+        if (found) return found;
+      }
+      if (el.type === "repeater") {
+        const rep = el as RepeaterElement;
+        const inTemplate = (rep.template?.elements ?? []).some((e) => e.id === selectedId);
+        if (inTemplate) return rep;
+      }
+    }
+    return null;
+  }
+  return walk(template.elements ?? []);
+}
+
+function insertIntoRepeaterTemplate(
+  template: LabelTemplate,
+  repeaterId: string,
+  element: LabelElement
+): LabelTemplate {
+  const mapElements = (elements: TemplateElement[]): TemplateElement[] =>
+    elements.map((el) => {
+      if (el.type !== "repeater") return el;
+      const rep = el as RepeaterElement;
+      if (rep.id !== repeaterId) return el;
+      return {
+        ...rep,
+        template: {
+          ...rep.template,
+          elements: [...(rep.template?.elements ?? []), element],
+        },
+      };
+    });
+
+  return {
+    ...template,
+    elements: mapElements(template.elements ?? []),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function findRepeaterByDataset(template: LabelTemplate, dataset: string): RepeaterElement | null {
+  function walk(elements: TemplateElement[]): RepeaterElement | null {
+    for (const el of elements) {
+      if (el.type === "repeater") {
+        const rep = el as RepeaterElement;
+        if (rep.dataset === dataset) return rep;
+      }
+      if (el.type === "group") {
+        const group = el as GroupElement;
+        const found = walk(group.elements ?? []);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  return walk(template.elements ?? []);
+}
+
+export type TemplateMeta = { group_id: number | null };
+
 type Props = {
   template: LabelTemplate;
   onTemplateChange: (t: LabelTemplate) => void;
   templateId?: number | null;
+  templateMeta?: TemplateMeta;
+  onTemplateMetaChange?: (meta: TemplateMeta) => void;
   onBack?: () => void;
 };
 
-export function LabelTemplateDesigner({ template, onTemplateChange, templateId, onBack }: Props) {
+export function LabelTemplateDesigner({ template, onTemplateChange, templateId, templateMeta, onTemplateMetaChange, onBack }: Props) {
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [presetModalOpen, setPresetModalOpen] = useState(false);
@@ -94,8 +173,18 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
   const draftingTableRef = useRef<HTMLDivElement>(null);
   const middlePanRef = useRef<{ startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
   const [isMiddlePanning, setIsMiddlePanning] = useState(false);
+  const [groups, setGroups] = useState<Array<{ id: number; name: string }>>([]);
 
-  const { labelSvg } = useLabelPreview(template);
+  useEffect(() => {
+    api
+      .get<Array<{ id: number; name: string }>>("/label-templates/groups", {
+        params: { tenant_id: 1, template_type: template.template_type ?? "location" },
+      })
+      .then((res) => setGroups(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setGroups([]));
+  }, [template.template_type]);
+
+  const { labelSvg, hasRepeaterPreview } = useLabelPreview(template);
 
   const {
     selectedId,
@@ -203,57 +292,123 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
     GRID_PX,
   });
 
+  const variableAnalysis = useTemplateVariableAnalysis(template);
+  const validation = useTemplateValidation(template);
+  const validationErrorElementIds = useMemo(
+    () => validation.errors.map((e) => e.elementId).filter((id): id is string => !!id),
+    [validation.errors]
+  );
+  const validationWarningElementIds = useMemo(
+    () => validation.warnings.map((e) => e.elementId).filter((id): id is string => !!id),
+    [validation.warnings]
+  );
+
   const addElementFromVariableDrop = useCallback(
-    (token: string, xMm: number, yMm: number) => {
+    (payload: string | { name: string; dataset?: string }, xMm: number, yMm: number) => {
+      const { name: token, dataset: payloadDataset } =
+        typeof payload === "string"
+          ? { name: payload, dataset: undefined as string | undefined }
+          : payload;
       const binding = tokenToBinding(token);
       const defaultW = 40;
       const defaultH = 8;
-      const x = Math.max(0, Math.min(xMm, template.widthMm - defaultW));
-      const y = Math.max(0, Math.min(yMm, template.heightMm - defaultH));
-      if (isBarcodeVariable(token)) {
+
+      const repeater =
+        findSelectedRepeater(template, selectedId) ??
+        (payloadDataset ? findRepeaterByDataset(template, payloadDataset) : null);
+
+      const isBarcode = isBarcodeVariable(token);
+      let x: number;
+      let y: number;
+      let width: number;
+      let height: number;
+
+      if (repeater) {
+        x = 2;
+        y = 2;
+        const itemW = repeater.itemWidth ?? defaultW;
+        width = Math.min(Math.max(0, itemW - 4), defaultW);
+        height = isBarcode ? Math.min(12, repeater.itemHeight ?? 8) : Math.min(defaultH, repeater.itemHeight ?? 8);
+      } else {
+        x = Math.max(0, Math.min(xMm, template.widthMm - defaultW));
+        y = Math.max(0, Math.min(yMm, template.heightMm - defaultH));
+        width = Math.min(defaultW, template.widthMm - x);
+        height = isBarcode ? Math.min(12, template.heightMm - y) : Math.min(defaultH, template.heightMm - y);
+      }
+
+      if (isBarcode) {
         const el: BarcodeElement = {
           id: generateId(),
           type: "barcode",
           x,
           y,
-          width: Math.min(defaultW, template.widthMm - x),
-          height: Math.min(12, template.heightMm - y),
+          width,
+          height,
           format: "Code128",
           dataBinding: binding as DynamicBinding,
           showValue: false,
         };
-        addElement(el);
+        if (repeater) {
+          onTemplateChange(insertIntoRepeaterTemplate(template, repeater.id, el));
+          setSelectedId(el.id);
+        } else {
+          addElement(el);
+        }
       } else {
         const el: DynamicTextElement = {
           id: generateId(),
           type: "dynamicText",
           x,
           y,
-          width: Math.min(defaultW, template.widthMm - x),
-          height: Math.min(defaultH, template.heightMm - y),
+          width,
+          height,
           binding: token as DynamicBinding,
           fontSize: 10,
           align: "left",
           verticalText: false,
         };
-        addElement(el);
+        if (repeater) {
+          onTemplateChange(insertIntoRepeaterTemplate(template, repeater.id, el));
+          setSelectedId(el.id);
+        } else {
+          addElement(el);
+        }
       }
     },
-    [addElement, template.widthMm, template.heightMm]
+    [
+      addElement,
+      template,
+      selectedId,
+      onTemplateChange,
+      setSelectedId,
+      template.widthMm,
+      template.heightMm,
+    ]
   );
 
   const handleCanvasDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const token = e.dataTransfer.getData("application/x-label-variable");
-      if (!token) return;
+      const raw = e.dataTransfer.getData("application/x-label-variable");
+      if (!raw) return;
+      let payload: string | { name: string; dataset?: string };
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (parsed && typeof parsed === "object" && typeof (parsed as { name?: string }).name === "string") {
+          payload = { name: (parsed as { name: string }).name, dataset: (parsed as { dataset?: string }).dataset };
+        } else {
+          payload = raw;
+        }
+      } catch {
+        payload = raw;
+      }
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
       const x_px = snapToGridPx(e.clientX - rect.left);
       const y_px = snapToGridPx(e.clientY - rect.top);
-      addElementFromVariableDrop(token, x_px / PX_PER_MM, y_px / PX_PER_MM);
+      addElementFromVariableDrop(payload, x_px / PX_PER_MM, y_px / PX_PER_MM);
     },
-    [addElementFromVariableDrop]
+    [addElementFromVariableDrop, PX_PER_MM]
   );
 
   const handleCanvasDragOver = useCallback((e: React.DragEvent) => {
@@ -271,6 +426,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
         template_type: template.template_type ?? "location",
         updatedAt: new Date().toISOString(),
       }),
+      group_id: templateMeta?.group_id ?? null,
     };
     setSaving(true);
     try {
@@ -285,7 +441,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
     } finally {
       setSaving(false);
     }
-  }, [template, templateId, onBack]);
+  }, [template, templateId, templateMeta?.group_id, onBack]);
 
   useEffect(() => {
     if (!isMiddlePanning) return;
@@ -351,6 +507,10 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
           handleSave={handleSave}
           onBack={onBack}
           setPresetModalOpen={setPresetModalOpen}
+          saveDisabled={!validation.valid}
+          templateMeta={templateMeta}
+          onTemplateMetaChange={onTemplateMetaChange}
+          groups={groups}
         />
         <div className="flex items-center gap-6 px-4 py-2 bg-white border-b border-[#E2E8F0] border-t-0">
           <div className="flex items-center gap-2">
@@ -404,6 +564,9 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
           handleCanvasDragOver={handleCanvasDragOver}
           handleCanvasDrop={handleCanvasDrop}
           labelSvg={labelSvg}
+          hasRepeaterPreview={hasRepeaterPreview}
+          validationErrorElementIds={validationErrorElementIds}
+          validationWarningElementIds={validationWarningElementIds}
           PX_PER_MM={PX_PER_MM}
           GRID_LINE_STEP_MM={GRID_LINE_STEP_MM}
           canvasRef={canvasRef}
@@ -412,15 +575,23 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
           onMiddlePanStart={onMiddlePanStart}
         />
 
-        <LabelInspectorPanel
-          template={template}
-          selected={selected}
-          updateElement={updateElement}
-          deleteElement={deleteElement}
-          collapsedCategories={collapsedCategories}
-          setCollapsedCategories={setCollapsedCategories}
-          variableCategories={variableCategories}
-        />
+        <aside className="w-72 shrink-0 flex flex-col gap-3 p-3 bg-white border-l border-[#E2E8F0] overflow-y-auto">
+          <TemplateValidationPanel
+            result={validation}
+            onSelectElement={setSelectedId}
+          />
+          <VariableInspectorPanel analysis={variableAnalysis} selected={selected} />
+          <LabelInspectorPanel
+            template={template}
+            selected={selected}
+            updateElement={updateElement}
+            deleteElement={deleteElement}
+            collapsedCategories={collapsedCategories}
+            setCollapsedCategories={setCollapsedCategories}
+            variableCategories={variableCategories}
+            wrapInAside={false}
+          />
+        </aside>
       </div>
     </div>
   );

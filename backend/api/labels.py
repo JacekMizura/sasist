@@ -38,6 +38,7 @@ class GenerateRackStripBody(BaseModel):
 class RenderPdfBody(BaseModel):
     template_id: int
     records: list[dict]
+    printer_profile_id: int | None = None
 
 
 class ProductLabelBody(BaseModel):
@@ -204,11 +205,25 @@ def post_render_pdf(
     """Render a label PDF from a template and list of records. One page per record."""
     if not body.records:
         return Response(content=b"", status_code=400, media_type="text/plain")
+    calibration = None
+    if body.printer_profile_id is not None:
+        from ..models.printer_profile import PrinterProfile
+        profile = db.query(PrinterProfile).filter(
+            PrinterProfile.id == body.printer_profile_id,
+            PrinterProfile.tenant_id == tenant_id,
+        ).first()
+        if profile:
+            calibration = {
+                "offset_x_mm": float(profile.offset_x_mm or 0),
+                "offset_y_mm": float(profile.offset_y_mm or 0),
+                "scale": float(profile.scale if profile.scale is not None else 1.0),
+            }
     pdf_bytes = render_label_template(
         db=db,
         template_id=body.template_id,
         data=body.records,
         tenant_id=tenant_id,
+        calibration=calibration,
     )
     return Response(content=pdf_bytes, media_type="application/pdf")
 

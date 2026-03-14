@@ -7,6 +7,7 @@ export interface MagazynRackDetailHeaderProps {
   binUsedVolumeDm3: (b: BinState) => number;
   binVolumeDm3: (b: BinState, r: RackState) => number;
   getRackDisplayId: (r: RackState) => string;
+  onShowLabelDownload?: () => void;
 }
 
 export function MagazynRackDetailHeader({
@@ -16,6 +17,7 @@ export function MagazynRackDetailHeader({
   binUsedVolumeDm3,
   binVolumeDm3,
   getRackDisplayId,
+  onShowLabelDownload,
 }: MagazynRackDetailHeaderProps) {
   const used = rack ? rack.bins.reduce((s, b) => s + binUsedVolumeDm3(b), 0) : 0;
   const total = rack ? (rack.total_capacity_dm3 ?? rack.bins.reduce((s, b) => s + binVolumeDm3(b, rack), 0)) : 0;
@@ -24,13 +26,24 @@ export function MagazynRackDetailHeader({
 
   return (
     <div className="shrink-0 flex items-center gap-3 p-3 border-b border-slate-100 bg-slate-50/50">
-      <button
-        type="button"
-        onClick={onBackToMap}
-        className="flex items-center gap-1.5 text-sm font-medium text-cyan-600 hover:text-cyan-700 hover:underline"
-      >
-        <span aria-hidden>←</span> Powrót do mapy
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onBackToMap}
+          className="flex items-center gap-1.5 text-sm font-medium text-cyan-600 hover:text-cyan-700 hover:underline"
+        >
+          <span aria-hidden>←</span> Powrót do mapy
+        </button>
+        {rack && onShowLabelDownload && (
+          <button
+            type="button"
+            onClick={onShowLabelDownload}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-600 text-white hover:bg-cyan-500"
+          >
+            Pobierz etykiety
+          </button>
+        )}
+      </div>
       {rack && (
         <>
           <span className="text-slate-300">|</span>

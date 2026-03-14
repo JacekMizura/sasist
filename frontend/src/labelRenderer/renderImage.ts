@@ -9,7 +9,7 @@ export function renderImage(item: LayoutItem): string {
   const w = item.width_mm;
   const h = item.height_mm;
 
-  return `<image href="${escapeAttr(item.src)}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet"/>`;
+  return `<image href="${escapeAttr(item.src)}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none"/>`;
 }
 
 function escapeAttr(s: string): string {

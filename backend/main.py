@@ -37,6 +37,9 @@ from .api.label_sizes import router as label_sizes_router
 from .api.labels import router as labels_router
 from .api.label_pack import router as label_pack_router
 from .api.label_preview import router as label_preview_router
+from .api.printer_profiles import router as printer_profiles_router
+from .api.printers import router as printers_router
+from .api.qz import router as qz_router
 from .api.wave import router as wave_router
 from .api.scan import router as scan_router
 from .api.inventory_api import router as inventory_router
@@ -218,6 +221,9 @@ app.include_router(label_sizes_router)
 app.include_router(labels_router)
 app.include_router(label_pack_router)
 app.include_router(label_preview_router)
+app.include_router(printer_profiles_router)
+app.include_router(printers_router)
+app.include_router(qz_router)
 app.include_router(wave_router)
 app.include_router(scan_router)
 app.include_router(inventory_router)

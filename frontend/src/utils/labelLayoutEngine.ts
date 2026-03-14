@@ -260,8 +260,10 @@ function flattenElements(
       const dir = rep.direction === "vertical";
       let cx = x0_mm + rep.x;
       let cy = y0_mm + rep.y;
-      for (const item of items) {
-        const itemData = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const itemData: Record<string, unknown> =
+          typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
         flattenElements(template, itemData, labelWidthMm, labelHeightMm, cx, cy, out);
         if (dir) cy += itemH;
         else cx += itemW;

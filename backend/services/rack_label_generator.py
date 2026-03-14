@@ -31,8 +31,9 @@ def generate_rack_locations(
     levels = max(1, int(levels))
     positions = max(1, int(positions))
     out: list[dict[str, Any]] = []
-    for level in range(1, levels + 1):
-        for position in range(1, positions + 1):
+    # Order matters for horizontal strip printing: position-major, then level.
+    for position in range(1, positions + 1):
+        for level in range(1, levels + 1):
             loc_name = f"{rack}-{level}-{position}"
             record: dict[str, Any] = {
                 "loc_name": loc_name,

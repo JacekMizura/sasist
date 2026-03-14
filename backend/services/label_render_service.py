@@ -7,6 +7,9 @@ Flow: Designer (frontend) → SavedLabelTemplate.template_json → label_render_
 
 Template format: { "widthMm", "heightMm", "elements": [{ type, x, y, ... }] }.
 Used by: location labels, cart/basket labels, label packs.
+
+Calibration (offset/scale): Should be applied either in frontend export OR backend
+rendering, not both, to avoid double transformation.
 """
 
 import io
@@ -276,6 +279,8 @@ def _normalize_template(template: dict) -> dict:
     }
 
 
+# Legacy renderer. Do not use. Kept only for backward compatibility.
+# Does not support repeaters or groups; current PDF pipeline uses label_engine.render_label_to_canvas_engine.
 def render_label_to_canvas(
     c: canvas.Canvas,
     template: dict,
@@ -307,11 +312,17 @@ def render_label_to_canvas(
         )
 
 
-def build_label_pdf(template: dict, records: list[dict[str, Any]], one_page_per_label: bool = True) -> bytes:
+def build_label_pdf(
+    template: dict,
+    records: list[dict[str, Any]],
+    one_page_per_label: bool = True,
+    calibration: dict | None = None,
+) -> bytes:
     """
     Build a PDF from a label template and a list of records.
     Template must have widthMm, heightMm, elements. Uses label_engine.render_elements.
     Normalizes records so keys match template bindings (e.g. cart_name, barcode_data, loc_name).
+    calibration: optional dict with offset_x_mm, offset_y_mm, scale (applied only during export).
     """
     t = _normalize_template(template)
     width = t["widthMm"]
@@ -325,12 +336,16 @@ def build_label_pdf(template: dict, records: list[dict[str, Any]], one_page_per_
         logger.info("RECORD KEYS: %s", list(records[0].keys()))
     layout = {"elements": elements}
     from .label_engine import build_label_pdf_engine
-    return build_label_pdf_engine(layout, width, height, records)
+    return build_label_pdf_engine(layout, width, height, records, calibration=calibration)
 
 
-def build_label_pdf_multi(template_record_pairs: list[tuple[dict, dict[str, Any]]]) -> bytes:
+def build_label_pdf_multi(
+    template_record_pairs: list[tuple[dict, dict[str, Any]]],
+    calibration: dict | None = None,
+) -> bytes:
     """
     Build one PDF with one page per (template, record) pair. Uses generic label engine.
+    calibration: optional dict with offset_x_mm, offset_y_mm, scale (applied only during export).
     """
     from .label_engine import render_label_to_canvas_engine
     if not template_record_pairs:
@@ -338,7 +353,13 @@ def build_label_pdf_multi(template_record_pairs: list[tuple[dict, dict[str, Any]
             {"widthMm": 100, "heightMm": 60, "dpi": 96, "elements": []},
             [{}],
             one_page_per_label=True,
+            calibration=calibration,
         )
+    ox_mm = 0.0 if not calibration else float(calibration.get("offset_x_mm") or 0)
+    oy_mm = 0.0 if not calibration else float(calibration.get("offset_y_mm") or 0)
+    scale = 1.0 if not calibration else float(calibration.get("scale") or 1.0)
+    offset_x_pt = ox_mm * POINTS_PER_MM
+    offset_y_pt = oy_mm * POINTS_PER_MM
     buf = io.BytesIO()
     c = None
     for i, (template, record) in enumerate(template_record_pairs):
@@ -355,7 +376,11 @@ def build_label_pdf_multi(template_record_pairs: list[tuple[dict, dict[str, Any]
         else:
             c.showPage()
             c.setPageSize((label_width_pt, label_height_pt))
+        c.saveState()
+        c.translate(offset_x_pt, offset_y_pt)
+        c.scale(scale, scale)
         render_label_to_canvas_engine(c, layout, record, w_mm, h_mm, 0.0, 0.0)
+        c.restoreState()
     if c is not None:
         c.save()
     buf.seek(0)
@@ -513,10 +538,12 @@ def render_label_template(
     template_id: int,
     data: dict[str, Any] | list[dict[str, Any]],
     tenant_id: int,
+    calibration: dict | None = None,
 ) -> bytes:
     """
     Single entry point for label PDF generation. Loads template from SavedLabelTemplate.template_json only.
     Ensures template_json is parsed to dict and normalized (widthMm, heightMm, elements) before rendering.
+    calibration: optional dict with offset_x_mm, offset_y_mm, scale (applied only during export).
     """
     from ..models.label_template import SavedLabelTemplate
 
@@ -550,4 +577,4 @@ def render_label_template(
     records = [_normalize_record_for_bindings(r, elements) for r in records]
     # Pass explicit shape so build_label_pdf always receives widthMm, heightMm, elements
     template_for_pdf = {"widthMm": width, "heightMm": height, "elements": elements}
-    return build_label_pdf(template_for_pdf, records, one_page_per_label=True)
+    return build_label_pdf(template_for_pdf, records, one_page_per_label=True, calibration=calibration)

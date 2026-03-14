@@ -13,6 +13,8 @@ from .consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackS
 from .warehouse_map import WarehouseMap, MapElement, StorageBin
 from .warehouse import StorageLocation  # noqa: F401 - register table
 from .label_template import SavedLabelTemplate  # noqa: F401
+from .printer_profile import PrinterProfile  # noqa: F401
+from .printer import Printer  # noqa: F401
 from .warehouse_template import WarehouseTemplate  # noqa: F401
 from .location import Location
 from .warehouse_graph import WarehouseNode, WarehouseEdge, LocationNode  # noqa: F401

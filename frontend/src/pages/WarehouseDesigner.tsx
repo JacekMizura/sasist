@@ -11,6 +11,7 @@ import { WarehouseFullMap } from "../components/warehouse/WarehouseFullMap";
 import { WarehouseLegend } from "../components/warehouse/WarehouseLegend";
 import { MagazynDashboardPanel } from "../components/warehouse/magazyn/MagazynDashboardPanel";
 import { MagazynRackDetailHeader } from "../components/warehouse/magazyn/MagazynRackDetailHeader";
+import { RackLabelDownloadModal } from "../components/labels/RackLabelDownloadModal";
 import { MagazynProductsSidebar } from "../components/warehouse/magazyn/MagazynProductsSidebar";
 import { UI_STRINGS } from "../constants/uiStrings";
 import PageLayout from "../components/layout/PageLayout";
@@ -248,6 +249,13 @@ export default function WarehouseDesigner() {
   const canMoveRowToRef = useRef<((rowId: string, newStart: { x: number; y: number }) => boolean) | null>(null);
   const moveRowToPositionRef = useRef<((rowId: string, newStartX: number, newStartY: number) => void) | null>(null);
   const moveRackWithinRowRef = useRef<((rowId: string, rackId: number | string, fromSlotIndex: number, toSlotIndex: number) => void) | null>(null);
+  const [showRackLabelDownload, setShowRackLabelDownload] = useState(false);
+
+  useEffect(() => {
+    if (selectedRackIdForSideView == null) {
+      setShowRackLabelDownload(false);
+    }
+  }, [selectedRackIdForSideView]);
 
   /** When "Rysuj Rząd" is turned off, clear all temp row-draw state so no extra slot can leak into rows. */
   useEffect(() => {
@@ -1366,6 +1374,7 @@ export default function WarehouseDesigner() {
                       binUsedVolumeDm3={binUsedVolumeDm3}
                       binVolumeDm3={binVolumeDm3}
                       getRackDisplayId={getRackDisplayId}
+                      onShowLabelDownload={() => setShowRackLabelDownload(true)}
                     />
                     {rack && (
                       <div className="flex-1 min-h-0 overflow-hidden flex flex-col shrink-0" style={{ minHeight: 0 }}>
@@ -1532,6 +1541,20 @@ export default function WarehouseDesigner() {
           />
         ) : null}
       </div>
+
+      {showRackLabelDownload && mainView === "magazyn" && selectedRackIdForSideView != null && (
+        (() => {
+          const rack = displayRack ?? selectedRackForMagazyn;
+          if (!rack) return null;
+          return (
+            <RackLabelDownloadModal
+              rack={rack}
+              locations={[]}
+              onClose={() => setShowRackLabelDownload(false)}
+            />
+          );
+        })()
+      )}
 
     </PageLayout>
   );

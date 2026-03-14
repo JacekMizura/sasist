@@ -8,26 +8,37 @@ import type { LabelRecord } from "../types/labelSystem";
 import { computeLayoutFromTemplate } from "../utils/labelLayoutEngine";
 import type { LabelRenderer } from "./renderer";
 import { svgRenderer } from "./svgRenderer";
+import { applyThermalMode } from "./applyThermalMode";
+
+export type RenderLabelOptions = {
+  renderer?: LabelRenderer;
+  thermal?: boolean;
+};
 
 /**
  * Renders a full label. Uses template + data to compute layout, then the given renderer (default SVG).
  * Elements are sorted by zIndex (higher = on top) before layout so render order matches layering.
- * Existing calls renderLabel(template, record) continue to return SVG exactly as before.
+ * When thermal is true, applies monochrome transformation (black fills/strokes, no images).
  */
 export async function renderLabel(
   template: LabelTemplate,
   data: LabelRecord | Record<string, unknown>,
-  renderer?: LabelRenderer
+  rendererOrOptions?: LabelRenderer | RenderLabelOptions
 ): Promise<string> {
+  const opts: RenderLabelOptions =
+    rendererOrOptions && "render" in rendererOrOptions
+      ? { renderer: rendererOrOptions }
+      : (rendererOrOptions ?? {});
   const sortedElements = [...template.elements].sort(
     (a, b) => ((a as { zIndex?: number }).zIndex ?? 0) - ((b as { zIndex?: number }).zIndex ?? 0)
   );
   const sortedTemplate = { ...template, elements: sortedElements };
-  const items = computeLayoutFromTemplate(sortedTemplate, data as LabelRecord);
+  let items = computeLayoutFromTemplate(sortedTemplate, data as LabelRecord);
+  if (opts.thermal) items = applyThermalMode(items);
   const widthMm = template.widthMm;
   const heightMm = template.heightMm;
 
-  const r = renderer ?? svgRenderer;
+  const r = opts.renderer ?? svgRenderer;
   const result = r.render(items, { widthMm, heightMm });
   return typeof result === "string" ? Promise.resolve(result) : result;
 }

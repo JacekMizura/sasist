@@ -79,11 +79,24 @@ def _hex_to_rgb(hex_str: str) -> tuple[float, float, float]:
         return (0, 0, 0)
 
 
+# Fallback order must match frontend for consistent barcode resolution.
+_BARCODE_FALLBACK_KEYS = (
+    "barcode_data",
+    "loc_barcode",
+    "location_barcode",
+    "cart_barcode",
+    "basket_barcode",
+    "product_barcode",
+    "order_barcode",
+    "location_code",
+)
+
+
 def _resolve_barcode_value(data: dict[str, Any], binding: str) -> str:
     v = _resolve(data, binding)
     if v:
         return v
-    for k in ("barcode_data", "location_barcode", "cart_barcode", "basket_barcode", "location_code"):
+    for k in _BARCODE_FALLBACK_KEYS:
         v = _resolve(data, k)
         if v:
             return v
@@ -117,7 +130,11 @@ def _compute_layout_items(
             _compute_layout_items(nested, record, label_width_mm, label_height_mm, gx, gy, out)
             continue
         if el_type == "repeater":
-            dataset_key = el.get("dataset") or "items"
+            dataset_key = el.get("dataset")
+            if not dataset_key or (isinstance(dataset_key, str) and not dataset_key.strip()):
+                logger.warning("Repeater element missing dataset property")
+                continue
+            dataset_key = dataset_key.strip() if isinstance(dataset_key, str) else dataset_key
             items = record.get(dataset_key)
             if not isinstance(items, list):
                 items = []
@@ -572,7 +589,11 @@ def render_elements(
                 render_elements(c, nested, data, {**ctx, "x0_mm": x_mm, "y0_mm": y_design_mm})
 
         elif el_type == "repeater":
-            dataset_key = el.get("dataset") or "items"
+            dataset_key = el.get("dataset")
+            if not dataset_key or (isinstance(dataset_key, str) and not dataset_key.strip()):
+                logger.warning("Repeater element missing dataset property")
+                continue
+            dataset_key = dataset_key.strip() if isinstance(dataset_key, str) else dataset_key
             items = data.get(dataset_key)
             if not isinstance(items, list):
                 items = []
@@ -955,10 +976,12 @@ def build_label_pdf_engine(
     height_mm: float,
     records: list[dict[str, Any]],
     debug_draw_bounds: bool = False,
+    calibration: dict | None = None,
 ) -> bytes:
     """
     Build PDF using the generic engine. One page per record.
     Accepts layout_json with elements (text, barcode, rectangle, line, icon, group, repeater).
+    calibration: optional dict with offset_x_mm, offset_y_mm, scale (applied only during export).
     """
     if isinstance(layout_json, str):
         try:
@@ -978,13 +1001,21 @@ def build_label_pdf_engine(
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(w_pt, h_pt))
 
+    ox_mm = 0.0 if not calibration else float(calibration.get("offset_x_mm") or 0)
+    oy_mm = 0.0 if not calibration else float(calibration.get("offset_y_mm") or 0)
+    scale = 1.0 if not calibration else float(calibration.get("scale") or 1.0)
+    offset_x_pt = ox_mm * POINTS_PER_MM
+    offset_y_pt = oy_mm * POINTS_PER_MM
+
     for i, record in enumerate(records):
         if i > 0:
             c.showPage()
             c.setPageSize((w_pt, h_pt))
-        # One label per page: offset 0 for single label
-        offset_y_pt = 0.0
-        render_label_to_canvas_engine(c, layout, record, width_mm, height_mm, 0.0, offset_y_pt, debug_draw_bounds)
+        c.saveState()
+        c.translate(offset_x_pt, offset_y_pt)
+        c.scale(scale, scale)
+        render_label_to_canvas_engine(c, layout, record, width_mm, height_mm, 0.0, 0.0, debug_draw_bounds)
+        c.restoreState()
     c.save()
     buf.seek(0)
     return buf.read()
@@ -1123,7 +1154,11 @@ def _render_elements_svg(
                 _render_elements_svg(nested, data, {**ctx, "x0_mm": x_mm, "y0_mm": y_mm}, out)
 
         elif el_type == "repeater":
-            dataset_key = el.get("dataset") or "items"
+            dataset_key = el.get("dataset")
+            if not dataset_key or (isinstance(dataset_key, str) and not dataset_key.strip()):
+                logger.warning("Repeater element missing dataset property")
+                continue
+            dataset_key = dataset_key.strip() if isinstance(dataset_key, str) else dataset_key
             items = data.get(dataset_key)
             if not isinstance(items, list):
                 items = []

@@ -18,15 +18,19 @@ const DEFAULT_TEMPLATE: LabelTemplate = {
   updatedAt: new Date().toISOString(),
 };
 
+import type { TemplateMeta } from "./LabelTemplateDesigner";
+
 function DesignerWrapper() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [template, setTemplate] = useState<LabelTemplate>(DEFAULT_TEMPLATE);
+  const [templateMeta, setTemplateMeta] = useState<TemplateMeta>({ group_id: null });
   const [loading, setLoading] = useState(!!id && id !== "new");
 
   useEffect(() => {
     if (!id || id === "new") {
       setTemplate({ ...DEFAULT_TEMPLATE, id: "new" });
+      setTemplateMeta({ group_id: null });
       setLoading(false);
       return;
     }
@@ -39,7 +43,7 @@ function DesignerWrapper() {
     api
       .get(`/label-templates/`, { params: { tenant_id: 1 } })
       .then((res) => {
-        const row = (res.data as { id: number; name: string; template_type?: string; template_json: string }[]).find((r) => r.id === numId);
+        const row = (res.data as { id: number; name: string; template_type?: string; template_json: string; group_id?: number | null }[]).find((r) => r.id === numId);
         if (row) {
           const t = JSON.parse(row.template_json) as LabelTemplate;
           setTemplate({
@@ -49,6 +53,7 @@ function DesignerWrapper() {
             template_type: (row.template_type || t.template_type) as LabelTemplate["template_type"],
             updatedAt: new Date().toISOString(),
           });
+          setTemplateMeta({ group_id: row.group_id ?? null });
         }
       })
       .catch(() => {})
@@ -68,6 +73,8 @@ function DesignerWrapper() {
       template={template}
       onTemplateChange={onTemplateChange}
       templateId={id === "new" ? null : id ? parseInt(id, 10) : null}
+      templateMeta={templateMeta}
+      onTemplateMetaChange={setTemplateMeta}
       onBack={onBack}
     />
   );

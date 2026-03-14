@@ -1,13 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
 import type { LabelTemplate } from "../../../types/labelSystem";
-import { PREVIEW_SAMPLES } from "../../../types/labelSystem";
+import { buildPreviewRecord } from "../../../labelSystem/repeaterPreview/buildPreviewRecord";
+import { findRepeaters } from "../../../labelSystem/repeaterAnalysis/findRepeaters";
 import { renderLabel } from "../../../labelRenderer";
 
 export function useLabelPreview(template: LabelTemplate) {
   const previewRecord: Record<string, unknown> = useMemo(
-    () => PREVIEW_SAMPLES[template.template_type ?? "location"],
-    [template.template_type]
+    () => buildPreviewRecord(template),
+    [template.elements, template.template_type]
   );
+
+  const hasRepeaterPreview = useMemo(() => findRepeaters(template).length > 0, [template.elements]);
 
   const [labelSvg, setLabelSvg] = useState<string>("");
   useEffect(() => {
@@ -18,5 +21,5 @@ export function useLabelPreview(template: LabelTemplate) {
     return () => { cancelled = true; };
   }, [template, previewRecord]);
 
-  return { previewRecord, labelSvg };
+  return { previewRecord, labelSvg, hasRepeaterPreview };
 }

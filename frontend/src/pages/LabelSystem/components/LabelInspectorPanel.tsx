@@ -17,6 +17,8 @@ export type LabelInspectorPanelProps = {
   collapsedCategories: Record<string, boolean>;
   setCollapsedCategories: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   variableCategories: Array<{ id: VariableCategoryId; label: string; items: LabelVariable[] }>;
+  /** When false, render inner content only (no aside wrapper). Used when panel is inside a shared sidebar. */
+  wrapInAside?: boolean;
 };
 
 export function LabelInspectorPanel({
@@ -27,9 +29,10 @@ export function LabelInspectorPanel({
   collapsedCategories,
   setCollapsedCategories,
   variableCategories,
+  wrapInAside = true,
 }: LabelInspectorPanelProps) {
-  return (
-    <aside className="w-72 shrink-0 flex flex-col gap-3 p-3 bg-white border-l border-[#E2E8F0] overflow-y-auto">
+  const content = (
+    <>
       <div>
         <h3 className="text-xs font-black uppercase tracking-wide text-slate-600 mb-2">{UI_STRINGS.labels.panel.variables}</h3>
         <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
@@ -147,6 +150,13 @@ export function LabelInspectorPanel({
           <p className="text-xs text-slate-500">{UI_STRINGS.labels.panel.clickToEdit}</p>
         )}
       </div>
+    </>
+  );
+  return wrapInAside ? (
+    <aside className="w-72 shrink-0 flex flex-col gap-3 p-3 bg-white border-l border-[#E2E8F0] overflow-y-auto">
+      {content}
     </aside>
+  ) : (
+    content
   );
 }

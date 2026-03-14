@@ -9,7 +9,6 @@ import { renderText } from "./renderText";
 import { renderBarcode } from "./renderBarcode";
 import { renderRectangle } from "./renderRectangle";
 import { renderArrow } from "./renderArrow";
-import { renderImage } from "./renderImage";
 import { renderIcon } from "./renderIcon";
 import { renderTriangle } from "./renderTriangle";
 import { renderPolygon } from "./renderPolygon";
@@ -53,7 +52,14 @@ async function renderElement(item: LayoutItem): Promise<string> {
       fragment = renderArrow(item);
       break;
     case "image":
-      fragment = renderImage(item);
+      fragment = `<image
+      href="${escapeAttr(item.src ?? "")}"
+      x="0"
+      y="0"
+      width="${item.width_mm}"
+      height="${item.height_mm}"
+      preserveAspectRatio="none"
+  />`;
       break;
     case "icon":
       fragment = renderIcon(item);

@@ -25,6 +25,11 @@ export type LabelCanvasProps = {
   handleCanvasDragOver: (e: React.DragEvent) => void;
   handleCanvasDrop: (e: React.DragEvent) => void;
   labelSvg: string;
+  hasRepeaterPreview?: boolean;
+  /** Element IDs with validation errors (highlight border). */
+  validationErrorElementIds?: string[];
+  /** Element IDs with validation warnings (highlight border). */
+  validationWarningElementIds?: string[];
   PX_PER_MM: number;
   GRID_LINE_STEP_MM: number;
   canvasRef: React.RefObject<HTMLDivElement | null>;
@@ -44,6 +49,9 @@ export function LabelCanvas({
   handleCanvasDragOver,
   handleCanvasDrop,
   labelSvg,
+  hasRepeaterPreview = false,
+  validationErrorElementIds,
+  validationWarningElementIds,
   PX_PER_MM,
   GRID_LINE_STEP_MM,
   canvasRef,
@@ -54,10 +62,13 @@ export function LabelCanvas({
   return (
     <div
       ref={draftingTableRef}
-      className="flex-1 min-h-0 min-w-0 flex items-center justify-center overflow-auto p-6 bg-[#F8FAFC]"
+      className="flex-1 min-h-0 min-w-0 flex flex-col items-center justify-start gap-2 overflow-auto pt-2 pb-6 px-6 bg-[#F8FAFC]"
       onMouseDown={onMiddlePanStart}
       style={{ cursor: isMiddlePanning ? "grabbing" : "default" }}
     >
+      {hasRepeaterPreview && (
+        <span className="text-[10px] text-slate-500">Preview: 3 sample items</span>
+      )}
       <div
         className="flex-shrink-0 overflow-hidden rounded-2xl border border-slate-200 shadow-xl"
         style={{
@@ -115,6 +126,10 @@ export function LabelCanvas({
             const left = "x" in el ? el.x * PX_PER_MM : 0;
             const top = "y" in el ? el.y * PX_PER_MM : 0;
             const { w, h } = getOverlaySizePx(el, PX_PER_MM);
+            const hasError = validationErrorElementIds?.includes(el.id);
+            const hasWarning = validationWarningElementIds?.includes(el.id);
+            const validationBorder =
+              hasError ? "#dc2626" : hasWarning ? "#d97706" : undefined;
             return (
               <div
                 key={el.id}
@@ -130,6 +145,7 @@ export function LabelCanvas({
                   width: `${w}px`,
                   height: `${h}px`,
                   ...(selectedId === el.id ? { borderColor: "#0891b2" } : {}),
+                  ...(validationBorder && selectedId !== el.id ? { borderColor: validationBorder } : {}),
                   ...(DEBUG_SHOW_BOUNDING_BOXES
                     ? { outline: "1px dashed rgba(255,0,0,0.6)", outlineOffset: -1 }
                     : {}),

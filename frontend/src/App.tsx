@@ -19,6 +19,7 @@ import CartsBaskets from "./pages/CartsBaskets"
 import CartsRacks from "./pages/CartsRacks"
 import CartsZones from "./pages/CartsZones"
 import Setup from "./pages/Setup"
+import PrintersPage from "./pages/Settings/PrintersPage"
 import Changelog from "./pages/Changelog"
 import CartDetails from "./pages/CartDetails"
 import FleetPlanner from "./pages/FleetPlanner"
@@ -87,6 +88,7 @@ function App() {
                   <Route path="zones" element={<CartsZones />} />
                 </Route>
                 <Route path="/setup" element={<Setup />} />
+                <Route path="/setup/printers" element={<PrintersPage />} />
                 <Route path="/changelog" element={<Changelog />} />
                 <Route path="/carts/:id" element={<CartDetails />} />
                 <Route path="/optimizer" element={<FleetPlanner />} />

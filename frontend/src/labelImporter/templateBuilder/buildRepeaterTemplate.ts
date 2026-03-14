@@ -34,25 +34,25 @@ export function buildRepeaterTemplate(
     zIndex: -1000,
   } as LabelElement;
 
-  const textEl: LabelElement = {
+  const locationCodeText: LabelElement = {
     id: uuid(),
     type: "dynamicText",
-    x: 2,
-    y: heightMm * 0.15,
-    width: itemWidthMm - 4,
+    x: itemWidthMm * 0.1,
+    y: heightMm * 0.1,
+    width: itemWidthMm * 0.8,
     height: heightMm * 0.2,
     binding: "location_code",
-    fontSize: 10,
+    fontSize: 6,
     align: "center",
   } as LabelElement;
 
-  const barcodeEl: LabelElement = {
+  const locationBarcode: LabelElement = {
     id: uuid(),
     type: "barcode",
-    x: 4,
-    y: heightMm * 0.4,
-    width: itemWidthMm - 8,
-    height: heightMm * 0.45,
+    x: itemWidthMm * 0.15,
+    y: heightMm * 0.35,
+    width: itemWidthMm * 0.7,
+    height: heightMm * 0.4,
     format: "Code128",
     dataBinding: "location_barcode",
     showValue: false,
@@ -70,13 +70,13 @@ export function buildRepeaterTemplate(
     itemWidth: itemWidthMm,
     itemHeight: heightMm,
     template: {
-      elements: [backgroundImage, textEl, barcodeEl],
+      elements: [backgroundImage, locationCodeText, locationBarcode],
     },
   };
 
   return {
     id: uuid(),
-    name: "Imported PNG strip",
+    name: `Imported PNG strip (${segments.length} segments)`,
     widthMm,
     heightMm,
     dpi,
