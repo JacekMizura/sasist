@@ -17,6 +17,8 @@ export type LabelInspectorPanelProps = {
   collapsedCategories: Record<string, boolean>;
   setCollapsedCategories: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   variableCategories: Array<{ id: VariableCategoryId; label: string; items: LabelVariable[] }>;
+  /** When selected is inside a repeater, pass repeater.template.elements for correct layer (z-index) sibling comparison. */
+  siblingElementsForLayer?: TemplateElement[];
   /** When false, render inner content only (no aside wrapper). Used when panel is inside a shared sidebar. */
   wrapInAside?: boolean;
 };
@@ -29,8 +31,10 @@ export function LabelInspectorPanel({
   collapsedCategories,
   setCollapsedCategories,
   variableCategories,
+  siblingElementsForLayer,
   wrapInAside = true,
 }: LabelInspectorPanelProps) {
+  const layerSiblings = siblingElementsForLayer ?? template.elements;
   const content = (
     <>
       <div>
@@ -101,7 +105,7 @@ export function LabelInspectorPanel({
                     title={UI_STRINGS.warehouse.visuals.toFront}
                     className="p-1.5 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 text-[10px]"
                     onClick={() => {
-                      const allZ = template.elements.map((e) => (e as { zIndex?: number }).zIndex ?? 0);
+                      const allZ = layerSiblings.map((e) => (e as { zIndex?: number }).zIndex ?? 0);
                       updateElement(selected.id, { zIndex: (allZ.length ? Math.max(...allZ) : 0) + 1 });
                     }}
                   >
@@ -128,7 +132,7 @@ export function LabelInspectorPanel({
                     title={UI_STRINGS.warehouse.visuals.toBack}
                     className="p-1.5 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 text-[10px]"
                     onClick={() => {
-                      const allZ = template.elements.map((e) => (e as { zIndex?: number }).zIndex ?? 0);
+                      const allZ = layerSiblings.map((e) => (e as { zIndex?: number }).zIndex ?? 0);
                       updateElement(selected.id, { zIndex: (allZ.length ? Math.min(...allZ) : 0) - 1 });
                     }}
                   >
@@ -144,6 +148,7 @@ export function LabelInspectorPanel({
               labelHeightMm={template.heightMm}
               onUpdate={(patch) => updateElement(selected.id, patch)}
               onDelete={() => deleteElement(selected.id)}
+              variableCategories={variableCategories}
             />
           </>
         ) : (

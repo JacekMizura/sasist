@@ -46,6 +46,8 @@ export const LABEL_VARIABLE_CATEGORIES: Array<{
     items: [
       { id: "loc_name", label: "{loc_name}", token: "{loc_name}" },
       { id: "loc_barcode", label: "{loc_barcode}", token: "{loc_barcode}" },
+      { id: "rack_name", label: "{rack_name}", token: "{rack_name}" },
+      { id: "bin", label: "{bin}", token: "{bin}" },
       { id: "zone", label: "{zone}", token: "{zone}" },
     ],
   },
@@ -119,7 +121,10 @@ export const PREVIEW_SAMPLES: Record<PreviewDataType, Record<string, unknown>> =
   location: {
     location_name: "A-01-02-03",
     rack_id: "A01",
+    rack_name: "A1",
+    bin: "B",
     level: 2,
+    position: 2,
     zone_name: "Magazyn",
     volume_capacity: 120,
     barcode_data: "A1-02-03",
@@ -128,6 +133,8 @@ export const PREVIEW_SAMPLES: Record<PreviewDataType, Record<string, unknown>> =
     storage_type: "primary",
     "{loc_name}": "A-01-02-03",
     "{loc_barcode}": "A1-02-03",
+    "{rack_name}": "A1",
+    "{bin}": "B",
     "{zone}": "Magazyn",
   },
   cart: {
@@ -274,10 +281,19 @@ export interface LineElement extends LabelElementBase {
   strokeWidth?: number;
 }
 
+/** Optional conditional styling: first matching condition overrides fill/stroke. */
+export type ConditionalStyleRule = {
+  if: string;
+  fill?: string;
+  stroke?: string;
+};
+
 export interface RectElement extends LabelElementBase {
   type: "rect";
   strokeWidth?: number;
   fill?: string;
+  /** Optional: first matching rule overrides fill and optionally stroke (evaluated in layout phase). */
+  conditions?: ConditionalStyleRule[];
 }
 
 /** Section block: colored zone (e.g. rack segment, warning area). */
@@ -329,7 +345,7 @@ export interface GroupElement {
   elements: LabelElement[];
 }
 
-/** Repeater: repeat template along horizontal or vertical (e.g. rack levels). */
+/** Repeater: repeat template along horizontal, vertical, or grid (e.g. rack levels). */
 export interface RepeaterElement {
   id: string;
   type: "repeater";
@@ -344,6 +360,14 @@ export interface RepeaterElement {
   itemWidth: number;
   itemHeight?: number;
   template: { elements: LabelElement[] };
+  /** Optional: sort dataset by this field (numeric or string) before rendering */
+  sortBy?: string;
+  /** Optional: "horizontal" | "vertical" | "grid". When "grid", use columns. Fallback: direction. */
+  layout?: "horizontal" | "vertical" | "grid";
+  /** Number of columns when layout === "grid" */
+  columns?: number;
+  /** Optional: filter items with same syntax as visibleIf (e.g. "{zone} == 'A'") */
+  filter?: string;
 }
 
 export type LabelElement =

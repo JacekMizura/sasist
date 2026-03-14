@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import api from "../api/axios";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
-import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexRowByPrefix, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks } from "../components/warehouse/warehouseUtils";
+import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexRowByPrefix, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells } from "../components/warehouse/warehouseUtils";
 import { RackSidebar } from "../components/warehouse/RackSidebar";
 import { RackSideViewGrid } from "../components/warehouse/RackSideViewGrid";
 import { WarehouseModals } from "../components/warehouse/WarehouseModals";
@@ -223,6 +223,7 @@ export default function WarehouseDesigner() {
   const [showPickingPath, setShowPickingPath] = useState(false);
   const [manualPathPoints, setManualPathPoints] = useState<{ x: number; y: number }[]>([]);
   const [snackbar, setSnackbar] = useState<{ message: string; undo?: () => void; undoLabel?: string } | null>(null);
+  const [showEditBuilding, setShowEditBuilding] = useState(false);
   const [selectedVisualIds, setSelectedVisualIds] = useState<string[]>([]);
   const deletedForUndoRef = useRef<{ racks?: RackState[]; visuals?: VisualElementState[]; row_containers?: LayoutState["row_containers"] } | null>(null);
   const [draggingWallEnd, setDraggingWallEnd] = useState<{ visualId: string; end: 0 | 1 } | null>(null);
@@ -383,13 +384,21 @@ export default function WarehouseDesigner() {
       });
       const d = res.data;
       console.log("Data from backend (rack colors):", (d.racks || []).map((r: Record<string, unknown>, i: number) => ({ index: i, color: r.color })));
-      setLayout({
+      const rawGridCols = (d.grid_cols ?? 24) <= 24 ? (d.grid_cols ?? 24) * CELLS_PER_METER : (d.grid_cols ?? GRID_COLS);
+      const rawGridRows = (d.grid_rows ?? 16) <= 16 ? (d.grid_rows ?? 16) * CELLS_PER_METER : (d.grid_rows ?? GRID_ROWS);
+      const building_width_m = d.building_width_m != null && Number(d.building_width_m) > 0 ? Number(d.building_width_m) : undefined;
+      const building_depth_m = d.building_depth_m != null && Number(d.building_depth_m) > 0 ? Number(d.building_depth_m) : (d.building_height_m != null && Number(d.building_height_m) > 0 ? Number(d.building_height_m) : undefined);
+      const building_height_m = d.building_height_m != null && Number(d.building_height_m) >= 0 ? Number(d.building_height_m) : undefined;
+      setLayout(clampGridToBuilding({
         layout_id: d.layout_id ?? null,
         warehouse_id: d.warehouse_id ?? warehouseId,
         warehouse_name: d.warehouse_name ?? "",
         name: d.name ?? "Layout 1",
-        grid_cols: (d.grid_cols ?? 24) <= 24 ? (d.grid_cols ?? 24) * CELLS_PER_METER : (d.grid_cols ?? GRID_COLS),
-        grid_rows: (d.grid_rows ?? 16) <= 16 ? (d.grid_rows ?? 16) * CELLS_PER_METER : (d.grid_rows ?? GRID_ROWS),
+        grid_cols: rawGridCols,
+        grid_rows: rawGridRows,
+        building_width_m,
+        building_depth_m,
+        building_height_m,
         racks: (d.racks || []).map((r: Record<string, unknown>) => {
           const isOldFormat = (d.grid_cols ?? 24) <= 24;
           const scale = isOldFormat ? CELLS_PER_METER : 1;
@@ -484,7 +493,7 @@ export default function WarehouseDesigner() {
         })) : [],
         picking_path: Array.isArray(d.picking_path) ? d.picking_path : undefined,
         row_containers: Array.isArray(d.row_containers) ? d.row_containers : [],
-      });
+      }));
       const pathPoints = Array.isArray(d.picking_path) ? d.picking_path : [];
       setManualPathPoints(pathPoints);
       if (pathPoints.length > 0) setShowPickingPath(true);
@@ -693,6 +702,13 @@ export default function WarehouseDesigner() {
         grid_rows: layout.grid_rows,
         width_m: layout.grid_cols / CELLS_PER_METER,
         length_m: layout.grid_rows / CELLS_PER_METER,
+        ...(layout.building_width_m != null && (layout.building_depth_m != null || layout.building_height_m != null)
+          ? {
+              building_width_m: layout.building_width_m,
+              building_depth_m: layout.building_depth_m ?? layout.building_height_m,
+              ...(layout.building_height_m != null ? { building_height_m: layout.building_height_m } : {}),
+            }
+          : {}),
         racks: layout.racks.map((r) => ({
           id: r.id,
           name: r.name ?? getRackDisplayId(r),
@@ -985,7 +1001,7 @@ export default function WarehouseDesigner() {
         ...prev,
         racks: prev.racks.map((r) => {
           if (r.templateId !== templateId) return r;
-          const bins = createBinsForRack(template.aisle_letter, r.rack_index, template.levels, template.bins_per_level, volPerBin, "M1", template.naming_pattern, template.width_cm, template.depth_cm, template.height_cm, template.reserve_bin_keys, template.addressPattern, template.rowId, template.sectionStartIndex, template.binNamingType, lcEdit);
+          const bins = createBinsForRack(template.aisle_letter, r.rack_index, template.levels, template.bins_per_level, volPerBin, "M1", template.naming_pattern, template.width_cm, template.depth_cm, template.height_cm, template.reserve_bin_keys, template.addressPattern, template.rowId, template.sectionStartIndex, template.binNamingType, lcEdit, template.namingStrategy, template.namingOrientation, template.namingPattern ?? template.addressPattern, template.manualLabels, template.overrides, template.indexPadding, template.startIndex);
           return {
             ...r,
             width: w,
@@ -1172,6 +1188,29 @@ export default function WarehouseDesigner() {
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
   const isMultiSelect = selectedRackIds.length > 1;
 
+  const buildingDepthM = layout.building_depth_m ?? layout.building_height_m;
+  const outsideRackIds = useMemo(() => {
+    const bw = layout.building_width_m;
+    const depth = buildingDepthM;
+    if (bw == null || depth == null || bw <= 0 || depth <= 0) return [];
+    const maxCols = metersToCells(bw);
+    const maxRows = metersToCells(depth);
+    return layout.racks
+      .filter((r) => r.x + r.width > maxCols || r.y + r.height > maxRows)
+      .map((r) => r.id ?? r.rack_index);
+  }, [layout.racks, layout.building_width_m, buildingDepthM]);
+
+  useEffect(() => {
+    if (outsideRackIds.length > 0) {
+      setSnackbar({
+        message:
+          outsideRackIds.length === 1
+            ? "1 regał znajduje się poza granicą budynku."
+            : `${outsideRackIds.length} regałów znajduje się poza granicą budynku.`,
+      });
+    }
+  }, [outsideRackIds.length]);
+
   const { summaryByTemplate } = useDesignerTemplateSummary({
     layout,
     customTemplates,
@@ -1221,6 +1260,19 @@ export default function WarehouseDesigner() {
           setSelectedWarehouseId={setSelectedWarehouseId}
           warehouseName={layout.warehouse_name}
           lastSavedAt={lastSavedAt}
+          layout={layout}
+          setLayout={setLayout}
+          warehouseUsagePct={(() => {
+            const bw = layout.building_width_m;
+            const depth = layout.building_depth_m ?? layout.building_height_m;
+            if (bw == null || depth == null || bw <= 0 || depth <= 0) return null;
+            const buildingAreaM2 = bw * depth;
+            const totalRackCells = layout.racks.reduce((s, r) => s + r.width * r.height, 0);
+            const rackAreaM2 = totalRackCells * 0.01;
+            return buildingAreaM2 > 0 ? (rackAreaM2 / buildingAreaM2) * 100 : null;
+          })()}
+          showEditBuilding={showEditBuilding}
+          setShowEditBuilding={setShowEditBuilding}
         />
       }
     >
@@ -1294,6 +1346,7 @@ export default function WarehouseDesigner() {
             setCurrentRowPrefix={setCurrentRowPrefix}
             onReindexRow={(rackId: number | string | null, prefix: string) => setLayout((prev) => ({ ...prev, racks: rackId != null ? reindexGeometricRow(prev.racks, rackId) : reindexRowByPrefix(prev.racks, prefix) }))}
             showOnlyCatalog
+            onOpenEditBuilding={() => setShowEditBuilding(true)}
           />
           </div>
         ) : mainView === "layout" ? (
@@ -1333,6 +1386,7 @@ export default function WarehouseDesigner() {
             currentRowPrefix={currentRowPrefix}
             setCurrentRowPrefix={setCurrentRowPrefix}
             onReindexRow={(rackId: number | string | null, prefix: string) => setLayout((prev) => ({ ...prev, racks: rackId != null ? reindexGeometricRow(prev.racks, rackId) : reindexRowByPrefix(prev.racks, prefix) }))}
+            onOpenEditBuilding={() => setShowEditBuilding(true)}
           />
         ) : null}
 
@@ -1530,6 +1584,7 @@ export default function WarehouseDesigner() {
               pathDistanceM,
               onMagicWand: handleMagicWand,
               selectedVisualIds,
+              outsideRackIds,
               isLiveView,
               setSelectedVisualId,
               setSelectedVisualIds,

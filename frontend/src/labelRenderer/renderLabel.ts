@@ -13,6 +13,8 @@ import { applyThermalMode } from "./applyThermalMode";
 export type RenderLabelOptions = {
   renderer?: LabelRenderer;
   thermal?: boolean;
+  /** Global variables merged into the record before layout (e.g. warehouse_name). */
+  templateVariables?: Record<string, unknown>;
 };
 
 /**
@@ -33,7 +35,9 @@ export async function renderLabel(
     (a, b) => ((a as { zIndex?: number }).zIndex ?? 0) - ((b as { zIndex?: number }).zIndex ?? 0)
   );
   const sortedTemplate = { ...template, elements: sortedElements };
-  let items = computeLayoutFromTemplate(sortedTemplate, data as LabelRecord);
+  const record = { ...(opts.templateVariables ?? {}), ...(data as Record<string, unknown>) };
+  let items = computeLayoutFromTemplate(sortedTemplate, record as LabelRecord);
+  console.log("LAYOUT ITEMS", items.length);
   if (opts.thermal) items = applyThermalMode(items);
   const widthMm = template.widthMm;
   const heightMm = template.heightMm;

@@ -21,6 +21,7 @@ import {
   binsToLevels,
   ROW_LABEL_ADDRESS_PATTERN,
 } from "../../components/warehouse/warehouseUtils";
+import type { LevelConfigItem } from "../../types/warehouse";
 import type { Dispatch, SetStateAction } from "react";
 
 export interface UseDesignerRackPlacementParams {
@@ -62,7 +63,32 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       const rackIndex = prev.racks.length + 1;
       const indexInRow = getNextIndexInRow(prev.racks, prefix);
       const rackLabel = `${prefix}${indexInRow}`;
-      const bins = createBinsForRack(template.aisle_letter, rackIndex, template.levels, template.bins_per_level, volPerBin, undefined, undefined, template.width_cm, template.depth_cm, template.height_cm);
+      const t = template as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha"; levelConfig?: LevelConfigItem[]; namingStrategy?: "pattern" | "rack-index" | "custom" | "manual"; namingOrientation?: "column-first" | "row-first"; namingPattern?: string; manualLabels?: Record<string, string>; overrides?: Record<string, string>; indexPadding?: number; startIndex?: number; naming_pattern?: string; reserve_bin_keys?: string[] };
+      const bins = createBinsForRack(
+        template.aisle_letter,
+        rackIndex,
+        template.levels,
+        template.bins_per_level,
+        volPerBin,
+        "M1",
+        t.naming_pattern,
+        template.width_cm,
+        template.depth_cm,
+        template.height_cm,
+        t.reserve_bin_keys,
+        t.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+        t.rowId ?? rackLabel,
+        t.sectionStartIndex ?? 1,
+        t.binNamingType ?? "numeric",
+        getLevelConfig(template),
+        t.namingStrategy,
+        t.namingOrientation,
+        t.namingPattern ?? t.addressPattern,
+        t.manualLabels,
+        t.overrides,
+        t.indexPadding,
+        t.startIndex
+      );
       return {
         ...prev,
         racks: [
@@ -85,6 +111,9 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
             name: rackLabel,
             rowPrefix: prefix,
             indexInRow,
+            ...(t.addressPattern != null ? { addressPattern: t.addressPattern } : {}),
+            ...(t.sectionStartIndex != null ? { sectionStartIndex: t.sectionStartIndex } : {}),
+            ...(t.binNamingType != null ? { binNamingType: t.binNamingType } : {}),
           } as RackState,
         ],
       };
@@ -146,11 +175,18 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         spec.depth_cm,
         spec.height_cm,
         spec.reserve_bin_keys,
-        ROW_LABEL_ADDRESS_PATTERN,
+        spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
         rackLabel,
-        1,
+        spec.sectionStartIndex ?? 1,
         spec.binNamingType ?? "numeric",
-        lc
+        lc,
+        spec.namingStrategy,
+        spec.namingOrientation,
+        spec.namingPattern ?? spec.addressPattern,
+        spec.manualLabels,
+        spec.overrides,
+        spec.indexPadding,
+        spec.startIndex
       );
       const templateColor = item.type === "custom" ? item.template.color : spec.color;
       const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
@@ -206,6 +242,9 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         name: rackLabel,
         rowPrefix: prefix,
         indexInRow,
+        ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
+        ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
+        ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
         ...(isVertical ? { rotationDegrees: 90 as const } : {}),
         ...(item.type === "custom" ? { templateId: item.template.id } : {}),
       };
@@ -265,11 +304,18 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       spec.depth_cm,
       spec.height_cm,
       spec.reserve_bin_keys,
-      ROW_LABEL_ADDRESS_PATTERN,
+      spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
       rackLabel,
-      1,
+      spec.sectionStartIndex ?? 1,
       spec.binNamingType ?? "numeric",
-      lc
+      lc,
+      spec.namingStrategy,
+      spec.namingOrientation,
+      spec.namingPattern ?? spec.addressPattern,
+      spec.manualLabels,
+      spec.overrides,
+      spec.indexPadding,
+      spec.startIndex
     );
     const templateColor = item.type === "custom" ? item.template.color : spec.color;
     const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
@@ -292,6 +338,9 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       name: rackLabel,
       rowPrefix: prefix,
       indexInRow,
+      ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
+      ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
+      ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
       ...(item.type === "custom" ? { templateId: item.template.id } : {}),
     };
     setLayout((prev) => ({ ...prev, racks: reindexGeometricRow([...prev.racks, newRack], newRack.rack_index) }));

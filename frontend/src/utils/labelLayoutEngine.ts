@@ -79,6 +79,52 @@ function resolveBarcodeValue(record: Record<string, unknown>, dataBinding: strin
   return "";
 }
 
+/**
+ * Simple condition evaluator for visibleIf. Supports: {field} == value, != value, > value, < value.
+ * Value can be quoted string ('x' or "x") or number. No full expression engine.
+ */
+export function evaluateCondition(expression: string, record: Record<string, unknown>): boolean {
+  const s = (expression ?? "").trim();
+  if (!s) return true;
+  const match = s.match(/^\s*(\{[^}]+\}|[a-zA-Z_][a-zA-Z0-9_]*)\s*(==|!=|>|<)\s*(.+)\s*$/s);
+  if (!match) return true;
+  const [, leftKey, op, rightRaw] = match;
+  const key = (leftKey ?? "").replace(/^\{|\}$/g, "").trim();
+  const fieldVal = record[key] ?? record[`{${key}}`];
+  const strVal = fieldVal != null ? String(fieldVal) : "";
+  let rightVal: string | number = (rightRaw ?? "").trim();
+  if ((rightVal.startsWith("'") && rightVal.endsWith("'")) || (rightVal.startsWith('"') && rightVal.endsWith('"'))) {
+    rightVal = rightVal.slice(1, -1);
+  } else {
+    const num = Number(rightVal);
+    if (!Number.isNaN(num) && String(num) === rightVal) rightVal = num;
+  }
+  if (op === "==") return strVal === String(rightVal);
+  if (op === "!=") return strVal !== String(rightVal);
+  const leftNum = Number(fieldVal);
+  const rightNum = Number(rightVal);
+  if (op === ">") return !Number.isNaN(leftNum) && !Number.isNaN(rightNum) ? leftNum > rightNum : strVal.localeCompare(String(rightVal)) > 0;
+  if (op === "<") return !Number.isNaN(leftNum) && !Number.isNaN(rightNum) ? leftNum < rightNum : strVal.localeCompare(String(rightVal)) < 0;
+  return true;
+}
+
+/** CSS px to mm at 96 DPI (1 inch = 96 px = 25.4 mm). */
+const MM_PER_PX = 25.4 / 96;
+
+/**
+ * Measure text width in mm using canvas. Mirrors backend stringWidth behavior for auto-fit.
+ */
+function measureTextWidth(text: string, fontSize: number, bold?: boolean): number {
+  if (!text) return 0;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return 0;
+  const font = `${bold ? "bold " : ""}${fontSize}px sans-serif`;
+  ctx.font = font;
+  const widthPx = ctx.measureText(text).width;
+  return widthPx * MM_PER_PX;
+}
+
 function normalizeAlign(a?: string): HorizontalAlign {
   const s = (a || "left").toLowerCase();
   if (s === "center" || s === "right") return s;
@@ -132,13 +178,26 @@ function elementToLayoutItem(
         textPosition: el.textPosition ?? "below",
       };
     }
-    case "dynamicText": {
-      const text = resolveBinding(record, el.binding) || `{${el.binding}}`;
+    case "dynamicText":
+    case "text": {
+      const binding = (el as { binding?: string }).binding ?? (el as { dataBinding?: string }).dataBinding ?? "";
+      const text = resolveBinding(record, binding as DynamicBinding) || (binding ? `{${binding.replace(/^\{|\}$/g, "")}}` : "");
+      let fontSize = el.fontSize ?? 10;
+      const ext = el as { autoFit?: boolean; minFontSize?: number; scaleToHeight?: boolean };
+      if (ext.autoFit) {
+        const minFontSize = Math.max(1, ext.minFontSize ?? 6);
+        while (measureTextWidth(text, fontSize, el.bold) > width_mm && fontSize > minFontSize) {
+          fontSize -= 0.5;
+        }
+        fontSize = Math.max(minFontSize, fontSize);
+      } else if (ext.scaleToHeight) {
+        fontSize = height_mm * 0.7;
+      }
       return {
         ...base,
         type: "text",
         text,
-        fontSize: el.fontSize ?? 10,
+        fontSize,
         fontFamily: el.fontFamily,
         bold: el.bold,
         horizontalAlign: normalizeAlign(el.align),
@@ -147,11 +206,29 @@ function elementToLayoutItem(
       };
     }
     case "staticText": {
+      let text = el.text ?? "";
+      const staticPlaceholderMatch = text.match(/^\s*\{\{?([a-zA-Z0-9_]+)\}?\}\s*$/);
+      if (staticPlaceholderMatch) {
+        const varName = staticPlaceholderMatch[1];
+        const resolved = resolveBinding(record, `{${varName}}`);
+        if (resolved) text = resolved;
+      }
+      let fontSize = el.fontSize ?? 8;
+      const ext = el as { autoFit?: boolean; minFontSize?: number; scaleToHeight?: boolean };
+      if (ext.autoFit) {
+        const minFontSize = Math.max(1, ext.minFontSize ?? 6);
+        while (measureTextWidth(text, fontSize, el.bold) > width_mm && fontSize > minFontSize) {
+          fontSize -= 0.5;
+        }
+        fontSize = Math.max(minFontSize, fontSize);
+      } else if (ext.scaleToHeight) {
+        fontSize = height_mm * 0.7;
+      }
       return {
         ...base,
         type: "text",
-        text: el.text ?? "",
-        fontSize: el.fontSize ?? 8,
+        text,
+        fontSize,
         fontFamily: el.fontFamily,
         bold: el.bold,
         horizontalAlign: normalizeAlign(el.align),
@@ -167,12 +244,24 @@ function elementToLayoutItem(
       };
     }
     case "rect": {
-      const rect = el as { fill?: string; strokeWidth?: number };
+      const rect = el as { fill?: string; strokeWidth?: number; conditions?: Array<{ if: string; fill?: string; stroke?: string }> };
+      let fill = rect.fill;
+      let stroke: string | undefined;
+      if (Array.isArray(rect.conditions)) {
+        for (const cond of rect.conditions) {
+          if (evaluateCondition(cond.if, record)) {
+            if (cond.fill != null) fill = cond.fill;
+            if (cond.stroke != null) stroke = cond.stroke;
+            break;
+          }
+        }
+      }
       return {
         ...base,
         type: "rect",
-        fill: rect.fill,
+        fill,
         strokeWidth: rect.strokeWidth ?? 0.5,
+        ...(stroke != null ? { borderColor: stroke } : {}),
       };
     }
     case "section": {
@@ -219,6 +308,7 @@ function mapElementTypeToLayoutType(
 ): "text" | "barcode" | "rect" | "line" | "section" | "image" | "icon" | "triangle" | "arrow" | "polygon" {
   const map: Record<string, LayoutItem["type"]> = {
     barcode: "barcode",
+    text: "text",
     dynamicText: "text",
     staticText: "text",
     line: "line",
@@ -243,6 +333,9 @@ function flattenElements(
   out: LayoutItem[]
 ): void {
   for (const el of elements) {
+    const visibleIf = (el as { visibleIf?: string }).visibleIf;
+    if (visibleIf && !evaluateCondition(visibleIf, record)) continue;
+
     if (el.type === "group") {
       const group = el as GroupElement;
       const gx = Math.max(0, Math.min(group.x, labelWidthMm - 0.5));
@@ -253,20 +346,54 @@ function flattenElements(
     }
     if (el.type === "repeater") {
       const rep = el as RepeaterElement;
-      const items = (record[rep.dataset] as unknown[]) ?? [];
+      let items: unknown[] = (record[rep.dataset] as unknown[]) ?? [];
+      items = [...items];
+      const filterExpr = rep.filter?.trim();
+      if (filterExpr) {
+        items = items.filter((item) => {
+          const rec = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
+          return evaluateCondition(filterExpr, rec);
+        });
+      }
+      const sortBy = rep.sortBy?.trim();
+      if (sortBy) {
+        items.sort((a, b) => {
+          const ra = typeof a === "object" && a !== null ? (a as Record<string, unknown>) : {};
+          const rb = typeof b === "object" && b !== null ? (b as Record<string, unknown>) : {};
+          const va = ra[sortBy] ?? ra[`{${sortBy}}`];
+          const vb = rb[sortBy] ?? rb[`{${sortBy}}`];
+          const na = Number(va);
+          const nb = Number(vb);
+          if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+          return String(va ?? "").localeCompare(String(vb ?? ""));
+        });
+      }
       const template = rep.template?.elements ?? [];
       const itemW = rep.itemWidth ?? 20;
       const itemH = rep.itemHeight ?? rep.itemWidth ?? 20;
-      const dir = rep.direction === "vertical";
-      let cx = x0_mm + rep.x;
-      let cy = y0_mm + rep.y;
+      const baseX = x0_mm + rep.x;
+      const baseY = y0_mm + rep.y;
+      const useGrid = rep.layout === "grid";
+      const columns = Math.max(1, rep.columns ?? 1);
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const itemData: Record<string, unknown> =
-          typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
+          typeof item === "object" && item !== null
+            ? { ...(item as Record<string, unknown>) }
+            : { loc_name: item, location_name: item, location_code: item, value: item };
+        let cx: number;
+        let cy: number;
+        if (useGrid) {
+          const row = Math.floor(i / columns);
+          const col = i % columns;
+          cx = baseX + col * itemW;
+          cy = baseY + row * itemH;
+        } else {
+          const dir = rep.direction === "vertical";
+          cx = baseX + (dir ? 0 : i * itemW);
+          cy = baseY + (dir ? i * itemH : 0);
+        }
         flattenElements(template, itemData, labelWidthMm, labelHeightMm, cx, cy, out);
-        if (dir) cy += itemH;
-        else cx += itemW;
       }
       continue;
     }

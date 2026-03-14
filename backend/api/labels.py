@@ -203,6 +203,13 @@ def post_render_pdf(
     db: Session = Depends(get_db),
 ):
     """Render a label PDF from a template and list of records. One page per record."""
+    import logging
+    _log = logging.getLogger(__name__)
+    _log.info("render-pdf request: template_id=%s records_count=%s", body.template_id, len(body.records or []))
+    if body.records:
+        first = body.records[0]
+        _log.info("render-pdf first record keys: %s", list(first.keys()) if isinstance(first, dict) else "not a dict")
+        _log.info("render-pdf first record has 'locations': %s", "locations" in first if isinstance(first, dict) else False)
     if not body.records:
         return Response(content=b"", status_code=400, media_type="text/plain")
     calibration = None
@@ -218,6 +225,7 @@ def post_render_pdf(
                 "offset_y_mm": float(profile.offset_y_mm or 0),
                 "scale": float(profile.scale if profile.scale is not None else 1.0),
             }
+    print("PDF REQUEST BODY:", body)
     pdf_bytes = render_label_template(
         db=db,
         template_id=body.template_id,

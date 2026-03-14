@@ -539,11 +539,13 @@ def render_label_template(
     data: dict[str, Any] | list[dict[str, Any]],
     tenant_id: int,
     calibration: dict | None = None,
+    template_variables: dict[str, Any] | None = None,
 ) -> bytes:
     """
     Single entry point for label PDF generation. Loads template from SavedLabelTemplate.template_json only.
     Ensures template_json is parsed to dict and normalized (widthMm, heightMm, elements) before rendering.
     calibration: optional dict with offset_x_mm, offset_y_mm, scale (applied only during export).
+    template_variables: optional dict merged into each record before layout (e.g. warehouse_name).
     """
     from ..models.label_template import SavedLabelTemplate
 
@@ -573,8 +575,10 @@ def render_label_template(
         raise ValueError("No records to render")
     if records:
         logger.info("RECORD KEYS: %s", list(records[0].keys()))
-    # Ensure each record has keys matching common template bindings (e.g. cart_name, barcode_data, loc_name)
-    records = [_normalize_record_for_bindings(r, elements) for r in records]
+    # Merge template variables into each record (caller-provided globals), then normalize bindings
+    vars_dict = template_variables if isinstance(template_variables, dict) else {}
+    records = [_normalize_record_for_bindings({**vars_dict, **r}, elements) for r in records]
+    print("RENDER RECORDS:", records)
     # Pass explicit shape so build_label_pdf always receives widthMm, heightMm, elements
     template_for_pdf = {"widthMm": width, "heightMm": height, "elements": elements}
     return build_label_pdf(template_for_pdf, records, one_page_per_label=True, calibration=calibration)

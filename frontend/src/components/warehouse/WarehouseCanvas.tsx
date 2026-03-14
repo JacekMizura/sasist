@@ -85,6 +85,8 @@ export type WarehouseCanvasProps = {
   collisionRackId: number | string | null;
   /** When set (e.g. group drag invalid), all these racks show as collision (red). */
   collisionRackIds?: Array<number | string> | null;
+  /** Racks outside building boundary; drawn with red stroke. */
+  outsideRackIds?: Array<number | string>;
   selectedRack: RackState | undefined;
   isMultiSelect: boolean;
   setInternalLayoutRackId: (id: number | string | null) => void;
@@ -227,6 +229,7 @@ function WarehouseCanvasInner({
   selectedRackIds,
   collisionRackId,
   collisionRackIds = null,
+  outsideRackIds,
   selectedRack,
   isMultiSelect,
   setInternalLayoutRackId,
@@ -661,14 +664,41 @@ function WarehouseCanvasInner({
                   ref={svgRef}
                   width={width}
                   height={height}
-                  viewBox={`0 0 ${width} ${height}`}
+                  viewBox={
+                    layout.building_width_m != null && (layout.building_depth_m != null || layout.building_height_m != null)
+                      ? `${-20} ${-18} ${width + 38} ${height + 18}`
+                      : `0 0 ${width} ${height}`
+                  }
                   className="relative z-10 block bg-transparent"
-                  style={{ cursor: isPanning ? "grabbing" : panMode ? "grab" : placementMode ? "none" : draggingRackId ? "grabbing" : (layoutMode != null ? LAYOUT_MODE_CURSORS[layoutMode] : "default") }}
+                  style={{ cursor: isPanning ? "grabbing" : panMode ? "grab" : placementMode ? "none" : draggingRackId ? "grabbing" : (layoutMode != null ? LAYOUT_MODE_CURSORS[layoutMode] : "default"), overflow: "visible" }}
                   onMouseMove={onMouseMove}
                   onMouseDown={onMouseDown}
                   onMouseUp={onMouseUp}
                   onMouseLeave={onMouseLeave}
                 >
+                  <rect
+                    x={0}
+                    y={0}
+                    width={width}
+                    height={height}
+                    fill="none"
+                    stroke="#666"
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                  />
+                  {layout.building_width_m != null && (layout.building_depth_m != null || layout.building_height_m != null) && (() => {
+                    const depthM = layout.building_depth_m ?? layout.building_height_m;
+                    return depthM != null ? (
+                      <g pointerEvents="none" aria-hidden>
+                        <text x={width / 2} y={-10} textAnchor="middle" fontSize={12} fill="#888">
+                          {layout.building_width_m} m
+                        </text>
+                        <text x={width + 10} y={height / 2} transform={`rotate(-90 ${width + 10} ${height / 2})`} textAnchor="middle" fontSize={12} fill="#888">
+                          {depthM} m
+                        </text>
+                      </g>
+                    ) : null;
+                  })()}
                   {dragSlotHighlights && (
                     <SelectionOverlay
                       part="dragSlots"
@@ -713,6 +743,7 @@ function WarehouseCanvasInner({
                     rackDragPreviewPosition={rackDragPreviewPosition}
                     collisionRackId={collisionRackId}
                     collisionRackIds={collisionRackIds}
+                    outsideRackIds={outsideRackIds}
                     showRackLabels={showRackLabels}
                     hoveredRackId={hoveredRackId}
                     setHoveredRackId={setHoveredRackId}

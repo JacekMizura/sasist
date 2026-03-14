@@ -11,8 +11,10 @@ type PreviewItem = Record<string, unknown>;
 function locationsPreview(): PreviewItem[] {
   const rack = "A1";
   const level = 1;
-  return [1, 2, 3].map((position) => {
-    const loc_name = `${rack}-${level}-${position}`;
+  const bins = ["A", "B", "C"];
+  return [1, 2, 3].map((position, i) => {
+    const bin = bins[i] ?? String(position);
+    const loc_name = `${bin}-${level}-${position}`;
     return {
       location_code: loc_name,
       location_barcode: loc_name,
@@ -20,7 +22,13 @@ function locationsPreview(): PreviewItem[] {
       loc_name,
       location_name: loc_name,
       loc_barcode: loc_name,
+      rack_name: rack,
+      bin,
+      level,
+      position,
       "{loc_name}": loc_name,
+      "{rack_name}": rack,
+      "{bin}": bin,
     };
   });
 }

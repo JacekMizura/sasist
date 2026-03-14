@@ -25,6 +25,12 @@ class Location(Base, BaseModelMixin):
     )
     name = Column(String, nullable=False)
     type = Column(String(20), nullable=False, default="pick")  # pick | reserve | floor
+
+    # Structural coordinates (optional). When set, avoid parsing name for ordering/labels. Backfill from Bin when available.
+    rack_name = Column(String(50), nullable=True)
+    level = Column(Integer, nullable=True)
+    position = Column(Integer, nullable=True)
+    bin = Column(String(20), nullable=True)
     width = Column(Float, nullable=True)
     depth = Column(Float, nullable=True)
     height = Column(Float, nullable=True)

@@ -66,14 +66,18 @@ export function getRecordsFromLayout(
       const zoneName = layout.visual_elements?.find((ve) => ve.type === "zone")?.name ?? "Magazyn";
       const levelNum = levelIndex + 1;
       const positionNum = segmentIndex + 1;
+      const binLabel = segmentIndex < 26 ? String.fromCharCode(65 + segmentIndex) : String(segmentIndex + 1);
 
       records.push({
         location_name: locationCode,
         location_code: locationCode,
         location_barcode: barcode_data,
         rack: rackId,
+        rack_name: rackId,
+        bin: binLabel,
         level: levelNum,
         position: positionNum,
+        segment_index: segmentIndex,
         rack_id: rackId,
         zone_name: zoneName,
         volume_capacity: b.volume_dm3,
@@ -85,6 +89,8 @@ export function getRecordsFromLayout(
         "{loc_name}": locationCode,
         "{loc_barcode}": barcode_data,
         "{rack_id}": rackId,
+        "{rack_name}": rackId,
+        "{bin}": binLabel,
         "{level_num}": levelNum,
         "{bin_pos}": String(positionNum),
         "{zone_name}": zoneName,
@@ -97,24 +103,57 @@ export function getRecordsFromLayout(
 }
 
 export function applyFormatting(record: LabelRecord, rules: FormattingRules): LabelRecord {
-  let location_name = record.location_name ?? record.location_code ?? "";
-  let rack_id = record.rack_id ?? record.rack ?? "";
-  const parts = location_name.split("-");
-  // Canonical format A1-1-3: parts[0]=rack (e.g. A1), parts[1]=level, parts[2]=position
+  const location_name_raw = record.location_name ?? record.location_code ?? "";
+  const hasStructural =
+    record.rack_name != null &&
+    record.level != null &&
+    record.position != null;
 
-  if (rules.zeroPadRackIndex && record.aisle_letter != null && record.rack_index != null) {
-    rack_id = `${record.aisle_letter}${String(record.rack_index).padStart(2, "0")}`;
-    if (parts.length >= 1) parts[0] = rack_id;
+  let rack_id: string;
+  let levelNum: number | undefined;
+  let positionNum: number | undefined;
+  let bin: string | number | undefined;
+  let levelStr: string;
+  let positionStr: string;
+  let location_name: string;
+
+  if (hasStructural) {
+    rack_id = String(record.rack_name ?? record.rack_id ?? record.rack ?? "");
+    levelNum = Number(record.level);
+    positionNum = Number(record.position);
+    bin = record.bin;
+    if (rules.zeroPadRackIndex && record.aisle_letter != null && record.rack_index != null) {
+      rack_id = `${record.aisle_letter}${String(record.rack_index).padStart(2, "0")}`;
+    }
+    levelStr = rules.zeroPadLevel ? String(levelNum).padStart(2, "0") : String(levelNum);
+    positionStr = rules.zeroPadSegment ? String(positionNum).padStart(2, "0") : String(positionNum);
+    location_name = [rack_id, levelStr, positionStr].filter(Boolean).join("-") || location_name_raw;
+  } else {
+    const parts = location_name_raw.split("-");
+    const parsedRack = parts.length >= 1 ? parts[0] : "";
+    const parsedLevel = parts.length >= 2 ? parseInt(parts[1], 10) : undefined;
+    const parsedPosition = parts.length >= 3 ? parseInt(parts[2], 10) : undefined;
+    const parsedBin = parts.length >= 2 ? parts[0] : undefined;
+
+    rack_id = record.rack_name ?? record.rack_id ?? record.rack ?? parsedRack;
+    levelNum = record.level != null ? Number(record.level) : parsedLevel;
+    positionNum = record.position != null ? Number(record.position) : parsedPosition;
+    bin = record.bin ?? parsedBin;
+
+    if (rules.zeroPadRackIndex && record.aisle_letter != null && record.rack_index != null) {
+      rack_id = `${record.aisle_letter}${String(record.rack_index).padStart(2, "0")}`;
+    }
+    levelStr =
+      levelNum != null && !Number.isNaN(levelNum)
+        ? (rules.zeroPadLevel ? String(levelNum).padStart(2, "0") : String(levelNum))
+        : (parts.length >= 2 ? parts[1] : "");
+    positionStr =
+      positionNum != null && !Number.isNaN(positionNum)
+        ? (rules.zeroPadSegment ? String(positionNum).padStart(2, "0") : String(positionNum))
+        : (parts.length >= 3 ? parts[2] : "");
+    location_name = [rack_id, levelStr, positionStr].filter(Boolean).join("-") || location_name_raw;
   }
-  if (rules.zeroPadLevel && parts.length >= 2) {
-    const levelNum = parseInt(parts[1], 10);
-    if (!Number.isNaN(levelNum)) parts[1] = String(levelNum).padStart(2, "0");
-  }
-  if (rules.zeroPadSegment && parts.length >= 3) {
-    const segNum = parseInt(parts[2], 10);
-    if (!Number.isNaN(segNum)) parts[2] = String(segNum).padStart(2, "0");
-  }
-  location_name = parts.join("-");
+
   let barcode_data = record.barcode_data ?? record.location_barcode ?? location_name;
   if (rules.prefix) barcode_data = rules.prefix + barcode_data;
   if (rules.suffix) barcode_data = barcode_data + rules.suffix;
@@ -128,8 +167,9 @@ export function applyFormatting(record: LabelRecord, rules: FormattingRules): La
     "{loc_name}": location_name,
     "{loc_barcode}": barcode_data,
     "{rack_id}": rack_id,
-    "{level_num}": record.level,
-    "{bin_pos}": parts.length >= 3 ? parts[2] : record["{bin_pos}"],
+    "{level_num}": record.level ?? levelNum,
+    "{bin_pos}": positionStr || (record.position != null ? String(record.position) : record["{bin_pos}"]),
+    "{bin}": bin ?? record["{bin}"],
     "{zone_name}": record.zone_name,
     "{capacity_dm3}": record.volume_capacity,
   };

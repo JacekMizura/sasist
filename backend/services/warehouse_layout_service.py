@@ -261,30 +261,40 @@ class WarehouseLayoutService:
             for bin_data in rack.get("bins") or []:
                 lev = int(bin_data.get("level_index", 0))
                 seg = int(bin_data.get("segment_index", 0))
-                location_code = _bin_label(aisle, r_idx, lev, seg)
-                if location_code in seen:
+                location_name = bin_data.get("label") or _bin_label(aisle, r_idx, lev, seg)
+                if location_name in seen:
                     continue
-                seen.add(location_code)
-                location_barcode = bin_data.get("barcode_data") or bin_data.get("label") or location_code
+                seen.add(location_name)
+                location_barcode = bin_data.get("barcode_data") or bin_data.get("label") or location_name
                 level_num = lev + 1
                 position_num = seg + 1
+                raw_bin = bin_data.get("bin")
+                if raw_bin is not None and str(raw_bin).strip():
+                    bin_label = str(raw_bin).strip()
+                else:
+                    bin_label = chr(ord("A") + seg) if seg < 26 else str(seg + 1)
                 records.append({
-                    "loc_name": location_code,
+                    "loc_name": location_name,
                     "loc_barcode": location_barcode,
                     "zone": zone,
-                    "location_code": location_code,
+                    "location_code": location_name,
                     "location_barcode": location_barcode,
                     "rack": rack_str,
+                    "rack_name": rack_str,
+                    "bin": bin_label,
                     "level": level_num,
                     "position": position_num,
+                    "segment_index": seg,
                     "barcode_data": location_barcode,
-                    "location_name": location_code,
+                    "location_name": location_name,
                     "rack_id": rack_str,
                     "level_num": level_num,
                     "zone_name": zone,
-                    "{loc_name}": location_code,
+                    "{loc_name}": location_name,
                     "{loc_barcode}": location_barcode,
                     "{rack_id}": rack_str,
+                    "{rack_name}": rack_str,
+                    "{bin}": bin_label,
                     "{level_num}": level_num,
                     "{bin_pos}": str(position_num),
                     "{zone}": zone,

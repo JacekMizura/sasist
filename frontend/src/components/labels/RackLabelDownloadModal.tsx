@@ -5,6 +5,13 @@ import type { LabelTemplate, TemplateElement, RepeaterElement } from "../../type
 import { renderLabel } from "../../labelRenderer";
 import { exportLabelsPdf } from "../../utils/labels/exportLabelsPdf";
 
+type RackLocationItem = {
+  label: string;
+  barcode?: string;
+  level_index?: number;
+  segment_index?: number;
+};
+
 type Props = {
   rack: RackState | null | undefined;
   locations: Array<{ label: string; barcode?: string }>;
@@ -20,12 +27,14 @@ type TemplateRow = {
 
 const TENANT_ID = 1;
 
-function getRackLocations(rack: RackState | null | undefined): Array<{ label: string; barcode?: string }> {
+function getRackLocations(rack: RackState | null | undefined): RackLocationItem[] {
   if (!rack) return [];
   const bins: BinState[] = rack.bins ?? [];
   return bins.map((b) => ({
     label: b.label,
     barcode: b.barcode_data ?? b.label,
+    level_index: b.level_index,
+    segment_index: b.segment_index,
   }));
 }
 
@@ -37,6 +46,15 @@ function findHorizontalRepeater(template: LabelTemplate): RepeaterElement | null
     }
   }
   return null;
+}
+
+/** Chunk array into groups of `size`; used to build one label per chunk for strip templates. */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
 }
 
 export function RackLabelDownloadModal({ rack, locations, onClose }: Props) {
@@ -88,31 +106,77 @@ export function RackLabelDownloadModal({ rack, locations, onClose }: Props) {
       }
 
       const repeater = findHorizontalRepeater(template);
-      const itemWidth = repeater?.itemWidth && repeater.itemWidth > 0 ? repeater.itemWidth : template.widthMm;
-      const capacity = Math.max(1, Math.floor(template.widthMm / itemWidth));
-
-      const chunks: typeof effectiveLocations[] = [];
-      for (let i = 0; i < effectiveLocations.length; i += capacity) {
-        chunks.push(effectiveLocations.slice(i, i + capacity));
+      const datasetKey = repeater?.dataset?.trim() || "locations";
+      let capacity: number;
+      if (repeater?.layout === "grid" && repeater.columns != null && repeater.columns > 0) {
+        capacity = Math.max(1, repeater.columns);
+      } else if (repeater) {
+        const itemWidth =
+          Number(repeater.itemWidth) ||
+          Number((repeater as { item_width?: number }).item_width) ||
+          0;
+        capacity =
+          itemWidth > 0
+            ? Math.max(1, Math.floor(template.widthMm / itemWidth))
+            : 1;
+      } else {
+        capacity = 1;
       }
 
+      const chunks = chunk(effectiveLocations, capacity);
+
+      console.log("effectiveLocations", effectiveLocations);
+      console.log("chunks", chunks);
+
+      const rackName = rack.name ?? `${(rack as { rowPrefix?: string }).rowPrefix ?? "A"}${(rack as { indexInRow?: number }).indexInRow ?? rack.rack_index ?? 1}`;
       const svgs: string[] = [];
-      for (const chunk of chunks) {
-        const first = chunk[0];
+      for (const group of chunks) {
+        const first = group[0] as RackLocationItem | undefined;
+        const datasetItems = group.map((loc): Record<string, unknown> => {
+          const item = typeof loc === "object" && loc !== null && "label" in loc
+            ? (loc as RackLocationItem)
+            : { label: String(loc), barcode: String(loc) };
+          const levIdx = item.level_index;
+          const segIdx = item.segment_index;
+          const hasStructural = typeof levIdx === "number" && typeof segIdx === "number";
+          const level = hasStructural ? levIdx + 1 : (Number(String(item.label).split("-")[1]) || 0);
+          const position = hasStructural ? segIdx + 1 : (Number(String(item.label).split("-")[2]) || 0);
+          const bin = hasStructural ? (segIdx! < 26 ? String.fromCharCode(65 + segIdx!) : String(segIdx! + 1)) : undefined;
+          return {
+            loc_name: item.label,
+            location_name: item.label,
+            location_code: item.label,
+            location_barcode: item.barcode ?? item.label,
+            barcode_data: item.barcode ?? item.label,
+            rack_name: rackName,
+            level,
+            position,
+            ...(bin != null ? { bin } : {}),
+          };
+        });
+        const firstLevIdx = first?.level_index;
+        const firstSegIdx = first?.segment_index;
+        const firstHasStructural = typeof firstLevIdx === "number" && typeof firstSegIdx === "number";
+        const firstLevel = firstHasStructural ? firstLevIdx! + 1 : (first ? Number(String(first.label).split("-")[1]) || 0 : 0);
+        const firstPosition = firstHasStructural ? firstSegIdx! + 1 : (first ? Number(String(first.label).split("-")[2]) || 0 : 0);
         const record = {
-          locations: chunk.map((loc) => ({
-            location_code: loc.label,
-            location_barcode: loc.barcode ?? loc.label,
-          })),
+          [datasetKey]: datasetItems,
+          loc_name: first?.label ?? "",
+          location_name: first?.label ?? "",
           location_code: first?.label ?? "",
           location_barcode: first?.barcode ?? first?.label ?? "",
           barcode_data: first?.barcode ?? first?.label ?? "",
+          rack_name: rackName,
+          level: firstLevel,
+          position: firstPosition,
         };
+        console.log("datasetItems", datasetItems);
+        console.log("record", record);
         const svg = await renderLabel(template, record);
         svgs.push(svg);
       }
 
-      await exportLabelsPdf(svgs, template.widthMm, template.heightMm, `rack-${rack.id ?? rack.rack_index}-labels.pdf`);
+      await exportLabelsPdf(svgs, template.widthMm, template.heightMm, `rack-${rack.id ?? rack.rack_index}-labels.pdf`, null, template);
       onClose();
     } catch (err) {
       console.error(err);

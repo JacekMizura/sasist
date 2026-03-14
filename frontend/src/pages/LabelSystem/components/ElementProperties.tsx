@@ -9,9 +9,33 @@ import type {
   DynamicBinding,
   StatusIconType,
   SectionElement,
+  ConditionalStyleRule,
+  LabelVariable,
 } from "../../../types/labelSystem";
 import { DYNAMIC_BINDINGS } from "../../../types/labelSystem";
 import { UI_STRINGS } from "../../../constants/uiStrings";
+
+const CONDITION_OPERATORS = ["==", "!=", ">", "<"] as const;
+
+/** Parse "if" expression like "{level} == 1" into { field, operator, value }. */
+function parseConditionIf(expr: string): { field: string; operator: string; value: string } {
+  const s = (expr ?? "").trim();
+  const match = s.match(/^\s*\{?([a-zA-Z0-9_]+)\}?\s*(==|!=|>|<)\s*(.*)\s*$/s);
+  if (match) {
+    const [, field, op, value] = match;
+    return { field: field ?? "", operator: op ?? "==", value: (value ?? "").trim() };
+  }
+  return { field: "", operator: "==", value: "" };
+}
+
+/** Build "if" expression from field, operator, value. */
+function buildConditionIf(field: string, operator: string, value: string): string {
+  const f = field.trim();
+  const op = CONDITION_OPERATORS.includes(operator as (typeof CONDITION_OPERATORS)[number]) ? operator : "==";
+  const v = value.trim();
+  if (!f) return "";
+  return `{${f}} ${op} ${v}`;
+}
 
 /** Clamp rotation to 0–360. */
 function clampRotation(deg: number): number {
@@ -25,18 +49,41 @@ const ZONE_COLORS = [
   "#f97316", "#8b5cf6", "#06b6d4", "#64748b", "#ffffff",
 ];
 
+/** Flatten variable categories into unique field options (id + label for dropdown). */
+function getConditionFieldOptions(
+  variableCategories: Array<{ id: string; label: string; items: LabelVariable[] }> | undefined
+): Array<{ value: string; label: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ value: string; label: string }> = [];
+  const add = (id: string, label: string) => {
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      out.push({ value: id, label });
+    }
+  };
+  add("level", "level");
+  add("position", "position");
+  variableCategories?.forEach((cat) => {
+    cat.items.forEach((item) => add(item.id, item.label || item.id));
+  });
+  return out;
+}
+
 export function ElementProperties({
   element,
   labelWidthMm,
   labelHeightMm,
   onUpdate,
   onDelete,
+  variableCategories,
 }: {
   element: TemplateElement;
   labelWidthMm: number;
   labelHeightMm: number;
   onUpdate: (patch: Partial<TemplateElement>) => void;
   onDelete: () => void;
+  /** Optional: for conditional styling field dropdown. */
+  variableCategories?: Array<{ id: string; label: string; items: LabelVariable[] }>;
 }) {
   const isGroup = element.type === "group";
   const isRepeater = element.type === "repeater";
@@ -45,7 +92,9 @@ export function ElementProperties({
   const isStaticText = element.type === "staticText";
   const isStatusIcon = element.type === "statusIcon";
   const isSection = element.type === "section";
+  const isRect = element.type === "rect";
   const isShape = element.type === "triangle" || element.type === "arrow" || element.type === "polygon" || element.type === "rect" || element.type === "line";
+  const conditionFieldOptions = getConditionFieldOptions(variableCategories);
 
   const maxX = Math.max(0, labelWidthMm - element.width);
   const maxY = Math.max(0, labelHeightMm - element.height);
@@ -199,6 +248,100 @@ export function ElementProperties({
               </div>
             </>
           )}
+        </div>
+      )}
+      {isRect && (
+        <div className="border-t border-slate-100 pt-2 space-y-2">
+          <label className="text-slate-600 font-medium block">Conditional styling</label>
+          {(element as { conditions?: ConditionalStyleRule[] }).conditions?.map((rule, index) => {
+            const { field, operator, value } = parseConditionIf(rule.if);
+            const conditions = [...((element as { conditions?: ConditionalStyleRule[] }).conditions ?? [])];
+            const updateRule = (patch: Partial<ConditionalStyleRule>) => {
+              const next = conditions.map((r, i) => (i === index ? { ...r, ...patch } : r));
+              onUpdate({ conditions: next });
+            };
+            const updateIf = (f: string, op: string, v: string) => {
+              const expr = buildConditionIf(f, op, v);
+              if (expr) updateRule({ if: expr });
+            };
+            const removeRule = () => {
+              const next = conditions.filter((_, i) => i !== index);
+              onUpdate({ conditions: next.length ? next : undefined });
+            };
+            const fieldOpts =
+              field && !conditionFieldOptions.some((o) => o.value === field)
+                ? [{ value: field, label: field }, ...conditionFieldOptions]
+                : conditionFieldOptions;
+            return (
+              <div key={index} className="rounded border border-slate-200 bg-slate-50/50 p-2 space-y-1.5">
+                <div className="text-[10px] text-slate-500 font-medium">IF</div>
+                <div className="flex flex-wrap items-center gap-1">
+                  <select
+                    value={field}
+                    onChange={(e) => updateIf(e.target.value, operator, value)}
+                    className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] min-w-0 flex-1 max-w-[100px]"
+                    title="Field"
+                  >
+                    {fieldOpts.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={operator}
+                    onChange={(e) => updateIf(field, e.target.value, value)}
+                    className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] w-12"
+                    title="Operator"
+                  >
+                    {CONDITION_OPERATORS.map((op) => (
+                      <option key={op} value={op}>{op}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => updateIf(field, operator, e.target.value)}
+                    placeholder="value"
+                    className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] w-14"
+                  />
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium">THEN fill</div>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="color"
+                    value={rule.fill ?? "#ffffff"}
+                    onChange={(e) => updateRule({ fill: e.target.value })}
+                    className="w-7 h-5 rounded border border-slate-200 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={rule.fill ?? ""}
+                    onChange={(e) => updateRule({ fill: e.target.value || undefined })}
+                    placeholder="#ffffff"
+                    className="flex-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-mono min-w-0"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={removeRule}
+                  className="text-[10px] text-red-600 hover:text-red-700 hover:underline"
+                >
+                  Delete rule
+                </button>
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => {
+              const current = (element as { conditions?: ConditionalStyleRule[] }).conditions ?? [];
+              onUpdate({
+                conditions: [...current, { if: "{level} == 1", fill: "#ffffff" }],
+              });
+            }}
+            className="text-[10px] rounded border border-slate-200 bg-white px-2 py-1 text-slate-600 hover:bg-slate-50 border-dashed"
+          >
+            + Add rule
+          </button>
         </div>
       )}
       {isGroup && (

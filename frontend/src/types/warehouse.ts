@@ -224,6 +224,13 @@ export type LayoutState = {
   name: string;
   grid_cols: number;
   grid_rows: number;
+  /** Physical building footprint (m). When set, grid_cols/grid_rows are capped to building. */
+  building_width_m?: number;
+  /** 2D depth (layout rows). Grid limits use width + depth only. */
+  building_depth_m?: number;
+  /** Physical height of the building (m). Used for validation/stats only; does not affect grid. */
+  building_height_m?: number;
+  // future: validate rack height vs building height (rack_height_cm / 100 <= building_height_m)
   racks: RackState[];
   aisles: AisleState[];
   visual_elements: VisualElementState[];
@@ -282,6 +289,21 @@ export type CustomRackTemplate = {
   binNamingType?: "numeric" | "alpha";
   /** Bin keys "level_index-segment_index" to mark as reserve (overstock). Preserved when placing racks from this template. */
   reserve_bin_keys?: string[];
+
+  /** Naming strategy: pattern (Row/Section/Bin/Level), rack-index, custom, or manual. When absent, treated as "pattern" with addressPattern. */
+  namingStrategy?: "pattern" | "rack-index" | "custom" | "manual";
+  /** For pattern strategy: column-first (A-1 B-1 C-1) or row-first (A-1 A-2 A-3). */
+  namingOrientation?: "column-first" | "row-first";
+  /** Pattern string for pattern/custom/rack-index. For pattern strategy when absent, addressPattern is used. */
+  namingPattern?: string;
+  /** Manual strategy: cell key "levelIndex-segmentIndex" → label. */
+  manualLabels?: Record<string, string>;
+  /** Per-cell overrides: same key format; applied on top of generated label. */
+  overrides?: Record<string, string>;
+  /** Rack-index strategy: zero-pad index to this many digits (e.g. 2 → 01, 02). */
+  indexPadding?: number;
+  /** Rack-index strategy: start index for first cell (default 1). */
+  startIndex?: number;
 };
 
 /** Catalog item: built-in preset or custom template */

@@ -9,7 +9,8 @@ export function renderRectangle(item: LayoutItem): string {
   const w = item.width_mm;
   const h = item.height_mm;
   const strokeWidth = (item.strokeWidth ?? 0.5);
-  const fill = item.fill ?? item.backgroundColor ?? "none";
+  const rawFill = item.fill ?? item.backgroundColor ?? "none";
+  const fill = rawFill === "none" || rawFill === undefined || rawFill === "" ? "#ffffff" : rawFill;
   const stroke = item.borderColor ?? item.textColor ?? "#000000";
 
   return `<rect x="0" y="0" width="${w}" height="${h}" fill="${escapeAttr(fill)}" stroke="${escapeAttr(stroke)}" stroke-width="${strokeWidth}"/>`;

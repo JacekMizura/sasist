@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { CustomRackTemplate, LevelConfigItem } from "../../types/warehouse";
 import { RESERVE_BG, RESERVE_BORDER } from "./reserveLocationStyle";
-import { snapCm, expandAddressPattern } from "./warehouseUtils";
+import { snapCm, expandAddressPattern, getRackTemplateLabel, type RackTemplateLabelOptions } from "./warehouseUtils";
 
 const DEFAULT_ADDRESS_PATTERN = "{Row}{Section}-{Bin}-{Level}";
 
@@ -33,11 +33,14 @@ function volumePerBinForLevelDm3(
   return Number((volCm3 / 1000).toFixed(2));
 }
 
+export type RackPreviewMode = "structure" | "names";
+
 /**
  * Industrial rack preview: blue vertical uprights (no top cap), orange/grey shelf beams
  * between levels only (no floor beam, no top beam). Last level open at top.
  * Per-bin: dynamic address (large bold), then W/H dimensions and Volume in smaller font; all centered.
  * When onBinClick is omitted, the preview is read-only (no pointer cursor, no click).
+ * previewMode "structure" shows coordinates only (L1-C1); "names" shows generated or manual labels.
  */
 export function RackPreview({
   width_cm,
@@ -55,6 +58,9 @@ export function RackPreview({
   className = "",
   onBinClick,
   title: titleProp,
+  previewMode = "names",
+  labelOptions,
+  onLabelEdit,
 }: {
   width_cm: number;
   depth_cm: number;
@@ -73,19 +79,30 @@ export function RackPreview({
   onBinClick?: (levelIndex: number, binIndex: number) => void;
   /** Optional title above the preview (default: "Podgląd regału — na żywo"). */
   title?: string;
+  /** "structure" = coordinates only (L1-C1); "names" = generated/manual labels. */
+  previewMode?: RackPreviewMode;
+  /** When set, labels come from getRackTemplateLabel (same as createBinsForRack). */
+  labelOptions?: RackTemplateLabelOptions | null;
+  /** When set, cells in names view are clickable to edit label (manual or override). */
+  onLabelEdit?: (levelIndex: number, binIndex: number, currentValue: string) => void;
 }) {
   const levelRows = (Array.isArray(levelConfig) && levelConfig.length > 0)
     ? levelConfig
     : Array.from({ length: Math.max(1, levels) }, (_, i) => ({ level: i + 1, locations: Math.max(1, bins_per_level) }));
   const L = levelRows.length;
   const pattern = (addressPattern || DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN;
+  const rackIdForPreview = (rowId || "A").replace(/\./g, "") + "1";
   const cells: { level: number; bin: number; label: string; isReserve: boolean; locationsOnLevel: number; volPerBin: number }[] = [];
   for (let lev = 0; lev < L; lev++) {
     const locs = Math.max(1, levelRows[lev].locations);
     const volPerBinLev = volumePerBinForLevelDm3(width_cm, depth_cm, height_cm, L, locs);
     for (let bin = 0; bin < locs; bin++) {
-      const label = expandAddressPattern(pattern, rowId, sectionStartIndex, binNamingType, lev + 1, bin + 1);
-      cells.push({ level: lev, bin, label, isReserve: reserveBinKeys.has(cellKey(lev, bin)), locationsOnLevel: locs, volPerBin: volPerBinLev });
+      const structuralLabel = `L${lev + 1}-C${bin + 1}`;
+      const nameLabel = labelOptions
+        ? getRackTemplateLabel(lev, bin, levelRows, { ...labelOptions, rackId: rackIdForPreview })
+        : expandAddressPattern(pattern, rowId, sectionStartIndex, binNamingType, lev + 1, bin + 1);
+      const displayLabel = previewMode === "structure" ? structuralLabel : nameLabel;
+      cells.push({ level: lev, bin, label: displayLabel, isReserve: reserveBinKeys.has(cellKey(lev, bin)), locationsOnLevel: locs, volPerBin: volPerBinLev });
     }
   }
   const containerRef = useRef<HTMLDivElement>(null);
@@ -218,8 +235,11 @@ export function RackPreview({
                   return (
                     <g
                       key={`${level}-${bin}`}
-                      onClick={() => onBinClick?.(level, bin)}
-                      style={{ cursor: onBinClick ? "pointer" : undefined }}
+                      onClick={() => {
+                        if (previewMode === "names" && onLabelEdit) onLabelEdit(level, bin, label);
+                        else onBinClick?.(level, bin);
+                      }}
+                      style={{ cursor: (onLabelEdit && previewMode === "names") || onBinClick ? "pointer" : undefined }}
                     >
                       <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={1} rx={2} />
                       <title>{title}</title>
@@ -252,25 +272,35 @@ export type TemplateCreatorProps = {
   onSaveEdit?: (templateId: string, template: CustomRackTemplate, updateExistingRacks: boolean) => void | Promise<void>;
 };
 
+export type NamingStrategyId = "pattern" | "rack-index" | "custom" | "manual";
+
 export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveEdit }: TemplateCreatorProps) {
   const [name, setName] = useState("");
   const [width_cm, setWidthCm] = useState(120);
   const [depth_cm, setDepthCm] = useState(80);
   const [height_cm, setHeightCm] = useState(200);
   const [levels, setLevels] = useState(4);
-  /** Per-level locations (length = levels). When all equal, effectively "bins_per_level". */
   const [locationsPerLevel, setLocationsPerLevel] = useState<number[]>([4]);
-  const [addressPattern, setAddressPattern] = useState(DEFAULT_ADDRESS_PATTERN);
+  const [color, setColor] = useState(DEFAULT_COLORS[0]);
+  const [reserveBinKeys, setReserveBinKeys] = useState<Set<string>>(new Set());
+  const [updateExistingRacks, setUpdateExistingRacks] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const isEdit = Boolean(initialTemplate?.id);
+
+  const [namingStrategy, setNamingStrategy] = useState<NamingStrategyId>("pattern");
+  const [namingOrientation, setNamingOrientation] = useState<"column-first" | "row-first">("column-first");
+  const [namingPattern, setNamingPattern] = useState(DEFAULT_ADDRESS_PATTERN);
   const [rowId, setRowId] = useState("A");
   const [sectionStartIndex, setSectionStartIndex] = useState(1);
   const [autoSectionNumbering, setAutoSectionNumbering] = useState(false);
   const [binNamingType, setBinNamingType] = useState<"numeric" | "alpha">("numeric");
-  const [color, setColor] = useState(DEFAULT_COLORS[0]);
-  const [updateExistingRacks, setUpdateExistingRacks] = useState(true);
-  const [reserveBinKeys, setReserveBinKeys] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const isEdit = Boolean(initialTemplate?.id);
+  const [indexPadding, setIndexPadding] = useState(2);
+  const [startIndex, setStartIndex] = useState(1);
+  const [manualLabels, setManualLabels] = useState<Record<string, string>>({});
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [allowOverrides, setAllowOverrides] = useState(false);
+  const [previewMode, setPreviewMode] = useState<RackPreviewMode>("names");
 
   useEffect(() => {
     if (initialTemplate) {
@@ -285,13 +315,21 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         const B = Math.max(1, initialTemplate.bins_per_level ?? 4);
         setLocationsPerLevel(Array.from({ length: Math.max(1, initialTemplate.levels) }, () => B));
       }
-      setAddressPattern(initialTemplate.addressPattern ?? DEFAULT_ADDRESS_PATTERN);
+      setColor(initialTemplate.color);
+      setReserveBinKeys(new Set(initialTemplate.reserve_bin_keys ?? []));
+      const strat = initialTemplate.namingStrategy ?? "pattern";
+      setNamingStrategy(strat as NamingStrategyId);
+      setNamingOrientation(initialTemplate.namingOrientation ?? "column-first");
+      setNamingPattern((initialTemplate.namingPattern ?? initialTemplate.addressPattern ?? DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN);
       setRowId(initialTemplate.rowId ?? "A");
       setSectionStartIndex(initialTemplate.sectionStartIndex ?? 1);
       setAutoSectionNumbering(initialTemplate.autoSectionNumbering ?? false);
       setBinNamingType(initialTemplate.binNamingType ?? "numeric");
-      setColor(initialTemplate.color);
-      setReserveBinKeys(new Set(initialTemplate.reserve_bin_keys ?? []));
+      setIndexPadding(initialTemplate.indexPadding ?? 2);
+      setStartIndex(initialTemplate.startIndex ?? 1);
+      setManualLabels(initialTemplate.manualLabels ?? {});
+      setOverrides(initialTemplate.overrides ?? {});
+      setAllowOverrides(Object.keys(initialTemplate.overrides ?? {}).length > 0);
     } else {
       setName("");
       setWidthCm(120);
@@ -299,13 +337,20 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       setHeightCm(200);
       setLevels(4);
       setLocationsPerLevel([4]);
-      setAddressPattern(DEFAULT_ADDRESS_PATTERN);
+      setColor(DEFAULT_COLORS[0]);
+      setReserveBinKeys(new Set());
+      setNamingStrategy("pattern");
+      setNamingOrientation("column-first");
+      setNamingPattern(DEFAULT_ADDRESS_PATTERN);
       setRowId("A");
       setSectionStartIndex(1);
       setAutoSectionNumbering(false);
       setBinNamingType("numeric");
-      setColor(DEFAULT_COLORS[0]);
-      setReserveBinKeys(new Set());
+      setIndexPadding(2);
+      setStartIndex(1);
+      setManualLabels({});
+      setOverrides({});
+      setAllowOverrides(false);
     }
   }, [initialTemplate]);
 
@@ -322,7 +367,15 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       && t.width_cm === width_cm && t.depth_cm === depth_cm && t.height_cm === height_cm
       && t.levels === levels && t.color === color
       && (t.reserve_bin_keys?.length ?? 0) === reserveBinKeys.size
-      && (t.reserve_bin_keys ?? []).every((k) => reserveBinKeys.has(k));
+      && (t.reserve_bin_keys ?? []).every((k) => reserveBinKeys.has(k))
+      && (t.namingStrategy ?? "pattern") === namingStrategy
+      && (t.namingOrientation ?? "column-first") === namingOrientation
+      && (t.namingPattern ?? t.addressPattern ?? DEFAULT_ADDRESS_PATTERN) === namingPattern
+      && (t.rowId ?? "A") === rowId
+      && (t.sectionStartIndex ?? 1) === sectionStartIndex
+      && (t.binNamingType ?? "numeric") === binNamingType
+      && (t.indexPadding ?? 2) === indexPadding
+      && (t.startIndex ?? 1) === startIndex;
     if (!same) return true;
     if (locationsPerLevel.length !== (t.levelConfig?.length ?? 0)) return true;
     if (t.levelConfig) {
@@ -330,8 +383,12 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         if ((locationsPerLevel[i] ?? 0) !== (t.levelConfig[i]?.locations ?? 0)) return true;
       }
     }
+    const ovKeys = Object.keys(t.overrides ?? {});
+    const manualKeys = Object.keys(t.manualLabels ?? {});
+    if (Object.keys(overrides).length !== ovKeys.length || ovKeys.some((k) => (t.overrides ?? {})[k] !== overrides[k])) return true;
+    if (Object.keys(manualLabels).length !== manualKeys.length || manualKeys.some((k) => (t.manualLabels ?? {})[k] !== manualLabels[k])) return true;
     return false;
-  }, [initialTemplate, name, width_cm, depth_cm, height_cm, levels, color, reserveBinKeys, locationsPerLevel]);
+  }, [initialTemplate, name, width_cm, depth_cm, height_cm, levels, color, reserveBinKeys, locationsPerLevel, namingStrategy, namingOrientation, namingPattern, rowId, sectionStartIndex, binNamingType, indexPadding, startIndex, overrides, manualLabels]);
 
   useEffect(() => {
     if (!isDirty || saving) return;
@@ -354,6 +411,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     const L = Math.max(1, Math.min(20, levels));
     const cfg = levelConfigForSave;
     const bins_per_level_legacy = cfg.length > 0 ? cfg[0].locations : 4;
+    const patternVal = namingPattern.trim() || DEFAULT_ADDRESS_PATTERN;
     const payload: CustomRackTemplate = {
       id: initialTemplate?.id ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `custom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
       name: trimmed,
@@ -366,12 +424,19 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       aisle_letter: rowIdVal,
       color,
       naming_pattern: `${rowIdVal}-{R}-{L}-{B}`,
-      addressPattern: addressPattern.trim() || DEFAULT_ADDRESS_PATTERN,
+      addressPattern: patternVal,
       rowId: rowIdVal,
       sectionStartIndex: Math.max(0, sectionStartIndex),
       autoSectionNumbering: autoSectionNumbering,
       binNamingType,
       reserve_bin_keys: Array.from(reserveBinKeys),
+      namingStrategy,
+      namingOrientation,
+      namingPattern: patternVal,
+      manualLabels: namingStrategy === "manual" ? manualLabels : undefined,
+      overrides: allowOverrides && Object.keys(overrides).length > 0 ? overrides : undefined,
+      indexPadding,
+      startIndex,
     };
     setSaving(true);
     setSaveSuccess(false);
@@ -395,145 +460,236 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     }
   };
 
+  const labelOptionsForPreview: RackTemplateLabelOptions = useMemo(() => ({
+    namingStrategy: namingStrategy === "manual" ? "manual" : namingStrategy === "rack-index" ? "rack-index" : namingStrategy === "custom" ? "custom" : "pattern",
+    namingOrientation: namingOrientation,
+    namingPattern: namingPattern.trim() || DEFAULT_ADDRESS_PATTERN,
+    rowId: rowId.trim() || "A",
+    sectionStartIndex: sectionStartIndex,
+    binNamingType,
+    manualLabels: namingStrategy === "manual" ? manualLabels : undefined,
+    overrides: allowOverrides ? overrides : undefined,
+    rackId: (rowId.trim() || "A") + "1",
+    indexPadding: indexPadding,
+    startIndex: startIndex,
+  }), [namingStrategy, namingOrientation, namingPattern, rowId, sectionStartIndex, binNamingType, manualLabels, overrides, allowOverrides, indexPadding, startIndex]);
+
+  const handleLabelEdit = (levelIndex: number, binIndex: number, currentValue: string) => {
+    const key = cellKey(levelIndex, binIndex);
+    const newVal = window.prompt("Etykieta lokacji", currentValue || "");
+    if (newVal === null) return;
+    if (namingStrategy === "manual") {
+      setManualLabels((prev) => ({ ...prev, [key]: newVal }));
+    } else if (allowOverrides) {
+      setOverrides((prev) => (newVal === "" ? (() => { const n = { ...prev }; delete n[key]; return n; })() : { ...prev, [key]: newVal }));
+    }
+  };
+
+  const handlePasteList = () => {
+    const raw = window.prompt("Wklej listę etykiet (jedna na linię). Kolejność: poziom po poziomie, od lewej.", "");
+    if (raw == null || raw.trim() === "") return;
+    const labels = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    const next: Record<string, string> = { ...manualLabels };
+    let idx = 0;
+    for (let lev = 0; lev < Math.max(1, levels); lev++) {
+      const locs = locationsPerLevel[lev] ?? 1;
+      for (let seg = 0; seg < locs && idx < labels.length; seg++) {
+        next[cellKey(lev, seg)] = labels[idx++];
+      }
+    }
+    setManualLabels(next);
+  };
+
   const formSection = (
     <div className="space-y-6 text-[16px]">
-      <div>
-        <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Nazwa</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="np. Regał wysokie palety"
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus transition-shadow"
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Szer. (cm)</label>
-          <input type="number" min={10} step={10} value={width_cm} onChange={(e) => setWidthCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
-        </div>
-        <div>
-          <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Gł. (cm)</label>
-          <input type="number" min={10} step={10} value={depth_cm} onChange={(e) => setDepthCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
-        </div>
-      </div>
-      <div>
-        <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Wys. (cm)</label>
-        <input type="number" min={10} step={10} value={height_cm} onChange={(e) => setHeightCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
-      </div>
-      <div>
-        <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Liczba poziomów</label>
-        <input
-          type="number"
-          min={1}
-          max={20}
-          value={levels}
-          onChange={(e) => {
-            const next = Math.max(1, Math.min(20, Number(e.target.value) || 1));
-            setLevels(next);
-            setLocationsPerLevel((prev) => {
-              if (next > prev.length) return [...prev, ...Array.from({ length: next - prev.length }, () => prev[prev.length - 1] ?? 1)];
-              return prev.slice(0, next);
-            });
-          }}
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus"
-        />
-      </div>
-      <div>
-        <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Lokacje na poziom</label>
-        <div className="space-y-2">
-          {Array.from({ length: Math.max(1, levels) }, (_, i) => {
-            const val = locationsPerLevel[i] ?? 1;
-            return (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-slate-600 font-semibold w-20 shrink-0 text-[16px]">Poziom {i + 1}:</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={val}
-                  onChange={(e) => setLocationsPerLevel((prev) => {
-                    const next = [...prev];
-                    while (next.length <= i) next.push(1);
-                    next[i] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
-                    return next;
-                  })}
-                  className="flex-1 rounded-lg border border-slate-200 bg-slate-50 text-[#1E293B] px-2.5 py-1.5 text-[16px] input-focus"
-                />
-                <span className="text-slate-400 text-[16px]">lok.</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <div>
-        <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Naming Scheme</label>
-        <div className="space-y-3">
+      {/* ——— SECTION 1: STRUCTURE ——— */}
+      <section>
+        <h4 className="text-slate-700 font-bold uppercase mb-3 text-[14px] border-b border-slate-200 pb-1">Struktura</h4>
+        <div className="space-y-4">
           <div>
-            <label className="text-[16px] text-slate-500">Row ID ({'{Row}'})</label>
+            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Nazwa</label>
             <input
               type="text"
-              value={rowId}
-              onChange={(e) => setRowId(e.target.value)}
-              placeholder="e.g. A or 1"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] px-3 py-2.5 text-[16px] input-focus"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="np. Regał wysokie palety"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus transition-shadow"
             />
           </div>
-          <div>
-            <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoSectionNumbering}
-                onChange={(e) => setAutoSectionNumbering(e.target.checked)}
-                className="rounded"
-              />
-              <span className="text-[16px] font-semibold">Automatyczna numeracja sekcji</span>
-            </label>
-            <p className="text-[16px] text-slate-500 mt-0.5">Przy rysowaniu rzędu: Regał 1 → {`{Section}`}=Start, Regał 2 → Start+1, …</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Szer. (cm)</label>
+              <input type="number" min={10} step={10} value={width_cm} onChange={(e) => setWidthCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
+            </div>
+            <div>
+              <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Gł. (cm)</label>
+              <input type="number" min={10} step={10} value={depth_cm} onChange={(e) => setDepthCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
+            </div>
           </div>
           <div>
-            <label className="text-[16px] text-slate-500">Start Section Index ({'{Section}'})</label>
+            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Wys. (cm)</label>
+            <input type="number" min={10} step={10} value={height_cm} onChange={(e) => setHeightCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
+          </div>
+          <div>
+            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Liczba poziomów</label>
             <input
               type="number"
-              min={0}
-              value={sectionStartIndex}
-              onChange={(e) => setSectionStartIndex(Number(e.target.value) || 0)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] px-3 py-2.5 text-[16px] input-focus"
+              min={1}
+              max={20}
+              value={levels}
+              onChange={(e) => {
+                const next = Math.max(1, Math.min(20, Number(e.target.value) || 1));
+                setLevels(next);
+                setLocationsPerLevel((prev) => {
+                  if (next > prev.length) return [...prev, ...Array.from({ length: next - prev.length }, () => prev[prev.length - 1] ?? 1)];
+                  return prev.slice(0, next);
+                });
+              }}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus"
             />
           </div>
           <div>
-            <label className="text-[16px] text-slate-500">Bin Naming ({'{Bin}'})</label>
+            <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Lokacje na poziom</label>
+            <div className="space-y-2">
+              {Array.from({ length: Math.max(1, levels) }, (_, i) => {
+                const val = locationsPerLevel[i] ?? 1;
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-slate-600 font-semibold w-20 shrink-0 text-[16px]">Poziom {i + 1}:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={val}
+                      onChange={(e) => setLocationsPerLevel((prev) => {
+                        const next = [...prev];
+                        while (next.length <= i) next.push(1);
+                        next[i] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                        return next;
+                      })}
+                      className="flex-1 rounded-lg border border-slate-200 bg-slate-50 text-[#1E293B] px-2.5 py-1.5 text-[16px] input-focus"
+                    />
+                    <span className="text-slate-400 text-[16px]">lok.</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Kolor</label>
+            <div className="flex flex-wrap gap-2 items-center">
+              {DEFAULT_COLORS.map((c) => (
+                <button key={c} type="button" onClick={() => setColor(c)} className={`w-8 h-8 rounded-xl border-2 transition-colors ${color === c ? "border-cyan-500 ring-2 ring-cyan-500/30" : "border-slate-200"}`} style={{ backgroundColor: c }} />
+              ))}
+              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 cursor-pointer rounded-xl border border-slate-200 bg-transparent" />
+            </div>
+          </div>
+          <p className="text-slate-500 text-[14px]">Kliknij komórki w podglądzie, aby oznaczyć lokacje rezerwowe.</p>
+        </div>
+      </section>
+
+      {/* ——— SECTION 2: NAMING STRATEGY ——— */}
+      <section>
+        <h4 className="text-slate-700 font-bold uppercase mb-3 text-[14px] border-b border-slate-200 pb-1">Strategia nazewnictwa</h4>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-slate-600 font-semibold text-[16px] mb-1.5">Sposób nazewnictwa</label>
             <select
-              value={binNamingType}
-              onChange={(e) => setBinNamingType(e.target.value as "numeric" | "alpha")}
+              value={namingStrategy}
+              onChange={(e) => setNamingStrategy(e.target.value as NamingStrategyId)}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] px-3 py-2.5 text-[16px] input-focus"
             >
-              <option value="numeric">Numeric (1, 2, 3…)</option>
-              <option value="alpha">Alpha (A, B, C…)</option>
+              <option value="pattern">Z wzorca (Row/Section/Bin/Level)</option>
+              <option value="rack-index">Rack + indeks</option>
+              <option value="custom">Własny wzorzec</option>
+              <option value="manual">Ręczne etykiety</option>
             </select>
           </div>
-          <div>
-            <label className="text-[16px] text-slate-500">Address Pattern</label>
-            <input
-              type="text"
-              value={addressPattern}
-              onChange={(e) => setAddressPattern(e.target.value)}
-              placeholder="{Row}{Section}-{Bin}-{Level}"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] px-3 py-2.5 font-mono text-[16px] input-focus"
-            />
-            <p className="text-[16px] text-slate-500 mt-0.5">{'{Row}'} {'{Section}'} {'{Bin}'} {'{Level}'}</p>
-          </div>
+
+          {namingStrategy === "pattern" && (
+            <>
+              <div>
+                <label className="block text-slate-600 font-semibold text-[14px] mb-1">Orientacja</label>
+                <select
+                  value={namingOrientation}
+                  onChange={(e) => setNamingOrientation(e.target.value as "column-first" | "row-first")}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus"
+                >
+                  <option value="column-first">Column-first (A-1 B-1 C-1)</option>
+                  <option value="row-first">Row-first (A-1 A-2 A-3)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[14px] text-slate-600">Row ID ({'{Row}'})</label>
+                <input type="text" value={rowId} onChange={(e) => setRowId(e.target.value)} placeholder="np. A" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-slate-600 cursor-pointer text-[14px]">
+                  <input type="checkbox" checked={autoSectionNumbering} onChange={(e) => setAutoSectionNumbering(e.target.checked)} className="rounded" />
+                  Automatyczna numeracja sekcji
+                </label>
+              </div>
+              <div>
+                <label className="text-[14px] text-slate-600">Start Section ({'{Section}'})</label>
+                <input type="number" min={0} value={sectionStartIndex} onChange={(e) => setSectionStartIndex(Number(e.target.value) || 0)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
+              </div>
+              <div>
+                <label className="text-[14px] text-slate-600">Kolumna ({'{Bin}'})</label>
+                <select value={binNamingType} onChange={(e) => setBinNamingType(e.target.value as "numeric" | "alpha")} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5">
+                  <option value="numeric">Numeric (1, 2, 3…)</option>
+                  <option value="alpha">Alpha (A, B, C…)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[14px] text-slate-600">Wzorzec</label>
+                <input type="text" value={namingPattern} onChange={(e) => setNamingPattern(e.target.value)} placeholder="{Row}{Section}-{Bin}-{Level}" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[14px] input-focus mt-0.5" />
+                <p className="text-slate-500 text-[12px] mt-0.5">{'{Row}'} {'{Section}'} {'{Bin}'} {'{Level}'}</p>
+              </div>
+            </>
+          )}
+
+          {(namingStrategy === "rack-index" || namingStrategy === "custom") && (
+            <>
+              <div>
+                <label className="text-[14px] text-slate-600">Wzorzec</label>
+                <input type="text" value={namingPattern} onChange={(e) => setNamingPattern(e.target.value)} placeholder={namingStrategy === "rack-index" ? "{Rack}-{Index:2}" : "PICK-{Rack}-{Index}"} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[14px] input-focus mt-0.5" />
+                <p className="text-slate-500 text-[12px] mt-0.5">{'{Rack}'} {'{Index}'} {'{Index:N}'}</p>
+              </div>
+              <div>
+                <label className="text-[14px] text-slate-600">Rack (np. A1)</label>
+                <input type="text" value={rowId} onChange={(e) => setRowId(e.target.value)} placeholder="A1" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[14px] text-slate-600">Dopełnienie indeksu</label>
+                  <input type="number" min={1} max={5} value={indexPadding} onChange={(e) => setIndexPadding(Math.max(1, Math.min(5, Number(e.target.value) || 2)))} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
+                </div>
+                <div>
+                  <label className="text-[14px] text-slate-600">Start indeksu</label>
+                  <input type="number" min={0} value={startIndex} onChange={(e) => setStartIndex(Number(e.target.value) ?? 1)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
+                </div>
+              </div>
+            </>
+          )}
+
+          {namingStrategy === "manual" && (
+            <>
+              <p className="text-slate-600 text-[14px]">Kliknij komórki w widoku „Nazwy”, aby wpisać etykiety. Możesz też wkleić listę (jedna etykieta na linię).</p>
+              <button type="button" onClick={handlePasteList} className="rounded-lg border border-slate-300 bg-slate-100 text-slate-700 px-3 py-2 text-[14px] font-medium hover:bg-slate-200">
+                Wklej listę
+              </button>
+            </>
+          )}
+
+          {namingStrategy !== "manual" && (
+            <label className="flex items-center gap-2 text-slate-600 cursor-pointer text-[14px]">
+              <input type="checkbox" checked={allowOverrides} onChange={(e) => setAllowOverrides(e.target.checked)} className="rounded" />
+              Nadpisz pojedyncze etykiety (kliknij komórkę w widoku Nazwy)
+            </label>
+          )}
         </div>
-      </div>
-      <div>
-        <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Kolor</label>
-        <div className="flex flex-wrap gap-2 items-center">
-          {DEFAULT_COLORS.map((c) => (
-            <button key={c} type="button" onClick={() => setColor(c)} className={`w-8 h-8 rounded-xl border-2 transition-colors ${color === c ? "border-cyan-500 ring-2 ring-cyan-500/30" : "border-slate-200"}`} style={{ backgroundColor: c }} />
-          ))}
-          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 cursor-pointer rounded-xl border border-slate-200 bg-transparent" />
-        </div>
-      </div>
+      </section>
+
       {isEdit && (
         <label className="flex items-center gap-2 text-slate-600 text-[16px]">
           <input type="checkbox" checked={updateExistingRacks} onChange={(e) => setUpdateExistingRacks(e.target.checked)} className="rounded" />
@@ -565,6 +721,13 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
           {formSection}
         </div>
         <div className="flex-1 min-w-0 flex flex-col p-6 bg-white overflow-hidden min-h-0">
+          <div className="flex items-center gap-2 mb-2 shrink-0">
+            <span className="text-slate-600 text-sm font-semibold">Podgląd:</span>
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+              <button type="button" onClick={() => setPreviewMode("structure")} className={`px-3 py-1.5 text-sm font-medium ${previewMode === "structure" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>Struktura</button>
+              <button type="button" onClick={() => setPreviewMode("names")} className={`px-3 py-1.5 text-sm font-medium ${previewMode === "names" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>Nazwy</button>
+            </div>
+          </div>
           <RackPreview
             width_cm={width_cm}
             depth_cm={depth_cm}
@@ -572,12 +735,15 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             levels={levels}
             bins_per_level={locationsPerLevel[0] ?? 4}
             levelConfig={levelConfigForSave}
-            addressPattern={addressPattern.trim() || DEFAULT_ADDRESS_PATTERN}
+            addressPattern={namingPattern.trim() || DEFAULT_ADDRESS_PATTERN}
             rowId={rowId.trim() || "A"}
             sectionStartIndex={sectionStartIndex}
             binNamingType={binNamingType}
             reserveBinKeys={reserveBinKeys}
             color={color}
+            previewMode={previewMode}
+            labelOptions={labelOptionsForPreview}
+            onLabelEdit={(namingStrategy === "manual" || allowOverrides) ? handleLabelEdit : undefined}
             onBinClick={(levelIndex, binIndex) => setReserveBinKeys((prev) => {
               const key = cellKey(levelIndex, binIndex);
               const next = new Set(prev);

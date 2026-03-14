@@ -12,6 +12,7 @@ rectangle, line, icon, group, repeater. Rotation 0-360°. Conditional styling. R
 import io
 import json
 import logging
+import re
 import xml.sax.saxutils as saxutils
 from typing import Any
 
@@ -42,13 +43,21 @@ def _resolve(data: dict[str, Any], key: str) -> str:
     key = (key or "").strip()
     if not key:
         return ""
+    print("BINDING KEY:", repr(key))
     val = data.get(key)
+    print("BINDING VALUE BEFORE:", repr(val))
     if val is not None:
-        return str(val)
+        result = str(val)
+        print("BINDING VALUE AFTER:", repr(result))
+        return result
     if key.startswith("{") and key.endswith("}"):
-        val = data.get(key[1:-1].strip())
+        bare = key[1:-1].strip()
+        val = data.get(bare)
         if val is not None:
-            return str(val)
+            result = str(val)
+            print("BINDING VALUE AFTER:", repr(result))
+            return result
+    print("BINDING VALUE AFTER:", repr(""))
     return ""
 
 
@@ -109,6 +118,54 @@ def _element_bounds(el: dict) -> tuple[float, float]:
     return (max(0.5, w), max(0.5, h))
 
 
+def _evaluate_condition(expression: str, record: dict[str, Any]) -> bool:
+    """
+    Simple condition evaluator for visibleIf. Supports: {field} == value, != value, > value, < value.
+    Value can be quoted string or number. No full expression engine.
+    """
+    if not expression or not isinstance(expression, str):
+        return True
+    s = expression.strip()
+    if not s:
+        return True
+    m = re.match(r"^\s*(\{[^}]+\}|[a-zA-Z_][a-zA-Z0-9_]*)\s*(==|!=|>|<)\s*(.+)\s*$", s, re.DOTALL)
+    if not m:
+        return True
+    left_key_raw = (m.group(1) or "").strip()
+    op = (m.group(2) or "").strip()
+    right_raw = (m.group(3) or "").strip()
+    key = left_key_raw.strip("{}").strip() if left_key_raw.startswith("{") else left_key_raw
+    field_val = record.get(key) if key in record else record.get(f"{{{key}}}")
+    str_val = str(field_val) if field_val is not None else ""
+    right_val: Any = right_raw
+    if (right_raw.startswith("'") and right_raw.endswith("'")) or (right_raw.startswith('"') and right_raw.endswith('"')):
+        right_val = right_raw[1:-1]
+    else:
+        try:
+            if "." in right_raw:
+                right_val = float(right_raw)
+            else:
+                right_val = int(right_raw)
+        except (ValueError, TypeError):
+            right_val = right_raw
+    if op == "==":
+        return str_val == str(right_val)
+    if op == "!=":
+        return str_val != str(right_val)
+    if op in (">", "<"):
+        try:
+            left_num = float(field_val) if field_val is not None else float("nan")
+            right_num = float(right_val) if isinstance(right_val, (int, float)) else float(right_val)
+            if op == ">":
+                return left_num > right_num
+            return left_num < right_num
+        except (TypeError, ValueError):
+            if op == ">":
+                return str_val > str(right_val)
+            return str_val < str(right_val)
+    return True
+
+
 def _compute_layout_items(
     elements: list[dict],
     record: dict[str, Any],
@@ -121,6 +178,9 @@ def _compute_layout_items(
     """Flatten template elements into layout items (same schema as frontend). Top-left origin, mm."""
     for el in elements:
         if not isinstance(el, dict) or not el.get("type"):
+            continue
+        visible_if = el.get("visibleIf")
+        if visible_if and not _evaluate_condition(str(visible_if).strip(), record):
             continue
         el_type = (el.get("type") or "").strip().lower()
         if el_type == "group":
@@ -135,22 +195,60 @@ def _compute_layout_items(
                 logger.warning("Repeater element missing dataset property")
                 continue
             dataset_key = dataset_key.strip() if isinstance(dataset_key, str) else dataset_key
-            items = record.get(dataset_key)
-            if not isinstance(items, list):
+            raw_dataset = record.get(dataset_key)
+            items = list(raw_dataset or [])
+            if not isinstance(raw_dataset, list):
                 items = []
+            print("REPEATER DATASET KEY:", dataset_key)
+            print("RECORD DATASET:", record.get(dataset_key))
+            logger.info(
+                "layout repeater: record_keys=%s dataset_key=%r record[dataset_key]=%s len=%s",
+                list(record.keys()),
+                dataset_key,
+                type(raw_dataset).__name__ if raw_dataset is not None else "missing",
+                len(items),
+            )
+            filter_expr = (el.get("filter") or "").strip()
+            if filter_expr:
+                items = [i for i in items if _evaluate_condition(filter_expr, i if isinstance(i, dict) else {})]
+            sort_by = (el.get("sortBy") or "").strip()
+            if sort_by:
+
+                def _repeater_sort_key(it: Any) -> tuple[int, float | str]:
+                    if not isinstance(it, dict):
+                        return (1, "")
+                    v = it.get(sort_by) if sort_by in it else it.get(f"{{{sort_by}}}")
+                    try:
+                        n = float(v) if v is not None else float("nan")
+                        return (0, n)
+                    except (TypeError, ValueError):
+                        return (1, str(v or ""))
+
+                items.sort(key=_repeater_sort_key)
+
             template = el.get("template") or {}
             nested = template.get("elements") if isinstance(template, dict) else []
+            layout = (el.get("layout") or "").strip().lower() or None
+            use_grid = layout == "grid"
+            columns = max(1, int(el.get("columns") or 1))
             direction = (el.get("direction") or "horizontal").lower()
             iw = float(el.get("itemWidth") or el.get("width") or 20)
             ih = float(el.get("itemHeight") or el.get("height") or 20)
-            cx, cy = x0_mm + float(el.get("x", 0)), y0_mm + float(el.get("y", 0))
-            for item in items:
+            base_x = x0_mm + float(el.get("x", 0))
+            base_y = y0_mm + float(el.get("y", 0))
+            for idx, item in enumerate(items):
                 item_data = item if isinstance(item, dict) else {}
-                _compute_layout_items(nested, item_data, label_width_mm, label_height_mm, cx, cy, out)
-                if direction == "vertical":
-                    cy += ih
+                child_record = {**record, **item_data}
+                if use_grid:
+                    row, col = idx // columns, idx % columns
+                    cx = base_x + col * iw
+                    cy = base_y + row * ih
                 else:
-                    cx += iw
+                    if direction == "vertical":
+                        cx, cy = base_x, base_y + idx * ih
+                    else:
+                        cx, cy = base_x + idx * iw, base_y
+                _compute_layout_items(nested, child_record, label_width_mm, label_height_mm, cx, cy, out)
             continue
         w_mm, h_mm = _element_bounds(el)
         x_mm = x0_mm + float(el.get("x", 0))
@@ -180,19 +278,53 @@ def _compute_layout_items(
         }
         if el_type in ("text", "dynamictext"):
             binding = el.get("binding") or el.get("dataBinding") or ""
-            item["text"] = _resolve(record, binding) or ""
+            resolved_text = _resolve(record, binding) or ""
+            print("TEXT ELEMENT RAW:", repr(el.get("text")), "binding:", repr(binding))
+            print("TEXT ELEMENT RESOLVED:", repr(resolved_text))
+            item["text"] = resolved_text
             item["fontSize"] = float(el.get("fontSize") or 10)
             item["fontFamily"] = el.get("fontFamily")
             item["bold"] = bool(el.get("bold"))
             item["align"] = (el.get("align") or "left").lower()
             item["verticalAlign"] = (el.get("verticalAlign") or el.get("vertical_text") or "middle").lower()
         elif el_type == "statictext":
-            item["text"] = el.get("text") or ""
+            text_value = el.get("text") or ""
+            print("TEXT ELEMENT RAW:", repr(text_value))
+            static_placeholder_match = re.match(r"^{{?([a-zA-Z0-9_]+)}}?$", text_value.strip())
+            if static_placeholder_match:
+                var_name = static_placeholder_match.group(1)
+                binding_key = "{" + var_name + "}"
+                resolved = _resolve(record, binding_key)
+                print("TEXT ELEMENT RESOLVED:", repr(resolved if resolved else text_value))
+                if resolved:
+                    item["text"] = resolved
+                    logger.debug("Resolved staticText placeholder %s -> %s", text_value.strip(), resolved)
+                else:
+                    item["text"] = text_value
+            else:
+                item["text"] = text_value
+                print("TEXT ELEMENT RESOLVED:", repr(text_value))
             item["fontSize"] = float(el.get("fontSize") or 8)
             item["fontFamily"] = el.get("fontFamily")
             item["bold"] = bool(el.get("bold"))
             item["align"] = (el.get("align") or "left").lower()
             item["verticalAlign"] = (el.get("verticalAlign") or "middle").lower()
+        if el_type in ("text", "dynamictext", "statictext"):
+            auto_fit = bool(el.get("autoFit"))
+            scale_to_height = bool(el.get("scaleToHeight"))
+            if auto_fit:
+                min_font_size = max(1.0, float(el.get("minFontSize") or 6))
+                font_size = float(item["fontSize"])
+                font_name = PDF_FONT_BOLD if item.get("bold") else PDF_FONT
+                text_val = (item.get("text") or "").strip()
+                while text_val and font_size > min_font_size:
+                    width_pt = stringWidth(text_val, font_name, font_size)
+                    if width_pt <= w_mm * POINTS_PER_MM:
+                        break
+                    font_size -= 0.5
+                item["fontSize"] = max(min_font_size, font_size)
+            elif scale_to_height:
+                item["fontSize"] = float(h_mm * 0.7)
         elif el_type == "barcode":
             binding = el.get("dataBinding") or el.get("data_binding") or el.get("binding") or "barcode_data"
             item["barcodeValue"] = _resolve_barcode_value(record, binding) or "SAMPLE"
@@ -202,6 +334,20 @@ def _compute_layout_items(
         elif el_type in ("rect", "rectangle"):
             item["strokeWidth"] = float(el.get("strokeWidth") or el.get("stroke_width") or 0.5)
             item["fill"] = el.get("fill") or el.get("backgroundColor")
+            conditions = el.get("conditions")
+            if isinstance(conditions, list):
+                for cond in conditions:
+                    if not isinstance(cond, dict):
+                        continue
+                    expr = (cond.get("if") or "").strip()
+                    if not expr:
+                        continue
+                    if _evaluate_condition(expr, record):
+                        if cond.get("fill") is not None:
+                            item["fill"] = cond["fill"]
+                        if cond.get("stroke") is not None:
+                            item["borderColor"] = cond["stroke"]
+                        break
         elif el_type == "section":
             item["borderWidth"] = float(el.get("borderWidth") or el.get("strokeWidth") or 0.5)
         elif el_type == "line":
@@ -285,6 +431,7 @@ def _draw_text(
     align = (el.get("align") or "left").lower()
     center_x = x_pt + w_pt / 2
     right_x = x_pt + w_pt
+    print("TEXT DRAW INPUT:", repr(val))
     if align == "center":
         c.drawCentredString(center_x, y_baseline, val)
     elif align == "right":
@@ -540,6 +687,7 @@ def render_elements(
             align = (el.get("align") or "left").lower()
             center_x = x_pt + w_pt / 2
             right_x = x_pt + w_pt
+            print("TEXT DRAW INPUT:", repr(val))
             if align == "center":
                 c.drawCentredString(center_x, y_baseline, val)
             elif align == "right":
@@ -743,6 +891,7 @@ def _draw_static_text_layout(
     else:
         y_baseline = y_pt + h_pt / 2 - font_size * 0.3
     align = (item.get("align") or "left").lower()
+    print("TEXT DRAW INPUT:", repr(val))
     if align == "center":
         c.drawCentredString(x_pt + w_pt / 2, y_baseline, val)
     elif align == "right":
@@ -967,6 +1116,7 @@ def render_label_to_canvas_engine(
     Uses single layout engine: compute_layout -> render_layout_items_to_canvas.
     """
     layout_items = compute_layout(layout, record, width_mm, height_mm)
+    print("LAYOUT ITEMS COUNT:", len(layout_items))
     render_layout_items_to_canvas(c, layout_items, width_mm, height_mm, offset_x_pt, offset_y_pt)
 
 

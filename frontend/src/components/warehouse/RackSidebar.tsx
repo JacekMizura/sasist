@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { LayoutState, CustomRackTemplate, CatalogItem, VisualElementType } from "../../types/warehouse";
-import { formatVolume, getLevelConfig, getTotalLocations, getRackDisplayId } from "./warehouseUtils";
+import { formatVolume, getLevelConfig, getTotalLocations, getRackDisplayId, type RackTemplateLabelOptions } from "./warehouseUtils";
 
 function sameCatalogItem(a: CatalogItem | null, b: CatalogItem): boolean {
   if (!a) return false;
@@ -10,6 +10,7 @@ function sameCatalogItem(a: CatalogItem | null, b: CatalogItem): boolean {
   return false;
 }
 import { TemplateCreator, RackPreview } from "./TemplateCreator";
+import { GenerateWarehouseLayoutModal } from "./GenerateWarehouseLayoutModal";
 import { UI_STRINGS } from "../../constants/uiStrings";
 
 const DEFAULT_ADDRESS_PATTERN = "{Row}{Section}-{Bin}-{Level}";
@@ -55,6 +56,8 @@ export type RackSidebarProps = {
   onReindexRow?: (rackId: number | string | null, prefix: string) => void;
   /** When true (e.g. Magazyn tab), show only catalog; hide Visual elements and layout-focused actions. */
   showOnlyCatalog?: boolean;
+  /** Open the building dimensions modal (toolbar remains primary entry point). */
+  onOpenEditBuilding?: () => void;
 };
 
 export function RackSidebar({
@@ -72,7 +75,7 @@ export function RackSidebar({
   onSaveEditTemplate,
   onSaveNewTemplate,
   onDeleteTemplate,
-  setLayout: _setLayout,
+  setLayout,
   rowToolActive,
   rowToolTemplate,
   setRowToolTemplate,
@@ -94,15 +97,19 @@ export function RackSidebar({
   setCurrentRowPrefix,
   onReindexRow,
   showOnlyCatalog = false,
+  onOpenEditBuilding,
 }: RackSidebarProps) {
   const [activeTab, setActiveTab] = useState<"catalog" | "visuals">("catalog");
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showGenerateLayoutModal, setShowGenerateLayoutModal] = useState(false);
   const [catalogCollapsed, setCatalogCollapsed] = useState(false);
   const [rackListCollapsed, setRackListCollapsed] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
   const editingTemplate = editingTemplateId ? customTemplates.find((t) => t.id === editingTemplateId) ?? null : null;
   const showTemplateCreator = showTemplateModal || editingTemplateId != null;
+  const buildingDepthM = layout.building_depth_m ?? layout.building_height_m;
+  const hasBuilding = layout.building_width_m != null && buildingDepthM != null && layout.building_width_m > 0 && buildingDepthM > 0;
   const VISUAL_ITEMS: { type: VisualElementType; label: string; size: string }[] = [
     { type: "column", label: UI_STRINGS.warehouse.visuals.column, size: "2×2" },
     { type: "mezzanine", label: UI_STRINGS.warehouse.visuals.mezzanine, size: "20×15" },
@@ -126,6 +133,27 @@ export function RackSidebar({
       )}
       {(showOnlyCatalog || activeTab === "catalog") && (
         <>
+      {onOpenEditBuilding != null && (
+        <div className="rounded-lg p-3 mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb" }}>
+          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Budynek</div>
+          {hasBuilding ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-slate-700">{layout.building_width_m} × {buildingDepthM}{layout.building_height_m != null && layout.building_height_m > 0 ? ` × ${layout.building_height_m}` : ""} m</span>
+                <button type="button" onClick={onOpenEditBuilding} className="text-xs text-cyan-600 hover:underline">Edytuj</button>
+              </div>
+              <div className="mt-1.5 text-[10px] text-slate-600 space-y-0.5">
+                <div>Powierzchnia: {Math.round((layout.building_width_m ?? 0) * (buildingDepthM ?? 0))} m²</div>
+                {layout.building_height_m != null && layout.building_height_m > 0 && (
+                  <div>Kubatura: {Math.round((layout.building_width_m ?? 0) * (buildingDepthM ?? 0) * layout.building_height_m)} m³</div>
+                )}
+              </div>
+            </>
+          ) : (
+            <button type="button" onClick={onOpenEditBuilding} className="text-sm text-cyan-600 hover:underline">Ustaw wymiary budynku</button>
+          )}
+        </div>
+      )}
       <div className="rounded-lg p-3 overflow-hidden mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
         <div className="flex items-center justify-between" style={{ marginBottom: "8px" }}>
           <button
@@ -136,13 +164,22 @@ export function RackSidebar({
             {UI_STRINGS.warehouse.rackSidebar.catalog} {catalogCollapsed ? "▶" : "▼"}
           </button>
           {!showOnlyCatalog && (
-            <button
-              type="button"
-              onClick={() => setShowTemplateModal(true)}
-              className="px-2 py-1 rounded-lg bg-cyan-600 text-white text-[10px] font-semibold hover:bg-cyan-500"
-            >
-              {UI_STRINGS.warehouse.rackSidebar.newTemplate}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowGenerateLayoutModal(true)}
+                className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-semibold hover:bg-emerald-500"
+              >
+                Generuj układ
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(true)}
+                className="px-2 py-1 rounded-lg bg-cyan-600 text-white text-[10px] font-semibold hover:bg-cyan-500"
+              >
+                {UI_STRINGS.warehouse.rackSidebar.newTemplate}
+              </button>
+            </div>
           )}
         </div>
         {!catalogCollapsed && (
@@ -452,12 +489,25 @@ export function RackSidebar({
                   levels={template.levels}
                   bins_per_level={template.bins_per_level}
                   levelConfig={lc}
-                  addressPattern={(template.addressPattern ?? DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN}
+                  addressPattern={(template.namingPattern ?? template.addressPattern ?? DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN}
                   rowId={(template.rowId ?? template.aisle_letter ?? "A").trim() || "A"}
                   sectionStartIndex={template.sectionStartIndex ?? 1}
                   binNamingType={template.binNamingType ?? "numeric"}
                   reserveBinKeys={new Set(template.reserve_bin_keys ?? [])}
                   color={template.color}
+                  labelOptions={template.namingStrategy != null || template.manualLabels != null || (template.overrides != null && Object.keys(template.overrides).length > 0) ? {
+                    namingStrategy: template.namingStrategy ?? "pattern",
+                    namingOrientation: template.namingOrientation ?? "column-first",
+                    namingPattern: (template.namingPattern ?? template.addressPattern ?? DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN,
+                    rowId: (template.rowId ?? template.aisle_letter ?? "A").trim() || "A",
+                    sectionStartIndex: template.sectionStartIndex ?? 1,
+                    binNamingType: template.binNamingType ?? "numeric",
+                    manualLabels: template.manualLabels,
+                    overrides: template.overrides,
+                    rackId: ((template.rowId ?? template.aisle_letter ?? "A").trim() || "A") + "1",
+                    indexPadding: template.indexPadding ?? 2,
+                    startIndex: template.startIndex ?? 1,
+                  } as RackTemplateLabelOptions : undefined}
                   title="Podgląd regału — na żywo"
                   className="h-full min-h-[400px]"
                 />
@@ -466,6 +516,30 @@ export function RackSidebar({
           </div>
         );
       })()}
+
+      {showGenerateLayoutModal && !showOnlyCatalog && (
+        <GenerateWarehouseLayoutModal
+          onClose={() => setShowGenerateLayoutModal(false)}
+          onConfirm={(result, mode) => {
+            if (mode === "replace") {
+              setLayout((prev) => ({
+                ...prev,
+                racks: result.racks,
+                row_containers: result.row_containers ?? [],
+              }));
+            } else {
+              setLayout((prev) => ({
+                ...prev,
+                racks: [...prev.racks, ...result.racks],
+                row_containers: [...(prev.row_containers ?? []), ...(result.row_containers ?? [])],
+              }));
+            }
+          }}
+          layout={layout}
+          customTemplates={customTemplates}
+          initialTemplate={rowToolTemplate}
+        />
+      )}
 
       {showTemplateCreator && !showOnlyCatalog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-hidden" onClick={() => { setShowTemplateModal(false); setEditingTemplateId(null); }}>

@@ -47,26 +47,59 @@ def _parse_assigned_locations(raw) -> list:
     return []
 
 
-def _location_label_to_coords(label: str) -> tuple[int, int, int] | None:
-    """Parse location label to (rack_num, level, position). Returns (rack_numeric, level, position) or None."""
-    if not label or not isinstance(label, str):
-        return None
-    s = str(label).strip()
-    parts = re.split(r"[-_\s]+", s)
-    if len(parts) < 3:
-        return None
-    try:
-        rack_str = parts[0].upper()
-        level = int(parts[1])
-        pos = int(parts[2])
-    except (ValueError, IndexError):
-        return None
+def _rack_str_to_num(rack_str: str) -> int:
+    """Convert rack string (e.g. A1, B) to numeric for ordering."""
     if not rack_str:
+        return 0
+    s = str(rack_str).strip().upper()
+    first = s[0] if s else ""
+    rest = s[1:].strip() or "0"
+    return (ord(first) - ord("A")) * 100 + (int(rest) if rest.isdigit() else 0)
+
+
+def _location_label_to_coords(location: str | dict) -> tuple[int, int, int] | None:
+    """Parse location to (rack_num, level, position). Accepts string label or dict with level/position/rack_name."""
+    if isinstance(location, dict):
+        if "level" in location and "position" in location:
+            try:
+                level = int(location.get("level", 0))
+                pos = int(location.get("position", 0))
+                rack_str = (
+                    location.get("rack_name")
+                    or location.get("rack_id")
+                    or location.get("rack")
+                    or ""
+                )
+                rack_num = _rack_str_to_num(str(rack_str))
+                return (rack_num, level, pos)
+            except (TypeError, ValueError):
+                pass
+        label = location.get("loc_name") or location.get("location_name") or location.get("name") or ""
+        if not label:
+            return None
+        location = str(label)
+    if not location or not isinstance(location, str):
         return None
-    first = rack_str[0]
-    rest = rack_str[1:].strip() or "0"
-    rack_num = (ord(first) - ord("A")) * 100 + (int(rest) if rest.isdigit() else 0)
-    return (rack_num, level, pos)
+    s = str(location).strip()
+    parts = re.split(r"[-_\s]+", s)
+    if len(parts) >= 3:
+        try:
+            rack_str = parts[0].upper()
+            level = int(parts[1])
+            pos = int(parts[2])
+            rack_num = _rack_str_to_num(rack_str)
+            return (rack_num, level, pos)
+        except (ValueError, IndexError):
+            pass
+    if len(parts) == 2:
+        try:
+            rack_str = parts[0].upper()
+            level = int(parts[1])
+            rack_num = _rack_str_to_num(rack_str)
+            return (rack_num, level, 0)
+        except (ValueError, IndexError):
+            pass
+    return None
 
 
 def _distance_between(coords_a: tuple[int, int, int] | None, coords_b: tuple[int, int, int] | None) -> float:

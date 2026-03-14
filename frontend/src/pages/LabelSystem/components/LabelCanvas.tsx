@@ -1,4 +1,5 @@
 import type { LabelTemplate, TemplateElement } from "../../../types/labelSystem";
+import type { OverlayEntry } from "../hooks/useLabelSelection";
 
 const DEBUG_SHOW_BOUNDING_BOXES = false;
 
@@ -10,9 +11,12 @@ function getOverlaySizePx(el: TemplateElement, PX_PER_MM: number): { w: number; 
 
 export type LabelCanvasProps = {
   template: LabelTemplate;
-  overlayElementsOrdered: TemplateElement[];
+  overlayElementsOrdered: OverlayEntry[];
   selected: TemplateElement | null;
   selectedId: string | null;
+  /** Display position for selected element (for nested elements: parent offset already applied). */
+  selectedDisplayX?: number;
+  selectedDisplayY?: number;
   handleElementMouseDown: (e: React.MouseEvent, id: string) => void;
   setResizeState: (state: {
     id: string;
@@ -43,6 +47,8 @@ export function LabelCanvas({
   overlayElementsOrdered,
   selected,
   selectedId,
+  selectedDisplayX,
+  selectedDisplayY,
   handleElementMouseDown,
   setResizeState,
   handleCanvasMouseDown,
@@ -59,6 +65,8 @@ export function LabelCanvas({
   isMiddlePanning,
   onMiddlePanStart,
 }: LabelCanvasProps) {
+  const selDispX = selectedDisplayX ?? (selected && "x" in selected ? selected.x : 0);
+  const selDispY = selectedDisplayY ?? (selected && "y" in selected ? selected.y : 0);
   return (
     <div
       ref={draftingTableRef}
@@ -122,9 +130,10 @@ export function LabelCanvas({
             />
           )}
 
-          {overlayElementsOrdered.map((el) => {
-            const left = "x" in el ? el.x * PX_PER_MM : 0;
-            const top = "y" in el ? el.y * PX_PER_MM : 0;
+          {overlayElementsOrdered.map((entry) => {
+            const el = entry.element;
+            const left = entry.displayX * PX_PER_MM;
+            const top = entry.displayY * PX_PER_MM;
             const { w, h } = getOverlaySizePx(el, PX_PER_MM);
             const hasError = validationErrorElementIds?.includes(el.id);
             const hasWarning = validationWarningElementIds?.includes(el.id);
@@ -132,7 +141,7 @@ export function LabelCanvas({
               hasError ? "#dc2626" : hasWarning ? "#d97706" : undefined;
             return (
               <div
-                key={el.id}
+                key={`${el.id}-${entry.displayX}-${entry.displayY}`}
                 data-draggable-wrapper
                 data-element-id={el.id}
                 role="button"
@@ -159,8 +168,8 @@ export function LabelCanvas({
             <div
               className="absolute pointer-events-none"
               style={{
-                left: selected.x * PX_PER_MM,
-                top: selected.y * PX_PER_MM,
+                left: selDispX * PX_PER_MM,
+                top: selDispY * PX_PER_MM,
                 width: selected.width * PX_PER_MM,
                 height: selected.height * PX_PER_MM,
                 zIndex: 20,

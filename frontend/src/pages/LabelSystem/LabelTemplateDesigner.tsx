@@ -24,7 +24,7 @@ import { useTemplateValidation } from "../../labelSystem/validation/useTemplateV
 import { TemplateValidationPanel } from "../../labelSystem/validation/TemplateValidationPanel";
 import { LabelLeftPanel } from "./components/LabelLeftPanel";
 import { useLabelPreview } from "./hooks/useLabelPreview";
-import { useLabelSelection } from "./hooks/useLabelSelection";
+import { useLabelSelection, findRepeaterContainingId } from "./hooks/useLabelSelection";
 import { useLabelDrag } from "./hooks/useLabelDrag";
 import { useLabelResize } from "./hooks/useLabelResize";
 import { importSvgTemplate } from "../../labelImporter/svgImporter";
@@ -201,17 +201,36 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
     (id: string, patch: Partial<TemplateElement>) => {
       const labelW = template.widthMm;
       const labelH = template.heightMm;
+
+      function updateInElements(elements: TemplateElement[]): TemplateElement[] {
+        return elements.map((el) => {
+          if (el.id === id) {
+            const merged = { ...el, ...patch } as TemplateElement;
+            return (merged.type === "group" || merged.type === "repeater"
+              ? clampTemplateElement(merged, labelW, labelH)
+              : clampElementToLabel(merged as LabelElement, labelW, labelH)) as TemplateElement;
+          }
+          if (el.type === "group") {
+            const g = el as GroupElement;
+            return { ...g, elements: updateInElements(g.elements ?? []) } as TemplateElement;
+          }
+          if (el.type === "repeater") {
+            const r = el as RepeaterElement;
+            return {
+              ...r,
+              template: {
+                ...r.template,
+                elements: updateInElements(r.template?.elements ?? []),
+              },
+            } as TemplateElement;
+          }
+          return el;
+        });
+      }
+
       onTemplateChange({
         ...template,
-        elements: template.elements.map((el) => {
-          if (el.id !== id) return el;
-          const merged = { ...el, ...patch } as TemplateElement;
-          const clamped =
-            merged.type === "group" || merged.type === "repeater"
-              ? clampTemplateElement(merged, labelW, labelH)
-              : clampElementToLabel(merged as LabelElement, labelW, labelH);
-          return clamped;
-        }) as LabelTemplate["elements"],
+        elements: updateInElements(template.elements),
         updatedAt: new Date().toISOString(),
       });
     },
@@ -558,6 +577,16 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
           overlayElementsOrdered={overlayElementsOrdered}
           selected={selected}
           selectedId={selectedId}
+          selectedDisplayX={
+            selectedId
+              ? overlayElementsOrdered.find((e) => e.element.id === selectedId)?.displayX
+              : undefined
+          }
+          selectedDisplayY={
+            selectedId
+              ? overlayElementsOrdered.find((e) => e.element.id === selectedId)?.displayY
+              : undefined
+          }
           handleElementMouseDown={handleElementMouseDown}
           setResizeState={setResizeState}
           handleCanvasMouseDown={handleCanvasMouseDown}
@@ -589,6 +618,11 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
             collapsedCategories={collapsedCategories}
             setCollapsedCategories={setCollapsedCategories}
             variableCategories={variableCategories}
+            siblingElementsForLayer={
+              selected?.id
+                ? findRepeaterContainingId(template.elements, selected.id)?.template?.elements
+                : undefined
+            }
             wrapInAside={false}
           />
         </aside>

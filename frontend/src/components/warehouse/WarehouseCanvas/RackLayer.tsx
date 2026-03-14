@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { RackState } from "../../../types/warehouse";
 import { formatVolume, binVolumeDm3, binUsedVolumeDm3, getRackDisplayId, getRackLabelStyle, canShowRackLabel } from "../warehouseUtils";
 import { colors, radius } from "../../../layout/designTokens";
@@ -35,6 +35,8 @@ export type RackLayerProps = {
   rackDragPreviewPosition: { x: number; y: number } | null;
   collisionRackId: number | string | null;
   collisionRackIds: Array<number | string> | null;
+  /** Racks outside building boundary; drawn with red stroke. */
+  outsideRackIds?: Array<number | string>;
   showRackLabels: boolean;
   hoveredRackId: number | string | null;
   setHoveredRackId: (id: number | string | null) => void;
@@ -49,10 +51,12 @@ export function RackLayer({
   rackDragPreviewPosition,
   collisionRackId,
   collisionRackIds,
+  outsideRackIds,
   showRackLabels,
   hoveredRackId,
   setHoveredRackId,
 }: RackLayerProps) {
+  const outsideSet = useMemo(() => (outsideRackIds != null && outsideRackIds.length > 0 ? new Set(outsideRackIds.map(String)) : null), [outsideRackIds]);
   return (
     <>
       {racks.map((r) => {
@@ -60,6 +64,7 @@ export function RackLayer({
         const isDragging = draggingRackId != null && selectedRackIds.includes(rid);
         const drawAt = rackDragPreviewPositions?.[String(rid)] ?? (isDragging && rackDragPreviewPosition ? rackDragPreviewPosition : { x: r.x, y: r.y });
         const isCollision = (collisionRackIds != null && collisionRackIds.includes(rid)) || rid === collisionRackId;
+        const isOutside = outsideSet != null && outsideSet.has(String(rid));
         const isSelected = selectedRackIds.includes(rid);
         const displayColor = rackFillColor(r);
         const showLabel = showRackLabels && (r.show_label !== false);
@@ -84,8 +89,8 @@ export function RackLayer({
         const clipY = rectY + rectH * clipInset;
         const layoutClipId = `layout-rack-clip-${rid}`;
         const isHovered = hoveredRackId === rid && !isDragging;
-        const rackStrokeColor = isCollision ? "#ef4444" : isSelected ? "#3b82f6" : colors.rackBorder;
-        const rackStrokeWidth = 1;
+        const rackStrokeColor = isCollision || isOutside ? "#ef4444" : isSelected ? "#3b82f6" : colors.rackBorder;
+        const rackStrokeWidth = isOutside ? 2 : 1;
         const rackBgHex = isCollision ? "#ef4444" : isSelected ? "#0ea5e9" : displayColor;
         const labelFill = labelColorForBackground(rackBgHex);
         const outlineOffset = 1;

@@ -329,11 +329,18 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.depth_cm,
             spec.height_cm,
             spec.reserve_bin_keys,
-            ROW_LABEL_ADDRESS_PATTERN,
+            spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
             rackLabel,
-            1,
+            spec.sectionStartIndex ?? 1,
             spec.binNamingType ?? "numeric",
-            lc
+            lc,
+            spec.namingStrategy,
+            spec.namingOrientation,
+            spec.namingPattern ?? spec.addressPattern,
+            spec.manualLabels,
+            spec.overrides,
+            spec.indexPadding,
+            spec.startIndex
           );
           newRacks.push({
             x: 0,
@@ -354,6 +361,9 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             name: rackLabel,
             rowPrefix: prefix,
             indexInRow,
+            ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
+            ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
+            ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
             ...(isVertical ? { rotationDegrees: 90 as const } : {}),
             ...(item.type === "custom" ? { templateId: item.template.id } : {}),
           } as RackState);
@@ -403,6 +413,13 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         addressPattern?: string;
         binNamingType?: "numeric" | "alpha";
         reserve_bin_keys?: string[];
+        namingStrategy?: "pattern" | "rack-index" | "custom" | "manual";
+        namingOrientation?: "column-first" | "row-first";
+        namingPattern?: string;
+        manualLabels?: Record<string, string>;
+        overrides?: Record<string, string>;
+        indexPadding?: number;
+        startIndex?: number;
       } = item.type === "custom"
         ? (JSON.parse(JSON.stringify({
           color: item.template.color ?? spec.color ?? "#3b82f6",
@@ -421,6 +438,13 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           addressPattern: item.template.addressPattern,
           binNamingType: item.template.binNamingType ?? "numeric",
           reserve_bin_keys: item.template.reserve_bin_keys ? [...item.template.reserve_bin_keys] : undefined,
+          namingStrategy: item.template.namingStrategy,
+          namingOrientation: item.template.namingOrientation,
+          namingPattern: item.template.namingPattern ?? item.template.addressPattern,
+          manualLabels: item.template.manualLabels,
+          overrides: item.template.overrides,
+          indexPadding: item.template.indexPadding,
+          startIndex: item.template.startIndex,
         })) as typeof templateToApply)
         : {
           color: spec.color ?? "#3b82f6",
@@ -439,6 +463,13 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           addressPattern: spec.addressPattern,
           binNamingType: spec.binNamingType ?? "numeric",
           reserve_bin_keys: spec.reserve_bin_keys ? [...spec.reserve_bin_keys] : undefined,
+          namingStrategy: spec.namingStrategy,
+          namingOrientation: spec.namingOrientation,
+          namingPattern: spec.namingPattern ?? spec.addressPattern,
+          manualLabels: spec.manualLabels,
+          overrides: spec.overrides,
+          indexPadding: spec.indexPadding,
+          startIndex: spec.startIndex,
         };
 
       const startSection = templateToApply.nextSectionIndex ?? templateToApply.sectionStartIndex;
@@ -500,11 +531,18 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               templateToApply.length_cm,
               templateToApply.height_cm,
               templateToApply.reserve_bin_keys,
-              ROW_LABEL_ADDRESS_PATTERN,
+              templateToApply.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
               rackLabel,
-              1,
+              templateToApply.sectionStartIndex ?? 1,
               templateToApply.binNamingType ?? "numeric",
-              lcRow
+              lcRow,
+              templateToApply.namingStrategy,
+              templateToApply.namingOrientation,
+              templateToApply.namingPattern ?? templateToApply.addressPattern,
+              templateToApply.manualLabels,
+              templateToApply.overrides,
+              templateToApply.indexPadding,
+              templateToApply.startIndex
             );
             return {
               x: pos.x,
@@ -525,6 +563,9 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               name: rackLabel,
               rowPrefix: prefix,
               indexInRow,
+              ...(templateToApply.addressPattern != null ? { addressPattern: templateToApply.addressPattern } : {}),
+              ...(templateToApply.sectionStartIndex != null ? { sectionStartIndex: templateToApply.sectionStartIndex } : {}),
+              ...(templateToApply.binNamingType != null ? { binNamingType: templateToApply.binNamingType } : {}),
               ...(templateToApply.templateId != null ? { templateId: templateToApply.templateId } : {}),
             } as RackState;
           });
@@ -680,11 +721,18 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.depth_cm,
             spec.height_cm,
             spec.reserve_bin_keys,
-            ROW_LABEL_ADDRESS_PATTERN,
+            spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
             rackLabel,
-            1,
+            spec.sectionStartIndex ?? 1,
             spec.binNamingType ?? "numeric",
-            lc
+            lc,
+            spec.namingStrategy,
+            spec.namingOrientation,
+            spec.namingPattern ?? spec.addressPattern,
+            spec.manualLabels,
+            spec.overrides,
+            spec.indexPadding,
+            spec.startIndex
           );
           newRacks.push({
             x: 0,
@@ -706,6 +754,9 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             name: rackLabel,
             rowPrefix,
             indexInRow,
+            ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
+            ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
+            ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
             ...(isVertical ? { rotationDegrees: 90 as const } : {}),
             ...(item.type === "custom" ? { templateId: item.template.id } : {}),
           } as RackState);

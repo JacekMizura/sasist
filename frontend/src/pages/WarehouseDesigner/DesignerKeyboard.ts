@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { LayoutState, RackState, VisualElementState } from "../../types/warehouse";
 import { GRID_UNIT_CM } from "../../types/warehouse";
-import { getLevelConfig, getTotalLocations, volumePerBinFromTotal, volumePerBin, createBinsForRack } from "../../components/warehouse/warehouseUtils";
+import { getLevelConfig, getTotalLocations, volumePerBinFromTotal, volumePerBin, createBinsForRack, ROW_LABEL_ADDRESS_PATTERN } from "../../components/warehouse/warehouseUtils";
 import { LayoutMode } from "../../warehouse-layout";
 
 export interface UseDesignerKeyboardParams {
@@ -133,7 +133,25 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
                 const lc = getLevelConfig(r);
                 const total = getTotalLocations(lc);
                 const volPerBin = total > 0 ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total) : volumePerBin(r.width_cm, r.length_cm, r.height_cm, r.levels, r.bins_per_level);
-                const bins = createBinsForRack(r.aisle_letter, prev.racks.length + i + 1, r.levels, r.bins_per_level, volPerBin, undefined, undefined, r.width_cm, r.length_cm, r.height_cm, undefined, undefined, undefined, undefined, undefined, lc);
+                const rAny = r as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha" };
+                const bins = createBinsForRack(
+                  r.aisle_letter,
+                  prev.racks.length + i + 1,
+                  r.levels,
+                  r.bins_per_level,
+                  volPerBin,
+                  "M1",
+                  undefined,
+                  r.width_cm,
+                  r.length_cm,
+                  r.height_cm,
+                  undefined,
+                  rAny.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+                  rAny.rowId ?? r.name,
+                  rAny.sectionStartIndex ?? 1,
+                  rAny.binNamingType ?? "numeric",
+                  lc
+                );
                 return { ...r, id: undefined, x: cx + (i % 3) * (r.width + 1), y: cy + Math.floor(i / 3) * (r.height + 1), rack_index: prev.racks.length + i + 1, bins };
               }),
             ],
@@ -155,7 +173,25 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
                   const lc = getLevelConfig(r);
                   const total = getTotalLocations(lc);
                   const volPerBin = total > 0 ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total) : volumePerBin(r.width_cm, r.length_cm, r.height_cm, r.levels, r.bins_per_level);
-                  const bins = createBinsForRack(r.aisle_letter, prev.racks.length + i + 1, r.levels, r.bins_per_level, volPerBin, undefined, undefined, r.width_cm, r.length_cm, r.height_cm, undefined, undefined, undefined, undefined, undefined, lc);
+                  const rAny = r as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha" };
+                  const bins = createBinsForRack(
+                    r.aisle_letter,
+                    prev.racks.length + i + 1,
+                    r.levels,
+                    r.bins_per_level,
+                    volPerBin,
+                    "M1",
+                    undefined,
+                    r.width_cm,
+                    r.length_cm,
+                    r.height_cm,
+                    undefined,
+                    rAny.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+                    rAny.rowId ?? r.name,
+                    rAny.sectionStartIndex ?? 1,
+                    rAny.binNamingType ?? "numeric",
+                    lc
+                  );
                   return { ...r, id: undefined, x: cx + (i % 3) * (r.width + 1), y: cy + Math.floor(i / 3) * (r.height + 1), rack_index: prev.racks.length + i + 1, bins };
                 }),
               ],

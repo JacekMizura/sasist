@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { LabelTemplate, TemplateElement } from "../../../types/labelSystem";
+import { findElementById, getElementParentBounds } from "./useLabelSelection";
 
 const DRAG_DEBUG = false;
 
@@ -41,7 +42,7 @@ export function useLabelDrag({
       if (DRAG_DEBUG) console.log("[LabelDesigner] element mousedown", { id, clientX: e.clientX, clientY: e.clientY });
       setSelectedId(id);
       setDragState(null);
-      const el = template.elements.find((x) => x.id === id);
+      const el = findElementById(template.elements, id);
       if (!el || !("x" in el)) return;
       const elX_px = el.x * PX_PER_MM;
       const elY_px = el.y * PX_PER_MM;
@@ -62,18 +63,21 @@ export function useLabelDrag({
     const onMove = (e: MouseEvent) => {
       if (DRAG_DEBUG) console.log("[LabelDesigner] drag mousemove", { id: state.id, clientX: e.clientX, clientY: e.clientY });
       const t = templateRef.current;
-      const el = t.elements.find((x) => x.id === state.id);
+      const el = findElementById(t.elements, state.id);
       if (!el || !("width" in el) || !("height" in el)) return;
-      const dxPx = e.clientX - state.startClientX;
-      const dyPx = e.clientY - state.startClientY;
+      const parentBounds = getElementParentBounds(t.elements, state.id);
       const canvasW_px = t.widthMm * PX_PER_MM;
       const canvasH_px = t.heightMm * PX_PER_MM;
+      const maxW_px = parentBounds ? parentBounds.widthMm * PX_PER_MM : canvasW_px;
+      const maxH_px = parentBounds ? parentBounds.heightMm * PX_PER_MM : canvasH_px;
       const elW_px = el.width * PX_PER_MM;
       const elH_px = el.height * PX_PER_MM;
+      const dxPx = e.clientX - state.startClientX;
+      const dyPx = e.clientY - state.startClientY;
       let newX_px = snapToGridPx(state.elX_px + dxPx, GRID_PX);
       let newY_px = snapToGridPx(state.elY_px + dyPx, GRID_PX);
-      newX_px = Math.max(0, Math.min(newX_px, canvasW_px - elW_px));
-      newY_px = Math.max(0, Math.min(newY_px, canvasH_px - elH_px));
+      newX_px = Math.max(0, Math.min(newX_px, maxW_px - elW_px));
+      newY_px = Math.max(0, Math.min(newY_px, maxH_px - elH_px));
       updateElementRef.current(state.id, {
         x: newX_px / PX_PER_MM,
         y: newY_px / PX_PER_MM,

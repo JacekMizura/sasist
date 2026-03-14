@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { LabelTemplate, TemplateElement } from "../../../types/labelSystem";
+import { findElementById, getElementParentBounds } from "./useLabelSelection";
 
 export type ResizeCorner = "nw" | "ne" | "sw" | "se";
 
@@ -37,13 +38,16 @@ export function useLabelResize({
     if (!resizeState) return;
     const onMove = (e: MouseEvent) => {
       const t = templateRef.current;
-      const el = t.elements.find((x) => x.id === resizeState.id);
+      const el = findElementById(t.elements, resizeState.id);
       if (!el || !("width" in el)) return;
+      const parentBounds = getElementParentBounds(t.elements, resizeState.id);
+      const canvasW_px = t.widthMm * PX_PER_MM;
+      const canvasH_px = t.heightMm * PX_PER_MM;
+      const maxW_px = parentBounds ? parentBounds.widthMm * PX_PER_MM : canvasW_px;
+      const maxH_px = parentBounds ? parentBounds.heightMm * PX_PER_MM : canvasH_px;
       const dxPx = e.clientX - resizeState.startClientX;
       const dyPx = e.clientY - resizeState.startClientY;
       const { x_px: sx, y_px: sy, w_px: sw, h_px: sh } = resizeState.startElPx;
-      const canvasW_px = t.widthMm * PX_PER_MM;
-      const canvasH_px = t.heightMm * PX_PER_MM;
       const minSize_px = Math.max(GRID_PX, 4);
       let x_px = sx;
       let y_px = sy;
@@ -75,8 +79,8 @@ export function useLabelResize({
       h_px = Math.max(minSize_px, snapToGridPx(h_px, GRID_PX));
       x_px = snapToGridPx(x_px, GRID_PX);
       y_px = snapToGridPx(y_px, GRID_PX);
-      x_px = Math.max(0, Math.min(x_px, canvasW_px - w_px));
-      y_px = Math.max(0, Math.min(y_px, canvasH_px - h_px));
+      x_px = Math.max(0, Math.min(x_px, maxW_px - w_px));
+      y_px = Math.max(0, Math.min(y_px, maxH_px - h_px));
       updateElementRef.current(resizeState.id, {
         x: x_px / PX_PER_MM,
         y: y_px / PX_PER_MM,

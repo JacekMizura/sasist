@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { RackState, LayoutState } from "./warehouseTypes";
-import { snapCm, volumePerBin, volumePerBinFromTotal, createBinsForRack, binsToLevels, getLevelConfig, getTotalLocations, getRackDisplayId } from "./warehouseUtils";
+import { snapCm, volumePerBin, volumePerBinFromTotal, createBinsForRack, binsToLevels, getLevelConfig, getTotalLocations, getRackDisplayId, ROW_LABEL_ADDRESS_PATTERN } from "./warehouseUtils";
 import { GRID_UNIT_CM } from "./warehouseTypes";
 import { UI_STRINGS } from "../../constants/uiStrings";
 
@@ -67,7 +67,25 @@ export function RackPropertiesSidebar({
                   racks: prev.racks.map((r) => {
                     if (!selectedRackIds.includes(r.id ?? r.rack_index)) return r;
                     const volPerBinVal = volumePerBin(r.width_cm, r.length_cm, r.height_cm, v, r.bins_per_level);
-                    const bins = createBinsForRack(r.aisle_letter, r.rack_index, v, r.bins_per_level, volPerBinVal, undefined, undefined, r.width_cm, r.length_cm, r.height_cm);
+                    const rAny = r as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha" };
+                    const bins = createBinsForRack(
+                      r.aisle_letter,
+                      r.rack_index,
+                      v,
+                      r.bins_per_level,
+                      volPerBinVal,
+                      "M1",
+                      undefined,
+                      r.width_cm,
+                      r.length_cm,
+                      r.height_cm,
+                      undefined,
+                      rAny.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+                      rAny.rowId ?? r.name,
+                      rAny.sectionStartIndex ?? 1,
+                      rAny.binNamingType ?? "numeric",
+                      getLevelConfig({ ...r, levels: v })
+                    );
                     return { ...r, levels: v, bins, rackLevels: binsToLevels(bins) };
                   }),
                 }));
@@ -160,7 +178,25 @@ export function RackPropertiesSidebar({
                     const lc = getLevelConfig(r);
                     const total = getTotalLocations(lc);
                     const volPerBinVal = total > 0 ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total) : volumePerBin(r.width_cm, r.length_cm, r.height_cm, r.levels, r.bins_per_level);
-                    const bins = createBinsForRack(r.aisle_letter, prev.racks.length + i + 1, r.levels, r.bins_per_level, volPerBinVal, undefined, undefined, r.width_cm, r.length_cm, r.height_cm, undefined, undefined, undefined, undefined, undefined, lc);
+                    const rAny = r as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha" };
+                    const bins = createBinsForRack(
+                      r.aisle_letter,
+                      prev.racks.length + i + 1,
+                      r.levels,
+                      r.bins_per_level,
+                      volPerBinVal,
+                      "M1",
+                      undefined,
+                      r.width_cm,
+                      r.length_cm,
+                      r.height_cm,
+                      undefined,
+                      rAny.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+                      rAny.rowId ?? r.name,
+                      rAny.sectionStartIndex ?? 1,
+                      rAny.binNamingType ?? "numeric",
+                      lc
+                    );
                     return { ...r, id: undefined, x: cx + (i % 3) * (r.width + 1), y: cy + Math.floor(i / 3) * (r.height + 1), rack_index: prev.racks.length + i + 1, bins, rackLevels: binsToLevels(bins) };
                   }),
                 ],

@@ -1,10 +1,12 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { jsPDF } from "jspdf";
 import api from "../../api/axios";
 import type {
   LabelTemplate,
   LabelRecord,
   SelectionMode,
+  RepeaterElement,
+  TemplateElement,
 } from "../../types/labelSystem";
 import type { Printer } from "../../types/printer";
 import type { PrinterProfile } from "../../types/printerProfiles";
@@ -186,6 +188,13 @@ export function LabelPrintQueue({ template }: Props) {
 
   const records = layout ? getRecordsFromLayout(layout, selectionMode, selectedRackIds, manualLocationIds) : [];
 
+  /** Page records (dataset structure for repeaters) — same as PDF pipeline. Used for preview and PDF. */
+  const locationPageRecords = useMemo(() => {
+    if (!records.length) return [];
+    const t = locationPreviewTemplate ?? template;
+    return buildPageRecords(t, records);
+  }, [locationPreviewTemplate, template, records]);
+
   useEffect(() => {
     if (printMode !== "location" || templateIdForPreview == null) {
       setLocationPreviewTemplate(null);
@@ -242,11 +251,20 @@ export function LabelPrintQueue({ template }: Props) {
     // Location labels: use filtered records only. Prefer backend POST /labels/render-pdf (no GET /warehouse/layout/labels/).
     if (printMode === "location" && selectedLocationTemplateId != null) {
       try {
+        let templateForBackend: LabelTemplate | null = locationPreviewTemplate ?? template;
+        if (!templateForBackend?.elements?.length) {
+          const tRes = await api.get<{ template_json: string }>(
+            `/label-templates/${selectedLocationTemplateId}`,
+            { params: { tenant_id: TENANT_ID } }
+          );
+          templateForBackend = JSON.parse(tRes.data.template_json) as LabelTemplate;
+        }
+        const recordsToSend = buildRecordsForBackendRenderPdf(templateForBackend, records);
         const res = await api.post(
           "/labels/render-pdf",
           {
             template_id: selectedLocationTemplateId,
-            records,
+            records: recordsToSend,
             ...((() => { const p = printers.find(pr => pr.id === selectedPrinterId); return p?.profile_id != null ? { printer_profile_id: p.profile_id } : {}; })()),
           },
           { params: { tenant_id: TENANT_ID }, responseType: "blob" }
@@ -286,11 +304,20 @@ export function LabelPrintQueue({ template }: Props) {
     if (records.length === 0) throw new Error("No records");
     if (printMode === "location" && selectedLocationTemplateId != null) {
       try {
+        let templateForBackend: LabelTemplate | null = locationPreviewTemplate ?? template;
+        if (!templateForBackend?.elements?.length) {
+          const tRes = await api.get<{ template_json: string }>(
+            `/label-templates/${selectedLocationTemplateId}`,
+            { params: { tenant_id: TENANT_ID } }
+          );
+          templateForBackend = JSON.parse(tRes.data.template_json) as LabelTemplate;
+        }
+        const recordsToSend = buildRecordsForBackendRenderPdf(templateForBackend, records);
         const res = await api.post<Blob>(
           "/labels/render-pdf",
           {
             template_id: selectedLocationTemplateId,
-            records,
+            records: recordsToSend,
             ...((() => { const p = printers.find(pr => pr.id === selectedPrinterId); return p?.profile_id != null ? { printer_profile_id: p.profile_id } : {}; })()),
           },
           { params: { tenant_id: TENANT_ID }, responseType: "blob" }
@@ -1157,7 +1184,7 @@ export function LabelPrintQueue({ template }: Props) {
             ) : (
               <div className="grid grid-cols-6 gap-3">
                 {locationPreviewTemplate &&
-                  records.slice(0, 20).map((record, i) => (
+                  locationPageRecords.slice(0, 20).map((record, i) => (
                     <div
                       key={i}
                       className="flex flex-col items-center rounded border border-slate-200 bg-white shadow-sm overflow-hidden"
@@ -1168,12 +1195,12 @@ export function LabelPrintQueue({ template }: Props) {
                         cardWidthPx={120}
                       />
                       <span className="text-[10px] text-slate-500 py-1 font-mono">
-                        {record?.location_name ?? record?.barcode_data ?? ""}
+                        {String(record?.loc_name ?? record?.location_name ?? record?.location_code ?? record?.barcode_data ?? "")}
                       </span>
                     </div>
                   ))}
-                {records.length > 20 && (
-                  <span className="text-xs text-slate-500 self-center">+{records.length - 20} kolejnych</span>
+                {locationPageRecords.length > 20 && (
+                  <span className="text-xs text-slate-500 self-center">+{locationPageRecords.length - 20} kolejnych</span>
                 )}
               </div>
             )}
@@ -1286,8 +1313,114 @@ function svgToPngDataUrl(svgString: string, widthMm: number, heightMm: number): 
 /** When true, use vector SVG→PDF; when false, use raster (SVG→PNG→PDF). */
 const VECTOR_PDF_ENABLED = true;
 
+/** Find first repeater in template tree (top-level or inside groups). */
+function findRepeater(elements: TemplateElement[]): RepeaterElement | null {
+  for (const el of elements) {
+    if (el.type === "repeater") return el as RepeaterElement;
+    if (el.type === "group" && "elements" in el && Array.isArray(el.elements)) {
+      const found = findRepeater(el.elements as TemplateElement[]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/** Chunk array into groups of `size`; same as RackLabelDownloadModal. */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
+}
+
+/**
+ * Capacity (slots per label) using same logic as RackLabelDownloadModal:
+ * grid -> columns; else itemWidth -> floor(template.widthMm / itemWidth); else 1.
+ */
+function getSlotsPerLabelLikeRack(rep: RepeaterElement, template: LabelTemplate): number {
+  if (rep.layout === "grid" && rep.columns != null && rep.columns > 0) {
+    return Math.max(1, rep.columns);
+  }
+  const itemWidth =
+    Number(rep.itemWidth) ?? Number((rep as { item_width?: number }).item_width) ?? 0;
+  if (itemWidth > 0) {
+    return Math.max(1, Math.floor(template.widthMm / itemWidth));
+  }
+  return 1;
+}
+
+/** Normalize a record so template variables (loc_name, loc_barcode, etc.) resolve. */
+function normalizeRepeaterItem(r: LabelRecord): Record<string, unknown> {
+  const rec = r as Record<string, unknown>;
+  const locName = rec.location_name ?? rec.location_code ?? rec.loc_name ?? "";
+  const barcode = rec.location_barcode ?? rec.barcode_data ?? rec.loc_barcode ?? rec.location_code ?? locName;
+  return {
+    ...rec,
+    loc_name: locName,
+    loc_barcode: barcode,
+    barcode_data: barcode,
+    location_name: rec.location_name ?? locName,
+    location_code: rec.location_code ?? locName,
+    location_barcode: rec.location_barcode ?? barcode,
+  };
+}
+
+/**
+ * Build repeater dataset from the same location records used by preview (getRecordsFromLayout).
+ * No synthetic data: dataset items use actual record fields only. Dataset key from repeater.dataset
+ * (e.g. levels, locations, bins). Ensures PDF repeater matches preview and warehouse layout.
+ */
+function buildRecordsLikeRackLabelModal(
+  template: LabelTemplate,
+  records: LabelRecord[]
+): Record<string, unknown>[] {
+  const repeater = findRepeater(template.elements ?? []);
+  if (!repeater) {
+    return records.map((r) => r as Record<string, unknown>);
+  }
+  const datasetKey = repeater.dataset?.trim() || "locations";
+  const capacity = getSlotsPerLabelLikeRack(repeater, template);
+  const chunks = chunk(records, capacity);
+
+  const groupedRecords: Record<string, unknown>[] = [];
+  for (const group of chunks) {
+    const datasetItems = group.map((loc) => normalizeRepeaterItem(loc));
+    const first = group[0];
+    const firstNormalized = first ? normalizeRepeaterItem(first) : {};
+    groupedRecords.push({
+      ...firstNormalized,
+      [datasetKey]: datasetItems,
+    });
+  }
+  return groupedRecords;
+}
+
+/**
+ * For /labels/render-pdf: use same record structure as RackLabelDownloadModal.
+ */
+function buildRecordsForBackendRenderPdf(
+  template: LabelTemplate | null,
+  records: LabelRecord[]
+): Record<string, unknown>[] {
+  if (!template?.elements?.length) return records.map((r) => r as Record<string, unknown>);
+  return buildRecordsLikeRackLabelModal(template, records);
+}
+
+/**
+ * Build list of records to render (one per physical label). Reuses RackLabelDownloadModal logic
+ * so client-side PDF layout matches backend and "Download rack labels".
+ */
+function buildPageRecords(
+  template: LabelTemplate,
+  records: LabelRecord[]
+): Record<string, unknown>[] {
+  return buildRecordsLikeRackLabelModal(template, records);
+}
+
 /**
  * Client-side PDF: uses shared renderLabel so layout matches editor exactly.
+ * Repeater templates: builds dataset records (e.g. { [datasetKey]: [r1, r2, r3] }) so repeater renders. Dataset key from repeater.dataset.
  * Tries vector render first (smaller PDF, sharper barcodes), falls back to raster.
  */
 async function generatePdfBlob(
@@ -1296,6 +1429,12 @@ async function generatePdfBlob(
   _thermal: boolean,
   printerProfile?: PrinterProfile | null
 ): Promise<Blob> {
+  // --- Diagnostic: template and repeater detection ---
+  console.log("TEMPLATE JSON", template);
+  const repeater = findRepeater(template.elements ?? []);
+  console.log("REPEATER FOUND:", repeater);
+  console.log("DATASET KEY:", repeater?.dataset);
+
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
@@ -1307,15 +1446,17 @@ async function generatePdfBlob(
   const stepX = (pageW - 2 * margin) / cols;
   const stepY = (pageH - 2 * margin) / rows;
 
+  const pageRecords = buildPageRecords(template, records);
+
   const BATCH_SIZE = 20;
   let index = 0;
-  for (let start = 0; start < records.length; start += BATCH_SIZE) {
-    const chunk = records.slice(start, start + BATCH_SIZE);
+  for (let start = 0; start < pageRecords.length; start += BATCH_SIZE) {
+    const chunk = pageRecords.slice(start, start + BATCH_SIZE);
     for (const record of chunk) {
       const col = index % cols;
       const row = Math.floor(index / cols) % rows;
-      const page = Math.floor(index / (cols * rows));
-      if (page > 0 && col === 0 && row === 0) pdf.addPage();
+      const pageNum = Math.floor(index / (cols * rows));
+      if (pageNum > 0 && col === 0 && row === 0) pdf.addPage();
 
       const x0 = margin + col * stepX;
       const y0 = margin + row * stepY;

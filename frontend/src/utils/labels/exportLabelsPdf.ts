@@ -8,6 +8,9 @@ const VECTOR_PDF_ENABLED = true;
 
 const PDF_PX_PER_MM = 6;
 
+/** 1 mm = 2.83465 pt. Use for page size so jsPDF format is in points. */
+const POINTS_PER_MM = 2.83465;
+
 async function svgToPngDataUrl(svgString: string, widthMm: number, heightMm: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -33,31 +36,59 @@ async function svgToPngDataUrl(svgString: string, widthMm: number, heightMm: num
   });
 }
 
+/**
+ * Draw SVG onto the current PDF page as raster (PNG).
+ * Used for templates with repeaters where svg2pdf can render content outside page bounds.
+ */
+async function drawSvgRaster(
+  pdf: import("jspdf").jsPDF,
+  svgString: string,
+  wPt: number,
+  hPt: number,
+  widthMm: number,
+  heightMm: number
+): Promise<void> {
+  const pngDataUrl = await svgToPngDataUrl(svgString, widthMm, heightMm);
+  pdf.addImage(pngDataUrl, "PNG", 0, 0, wPt, hPt);
+}
+
+export type ExportLabelsPdfTemplate = { elements?: Array<{ type?: string }> };
+
 export async function exportLabelsPdf(
   svgs: string[],
   widthMm: number,
   heightMm: number,
   filename: string,
-  printerProfile?: PrinterProfile | null
+  printerProfile?: PrinterProfile | null,
+  template?: ExportLabelsPdfTemplate | null
 ): Promise<void> {
   if (!svgs.length) return;
 
-  const pdf = new jsPDF({ unit: "mm", format: [widthMm, heightMm] });
+  const wPt = widthMm * POINTS_PER_MM;
+  const hPt = heightMm * POINTS_PER_MM;
+  const orientation = widthMm > heightMm ? "l" : "p";
+  const pdf = new jsPDF({ orientation, unit: "pt", format: [wPt, hPt] });
+
+  const hasRepeater = template?.elements?.some((el) => el.type === "repeater") ?? false;
+
+  if (process.env.NODE_ENV === "development") {
+    console.debug("[exportLabelsPdf] pageSize pt:", pdf.internal.pageSize.getWidth(), "×", pdf.internal.pageSize.getHeight());
+  }
 
   for (let i = 0; i < svgs.length; i++) {
-    if (i > 0) pdf.addPage([widthMm, heightMm]);
+    if (i > 0) pdf.addPage([wPt, hPt], orientation);
     const calibratedSvg = applyCalibration(svgs[i], printerProfile);
 
-    if (VECTOR_PDF_ENABLED) {
+    if (hasRepeater) {
+      await drawSvgRaster(pdf, calibratedSvg, wPt, hPt, widthMm, heightMm);
+    } else if (VECTOR_PDF_ENABLED) {
       try {
-        await drawSvgVector(pdf, calibratedSvg, 0, 0, widthMm, heightMm);
+        await drawSvgVector(pdf, calibratedSvg, 0, 0, wPt, hPt);
       } catch {
-        const pngDataUrl = await svgToPngDataUrl(calibratedSvg, widthMm, heightMm);
-        pdf.addImage(pngDataUrl, "PNG", 0, 0, widthMm, heightMm);
+        await drawSvgRaster(pdf, calibratedSvg, wPt, hPt, widthMm, heightMm);
       }
     } else {
-      const pngDataUrl = await svgToPngDataUrl(calibratedSvg, widthMm, heightMm);
-      pdf.addImage(pngDataUrl, "PNG", 0, 0, widthMm, heightMm);
+      await drawSvgRaster(pdf, calibratedSvg, wPt, hPt, widthMm, heightMm);
     }
   }
 
