@@ -39,10 +39,6 @@ export function useLayoutModeShortcuts(
           e.preventDefault();
           setMode(LayoutMode.DRAW_AISLE);
           break;
-        case "P":
-          e.preventDefault();
-          setMode(LayoutMode.PATH_TOOL);
-          break;
         case "1":
           e.preventDefault();
           setMode(LayoutMode.ADD_START);
@@ -50,10 +46,6 @@ export function useLayoutModeShortcuts(
         case "2":
           e.preventDefault();
           setMode(LayoutMode.ADD_PACK);
-          break;
-        case "3":
-          e.preventDefault();
-          setMode(LayoutMode.ADD_DOCK);
           break;
         case "E":
           e.preventDefault();
@@ -74,10 +66,8 @@ export function useLayoutModeDisplay(mode: LayoutMode): LayoutModeDisplay {
       cursorStyle:
         mode === LayoutMode.DRAW_ROW ||
         mode === LayoutMode.DRAW_AISLE ||
-        mode === LayoutMode.PATH_TOOL ||
         mode === LayoutMode.ADD_START ||
-        mode === LayoutMode.ADD_PACK ||
-        mode === LayoutMode.ADD_DOCK
+        mode === LayoutMode.ADD_PACK
           ? "crosshair"
           : "default",
       modeLabel: LAYOUT_MODE_LABELS[mode].toUpperCase().replace(/\s+/g, " "),

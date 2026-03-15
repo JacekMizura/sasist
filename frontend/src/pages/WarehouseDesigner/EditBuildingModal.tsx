@@ -52,6 +52,14 @@ export function EditBuildingModal({ onClose, onSave, layout }: EditBuildingModal
     const d = Number(depthM);
     const h = Math.max(0, Number(heightM));
     if (w <= 0 || d <= 0) return;
+    console.log("Saving building", {
+      width: w,
+      depth: d,
+      height: h,
+      building_width_m: w,
+      building_depth_m: d,
+      building_height_m: h,
+    });
     if (racksOutsideCount > 0) {
       setPendingSave({ w, d, h });
       setShowShrinkWarning(true);

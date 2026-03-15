@@ -27,8 +27,6 @@ export interface UseRackInteractionParams {
     moveRackWithinRowRef: React.MutableRefObject<((rowId: string, rackId: number | string, fromSlotIndex: number, toSlotIndex: number) => void) | null>;
   };
   helpers: RackInteractionHelpers;
-  setSelectedPathPointIndex: React.Dispatch<React.SetStateAction<number | null>>;
-  setSelectedPathLine: (v: boolean) => void;
   setSelectedRackId: React.Dispatch<React.SetStateAction<number | string | null>>;
   setSelectedRackIds: React.Dispatch<React.SetStateAction<Array<number | string>>>;
   setDraggingRackId: React.Dispatch<React.SetStateAction<number | string | null>>;
@@ -54,8 +52,6 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     aisleWidthCm,
     refs,
     helpers,
-    setSelectedPathPointIndex,
-    setSelectedPathLine,
     setSelectedRackId,
     setSelectedRackIds,
     setDraggingRackId,
@@ -75,8 +71,6 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     (e: React.MouseEvent, cell: { x: number; y: number }) => {
       const hit = layout.racks.find((r) => isCellInsideRack(cell, r));
       if (!hit) return false;
-      setSelectedPathPointIndex(null);
-      setSelectedPathLine(false);
       const rid = hit.id ?? hit.rack_index;
       if (e.ctrlKey || e.metaKey) {
         setSelectedRackIds((prev) => (prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]));
@@ -101,8 +95,6 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     [
       layout.racks,
       mainView,
-      setSelectedPathPointIndex,
-      setSelectedPathLine,
       setSelectedRackId,
       setSelectedRackIds,
       setDraggingRackId,

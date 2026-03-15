@@ -2,14 +2,12 @@ import React, { type RefObject } from "react";
 import type { LayoutState } from "../../types/warehouse";
 import type { CatalogItem, VisualElementType } from "../../types/warehouse";
 import { cmToCells, getCatalogItemSpec, binVolumeDm3 } from "./warehouseUtils";
-import { DimensionOverlay } from "./DimensionOverlay";
 import { RowPreviewOverlay } from "./RowPreviewOverlay";
 import { LayoutModeBadge, LayoutMode, LAYOUT_MODE_CURSORS } from "../warehouse-layout";
 import { colors, radius } from "../../layout/designTokens";
 import { RackLayer } from "./WarehouseCanvas/RackLayer";
 import { RowLayer } from "./WarehouseCanvas/RowLayer";
 import { VisualLayer } from "./WarehouseCanvas/VisualLayer";
-import { PathLayer } from "./WarehouseCanvas/PathLayer";
 import { SelectionOverlay } from "./WarehouseCanvas/SelectionOverlay";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
@@ -143,13 +141,6 @@ export type WarehouseCanvasProps = {
   setRowGapCm?: (v: number) => void;
   showGrid: boolean;
   setShowGrid: (fn: (v: boolean) => boolean) => void;
-  /** Show dimension lines (distances to nearest rows/walls). */
-  showDimensions?: boolean;
-  setShowDimensions?: (fn: (v: boolean) => boolean) => void;
-  /** Precomputed dimension lines (cell coords). Drawn when showDimensions is true. */
-  dimensionLines?: Array<{ id: string; from: { x: number; y: number }; to: { x: number; y: number }; distanceCm: number; isAisle?: boolean }>;
-  /** Aisle zones (gap between parallel rows) to highlight. Cell coords. */
-  aisleHighlights?: Array<{ x: number; y: number; w: number; h: number; widthCm: number }>;
   snapToGrid: boolean;
   setSnapToGrid: (fn: (v: boolean) => boolean) => void;
   showRackLabels: boolean;
@@ -163,14 +154,6 @@ export type WarehouseCanvasProps = {
   getDefaultVisualSize: (type: VisualElementType) => { w: number; h: number };
   selectedVisualId: string | null;
   onExportPdf?: () => void | Promise<void>;
-  showPickingPath?: boolean;
-  setShowPickingPath?: (fn: (v: boolean) => boolean) => void;
-  pickingPathPoints?: { x: number; y: number }[] | null;
-  pathToolActive?: boolean;
-  setPathToolActive?: (fn: (v: boolean) => boolean) => void;
-  manualPathPoints?: { x: number; y: number }[];
-  pathDistanceM?: number;
-  onMagicWand?: () => void;
   selectedVisualIds?: string[];
   isLiveView?: boolean;
   /** Layout mode badge (top-right of canvas) */
@@ -271,10 +254,6 @@ function WarehouseCanvasInner({
   setRowGapCm,
   showGrid,
   setShowGrid,
-  showDimensions = false,
-  setShowDimensions,
-  dimensionLines = [],
-  aisleHighlights = [],
   snapToGrid,
   setSnapToGrid,
   showRackLabels,
@@ -288,14 +267,6 @@ function WarehouseCanvasInner({
   getDefaultVisualSize,
   selectedVisualId,
   onExportPdf: _onExportPdf,
-  showPickingPath,
-  setShowPickingPath,
-  pickingPathPoints,
-  pathToolActive,
-  setPathToolActive,
-  manualPathPoints = [],
-  pathDistanceM,
-  onMagicWand,
   selectedVisualIds = [],
   isLiveView,
   layoutModeLabel,
@@ -436,18 +407,11 @@ function WarehouseCanvasInner({
                 <button type="button" onClick={() => setAisleToolActive((a) => !a)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${aisleToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`}>Alejka</button>
                 <button type="button" onClick={() => { const next = !rowToolActive; if (next) setRowToolTemplate?.(null); setRowToolActive((a) => !a); }} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${rowToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Narysuj rząd pustych slotów (bez szablonu). Później przeciągnij szablon do slotu.">Rysuj Rząd</button>
                 <button type="button" onClick={() => setSnapToGrid((g) => !g)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${snapToGrid ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Przyciągnij do siatki">Przyciągnij do siatki</button>
-                {setPathToolActive && (
-                  <button type="button" onClick={() => setPathToolActive((v) => !v)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${pathToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Kliknij na siatce, aby dodać punkty ścieżki">Narzędzie ścieżki</button>
-                )}
                 {setLayoutMode && (
                   <>
                     <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_START ? "bg-[#dcfce7] text-[#166534]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Punkt startowy kompletacji">Add Start Point</button>
                     <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_PACK)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_PACK ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Stacja pakowania">Add Packing Station</button>
-                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_DOCK)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_DOCK ? "bg-[#e5e7eb] text-[#374151]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Rampa / dok wysyłkowy">Add Dock</button>
                   </>
-                )}
-                {onMagicWand && (
-                  <button type="button" onClick={onMagicWand} className="px-2.5 py-1 rounded text-xs font-medium bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]" title="Optymalizuj ścieżkę (S-Shape)">Optymalizuj (S)</button>
                 )}
               </div>
             )}
@@ -456,18 +420,6 @@ function WarehouseCanvasInner({
               <button type="button" onClick={() => setShowGrid((g) => !g)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${showGrid ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Widoczna siatka">Widoczna siatka</button>
               <button type="button" onClick={() => setShowRackLabels((v) => !v)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${showRackLabels ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Nazwy regałów i etykiety elementów">Pokaż etykiety</button>
             </div>
-            {setShowDimensions && (
-              <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input type="checkbox" checked={showDimensions} onChange={(e) => setShowDimensions(() => e.target.checked)} className="rounded border-[#e5e7eb] text-[#1d4ed8] focus:ring-[#3b82f6]" />
-                <span className="text-xs font-medium" style={{ color: colors.textSecondary }}>Pokaż wymiary</span>
-              </label>
-            )}
-            {!isLiveView && setShowPickingPath && (
-              <button type="button" onClick={() => setShowPickingPath((v) => !v)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${showPickingPath ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Ścieżka S (zig-zag)">Ścieżka kompletowania</button>
-            )}
-            {showPickingPath && pathDistanceM != null && pathDistanceM > 0 && (
-              <span className="text-xs text-slate-600 font-mono">Dystans: {pathDistanceM} m</span>
-            )}
             {rowToolActive && rowGhostPositions.length > 0 && (
               <span className="text-xs font-mono" style={{ color: colors.textSecondary }}>→ {rowGhostPositions.length} {rowToolTemplate ? "regałów" : "slotów"}</span>
             )}
@@ -792,13 +744,6 @@ function WarehouseCanvasInner({
                     visualGhostPosition={visualGhostPosition}
                     getDefaultVisualSize={getDefaultVisualSize}
                   />
-                  {pickingPathPoints && pickingPathPoints.length >= 2 && (
-                    <PathLayer
-                      pickingPathPoints={pickingPathPoints}
-                      manualPathPoints={manualPathPoints}
-                      cellPx={cellPx}
-                    />
-                  )}
                   {placementMode && ghostPosition && (
                     <rect
                       x={ghostPosition.x * cellPx + 2}
@@ -896,16 +841,6 @@ function WarehouseCanvasInner({
                     rowDragPreviewStart={rowDragPreviewStart ?? null}
                   />
                 </svg>
-                {/* Visual-only overlay: dimension lines and aisle width. Does not modify layout or slots. */}
-                {showDimensions && (
-                  <DimensionOverlay
-                    width={width}
-                    height={height}
-                    cellPx={cellPx}
-                    dimensionLines={dimensionLines}
-                    aisleHighlights={aisleHighlights}
-                  />
-                )}
                 {/* HTML drop zones over empty slots. When rowToolActive, do not capture so SVG receives draw events. */}
                 <div className="absolute left-0 top-0 pointer-events-none" style={{ width, height, zIndex: 10 }}>
                   {(layout.row_containers ?? []).flatMap((rc) =>

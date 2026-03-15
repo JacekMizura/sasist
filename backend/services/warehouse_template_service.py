@@ -47,6 +47,7 @@ class WarehouseTemplateService:
                 "binNamingType": r.bin_naming_type or "numeric",
                 "autoSectionNumbering": r.auto_section_numbering or False,
                 "reserve_bin_keys": _reserve_bin_keys_from_json(r.reserve_bin_keys),
+                "level_max_load_kg": float(r.level_max_load_kg) if r.level_max_load_kg is not None else None,
             }
             for r in rows
         ]
@@ -83,6 +84,7 @@ class WarehouseTemplateService:
             bin_naming_type=str(payload.get("binNamingType", "numeric")),
             auto_section_numbering=bool(payload.get("autoSectionNumbering", False)),
             reserve_bin_keys=_reserve_bin_keys_to_json(payload.get("reserve_bin_keys")),
+            level_max_load_kg=float(payload["level_max_load_kg"]) if payload.get("level_max_load_kg") is not None else 500.0,
         )
         self.db.add(t)
         self.db.commit()
@@ -106,6 +108,8 @@ class WarehouseTemplateService:
         row.bin_naming_type = str(payload.get("binNamingType", row.bin_naming_type or "numeric"))
         row.auto_section_numbering = bool(payload.get("autoSectionNumbering", row.auto_section_numbering))
         row.reserve_bin_keys = _reserve_bin_keys_to_json(payload.get("reserve_bin_keys"))
+        if "level_max_load_kg" in payload:
+            row.level_max_load_kg = float(payload["level_max_load_kg"]) if payload.get("level_max_load_kg") is not None else None
 
     def _row_to_dict(self, r: WarehouseTemplate) -> dict:
         return {
@@ -126,6 +130,7 @@ class WarehouseTemplateService:
             "binNamingType": r.bin_naming_type or "numeric",
             "autoSectionNumbering": r.auto_section_numbering or False,
             "reserve_bin_keys": _reserve_bin_keys_from_json(r.reserve_bin_keys),
+            "level_max_load_kg": float(r.level_max_load_kg) if r.level_max_load_kg is not None else None,
         }
 
     def delete(self, tenant_id: int, template_uid: str) -> None:

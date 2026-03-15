@@ -15,6 +15,17 @@ from .label_render_service import render_label_template
 logger = logging.getLogger(__name__)
 
 
+def _float_or_none(v):
+    """Return float or None for building dimension fields."""
+    if v is None:
+        return None
+    try:
+        x = float(v)
+        return x if (x == x) else None  # reject NaN
+    except (TypeError, ValueError):
+        return None
+
+
 def _bin_label(aisle_letter: str, rack_index: int, level: int, segment: int) -> str:
     """Canonical location code without leading zeros, e.g. A1-1-3."""
     return f"{aisle_letter}{rack_index}-{level + 1}-{segment + 1}"
@@ -173,6 +184,9 @@ class WarehouseLayoutService:
                 "grid_rows": 16,
                 "width_m": 24.0,
                 "length_m": 16.0,
+                "building_width_m": None,
+                "building_depth_m": None,
+                "building_height_m": None,
                 "racks": [],
                 "aisles": [],
                 "row_containers": [],
@@ -239,6 +253,9 @@ class WarehouseLayoutService:
             "grid_rows": layout.grid_rows,
             "width_m": float(layout.width_m),
             "length_m": float(layout.length_m),
+            "building_width_m": _float_or_none(getattr(layout, "building_width_m", None)),
+            "building_depth_m": _float_or_none(getattr(layout, "building_depth_m", None)),
+            "building_height_m": _float_or_none(getattr(layout, "building_height_m", None)),
             "racks": racks_out,
             "aisles": aisles_out,
             "row_containers": row_containers,
@@ -357,6 +374,9 @@ class WarehouseLayoutService:
                 width_m=data.get("width_m", 24.0),
                 length_m=data.get("length_m", 16.0),
                 row_containers_json=json.dumps(data.get("row_containers") or []) if data.get("row_containers") else None,
+                building_width_m=_float_or_none(data.get("building_width_m")),
+                building_depth_m=_float_or_none(data.get("building_depth_m")),
+                building_height_m=_float_or_none(data.get("building_height_m")),
             )
             self.db.add(layout)
             self.db.flush()
@@ -366,6 +386,12 @@ class WarehouseLayoutService:
             layout.grid_rows = data.get("grid_rows", layout.grid_rows)
             layout.width_m = data.get("width_m", layout.width_m)
             layout.length_m = data.get("length_m", layout.length_m)
+            if "building_width_m" in data:
+                layout.building_width_m = _float_or_none(data.get("building_width_m"))
+            if "building_depth_m" in data:
+                layout.building_depth_m = _float_or_none(data.get("building_depth_m"))
+            if "building_height_m" in data:
+                layout.building_height_m = _float_or_none(data.get("building_height_m"))
             row_containers = data.get("row_containers")
             if row_containers is not None:
                 layout.row_containers_json = json.dumps(row_containers) if row_containers else None

@@ -18,7 +18,6 @@ import type { CatalogItem } from "../../types/warehouse";
 import type { Dispatch, SetStateAction } from "react";
 import { usePanInteraction } from "./interactions/usePanInteraction";
 import { usePlacementInteraction } from "./interactions/usePlacementInteraction";
-import { usePathInteraction } from "./interactions/usePathInteraction";
 import { useRowInteraction } from "./interactions/useRowInteraction";
 import { useVisualInteraction } from "./interactions/useVisualInteraction";
 import { useRackInteraction } from "./interactions/useRackInteraction";
@@ -52,7 +51,6 @@ export interface UseDesignerMouseHandlersState {
   draggingVisualId: string | null;
   dragOffsetVisual: { dx: number; dy: number } | null;
   draggingWallEnd: { visualId: string; end: 0 | 1 } | null;
-  draggingPathPointIndex: number | null;
   marqueeStart: { x: number; y: number } | null;
   marqueeEnd: { x: number; y: number } | null;
   rowToolActive: boolean;
@@ -63,16 +61,12 @@ export interface UseDesignerMouseHandlersState {
   draggingRowId: string | null;
   rowDragPreviewStart: { x: number; y: number } | null;
   rackDragPreviewPosition: { x: number; y: number } | null;
-  manualPathPoints: { x: number; y: number }[];
-  showPickingPath: boolean;
-  pathToolActive: boolean;
   isLiveView: boolean;
   mainView: "magazyn" | "layout";
   layoutMode: LayoutMode;
   selectedWarehouseId: number | null;
   selectedRackIds: Array<number | string>;
   selectedVisualIds: string[];
-  showDimensions: boolean;
   snapToGrid: boolean;
   aisleWidthCm: number;
   ghostW: number;
@@ -90,13 +84,10 @@ export interface UseDesignerMouseHandlersSetters {
   setMarqueeEnd: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
   setRackDragPreviewPosition: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
   setLayout: Dispatch<SetStateAction<LayoutState>>;
-  setManualPathPoints: Dispatch<SetStateAction<{ x: number; y: number }[]>>;
   setSelectedRackId: Dispatch<SetStateAction<number | string | null>>;
   setSelectedRackIds: Dispatch<SetStateAction<Array<number | string>>>;
   setSelectedVisualId: Dispatch<SetStateAction<string | null>>;
   setSelectedVisualIds: Dispatch<SetStateAction<string[]>>;
-  setSelectedPathPointIndex: Dispatch<SetStateAction<number | null>>;
-  setSelectedPathLine: (v: boolean) => void;
   setSelectedAisleIndex: Dispatch<SetStateAction<number | null>>;
   setShowElevationForRackId: Dispatch<SetStateAction<number | string | null>>;
   setDraggingRackId: Dispatch<SetStateAction<number | string | null>>;
@@ -104,11 +95,9 @@ export interface UseDesignerMouseHandlersSetters {
   setDraggingVisualId: Dispatch<SetStateAction<string | null>>;
   setDragOffsetVisual: Dispatch<SetStateAction<{ dx: number; dy: number } | null>>;
   setDraggingWallEnd: Dispatch<SetStateAction<{ visualId: string; end: 0 | 1 } | null>>;
-  setDraggingPathPointIndex: Dispatch<SetStateAction<number | null>>;
   setRowDrawStart: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
   setMarqueeStart: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
   setAisleDrawStart: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
-  setShowPickingPath: (v: boolean) => void;
   setSelectedRowContainerId: Dispatch<SetStateAction<string | null>>;
   setSelectedRowContainerIds: Dispatch<SetStateAction<string[]>>;
   setDraggingRowId: Dispatch<SetStateAction<string | null>>;
@@ -174,7 +163,6 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     draggingVisualId,
     dragOffsetVisual,
     draggingWallEnd,
-    draggingPathPointIndex,
     marqueeStart,
     marqueeEnd,
     rowToolActive,
@@ -185,15 +173,11 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     draggingRowId,
     rowDragPreviewStart,
     rackDragPreviewPosition,
-    manualPathPoints,
-    showPickingPath,
-    pathToolActive,
     isLiveView,
     mainView,
     selectedWarehouseId,
   selectedRackIds,
   selectedVisualIds,
-  showDimensions,
   snapToGrid,
   aisleWidthCm,
   ghostW,
@@ -210,13 +194,10 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setMarqueeEnd,
     setRackDragPreviewPosition,
     setLayout,
-    setManualPathPoints,
     setSelectedRackId,
     setSelectedRackIds,
     setSelectedVisualId,
     setSelectedVisualIds,
-    setSelectedPathPointIndex,
-    setSelectedPathLine,
     setSelectedAisleIndex,
     setShowElevationForRackId,
     setDraggingRackId,
@@ -224,11 +205,9 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setDraggingVisualId,
     setDragOffsetVisual,
     setDraggingWallEnd,
-    setDraggingPathPointIndex,
     setRowDrawStart,
     setMarqueeStart,
     setAisleDrawStart,
-    setShowPickingPath,
     setSelectedRowContainerId,
     setSelectedRowContainerIds,
     setDraggingRowId,
@@ -265,8 +244,6 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setSelectedRackIds([]);
     setSelectedVisualId(null);
     setSelectedVisualIds([]);
-    setSelectedPathPointIndex(null);
-    setSelectedPathLine(false);
     setSelectedAisleIndex(null);
   }
 
@@ -299,20 +276,6 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     addSpecialLocation,
   });
 
-  const path = usePathInteraction({
-    layout,
-    showPickingPath,
-    pathToolActive,
-    manualPathPoints,
-    draggingPathPointIndex,
-    setManualPathPoints,
-    setShowPickingPath,
-    setSelectedPathPointIndex,
-    setSelectedPathLine,
-    setDraggingPathPointIndex,
-    clearAllSelections,
-  });
-
   const row = useRowInteraction({
     layout,
     rowToolActive,
@@ -321,7 +284,6 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     rowToolTemplate,
     draggingRowId,
     rowDragPreviewStart,
-    showDimensions,
     refs: {
       rowDragPointerOffsetRef,
       rowDragPreviewStartRef,
@@ -383,8 +345,6 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       findEmptySlotAt: helpers.findEmptySlotAt,
       reindexGeometricRow: helpers.reindexGeometricRow,
     },
-    setSelectedPathPointIndex,
-    setSelectedPathLine,
     setSelectedRackId,
     setSelectedRackIds,
     setDraggingRackId,
@@ -447,9 +407,8 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       selection.handleMouseMove(e, cell);
       rack.handleMouseMove(e, cell);
       visual.handleMouseMove(e, cell);
-      path.handleMouseMove(e, cell);
     },
-    [getCellFromEvent, pan, placement, row, selection, rack, visual, path]
+    [getCellFromEvent, pan, placement, row, selection, rack, visual]
   );
 
   const handleCanvasMouseDown = useCallback(
@@ -461,14 +420,13 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
         return;
       }
       if (placement.handleMouseDown(e, cell)) return;
-      if (path.handleMouseDown(e, cell)) return;
       if (row.handleMouseDown(e, cell)) return;
       if (selection.handleAislePart(e, cell)) return;
       if (visual.handleMouseDown(e, cell)) return;
       if (rack.handleMouseDown(e, cell)) return;
       selection.handleMarqueePart(e, cell);
     },
-    [getCellFromEvent, clearAllSelections, pan, placement, path, row, selection, visual, rack]
+    [getCellFromEvent, clearAllSelections, pan, placement, row, selection, visual, rack]
   );
 
   const handleCanvasMouseUp = useCallback(() => {
@@ -477,8 +435,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     pan.handlePanEnd();
     rack.handleMouseUp();
     visual.handleMouseUpCleanup();
-    path.handleMouseUpCleanup();
-  }, [row, selection, pan, rack, visual, path]);
+  }, [row, selection, pan, rack, visual]);
 
   const handleCanvasMouseLeave = useCallback(() => {
     setCursorCm(null);

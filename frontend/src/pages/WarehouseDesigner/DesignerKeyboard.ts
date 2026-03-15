@@ -19,8 +19,6 @@ export interface UseDesignerKeyboardParams {
   setSelectedRackIds: (v: React.SetStateAction<Array<number | string>>) => void;
   setSelectedVisualId: (v: React.SetStateAction<string | null>) => void;
   setSelectedVisualIds: (v: React.SetStateAction<string[]>) => void;
-  setSelectedPathPointIndex: (v: React.SetStateAction<number | null>) => void;
-  setSelectedPathLine: (v: boolean) => void;
   setMarqueeStart: (v: React.SetStateAction<{ x: number; y: number } | null>) => void;
   setMarqueeEnd: (v: React.SetStateAction<{ x: number; y: number } | null>) => void;
   setAisleDrawStart: (v: React.SetStateAction<{ x: number; y: number } | null>) => void;
@@ -55,8 +53,6 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
     setSelectedRackIds,
     setSelectedVisualId,
     setSelectedVisualIds,
-    setSelectedPathPointIndex,
-    setSelectedPathLine,
     setMarqueeStart,
     setMarqueeEnd,
     setAisleDrawStart,
@@ -108,8 +104,6 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
         setSelectedRackIds([]);
         setSelectedVisualId(null);
         setSelectedVisualIds([]);
-        setSelectedPathPointIndex(null);
-        setSelectedPathLine(false);
         setMarqueeStart(null);
         setMarqueeEnd(null);
         setAisleDrawStart(null);

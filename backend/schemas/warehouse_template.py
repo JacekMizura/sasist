@@ -20,6 +20,7 @@ class WarehouseTemplatePayload(BaseModel):
     binNamingType: str = "numeric"
     autoSectionNumbering: bool = False
     reserve_bin_keys: Optional[List[str]] = None
+    level_max_load_kg: Optional[float] = None
 
 
 class WarehouseTemplateResponse(BaseModel):
@@ -40,6 +41,7 @@ class WarehouseTemplateResponse(BaseModel):
     binNamingType: str
     autoSectionNumbering: bool
     reserve_bin_keys: Optional[List[str]] = None
+    level_max_load_kg: Optional[float] = None
 
     class Config:
         from_attributes = True

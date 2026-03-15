@@ -47,9 +47,7 @@ import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
 import { useDesignerMouseHandlers } from "./WarehouseDesigner/useDesignerMouseHandlers";
 import { useDesignerRowOperations } from "./WarehouseDesigner/useDesignerRowOperations";
 import { useDesignerRackPlacement } from "./WarehouseDesigner/useDesignerRackPlacement";
-import { useDesignerPath } from "./WarehouseDesigner/useDesignerPath";
 import { useDesignerCanvas } from "./WarehouseDesigner/useDesignerCanvas";
-import { useDesignerDimensions } from "./WarehouseDesigner/useDesignerDimensions";
 import { useDesignerProductModal } from "./WarehouseDesigner/useDesignerProductModal";
 import { useDesignerMagazynState } from "./WarehouseDesigner/useDesignerMagazynState";
 import { useDesignerTemplateSummary } from "./WarehouseDesigner/useDesignerTemplateSummary";
@@ -161,15 +159,11 @@ export default function WarehouseDesigner() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(LayoutMode.SELECT);
   const rowToolActive = layoutMode === LayoutMode.DRAW_ROW;
   const aisleToolActive = layoutMode === LayoutMode.DRAW_AISLE;
-  const pathToolActive = layoutMode === LayoutMode.PATH_TOOL;
   const setRowToolActive = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
     setLayoutMode((prev) => (typeof v === "function" ? v(prev === LayoutMode.DRAW_ROW) : v) ? LayoutMode.DRAW_ROW : LayoutMode.SELECT);
   }, []);
   const setAisleToolActive = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
     setLayoutMode((prev) => (typeof v === "function" ? v(prev === LayoutMode.DRAW_AISLE) : v) ? LayoutMode.DRAW_AISLE : LayoutMode.SELECT);
-  }, []);
-  const setPathToolActive = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
-    setLayoutMode((prev) => (typeof v === "function" ? v(prev === LayoutMode.PATH_TOOL) : v) ? LayoutMode.PATH_TOOL : LayoutMode.SELECT);
   }, []);
   useLayoutModeShortcuts(layoutMode, setLayoutMode);
   const layoutModeDisplay = useLayoutModeDisplay(layoutMode);
@@ -211,7 +205,6 @@ export default function WarehouseDesigner() {
   const [showRackLabels, setShowRackLabels] = useState(true);
   const [selectedAisleIndex, setSelectedAisleIndex] = useState<number | null>(null);
   const [showGrid, setShowGrid] = useState(true);
-  const [showDimensions, setShowDimensions] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [draggingVisualType, setDraggingVisualType] = useState<VisualElementType | null>(null);
   const [selectedVisualId, setSelectedVisualId] = useState<string | null>(null);
@@ -220,16 +213,11 @@ export default function WarehouseDesigner() {
   const [visualGhostPosition, setVisualGhostPosition] = useState<{ x: number; y: number } | null>(null);
   const [clipboard, setClipboard] = useState<RackState[]>([]);
   const [catalogGhostPosition, setCatalogGhostPosition] = useState<{ x: number; y: number } | null>(null);
-  const [showPickingPath, setShowPickingPath] = useState(false);
-  const [manualPathPoints, setManualPathPoints] = useState<{ x: number; y: number }[]>([]);
   const [snackbar, setSnackbar] = useState<{ message: string; undo?: () => void; undoLabel?: string } | null>(null);
   const [showEditBuilding, setShowEditBuilding] = useState(false);
   const [selectedVisualIds, setSelectedVisualIds] = useState<string[]>([]);
   const deletedForUndoRef = useRef<{ racks?: RackState[]; visuals?: VisualElementState[]; row_containers?: LayoutState["row_containers"] } | null>(null);
   const [draggingWallEnd, setDraggingWallEnd] = useState<{ visualId: string; end: 0 | 1 } | null>(null);
-  const [draggingPathPointIndex, setDraggingPathPointIndex] = useState<number | null>(null);
-  const [selectedPathPointIndex, setSelectedPathPointIndex] = useState<number | null>(null);
-  const [selectedPathLine, setSelectedPathLine] = useState(false);
   const [searchParams] = useSearchParams();
   /** Single view mode: Magazyn (live) | Projektant Layoutu */
   const [mainView, setMainView] = useState<"magazyn" | "layout">(() =>
@@ -279,12 +267,10 @@ export default function WarehouseDesigner() {
 
   /** Top-level state to avoid ReferenceError; synced from selection. */
   const selectedObjectIdDerived = useMemo<string | null>(() => {
-    if (selectedPathPointIndex !== null) return `pathNode:${selectedPathPointIndex}`;
-    if (selectedPathLine) return "path";
     if (selectedRackIds.length > 0) return `rack:${selectedRackIds[0]}`;
     if (selectedVisualIds.length > 0) return `visual:${selectedVisualIds[0]}`;
     return null;
-  }, [selectedPathPointIndex, selectedPathLine, selectedRackIds, selectedVisualIds]);
+  }, [selectedRackIds, selectedVisualIds]);
 
   /** Top-level state to avoid ReferenceError; synced from selection. */
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
@@ -299,6 +285,8 @@ export default function WarehouseDesigner() {
     displayRack,
     binItemCounts,
     binUniqueProductCounts,
+    binLoadKg,
+    levelLoadKg,
     usedVolumeAtBin,
   } = useDesignerMagazynState({
     layout,
@@ -308,22 +296,6 @@ export default function WarehouseDesigner() {
 
   const deleteObject = useCallback((objectId: string | null) => {
     if (!objectId) return;
-    if (objectId.startsWith("pathNode:")) {
-      const idx = parseInt(objectId.slice(9), 10);
-      if (!Number.isNaN(idx)) {
-        setManualPathPoints((prev) => prev.filter((_, i) => i !== idx));
-        setSelectedPathPointIndex(null);
-        setSnackbar({ message: "Usunięto punkt ścieżki.", undo: () => setSnackbar(null) });
-      }
-      return;
-    }
-    if (objectId === "path") {
-      setManualPathPoints([]);
-      setShowPickingPath(false);
-      setSelectedPathLine(false);
-      setSnackbar({ message: "Usunięto ścieżkę.", undo: () => setSnackbar(null) });
-      return;
-    }
     if (objectId.startsWith("rack:")) {
       const toDelete = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
       deletedForUndoRef.current = { racks: toDelete, row_containers: layout.row_containers };
@@ -453,6 +425,7 @@ export default function WarehouseDesigner() {
           used_dm3: Number(r.used_dm3 ?? 0),
           color: (typeof r.color === "string" && r.color.trim() !== "") ? r.color.trim() : "#3b82f6",
           templateId: typeof r.templateId === "string" ? r.templateId : undefined,
+          level_max_load_kg: typeof (r as { level_max_load_kg?: number }).level_max_load_kg === "number" ? (r as { level_max_load_kg: number }).level_max_load_kg : undefined,
           show_label: typeof r.show_label === "boolean" ? r.show_label : undefined,
           rowPrefix: typeof (r as { row_prefix?: string }).row_prefix === "string" ? (r as { row_prefix: string }).row_prefix.trim() || undefined : typeof (r as { rowPrefix?: string }).rowPrefix === "string" ? (r as { rowPrefix: string }).rowPrefix.trim() || undefined : undefined,
           indexInRow: typeof (r as { index_in_row?: number }).index_in_row === "number" ? (r as { index_in_row: number }).index_in_row : typeof (r as { indexInRow?: number }).indexInRow === "number" ? (r as { indexInRow: number }).indexInRow : undefined,
@@ -494,9 +467,6 @@ export default function WarehouseDesigner() {
         picking_path: Array.isArray(d.picking_path) ? d.picking_path : undefined,
         row_containers: Array.isArray(d.row_containers) ? d.row_containers : [],
       }));
-      const pathPoints = Array.isArray(d.picking_path) ? d.picking_path : [];
-      setManualPathPoints(pathPoints);
-      if (pathPoints.length > 0) setShowPickingPath(true);
       // Sync product–location assignments from API so map shows products in correct slots
       const racksFromRes = (d.racks || []) as Array<{ bins?: Array<{ locationUUID?: string; location_uuid?: string; label?: string; location_id?: string }> }>;
       const resolveLabel = (locationUUID: string): string | null => {
@@ -518,6 +488,7 @@ export default function WarehouseDesigner() {
           const vol = safeVolumeDm3(p.volume);
           const firstLoc = assigned[0];
           const location_id = firstLoc ? resolveLabel(firstLoc.locationUUID) : null;
+          const weightKg = typeof p.weight_kg === "number" ? p.weight_kg : typeof p.weight === "number" ? p.weight : undefined;
           return {
             id,
             name: String(p.name ?? ""),
@@ -527,6 +498,7 @@ export default function WarehouseDesigner() {
             volume_dm3: vol,
             location_id: location_id ?? null,
             assignedLocations: assigned.length > 0 ? assigned : undefined,
+            weight_kg: weightKg,
             image_url: typeof p.image_url === "string" ? p.image_url : undefined,
           };
         });
@@ -729,6 +701,7 @@ export default function WarehouseDesigner() {
           internal_structure: r.internal_structure ?? undefined,
           color: (typeof r.color === "string" && r.color.trim() !== "") ? r.color.trim() : "#3b82f6",
           templateId: r.templateId ?? undefined,
+          level_max_load_kg: r.level_max_load_kg ?? undefined,
           show_label: r.show_label,
           row_prefix: r.rowPrefix,
           index_in_row: r.indexInRow,
@@ -743,10 +716,15 @@ export default function WarehouseDesigner() {
           two_way: a.two_way,
         })),
         visual_elements: layout.visual_elements ?? [],
-        picking_path: manualPathPoints.length > 0 ? manualPathPoints : undefined,
+        picking_path: layout.picking_path ?? undefined,
         row_containers: layout.row_containers ?? [],
       };
       console.log("Saving payload (rack colors):", payload.racks.map((r, i) => ({ index: i, color: r.color })));
+      console.log("Saving building", {
+        width: (payload as { building_width_m?: number }).building_width_m,
+        depth: (payload as { building_depth_m?: number }).building_depth_m,
+        height: (payload as { building_height_m?: number }).building_height_m,
+      });
       await api.put(`/warehouse/${whId}/layout`, payload, { params: { tenant_id: TENANT_ID } });
       setLastSavedAt(Date.now());
       if (selectedWarehouseId) await loadLayout(selectedWarehouseId);
@@ -755,7 +733,7 @@ export default function WarehouseDesigner() {
     } finally {
       setSaving(false);
     }
-  }, [layout, selectedWarehouseId, loadLayout, manualPathPoints]);
+  }, [layout, selectedWarehouseId, loadLayout]);
 
   const {
     ghostW,
@@ -811,7 +789,6 @@ export default function WarehouseDesigner() {
       draggingVisualId,
       dragOffsetVisual,
       draggingWallEnd,
-      draggingPathPointIndex,
       marqueeStart,
       marqueeEnd,
       rowToolActive,
@@ -822,16 +799,12 @@ export default function WarehouseDesigner() {
       draggingRowId,
       rowDragPreviewStart,
       rackDragPreviewPosition,
-      manualPathPoints,
-      showPickingPath,
-      pathToolActive,
       isLiveView,
       mainView,
       layoutMode,
       selectedWarehouseId,
       selectedRackIds,
       selectedVisualIds,
-      showDimensions,
       snapToGrid,
       aisleWidthCm,
       ghostW,
@@ -848,13 +821,10 @@ export default function WarehouseDesigner() {
       setMarqueeEnd,
       setRackDragPreviewPosition,
       setLayout,
-      setManualPathPoints,
       setSelectedRackId,
       setSelectedRackIds,
       setSelectedVisualId,
       setSelectedVisualIds,
-      setSelectedPathPointIndex,
-      setSelectedPathLine,
       setSelectedAisleIndex,
       setShowElevationForRackId,
       setDraggingRackId,
@@ -862,11 +832,9 @@ export default function WarehouseDesigner() {
       setDraggingVisualId,
       setDragOffsetVisual,
       setDraggingWallEnd,
-      setDraggingPathPointIndex,
       setRowDrawStart,
       setMarqueeStart,
       setAisleDrawStart,
-      setShowPickingPath,
       setSelectedRowContainerId,
       setSelectedRowContainerIds,
       setDraggingRowId,
@@ -926,8 +894,6 @@ export default function WarehouseDesigner() {
     setSelectedAisleIndex,
     setSelectedVisualId,
     setSelectedVisualIds,
-    setSelectedPathPointIndex,
-    setSelectedPathLine,
     setDraggingRowId,
     setRowDragPreviewStart,
     setCatalogHoveredSlot,
@@ -1058,8 +1024,6 @@ export default function WarehouseDesigner() {
     setSelectedRackIds,
     setSelectedVisualId,
     setSelectedVisualIds,
-    setSelectedPathPointIndex,
-    setSelectedPathLine,
     setMarqueeStart,
     setMarqueeEnd,
     setAisleDrawStart,
@@ -1160,29 +1124,6 @@ export default function WarehouseDesigner() {
     ? draggingRackId
     : (dragCollisionRackId ? (dragCollisionRackId.id ?? dragCollisionRackId.rack_index) : null);
   const collisionRackIds = groupDragInvalid ? selectedRackIds : null;
-
-  const { dimensionData } = useDesignerDimensions({
-    showDimensions,
-    layout,
-    selectedRowContainerId,
-    selectedRowContainerIds,
-    selectedRackIds,
-    draggingRowId,
-    rowDragPreviewStart,
-    rackDragPreviewPositions,
-    draggingRackId,
-  });
-
-  const {
-    pickingPathPoints,
-    pathDistanceM,
-    handleMagicWand,
-  } = useDesignerPath({
-    manualPathPoints,
-    setManualPathPoints,
-    setShowPickingPath,
-    setSnackbar,
-  });
 
   const selectedRack = layout.racks.find((r) => (r.id != null && r.id === selectedRackId) || r.rack_index === selectedRackId);
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
@@ -1438,6 +1379,13 @@ export default function WarehouseDesigner() {
                           selectedLocation={selectedLocationForProducts}
                           binItemCounts={binItemCounts}
                           binUniqueProductCounts={binUniqueProductCounts}
+                          levelLoadKg={levelLoadKg}
+                          levelMaxLoadKg={(() => {
+                            const r = displayRack ?? rack;
+                            const fromRack = r?.level_max_load_kg;
+                            const fromTemplate = r?.templateId ? customTemplates.find((tpl) => tpl.id === r.templateId)?.level_max_load_kg : null;
+                            return fromRack ?? fromTemplate ?? 500;
+                          })()}
                         />
                       </div>
                     )}
@@ -1554,10 +1502,6 @@ export default function WarehouseDesigner() {
               setAisleWidthCm,
               showGrid,
               setShowGrid,
-              showDimensions,
-              setShowDimensions,
-              dimensionLines: dimensionData.dimensionLines,
-              aisleHighlights: dimensionData.aisleHighlights,
               snapToGrid,
               setSnapToGrid,
               showRackLabels,
@@ -1570,19 +1514,11 @@ export default function WarehouseDesigner() {
               addVisualElement,
               getDefaultVisualSize,
               selectedVisualId,
-              showPickingPath,
-              setShowPickingPath,
-              pickingPathPoints,
-              pathToolActive,
-              setPathToolActive,
               setLayoutMode,
               specialLocations,
               layoutModeLabel: layoutModeDisplay.modeLabel,
               layoutModeColor: layoutModeDisplay.modeColor,
               layoutMode,
-              manualPathPoints,
-              pathDistanceM,
-              onMagicWand: handleMagicWand,
               selectedVisualIds,
               outsideRackIds,
               isLiveView,

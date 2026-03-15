@@ -63,6 +63,15 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
     return Number.isFinite(n) ? n : undefined;
   }, []);
 
+  /** Normalize numeric input for API: comma → dot, return number or null. Ensures backend receives numbers, not strings. */
+  const parseNumber = useCallback((value: unknown): number | null => {
+    if (value === null || value === undefined) return null;
+    const s = String(value).trim().replace(",", ".");
+    if (s === "") return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }, []);
+
   const updateDimension = useCallback(
     (which: "length" | "width" | "height", raw: string) => {
       const normalized = raw.trim().replace(",", ".");
@@ -229,23 +238,26 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
         unit: unit.trim() || undefined,
         stock_quantity: stockQtyVal,
       };
+      // Backend expects metric fields only (no legacy length/width/height/weight/volume).
       const body: Record<string, unknown> = {
         name: payload.name,
         ean: payload.ean ?? "",
         symbol: payload.symbol ?? "",
-        length: payload.length,
-        width: payload.width,
-        height: payload.height,
-        weight: payload.weight,
-        volume: payload.volume,
+        length_cm: parseNumber(length) ?? undefined,
+        width_cm: parseNumber(width) ?? undefined,
+        height_cm: parseNumber(height) ?? undefined,
+        weight_kg: parseNumber(weight) ?? undefined,
+        volume_dm3: parseNumber(volume) ?? undefined,
         image_url: payload.image_url,
         tenant_id: tenantId,
         assigned_locations: enriched ?? assignedLocations,
         label_template_id: labelTemplateId ?? undefined,
-        purchase_price: payload.purchase_price,
+        purchase_price: parseNumber(purchasePrice) ?? undefined,
         manufacturer: payload.manufacturer ?? null,
         unit: payload.unit ?? null,
       };
+      if (stockQtyVal !== undefined) body.stock_quantity = stockQtyVal;
+      console.log("Payload:", payload);
       if (isNew) {
         const res = await api.post("/products/", body, { params: { tenant_id: tenantId } });
         onSave({ ...payload, id: res.data?.id ?? undefined });
@@ -255,12 +267,12 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
           alert("Błąd: nieprawidłowy ID produktu.");
           return;
         }
-        if (stockQtyVal !== undefined) (body as Record<string, unknown>).stock_quantity = stockQtyVal;
         const res = await api.put(`/products/${productId}/`, body, { params: { tenant_id: tenantId } });
         onSave({ ...payload, id: product!.id, stock_quantity: res.data?.stock_quantity ?? payload.stock_quantity });
       }
       onClose();
     } catch (err: unknown) {
+      console.error("Product save failed:", err);
       const msg =
         err && typeof err === "object" && "response" in err
           ? (err as { response?: { status?: number; data?: unknown } }).response?.data

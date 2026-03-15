@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional, Any
 
 from ..database import get_db
@@ -33,8 +33,33 @@ router = APIRouter(
 )
 
 
+def _coerce_float(v: Any) -> Optional[float]:
+    """Safe parse: accept int/float or string (comma as decimal); return float or None."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        s = v.strip().replace(",", ".")
+        if not s or s.lower() == "null":
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            return None
+    return None
+
+
+def _parse_float(v: Any) -> Optional[float]:
+    """Parse numeric field from payload; use for both legacy (length/weight) and alternate (length_cm/weight_kg) names."""
+    if v in (None, "", "null"):
+        return None
+    return _coerce_float(v)
+
+
 class ProductBody(BaseModel):
-    """Request body for create/update. All fields optional for update; name required for create."""
+    """Request body for create/update. All fields optional for update; name required for create.
+    Accepts both legacy (length, weight, volume) and alternate (length_cm, weight_kg, volume_dm3) names."""
     name: Optional[str] = None
     ean: Optional[str] = None
     symbol: Optional[str] = None
@@ -43,6 +68,12 @@ class ProductBody(BaseModel):
     height: Optional[float] = None
     weight: Optional[float] = None
     volume: Optional[float] = None
+    # Alternate names (frontend may send these)
+    length_cm: Optional[float] = None
+    width_cm: Optional[float] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    volume_dm3: Optional[float] = None
     image_url: Optional[str] = None
     tenant_id: Optional[int] = None
     assigned_locations: Optional[List[dict]] = None  # accepted but not stored on Product model
@@ -52,6 +83,16 @@ class ProductBody(BaseModel):
     manufacturer: Optional[str] = None
     unit: Optional[str] = None
     stock_quantity: Optional[float] = None  # when set on update, write to first inventory row (or create)
+
+    @field_validator(
+        "length", "width", "height", "weight", "volume",
+        "length_cm", "width_cm", "height_cm", "weight_kg", "volume_dm3",
+        "sale_price", "purchase_price", "stock_quantity",
+        mode="before",
+    )
+    @classmethod
+    def coerce_numeric(cls, v: Any) -> Optional[float]:
+        return _coerce_float(v)
 
 # Dozwolone pola sortowania
 SORT_FIELDS = {"id", "name", "ean", "symbol", "length", "width", "height", "weight", "volume"}
@@ -466,7 +507,10 @@ def update_product(
     db: Session = Depends(get_db),
     tenant_id: Optional[int] = None,
 ):
-    """Update product by ID. tenant_id optional for scoping; body.tenant_id can change product's tenant."""
+    """Update product by ID. tenant_id optional for scoping; body.tenant_id can change product's tenant.
+    Accepts both legacy (length, weight, volume) and alternate (length_cm, weight_kg, volume_dm3) field names."""
+    payload = body.model_dump()
+    print("PRODUCT UPDATE PAYLOAD:", payload)  # noqa: T201 - temporary debug
     q = db.query(Product).filter(Product.id == product_id)
     if tenant_id is not None:
         q = q.filter(Product.tenant_id == tenant_id)
@@ -481,23 +525,30 @@ def update_product(
         product.ean = (body.ean or "").strip() or None
     if body.symbol is not None:
         product.symbol = (body.symbol or "").strip() or None
-    if body.length is not None:
-        product.length = _round_float(body.length, 2)
-    if body.width is not None:
-        product.width = _round_float(body.width, 2)
-    if body.height is not None:
-        product.height = _round_float(body.height, 2)
-    if body.weight is not None:
-        product.weight = _round_float(body.weight, 3)
-    # Recompute volume from dimensions when all three are set; otherwise use body.volume if provided
+    # Numeric fields: accept both legacy and alternate names, safe parse (comma decimal, strings)
+    length_val = _parse_float(payload.get("length_cm") or payload.get("length"))
+    if length_val is not None:
+        product.length = _round_float(length_val, 2)
+    width_val = _parse_float(payload.get("width_cm") or payload.get("width"))
+    if width_val is not None:
+        product.width = _round_float(width_val, 2)
+    height_val = _parse_float(payload.get("height_cm") or payload.get("height"))
+    if height_val is not None:
+        product.height = _round_float(height_val, 2)
+    weight_val = _parse_float(payload.get("weight_kg") or payload.get("weight"))
+    if weight_val is not None:
+        product.weight = _round_float(weight_val, 3)
+    # Recompute volume from dimensions when all three are set; otherwise use body.volume / volume_dm3 if provided
     len_ = product.length
     wid_ = product.width
     hei_ = product.height
     vol = _volume_from_dimensions_dm3(len_, wid_, hei_)
     if vol is not None:
         product.volume = vol
-    elif body.volume is not None:
-        product.volume = _round_float(body.volume, 2)
+    else:
+        volume_val = _parse_float(payload.get("volume_dm3") or payload.get("volume"))
+        if volume_val is not None:
+            product.volume = _round_float(volume_val, 2)
     if body.image_url is not None:
         product.image_url = (body.image_url or "").strip() or None
     if body.assigned_locations is not None:
@@ -516,7 +567,8 @@ def update_product(
         product.unit = (body.unit or "").strip() or None
 
     # Optional: update stock (first inventory row or create one)
-    if body.stock_quantity is not None:
+    stock_qty_val = _parse_float(payload.get("stock_quantity"))
+    if stock_qty_val is not None:
         first_inv = (
             db.query(Inventory)
             .filter(
@@ -526,7 +578,7 @@ def update_product(
             .order_by(Inventory.id)
             .first()
         )
-        qty = float(body.stock_quantity)
+        qty = float(stock_qty_val)
         if first_inv:
             first_inv.quantity = qty
         else:
@@ -553,18 +605,23 @@ def update_product(
             )
             db.add(inv)
 
-    db.commit()
-    db.refresh(product)
-    out = _product_to_dict(product)
-    qty_row = (
-        db.query(func.sum(Inventory.quantity).label("qty"))
-        .filter(Inventory.product_id == product.id, Inventory.tenant_id == product.tenant_id)
-        .first()
-    )
-    out["stock_quantity"] = int(round(float(qty_row.qty or 0))) if qty_row and qty_row.qty is not None else 0
-    loc_map = _inventory_locations_by_product_ids(db, [product.id])
-    out["locations"] = loc_map.get(product.id, [])
-    return out
+    try:
+        db.commit()
+        db.refresh(product)
+        out = _product_to_dict(product)
+        qty_row = (
+            db.query(func.sum(Inventory.quantity).label("qty"))
+            .filter(Inventory.product_id == product.id, Inventory.tenant_id == product.tenant_id)
+            .first()
+        )
+        out["stock_quantity"] = int(round(float(qty_row.qty or 0))) if qty_row and qty_row.qty is not None else 0
+        loc_map = _inventory_locations_by_product_ids(db, [product.id])
+        out["locations"] = loc_map.get(product.id, [])
+        return out
+    except Exception as e:
+        db.rollback()
+        logger.exception("Product update failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Product update failed: {e!s}") from e
 
 
 @router.post("/randomize-locations/{warehouse_id}")

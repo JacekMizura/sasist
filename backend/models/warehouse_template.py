@@ -34,3 +34,5 @@ class WarehouseTemplate(Base, BaseModelMixin):
     bin_naming_type = Column(String(16), nullable=False, default="numeric")
     auto_section_numbering = Column(Boolean, nullable=False, default=False)
     reserve_bin_keys = Column(Text, nullable=True)
+    """Maximum allowed load per rack level (kg). Used for level beam capacity visualization. Default 500."""
+    level_max_load_kg = Column(Float, nullable=True, default=500)

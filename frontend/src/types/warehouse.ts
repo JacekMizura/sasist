@@ -51,6 +51,10 @@ export type WarehouseProduct = {
   location_id: string | null;
   /** Per-position assignments (Row/Rack/Level/Position). When set, total quantity can be sum of these. */
   assignedLocations?: AssignedLocation[];
+  /** Unit weight in kg; used for level load calculation (bin_load_kg = Σ weight_kg × quantity). API may also return as weight. */
+  weight_kg?: number;
+  /** Alternative weight field (kg); prefer weight_kg. Used when mapping from API that returns "weight". */
+  weight?: number;
   image_url?: string;
 };
 
@@ -132,13 +136,15 @@ export type RackState = {
   color?: string;
   /** Custom template id when placed from catalog (for edit propagation) */
   templateId?: string;
+  /** Max allowed load per level in kg (from template). Used for level load capacity display. */
+  level_max_load_kg?: number;
   /** Show label on map (e.g. "Regał A1") */
   show_label?: boolean;
   /** Dynamic row label: prefix (e.g. "G") and index in that row (1,2,3…). Display label = rowPrefix.indexInRow (e.g. G.1). */
   rowPrefix?: string;
   indexInRow?: number;
-  /** When 90, rack is placed in a vertical row and should be drawn rotated 90° (footprint already swapped in width/height). */
-  rotationDegrees?: 0 | 90;
+  /** When 90, rack is placed in a vertical row and should be drawn rotated 90° (footprint already swapped in width/height). When 180, back-to-back row: face opposite aisle. */
+  rotationDegrees?: 0 | 90 | 180;
 };
 
 export type AisleState = {
@@ -228,9 +234,9 @@ export type LayoutState = {
   building_width_m?: number;
   /** 2D depth (layout rows). Grid limits use width + depth only. */
   building_depth_m?: number;
-  /** Physical height of the building (m). Used for validation/stats only; does not affect grid. */
+  /** Physical height of the building (m). Used for layout stats/kubatura only; does NOT affect grid.
+   * Must NOT be used for rack template validation. Template height uses only rack_template.height_cm and sum(level.height_cm). */
   building_height_m?: number;
-  // future: validate rack height vs building height (rack_height_cm / 100 <= building_height_m)
   racks: RackState[];
   aisles: AisleState[];
   visual_elements: VisualElementState[];
@@ -304,6 +310,8 @@ export type CustomRackTemplate = {
   indexPadding?: number;
   /** Rack-index strategy: start index for first cell (default 1). */
   startIndex?: number;
+  /** Max allowed load per level in kg. Default 500. Used for level load capacity visualization. */
+  level_max_load_kg?: number;
 };
 
 /** Catalog item: built-in preset or custom template */

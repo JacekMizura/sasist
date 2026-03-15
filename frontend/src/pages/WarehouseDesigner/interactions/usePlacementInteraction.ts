@@ -52,8 +52,8 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, cell: { x: number; y: number }) => {
-      if (e.button === 0 && selectedWarehouseId != null && (layoutMode === LayoutMode.ADD_START || layoutMode === LayoutMode.ADD_PACK || layoutMode === LayoutMode.ADD_DOCK)) {
-        const type = layoutMode === LayoutMode.ADD_START ? "PICK_START" : layoutMode === LayoutMode.ADD_PACK ? "PACKING" : "DOCK";
+      if (e.button === 0 && selectedWarehouseId != null && (layoutMode === LayoutMode.ADD_START || layoutMode === LayoutMode.ADD_PACK)) {
+        const type = layoutMode === LayoutMode.ADD_START ? "PICK_START" : "PACKING";
         addSpecialLocation(cell, type);
         return true;
       }

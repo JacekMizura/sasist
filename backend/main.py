@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
 from .database import Base, engine
+from .db.schema_upgrade import ensure_locations_columns, ensure_warehouse_layout_building_columns
 from .middleware.request_metrics import record_request, record_error
 
 # Import all models so SQLAlchemy mappers (and relationships like Tenant.storage_units) are registered
@@ -189,9 +190,36 @@ def _ensure_pick_columns():
         pass
 
 
+def _ensure_warehouse_template_level_max_load_kg():
+    """Add level_max_load_kg to warehouse_templates if missing (safe SQLite schema upgrade)."""
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            r = conn.execute(text("PRAGMA table_info(warehouse_templates)"))
+            cols = {row[1] for row in r}
+            if "level_max_load_kg" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE warehouse_templates ADD COLUMN level_max_load_kg FLOAT DEFAULT 500"
+                ))
+            conn.execute(text(
+                "UPDATE warehouse_templates SET level_max_load_kg = 500 WHERE level_max_load_kg IS NULL"
+            ))
+    except Exception:
+        pass
+
+
 _ensure_order_columns()
 _ensure_location_warehouse_columns()
 _ensure_pick_columns()
+_ensure_warehouse_template_level_max_load_kg()
+
+
+@app.on_event("startup")
+def upgrade_schema():
+    """Run schema upgrades so existing SQLite DBs gain new columns."""
+    ensure_locations_columns(engine)
+    ensure_warehouse_layout_building_columns(engine)
+
 
 # ==================================================
 # ROUTERS

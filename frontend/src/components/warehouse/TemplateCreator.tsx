@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import type { CustomRackTemplate, LevelConfigItem } from "../../types/warehouse";
+import type { CustomRackTemplate, LevelConfigItem, LayoutState } from "../../types/warehouse";
 import { RESERVE_BG, RESERVE_BORDER } from "./reserveLocationStyle";
-import { snapCm, expandAddressPattern, getRackTemplateLabel, type RackTemplateLabelOptions } from "./warehouseUtils";
+import { snapCm, expandAddressPattern, getRackTemplateLabel, levelHeightsForRack, type RackTemplateLabelOptions } from "./warehouseUtils";
 
 const DEFAULT_ADDRESS_PATTERN = "{Row}{Section}-{Bin}-{Level}";
 
@@ -30,6 +30,19 @@ function volumePerBinForLevelDm3(
   const binWidthCm = width_cm / locationsOnLevel;
   const heightPerLevelCm = height_cm / totalLevels;
   const volCm3 = binWidthCm * depth_cm * heightPerLevelCm;
+  return Number((volCm3 / 1000).toFixed(2));
+}
+
+/** Volume per bin for one level when level heights sum exactly to rack height (from levelHeightsForRack). */
+function volumePerBinForLevelHeightDm3(
+  width_cm: number,
+  depth_cm: number,
+  levelHeightCm: number,
+  locationsOnLevel: number
+): number {
+  if (locationsOnLevel <= 0) return 0;
+  const binWidthCm = width_cm / locationsOnLevel;
+  const volCm3 = binWidthCm * depth_cm * levelHeightCm;
   return Number((volCm3 / 1000).toFixed(2));
 }
 
@@ -92,17 +105,19 @@ export function RackPreview({
   const L = levelRows.length;
   const pattern = (addressPattern || DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN;
   const rackIdForPreview = (rowId || "A").replace(/\./g, "") + "1";
-  const cells: { level: number; bin: number; label: string; isReserve: boolean; locationsOnLevel: number; volPerBin: number }[] = [];
+  const levelHeights = levelHeightsForRack(height_cm, L);
+  const cells: { level: number; bin: number; label: string; isReserve: boolean; locationsOnLevel: number; volPerBin: number; levelHeightCm: number }[] = [];
   for (let lev = 0; lev < L; lev++) {
     const locs = Math.max(1, levelRows[lev].locations);
-    const volPerBinLev = volumePerBinForLevelDm3(width_cm, depth_cm, height_cm, L, locs);
+    const levelHeightCm = levelHeights[lev] ?? height_cm / L;
+    const volPerBinLev = volumePerBinForLevelHeightDm3(width_cm, depth_cm, levelHeightCm, locs);
     for (let bin = 0; bin < locs; bin++) {
       const structuralLabel = `L${lev + 1}-C${bin + 1}`;
       const nameLabel = labelOptions
         ? getRackTemplateLabel(lev, bin, levelRows, { ...labelOptions, rackId: rackIdForPreview })
         : expandAddressPattern(pattern, rowId, sectionStartIndex, binNamingType, lev + 1, bin + 1);
       const displayLabel = previewMode === "structure" ? structuralLabel : nameLabel;
-      cells.push({ level: lev, bin, label: displayLabel, isReserve: reserveBinKeys.has(cellKey(lev, bin)), locationsOnLevel: locs, volPerBin: volPerBinLev });
+      cells.push({ level: lev, bin, label: displayLabel, isReserve: reserveBinKeys.has(cellKey(lev, bin)), locationsOnLevel: locs, volPerBin: volPerBinLev, levelHeightCm });
     }
   }
   const containerRef = useRef<HTMLDivElement>(null);
@@ -196,7 +211,7 @@ export function RackPreview({
                   ));
                 })}
                 {/* Bins: Line1 ID 16px bold, Line2/3 12px; 5px padding; flex-like vertical center; scale down to min 10px when narrow. */}
-                {cells.map(({ level, bin, label, isReserve, locationsOnLevel, volPerBin: cellVol }) => {
+                {cells.map(({ level, bin, label, isReserve, locationsOnLevel, volPerBin: cellVol, levelHeightCm }) => {
                   const cellWLev = contentW / Math.max(1, locationsOnLevel);
                   const x = ox + bin * cellWLev + pad;
                   const y = levelToY(level);
@@ -205,9 +220,8 @@ export function RackPreview({
                   const fill = isReserve ? RESERVE_FILL : "white";
                   const stroke = isReserve ? RESERVE_STROKE : CELL_STROKE;
                   const cx = x + w / 2;
-                  const heightPerLevelCm = L > 0 ? height_cm / L : 0;
                   const volStr = `${Number(cellVol).toFixed(2)} dm³`;
-                  const title = `${label}\nW:${width_cm} × H:${Math.round(heightPerLevelCm)}\n${volStr}`;
+                  const title = `${label}\nW:${width_cm} × H:${Math.round(levelHeightCm)}\n${volStr}`;
                   const textColor = "#0f172a";
                   const subColor = "#334155";
                   const line1H = 16;
@@ -247,7 +261,7 @@ export function RackPreview({
                         {label.length > 14 ? label.slice(0, 12) + "…" : label}
                       </text>
                       <text x={cx} y={line2Y} textAnchor="middle" fontSize={fontSize2} fill={subColor} fontFamily="system-ui, sans-serif">
-                        W×H: {width_cm}×{Math.round(heightPerLevelCm)}
+                        W×H: {width_cm}×{Math.round(levelHeightCm)}
                       </text>
                       <text x={cx} y={line3Y} textAnchor="middle" fontSize={fontSize2} fill={subColor} fontFamily="system-ui, sans-serif">
                         {volStr}
@@ -270,11 +284,13 @@ export type TemplateCreatorProps = {
   onCancelEdit?: () => void;
   /** When editing: persist template and update layout. Return Promise to support loading state. */
   onSaveEdit?: (templateId: string, template: CustomRackTemplate, updateExistingRacks: boolean) => void | Promise<void>;
+  /** Optional layout (e.g. from RackSidebar). Not used for validation; only for temporary debug logs to confirm rack height is independent from warehouse height. */
+  layout?: LayoutState | null;
 };
 
 export type NamingStrategyId = "pattern" | "rack-index" | "custom" | "manual";
 
-export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveEdit }: TemplateCreatorProps) {
+export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveEdit, layout }: TemplateCreatorProps) {
   const [name, setName] = useState("");
   const [width_cm, setWidthCm] = useState(120);
   const [depth_cm, setDepthCm] = useState(80);
@@ -301,6 +317,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [allowOverrides, setAllowOverrides] = useState(false);
   const [previewMode, setPreviewMode] = useState<RackPreviewMode>("names");
+  const [levelMaxLoadKg, setLevelMaxLoadKg] = useState(500);
 
   useEffect(() => {
     if (initialTemplate) {
@@ -316,6 +333,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         setLocationsPerLevel(Array.from({ length: Math.max(1, initialTemplate.levels) }, () => B));
       }
       setColor(initialTemplate.color);
+      setLevelMaxLoadKg(initialTemplate.level_max_load_kg ?? 500);
       setReserveBinKeys(new Set(initialTemplate.reserve_bin_keys ?? []));
       const strat = initialTemplate.namingStrategy ?? "pattern";
       setNamingStrategy(strat as NamingStrategyId);
@@ -412,12 +430,16 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     const cfg = levelConfigForSave;
     const bins_per_level_legacy = cfg.length > 0 ? cfg[0].locations : 4;
     const patternVal = namingPattern.trim() || DEFAULT_ADDRESS_PATTERN;
+    const rackHeightCm = snapCm(height_cm);
+    // Temporary: confirm rack template height is independent from warehouse building height (do not use building_height_m for template validation).
+    console.log("warehouseHeight", layout?.building_height_m);
+    console.log("rackHeight", rackHeightCm);
     const payload: CustomRackTemplate = {
       id: initialTemplate?.id ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `custom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
       name: trimmed,
       width_cm: snapCm(width_cm),
       depth_cm: snapCm(depth_cm),
-      height_cm: snapCm(height_cm),
+      height_cm: rackHeightCm,
       levels: L,
       bins_per_level: bins_per_level_legacy,
       levelConfig: cfg,
@@ -437,6 +459,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       overrides: allowOverrides && Object.keys(overrides).length > 0 ? overrides : undefined,
       indexPadding,
       startIndex,
+      level_max_load_kg: Math.max(1, levelMaxLoadKg),
     };
     setSaving(true);
     setSaveSuccess(false);
@@ -574,6 +597,19 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                 );
               })}
             </div>
+          </div>
+          <div>
+            <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Obciążenie na poziom (kg)</label>
+            <input
+              type="number"
+              min={1}
+              step={10}
+              value={levelMaxLoadKg}
+              onChange={(e) => setLevelMaxLoadKg(Math.max(1, Number(e.target.value) || 500))}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus"
+              placeholder="500"
+            />
+            <p className="text-slate-500 text-[12px] mt-0.5">Maksymalna dopuszczalna waga dla jednego poziomu regału.</p>
           </div>
           <div>
             <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Kolor</label>

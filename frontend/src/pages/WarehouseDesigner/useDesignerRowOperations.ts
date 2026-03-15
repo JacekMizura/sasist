@@ -36,8 +36,6 @@ export interface UseDesignerRowOperationsParams {
   setSelectedAisleIndex: Dispatch<SetStateAction<number | null>>;
   setSelectedVisualId: Dispatch<SetStateAction<string | null>>;
   setSelectedVisualIds: Dispatch<SetStateAction<string[]>>;
-  setSelectedPathPointIndex: Dispatch<SetStateAction<number | null>>;
-  setSelectedPathLine: (v: boolean) => void;
   setDraggingRowId: Dispatch<SetStateAction<string | null>>;
   setRowDragPreviewStart: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
   setCatalogHoveredSlot: Dispatch<SetStateAction<{ rowId: string; slotIndex: number } | null>>;
@@ -62,8 +60,6 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
     setSelectedAisleIndex,
     setSelectedVisualId,
     setSelectedVisualIds,
-    setSelectedPathPointIndex,
-    setSelectedPathLine,
     setDraggingRowId,
     setRowDragPreviewStart,
     setCatalogHoveredSlot,
@@ -195,9 +191,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
     setSelectedAisleIndex(null);
     setSelectedVisualId(null);
     setSelectedVisualIds([]);
-    setSelectedPathPointIndex(null);
-    setSelectedPathLine(false);
-  }, [setSelectedRowContainerId, setSelectedRackId, setSelectedRackIds, setSelectedAisleIndex, setSelectedVisualId, setSelectedVisualIds, setSelectedPathPointIndex, setSelectedPathLine]);
+  }, [setSelectedRowContainerId, setSelectedRackId, setSelectedRackIds, setSelectedAisleIndex, setSelectedVisualId, setSelectedVisualIds]);
 
   /** Start dragging the selected row by its handle. Call on mousedown on the drag handle. */
   const onStartRowDrag = useCallback(
@@ -366,6 +360,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
             ...(isVertical ? { rotationDegrees: 90 as const } : {}),
             ...(item.type === "custom" ? { templateId: item.template.id } : {}),
+            ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
           } as RackState);
           nextRackIndex += 1;
           indexInRow += 1;
@@ -428,6 +423,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           sectionStartIndex: item.template.sectionStartIndex ?? 1,
           nextSectionIndex: item.template.nextSectionIndex ?? item.template.sectionStartIndex ?? 1,
           templateId: item.template.id,
+          level_max_load_kg: item.template.level_max_load_kg,
           levels: item.template.levels,
           bins_per_level: item.template.bins_per_level,
           levelConfig: item.template.levelConfig,
@@ -567,6 +563,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               ...(templateToApply.sectionStartIndex != null ? { sectionStartIndex: templateToApply.sectionStartIndex } : {}),
               ...(templateToApply.binNamingType != null ? { binNamingType: templateToApply.binNamingType } : {}),
               ...(templateToApply.templateId != null ? { templateId: templateToApply.templateId } : {}),
+              ...(templateToApply.level_max_load_kg != null ? { level_max_load_kg: templateToApply.level_max_load_kg } : {}),
             } as RackState;
           });
           return { ...prev, racks: [...prev.racks, ...newRacks] };
@@ -759,6 +756,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
             ...(isVertical ? { rotationDegrees: 90 as const } : {}),
             ...(item.type === "custom" ? { templateId: item.template.id } : {}),
+            ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
           } as RackState);
           nextRackIndex += 1;
           indexInRow += 1;

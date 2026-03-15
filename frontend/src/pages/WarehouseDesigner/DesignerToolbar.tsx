@@ -112,6 +112,11 @@ export function DesignerToolbar({
         <EditBuildingModal
           onClose={() => setShowEditBuilding(false)}
           onSave={(building_width_m, building_depth_m, building_height_m) => {
+            console.log("Saving building", {
+              width: building_width_m,
+              depth: building_depth_m,
+              height: building_height_m,
+            });
             setLayout((prev) => clampGridToBuilding({ ...prev, building_width_m, building_depth_m, building_height_m }));
           }}
           layout={layout}

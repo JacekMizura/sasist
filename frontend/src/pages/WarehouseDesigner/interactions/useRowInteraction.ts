@@ -10,7 +10,6 @@ export interface UseRowInteractionParams {
   rowToolTemplate: CatalogItem | null;
   draggingRowId: string | null;
   rowDragPreviewStart: { x: number; y: number } | null;
-  showDimensions: boolean;
   refs: {
     rowDragPointerOffsetRef: React.MutableRefObject<{ dx: number; dy: number } | null>;
     rowDragPreviewStartRef: React.MutableRefObject<{ x: number; y: number } | null>;
@@ -43,7 +42,6 @@ export function useRowInteraction(params: UseRowInteractionParams) {
     rowToolTemplate,
     draggingRowId,
     rowDragPreviewStart,
-    showDimensions,
     refs,
     getCellFromEvent,
     snapRowPreviewToDistance: snapRowPreview,
@@ -90,13 +88,11 @@ export function useRowInteraction(params: UseRowInteractionParams) {
         const { dx, dy } = rowDragPointerOffsetRef.current;
         let px = Math.max(0, Math.min(layout.grid_cols - 1, Math.round(cell.x - dx)));
         let py = Math.max(0, Math.min(layout.grid_rows - 1, Math.round(cell.y - dy)));
-        if (showDimensions) {
-          const row = layout.row_containers?.find((rc) => rc.id === draggingRowId);
-          if (row) {
-            const snapped = snapRowPreview(row, { x: px, y: py }, layout);
-            px = snapped.x;
-            py = snapped.y;
-          }
+        const row = layout.row_containers?.find((rc) => rc.id === draggingRowId);
+        if (row) {
+          const snapped = snapRowPreview(row, { x: px, y: py }, layout);
+          px = snapped.x;
+          py = snapped.y;
         }
         setRowDragPreviewStart((prev) => (prev?.x === px && prev?.y === py ? prev : { x: px, y: py }));
         rowDragPreviewStartRef.current = { x: px, y: py };
@@ -118,7 +114,6 @@ export function useRowInteraction(params: UseRowInteractionParams) {
       rowToolActive,
       rowDrawStart,
       layout,
-      showDimensions,
       snapRowPreview,
       rowDragPointerOffsetRef,
       rowDragPreviewStartRef,
@@ -199,13 +194,11 @@ export function useRowInteraction(params: UseRowInteractionParams) {
       const { dx, dy } = rowDragPointerOffsetRef.current;
       let px = Math.max(0, Math.min(layout.grid_cols - 1, Math.round(cell.x - dx)));
       let py = Math.max(0, Math.min(layout.grid_rows - 1, Math.round(cell.y - dy)));
-      if (showDimensions) {
-        const row = layout.row_containers?.find((rc) => rc.id === draggingRowId);
-        if (row) {
-          const snapped = snapRowPreview(row, { x: px, y: py }, layout);
-          px = snapped.x;
-          py = snapped.y;
-        }
+      const row = layout.row_containers?.find((rc) => rc.id === draggingRowId);
+      if (row) {
+        const snapped = snapRowPreview(row, { x: px, y: py }, layout);
+        px = snapped.x;
+        py = snapped.y;
       }
       setRowDragPreviewStart((prev) => (prev?.x === px && prev?.y === py ? prev : { x: px, y: py }));
       rowDragPreviewStartRef.current = { x: px, y: py };
@@ -230,7 +223,7 @@ export function useRowInteraction(params: UseRowInteractionParams) {
       window.removeEventListener("mousemove", onWindowMouseMove);
       window.removeEventListener("mouseup", onWindowMouseUp);
     };
-  }, [draggingRowId, getCellFromEvent, layout, showDimensions, snapRowPreview, refs, setRowDragPreviewStart, setDraggingRowId]);
+  }, [draggingRowId, getCellFromEvent, layout, snapRowPreview, refs, setRowDragPreviewStart, setDraggingRowId]);
 
   return { handleMouseDown, handleMouseMove, handleMouseUp };
 }

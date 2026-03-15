@@ -108,6 +108,9 @@ class WarehouseLayout(Base, BaseModelMixin):
     grid_cols = Column(Integer, nullable=False, default=24)
     grid_rows = Column(Integer, nullable=False, default=16)
     row_containers_json = Column(Text, nullable=True)  # JSON: list of row containers (empty slots)
+    building_width_m = Column(Float, nullable=True)
+    building_depth_m = Column(Float, nullable=True)
+    building_height_m = Column(Float, nullable=True)
 
     warehouse = relationship("Warehouse", back_populates="layouts")
     racks = relationship("Rack", back_populates="layout", cascade="all, delete-orphan")

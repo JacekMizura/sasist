@@ -98,6 +98,44 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     return out;
   }, [selectedRackForMagazyn, products]);
 
+  /** Per-bin load in kg: Σ(productWeight × quantity) for products in that bin; productWeight = weight_kg ?? weight ?? 0. */
+  const binLoadKg = useMemo(() => {
+    if (!selectedRackForMagazyn) return {};
+    const out: Record<string, number> = {};
+    for (const b of selectedRackForMagazyn.bins) {
+      const locId = (b.label ?? b.location_id ?? "").trim();
+      const uuid = b.locationUUID;
+      let load = 0;
+      for (const p of products) {
+        const weight = (p as { weight_kg?: number; weight?: number }).weight_kg ?? (p as { weight?: number }).weight ?? 0;
+        const productWeight = Number(weight);
+        if (!Number.isFinite(productWeight) || productWeight < 0) continue;
+        let qty = 0;
+        if (uuid && p.assignedLocations?.length) {
+          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
+          if (a) qty = safeQuantity(a.quantity);
+        } else if (locId && p.location_id === locId) qty = safeQuantity(p.quantity);
+        load += productWeight * qty;
+      }
+      const safeLoad = Number.isFinite(load) ? load : 0;
+      out[`${b.level_index}-${b.segment_index}`] = safeLoad;
+    }
+    return out;
+  }, [selectedRackForMagazyn, products]);
+
+  /** Per-level total load in kg: sum of bin loads for that level. */
+  const levelLoadKg = useMemo(() => {
+    if (!selectedRackForMagazyn) return {};
+    const out: Record<number, number> = {};
+    for (const b of selectedRackForMagazyn.bins) {
+      const key = `${b.level_index}-${b.segment_index}`;
+      const load = binLoadKg[key] ?? 0;
+      const levelTotal = (out[b.level_index] ?? 0) + load;
+      out[b.level_index] = Number.isFinite(levelTotal) ? levelTotal : 0;
+    }
+    return out;
+  }, [selectedRackForMagazyn, binLoadKg]);
+
   return {
     selectedRackForMagazyn,
     selectedRackBinLabels,
@@ -105,6 +143,8 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     displayRack,
     binItemCounts,
     binUniqueProductCounts,
+    binLoadKg,
+    levelLoadKg,
     usedVolumeAtBin,
   };
 }

@@ -6,6 +6,8 @@ import {
   generateWarehouseLayout,
   getPreviewLabels,
   hasOverlapWithRacks,
+  planRackRowsForBuilding,
+  plannedStructureToRowCount,
   type LayoutGeneratorTemplate,
   type LayoutGeneratorResult,
 } from "./layoutGenerator";
@@ -50,6 +52,7 @@ export function GenerateWarehouseLayoutModal({
   const [startRowPrefix, setStartRowPrefix] = useState("A");
   const [mode, setMode] = useState<GenerateLayoutMode>("append");
   const [overlapWarning, setOverlapWarning] = useState(false);
+  const [autoFillWarehouse, setAutoFillWarehouse] = useState(false);
 
   const spec = useMemo(() => (selectedItem ? getCatalogItemSpec(selectedItem) : null), [selectedItem]);
 
@@ -62,8 +65,6 @@ export function GenerateWarehouseLayoutModal({
     return base as LayoutGeneratorTemplate;
   }, [spec, selectedItem]);
 
-  const previewGrid = useMemo(() => getPreviewLabels(rows, columns, startRowPrefix), [rows, columns, startRowPrefix]);
-
   const buildingDepthM = layout.building_depth_m ?? layout.building_height_m;
   const maxCols = layout.building_width_m != null ? metersToCells(layout.building_width_m) : layout.grid_cols;
   const maxRows = buildingDepthM != null ? metersToCells(buildingDepthM) : layout.grid_rows;
@@ -71,6 +72,27 @@ export function GenerateWarehouseLayoutModal({
   const rackH = spec ? cmToCells(spec.depth_cm) : 0;
   const spacingCells = Math.max(0, cmToCells(rackSpacingCm));
   const aisleCells = Math.max(0, cmToCells(aisleWidthCm));
+  const wallGapCells = Math.max(0, cmToCells(30));
+  const autoFillComputed = useMemo(() => {
+    if (!autoFillWarehouse || !spec || maxCols == null || maxRows == null || maxCols <= 0 || maxRows <= 0)
+      return null;
+    const rackWidthCells = cmToCells(spec.width_cm);
+    const rackDepthCells = cmToCells(spec.depth_cm);
+    const columnStep = rackWidthCells + spacingCells;
+    const usableWidth = maxCols - wallGapCells * 2;
+    const columns = Math.max(0, Math.floor(usableWidth / columnStep));
+    const structure = planRackRowsForBuilding(maxRows, rackDepthCells, aisleCells, wallGapCells);
+    const rows = plannedStructureToRowCount(structure);
+    return { rows, columns };
+  }, [autoFillWarehouse, spec, maxCols, maxRows, spacingCells, aisleCells, wallGapCells]);
+
+  const effectiveRows = autoFillWarehouse && autoFillComputed ? autoFillComputed.rows : rows;
+  const effectiveColumns = autoFillWarehouse && autoFillComputed ? autoFillComputed.columns : columns;
+  const previewGrid = useMemo(
+    () => getPreviewLabels(effectiveRows, effectiveColumns, startRowPrefix),
+    [effectiveRows, effectiveColumns, startRowPrefix]
+  );
+
   const stepW = rackW + spacingCells;
   const stepH = rackH + aisleCells;
   const stepBetweenRows = rackW + aisleCells;
@@ -78,31 +100,38 @@ export function GenerateWarehouseLayoutModal({
   const hasBuildingLimits = layout.building_width_m != null && buildingDepthM != null;
   const firstRackExceeds =
     hasBuildingLimits &&
-    (startX + rackW > maxCols || startY + rackH > maxRows);
+    (autoFillWarehouse ? false : (startX + rackW > maxCols || startY + rackH > maxRows));
   const lastRackRight =
-    orientation === "horizontal" ? startX + (columns - 1) * stepW + rackW : startX + (rows - 1) * stepBetweenRows + rackW;
+    orientation === "horizontal"
+      ? (autoFillWarehouse ? wallGapCells : startX) + (effectiveColumns - 1) * stepW + rackW
+      : (autoFillWarehouse ? wallGapCells : startX) + (effectiveRows - 1) * stepBetweenRows + rackW;
   const lastRackBottom =
-    orientation === "horizontal" ? startY + (rows - 1) * stepH + rackH : startY + (columns - 1) * stepInRow + rackH;
+    orientation === "horizontal"
+      ? (autoFillWarehouse ? wallGapCells : startY) + (effectiveRows - 1) * stepH + rackH
+      : (autoFillWarehouse ? wallGapCells : startY) + (effectiveColumns - 1) * stepInRow + rackH;
   const wouldTruncate =
     hasBuildingLimits &&
     (lastRackRight > maxCols || lastRackBottom > maxRows);
 
   const handleGenerate = () => {
-    if (!templateForGenerator || rows < 1 || columns < 1) return;
+    if (!templateForGenerator) return;
+    if (!autoFillWarehouse && (rows < 1 || columns < 1)) return;
+    if (autoFillWarehouse && (!autoFillComputed || autoFillComputed.rows < 1 || autoFillComputed.columns < 1)) return;
     const baseRackIndex = mode === "replace" ? 1 : layout.racks.length + 1;
     const result = generateWarehouseLayout({
       template: templateForGenerator,
-      rows,
-      columns,
+      rows: effectiveRows,
+      columns: effectiveColumns,
       rackSpacingCm,
       aisleWidthCm,
       orientation,
-      startX,
-      startY,
+      startX: autoFillWarehouse ? wallGapCells : startX,
+      startY: autoFillWarehouse ? wallGapCells : startY,
       startRowPrefix,
       baseRackIndex,
       maxCols: layout.building_width_m != null ? maxCols : undefined,
       maxRows: buildingDepthM != null ? maxRows : undefined,
+      autoFillWarehouse,
     });
 
     const existingRects = layout.racks.map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height }));
@@ -117,7 +146,12 @@ export function GenerateWarehouseLayoutModal({
     onClose();
   };
 
-  const canGenerate = templateForGenerator != null && rows >= 1 && columns >= 1 && !firstRackExceeds;
+  const canGenerate =
+    templateForGenerator != null &&
+    !firstRackExceeds &&
+    (autoFillWarehouse
+      ? hasBuildingLimits && autoFillComputed != null && autoFillComputed.rows >= 1 && autoFillComputed.columns >= 1
+      : rows >= 1 && columns >= 1);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -160,6 +194,22 @@ export function GenerateWarehouseLayoutModal({
             </select>
           </div>
 
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={autoFillWarehouse}
+                onChange={(e) => setAutoFillWarehouse(e.target.checked)}
+              />
+              <span className="text-sm font-semibold text-slate-700">Auto fill warehouse</span>
+            </label>
+            <p className="text-xs text-slate-500 mb-3">
+              {autoFillWarehouse
+                ? "Rows and columns are computed from building size and rack template."
+                : "Set rows and columns manually."}
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-slate-600 mb-1">Liczba rzędów</label>
@@ -167,9 +217,10 @@ export function GenerateWarehouseLayoutModal({
                 type="number"
                 min={1}
                 max={50}
-                value={rows}
+                value={autoFillWarehouse && autoFillComputed ? autoFillComputed.rows : rows}
                 onChange={(e) => setRows(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                disabled={autoFillWarehouse}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-500"
               />
             </div>
             <div>
@@ -178,9 +229,10 @@ export function GenerateWarehouseLayoutModal({
                 type="number"
                 min={1}
                 max={50}
-                value={columns}
+                value={autoFillWarehouse && autoFillComputed ? autoFillComputed.columns : columns}
                 onChange={(e) => setColumns(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                disabled={autoFillWarehouse}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-500"
               />
             </div>
           </div>

@@ -66,6 +66,9 @@ class WarehouseLayoutPayload(BaseModel):
     grid_rows: int = 16
     width_m: float = 24.0
     length_m: float = 16.0
+    building_width_m: Optional[float] = None
+    building_depth_m: Optional[float] = None
+    building_height_m: Optional[float] = None
     racks: List[RackSchema] = []
     aisles: List[AisleSchema] = []
     row_containers: Optional[List[Any]] = None  # Empty row slots; [{ id, rowPrefix?, slots: [{ x,y,w,h, rackId? }] }]

@@ -247,6 +247,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
         ...(isVertical ? { rotationDegrees: 90 as const } : {}),
         ...(item.type === "custom" ? { templateId: item.template.id } : {}),
+        ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
       };
       setLayout((prev) => {
         const updatedRacks = prev.racks.map((r) => {
@@ -342,6 +343,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
       ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
       ...(item.type === "custom" ? { templateId: item.template.id } : {}),
+      ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
     };
     setLayout((prev) => ({ ...prev, racks: reindexGeometricRow([...prev.racks, newRack], newRack.rack_index) }));
     setDraggingFromCatalog(null);

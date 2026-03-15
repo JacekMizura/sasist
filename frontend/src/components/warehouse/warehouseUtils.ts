@@ -26,6 +26,7 @@ export function getCatalogItemSpec(item: CatalogItem): {
   overrides?: Record<string, string>;
   indexPadding?: number;
   startIndex?: number;
+  level_max_load_kg?: number;
 } {
   if (item.type === "preset") {
     const p = CATALOG_PRESETS.find((x) => x.id === item.id);
@@ -64,6 +65,7 @@ export function getCatalogItemSpec(item: CatalogItem): {
     overrides: t.overrides,
     indexPadding: t.indexPadding,
     startIndex: t.startIndex,
+    level_max_load_kg: t.level_max_load_kg,
   };
 }
 
@@ -521,6 +523,19 @@ export function snapCm(cm: number): number {
   return Math.round(cm / GRID_UNIT_CM) * GRID_UNIT_CM;
 }
 
+/**
+ * Level heights that sum exactly to rackHeight.
+ * baseHeight = floor(rackHeight / levels); last level gets the remainder.
+ * Use for both preview and internal layout so they never exceed rack height.
+ */
+export function levelHeightsForRack(rackHeightCm: number, levelCount: number): number[] {
+  if (levelCount <= 0 || rackHeightCm <= 0) return [];
+  const baseHeight = Math.floor(rackHeightCm / levelCount);
+  const heights = Array(levelCount).fill(baseHeight) as number[];
+  heights[levelCount - 1] = rackHeightCm - baseHeight * (levelCount - 1);
+  return heights;
+}
+
 /** Generate location_id and barcode string: WH-SEC-ROW-LEV-BIN (e.g. M1-A-04-02-01) */
 export function locationId(warehouseCode: string, section: string, row: number, level: number, bin: number): string {
   return `${warehouseCode}-${section}-${String(row).padStart(2, "0")}-${String(level).padStart(2, "0")}-${String(bin).padStart(2, "0")}`;
@@ -717,7 +732,7 @@ export function createBinsForRack(
     ? levelConfig
     : Array.from({ length: Math.max(1, levels) }, (_, i) => ({ level: i + 1, locations: Math.max(1, binsPerLevel) }));
   const levelCount = levelRows.length;
-  const height_cm_base = rackHeightCm != null ? snapCm(rackHeightCm / levelCount) : undefined;
+  const levelHeights = rackHeightCm != null && rackHeightCm > 0 ? levelHeightsForRack(rackHeightCm, levelCount) : [];
   const depth_cm = rackDepthCm ?? undefined;
   const reserveSet = reserveBinKeys ? new Set(reserveBinKeys) : undefined;
   const row = (rowId ?? aisleLetter).toString().replace(/\./g, "");
@@ -758,7 +773,7 @@ export function createBinsForRack(
   for (let lev = 0; lev < levelRows.length; lev++) {
     const locs = Math.max(1, levelRows[lev].locations);
     const width_cm = rackWidthCm != null ? snapCm(rackWidthCm / locs) : undefined;
-    const height_cm = height_cm_base;
+    const height_cm = levelHeights[lev] ?? undefined;
     for (let seg = 0; seg < locs; seg++) {
       const key = `${lev}-${seg}`;
       const isReserve = reserveSet?.has(key) ?? false;

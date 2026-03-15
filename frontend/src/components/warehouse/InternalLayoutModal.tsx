@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { RackState, InternalStructure, InternalLevel, BinState } from "./warehouseTypes";
-import { snapCm, binVolumeFromDimensions, getRackDisplayId } from "./warehouseUtils";
+import { snapCm, binVolumeFromDimensions, getRackDisplayId, levelHeightsForRack } from "./warehouseUtils";
 
 export type InternalLayoutModalProps = {
   rack: RackState;
@@ -15,9 +15,9 @@ const DEFAULT_BIN_HEIGHT_CM = 150;
 
 function getInitialLevels(rack: RackState): InternalLevel[] {
   const defaultDepthCm = rack.length_cm ?? DEFAULT_BIN_DEPTH_CM;
-  const defaultHeightCm = rack.height_cm ? snapCm(rack.height_cm / rack.levels) : DEFAULT_BIN_HEIGHT_CM;
   const defaultWidthCm = rack.width_cm ? snapCm(rack.width_cm / rack.bins_per_level) : DEFAULT_BIN_WIDTH_CM;
   if (rack.internal_structure?.levels?.length) {
+    const defaultHeightCm = rack.height_cm ? Math.floor(rack.height_cm / rack.levels) : DEFAULT_BIN_HEIGHT_CM;
     return rack.internal_structure.levels.map((l) => ({
       height_cm: l.height_cm,
       locations: l.locations.map((loc) => ({
@@ -27,16 +27,21 @@ function getInitialLevels(rack: RackState): InternalLevel[] {
       })),
     }));
   }
-  const levelHeightCm = defaultHeightCm;
+  const levelHeights = rack.height_cm && rack.levels > 0
+    ? levelHeightsForRack(rack.height_cm, rack.levels)
+    : Array.from({ length: rack.levels }, () => DEFAULT_BIN_HEIGHT_CM);
   const locationWidthCm = defaultWidthCm;
-  return Array.from({ length: rack.levels }, () => ({
-    height_cm: levelHeightCm,
-    locations: Array.from({ length: rack.bins_per_level }, () => ({
-      width_cm: locationWidthCm,
-      depth_cm: defaultDepthCm,
+  return Array.from({ length: rack.levels }, (_, i) => {
+    const levelHeightCm = levelHeights[i] ?? DEFAULT_BIN_HEIGHT_CM;
+    return {
       height_cm: levelHeightCm,
-    })),
-  }));
+      locations: Array.from({ length: rack.bins_per_level }, () => ({
+        width_cm: locationWidthCm,
+        depth_cm: defaultDepthCm,
+        height_cm: levelHeightCm,
+      })),
+    };
+  });
 }
 
 function binKey(levIdx: number, segIdx: number) {
