@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Literal
 
 
 class BinSchema(BaseModel):
@@ -60,6 +60,15 @@ class AisleSchema(BaseModel):
     two_way: bool = True
 
 
+class WallElementSchema(BaseModel):
+    id: str
+    type: Literal["door", "gate"]
+    wall: Literal["north", "south", "east", "west"]
+    position_cm: float
+    width_cm: float
+    gateType: Optional[Literal["courier", "supplier", "both"]] = None
+
+
 class WarehouseLayoutPayload(BaseModel):
     name: str = "Layout 1"
     grid_cols: int = 24
@@ -72,3 +81,4 @@ class WarehouseLayoutPayload(BaseModel):
     racks: List[RackSchema] = []
     aisles: List[AisleSchema] = []
     row_containers: Optional[List[Any]] = None  # Empty row slots; [{ id, rowPrefix?, slots: [{ x,y,w,h, rackId? }] }]
+    wall_elements: Optional[List[WallElementSchema]] = None

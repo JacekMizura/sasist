@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import type { RackState } from "../../../types/warehouse";
+import { cellToPx } from "../renderUtils";
 import { formatVolume, binVolumeDm3, binUsedVolumeDm3, getRackDisplayId, getRackLabelStyle, canShowRackLabel } from "../warehouseUtils";
 import { colors, radius } from "../../../layout/designTokens";
 
@@ -40,6 +41,12 @@ export type RackLayerProps = {
   showRackLabels: boolean;
   hoveredRackId: number | string | null;
   setHoveredRackId: (id: number | string | null) => void;
+  /** Racks to highlight (e.g. product locator). Values are String(rack.id ?? rack.rack_index). */
+  highlightedRackIds?: Set<string>;
+  /** Optional rack click handler (used for read-only map). */
+  onRackClick?: (rackId: number | string) => void;
+  /** Optional rack double click handler (used for read-only map). */
+  onRackDoubleClick?: (rackId: number | string) => void;
 };
 
 export function RackLayer({
@@ -55,17 +62,22 @@ export function RackLayer({
   showRackLabels,
   hoveredRackId,
   setHoveredRackId,
+  highlightedRackIds,
+  onRackClick,
+  onRackDoubleClick,
 }: RackLayerProps) {
   const outsideSet = useMemo(() => (outsideRackIds != null && outsideRackIds.length > 0 ? new Set(outsideRackIds.map(String)) : null), [outsideRackIds]);
   return (
     <>
       {racks.map((r) => {
         const rid = r.id ?? r.rack_index;
+        const ridStr = String(rid);
         const isDragging = draggingRackId != null && selectedRackIds.includes(rid);
         const drawAt = rackDragPreviewPositions?.[String(rid)] ?? (isDragging && rackDragPreviewPosition ? rackDragPreviewPosition : { x: r.x, y: r.y });
         const isCollision = (collisionRackIds != null && collisionRackIds.includes(rid)) || rid === collisionRackId;
         const isOutside = outsideSet != null && outsideSet.has(String(rid));
         const isSelected = selectedRackIds.includes(rid);
+        const isHighlighted = highlightedRackIds != null && highlightedRackIds.has(ridStr) && !isSelected && !isDragging;
         const displayColor = rackFillColor(r);
         const showLabel = showRackLabels && (r.show_label !== false);
         const label = getRackDisplayId(r);
@@ -73,12 +85,12 @@ export function RackLayer({
         const total = r.total_capacity_dm3 ?? r.bins?.reduce((s, b) => s + binVolumeDm3(b, r), 0) ?? 0;
         const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
         const tooltip = `${label} · Zajętość: ${formatVolume(used)} / ${formatVolume(total)} dm³ (${pct.toFixed(0)}%)`;
-        const rectX = drawAt.x * cellPx + 1;
-        const rectY = drawAt.y * cellPx + 1;
-        const rectW = r.width * cellPx - 2;
-        const rectH = r.height * cellPx - 2;
-        const cx = drawAt.x * cellPx + (r.width * cellPx) / 2;
-        const cy = drawAt.y * cellPx + (r.height * cellPx) / 2;
+        const rectX = cellToPx(drawAt.x, cellPx) + 1;
+        const rectY = cellToPx(drawAt.y, cellPx) + 1;
+        const rectW = cellToPx(r.width, cellPx) - 2;
+        const rectH = cellToPx(r.height, cellPx) - 2;
+        const cx = cellToPx(drawAt.x, cellPx) + cellToPx(r.width, cellPx) / 2;
+        const cy = cellToPx(drawAt.y, cellPx) + cellToPx(r.height, cellPx) / 2;
         const showLabelHere = showLabel && canShowRackLabel(rectW, rectH);
         const { displayText, fontSize: fontSizeBase } = getRackLabelStyle(rectW, rectH, label, false);
         const labelFontSize = fontSizeBase + 1;
@@ -100,7 +112,22 @@ export function RackLayer({
             style={isDragging ? { pointerEvents: "none" } : undefined}
             onMouseEnter={() => setHoveredRackId(rid)}
             onMouseLeave={() => setHoveredRackId(null)}
+            onClick={onRackClick ? (e) => { e.stopPropagation(); onRackClick(rid); } : undefined}
+            onDoubleClick={onRackDoubleClick ? (e) => { e.preventDefault(); e.stopPropagation(); onRackDoubleClick(rid); } : undefined}
           >
+            {isHighlighted && (
+              <rect
+                x={rectX - outlineOffset - 2}
+                y={rectY - outlineOffset - 2}
+                width={rectW + (outlineOffset + 2) * 2}
+                height={rectH + (outlineOffset + 2) * 2}
+                fill="none"
+                stroke="rgba(168,85,247,0.9)"
+                strokeWidth={3}
+                rx={RACK_RADIUS_PX + outlineOffset + 2}
+                pointerEvents="none"
+              />
+            )}
             {isHovered && (
               <rect
                 x={rectX - outlineOffset}

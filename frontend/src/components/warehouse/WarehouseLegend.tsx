@@ -26,6 +26,8 @@ export type WarehouseLegendStats = {
   rackCount: number;
   usedDm3: number;
   totalDm3: number;
+  primaryUsedDm3?: number;
+  reserveUsedDm3?: number;
 };
 
 function formatVolume(value: number): string {
@@ -53,6 +55,12 @@ export function WarehouseLegend({ viewMode, stats }: WarehouseLegendProps) {
         <div className="shrink-0 flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 px-4 py-2 border-b border-slate-100 bg-slate-50/80 text-xs text-slate-600">
           <span>Liczba regałów: <strong className="text-slate-800">{stats.rackCount}</strong></span>
           <span>Łączna zajętość: <strong className="font-mono text-slate-800">{formatVolume(stats.usedDm3)}</strong> / <strong className="font-mono text-slate-800">{formatVolume(stats.totalDm3)}</strong> dm³</span>
+          {stats.primaryUsedDm3 != null && (
+            <span>Podstawowa zajętość: <strong className="font-mono text-slate-800">{formatVolume(stats.primaryUsedDm3)}</strong> dm³</span>
+          )}
+          {stats.reserveUsedDm3 != null && (
+            <span>Rezerwa zajętość: <strong className="font-mono text-slate-800">{formatVolume(stats.reserveUsedDm3)}</strong> dm³</span>
+          )}
           <span>Wykorzystanie: <strong className="text-slate-800">{utilizationPct.toFixed(1)}%</strong></span>
         </div>
       )}

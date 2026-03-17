@@ -24,6 +24,12 @@ export type ProductForm = {
   manufacturer?: string | null;
   unit?: string | null;
   stock_quantity?: number;
+  orientation_type?: "any" | "upright" | "no_stack";
+  shape_type?: "box" | "cylinder";
+  stack_compressible?: boolean;
+  compressed_height_cm?: number | null;
+  max_stack_weight?: number | null;
+  stack_behavior?: "stackable" | "no_stack";
 };
 
 type Tenant = { id: number; name: string };
@@ -100,6 +106,18 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
   const [manufacturer, setManufacturer] = useState(product?.manufacturer ?? "");
   const [unit, setUnit] = useState(product?.unit ?? "");
   const [stockQuantity, setStockQuantity] = useState<number | "">(product?.stock_quantity ?? "");
+  const [orientationType, setOrientationType] = useState<"any" | "upright" | "no_stack">(
+    product?.orientation_type ?? "any"
+  );
+  const [shapeType, setShapeType] = useState<"box" | "cylinder">(product?.shape_type ?? "box");
+  const [stackBehavior, setStackBehavior] = useState<"stackable" | "no_stack">(product?.stack_behavior ?? "stackable");
+  const [stackCompressible, setStackCompressible] = useState<boolean>(product?.stack_compressible ?? false);
+  const [compressedHeightCm, setCompressedHeightCm] = useState<number | "">(
+    product?.compressed_height_cm != null && product.compressed_height_cm > 0 ? product.compressed_height_cm : ""
+  );
+  const [maxStackWeight, setMaxStackWeight] = useState<number | "">(
+    product?.max_stack_weight != null && product.max_stack_weight > 0 ? product.max_stack_weight : ""
+  );
   const [productTemplates, setProductTemplates] = useState<{ id: number; name: string }[]>([]);
   const [templatePreviewSvg, setTemplatePreviewSvg] = useState<string | null>(null);
   const [templatePreviewLoading, setTemplatePreviewLoading] = useState(false);
@@ -144,6 +162,12 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
       setManufacturer(product.manufacturer ?? "");
       setUnit(product.unit ?? "");
       setStockQuantity(product.stock_quantity ?? "");
+      setOrientationType(product.orientation_type ?? "any");
+      setShapeType(product.shape_type ?? "box");
+      setStackBehavior(["stackable", "no_stack"].includes(String(product.stack_behavior)) ? product.stack_behavior : "stackable");
+      setStackCompressible(product.stack_compressible ?? false);
+      setCompressedHeightCm(product.compressed_height_cm != null && product.compressed_height_cm > 0 ? product.compressed_height_cm : "");
+      setMaxStackWeight(product.max_stack_weight != null && product.max_stack_weight > 0 ? product.max_stack_weight : "");
     }
   }, [product?.id]);
 
@@ -237,6 +261,12 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
         manufacturer: manufacturer.trim() || undefined,
         unit: unit.trim() || undefined,
         stock_quantity: stockQtyVal,
+        orientation_type: orientationType,
+        shape_type: shapeType,
+        stack_compressible: stackCompressible,
+        compressed_height_cm: compressedHeightCm === "" ? undefined : (typeof compressedHeightCm === "number" ? compressedHeightCm : parseDecimal(String(compressedHeightCm)) ?? undefined),
+        max_stack_weight: maxStackWeight === "" ? undefined : (typeof maxStackWeight === "number" ? maxStackWeight : parseDecimal(String(maxStackWeight)) ?? undefined),
+        stack_behavior: stackBehavior,
       };
       // Backend expects metric fields only (no legacy length/width/height/weight/volume).
       const body: Record<string, unknown> = {
@@ -255,6 +285,12 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
         purchase_price: parseNumber(purchasePrice) ?? undefined,
         manufacturer: payload.manufacturer ?? null,
         unit: payload.unit ?? null,
+        orientation_type: orientationType,
+        shape_type: shapeType,
+        stack_compressible: stackCompressible,
+        compressed_height_cm: compressedHeightCm === "" ? undefined : (parseNumber(compressedHeightCm) ?? undefined),
+        max_stack_weight: maxStackWeight === "" ? undefined : (parseNumber(maxStackWeight) ?? undefined),
+        stack_behavior: stackBehavior,
       };
       if (stockQtyVal !== undefined) body.stock_quantity = stockQtyVal;
       console.log("Payload:", payload);
@@ -471,6 +507,93 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
                     value={height === "" ? "" : height}
                     onChange={(e) => updateDimension("height", e.target.value)}
                     className="product-edit-numeric w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Orientacja produktu</label>
+                  <select
+                    value={orientationType}
+                    onChange={(e) => setOrientationType(e.target.value as "any" | "upright" | "no_stack")}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="any">Dowolna</option>
+                    <option value="upright">Tylko pionowo</option>
+                    <option value="no_stack">Nie układać w stos</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Kształt produktu</label>
+                  <select
+                    value={shapeType}
+                    onChange={(e) => setShapeType(e.target.value as "box" | "cylinder")}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="box">Prostopadłościan</option>
+                    <option value="cylinder">Walec (butelka)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-slate-700">Układanie w stos</h4>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Układanie w stos</label>
+                  <select
+                    value={stackBehavior}
+                    onChange={(e) => setStackBehavior(e.target.value as "stackable" | "no_stack")}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="stackable">Dozwolone</option>
+                    <option value="no_stack">Niedozwolone</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={stackCompressible}
+                    onChange={(e) => setStackCompressible(e.target.checked)}
+                    className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                  />
+                  <span className="text-sm text-slate-700">Kompresja przy układaniu w stos</span>
+                </label>
+                {stackCompressible && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Wysokość po kompresji (cm)</label>
+                    <input
+                      type="number"
+                      min={0.01}
+                      step={0.1}
+                      value={compressedHeightCm === "" ? "" : compressedHeightCm}
+                      onChange={(e) => {
+                        const s = String(e.target.value).trim().replace(",", ".");
+                        if (s === "") setCompressedHeightCm("");
+                        else {
+                          const n = parseFloat(s);
+                          if (Number.isFinite(n) && n > 0) setCompressedHeightCm(n);
+                        }
+                      }}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Maksymalna waga stosu (kg)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={maxStackWeight === "" ? "" : maxStackWeight}
+                    onChange={(e) => {
+                      const s = String(e.target.value).trim().replace(",", ".");
+                      if (s === "") setMaxStackWeight("");
+                      else {
+                        const n = parseFloat(s);
+                        if (Number.isFinite(n) && n >= 0) setMaxStackWeight(n);
+                      }
+                    }}
+                    placeholder="Opcjonalnie"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500"
                   />
                 </div>
               </div>

@@ -1,7 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from "react";
-import type { RackState, BinState } from "../../types/warehouse";
-import { getLevelConfig } from "./warehouseUtils";
-import { binUsedVolumeDm3, binVolumeDm3 } from "./warehouseUtils";
+import type { RackState, BinState, WarehouseProduct } from "../../types/warehouse";
+import { getLevelConfig, binUsedVolumeDm3, binVolumeDm3, type PackingLayoutResult } from "./warehouseUtils";
 import { RESERVE_BG, RESERVE_BORDER } from "./reserveLocationStyle";
 
 /** Blue – vertical rack columns (uprights) for non-top levels */
@@ -48,6 +47,10 @@ export function RackSideViewGrid({
   selectedLocation,
   binItemCounts,
   binUniqueProductCounts,
+  binMaxCapacityPieces,
+  binCapacityDetails,
+  binPackingPreview,
+  showPhysicalCapacity = false,
   levelLoadKg = {},
   levelMaxLoadKg,
 }: {
@@ -57,6 +60,25 @@ export function RackSideViewGrid({
   selectedLocation?: SelectedLocation;
   binItemCounts?: Record<string, number>;
   binUniqueProductCounts?: Record<string, number>;
+  /** Per-bin max physical capacity (pieces). Shown only when showPhysicalCapacity and slot has products. */
+  binMaxCapacityPieces?: Record<string, number>;
+  /** Per-bin list of { product, quantity, capacity } for tooltip (capacity per product). */
+  binCapacityDetails?: Record<
+    string,
+    { product: WarehouseProduct; quantity: number; capacity: number }[]
+  >;
+  /** Packing layout preview for bins with exactly one product (for hover overlay). */
+  binPackingPreview?: Record<
+    string,
+    PackingLayoutResult & {
+      productName: string;
+      productDisplayName: string;
+      quantity: number;
+      slotDims: { width_cm?: number; depth_cm?: number; height_cm?: number };
+    }
+  >;
+  /** When true (e.g. Magazyn view), show "Fizyczna poj.: X szt." under slot percentage. */
+  showPhysicalCapacity?: boolean;
   /** Per-level total load in kg (from products weight_kg × quantity). */
   levelLoadKg?: Record<number, number>;
   /** Max allowed load per level in kg (from template/rack). Default 500 when missing. */
@@ -66,6 +88,8 @@ export function RackSideViewGrid({
   const effectiveMaxKg = hasLevelMaxLoad ? levelMaxLoadKg! : DEFAULT_LEVEL_MAX_LOAD_KG;
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(400);
+  const [hoveredBinKey, setHoveredBinKey] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; top: number } | null>(null);
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -106,7 +130,7 @@ export function RackSideViewGrid({
   const uprightHeight = structureHeight;
 
   return (
-    <div ref={containerRef} className={`w-full overflow-visible ${className}`} style={{ height: "100%", minHeight: 0 }}>
+    <div ref={containerRef} className={`w-full overflow-visible ${className}`} style={{ height: "100%", minHeight: 0, position: "relative" }}>
       <svg
         viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
         preserveAspectRatio="xMidYMid meet"
@@ -366,6 +390,32 @@ export function RackSideViewGrid({
                     <text x={cx} y={pctY} textAnchor="middle" fontSize={fontSizeSub} fill="#64748b" fontFamily="system-ui, sans-serif">
                       {pct.toFixed(0)}%
                     </text>
+                    {showPhysicalCapacity && quantity > 0 && binMaxCapacityPieces?.[`${lev}-${bin}`] != null && (
+                      <g
+                        onMouseEnter={(e) => {
+                          const key = `${lev}-${bin}`;
+                          setHoveredBinKey(key);
+                          const slotEl = e.currentTarget.parentElement;
+                          const container = containerRef.current;
+                          if (slotEl && container) {
+                            const slotRect = slotEl.getBoundingClientRect();
+                            const containerRect = container.getBoundingClientRect();
+                            setTooltipPosition({
+                              left: slotRect.right - containerRect.left + 8,
+                              top: slotRect.top - containerRect.top,
+                            });
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredBinKey(null);
+                          setTooltipPosition(null);
+                        }}
+                      >
+                        <text x={cx} y={pctY + 12} textAnchor="middle" fontSize={10} fill="#6b7280" fontFamily="system-ui, sans-serif">
+                          Fizyczna poj.: {binMaxCapacityPieces[`${lev}-${bin}`]} szt.
+                        </text>
+                      </g>
+                    )}
                   </g>
                 );
               });
@@ -373,6 +423,179 @@ export function RackSideViewGrid({
           </g>
         </g>
       </svg>
+      {hoveredBinKey && tooltipPosition && binPackingPreview?.[hoveredBinKey] && (() => {
+        const preview = binPackingPreview[hoveredBinKey]!;
+        const { count, countX, countY, countZ, boxW_cm, boxD_cm, boxH_cm, productDisplayName, productSku, quantity, slotDims } = preview;
+        const shapeType = (preview as { shapeType?: "box" | "cylinder" }).shapeType ?? "box";
+        const maxCapacity = count;
+        const hasOverflow = quantity > maxCapacity;
+        const slotWidthCm = (slotDims.width_cm ?? 0) || 1;
+        const slotDepthCm = (slotDims.depth_cm ?? 0) || 1;
+        const slotHeightCm = (slotDims.height_cm ?? 0) || 1;
+        const productFits = (boxW_cm ?? 0) <= slotWidthCm && (boxD_cm ?? 0) <= slotDepthCm && (boxH_cm ?? 0) <= slotHeightCm;
+        const showWarning = count === 0 || !productFits;
+        const slotStroke = "#d1d5db";
+        const productFill = "#60a5fa";
+        const TOP_VIEW_WIDTH_PX = 180;
+        const TOP_VIEW_HEIGHT_PX = 120;
+        const SIDE_VIEW_WIDTH_PX = 60;
+        const productW = boxW_cm ?? 0;
+        const productD = boxD_cm ?? 0;
+        const layoutW = countX * productW || 1;
+        const layoutH = countY * productD || 1;
+        const scaleX = TOP_VIEW_WIDTH_PX / layoutW;
+        const scaleY = TOP_VIEW_HEIGHT_PX / layoutH;
+        const scaleTop = Math.min(scaleX, scaleY);
+        const slotWidthPx = slotWidthCm * scaleTop;
+        const slotDepthPx = slotDepthCm * scaleTop;
+        const productWidthPx = productW * scaleTop;
+        const productDepthPx = productD * scaleTop;
+        const diameterPx = shapeType === "cylinder" ? productWidthPx : 0;
+        const topViewBoxW = Math.max(TOP_VIEW_WIDTH_PX, slotWidthPx);
+        const topViewBoxH = Math.max(TOP_VIEW_HEIGHT_PX, slotDepthPx);
+        const sideSlotWidthPx = slotWidthCm * scaleTop;
+        const sideSlotHeightPx = slotHeightCm * scaleTop;
+        const sideProductWidthPx = productWidthPx;
+        const sideProductHeightPx = (boxH_cm ?? 0) * scaleTop;
+        const sideDiameterPx = shapeType === "cylinder" ? Math.min(sideProductWidthPx, sideProductHeightPx) : 0;
+        const filledInLayer = Math.min(quantity, countX * countY);
+        return (
+          <div
+            className="packing-preview"
+            style={{
+              position: "absolute",
+              left: tooltipPosition.left,
+              top: tooltipPosition.top,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              background: "white",
+              border: "1px solid #e5e7eb",
+              borderRadius: 6,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              padding: 8,
+              fontSize: 11,
+              width: 260,
+              fontFamily: "system-ui, sans-serif",
+              wordWrap: "break-word",
+              overflowWrap: "break-word",
+              zIndex: 10,
+            }}
+          >
+            <div style={{ marginBottom: 2, alignSelf: "stretch" }}>
+              {productSku ? `SKU ${productSku}` : productDisplayName}
+            </div>
+            <div style={{ marginBottom: 8, color: "#64748b", alignSelf: "stretch" }}>
+              {quantity} / {maxCapacity} szt.
+              {hasOverflow && (
+                <span style={{ display: "block", fontSize: 10, color: "#b91c1c", marginTop: 2 }}>
+                  ⚠ (w slocie: {quantity})
+                </span>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "row", alignItems: "stretch", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "1 1 180px", minWidth: 0 }}>
+                <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.02em" }}>Widok z góry</div>
+                <svg width={TOP_VIEW_WIDTH_PX} height={TOP_VIEW_HEIGHT_PX} style={{ display: "block" }} viewBox={`0 0 ${topViewBoxW} ${topViewBoxH}`}>
+                  <g transform={`translate(${(topViewBoxW - slotWidthPx) / 2}, ${(topViewBoxH - slotDepthPx) / 2})`}>
+                    <rect x={0} y={0} width={slotWidthPx} height={slotDepthPx} fill="none" stroke={slotStroke} strokeWidth={1} />
+                    {!showWarning && countX > 0 && countY > 0 && (shapeType === "cylinder"
+                      ? Array.from({ length: countY }).map((_, iy) =>
+                          Array.from({ length: countX }).map((_, ix) => {
+                            const i = iy * countX + ix;
+                            const isFilled = i < filledInLayer;
+                            const r = diameterPx / 2;
+                            const cx = ix * diameterPx + r;
+                            const cy = iy * diameterPx + r;
+                            return (
+                              <circle key={`${ix}-${iy}`} cx={cx} cy={cy} r={r} fill={isFilled ? productFill : "none"} stroke={slotStroke} strokeWidth={1} />
+                            );
+                          })
+                        )
+                      : Array.from({ length: countY }).map((_, iy) =>
+                          Array.from({ length: countX }).map((_, ix) => {
+                            const i = iy * countX + ix;
+                            const isFilled = i < filledInLayer;
+                            return (
+                              <rect
+                                key={`${ix}-${iy}`}
+                                x={ix * productWidthPx}
+                                y={iy * productDepthPx}
+                                width={productWidthPx}
+                                height={productDepthPx}
+                                fill={isFilled ? productFill : "none"}
+                                stroke={slotStroke}
+                                strokeWidth={1}
+                              />
+                            );
+                          })
+                        ))}
+                    {showWarning && (
+                      <text x={slotWidthPx / 2} y={slotDepthPx / 2} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="#b91c1c">
+                        {count === 0 ? "Nie mieści się" : "Błąd wymiarów"}
+                      </text>
+                    )}
+                  </g>
+                </svg>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 60px" }}>
+                <div style={{ fontSize: 9, color: "#94a3b8", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.02em" }}>Widok z boku</div>
+                <svg
+                  width={SIDE_VIEW_WIDTH_PX}
+                  height={Math.round(SIDE_VIEW_WIDTH_PX * (sideSlotHeightPx / sideSlotWidthPx))}
+                  style={{ display: "block" }}
+                  viewBox={`0 0 ${sideSlotWidthPx} ${sideSlotHeightPx}`}
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <rect x={0} y={0} width={sideSlotWidthPx} height={sideSlotHeightPx} fill="none" stroke={slotStroke} strokeWidth={1} />
+                  {!showWarning && countX > 0 && countZ > 0 && (shapeType === "cylinder"
+                    ? Array.from({ length: countZ }).map((_, iz) =>
+                        Array.from({ length: countX }).map((_, ix) => {
+                          const x = ix * sideProductWidthPx;
+                          const y = sideSlotHeightPx - (iz + 1) * sideProductHeightPx;
+                          const w = sideProductWidthPx;
+                          const h = Math.max(1, sideProductHeightPx - 1);
+                          const rx = Math.min(w / 2, 2);
+                          const ry = Math.min(w / 2, 2);
+                          return (
+                            <rect
+                              key={`${ix}-${iz}`}
+                              x={x}
+                              y={y}
+                              width={w}
+                              height={h}
+                              rx={rx}
+                              ry={ry}
+                              fill={productFill}
+                              stroke={slotStroke}
+                              strokeWidth={1}
+                            />
+                          );
+                        })
+                      )
+                    : Array.from({ length: countZ }).map((_, iz) =>
+                        Array.from({ length: countX }).map((_, ix) => (
+                          <rect
+                            key={`${ix}-${iz}`}
+                            x={ix * sideProductWidthPx}
+                            y={sideSlotHeightPx - (iz + 1) * sideProductHeightPx}
+                            width={sideProductWidthPx}
+                            height={Math.max(1, sideProductHeightPx - 1)}
+                            fill={productFill}
+                            stroke={slotStroke}
+                            strokeWidth={1}
+                          />
+                        ))
+                      ))}
+                </svg>
+              </div>
+            </div>
+            <div style={{ marginTop: 6, fontSize: 10, color: "#64748b", textAlign: "center" }}>
+              {countX} × {countY} × {countZ}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

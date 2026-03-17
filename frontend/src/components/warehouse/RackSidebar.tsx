@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Plus, Wand2 } from "lucide-react";
 import type { LayoutState, CustomRackTemplate, CatalogItem, VisualElementType } from "../../types/warehouse";
 import { formatVolume, getLevelConfig, getTotalLocations, getRackDisplayId, type RackTemplateLabelOptions } from "./warehouseUtils";
 
@@ -8,6 +9,10 @@ function sameCatalogItem(a: CatalogItem | null, b: CatalogItem): boolean {
   if (a.type === "custom" && b.type === "custom") return a.template.id === b.template.id;
   if (a.type === "preset" && b.type === "preset") return a.id === b.id;
   return false;
+}
+
+function normalize(s: string): string {
+  return s.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
 import { TemplateCreator, RackPreview } from "./TemplateCreator";
 import { GenerateWarehouseLayoutModal } from "./GenerateWarehouseLayoutModal";
@@ -50,14 +55,16 @@ export type RackSidebarProps = {
   onExportJson?: () => void;
   /** Export every slot: locationUUID, name, capacity_dm3 (map of locations CSV) */
   onExportLocationsMapCsv?: () => void;
-  currentRowPrefix: string;
-  setCurrentRowPrefix: (v: string) => void;
-  /** Re-index the row: by selected rack (geometric row) when rackId is set, else by prefix. */
-  onReindexRow?: (rackId: number | string | null, prefix: string) => void;
   /** When true (e.g. Magazyn tab), show only catalog; hide Visual elements and layout-focused actions. */
   showOnlyCatalog?: boolean;
   /** Open the building dimensions modal (toolbar remains primary entry point). */
   onOpenEditBuilding?: () => void;
+  /** When provided, generate layout modal is controlled by parent (e.g. opened from main toolbar). */
+  showGenerateLayoutModal?: boolean;
+  setShowGenerateLayoutModal?: (v: boolean) => void;
+  /** Wall element tool: door or gate on building perimeter. When set, click on wall places element. */
+  wallElementTool?: "door" | "gate" | null;
+  setWallElementTool?: (v: "door" | "gate" | null) => void;
 };
 
 export function RackSidebar({
@@ -93,18 +100,30 @@ export function RackSidebar({
   onExportCsv,
   onExportJson,
   onExportLocationsMapCsv,
-  currentRowPrefix,
-  setCurrentRowPrefix,
-  onReindexRow,
   showOnlyCatalog = false,
   onOpenEditBuilding,
+  showGenerateLayoutModal: showGenerateLayoutModalProp,
+  setShowGenerateLayoutModal: setShowGenerateLayoutModalProp,
+  wallElementTool = null,
+  setWallElementTool,
 }: RackSidebarProps) {
   const [activeTab, setActiveTab] = useState<"catalog" | "visuals">("catalog");
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [showGenerateLayoutModal, setShowGenerateLayoutModal] = useState(false);
+  const [showGenerateLayoutModalLocal, setShowGenerateLayoutModalLocal] = useState(false);
+  const showGenerateLayoutModal = setShowGenerateLayoutModalProp != null ? (showGenerateLayoutModalProp ?? false) : showGenerateLayoutModalLocal;
+  const setShowGenerateLayoutModal = setShowGenerateLayoutModalProp ?? setShowGenerateLayoutModalLocal;
   const [catalogCollapsed, setCatalogCollapsed] = useState(false);
   const [rackListCollapsed, setRackListCollapsed] = useState(false);
+  const [rackSearch, setRackSearch] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
+  const filteredRacks = layout.racks.filter(
+    (r) =>
+      !rackSearch.trim() ||
+      normalize(getRackDisplayId(r)).includes(normalize(rackSearch)) ||
+      normalize(r.name ?? "").includes(normalize(rackSearch)) ||
+      normalize(r.label ?? "").includes(normalize(rackSearch)) ||
+      normalize(r.rowPrefix ?? "").includes(normalize(rackSearch))
+  );
   const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
   const editingTemplate = editingTemplateId ? customTemplates.find((t) => t.id === editingTemplateId) ?? null : null;
   const showTemplateCreator = showTemplateModal || editingTemplateId != null;
@@ -133,6 +152,52 @@ export function RackSidebar({
       )}
       {(showOnlyCatalog || activeTab === "catalog") && (
         <>
+      {!showOnlyCatalog && (onExportPdf || onExportCsv || onExportJson || onExportLocationsMapCsv) && (
+        <div className="mb-4">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setExportOpen(!exportOpen)}
+              className="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-xs font-semibold flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              {UI_STRINGS.warehouse.export.button}
+              <span className="opacity-80">▾</span>
+            </button>
+            {exportOpen && (
+              <>
+                <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-100 bg-white shadow-lg py-1 overflow-hidden">
+                  {onExportLocationsMapCsv && (
+                    <button type="button" onClick={() => { onExportLocationsMapCsv(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      {UI_STRINGS.warehouse.rackSidebar.exportLocationsCsv}
+                    </button>
+                  )}
+                  {onExportPdf && (
+                    <button type="button" onClick={() => { onExportPdf(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      {UI_STRINGS.warehouse.export.pdf}
+                    </button>
+                  )}
+                  {onExportCsv && (
+                    <button type="button" onClick={() => { onExportCsv(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      {UI_STRINGS.warehouse.export.csv}
+                    </button>
+                  )}
+                  {onExportJson && (
+                    <button type="button" onClick={() => { onExportJson(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                      {UI_STRINGS.warehouse.export.json}
+                    </button>
+                  )}
+                </div>
+                <div className="fixed inset-0 z-0" onClick={() => setExportOpen(false)} aria-hidden="true" />
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {onOpenEditBuilding != null && (
         <div className="rounded-lg p-3 mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb" }}>
           <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Budynek</div>
@@ -140,7 +205,15 @@ export function RackSidebar({
             <>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-slate-700">{layout.building_width_m} × {buildingDepthM}{layout.building_height_m != null && layout.building_height_m > 0 ? ` × ${layout.building_height_m}` : ""} m</span>
-                <button type="button" onClick={onOpenEditBuilding} className="text-xs text-cyan-600 hover:underline">Edytuj</button>
+                <button
+                  type="button"
+                  onClick={onOpenEditBuilding}
+                  className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700"
+                  title="Edytuj budynek"
+                  aria-label="Edytuj budynek"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                </button>
               </div>
               <div className="mt-1.5 text-[10px] text-slate-600 space-y-0.5">
                 <div>Powierzchnia: {Math.round((layout.building_width_m ?? 0) * (buildingDepthM ?? 0))} m²</div>
@@ -155,57 +228,35 @@ export function RackSidebar({
         </div>
       )}
       <div className="rounded-lg p-3 overflow-hidden mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
-        <div className="flex items-center justify-between" style={{ marginBottom: "8px" }}>
+        <div className="flex items-center justify-between gap-2" style={{ marginBottom: "8px" }}>
           <button
             type="button"
             onClick={() => setCatalogCollapsed(!catalogCollapsed)}
-            className={sectionTitleClass + " hover:text-slate-800 text-left"}
+            className={sectionTitleClass + " hover:text-slate-800 text-left shrink-0"}
           >
             {UI_STRINGS.warehouse.rackSidebar.catalog} {catalogCollapsed ? "▶" : "▼"}
           </button>
-          {!showOnlyCatalog && (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setShowGenerateLayoutModal(true)}
-                className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-semibold hover:bg-emerald-500"
-              >
-                Generuj układ
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowTemplateModal(true)}
-                className="px-2 py-1 rounded-lg bg-cyan-600 text-white text-[10px] font-semibold hover:bg-cyan-500"
-              >
-                {UI_STRINGS.warehouse.rackSidebar.newTemplate}
-              </button>
-            </div>
-          )}
         </div>
         {!catalogCollapsed && (
           <>
       {!showOnlyCatalog && (
-      <div className="mb-2 flex flex-col gap-1">
-        <label className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.currentRow}</label>
-        <div className="flex items-center gap-1">
-          <input
-            type="text"
-            value={currentRowPrefix}
-            onChange={(e) => setCurrentRowPrefix(e.target.value)}
-            placeholder="A"
-            className="w-12 px-2 py-1 text-xs border border-slate-200 rounded-lg"
-            maxLength={4}
-          />
-          {onReindexRow != null && (
-            <button
-              type="button"
-              onClick={() => onReindexRow(selectedRackId ?? null, (currentRowPrefix || "A").trim() || "A")}
-              className="px-2 py-1 text-[10px] font-medium rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200"
-            >
-              Re-index
-            </button>
-          )}
-        </div>
+      <div className="flex flex-col gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => setShowTemplateModal(true)}
+          className="w-full px-3 py-2 rounded-lg bg-cyan-600 text-white text-xs font-semibold hover:bg-cyan-500 transition-colors flex items-center justify-center gap-2"
+        >
+          <Plus size={14} strokeWidth={2} />
+          {UI_STRINGS.warehouse.rackSidebar.newTemplate}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowGenerateLayoutModal(true)}
+          className="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 transition-colors flex items-center justify-center gap-2"
+        >
+          <Wand2 size={14} strokeWidth={2} />
+          Generuj układ
+        </button>
       </div>
       )}
       {!showOnlyCatalog && rowToolActive && (
@@ -328,6 +379,27 @@ export function RackSidebar({
       {!showOnlyCatalog && activeTab === "visuals" && (
         <div className="space-y-2 rounded-lg p-3 mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
           <h2 className={sectionTitleClass}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</h2>
+          {setWallElementTool && (
+            <>
+              <p className="text-[10px] text-slate-500 mb-2">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setWallElementTool(wallElementTool === "door" ? null : "door")}
+                  className={`flex-1 rounded-lg border p-2 text-xs font-semibold ${wallElementTool === "door" ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                >
+                  Drzwi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWallElementTool(wallElementTool === "gate" ? null : "gate")}
+                  className={`flex-1 rounded-lg border p-2 text-xs font-semibold ${wallElementTool === "gate" ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                >
+                  Brama
+                </button>
+              </div>
+            </>
+          )}
           <p className="text-[10px] text-slate-500 mb-2">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
           {VISUAL_ITEMS.map(({ type, label, size }) => (
             <div
@@ -343,7 +415,7 @@ export function RackSidebar({
           ))}
         </div>
       )}
-      {!showOnlyCatalog && (
+      {!showOnlyCatalog && activeTab === "catalog" && (
       <div className="rounded-lg p-3 flex flex-col min-h-0" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
         <button
           type="button"
@@ -355,62 +427,24 @@ export function RackSidebar({
         </button>
         {!rackListCollapsed && (
           <>
-      {onExportLocationsMapCsv && (
-        <button
-          type="button"
-          onClick={onExportLocationsMapCsv}
-          className="w-full mt-2 px-3 py-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-200 flex items-center justify-center gap-2"
-        >
-          <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-          Pobierz Mapę Lokalizacji (CSV)
-        </button>
-      )}
-      {(onExportPdf || onExportCsv || onExportJson) && (
-        <div className="relative mt-2">
-          <button
-            type="button"
-            onClick={() => setExportOpen(!exportOpen)}
-            className="w-full px-3 py-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-200 flex items-center justify-center gap-2"
-          >
-            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            {UI_STRINGS.warehouse.export.button} ▾
-          </button>
-          {exportOpen && (
-            <>
-              <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-100 bg-white shadow-lg py-1 overflow-hidden">
-                {onExportPdf && (
-                  <button type="button" onClick={() => { onExportPdf(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {UI_STRINGS.warehouse.export.pdf}
-                  </button>
-                )}
-                {onExportCsv && (
-                  <button type="button" onClick={() => { onExportCsv(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    {UI_STRINGS.warehouse.export.csv}
-                  </button>
-                )}
-                {onExportJson && (
-                  <button type="button" onClick={() => { onExportJson(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
-                    {UI_STRINGS.warehouse.export.json}
-                  </button>
-                )}
-              </div>
-              <div className="fixed inset-0 z-0" onClick={() => setExportOpen(false)} aria-hidden="true" />
-            </>
-          )}
-        </div>
-      )}
+      <input
+        type="search"
+        value={rackSearch}
+        onChange={(e) => setRackSearch(e.target.value)}
+        placeholder={UI_STRINGS.warehouse.rackSidebar.rackSearchPlaceholder}
+        className="w-full mt-2 px-2 py-1.5 rounded-lg border border-[#E2E8F0] bg-white text-[11px] text-[#1E293B] placeholder:text-slate-400"
+        aria-label="Szukaj w liście regałów"
+      />
       <div className="flex-1 overflow-y-auto space-y-1 min-h-0 max-h-40 mt-2">
-        {layout.racks.length === 0 ? (
-          <p className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.noRacks}</p>
+        {filteredRacks.length === 0 ? (
+          <p className="text-[10px] text-slate-500">{layout.racks.length === 0 ? UI_STRINGS.warehouse.rackSidebar.noRacks : "Brak wyników wyszukiwania"}</p>
         ) : (
-          layout.racks.map((r) => {
+          filteredRacks.map((r) => {
             const rid = r.id ?? r.rack_index;
-            const cap = r.total_capacity_dm3 ?? r.bins.reduce((s, b) => s + b.volume_dm3, 0);
-            const used = r.used_dm3 ?? r.bins.reduce((s, b) => s + (b.current_load_dm3 ?? 0), 0);
-            const pct = cap > 0 ? (used / cap) * 100 : 0;
+            const w = r.width_cm ?? 0;
+            const len = r.length_cm ?? r.depth_cm ?? 0;
+            const h = r.height_cm ?? 0;
+            const cap = r.total_capacity_dm3 ?? r.bins.reduce((s, b) => s + (b.volume_dm3 ?? 0), 0);
             const isSel = selectedRackIds.includes(rid);
             return (
               <button
@@ -428,7 +462,17 @@ export function RackSidebar({
                   isSel ? "border-cyan-500 bg-cyan-50 text-[#1E293B]" : "border-[#E2E8F0] bg-slate-50 text-slate-700 hover:bg-slate-100"
                 }`}
               >
-                {getRackDisplayId(r)} · {formatVolume(pct)}%
+                <div className="flex flex-col items-start">
+                  <div className="font-medium">
+                    {getRackDisplayId(r)}
+                  </div>
+                  <div className="text-sm text-slate-600">
+                    {w}×{len}×{h} cm
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    {cap.toLocaleString()} dm³
+                  </div>
+                </div>
               </button>
             );
           })

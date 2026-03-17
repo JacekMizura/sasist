@@ -14,7 +14,6 @@ export function useDesignerRowState() {
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null);
   const [rowDragPreviewStart, setRowDragPreviewStart] = useState<{ x: number; y: number } | null>(null);
   const [catalogHoveredSlot, setCatalogHoveredSlot] = useState<{ rowId: string; slotIndex: number } | null>(null);
-  const [currentRowPrefix, setCurrentRowPrefix] = useState("A");
   const [aisleWidthCm, setAisleWidthCm] = useState(DEFAULT_AISLE_WIDTH_CM);
 
   return {
@@ -40,8 +39,6 @@ export function useDesignerRowState() {
     setRowDragPreviewStart,
     catalogHoveredSlot,
     setCatalogHoveredSlot,
-    currentRowPrefix,
-    setCurrentRowPrefix,
     aisleWidthCm,
     setAisleWidthCm,
   };

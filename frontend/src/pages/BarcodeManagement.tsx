@@ -182,7 +182,7 @@ export default function BarcodeManagement() {
                   onClick={() => setSelectedRackIndex(null)}
                   className={`px-3 py-1.5 rounded text-sm font-medium ${selectedRackIndex === null ? "bg-cyan-600 text-white" : "bg-slate-200 text-slate-700"}`}
                 >
-                  Wszystkie lokacje
+                  Wszystkie lokalizacje
                 </button>
                 {rackOptions.map((opt) => (
                   <button
@@ -197,7 +197,7 @@ export default function BarcodeManagement() {
               </div>
             </div>
             <p className="text-sm text-slate-500">
-              Lokacji: {selectedLocations.length}
+              Lokalizacji: {selectedLocations.length}
             </p>
             <button
               type="button"
@@ -205,7 +205,7 @@ export default function BarcodeManagement() {
               disabled={selectedLocations.length === 0}
               className="px-4 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50"
             >
-              Generuj PDF dla {selectedRackIndex != null ? "wybranego regału" : "wszystkich lokacji"}
+              Generuj PDF dla {selectedRackIndex != null ? "wybranego regału" : "wszystkich lokalizacji"}
             </button>
           </>
         )}
@@ -213,7 +213,7 @@ export default function BarcodeManagement() {
 
       {layout && selectedLocations.length > 0 && (
         <div className="border border-slate-200 rounded-lg overflow-hidden">
-          <h2 className="text-sm font-semibold text-slate-700 bg-slate-100 px-4 py-2">Podgląd lokacji</h2>
+          <h2 className="text-sm font-semibold text-slate-700 bg-slate-100 px-4 py-2">Podgląd lokalizacji</h2>
           <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
             {selectedLocations.slice(0, 24).map((loc, i) => (
               <div key={i} className="border border-slate-200 rounded p-2 bg-white">

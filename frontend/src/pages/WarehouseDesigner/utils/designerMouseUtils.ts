@@ -43,6 +43,65 @@ export function isCellInsideRack(cell: { x: number; y: number }, rack: RectLike)
   );
 }
 
+const WALL_HIT_BAND_PX = 18;
+
+export type WallHit = {
+  wall: "north" | "south" | "east" | "west";
+  position_cm: number;
+};
+
+/** Client coords + SVG rect + canvas size and grid → wall hit or null. */
+export function getWallFromClientPosition(
+  clientX: number,
+  clientY: number,
+  svgRect: DOMRect,
+  widthPx: number,
+  heightPx: number,
+  gridCols: number,
+  gridRows: number,
+  gridUnitCm: number
+): WallHit | null {
+  const localX = ((clientX - svgRect.left) / svgRect.width) * widthPx;
+  const localY = ((clientY - svgRect.top) / svgRect.height) * heightPx;
+  if (localY <= WALL_HIT_BAND_PX) {
+    const position_cm = (localX / widthPx) * gridCols * gridUnitCm;
+    return { wall: "north", position_cm };
+  }
+  if (localY >= heightPx - WALL_HIT_BAND_PX) {
+    const position_cm = (localX / widthPx) * gridCols * gridUnitCm;
+    return { wall: "south", position_cm };
+  }
+  if (localX <= WALL_HIT_BAND_PX) {
+    const position_cm = (localY / heightPx) * gridRows * gridUnitCm;
+    return { wall: "west", position_cm };
+  }
+  if (localX >= widthPx - WALL_HIT_BAND_PX) {
+    const position_cm = (localY / heightPx) * gridRows * gridUnitCm;
+    return { wall: "east", position_cm };
+  }
+  return null;
+}
+
+/** Client coords + SVG rect + canvas size and grid + fixed wall → position_cm along that wall (for drag). */
+export function getPositionCmAlongWall(
+  clientX: number,
+  clientY: number,
+  wall: "north" | "south" | "east" | "west",
+  svgRect: DOMRect,
+  widthPx: number,
+  heightPx: number,
+  gridCols: number,
+  gridRows: number,
+  gridUnitCm: number
+): number {
+  const localX = ((clientX - svgRect.left) / svgRect.width) * widthPx;
+  const localY = ((clientY - svgRect.top) / svgRect.height) * heightPx;
+  if (wall === "north" || wall === "south") {
+    return (localX / widthPx) * gridCols * gridUnitCm;
+  }
+  return (localY / heightPx) * gridRows * gridUnitCm;
+}
+
 /** Pan delta from pointer event and previous pan start. */
 export function computePanDelta(
   event: { clientX: number; clientY: number; movementX?: number; movementY?: number },

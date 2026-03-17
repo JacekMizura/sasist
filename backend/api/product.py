@@ -83,16 +83,71 @@ class ProductBody(BaseModel):
     manufacturer: Optional[str] = None
     unit: Optional[str] = None
     stock_quantity: Optional[float] = None  # when set on update, write to first inventory row (or create)
+    orientation_type: Optional[str] = None  # any | upright | no_stack
+    shape_type: Optional[str] = None  # box | cylinder
+    stack_compressible: Optional[bool] = None
+    compressed_height_cm: Optional[float] = None
+    max_stack_weight: Optional[float] = None
+    stack_behavior: Optional[str] = None  # stackable | no_stack
 
     @field_validator(
         "length", "width", "height", "weight", "volume",
         "length_cm", "width_cm", "height_cm", "weight_kg", "volume_dm3",
         "sale_price", "purchase_price", "stock_quantity",
+        "compressed_height_cm", "max_stack_weight",
         mode="before",
     )
     @classmethod
     def coerce_numeric(cls, v: Any) -> Optional[float]:
         return _coerce_float(v)
+
+    @field_validator("orientation_type")
+    @classmethod
+    def validate_orientation_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        if v not in ("any", "upright", "no_stack"):
+            raise ValueError("orientation_type must be one of: any, upright, no_stack")
+        return v
+
+    @field_validator("shape_type")
+    @classmethod
+    def validate_shape_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        if v not in ("box", "cylinder"):
+            raise ValueError("shape_type must be one of: box, cylinder")
+        return v
+
+    @field_validator("compressed_height_cm")
+    @classmethod
+    def validate_compressed_height_cm(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
+        f = _coerce_float(v)
+        if f is not None and f <= 0:
+            raise ValueError("compressed_height_cm must be > 0")
+        return f
+
+    @field_validator("max_stack_weight")
+    @classmethod
+    def validate_max_stack_weight(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
+        f = _coerce_float(v)
+        if f is not None and f <= 0:
+            raise ValueError("max_stack_weight must be > 0")
+        return f
+
+    @field_validator("stack_behavior")
+    @classmethod
+    def validate_stack_behavior(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        if v not in ("stackable", "no_stack"):
+            raise ValueError("stack_behavior must be one of: stackable, no_stack")
+        return v
+
 
 # Dozwolone pola sortowania
 SORT_FIELDS = {"id", "name", "ean", "symbol", "length", "width", "height", "weight", "volume"}
@@ -175,6 +230,12 @@ def _product_to_dict(p: Product) -> dict:
         "image_url": p.image_url,
         "assigned_locations": _parse_assigned_locations(p.assigned_locations),
         "label_template_id": getattr(p, "label_template_id", None),
+        "orientation_type": getattr(p, "orientation_type", None),
+        "shape_type": getattr(p, "shape_type", None),
+        "stack_compressible": getattr(p, "stack_compressible", None),
+        "compressed_height_cm": getattr(p, "compressed_height_cm", None),
+        "max_stack_weight": getattr(p, "max_stack_weight", None),
+        "stack_behavior": getattr(p, "stack_behavior", None),
     }
 
 
@@ -458,6 +519,12 @@ def create_product(
         sale_price=body.sale_price,
         manufacturer=(body.manufacturer or "").strip() or None,
         unit=(body.unit or "").strip() or None,
+        orientation_type=(body.orientation_type or "").strip() or None,
+        shape_type=(body.shape_type or "").strip() or None,
+        stack_compressible=body.stack_compressible,
+        compressed_height_cm=body.compressed_height_cm,
+        max_stack_weight=body.max_stack_weight,
+        stack_behavior=(body.stack_behavior or "").strip() or None,
     )
     db.add(product)
     db.flush()
@@ -565,6 +632,18 @@ def update_product(
         product.manufacturer = (body.manufacturer or "").strip() or None
     if body.unit is not None:
         product.unit = (body.unit or "").strip() or None
+    if body.orientation_type is not None:
+        product.orientation_type = (body.orientation_type or "").strip() or None
+    if body.shape_type is not None:
+        product.shape_type = (body.shape_type or "").strip() or None
+    if body.stack_compressible is not None:
+        product.stack_compressible = body.stack_compressible
+    if body.compressed_height_cm is not None:
+        product.compressed_height_cm = body.compressed_height_cm
+    if body.max_stack_weight is not None:
+        product.max_stack_weight = body.max_stack_weight
+    if body.stack_behavior is not None:
+        product.stack_behavior = (body.stack_behavior or "").strip() or None
 
     # Optional: update stock (first inventory row or create one)
     stock_qty_val = _parse_float(payload.get("stock_quantity"))

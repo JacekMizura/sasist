@@ -190,6 +190,7 @@ class WarehouseLayoutService:
                 "racks": [],
                 "aisles": [],
                 "row_containers": [],
+                "wall_elements": [],
             }
         racks_out = []
         for r in layout.racks or []:
@@ -244,6 +245,12 @@ class WarehouseLayoutService:
                 row_containers = json.loads(layout.row_containers_json)
             except (json.JSONDecodeError, TypeError):
                 pass
+        wall_elements = []
+        if getattr(layout, "wall_elements_json", None):
+            try:
+                wall_elements = json.loads(layout.wall_elements_json)
+            except (json.JSONDecodeError, TypeError):
+                pass
         return {
             "layout_id": layout.id,
             "warehouse_id": layout.warehouse_id,
@@ -259,6 +266,7 @@ class WarehouseLayoutService:
             "racks": racks_out,
             "aisles": aisles_out,
             "row_containers": row_containers,
+            "wall_elements": wall_elements,
         }
 
     def get_location_label_records(self, tenant_id: int, warehouse_id: int) -> list[dict]:
@@ -374,6 +382,7 @@ class WarehouseLayoutService:
                 width_m=data.get("width_m", 24.0),
                 length_m=data.get("length_m", 16.0),
                 row_containers_json=json.dumps(data.get("row_containers") or []) if data.get("row_containers") else None,
+                wall_elements_json=json.dumps(data.get("wall_elements") or []) if data.get("wall_elements") else None,
                 building_width_m=_float_or_none(data.get("building_width_m")),
                 building_depth_m=_float_or_none(data.get("building_depth_m")),
                 building_height_m=_float_or_none(data.get("building_height_m")),
@@ -395,6 +404,9 @@ class WarehouseLayoutService:
             row_containers = data.get("row_containers")
             if row_containers is not None:
                 layout.row_containers_json = json.dumps(row_containers) if row_containers else None
+            if "wall_elements" in data:
+                wall_el = data.get("wall_elements")
+                layout.wall_elements_json = json.dumps(wall_el) if wall_el else None
             self.db.add(layout)
 
         for r in layout.racks or []:

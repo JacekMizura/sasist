@@ -1,6 +1,7 @@
 import React from "react";
 import type { LayoutState, RackState } from "../../../types/warehouse";
 import type { CatalogItem } from "../../../types/warehouse";
+import { cellToPx } from "../renderUtils";
 import { radius } from "../../../layout/designTokens";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
@@ -56,10 +57,10 @@ export function RowLayer(props: RowLayerProps) {
               {ghostSlots.map((slot, i) => (
                 <rect
                   key={`ghost-slot-${i}`}
-                  x={slot.x * cellPx + 1}
-                  y={slot.y * cellPx + 1}
-                  width={slot.w * cellPx - 2}
-                  height={slot.h * cellPx - 2}
+                  x={cellToPx(slot.x, cellPx) + 1}
+                  y={cellToPx(slot.y, cellPx) + 1}
+                  width={cellToPx(slot.w, cellPx) - 2}
+                  height={cellToPx(slot.h, cellPx) - 2}
                   fill="rgba(148,163,184,0.6)"
                   stroke="#64748b"
                   strokeWidth={1}
@@ -70,10 +71,10 @@ export function RowLayer(props: RowLayerProps) {
                 if (slot.rackId == null) return null;
                 const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === slot.rackId);
                 if (!rack) return null;
-                const rx = slot.x * cellPx + 1;
-                const ry = slot.y * cellPx + 1;
-                const rw = rack.width * cellPx - 2;
-                const rh = rack.height * cellPx - 2;
+                const rx = cellToPx(slot.x, cellPx) + 1;
+                const ry = cellToPx(slot.y, cellPx) + 1;
+                const rw = cellToPx(rack.width, cellPx) - 2;
+                const rh = cellToPx(rack.height, cellPx) - 2;
                 return (
                   <rect
                     key={`ghost-rack-${i}`}
@@ -153,10 +154,10 @@ export function RowLayer(props: RowLayerProps) {
               style={{ cursor: isHoveredByCatalog ? "copy" : "pointer" }}
             >
               <rect
-                x={slot.x * cellPx + 1}
-                y={slot.y * cellPx + 1}
-                width={slot.w * cellPx - 2}
-                height={slot.h * cellPx - 2}
+                x={cellToPx(slot.x, cellPx) + 1}
+                y={cellToPx(slot.y, cellPx) + 1}
+                width={cellToPx(slot.w, cellPx) - 2}
+                height={cellToPx(slot.h, cellPx) - 2}
                 fill={fillColor}
                 stroke={strokeColor}
                 strokeWidth={strokeW}

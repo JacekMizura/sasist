@@ -1,13 +1,11 @@
 import type { LayoutState, RowContainer, EmptyRowSlot } from "../../types/warehouse";
-import { GRID_UNIT_CM } from "../../types/warehouse";
+import { cmToCells, cellsToCm } from "../../components/warehouse/warehouseUtils";
 
 export const CELLS_PER_METER = 10;
 export const BASE_PX_PER_CELL = 5;
 export const GRID_COLS = 240;
 export const GRID_ROWS = 160;
 export const TENANT_ID = 1;
-/** Backend special locations use cm; 1 grid cell = 100 cm for API. */
-export const SPECIAL_LOCATION_CELL_CM = 100;
 /** Default slot size (cells) for "Draw Row" when no template is selected. 120×80 cm. */
 export const DEFAULT_ROW_SLOT_W = 12;
 export const DEFAULT_ROW_SLOT_H = 8;
@@ -95,15 +93,15 @@ export function snapRowPreviewToDistance(
       if (o.y1 <= selTop) nearestAbove = Math.max(nearestAbove, o.y1);
       if (o.y0 >= selBottom) nearestBelow = Math.min(nearestBelow, o.y0);
     }
-    const distAboveCm = (selTop - nearestAbove) * GRID_UNIT_CM;
-    const distBelowCm = (nearestBelow - selBottom) * GRID_UNIT_CM;
+    const distAboveCm = cellsToCm(selTop - nearestAbove);
+    const distBelowCm = cellsToCm(nearestBelow - selBottom);
     for (const target of SNAP_DISTANCES_CM) {
       if (Math.abs(distAboveCm - target) <= SNAP_DISTANCE_THRESHOLD_CM) {
-        const newY = nearestAbove + target / GRID_UNIT_CM;
+        const newY = nearestAbove + cmToCells(target);
         if (newY >= 0 && newY + sel.h <= gridRows) return { x: candidate.x, y: Math.round(newY) };
       }
       if (Math.abs(distBelowCm - target) <= SNAP_DISTANCE_THRESHOLD_CM) {
-        const newY = nearestBelow - target / GRID_UNIT_CM - sel.h;
+        const newY = nearestBelow - cmToCells(target) - sel.h;
         if (newY >= 0 && newY + sel.h <= gridRows) return { x: candidate.x, y: Math.round(newY) };
       }
     }
@@ -115,15 +113,15 @@ export function snapRowPreviewToDistance(
       if (o.x1 <= selLeft) nearestLeft = Math.max(nearestLeft, o.x1);
       if (o.x0 >= selRight) nearestRight = Math.min(nearestRight, o.x0);
     }
-    const distLeftCm = (selLeft - nearestLeft) * GRID_UNIT_CM;
-    const distRightCm = (nearestRight - selRight) * GRID_UNIT_CM;
+    const distLeftCm = cellsToCm(selLeft - nearestLeft);
+    const distRightCm = cellsToCm(nearestRight - selRight);
     for (const target of SNAP_DISTANCES_CM) {
       if (Math.abs(distLeftCm - target) <= SNAP_DISTANCE_THRESHOLD_CM) {
-        const newX = nearestLeft + target / GRID_UNIT_CM;
+        const newX = nearestLeft + cmToCells(target);
         if (newX >= 0 && newX + sel.w <= gridCols) return { x: Math.round(newX), y: candidate.y };
       }
       if (Math.abs(distRightCm - target) <= SNAP_DISTANCE_THRESHOLD_CM) {
-        const newX = nearestRight - target / GRID_UNIT_CM - sel.w;
+        const newX = nearestRight - cmToCells(target) - sel.w;
         if (newX >= 0 && newX + sel.w <= gridCols) return { x: Math.round(newX), y: candidate.y };
       }
     }
@@ -248,7 +246,7 @@ export function snapPosition(
   gridRows: number,
   aisleWidthCm: number = DEFAULT_AISLE_WIDTH_CM
 ): { x: number; y: number } {
-  const aisleCells = Math.round(aisleWidthCm / GRID_UNIT_CM);
+  const aisleCells = cmToCells(aisleWidthCm);
   const candX = new Set<number>([0, gridCols - ghostW, snapToGrid(desired.x)]);
   const candY = new Set<number>([0, gridRows - ghostH, snapToGrid(desired.y)]);
   racks.forEach((r) => {

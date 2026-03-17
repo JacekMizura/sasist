@@ -965,7 +965,7 @@ export function LabelPrintQueue({ template }: Props) {
               <label className="block text-sm font-medium text-slate-600 mb-2">Które etykiety drukować</label>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { value: "all" as const, label: "Wszystkie lokacje" },
+                  { value: "all" as const, label: "Wszystkie lokalizacje" },
                   { value: "by_rack" as const, label: "Po regale" },
                   { value: "reserve_only" as const, label: "Tylko rezerwa" },
                   { value: "manual" as const, label: "Ręczny wybór (lista)" },
@@ -1032,7 +1032,7 @@ export function LabelPrintQueue({ template }: Props) {
               };
               return (
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Ręczny wybór lokacji</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Ręczny wybór lokalizacji</label>
                   <input
                     type="text"
                     placeholder="Szukaj (kod, regał…)"
@@ -1076,7 +1076,7 @@ export function LabelPrintQueue({ template }: Props) {
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">Wybrano: {manualLocationIds.length} lokacji</p>
+                  <p className="text-xs text-slate-500 mt-1">Wybrano: {manualLocationIds.length} lokalizacji</p>
                 </div>
               );
             })()}

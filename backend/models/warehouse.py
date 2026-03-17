@@ -108,6 +108,7 @@ class WarehouseLayout(Base, BaseModelMixin):
     grid_cols = Column(Integer, nullable=False, default=24)
     grid_rows = Column(Integer, nullable=False, default=16)
     row_containers_json = Column(Text, nullable=True)  # JSON: list of row containers (empty slots)
+    wall_elements_json = Column(Text, nullable=True)  # JSON: list of WallElement (doors/gates on perimeter)
     building_width_m = Column(Float, nullable=True)
     building_depth_m = Column(Float, nullable=True)
     building_height_m = Column(Float, nullable=True)

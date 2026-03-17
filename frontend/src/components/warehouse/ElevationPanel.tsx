@@ -63,7 +63,7 @@ export function ElevationPanel({
         </div>
         <p className="text-[9px] text-slate-500 mt-0.5">Zielony 0–50% · Żółty 50–80% · Czerwony 80–100%</p>
       </div>
-      <p className="text-[10px] text-slate-400 mb-2">Kliknij lokację, aby filtrować produkty.</p>
+      <p className="text-[10px] text-slate-400 mb-2">Kliknij lokalizację, aby filtrować produkty.</p>
       <div className="space-y-3">
         {Array.from({ length: rack.levels }, (_, lev) => lev)
           .reverse()
@@ -111,11 +111,11 @@ export function ElevationPanel({
       </div>
       <div className="mt-4 pt-4 border-t border-[#E2E8F0]">
         <h4 className="text-xs font-bold text-slate-600 uppercase mb-2">
-          {filteredBin ? `Produkty w lokacji ${filteredBin.barcode_data ?? filteredBin.label}` : "Produkty w regale"}
+          {filteredBin ? `Produkty w lokalizacji ${filteredBin.barcode_data ?? filteredBin.label}` : "Produkty w regale"}
         </h4>
         {filteredBin && (
           <button type="button" onClick={() => setSelectedBinForFilter(null)} className="text-[10px] text-cyan-600 hover:underline mb-2">
-            Pokaż wszystkie lokacje
+            Pokaż wszystkie lokalizacje
           </button>
         )}
         {onAddProduct && (

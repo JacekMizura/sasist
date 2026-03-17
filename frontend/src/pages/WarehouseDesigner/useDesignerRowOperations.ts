@@ -27,7 +27,6 @@ import type { Dispatch, SetStateAction } from "react";
 export interface UseDesignerRowOperationsParams {
   layout: LayoutState;
   selectedRowContainerId: string | null;
-  currentRowPrefix: string;
   rowGapCm: number;
   setLayout: Dispatch<SetStateAction<LayoutState>>;
   setSelectedRowContainerId: Dispatch<SetStateAction<string | null>>;
@@ -51,7 +50,6 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
   const {
     layout,
     selectedRowContainerId,
-    currentRowPrefix,
     rowGapCm,
     setLayout,
     setSelectedRowContainerId,
@@ -284,7 +282,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
       const w = cmToCells(spec.width_cm);
       const h = cmToCells(spec.depth_cm);
-      const prefix = ((row.rowPrefix ?? currentRowPrefix) || "A").trim() || "A";
+      const prefix = (row.rowPrefix || "A").trim() || "A";
       const templateColor = item.type === "custom" ? item.template.color : spec.color;
       const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
       const { x: startX, y: startY } = getRowStart(row);
@@ -384,7 +382,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         };
       });
     },
-    [selectedRowContainerId, layout.row_containers, currentRowPrefix, setLayout]
+    [selectedRowContainerId, layout.row_containers, setLayout]
   );
 
   /** Place a row of racks from cell A to cell B. Template properties (color, reserve bins, dimensions, rowId) are strictly inherited from the selected template. Section numbering is per-template (no global counter). */
@@ -507,7 +505,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         rackStubs.push({ x, y });
       }
       if (rackStubs.length > 0) {
-        const prefix = (currentRowPrefix || "A").trim() || "A";
+        const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
+        const prefix = (row?.rowPrefix || "A").trim() || "A";
         setLayout((prev) => {
           const nextRackIndexBase = prev.racks.length + 1;
           const startIndexInRow = getNextIndexInRow(prev.racks, prefix);
@@ -580,13 +579,13 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       setRowDrawEnd(null);
       return rackStubs.length;
     },
-    [layout.racks, layout.grid_cols, layout.grid_rows, rowGapCm, currentRowPrefix, setLayout, setCustomTemplates, setRowDrawStart, setRowDrawEnd]
+    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, selectedRowContainerId, rowGapCm, setLayout, setCustomTemplates, setRowDrawStart, setRowDrawEnd]
   );
   void _placeRowFromCatalogItem;
 
   /** Create an empty row as one container of available space (one big slot). Racks placed later will split it and push slots right. */
   const placeEmptyRow = useCallback(
-    (start: { x: number; y: number }, end: { x: number; y: number }) => {
+    (start: { x: number; y: number }, end: { x: number; y: number }, rowPrefix: string) => {
       const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
       const gapCells = Math.max(0, cmToCells(rowGapCm));
 
@@ -630,19 +629,19 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       if (overlapsExisting || overlapsOther) return;
 
       const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const rowPrefix = (currentRowPrefix || "A").trim() || "A";
+      const prefix = (rowPrefix || "A").trim() || "A";
       const orientation: "horizontal" | "vertical" = isHorizontal ? "horizontal" : "vertical";
-      const newRow: RowContainer = { id, rowPrefix, orientation, slots };
+      const newRow: RowContainer = { id, rowPrefix: prefix, orientation, slots };
       setLayout((prev) => ({ ...prev, row_containers: [...(prev.row_containers ?? []), newRow] }));
       setRowDrawStart(null);
       setRowDrawEnd(null);
     },
-    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, rowGapCm, currentRowPrefix, setLayout, setRowDrawStart, setRowDrawEnd]
+    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, rowGapCm, setLayout, setRowDrawStart, setRowDrawEnd]
   );
 
   /** Create a row with orientation from drag and immediately fill it with the given template (vertical → swapped dims + rotation). */
   const placeRowWithTemplate = useCallback(
-    (start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem) => {
+    (start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem, rowPrefix: string) => {
       const ph = DEFAULT_ROW_SLOT_H;
       const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
       let x0: number, y0: number, span: number;
@@ -668,7 +667,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       );
       if (overlapsExisting || overlapsOther) return;
       const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const rowPrefix = (currentRowPrefix || "A").trim() || "A";
+      const prefix = (rowPrefix || "A").trim() || "A";
       const orientation: "horizontal" | "vertical" = isHorizontal ? "horizontal" : "vertical";
       const spec = getCatalogItemSpec(item);
       const lc = getLevelConfig(spec);
@@ -705,7 +704,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             continue;
           }
           newSlotsRaw.push({ x: 0, y: startY, w: isVertical ? cellH : cellW, h: isVertical ? cellW : cellH, rackId: nextRackIndex });
-          const rackLabel = `${rowPrefix}${indexInRow}`;
+          const rackLabel = `${prefix}${indexInRow}`;
           const bins = createBinsForRack(
             spec.aisle_letter,
             nextRackIndex,
@@ -749,7 +748,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             rackLevels: binsToLevels(bins),
             color: rackColor,
             name: rackLabel,
-            rowPrefix,
+            rowPrefix: prefix,
             indexInRow,
             ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
             ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
@@ -783,14 +782,14 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         const nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
         return {
           ...prev,
-          row_containers: [...(prev.row_containers ?? []), { id, rowPrefix, orientation, slots: newSlots }],
+          row_containers: [...(prev.row_containers ?? []), { id, rowPrefix: prefix, orientation, slots: newSlots }],
           racks: nextRacks,
         };
       });
       setRowDrawStart(null);
       setRowDrawEnd(null);
     },
-    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, currentRowPrefix, setLayout, setRowDrawStart, setRowDrawEnd]
+    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, setLayout, setRowDrawStart, setRowDrawEnd]
   );
 
   return {

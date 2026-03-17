@@ -15,12 +15,18 @@ function rackFillByOccupancy(occupancyPct: number | undefined): string {
   return RACK_OCCUPANCY_HIGH;
 }
 
+const RACK_PRODUCT_HIGHLIGHT_FILL = "#8b5cf6";
+
 export type WarehouseFullMapProps = {
   layout: LayoutState;
   selectedRackId: number | string | null;
   onSelectRack: (rackId: number | string) => void;
+  /** Optional: double-click on rack (e.g. open side view and clear map selection). */
+  onOpenRack?: (rackId: number | string) => void;
   /** Per-rack occupancy % (used/total*100). When set, racks are colored by occupancy. */
   rackOccupancyPct?: Record<string, number>;
+  /** Rack ids (string) that contain the globally selected product; highlighted with product color. */
+  rackIdsContainingSelectedProduct?: Set<string> | null;
   showRackLabels?: boolean;
   className?: string;
 };
@@ -36,7 +42,9 @@ export function WarehouseFullMap({
   layout,
   selectedRackId,
   onSelectRack,
+  onOpenRack,
   rackOccupancyPct,
+  rackIdsContainingSelectedProduct = null,
   showRackLabels = true,
   className = "",
 }: WarehouseFullMapProps) {
@@ -72,8 +80,13 @@ export function WarehouseFullMap({
             const rid = r.id ?? r.rack_index;
             const ridStr = String(rid);
             const isSelected = selectedRackId != null && String(selectedRackId) === ridStr;
+            const hasSelectedProduct = rackIdsContainingSelectedProduct?.has(ridStr) ?? false;
             const occupancyPct = rackOccupancyPct?.[ridStr];
-            const fill = isSelected ? RACK_SELECTED_FILL : rackFillByOccupancy(occupancyPct);
+            const fill = isSelected
+              ? RACK_SELECTED_FILL
+              : hasSelectedProduct
+                ? RACK_PRODUCT_HIGHLIGHT_FILL
+                : rackFillByOccupancy(occupancyPct);
             const label = getRackDisplayId(r);
             const rectW = Math.max(0.04, r.width - 0.04);
             const rectH = Math.max(0.04, r.height - 0.04);
@@ -85,15 +98,20 @@ export function WarehouseFullMap({
             const clipY = r.y + 0.02 + (rectH - clipH) / 2;
             const clipId = `rack-clip-${rid}`;
             return (
-              <g key={ridStr} onClick={() => onSelectRack(rid)} style={{ cursor: "pointer" }}>
+              <g
+                key={ridStr}
+                onClick={() => onSelectRack(rid)}
+                onDoubleClick={(e) => { e.preventDefault(); onOpenRack?.(rid); }}
+                style={{ cursor: "pointer" }}
+              >
                 <rect
                   x={r.x + 0.02}
                   y={r.y + 0.02}
                   width={rectW}
                   height={rectH}
                   fill={fill}
-                  stroke={isSelected ? "#0f172a" : "#64748b"}
-                  strokeWidth={isSelected ? 0.08 : 0.03}
+                  stroke={isSelected ? "#0f172a" : hasSelectedProduct ? "#6d28d9" : "#64748b"}
+                  strokeWidth={isSelected ? 0.08 : hasSelectedProduct ? 0.05 : 0.03}
                   rx={0.2}
                 />
                 {showLabel && (

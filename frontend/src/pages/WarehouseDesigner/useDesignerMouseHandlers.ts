@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { LayoutState } from "../../types/warehouse";
-import { GRID_UNIT_CM } from "../../types/warehouse";
+import { cellsToCm } from "../../components/warehouse/warehouseUtils";
 import { findSnapToRowPosition, reindexGeometricRow } from "../../components/warehouse/warehouseUtils";
 import { LayoutMode } from "../../warehouse-layout";
 import {
@@ -13,7 +13,7 @@ import {
   snapRowPreviewToDistance,
   snapPosition,
 } from "./DesignerRackPlacement";
-import { getCellFromClientPosition } from "./utils/designerMouseUtils";
+import { getCellFromClientPosition, getWallFromClientPosition } from "./utils/designerMouseUtils";
 import type { CatalogItem } from "../../types/warehouse";
 import type { Dispatch, SetStateAction } from "react";
 import { usePanInteraction } from "./interactions/usePanInteraction";
@@ -71,6 +71,8 @@ export interface UseDesignerMouseHandlersState {
   aisleWidthCm: number;
   ghostW: number;
   ghostH: number;
+  copyPlacementMode?: boolean;
+  copiedRack?: import("../../types/warehouse").RackState | null;
 }
 
 export interface UseDesignerMouseHandlersSetters {
@@ -107,11 +109,15 @@ export interface UseDesignerMouseHandlersSetters {
   setProductSearchQuery: (v: string) => void;
   setShowAllProductsInSidebar: (v: boolean) => void;
   setRowToolTemplate: Dispatch<SetStateAction<CatalogItem | null>>;
+  setSelectedWallElementId?: Dispatch<SetStateAction<string | null>>;
 }
 
 export interface UseDesignerMouseHandlersCallbacks {
   stampRackAt: (cell: { x: number; y: number }) => void;
   addSpecialLocation: (cell: { x: number; y: number }, type: "PICK_START" | "PACKING" | "DOCK") => void;
+  placeCopiedRack?: (cell: { x: number; y: number }) => void;
+  onAddWallElement?: (wall: "north" | "south" | "east" | "west", position_cm: number, type: "door" | "gate", gateType?: "courier" | "supplier" | "both") => void;
+  onRequestGatePlacement?: (wall: "north" | "south" | "east" | "west", position_cm: number) => void;
 }
 
 export interface UseDesignerMouseHandlersParams {
@@ -137,11 +143,17 @@ export interface UseDesignerMouseHandlersParams {
     ghostH: number;
     panMode: boolean;
     aisleToolActive: boolean;
+    canvasWidthPx?: number;
+    canvasHeightPx?: number;
+    gridUnitCm?: number;
+    wallElementTool?: "door" | "gate" | null;
   };
 }
 
 export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams) {
   const { layout, refs, state, setters, callbacks, helpers, options } = params;
+  const { placeCopiedRack, onAddWallElement, onRequestGatePlacement } = callbacks;
+  const { canvasWidthPx = 0, canvasHeightPx = 0, gridUnitCm = 10, wallElementTool } = options;
   const {
     svgRef,
     panStartRef,
@@ -182,6 +194,8 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
   aisleWidthCm,
   ghostW,
   ghostH,
+  copyPlacementMode = false,
+  copiedRack = null,
   } = state;
   const {
     setIsPanning,
@@ -217,6 +231,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setProductSearchQuery,
     setShowAllProductsInSidebar,
   setRowToolTemplate,
+  setSelectedWallElementId,
   } = setters;
   const { stampRackAt, addSpecialLocation } = callbacks;
   const { placeRowWithTemplateRef, placeEmptyRowRef, canMoveRowToRef, moveRowToPositionRef, moveRackWithinRowRef } = refs;
@@ -245,6 +260,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setSelectedVisualId(null);
     setSelectedVisualIds([]);
     setSelectedAisleIndex(null);
+    if (setSelectedWallElementId) setSelectedWallElementId(null);
   }
 
   const pan = usePanInteraction({
@@ -274,6 +290,9 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setShowElevationForRackId,
     stampRackAt,
     addSpecialLocation,
+    copyPlacementMode,
+    copiedRack,
+    placeCopiedRack,
   });
 
   const row = useRowInteraction({
@@ -389,8 +408,8 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       const cell = getCellFromEvent(e);
       function handleCursorUpdate() {
         if (!cell) return;
-        const x = cell.x * GRID_UNIT_CM;
-        const y = cell.y * GRID_UNIT_CM;
+        const x = cellsToCm(cell.x);
+        const y = cellsToCm(cell.y);
         cursorPendingRef.current = { x, y };
         if (cursorRafRef.current == null) {
           cursorRafRef.current = requestAnimationFrame(() => {
@@ -415,6 +434,20 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     (e: React.MouseEvent<SVGSVGElement>) => {
       const cell = getCellFromEvent(e);
       if (pan.handlePanStart(e)) return;
+      if (wallElementTool && (onAddWallElement || onRequestGatePlacement) && svgRef.current && canvasWidthPx > 0 && canvasHeightPx > 0) {
+        const rect = svgRef.current.getBoundingClientRect();
+        const hit = getWallFromClientPosition(e.clientX, e.clientY, rect, canvasWidthPx, canvasHeightPx, layout.grid_cols, layout.grid_rows, gridUnitCm);
+        if (hit) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (wallElementTool === "gate" && onRequestGatePlacement) {
+            onRequestGatePlacement(hit.wall, hit.position_cm);
+          } else if (wallElementTool === "door" && onAddWallElement) {
+            onAddWallElement(hit.wall, hit.position_cm, "door");
+          }
+          return;
+        }
+      }
       if (!cell) {
         if (e.button === 0) clearAllSelections();
         return;
@@ -426,7 +459,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       if (rack.handleMouseDown(e, cell)) return;
       selection.handleMarqueePart(e, cell);
     },
-    [getCellFromEvent, clearAllSelections, pan, placement, row, selection, visual, rack]
+    [getCellFromEvent, clearAllSelections, pan, placement, row, selection, visual, rack, wallElementTool, onAddWallElement, onRequestGatePlacement, layout.grid_cols, layout.grid_rows, canvasWidthPx, canvasHeightPx, gridUnitCm]
   );
 
   const handleCanvasMouseUp = useCallback(() => {

@@ -1,6 +1,8 @@
-import React, { type RefObject } from "react";
-import type { LayoutState } from "../../types/warehouse";
+import React, { useState, useCallback, useEffect, useRef, type RefObject } from "react";
+import { MapPin, Package } from "lucide-react";
+import type { LayoutState, RackState, WallElement } from "../../types/warehouse";
 import type { CatalogItem, VisualElementType } from "../../types/warehouse";
+import { GRID_UNIT_CM } from "../../types/warehouse";
 import { cmToCells, getCatalogItemSpec, binVolumeDm3 } from "./warehouseUtils";
 import { RowPreviewOverlay } from "./RowPreviewOverlay";
 import { LayoutModeBadge, LayoutMode, LAYOUT_MODE_CURSORS } from "../warehouse-layout";
@@ -9,6 +11,7 @@ import { RackLayer } from "./WarehouseCanvas/RackLayer";
 import { RowLayer } from "./WarehouseCanvas/RowLayer";
 import { VisualLayer } from "./WarehouseCanvas/VisualLayer";
 import { SelectionOverlay } from "./WarehouseCanvas/SelectionOverlay";
+import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 
@@ -24,6 +27,8 @@ const FIT_MAX_ZOOM = 1.4;
 const VIEWPORT_TRANSITION_MS = 200;
 
 export type WarehouseCanvasProps = {
+  /** edit = full designer interactions; read = view-only (no drag/resize/create; click/hover still allowed). */
+  mode?: "edit" | "read";
   layout: LayoutState;
   selectedWarehouseId: number | null;
   loading: boolean;
@@ -83,6 +88,12 @@ export type WarehouseCanvasProps = {
   collisionRackId: number | string | null;
   /** When set (e.g. group drag invalid), all these racks show as collision (red). */
   collisionRackIds?: Array<number | string> | null;
+  /** Racks to highlight (e.g. product locator). Values are String(rack.id ?? rack.rack_index). */
+  highlightedRackIds?: Set<string>;
+  /** Optional rack click handler (primarily for read mode). */
+  onRackClick?: (rackId: number | string) => void;
+  /** Optional rack double-click handler (primarily for read mode). */
+  onRackDoubleClick?: (rackId: number | string) => void;
   /** Racks outside building boundary; drawn with red stroke. */
   outsideRackIds?: Array<number | string>;
   selectedRack: RackState | undefined;
@@ -95,6 +106,8 @@ export type WarehouseCanvasProps = {
   marqueeStart: { x: number; y: number } | null;
   marqueeEnd: { x: number; y: number } | null;
   cursorCm: { x: number; y: number } | null;
+  /** Returns paste position in cm (cursor, last cursor, or layout center). Used so paste works when mouse left canvas. */
+  getPastePosition?: () => { x: number; y: number };
   draggingRackId: number | string | null;
   /** When set, the rack being dragged is drawn at this position (smooth drag). */
   rackDragPreviewPosition: { x: number; y: number } | null;
@@ -169,9 +182,27 @@ export type WarehouseCanvasProps = {
     packing: { id: number; x: number; y: number } | null;
     dock: { id: number; x: number; y: number } | null;
   };
+  /** Update special location position (cell in grid cells). Parent converts to cm and calls API. */
+  onUpdateSpecialLocation?: (locationId: number, cell: { x: number; y: number }) => void;
+  /** Delete special location by id. */
+  onDeleteSpecialLocation?: (locationId: number) => void;
+  /** Copy rack from toolbar → enter copy placement mode. */
+  onCopyRack?: (rack: RackState) => void;
+  /** When true, ghost shows copied rack and click places duplicate. */
+  copyPlacementMode?: boolean;
+  /** Rack being placed in copy placement mode (for ghost size). */
+  copiedRack?: RackState | null;
+  /** Doors and gates on building perimeter. */
+  wallElements?: WallElement[];
+  selectedWallElementId?: string | null;
+  setSelectedWallElementId?: (id: string | null) => void;
+  draggingWallElementId?: string | null;
+  dragPreviewPositionCm?: number | null;
+  onStartWallElementDrag?: (el: WallElement) => void;
 };
 
 function WarehouseCanvasInner({
+  mode = "edit",
   layout,
   selectedWarehouseId,
   loading,
@@ -212,6 +243,9 @@ function WarehouseCanvasInner({
   selectedRackIds,
   collisionRackId,
   collisionRackIds = null,
+  highlightedRackIds,
+  onRackClick,
+  onRackDoubleClick,
   outsideRackIds,
   selectedRack,
   isMultiSelect,
@@ -274,8 +308,93 @@ function WarehouseCanvasInner({
   layoutMode,
   setLayoutMode,
   specialLocations = { pick_start: null, packing: null, dock: null },
+  onUpdateSpecialLocation,
+  onDeleteSpecialLocation,
+  onCopyRack,
+  copyPlacementMode = false,
+  copiedRack = null,
+  wallElements = [],
+  selectedWallElementId = null,
+  setSelectedWallElementId,
+  draggingWallElementId = null,
+  dragPreviewPositionCm = null,
+  onStartWallElementDrag,
 }: WarehouseCanvasProps) {
-  const SPECIAL_CELL_CM = 100;
+  const isReadMode = mode === "read";
+  type SpecialKey = "pick_start" | "packing" | "dock";
+  const [draggingSpecial, setDraggingSpecial] = useState<{ key: SpecialKey; id: number } | null>(null);
+  const [dragPreviewCell, setDragPreviewCell] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ id: number; key: SpecialKey; x: number; y: number } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onDocClick = (e: MouseEvent) => {
+      if (contextMenuRef.current?.contains(e.target as Node)) return;
+      close();
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [contextMenu]);
+
+  const handleSpecialPointerDown = useCallback(
+    (e: React.PointerEvent, key: SpecialKey, id: number) => {
+      e.stopPropagation();
+      if (isReadMode) return;
+      if (onUpdateSpecialLocation) setDraggingSpecial({ key, id });
+    },
+    [isReadMode, onUpdateSpecialLocation]
+  );
+
+  const handleSpecialContextMenu = useCallback(
+    (e: React.MouseEvent, key: SpecialKey, id: number) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (onDeleteSpecialLocation) setContextMenu({ id, key, x: e.clientX, y: e.clientY });
+    },
+    [onDeleteSpecialLocation]
+  );
+
+  const handleCanvasMouseMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (isReadMode) return;
+      if (draggingSpecial && getCellFromEvent(e)) {
+        setDragPreviewCell(getCellFromEvent(e)!);
+        return;
+      }
+      onMouseMove(e);
+    },
+    [isReadMode, draggingSpecial, getCellFromEvent, onMouseMove]
+  );
+
+  const handleCanvasMouseDown = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (isReadMode) return;
+      if (draggingSpecial) return;
+      onMouseDown(e);
+    },
+    [isReadMode, draggingSpecial, onMouseDown]
+  );
+
+  const handleCanvasMouseUp = useCallback(() => {
+    if (isReadMode) return;
+    if (draggingSpecial && onUpdateSpecialLocation) {
+      const cell = dragPreviewCell ?? (specialLocations[draggingSpecial.key] ? { x: Math.round((specialLocations[draggingSpecial.key]!.x / GRID_UNIT_CM)), y: Math.round((specialLocations[draggingSpecial.key]!.y / GRID_UNIT_CM)) } : null);
+      if (cell) onUpdateSpecialLocation(draggingSpecial.id, cell);
+      setDraggingSpecial(null);
+      setDragPreviewCell(null);
+      return;
+    }
+    onMouseUp();
+  }, [isReadMode, draggingSpecial, dragPreviewCell, specialLocations, onUpdateSpecialLocation, onMouseUp]);
+
+  const handleCanvasMouseLeave = useCallback(() => {
+    if (isReadMode) return;
+    if (draggingSpecial) return;
+    onMouseLeave();
+  }, [isReadMode, draggingSpecial, onMouseLeave]);
+
   const visualIdSet = new Set(selectedVisualIds);
   const isVisualSelected = (id: string) => selectedVisualId === id || visualIdSet.has(id);
   const rowGhostPositions = (() => {
@@ -386,6 +505,25 @@ function WarehouseCanvasInner({
         <div className="flex items-center justify-center flex-1" style={{ color: colors.textSecondary }}>Ładowanie…</div>
       ) : (
         <>
+          {contextMenu && onDeleteSpecialLocation && (
+            <div
+              ref={contextMenuRef}
+              className="fixed z-[100] min-w-[120px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              role="menu"
+            >
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                onClick={() => {
+                  onDeleteSpecialLocation(contextMenu.id);
+                  setContextMenu(null);
+                }}
+              >
+                Usuń
+              </button>
+            </div>
+          )}
           <div
             className="shrink-0 flex items-center gap-3 px-3"
             style={{
@@ -399,7 +537,7 @@ function WarehouseCanvasInner({
               <button type="button" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.25))} className="px-2 py-1 rounded bg-[#f3f4f6] text-sm font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }}>+</button>
               <span className="text-xs font-mono w-10 min-w-0" style={{ color: colors.textSecondary }}>{Math.round(zoom * 100)}%</span>
               <button type="button" onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.25))} className="px-2 py-1 rounded bg-[#f3f4f6] text-sm font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }}>−</button>
-              <button type="button" onClick={fitToContent} className="px-2 py-1 rounded bg-[#f3f4f6] text-xs font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }} title="Dopasuj widok do zawartości">Fit</button>
+              <button type="button" onClick={fitToContent} className="px-2 py-1 rounded bg-[#f3f4f6] text-xs font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }} title="Dopasuj widok do zawartości">Dopasuj</button>
             </div>
             <span className="text-[#e5e7eb]" aria-hidden>|</span>
             {!isLiveView && (
@@ -409,8 +547,8 @@ function WarehouseCanvasInner({
                 <button type="button" onClick={() => setSnapToGrid((g) => !g)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${snapToGrid ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Przyciągnij do siatki">Przyciągnij do siatki</button>
                 {setLayoutMode && (
                   <>
-                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_START ? "bg-[#dcfce7] text-[#166534]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Punkt startowy kompletacji">Add Start Point</button>
-                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_PACK)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_PACK ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Stacja pakowania">Add Packing Station</button>
+                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_START ? "bg-[#dcfce7] text-[#166534]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Punkt startowy kompletacji">Punkt startowy</button>
+                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_PACK)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_PACK ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Stacja pakowania">Stacja pakowania</button>
                   </>
                 )}
               </div>
@@ -495,6 +633,7 @@ function WarehouseCanvasInner({
             }}
             onDragOver={(e) => {
               e.preventDefault();
+              if (isReadMode) return;
               if (draggingVisualType) {
                 const cell = getCellFromEvent(e);
                 if (cell) setVisualGhostPosition(cell);
@@ -520,6 +659,7 @@ function WarehouseCanvasInner({
               setCatalogGhostPosition(pos);
             }}
             onDragLeave={() => {
+              if (isReadMode) return;
               setCatalogGhostPosition(null);
               setVisualGhostPosition(null);
               setCatalogHoveredSlotFromCell?.(null);
@@ -527,6 +667,7 @@ function WarehouseCanvasInner({
             }}
             onDrop={(e) => {
               e.preventDefault();
+              if (isReadMode) return;
               const cell = getCellFromEvent(e);
               if (cell && draggingVisualType) {
                 addVisualElement(cell, draggingVisualType);
@@ -553,7 +694,7 @@ function WarehouseCanvasInner({
               }
             }}
           >
-            {!isLiveView && layoutModeLabel != null && layoutModeColor != null && (
+            {!isReadMode && !isLiveView && layoutModeLabel != null && layoutModeColor != null && (
               <LayoutModeBadge modeLabel={layoutModeLabel} modeColor={layoutModeColor} />
             )}
             <RowPreviewOverlay
@@ -616,17 +757,13 @@ function WarehouseCanvasInner({
                   ref={svgRef}
                   width={width}
                   height={height}
-                  viewBox={
-                    layout.building_width_m != null && (layout.building_depth_m != null || layout.building_height_m != null)
-                      ? `${-20} ${-18} ${width + 38} ${height + 18}`
-                      : `0 0 ${width} ${height}`
-                  }
+                  viewBox={`0 0 ${width} ${height}`}
                   className="relative z-10 block bg-transparent"
-                  style={{ cursor: isPanning ? "grabbing" : panMode ? "grab" : placementMode ? "none" : draggingRackId ? "grabbing" : (layoutMode != null ? LAYOUT_MODE_CURSORS[layoutMode] : "default"), overflow: "visible" }}
-                  onMouseMove={onMouseMove}
-                  onMouseDown={onMouseDown}
-                  onMouseUp={onMouseUp}
-                  onMouseLeave={onMouseLeave}
+                  style={{ cursor: isPanning ? "grabbing" : panMode ? "grab" : (placementMode || copyPlacementMode) ? "none" : draggingRackId ? "grabbing" : (layoutMode != null ? LAYOUT_MODE_CURSORS[layoutMode] : "default"), overflow: "visible" }}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseDown={handleCanvasMouseDown}
+                  onMouseUp={handleCanvasMouseUp}
+                  onMouseLeave={handleCanvasMouseLeave}
                 >
                   <rect
                     x={0}
@@ -636,22 +773,23 @@ function WarehouseCanvasInner({
                     fill="none"
                     stroke="#666"
                     strokeWidth={2}
-                    strokeDasharray="6 4"
                   />
-                  {layout.building_width_m != null && (layout.building_depth_m != null || layout.building_height_m != null) && (() => {
-                    const depthM = layout.building_depth_m ?? layout.building_height_m;
-                    return depthM != null ? (
-                      <g pointerEvents="none" aria-hidden>
-                        <text x={width / 2} y={-10} textAnchor="middle" fontSize={12} fill="#888">
-                          {layout.building_width_m} m
-                        </text>
-                        <text x={width + 10} y={height / 2} transform={`rotate(-90 ${width + 10} ${height / 2})`} textAnchor="middle" fontSize={12} fill="#888">
-                          {depthM} m
-                        </text>
-                      </g>
-                    ) : null;
-                  })()}
-                  {dragSlotHighlights && (
+                  {wallElements.length > 0 && (
+                    <WallElementsLayer
+                      wallElements={wallElements}
+                      gridCols={layout.grid_cols}
+                      gridRows={layout.grid_rows}
+                      cellPx={cellPx}
+                      widthPx={width}
+                      heightPx={height}
+                      selectedWallElementId={selectedWallElementId}
+                      draggingWallElementId={draggingWallElementId}
+                      dragPreviewPositionCm={dragPreviewPositionCm}
+                      onSelect={setSelectedWallElementId ?? (() => {})}
+                      onPointerDown={onStartWallElementDrag ? (e, el) => { e.preventDefault(); onStartWallElementDrag(el); } : undefined}
+                    />
+                  )}
+                  {!isReadMode && dragSlotHighlights && (
                     <SelectionOverlay
                       part="dragSlots"
                       dragSlotHighlights={dragSlotHighlights}
@@ -699,37 +837,80 @@ function WarehouseCanvasInner({
                     showRackLabels={showRackLabels}
                     hoveredRackId={hoveredRackId}
                     setHoveredRackId={setHoveredRackId}
+                    highlightedRackIds={highlightedRackIds}
+                    onRackClick={onRackClick}
+                    onRackDoubleClick={onRackDoubleClick}
                   />
-                  {/* Special warehouse nodes (above shelves) */}
+                  {/* Special warehouse nodes (above shelves) — draggable, right-click to delete */}
                   {specialLocations.pick_start && (() => {
-                    const px = (specialLocations.pick_start.x / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
-                    const py = (specialLocations.pick_start.y / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
-                    const r = cellPx * 0.45;
+                    const isDragging = draggingSpecial?.key === "pick_start";
+                    const px = isDragging && dragPreviewCell
+                      ? dragPreviewCell.x * cellPx + cellPx / 2
+                      : (specialLocations.pick_start.x / GRID_UNIT_CM) * cellPx + cellPx / 2;
+                    const py = isDragging && dragPreviewCell
+                      ? dragPreviewCell.y * cellPx + cellPx / 2
+                      : (specialLocations.pick_start.y / GRID_UNIT_CM) * cellPx + cellPx / 2;
+                    const iconSize = Math.min(24, Math.max(14, cellPx * 0.6));
+                    const half = iconSize / 2;
                     return (
-                      <g key="special-pick_start" pointerEvents="none">
-                        <circle cx={px} cy={py} r={r} fill="#22c55e" stroke="#166534" strokeWidth={2} />
-                        <text x={px} y={py + 1} textAnchor="middle" fontSize={Math.max(8, cellPx * 0.3)} fill="#fff" fontWeight="bold">START</text>
+                      <g
+                        key="special-pick_start"
+                        data-special-location="pick_start"
+                        data-special-id={specialLocations.pick_start.id}
+                        transform={`translate(${px - half}, ${py - half})`}
+                        style={{ color: "#22c55e", cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default" }}
+                        onPointerDown={(e) => handleSpecialPointerDown(e, "pick_start", specialLocations.pick_start!.id)}
+                        onContextMenu={(e) => handleSpecialContextMenu(e, "pick_start", specialLocations.pick_start!.id)}
+                      >
+                        <circle cx={half} cy={half} r={half + 2} fill="#dcfce7" stroke="#166534" strokeWidth={1.5} />
+                        <MapPin size={iconSize} strokeWidth={2} style={{ overflow: "visible" }} />
                       </g>
                     );
                   })()}
                   {specialLocations.packing && (() => {
-                    const px = (specialLocations.packing.x / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
-                    const py = (specialLocations.packing.y / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
-                    const s = cellPx * 0.7;
+                    const isDragging = draggingSpecial?.key === "packing";
+                    const px = isDragging && dragPreviewCell
+                      ? dragPreviewCell.x * cellPx + cellPx / 2
+                      : (specialLocations.packing.x / GRID_UNIT_CM) * cellPx + cellPx / 2;
+                    const py = isDragging && dragPreviewCell
+                      ? dragPreviewCell.y * cellPx + cellPx / 2
+                      : (specialLocations.packing.y / GRID_UNIT_CM) * cellPx + cellPx / 2;
+                    const iconSize = Math.min(24, Math.max(14, cellPx * 0.6));
+                    const half = iconSize / 2;
                     return (
-                      <g key="special-packing" pointerEvents="none">
-                        <rect x={px - s / 2} y={py - s / 2} width={s} height={s} fill="#3b82f6" stroke="#1d4ed8" strokeWidth={2} rx={2} />
-                        <text x={px} y={py + 1} textAnchor="middle" fontSize={Math.max(8, cellPx * 0.3)} fill="#fff" fontWeight="bold">PACK</text>
+                      <g
+                        key="special-packing"
+                        data-special-location="packing"
+                        data-special-id={specialLocations.packing.id}
+                        transform={`translate(${px - half}, ${py - half})`}
+                        style={{ color: "#1d4ed8", cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default" }}
+                        onPointerDown={(e) => handleSpecialPointerDown(e, "packing", specialLocations.packing!.id)}
+                        onContextMenu={(e) => handleSpecialContextMenu(e, "packing", specialLocations.packing!.id)}
+                      >
+                        <circle cx={half} cy={half} r={half + 2} fill="#dbeafe" stroke="#1d4ed8" strokeWidth={1.5} />
+                        <Package size={iconSize} strokeWidth={2} style={{ overflow: "visible" }} />
                       </g>
                     );
                   })()}
                   {specialLocations.dock && (() => {
-                    const px = (specialLocations.dock.x / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
-                    const py = (specialLocations.dock.y / SPECIAL_CELL_CM) * cellPx + cellPx / 2;
+                    const isDragging = draggingSpecial?.key === "dock";
+                    const px = isDragging && dragPreviewCell
+                      ? dragPreviewCell.x * cellPx + cellPx / 2
+                      : (specialLocations.dock.x / GRID_UNIT_CM) * cellPx + cellPx / 2;
+                    const py = isDragging && dragPreviewCell
+                      ? dragPreviewCell.y * cellPx + cellPx / 2
+                      : (specialLocations.dock.y / GRID_UNIT_CM) * cellPx + cellPx / 2;
                     const size = cellPx * 0.5;
                     const points = `${px},${py - size} ${px + size},${py} ${px},${py + size} ${px - size},${py}`;
                     return (
-                      <g key="special-dock" pointerEvents="none">
+                      <g
+                        key="special-dock"
+                        data-special-location="dock"
+                        data-special-id={specialLocations.dock.id}
+                        style={{ cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default" }}
+                        onPointerDown={(e) => handleSpecialPointerDown(e, "dock", specialLocations.dock!.id)}
+                        onContextMenu={(e) => handleSpecialContextMenu(e, "dock", specialLocations.dock!.id)}
+                      >
                         <polygon points={points} fill="#6b7280" stroke="#4b5563" strokeWidth={2} />
                         <text x={px} y={py + 1} textAnchor="middle" fontSize={Math.max(8, cellPx * 0.3)} fill="#fff" fontWeight="bold">DOCK</text>
                       </g>
@@ -752,6 +933,19 @@ function WarehouseCanvasInner({
                       height={ghostH * cellPx - 4}
                       fill={ghostCollision ? "rgba(239, 68, 68, 0.5)" : "rgba(59, 130, 246, 0.4)"}
                       stroke={ghostCollision ? "#dc2626" : "#3b82f6"}
+                      strokeWidth={2}
+                      strokeDasharray="4 2"
+                      rx={RACK_RADIUS_PX}
+                    />
+                  )}
+                  {copyPlacementMode && ghostPosition && copiedRack && (
+                    <rect
+                      x={ghostPosition.x * cellPx + 2}
+                      y={ghostPosition.y * cellPx + 2}
+                      width={(copiedRack.width ?? ghostW) * cellPx - 4}
+                      height={(copiedRack.height ?? ghostH) * cellPx - 4}
+                      fill="rgba(59, 130, 246, 0.4)"
+                      stroke="#3b82f6"
                       strokeWidth={2}
                       strokeDasharray="4 2"
                       rx={RACK_RADIUS_PX}
@@ -825,7 +1019,7 @@ function WarehouseCanvasInner({
                         </g>
                       );
                     })()}
-                  {marqueeStart && marqueeEnd && (
+                  {!isReadMode && marqueeStart && marqueeEnd && (
                     <SelectionOverlay
                       part="marquee"
                       marqueeStart={marqueeStart}
@@ -905,21 +1099,24 @@ function WarehouseCanvasInner({
                     })
                   )}
                 </div>
-                <SelectionOverlay
-                  part="toolbar"
-                  selectedRack={selectedRack}
-                  isMultiSelect={isMultiSelect}
-                  cellPx={cellPx}
-                  setInternalLayoutRackId={setInternalLayoutRackId}
-                  setShowElevationForRackId={setShowElevationForRackId}
-                  setLayout={setLayout}
-                  setSelectedRackId={setSelectedRackId}
-                  setSelectedRackIds={setSelectedRackIds}
-                  selectedRackIds={selectedRackIds}
-                />
+                {!isReadMode && (
+                  <SelectionOverlay
+                    part="toolbar"
+                    selectedRack={selectedRack}
+                    isMultiSelect={isMultiSelect}
+                    cellPx={cellPx}
+                    setInternalLayoutRackId={setInternalLayoutRackId}
+                    setShowElevationForRackId={setShowElevationForRackId}
+                    setLayout={setLayout}
+                    setSelectedRackId={setSelectedRackId}
+                    setSelectedRackIds={setSelectedRackIds}
+                    selectedRackIds={selectedRackIds}
+                    onCopyRack={onCopyRack}
+                  />
+                )}
               </div>
             </div>
-            {cursorCm != null && (placementMode || draggingRackId != null) && (
+            {cursorCm != null && (placementMode || copyPlacementMode || draggingRackId != null) && (
               <p className="text-xs text-cyan-200/80 mt-1 font-mono absolute bottom-0 left-0">
                 {cursorCm.x} cm × {cursorCm.y} cm
               </p>

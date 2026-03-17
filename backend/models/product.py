@@ -5,7 +5,7 @@ Produkt należy do konkretnego tenant.
 Może być używany w wielu zamówieniach.
 """
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Numeric, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Numeric, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -53,6 +53,17 @@ class Product(Base):
 
     # Przypisania do lokalizacji magazynowych (JSON: [{"locationUUID": "...", "quantity": n}, ...])
     assigned_locations = Column(Text, nullable=True)
+
+    # Orientacja przy pakowaniu: any | upright | no_stack
+    orientation_type = Column(String(20), nullable=True)
+    # Kształt: box | cylinder (cylinder = średnica w width, wysokość w height)
+    shape_type = Column(String(20), nullable=True)
+    # Układanie w stos: kompresja (np. poduszki, koce) i limit wagi
+    stack_compressible = Column(Boolean, nullable=True)
+    compressed_height_cm = Column(Float, nullable=True)
+    max_stack_weight = Column(Float, nullable=True)
+    # Układanie w stos: stackable (domyślnie) | no_stack
+    stack_behavior = Column(String(20), nullable=True)
 
     # Szablon etykiety produktu (jeśli ustawiony, używany przy generowaniu etykiet)
     label_template_id = Column(

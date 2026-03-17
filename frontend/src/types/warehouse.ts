@@ -56,6 +56,22 @@ export type WarehouseProduct = {
   /** Alternative weight field (kg); prefer weight_kg. Used when mapping from API that returns "weight". */
   weight?: number;
   image_url?: string;
+  /** Physical dimensions (cm). When set, used for physical slot capacity (3D bin packing). May come from API. */
+  width_cm?: number;
+  depth_cm?: number;
+  height_cm?: number;
+  /** Orientation constraint for packing: any | upright | no_stack. Null/undefined → any. */
+  orientation_type?: "any" | "upright" | "no_stack";
+  /** Shape: box | cylinder. Null/undefined → box. */
+  shape_type?: "box" | "cylinder";
+  /** Stack compression (e.g. pillows, quilts). Null/undefined → false. */
+  stack_compressible?: boolean;
+  /** Height (cm) when stacked/compressed. Used when stack_compressible is true. */
+  compressed_height_cm?: number | null;
+  /** Max total weight (kg) of stack; limits stack height by weight. */
+  max_stack_weight?: number | null;
+  /** Stacking: stackable (default) | no_stack. When no_stack, countZ = 1. */
+  stack_behavior?: "stackable" | "no_stack";
 };
 
 export interface InternalLocation {
@@ -223,6 +239,20 @@ export type RowContainer = {
   slots: EmptyRowSlot[];
 };
 
+export type WallSide = "north" | "south" | "east" | "west";
+
+export type WallElement = {
+  id: string;
+  type: "door" | "gate";
+  wall: WallSide;
+  /** Position along wall from start (cm). */
+  position_cm: number;
+  /** Width along wall (cm). */
+  width_cm: number;
+  /** For type === "gate" only. */
+  gateType?: "courier" | "supplier" | "both";
+};
+
 export type LayoutState = {
   layout_id: number | null;
   warehouse_id: number | null;
@@ -244,6 +274,8 @@ export type LayoutState = {
   picking_path?: PickingPathState;
   /** Empty row containers (slots). Racks can be placed into slots by dragging from catalog. */
   row_containers?: RowContainer[];
+  /** Doors and loading gates on building perimeter (wall + position_cm + width_cm). */
+  wall_elements?: WallElement[];
 };
 
 export type RackTemplate = {

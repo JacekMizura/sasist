@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import type { LayoutState, RackState, VisualElementState } from "../../types/warehouse";
-import { GRID_UNIT_CM } from "../../types/warehouse";
-import { getLevelConfig, getTotalLocations, volumePerBinFromTotal, volumePerBin, createBinsForRack, ROW_LABEL_ADDRESS_PATTERN } from "../../components/warehouse/warehouseUtils";
+import { cmToCells, duplicateRacksAtPosition } from "../../components/warehouse/warehouseUtils";
 import { LayoutMode } from "../../warehouse-layout";
 
 export interface UseDesignerKeyboardParams {
@@ -31,10 +30,15 @@ export interface UseDesignerKeyboardParams {
   selectedObjectId: string | null;
   deleteObject: (objectId: string | null) => void;
   clipboard: RackState[];
-  cursorCm: { x: number; y: number } | null;
+  getPastePosition: () => { x: number; y: number };
   layout: LayoutState;
   selectedRackIds: Array<number | string>;
   selectedVisualIds: string[];
+  copyPlacementMode?: boolean;
+  setCopyPlacementMode?: (v: boolean) => void;
+  setCopiedRack?: (v: RackState | null) => void;
+  selectedWallElementId?: string | null;
+  deleteSelectedWallElement?: () => void;
 }
 
 export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
@@ -65,10 +69,15 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
     selectedObjectId,
     deleteObject,
     clipboard,
-    cursorCm,
+    getPastePosition,
     layout,
     selectedRackIds,
     selectedVisualIds,
+  copyPlacementMode = false,
+  setCopyPlacementMode,
+  setCopiedRack,
+  selectedWallElementId = null,
+  deleteSelectedWallElement,
   } = params;
 
   useEffect(() => {
@@ -79,6 +88,11 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
         if (mainView === "layout" && selectedRowContainerId && deleteSelectedRow) {
           e.preventDefault();
           deleteSelectedRow();
+          return;
+        }
+        if (selectedWallElementId && deleteSelectedWallElement) {
+          e.preventDefault();
+          deleteSelectedWallElement();
           return;
         }
         if (!selectedObjectId) return;
@@ -92,6 +106,12 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
         if (placementMode) setRackRotation((prev) => (prev === "vertical" ? "horizontal" : "vertical"));
       }
       if (e.key === "Escape") {
+        if (copyPlacementMode && setCopyPlacementMode && setCopiedRack) {
+          setCopyPlacementMode(false);
+          setCopiedRack(null);
+          setGhostPosition(null);
+          return;
+        }
         setPlacementMode(false);
         setLayoutMode(LayoutMode.SELECT);
         setGhostPosition(null);
@@ -115,40 +135,13 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
         }
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "v") {
-        if (clipboard.length > 0 && cursorCm != null) {
+        if (clipboard.length > 0) {
           e.preventDefault();
-          const cx = Math.round(cursorCm.x / GRID_UNIT_CM);
-          const cy = Math.round(cursorCm.y / GRID_UNIT_CM);
+          const pos = getPastePosition();
+          const cell = { x: cmToCells(pos.x), y: cmToCells(pos.y) };
           setLayout((prev) => ({
             ...prev,
-            racks: [
-              ...prev.racks,
-              ...clipboard.map((r, i) => {
-                const lc = getLevelConfig(r);
-                const total = getTotalLocations(lc);
-                const volPerBin = total > 0 ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total) : volumePerBin(r.width_cm, r.length_cm, r.height_cm, r.levels, r.bins_per_level);
-                const rAny = r as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha" };
-                const bins = createBinsForRack(
-                  r.aisle_letter,
-                  prev.racks.length + i + 1,
-                  r.levels,
-                  r.bins_per_level,
-                  volPerBin,
-                  "M1",
-                  undefined,
-                  r.width_cm,
-                  r.length_cm,
-                  r.height_cm,
-                  undefined,
-                  rAny.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
-                  rAny.rowId ?? r.name,
-                  rAny.sectionStartIndex ?? 1,
-                  rAny.binNamingType ?? "numeric",
-                  lc
-                );
-                return { ...r, id: undefined, x: cx + (i % 3) * (r.width + 1), y: cy + Math.floor(i / 3) * (r.height + 1), rack_index: prev.racks.length + i + 1, bins };
-              }),
-            ],
+            racks: [...prev.racks, ...duplicateRacksAtPosition(clipboard, cell, prev.racks.length + 1)],
           }));
         }
       }
@@ -156,47 +149,21 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
         e.preventDefault();
         if (mainView !== "magazyn" && selectedRackIds.length > 0) {
           const toDup = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
-          if (toDup.length > 0 && cursorCm != null) {
-            const cx = Math.round(cursorCm.x / GRID_UNIT_CM);
-            const cy = Math.round(cursorCm.y / GRID_UNIT_CM);
+          if (toDup.length > 0) {
+            const pos = getPastePosition();
+            const cell = { x: cmToCells(pos.x), y: cmToCells(pos.y) };
             setLayout((prev) => ({
               ...prev,
-              racks: [
-                ...prev.racks,
-                ...toDup.map((r, i) => {
-                  const lc = getLevelConfig(r);
-                  const total = getTotalLocations(lc);
-                  const volPerBin = total > 0 ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total) : volumePerBin(r.width_cm, r.length_cm, r.height_cm, r.levels, r.bins_per_level);
-                  const rAny = r as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha" };
-                  const bins = createBinsForRack(
-                    r.aisle_letter,
-                    prev.racks.length + i + 1,
-                    r.levels,
-                    r.bins_per_level,
-                    volPerBin,
-                    "M1",
-                    undefined,
-                    r.width_cm,
-                    r.length_cm,
-                    r.height_cm,
-                    undefined,
-                    rAny.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
-                    rAny.rowId ?? r.name,
-                    rAny.sectionStartIndex ?? 1,
-                    rAny.binNamingType ?? "numeric",
-                    lc
-                  );
-                  return { ...r, id: undefined, x: cx + (i % 3) * (r.width + 1), y: cy + Math.floor(i / 3) * (r.height + 1), rack_index: prev.racks.length + i + 1, bins };
-                }),
-              ],
+              racks: [...prev.racks, ...duplicateRacksAtPosition(toDup, cell, prev.racks.length + 1)],
             }));
             setSnackbar({ message: "Sklonowano regały.", undo: () => setSnackbar(null) });
           }
         } else if (mainView !== "magazyn" && selectedVisualIds.length > 0) {
           const toDup = (layout.visual_elements ?? []).filter((ve) => selectedVisualIds.includes(ve.id));
-          if (toDup.length > 0 && cursorCm != null) {
-            const cx = Math.round(cursorCm.x / GRID_UNIT_CM);
-            const cy = Math.round(cursorCm.y / GRID_UNIT_CM);
+          if (toDup.length > 0) {
+            const pos = getPastePosition();
+            const cx = cmToCells(pos.x);
+            const cy = cmToCells(pos.y);
             const newEls: VisualElementState[] = toDup.map((ve, i) => ({
               ...ve,
               id: `ve-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 9)}`,
@@ -213,5 +180,5 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [placementMode, selectedObjectId, deleteObject, deleteSelectedRow, clipboard, cursorCm, layout.racks, layout.visual_elements, mainView, selectedRackIds.length, selectedRowContainerId, selectedVisualIds.length]);
+  }, [placementMode, selectedObjectId, deleteObject, deleteSelectedRow, clipboard, getPastePosition, layout.racks, layout.visual_elements, mainView, selectedRackIds.length, selectedRowContainerId, selectedVisualIds.length, copyPlacementMode, setCopyPlacementMode, setCopiedRack, selectedWallElementId, deleteSelectedWallElement]);
 }

@@ -22,7 +22,7 @@ export function LayoutModeBadge({ modeLabel, modeColor: _modeColor, className = 
       aria-live="polite"
       aria-label={`Tryb: ${modeLabel}`}
     >
-      MODE: {modeLabel}
+      Tryb: {modeLabel}
     </div>
   );
 }

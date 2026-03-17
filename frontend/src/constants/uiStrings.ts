@@ -49,7 +49,7 @@ export const UI_STRINGS = {
       title: "PODSUMOWANIE PROJEKTU",
       totalCapacity: "Pojemność całkowita:",
       freeCapacity: "Wolna pojemność:",
-      locationsBins: "Lokacje (biny):",
+      locationsBins: "Lokalizacje (biny):",
       reserveOverstock: "Rezerwa (overstock):",
       clickRackHint: "Kliknij regał, aby zobaczyć stan i zajętość.",
       totalRacks: "Regały:",
@@ -78,7 +78,9 @@ export const UI_STRINGS = {
       create: "Utwórz",
     },
     rackSidebar: {
-      catalog: "Katalog",
+      catalog: "Layout i szablony",
+      exportLocationsCsv: "Pobierz lokalizacje",
+      rackSearchPlaceholder: "Szukaj regału...",
       currentRow: "Aktualny rząd",
       locationsPerLevelShort: "lok./poz.",
       visualElements: "Elementy wizualne",
@@ -103,7 +105,7 @@ export const UI_STRINGS = {
     },
     rackProperties: {
       title: "Właściwości",
-      levelsBins: "Poziomy / Biny",
+      levelsBins: "Poziomy / Pozycje",
     },
     visuals: {
       toFront: "Na wierzch",
@@ -167,7 +169,7 @@ export const UI_STRINGS = {
       heightMm: "Wys. (mm)",
       dpi: "DPI (drukarki termiczne: 203–300)",
       conditionalFormatting: "Formatowanie warunkowe",
-      conditionalHint: "Kolory etykiet wg typu lokacji (np. Rezerwa → czerwone tło)",
+      conditionalHint: "Kolory etykiet wg typu lokalizacji (np. Rezerwa → czerwone tło)",
       addRule: "+ Reguła",
       addElement: "Dodaj element",
       barcode: "Kod kreskowy",

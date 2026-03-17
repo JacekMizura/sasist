@@ -21,6 +21,11 @@ class SpecialLocationCreate(BaseModel):
     type: Literal["PICK_START", "PACKING", "DOCK"]
 
 
+class SpecialLocationUpdate(BaseModel):
+    x: float
+    y: float
+
+
 def _pdf_response(pdf_bytes: bytes, filename: str) -> Response:
     return Response(
         content=pdf_bytes,
@@ -142,3 +147,40 @@ def get_special_locations(
         elif loc.location_type == "DOCK":
             dock = d
     return {"pick_start": pick_start, "packing": packing, "dock": dock}
+
+
+@router.patch("/special-location/{location_id}")
+def update_special_location(
+    location_id: int,
+    body: SpecialLocationUpdate,
+    db: Session = Depends(get_db),
+):
+    """Update special location position by id."""
+    loc = db.query(Location).filter(
+        Location.id == location_id,
+        Location.location_type.in_(["PICK_START", "PACKING", "DOCK"]),
+    ).first()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Special location not found")
+    loc.x = body.x
+    loc.y = body.y
+    db.commit()
+    db.refresh(loc)
+    return {"id": loc.id, "x": float(loc.x or 0), "y": float(loc.y or 0), "location_type": loc.location_type}
+
+
+@router.delete("/special-location/{location_id}")
+def delete_special_location(
+    location_id: int,
+    db: Session = Depends(get_db),
+):
+    """Delete a special location by id."""
+    loc = db.query(Location).filter(
+        Location.id == location_id,
+        Location.location_type.in_(["PICK_START", "PACKING", "DOCK"]),
+    ).first()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Special location not found")
+    db.delete(loc)
+    db.commit()
+    return {"ok": True}

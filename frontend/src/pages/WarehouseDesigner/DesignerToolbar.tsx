@@ -65,31 +65,20 @@ export function DesignerToolbar({
           {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
         </button>
       </nav>
-      <div className="flex items-center gap-3">
-        {hasBuilding ? (
-          <button
-            type="button"
-            onClick={() => setShowEditBuilding(true)}
-            className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-800 hover:underline"
-            title="Edytuj wymiary budynku"
-          >
-            <span>Budynek: {layout.building_width_m} × {depthM}{layout.building_height_m != null && layout.building_height_m > 0 ? ` × ${layout.building_height_m}` : ""} m</span>
-            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowEditBuilding(true)}
-            className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400"
-            title="Ustaw wymiary budynku"
-          >
-            Ustaw wymiary budynku
-          </button>
-        )}
+      <div className="flex items-center gap-3 flex-wrap">
         {warehouseUsagePct != null && hasBuilding && (
-          <span className="text-xs font-mono px-2 py-1 rounded bg-slate-100 text-slate-700" title="Zajętość powierzchni (regały / budynek)">
-            Zajętość: {Number(warehouseUsagePct).toFixed(0)}%
-          </span>
+          <div className="flex items-center gap-2" title="Zajętość powierzchni (regały / budynek)">
+            <span className="text-sm text-slate-600">Zajętość</span>
+            <div className="w-32 h-2 bg-slate-200 rounded overflow-hidden">
+              <div
+                className="h-2 bg-emerald-500 rounded"
+                style={{ width: `${Math.min(100, Math.max(0, Number(warehouseUsagePct)))}%` }}
+              />
+            </div>
+            <span className="text-sm text-slate-600 min-w-[2rem]">
+              {Number(warehouseUsagePct).toFixed(0)}%
+            </span>
+          </div>
         )}
         <select
           value={selectedWarehouseId ?? ""}
@@ -101,9 +90,6 @@ export function DesignerToolbar({
             <option key={wh.id} value={wh.id}>{wh.name}</option>
           ))}
         </select>
-        {warehouseName ? (
-          <span className="text-sm text-slate-600">{warehouseName}</span>
-        ) : null}
         <span className={`text-xs font-mono px-2 py-1 rounded ${lastSavedAt != null ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
           {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
         </span>

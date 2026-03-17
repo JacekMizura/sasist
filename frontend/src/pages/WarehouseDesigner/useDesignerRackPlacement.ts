@@ -28,7 +28,6 @@ export interface UseDesignerRackPlacementParams {
   layout: LayoutState;
   template: RackTemplate;
   rackRotation: "vertical" | "horizontal";
-  currentRowPrefix: string;
   aisleWidthCm: number;
   setLayout: Dispatch<SetStateAction<LayoutState>>;
   setDraggingFromCatalog: Dispatch<SetStateAction<CatalogItem | null>>;
@@ -41,7 +40,6 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     layout,
     template,
     rackRotation,
-    currentRowPrefix,
     aisleWidthCm,
     setLayout,
     setDraggingFromCatalog,
@@ -159,7 +157,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         }
         if (consumedSpan < reqW) return;
       }
-      const prefix = ((row.rowPrefix ?? currentRowPrefix) || "A").trim() || "A";
+      const prefix = (row.rowPrefix || "A").trim() || "A";
       const indexInRow = 1 + row.slots.filter((s) => s.rackId != null).length;
       const rackIndex = layout.racks.length + 1;
       const rackLabel = `${prefix}${indexInRow}`;
@@ -266,10 +264,10 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       setCatalogGhostPosition(null);
       setCatalogHoveredSlot(null);
     },
-    [layout.racks, layout.row_containers, currentRowPrefix, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]
+    [layout.racks, layout.row_containers, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]
   );
 
-  const stampRackFromCatalogItem = useCallback((cell: { x: number; y: number }, item: CatalogItem) => {
+  const stampRackFromCatalogItem = useCallback((cell: { x: number; y: number }, item: CatalogItem, rowPrefix?: string) => {
     const emptySlot = findEmptySlotAt(layout.row_containers, cell);
     if (emptySlot) {
       stampRackIntoSlot(emptySlot.rowContainer.id, emptySlot.slotIndex, item);
@@ -289,7 +287,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     const snap = findSnapToRowPosition(layout.racks, cell.x, cell.y, w, h);
     const x = snap ? Math.max(0, Math.min(layout.grid_cols - w, snap.x)) : Math.max(0, Math.min(layout.grid_cols - w, cell.x));
     const y = snap ? Math.max(0, Math.min(layout.grid_rows - h, snap.y)) : Math.max(0, Math.min(layout.grid_rows - h, cell.y));
-    const prefix = snap ? snap.rowPrefix : (currentRowPrefix || "A").trim() || "A";
+    const prefix = snap ? snap.rowPrefix : (rowPrefix ?? "A").trim() || "A";
     const indexInRow = snap ? snap.indexInRow : getNextIndexInRow(layout.racks, prefix);
     const rackIndex = layout.racks.length + 1;
     const rackLabel = `${prefix}${indexInRow}`;
@@ -349,7 +347,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     setDraggingFromCatalog(null);
     setCatalogGhostPosition(null);
     setCatalogHoveredSlot(null);
-  }, [layout.racks, layout.row_containers, layout.grid_cols, layout.grid_rows, currentRowPrefix, stampRackIntoSlot, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]);
+  }, [layout.racks, layout.row_containers, layout.grid_cols, layout.grid_rows, stampRackIntoSlot, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]);
 
   const getCatalogDropCell = useCallback(
     (cell: { x: number; y: number }, item: CatalogItem) => {

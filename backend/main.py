@@ -8,7 +8,13 @@ from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
 from .database import Base, engine
-from .db.schema_upgrade import ensure_locations_columns, ensure_warehouse_layout_building_columns
+from .db.schema_upgrade import (
+    ensure_locations_columns,
+    ensure_warehouse_layout_building_columns,
+    ensure_products_physical_columns,
+    ensure_products_stack_columns,
+    ensure_products_stack_behavior_column,
+)
 from .middleware.request_metrics import record_request, record_error
 
 # Import all models so SQLAlchemy mappers (and relationships like Tenant.storage_units) are registered
@@ -219,6 +225,9 @@ def upgrade_schema():
     """Run schema upgrades so existing SQLite DBs gain new columns."""
     ensure_locations_columns(engine)
     ensure_warehouse_layout_building_columns(engine)
+    ensure_products_physical_columns(engine)
+    ensure_products_stack_columns(engine)
+    ensure_products_stack_behavior_column(engine)
 
 
 # ==================================================

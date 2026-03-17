@@ -1,6 +1,7 @@
 import React from "react";
 import type { RackState } from "../../../types/warehouse";
 import type { LayoutState } from "../../../types/warehouse";
+import { cellToPx } from "../renderUtils";
 import { radius } from "../../../layout/designTokens";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
@@ -29,6 +30,7 @@ type ToolbarProps = {
   setSelectedRackId: (id: number | string | null) => void;
   setSelectedRackIds: (ids: Array<number | string>) => void;
   selectedRackIds: Array<number | string>;
+  onCopyRack?: (rack: RackState) => void;
 };
 
 export type SelectionOverlayProps = DragSlotsProps | MarqueeProps | ToolbarProps;
@@ -41,10 +43,10 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         {dragSlotHighlights.validSlots.map((slot, i) => (
           <rect
             key={`valid-${i}`}
-            x={slot.x * cellPx + 1}
-            y={slot.y * cellPx + 1}
-            width={slot.width * cellPx - 2}
-            height={slot.height * cellPx - 2}
+            x={cellToPx(slot.x, cellPx) + 1}
+            y={cellToPx(slot.y, cellPx) + 1}
+            width={cellToPx(slot.width, cellPx) - 2}
+            height={cellToPx(slot.height, cellPx) - 2}
             fill="rgba(34,197,94,0.35)"
             stroke="#22c55e"
             strokeWidth={1}
@@ -55,10 +57,10 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         {dragSlotHighlights.invalidSlots.map((slot, i) => (
           <rect
             key={`invalid-${i}`}
-            x={slot.x * cellPx + 1}
-            y={slot.y * cellPx + 1}
-            width={slot.width * cellPx - 2}
-            height={slot.height * cellPx - 2}
+            x={cellToPx(slot.x, cellPx) + 1}
+            y={cellToPx(slot.y, cellPx) + 1}
+            width={cellToPx(slot.width, cellPx) - 2}
+            height={cellToPx(slot.height, cellPx) - 2}
             fill="rgba(239,68,68,0.25)"
             stroke="#ef4444"
             strokeWidth={1}
@@ -73,10 +75,10 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     const { marqueeStart, marqueeEnd, cellPx } = props;
     return (
       <rect
-        x={Math.min(marqueeStart.x, marqueeEnd.x) * cellPx}
-        y={Math.min(marqueeStart.y, marqueeEnd.y) * cellPx}
-        width={Math.abs(marqueeEnd.x - marqueeStart.x) * cellPx || cellPx}
-        height={Math.abs(marqueeEnd.y - marqueeStart.y) * cellPx || cellPx}
+        x={cellToPx(Math.min(marqueeStart.x, marqueeEnd.x), cellPx)}
+        y={cellToPx(Math.min(marqueeStart.y, marqueeEnd.y), cellPx)}
+        width={cellToPx(Math.abs(marqueeEnd.x - marqueeStart.x), cellPx) || cellPx}
+        height={cellToPx(Math.abs(marqueeEnd.y - marqueeStart.y), cellPx) || cellPx}
         fill="rgba(59,130,246,0.25)"
         stroke="#3b82f6"
         strokeWidth={1.5}
@@ -94,14 +96,20 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     setSelectedRackId,
     setSelectedRackIds,
     selectedRackIds,
+    onCopyRack,
   } = props;
   if (!selectedRack || isMultiSelect) return null;
   return (
     <div
       className="absolute z-20 flex gap-0.5 shadow-lg rounded overflow-hidden border border-cyan-500/50 bg-slate-800"
-      style={{ left: selectedRack.x * cellPx, top: selectedRack.y * cellPx - 32 }}
+      style={{ left: cellToPx(selectedRack.x, cellPx), top: cellToPx(selectedRack.y, cellPx) - 32 }}
       onClick={(e) => e.stopPropagation()}
     >
+      {onCopyRack && (
+        <button type="button" onClick={() => onCopyRack(selectedRack)} className="p-1.5 bg-slate-700 hover:bg-cyan-600 text-cyan-100" title="Kopiuj regał" aria-label="Kopiuj regał">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+        </button>
+      )}
       <button type="button" onClick={() => setInternalLayoutRackId(selectedRack.id ?? selectedRack.rack_index)} className="p-1.5 bg-slate-700 hover:bg-cyan-600 text-cyan-100" title="Układ wewnętrzny">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
       </button>

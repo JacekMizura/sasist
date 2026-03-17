@@ -1,11 +1,168 @@
 import { useMemo, useCallback } from "react";
 import type { LayoutState, WarehouseProduct, BinState } from "../../types/warehouse";
 import { safeQuantity, safeVolumeDm3 } from "./DesignerRackPlacement";
+import {
+  binVolumeDm3,
+  calculateMaxCapacityByVolume,
+  calculatePackingLayout,
+  type PackingLayoutResult,
+} from "../../components/warehouse/warehouseUtils";
 
 export interface UseDesignerMagazynStateParams {
   layout: LayoutState;
   products: WarehouseProduct[];
   selectedRackIdForSideView: number | string | null;
+}
+
+/** Effective height (cm) for stacking: compressed when stack_compressible and compressed_height_cm > 0. */
+function effectiveHeightCm(product: WarehouseProduct): number | undefined {
+  const raw = product.height_cm;
+  if (product.stack_compressible && product.compressed_height_cm != null && product.compressed_height_cm > 0)
+    return product.compressed_height_cm;
+  return raw ?? undefined;
+}
+
+/** Max stack count by weight: floor(max_stack_weight / unit_weight). Infinity if no limit. */
+function maxCountZByWeight(product: WarehouseProduct): number {
+  const maxW = product.max_stack_weight;
+  const weight = product.weight_kg ?? product.weight;
+  if (maxW == null || maxW <= 0 || weight == null || weight <= 0) return Infinity;
+  const n = Math.floor(maxW / weight);
+  return Number.isFinite(n) && n >= 0 ? n : Infinity;
+}
+
+/** Capacity (pieces) for a product in a slot: orientation, shape, compression, weight limit. */
+function capacityForProduct(
+  slotDims: { width_cm?: number; depth_cm?: number; height_cm?: number },
+  product: WarehouseProduct
+): number {
+  const shape = product.shape_type ?? "box";
+  // Cylinders are always treated as upright (no horizontal rotation).
+  const orient = shape === "cylinder" ? "upright" : (product.orientation_type ?? "any");
+  const effectiveH = effectiveHeightCm(product);
+  // For cylinder: height = longest dimension (vertical axis); diameter = cross-section (smallest dimension).
+  // Example: width=5, height=5, length=22 → height=22, diameter=5 → countZ=floor(70/22)=3, capacity 10×12×3=360.
+  const w = product.width_cm ?? 0;
+  const d = product.depth_cm ?? 0;
+  const h = product.height_cm ?? 0;
+  const cylinderHeight = shape === "cylinder"
+    ? Math.max(w, d, effectiveH ?? h)
+    : effectiveH ?? product.height_cm;
+  const cylinderDiameter = shape === "cylinder"
+    ? (() => { const m = Math.min(w || Infinity, d || Infinity, h || Infinity); return Number.isFinite(m) ? m : 0; })()
+    : 0;
+  const dims =
+    shape === "cylinder"
+      ? {
+          width_cm: cylinderDiameter,
+          depth_cm: cylinderDiameter,
+          height_cm: cylinderHeight,
+        }
+      : {
+          width_cm: product.width_cm,
+          depth_cm: product.depth_cm,
+          height_cm: effectiveH ?? product.height_cm,
+        };
+  // Shape-specific guards: cylinder needs diameter and height derived from dimensions; box needs all three.
+  if (shape === "cylinder") {
+    if (!cylinderDiameter || !cylinderHeight) return 0;
+  } else {
+    if (!dims.width_cm || !dims.depth_cm || !dims.height_cm) return 0;
+  }
+
+  const noStack = product.stack_behavior === "no_stack" || orient === "no_stack";
+  const orientationLimit = noStack ? 1 : Infinity;
+  const weightLimit = maxCountZByWeight(product);
+  const slotH = slotDims.height_cm ?? 0;
+  const heightLimit =
+    slotH > 0 && dims.height_cm > 0 ? Math.floor(slotH / dims.height_cm) : Infinity;
+  const maxCountZ = Math.min(heightLimit, weightLimit, orientationLimit);
+  const maxCountZArg = Number.isFinite(maxCountZ) ? maxCountZ : undefined;
+
+  if (shape === "cylinder") {
+    const diameter = dims.width_cm;
+    const height = dims.height_cm;
+    const countX = Math.floor((slotDims.width_cm ?? 0) / diameter);
+    const countY = Math.floor((slotDims.depth_cm ?? 0) / diameter);
+    const countZ = Math.min(Math.floor(slotH / height), maxCountZ);
+    return countX * countY * countZ;
+  }
+  const allowedRotations = orient === "upright" ? [0, 2, 4] : [0, 1, 2, 3, 4, 5];
+  const layout = calculatePackingLayout(slotDims, dims, allowedRotations, maxCountZArg);
+  return layout?.count ?? 0;
+}
+
+/** Packing layout for preview: orientation, shape, compression, weight limit. */
+function packingLayoutForProduct(
+  slotDims: { width_cm?: number; depth_cm?: number; height_cm?: number },
+  product: WarehouseProduct
+): (PackingLayoutResult & { shapeType: "box" | "cylinder" }) | null {
+  const shape = product.shape_type ?? "box";
+  const orient = shape === "cylinder" ? "upright" : (product.orientation_type ?? "any");
+  const effectiveH = effectiveHeightCm(product);
+  const w = product.width_cm ?? 0;
+  const d = product.depth_cm ?? 0;
+  const h = product.height_cm ?? 0;
+  const cylinderHeight = shape === "cylinder"
+    ? Math.max(w, d, effectiveH ?? h)
+    : effectiveH ?? product.height_cm;
+  const cylinderDiameter = shape === "cylinder"
+    ? (() => { const m = Math.min(w || Infinity, d || Infinity, h || Infinity); return Number.isFinite(m) ? m : 0; })()
+    : 0;
+  const dims =
+    shape === "cylinder"
+      ? {
+          width_cm: cylinderDiameter,
+          depth_cm: cylinderDiameter,
+          height_cm: cylinderHeight,
+        }
+      : {
+          width_cm: product.width_cm,
+          depth_cm: product.depth_cm,
+          height_cm: effectiveH ?? product.height_cm,
+        };
+  if (shape === "cylinder") {
+    if (!cylinderDiameter || !cylinderHeight) return null;
+  } else {
+    if (!dims.width_cm || !dims.depth_cm || !dims.height_cm) return null;
+  }
+
+  const noStack = product.stack_behavior === "no_stack" || orient === "no_stack";
+  const orientationLimit = noStack ? 1 : Infinity;
+  const weightLimit = maxCountZByWeight(product);
+  const slotH = slotDims.height_cm ?? 0;
+  const heightLimit =
+    slotH > 0 && dims.height_cm > 0 ? Math.floor(slotH / dims.height_cm) : Infinity;
+  const maxCountZ = Math.min(heightLimit, weightLimit, orientationLimit);
+  const maxCountZArg = Number.isFinite(maxCountZ) ? maxCountZ : undefined;
+
+  if (shape === "cylinder") {
+    const diameter = dims.width_cm;
+    const height = dims.height_cm;
+    const sw = slotDims.width_cm ?? 0;
+    const sd = slotDims.depth_cm ?? 0;
+    const sh = slotDims.height_cm ?? 0;
+    const countX = Math.floor(sw / diameter);
+    const countY = Math.floor(sd / diameter);
+    const countZ = Math.min(Math.floor(sh / height), maxCountZ);
+    const count = countX * countY * countZ;
+    if (count <= 0) return null;
+    return {
+      count,
+      rotationIndex: 0,
+      countX,
+      countY,
+      countZ,
+      boxW_cm: diameter,
+      boxD_cm: diameter,
+      boxH_cm: height,
+      shapeType: "cylinder",
+    };
+  }
+  const allowedRotations = orient === "upright" ? [0, 2, 4] : [0, 1, 2, 3, 4, 5];
+  const layout = calculatePackingLayout(slotDims, dims, allowedRotations, maxCountZArg);
+  if (!layout) return null;
+  return { ...layout, shapeType: "box" };
 }
 
 export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
@@ -136,6 +293,193 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     return out;
   }, [selectedRackForMagazyn, binLoadKg]);
 
+  /** Per-bin max physical capacity (pieces) for the first assigned product (dimensions or volume fallback). Only set when bin has at least one product. */
+  const binMaxCapacityPieces = useMemo(() => {
+    if (!selectedRackForMagazyn) return {};
+    const rack = selectedRackForMagazyn;
+    const out: Record<string, number> = {};
+    for (const bin of rack.bins) {
+      const key = `${bin.level_index}-${bin.segment_index}`;
+      const quantity = binItemCounts[key] ?? 0;
+      if (quantity <= 0) continue;
+
+      const locId = (bin.label ?? bin.location_id ?? "").trim();
+      const uuid = bin.locationUUID;
+      let firstProduct: WarehouseProduct | null = null;
+      for (const p of products) {
+        if (uuid && p.assignedLocations?.length) {
+          if (p.assignedLocations.some((a) => a.locationUUID === uuid)) {
+            firstProduct = p;
+            break;
+          }
+        } else if (locId && p.location_id === locId) {
+          firstProduct = p;
+          break;
+        }
+      }
+
+      if (!firstProduct) continue;
+
+      const slotVol = binVolumeDm3(bin, rack);
+      const productVol = safeVolumeDm3(firstProduct.volume_dm3);
+      // Derive slot dimensions from rack when layout API does not return bin width_cm/depth_cm/height_cm
+      const rackW = (rack as { width_cm?: number }).width_cm;
+      const rackD = (rack as { depth_cm?: number }).depth_cm ?? (rack as { length_cm?: number }).length_cm;
+      const rackH = (rack as { height_cm?: number }).height_cm;
+      const levels = Math.max(1, (rack as { levels?: number }).levels ?? 1);
+      const binsPerLevel = Math.max(1, (rack as { bins_per_level?: number }).bins_per_level ?? 1);
+      const slotWidth =
+        bin.width_cm ??
+        (rackW != null && rackW > 0 && binsPerLevel > 0 ? rackW / binsPerLevel : undefined);
+      const slotDepth = bin.depth_cm ?? (rackD != null && rackD > 0 ? rackD : undefined);
+      const slotHeight =
+        bin.height_cm ??
+        (rackH != null && rackH > 0 && levels > 0 ? rackH / levels : undefined);
+      const slotDims = {
+        width_cm: slotWidth,
+        depth_cm: slotDepth,
+        height_cm: slotHeight,
+      };
+      const byDims = capacityForProduct(slotDims, firstProduct);
+      const capacity = byDims > 0 ? byDims : calculateMaxCapacityByVolume(slotVol, productVol);
+      if (Number.isFinite(capacity) && capacity >= 0) out[key] = capacity;
+    }
+    return out;
+  }, [selectedRackForMagazyn, products, binItemCounts]);
+
+  /** Per-bin list of products with quantity and capacity (for tooltip: capacity per product). */
+  const binCapacityDetails = useMemo(() => {
+    if (!selectedRackForMagazyn) return {};
+    const rack = selectedRackForMagazyn;
+    const out: Record<
+      string,
+      { product: WarehouseProduct; quantity: number; capacity: number }[]
+    > = {};
+    for (const bin of rack.bins) {
+      const key = `${bin.level_index}-${bin.segment_index}`;
+      const locId = (bin.label ?? bin.location_id ?? "").trim();
+      const uuid = bin.locationUUID;
+      const assigned: { product: WarehouseProduct; quantity: number }[] = [];
+      for (const p of products) {
+        let qty = 0;
+        if (uuid && p.assignedLocations?.length) {
+          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
+          if (a) qty = safeQuantity(a.quantity);
+        } else if (locId && p.location_id === locId) {
+          qty = safeQuantity(p.quantity);
+        }
+        if (qty > 0) assigned.push({ product: p, quantity: qty });
+      }
+      if (assigned.length === 0) continue;
+
+      const slotVol = binVolumeDm3(bin, rack);
+      const rackW = (rack as { width_cm?: number }).width_cm;
+      const rackD = (rack as { depth_cm?: number }).depth_cm ?? (rack as { length_cm?: number }).length_cm;
+      const rackH = (rack as { height_cm?: number }).height_cm;
+      const levels = Math.max(1, (rack as { levels?: number }).levels ?? 1);
+      const binsPerLevel = Math.max(1, (rack as { bins_per_level?: number }).bins_per_level ?? 1);
+      const slotWidth =
+        bin.width_cm ??
+        (rackW != null && rackW > 0 && binsPerLevel > 0 ? rackW / binsPerLevel : undefined);
+      const slotDepth = bin.depth_cm ?? (rackD != null && rackD > 0 ? rackD : undefined);
+      const slotHeight =
+        bin.height_cm ??
+        (rackH != null && rackH > 0 && levels > 0 ? rackH / levels : undefined);
+      const slotDims = {
+        width_cm: slotWidth,
+        depth_cm: slotDepth,
+        height_cm: slotHeight,
+      };
+
+      const details: { product: WarehouseProduct; quantity: number; capacity: number }[] = [];
+      for (const { product: prod, quantity } of assigned) {
+        const productVol = safeVolumeDm3(prod.volume_dm3);
+        const byDims = capacityForProduct(slotDims, prod);
+        const capacity =
+          byDims > 0 ? byDims : calculateMaxCapacityByVolume(slotVol, productVol);
+        if (Number.isFinite(capacity) && capacity >= 0) {
+          details.push({ product: prod, quantity, capacity });
+        }
+      }
+      if (details.length > 0) out[key] = details;
+    }
+    return out;
+  }, [selectedRackForMagazyn, products]);
+
+  /** Packing layout preview for bins with exactly one product (dimensions required). Used for hover overlay. */
+  const binPackingPreview = useMemo(() => {
+    if (!selectedRackForMagazyn) return {};
+    const rack = selectedRackForMagazyn;
+    const out: Record<
+      string,
+      {
+        count: number;
+        rotationIndex: number;
+        countX: number;
+        countY: number;
+        countZ: number;
+        boxW_cm: number;
+        boxD_cm: number;
+        boxH_cm: number;
+        shapeType: "box" | "cylinder";
+        productName: string;
+        productDisplayName: string;
+        productSku?: string;
+        quantity: number;
+        slotDims: { width_cm?: number; depth_cm?: number; height_cm?: number };
+      }
+    > = {};
+    for (const bin of rack.bins) {
+      const key = `${bin.level_index}-${bin.segment_index}`;
+      const locId = (bin.label ?? bin.location_id ?? "").trim();
+      const uuid = bin.locationUUID;
+      const assigned: { product: WarehouseProduct; quantity: number }[] = [];
+      for (const p of products) {
+        let qty = 0;
+        if (uuid && p.assignedLocations?.length) {
+          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
+          if (a) qty = safeQuantity(a.quantity);
+        } else if (locId && p.location_id === locId) {
+          qty = safeQuantity(p.quantity);
+        }
+        if (qty > 0) assigned.push({ product: p, quantity: qty });
+      }
+      if (assigned.length !== 1) continue;
+
+      const product = assigned[0].product;
+      const rackW = (rack as { width_cm?: number }).width_cm;
+      const rackD = (rack as { depth_cm?: number }).depth_cm ?? (rack as { length_cm?: number }).length_cm;
+      const rackH = (rack as { height_cm?: number }).height_cm;
+      const levels = Math.max(1, (rack as { levels?: number }).levels ?? 1);
+      const binsPerLevel = Math.max(1, (rack as { bins_per_level?: number }).bins_per_level ?? 1);
+      const slotWidth =
+        bin.width_cm ??
+        (rackW != null && rackW > 0 && binsPerLevel > 0 ? rackW / binsPerLevel : undefined);
+      const slotDepth = bin.depth_cm ?? (rackD != null && rackD > 0 ? rackD : undefined);
+      const slotHeight =
+        bin.height_cm ??
+        (rackH != null && rackH > 0 && levels > 0 ? rackH / levels : undefined);
+      const slotDims = {
+        width_cm: slotWidth,
+        depth_cm: slotDepth,
+        height_cm: slotHeight,
+      };
+      const layout = packingLayoutForProduct(slotDims, product);
+      if (layout) {
+        const quantity = assigned[0].quantity;
+        out[key] = {
+          ...layout,
+          productName: product.name,
+          productDisplayName: product.name.length <= 16 ? product.name : `SKU ${product.sku}`,
+          productSku: product.sku,
+          quantity,
+          slotDims,
+        };
+      }
+    }
+    return out;
+  }, [selectedRackForMagazyn, products]);
+
   return {
     selectedRackForMagazyn,
     selectedRackBinLabels,
@@ -145,6 +489,9 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     binUniqueProductCounts,
     binLoadKg,
     levelLoadKg,
+    binMaxCapacityPieces,
+    binCapacityDetails,
+    binPackingPreview,
     usedVolumeAtBin,
   };
 }

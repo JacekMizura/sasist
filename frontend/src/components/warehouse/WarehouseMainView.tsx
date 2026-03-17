@@ -10,8 +10,6 @@ export type WarehouseMainViewProps = WarehouseCanvasProps & {
   setSelectedVisualIds: React.Dispatch<React.SetStateAction<string[]>>;
   setSelectedAisleIndex: (v: number | null) => void;
   selectedRacks: RackState[];
-  setClipboard: (racks: RackState[]) => void;
-  clipboard: RackState[];
 };
 
 export function WarehouseMainView(props: WarehouseMainViewProps) {
@@ -30,8 +28,6 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     setInternalLayoutRackId,
     setSelectedRackId,
     setSelectedRackIds,
-    setClipboard,
-    clipboard,
     cursorCm,
   } = props;
 
@@ -303,9 +299,6 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
             setInternalLayoutRackId={setInternalLayoutRackId}
             setSelectedRackId={setSelectedRackId}
             setSelectedRackIds={setSelectedRackIds}
-            setClipboard={setClipboard}
-            clipboard={clipboard}
-            cursorCm={cursorCm}
           />
         )}
       </>

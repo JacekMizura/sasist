@@ -147,11 +147,11 @@ export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutMod
           <h3 className="font-bold text-slate-800">Układ wewnętrzny – {getRackDisplayId(rack)}</h3>
           <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100">✕</button>
         </div>
-        <p className="text-xs text-slate-500 px-5 py-1 shrink-0">Szerokość regału: {rackWidthCm} cm. Wysokość regału: {rack.height_cm} cm. Suma szerokości lokacji na każdym poziomie nie może przekroczyć szerokości regału; suma wysokości poziomów nie może przekroczyć wysokości regału.</p>
+        <p className="text-xs text-slate-500 px-5 py-1 shrink-0">Szerokość regału: {rackWidthCm} cm. Wysokość regału: {rack.height_cm} cm. Suma szerokości lokalizacji na każdym poziomie nie może przekroczyć szerokości regału; suma wysokości poziomów nie może przekroczyć wysokości regału.</p>
         {(heightExceeded || widthExceeded) && (
           <p className="text-sm font-semibold text-red-600 px-5 py-1 shrink-0" role="alert">
             {heightExceeded && `Suma wysokości poziomów (${totalHeightCm} cm) przekracza wysokość regału (${rack.height_cm} cm). `}
-            {widthExceeded && "Suma szerokości lokacji na co najmniej jednym poziomie przekracza szerokość regału."}
+            {widthExceeded && "Suma szerokości lokalizacji na co najmniej jednym poziomie przekracza szerokość regału."}
           </p>
         )}
         <div className={`flex-1 min-h-0 flex flex-col p-5 ${fitsWithoutVerticalScroll ? "overflow-hidden" : "overflow-y-auto"}`}>
@@ -179,7 +179,7 @@ export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutMod
                       const depthCm = loc.depth_cm ?? rack.length_cm;
                       const heightCm = loc.height_cm ?? lev.height_cm;
                       const volDm3 = binVolumeFromDimensions(loc.width_cm, depthCm, heightCm);
-                      const technicalId = `Poziom ${levelNumber}, lokacja ${locIdx + 1}`;
+                      const technicalId = `Poziom ${levelNumber}, lokalizacja ${locIdx + 1}`;
                       const parseDim = (v: string) => {
                         const n = parseFloat(String(v).replace(",", "."));
                         return Number.isNaN(n) ? null : Math.max(10, n);
@@ -199,7 +199,7 @@ export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutMod
                               type="button"
                               onClick={() => removeLocation(levIdx, locIdx)}
                               className="min-w-[28px] min-h-[26px] px-1.5 py-0.5 rounded-md bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold border border-red-200"
-                              title="Usuń lokację"
+                              title="Usuń lokalizację"
                             >
                               Usuń
                             </button>
@@ -215,7 +215,7 @@ export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutMod
                                 onChange={(e) => setBinLabel(levIdx, locIdx, e.target.value)}
                                 placeholder="np. A1-A-1"
                                 className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-bold font-mono bg-white text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                                title="Adres lokacji (edytowalny)"
+                                title="Adres lokalizacji (edytowalny)"
                               />
                               <p className="text-[10px] text-slate-500 font-normal">{technicalId}</p>
                               <div className="flex items-center gap-1 flex-wrap">
@@ -224,7 +224,7 @@ export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutMod
                                   type="button"
                                   onClick={() => setBinStorageType(levIdx, locIdx, "primary")}
                                   className={`text-[10px] px-2 py-1 rounded-md ${!isReserve ? "bg-blue-100 border border-blue-300 font-semibold text-blue-800" : "bg-slate-100 border border-slate-200 text-slate-600"}`}
-                                  title="Lokacja podstawowa (kompletowanie)"
+                                  title="Lokalizacja podstawowa (kompletowanie)"
                                 >
                                   Podstawowa
                                 </button>
@@ -287,7 +287,7 @@ export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutMod
                       );
                     })}
                     <button type="button" onClick={() => addLocation(levIdx)} className="flex-shrink-0 text-xs text-blue-600 border-2 border-dashed border-blue-200 rounded-lg px-3 py-2 self-center hover:bg-blue-50">
-                      + Lokacja
+                      + Lokalizacja
                     </button>
                   </div>
                   <p className={`text-[10px] px-3 py-1 ${totalW > (rackWidthCm ?? 0) + 0.01 ? "text-red-600 font-semibold" : "text-slate-500"}`}>

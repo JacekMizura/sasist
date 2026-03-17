@@ -79,6 +79,16 @@ export function metersToCells(m: number): number {
   return Math.floor((m * 100) / GRID_UNIT_CM);
 }
 
+/** Centimeters from grid cells (1 cell = GRID_UNIT_CM cm) */
+export function cellsToCm(cells: number): number {
+  return cells * GRID_UNIT_CM;
+}
+
+/** Meters from grid cells (1 cell = 10 cm → cells * 0.1 m) */
+export function cellsToMeters(cells: number): number {
+  return (cells * GRID_UNIT_CM) / 100;
+}
+
 /** When layout has building dimensions, return grid_cols/grid_rows clamped to building max. Otherwise return unchanged. Grid uses width + depth only; building_height_m does not affect grid. */
 export function clampGridToBuilding<T extends { grid_cols: number; grid_rows: number; building_width_m?: number; building_depth_m?: number; building_height_m?: number }>(layout: T): T {
   const bw = layout.building_width_m;
@@ -412,6 +422,52 @@ export function getTotalLocations(config: LevelConfigItem[]): number {
 }
 
 /**
+ * Duplicate racks at a grid cell position. Returns new RackState[] with new rack_index, x/y, and regenerated bins.
+ * Used by paste (Ctrl+V), duplicate (Ctrl+D), and copy-placement click.
+ */
+export function duplicateRacksAtPosition(
+  racks: RackState[],
+  cell: { x: number; y: number },
+  nextRackIndexBase: number
+): RackState[] {
+  const rAny = (r: RackState) => r as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha" };
+  return racks.map((r, i) => {
+    const lc = getLevelConfig(r);
+    const total = getTotalLocations(lc);
+    const volPerBin = total > 0
+      ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total)
+      : volumePerBin(r.width_cm, r.length_cm, r.height_cm, r.levels, r.bins_per_level);
+    const bins = createBinsForRack(
+      r.aisle_letter,
+      nextRackIndexBase + i,
+      r.levels,
+      r.bins_per_level,
+      volPerBin,
+      "M1",
+      undefined,
+      r.width_cm,
+      r.length_cm,
+      r.height_cm,
+      undefined,
+      rAny(r).addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+      rAny(r).rowId ?? r.name,
+      rAny(r).sectionStartIndex ?? 1,
+      rAny(r).binNamingType ?? "numeric",
+      lc
+    );
+    return {
+      ...r,
+      id: undefined,
+      x: cell.x + (i % 3) * (r.width + 1),
+      y: cell.y + Math.floor(i / 3) * (r.height + 1),
+      rack_index: nextRackIndexBase + i,
+      bins,
+      rackLevels: binsToLevels(bins),
+    } as RackState;
+  });
+}
+
+/**
  * Re-index racks in a row so labels stay sequential (e.g. C.1, C.2, C.3).
  * Racks with rowPrefix === prefix are sorted by position (x, then y), assigned indexInRow 1,2,3…, and bins regenerated.
  */
@@ -701,6 +757,107 @@ export function binVolumeDm3(b: BinState, _rack?: { width_cm: number; length_cm:
   if (b.width_cm != null && b.depth_cm != null && b.height_cm != null)
     return binVolumeFromDimensions(b.width_cm, b.depth_cm, b.height_cm);
   return b.volume_dm3 ?? 0;
+}
+
+/** Max items that fit in a slot by volume (floor(slotVol / productVol)). Returns 0 if either volume is falsy. */
+export function calculateMaxCapacityByVolume(slotVol: number, productVol: number): number {
+  if (!slotVol || !productVol) return 0;
+  return Math.floor(slotVol / productVol);
+}
+
+/** Result of packing layout: best rotation and counts along slot axes. */
+export interface PackingLayoutResult {
+  count: number;
+  rotationIndex: number;
+  countX: number;
+  countY: number;
+  countZ: number;
+  boxW_cm: number;
+  boxD_cm: number;
+  boxH_cm: number;
+}
+
+/**
+ * Compute best packing layout (rotation and counts) for product in slot.
+ * allowedRotations: rotation indices 0..5 to consider (default all).
+ * maxCountZ: cap countZ (e.g. 1 for no_stack). Omitted = no cap.
+ * Returns null if any dimension is missing.
+ */
+export function calculatePackingLayout(
+  slot: { width_cm?: number; depth_cm?: number; height_cm?: number },
+  product: { width_cm?: number; depth_cm?: number; height_cm?: number },
+  allowedRotations: number[] = [0, 1, 2, 3, 4, 5],
+  maxCountZ?: number
+): PackingLayoutResult | null {
+  const sw = slot.width_cm;
+  const sd = slot.depth_cm;
+  const sh = slot.height_cm;
+  const pw = product.width_cm;
+  const pd = product.depth_cm;
+  const ph = product.height_cm;
+  if (!sw || !sd || !sh || !pw || !pd || !ph) return null;
+
+  const rotations: [number, number, number][] = [
+    [pw, pd, ph],
+    [pw, ph, pd],
+    [pd, pw, ph],
+    [pd, ph, pw],
+    [ph, pw, pd],
+    [ph, pd, pw],
+  ];
+
+  const allowedSet = new Set(allowedRotations);
+  let best: PackingLayoutResult | null = null;
+  rotations.forEach(([w, d, h], i) => {
+    if (!allowedSet.has(i)) return;
+    const countX = Math.floor(sw / w);
+    const countY = Math.floor(sd / d);
+    let countZ = Math.floor(sh / h);
+    if (maxCountZ != null && maxCountZ >= 0) countZ = Math.min(countZ, maxCountZ);
+    const qty = countX * countY * countZ;
+    if (!best || qty > best.count) {
+      best = {
+        count: qty,
+        rotationIndex: i,
+        countX,
+        countY,
+        countZ,
+        boxW_cm: w,
+        boxD_cm: d,
+        boxH_cm: h,
+      };
+    }
+  });
+  return best;
+}
+
+/**
+ * Max items (cylinders) that fit in a slot. Diameter = product width_cm, height = product height_cm.
+ * capacity = floor(slotWidth/diameter) * floor(slotDepth/diameter) * floor(slotHeight/height).
+ */
+export function calculateMaxCapacityCylinder(
+  slotDims: { width_cm?: number; depth_cm?: number; height_cm?: number },
+  productDims: { width_cm?: number; depth_cm?: number; height_cm?: number }
+): number {
+  const slotW = slotDims.width_cm ?? 0;
+  const slotD = slotDims.depth_cm ?? 0;
+  const slotH = slotDims.height_cm ?? 0;
+  const diameter = productDims.width_cm ?? 0;
+  const height = productDims.height_cm ?? 0;
+  if (!slotW || !slotD || !slotH || !diameter || !height) return 0;
+  const perW = Math.floor(slotW / diameter);
+  const perD = Math.floor(slotD / diameter);
+  const perH = Math.floor(slotH / height);
+  return perW * perD * perH;
+}
+
+/** Max items that fit in a slot by 3D dimensions (6 rotations). Uses same logic as calculatePackingLayout. */
+export function calculateMaxCapacityByDimensions(
+  slot: { width_cm?: number; depth_cm?: number; height_cm?: number },
+  product: { width_cm?: number; depth_cm?: number; height_cm?: number }
+): number {
+  const layout = calculatePackingLayout(slot, product);
+  return layout ? layout.count : 0;
 }
 
 export function createBinsForRack(

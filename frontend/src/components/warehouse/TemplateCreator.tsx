@@ -499,7 +499,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
 
   const handleLabelEdit = (levelIndex: number, binIndex: number, currentValue: string) => {
     const key = cellKey(levelIndex, binIndex);
-    const newVal = window.prompt("Etykieta lokacji", currentValue || "");
+    const newVal = window.prompt("Etykieta lokalizacji", currentValue || "");
     if (newVal === null) return;
     if (namingStrategy === "manual") {
       setManualLabels((prev) => ({ ...prev, [key]: newVal }));
@@ -572,7 +572,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             />
           </div>
           <div>
-            <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Lokacje na poziom</label>
+            <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Lokalizacje na poziom</label>
             <div className="space-y-2">
               {Array.from({ length: Math.max(1, levels) }, (_, i) => {
                 const val = locationsPerLevel[i] ?? 1;
@@ -620,7 +620,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 cursor-pointer rounded-xl border border-slate-200 bg-transparent" />
             </div>
           </div>
-          <p className="text-slate-500 text-[14px]">Kliknij komórki w podglądzie, aby oznaczyć lokacje rezerwowe.</p>
+          <p className="text-slate-500 text-[14px]">Kliknij komórki w podglądzie, aby oznaczyć lokalizacje rezerwowe.</p>
         </div>
       </section>
 
@@ -635,7 +635,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               onChange={(e) => setNamingStrategy(e.target.value as NamingStrategyId)}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] px-3 py-2.5 text-[16px] input-focus"
             >
-              <option value="pattern">Z wzorca (Row/Section/Bin/Level)</option>
+              <option value="pattern">Z wzorca (Rząd/Sekcja/Pozycja/Poziom)</option>
               <option value="rack-index">Rack + indeks</option>
               <option value="custom">Własny wzorzec</option>
               <option value="manual">Ręczne etykiety</option>
@@ -651,12 +651,12 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                   onChange={(e) => setNamingOrientation(e.target.value as "column-first" | "row-first")}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus"
                 >
-                  <option value="column-first">Column-first (A-1 B-1 C-1)</option>
-                  <option value="row-first">Row-first (A-1 A-2 A-3)</option>
+                  <option value="column-first">Pierwsza kolumna (A-1 B-1 C-1)</option>
+                  <option value="row-first">Pierwszy rząd (A-1 A-2 A-3)</option>
                 </select>
               </div>
               <div>
-                <label className="text-[14px] text-slate-600">Row ID ({'{Row}'})</label>
+                <label className="text-[14px] text-slate-600">Rząd ({'{Row}'})</label>
                 <input type="text" value={rowId} onChange={(e) => setRowId(e.target.value)} placeholder="np. A" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
               </div>
               <div>
@@ -666,14 +666,14 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                 </label>
               </div>
               <div>
-                <label className="text-[14px] text-slate-600">Start Section ({'{Section}'})</label>
+                <label className="text-[14px] text-slate-600">Startowa sekcja ({'{Section}'})</label>
                 <input type="number" min={0} value={sectionStartIndex} onChange={(e) => setSectionStartIndex(Number(e.target.value) || 0)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
               </div>
               <div>
-                <label className="text-[14px] text-slate-600">Kolumna ({'{Bin}'})</label>
+                <label className="text-[14px] text-slate-600">Pozycja ({'{Bin}'})</label>
                 <select value={binNamingType} onChange={(e) => setBinNamingType(e.target.value as "numeric" | "alpha")} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5">
-                  <option value="numeric">Numeric (1, 2, 3…)</option>
-                  <option value="alpha">Alpha (A, B, C…)</option>
+                  <option value="numeric">Liczbowe (1, 2, 3…)</option>
+                  <option value="alpha">Alfabetyczne (A, B, C…)</option>
                 </select>
               </div>
               <div>

@@ -1,18 +1,20 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/axios";
-import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot } from "../types/warehouse";
+import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
-import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexRowByPrefix, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells } from "../components/warehouse/warehouseUtils";
+import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition } from "../components/warehouse/warehouseUtils";
 import { RackSidebar } from "../components/warehouse/RackSidebar";
 import { RackSideViewGrid } from "../components/warehouse/RackSideViewGrid";
 import { WarehouseModals } from "../components/warehouse/WarehouseModals";
-import { WarehouseFullMap } from "../components/warehouse/WarehouseFullMap";
+import { WarehouseLayoutRenderer } from "../components/warehouse/WarehouseLayoutRenderer";
 import { WarehouseLegend } from "../components/warehouse/WarehouseLegend";
 import { MagazynDashboardPanel } from "../components/warehouse/magazyn/MagazynDashboardPanel";
 import { MagazynRackDetailHeader } from "../components/warehouse/magazyn/MagazynRackDetailHeader";
 import { RackLabelDownloadModal } from "../components/labels/RackLabelDownloadModal";
 import { MagazynProductsSidebar } from "../components/warehouse/magazyn/MagazynProductsSidebar";
+import { ProductLocatorSidebar } from "../components/warehouse/magazyn/ProductLocatorSidebar";
+import { TopProductsSidebar } from "../components/warehouse/magazyn/TopProductsSidebar";
 import { UI_STRINGS } from "../constants/uiStrings";
 import PageLayout from "../components/layout/PageLayout";
 import { LayoutMode } from "../warehouse-layout";
@@ -23,7 +25,6 @@ import {
   GRID_COLS,
   GRID_ROWS,
   TENANT_ID,
-  SPECIAL_LOCATION_CELL_CM,
   DEFAULT_ROW_SLOT_W,
   DEFAULT_ROW_SLOT_H,
   getRowStart,
@@ -52,6 +53,15 @@ import { useDesignerProductModal } from "./WarehouseDesigner/useDesignerProductM
 import { useDesignerMagazynState } from "./WarehouseDesigner/useDesignerMagazynState";
 import { useDesignerTemplateSummary } from "./WarehouseDesigner/useDesignerTemplateSummary";
 import { useDesignerRowState } from "./WarehouseDesigner/useDesignerRowState";
+import { RowPrefixModal } from "../components/warehouse/RowPrefixModal";
+import { getWallFromClientPosition, getPositionCmAlongWall } from "./WarehouseDesigner/utils/designerMouseUtils";
+import { normalizeProductDims } from "../utils/productNormalizer";
+
+type PendingRowCreation =
+  | { type: "emptyRow"; start: { x: number; y: number }; end: { x: number; y: number } }
+  | { type: "rowWithTemplate"; start: { x: number; y: number }; end: { x: number; y: number }; item: CatalogItem }
+  | { type: "stampRack"; cell: { x: number; y: number }; item: CatalogItem }
+  | null;
 
 export default function WarehouseDesigner() {
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -67,10 +77,13 @@ export default function WarehouseDesigner() {
     aisles: [],
     visual_elements: [],
     row_containers: [],
+    wall_elements: [],
   });
   const [selectedRackId, setSelectedRackId] = useState<number | string | null>(null);
   const [placementMode, setPlacementMode] = useState(false);
   const [ghostPosition, setGhostPosition] = useState<{ x: number; y: number } | null>(null);
+  const [copyPlacementMode, setCopyPlacementMode] = useState(false);
+  const [copiedRack, setCopiedRack] = useState<RackState | null>(null);
   const [rackRotation, setRackRotation] = useState<"vertical" | "horizontal">("vertical");
   const [draggingRackId, setDraggingRackId] = useState<number | string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ dx: number; dy: number } | null>(null);
@@ -127,6 +140,17 @@ export default function WarehouseDesigner() {
     isPanning,
     setIsPanning,
   } = useDesignerCanvas();
+  const lastCursorCmRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (cursorCm != null) lastCursorCmRef.current = cursorCm;
+  }, [cursorCm]);
+  const getPastePosition = useCallback(() => {
+    const viewportCenterCm = {
+      x: (layout.grid_cols * GRID_UNIT_CM) / 2,
+      y: (layout.grid_rows * GRID_UNIT_CM) / 2,
+    };
+    return cursorCm ?? lastCursorCmRef.current ?? viewportCenterCm;
+  }, [cursorCm, layout.grid_cols, layout.grid_rows]);
   const [internalLayoutRackId, setInternalLayoutRackId] = useState<number | string | null>(null);
   const [panMode, _setPanMode] = useState(false);
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -136,6 +160,10 @@ export default function WarehouseDesigner() {
   const [selectedBinForFilter, setSelectedBinForFilter] = useState<{ level_index: number; segment_index: number } | null>(null);
   /** In Magazyn tab: which rack to show in the side-view panel. */
   const [selectedRackIdForSideView, setSelectedRackIdForSideView] = useState<number | string | null>(null);
+  /** Magazyn tab: rack selected on full map (single click); sidebar shows products, double-click opens side view. */
+  const [selectedRackIdOnMap, setSelectedRackIdOnMap] = useState<string | null>(null);
+  /** Magazyn tab: product selected from global search on map; highlights racks and shows ProductLocatorSidebar. */
+  const [selectedProductIdOnMap, setSelectedProductIdOnMap] = useState<string | null>(null);
   /** Magazyn tab: selected location (level_index, segment_index) for inventory filter and highlight. */
   const [selectedLocationForProducts, setSelectedLocationForProducts] = useState<{ level_index: number; segment_index: number } | null>(null);
   /** Inventory products (Magazyn); drive bin occupancy and quantity display. */
@@ -192,11 +220,12 @@ export default function WarehouseDesigner() {
     setRowDragPreviewStart,
     catalogHoveredSlot,
     setCatalogHoveredSlot,
-    currentRowPrefix,
-    setCurrentRowPrefix,
     aisleWidthCm,
     setAisleWidthCm,
   } = useDesignerRowState();
+
+  const [rowPrefixModalOpen, setRowPrefixModalOpen] = useState(false);
+  const [pendingRowCreation, setPendingRowCreation] = useState<PendingRowCreation>(null);
   /** Offset from pointer (cell) to row start when drag started, so we can compute preview from current cell. */
   const rowDragPointerOffsetRef = useRef<{ dx: number; dy: number } | null>(null);
   /** Latest preview position for row drag (so window mouseup can read it). */
@@ -215,6 +244,7 @@ export default function WarehouseDesigner() {
   const [catalogGhostPosition, setCatalogGhostPosition] = useState<{ x: number; y: number } | null>(null);
   const [snackbar, setSnackbar] = useState<{ message: string; undo?: () => void; undoLabel?: string } | null>(null);
   const [showEditBuilding, setShowEditBuilding] = useState(false);
+  const [showGenerateLayoutModal, setShowGenerateLayoutModal] = useState(false);
   const [selectedVisualIds, setSelectedVisualIds] = useState<string[]>([]);
   const deletedForUndoRef = useRef<{ racks?: RackState[]; visuals?: VisualElementState[]; row_containers?: LayoutState["row_containers"] } | null>(null);
   const [draggingWallEnd, setDraggingWallEnd] = useState<{ visualId: string; end: 0 | 1 } | null>(null);
@@ -238,7 +268,14 @@ export default function WarehouseDesigner() {
   const canMoveRowToRef = useRef<((rowId: string, newStart: { x: number; y: number }) => boolean) | null>(null);
   const moveRowToPositionRef = useRef<((rowId: string, newStartX: number, newStartY: number) => void) | null>(null);
   const moveRackWithinRowRef = useRef<((rowId: string, rackId: number | string, fromSlotIndex: number, toSlotIndex: number) => void) | null>(null);
+  const wallElementDragPosRef = useRef<number | null>(null);
   const [showRackLabelDownload, setShowRackLabelDownload] = useState(false);
+  const [wallElementTool, setWallElementTool] = useState<"door" | "gate" | null>(null);
+  const [selectedWallElementId, setSelectedWallElementId] = useState<string | null>(null);
+  const [draggingWallElementId, setDraggingWallElementId] = useState<string | null>(null);
+  const [dragPreviewPositionCm, setDragPreviewPositionCm] = useState<number | null>(null);
+  const [showGateTypeModal, setShowGateTypeModal] = useState(false);
+  const [pendingGatePlacement, setPendingGatePlacement] = useState<{ wall: WallSide; position_cm: number } | null>(null);
 
   useEffect(() => {
     if (selectedRackIdForSideView == null) {
@@ -287,12 +324,135 @@ export default function WarehouseDesigner() {
     binUniqueProductCounts,
     binLoadKg,
     levelLoadKg,
+    binMaxCapacityPieces,
+    binCapacityDetails,
+    binPackingPreview,
     usedVolumeAtBin,
   } = useDesignerMagazynState({
     layout,
     products,
     selectedRackIdForSideView,
   });
+
+  /** Map locationUUID → bin (for storage_type and primary/reserve split). Declared before mapRackState and occupancy useMemos. */
+  const uuidToBin = useMemo(() => {
+    const map = new Map<string, BinState>();
+    layout.racks.forEach((rack) => {
+      (rack.bins ?? []).forEach((bin) => {
+        if (bin.locationUUID) {
+          map.set(bin.locationUUID, bin);
+        }
+      });
+    });
+    return map;
+  }, [layout.racks]);
+
+  /** Map locationUUID → rack id (string) for product locator: which rack contains a location. */
+  const uuidToRackId = useMemo(() => {
+    const map = new Map<string, string>();
+    layout.racks.forEach((rack) => {
+      const rackId = String(rack.id ?? rack.rack_index);
+      (rack.bins ?? []).forEach((bin) => {
+        if (bin.locationUUID) {
+          map.set(bin.locationUUID, rackId);
+        }
+      });
+    });
+    return map;
+  }, [layout.racks]);
+
+  /** Map product id → Set of rack ids that contain that product (from assignedLocations). */
+  const productToRackIds = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    products.forEach((p) => {
+      const racks = new Set<string>();
+      p.assignedLocations?.forEach((a) => {
+        const rackId = uuidToRackId.get(a.locationUUID);
+        if (rackId) racks.add(rackId);
+      });
+      map.set(p.id, racks);
+    });
+    return map;
+  }, [products, uuidToRackId]);
+
+  /** Rack ids to highlight when a product is selected on the map (global locator). */
+  const rackIdsContainingSelectedProduct =
+    selectedProductIdOnMap != null ? productToRackIds.get(selectedProductIdOnMap) ?? null : null;
+
+  /** Quantity breakdown for the globally selected product (for ProductLocatorSidebar). */
+  const selectedProductQuantityBreakdown = useMemo(() => {
+    if (selectedProductIdOnMap == null) return null;
+    const p = products.find((x) => x.id === selectedProductIdOnMap);
+    if (!p) return null;
+    let totalQuantity = 0;
+    let primaryQuantity = 0;
+    let reserveQuantity = 0;
+    if (p.assignedLocations?.length) {
+      for (const a of p.assignedLocations) {
+        const type = a.storageType ?? uuidToBin.get(a.locationUUID)?.storage_type ?? "primary";
+        const q = safeQuantity(a.quantity);
+        totalQuantity += q;
+        if (type === "reserve") reserveQuantity += q;
+        else primaryQuantity += q;
+      }
+    } else {
+      totalQuantity = safeQuantity(p.quantity);
+      primaryQuantity = totalQuantity;
+    }
+    return { product: p, totalQuantity, primaryQuantity, reserveQuantity };
+  }, [selectedProductIdOnMap, products, uuidToBin]);
+
+  /** Products sorted by occupied volume in warehouse (for map view sidebar). totalVolume = sum(assignedLocations.quantity * volume_dm3) or quantity * volume_dm3. No fixed limit; sidebar scrolls. */
+  const sortedProductsByVolume = useMemo(() => {
+    const withVolume = products.map((p) => {
+      const vol = safeVolumeDm3(p.volume_dm3);
+      let totalQuantity = 0;
+      if (p.assignedLocations?.length) {
+        for (const a of p.assignedLocations) totalQuantity += safeQuantity(a.quantity);
+      } else {
+        totalQuantity = safeQuantity(p.quantity);
+      }
+      const totalVolumeDm3 = totalQuantity * vol;
+      return { product: p, totalQuantity, totalVolumeDm3 };
+    });
+    return withVolume.sort((a, b) => b.totalVolumeDm3 - a.totalVolumeDm3);
+  }, [products]);
+
+  /** When a rack is selected on the full map (single click): rack ref and products in that rack (sorted, with quantity breakdown). */
+  const mapRackState = useMemo(() => {
+    if (selectedRackIdOnMap == null) return { selectedRackForMap: null as RackState | null, mapRackBinUUIDs: new Set<string>(), mapRackBinLabels: new Set<string>(), rackProductsForMap: [] as (WarehouseProduct & { totalQuantity: number; primaryQuantity: number; reserveQuantity: number })[] };
+    const selectedRackForMap = layout.racks.find((r) => String(r.id ?? r.rack_index) === selectedRackIdOnMap) ?? null;
+    if (!selectedRackForMap) return { selectedRackForMap: null, mapRackBinUUIDs: new Set<string>(), mapRackBinLabels: new Set<string>(), rackProductsForMap: [] as (WarehouseProduct & { totalQuantity: number; primaryQuantity: number; reserveQuantity: number })[] };
+    const mapRackBinUUIDs = new Set<string>(selectedRackForMap.bins.map((b) => b.locationUUID).filter((u): u is string => Boolean(u)));
+    const mapRackBinLabels = new Set<string>(selectedRackForMap.bins.map((b) => (b.label ?? b.location_id ?? "").trim()).filter(Boolean));
+    const belongsToRack = (p: WarehouseProduct) => {
+      if (p.assignedLocations?.length) return p.assignedLocations.some((a) => mapRackBinUUIDs.has(a.locationUUID));
+      return p.location_id != null && mapRackBinLabels.has(p.location_id);
+    };
+    const rackProducts = products.filter(belongsToRack);
+    const rackProductsForMap = rackProducts.map((p) => {
+      let totalQuantity = 0;
+      let primaryQuantity = 0;
+      let reserveQuantity = 0;
+      if (p.assignedLocations?.length) {
+        for (const a of p.assignedLocations) {
+          const type = a.storageType ?? uuidToBin.get(a.locationUUID)?.storage_type ?? "primary";
+          const q = safeQuantity(a.quantity);
+          totalQuantity += q;
+          if (type === "reserve") reserveQuantity += q;
+          else primaryQuantity += q;
+        }
+      } else {
+        totalQuantity = safeQuantity(p.quantity);
+        primaryQuantity = totalQuantity;
+      }
+      return { ...p, totalQuantity, primaryQuantity, reserveQuantity };
+    }).sort((a, b) => b.totalQuantity - a.totalQuantity);
+    return { selectedRackForMap, mapRackBinUUIDs, mapRackBinLabels, rackProductsForMap };
+  }, [selectedRackIdOnMap, products, layout.racks, uuidToBin]);
+
+
+  const { selectedRackForMap, mapRackBinUUIDs, mapRackBinLabels, rackProductsForMap } = mapRackState;
 
   const deleteObject = useCallback((objectId: string | null) => {
     if (!objectId) return;
@@ -466,6 +626,16 @@ export default function WarehouseDesigner() {
         })) : [],
         picking_path: Array.isArray(d.picking_path) ? d.picking_path : undefined,
         row_containers: Array.isArray(d.row_containers) ? d.row_containers : [],
+        wall_elements: Array.isArray(d.wall_elements)
+          ? (d.wall_elements as Array<Record<string, unknown>>).map((we) => ({
+              id: String(we.id ?? `we-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
+              type: we.type === "gate" ? "gate" as const : "door" as const,
+              wall: (["north", "south", "east", "west"] as const).includes(String(we.wall) as "north" | "south" | "east" | "west") ? String(we.wall) as "north" | "south" | "east" | "west" : "north",
+              position_cm: Number(we.position_cm ?? 0),
+              width_cm: Number(we.width_cm ?? 120),
+              gateType: we.gateType === "courier" || we.gateType === "supplier" || we.gateType === "both" ? we.gateType : undefined,
+            }))
+          : [],
       }));
       // Sync product–location assignments from API so map shows products in correct slots
       const racksFromRes = (d.racks || []) as Array<{ bins?: Array<{ locationUUID?: string; location_uuid?: string; label?: string; location_id?: string }> }>;
@@ -489,6 +659,7 @@ export default function WarehouseDesigner() {
           const firstLoc = assigned[0];
           const location_id = firstLoc ? resolveLabel(firstLoc.locationUUID) : null;
           const weightKg = typeof p.weight_kg === "number" ? p.weight_kg : typeof p.weight === "number" ? p.weight : undefined;
+          const dims = normalizeProductDims(p);
           return {
             id,
             name: String(p.name ?? ""),
@@ -500,6 +671,16 @@ export default function WarehouseDesigner() {
             assignedLocations: assigned.length > 0 ? assigned : undefined,
             weight_kg: weightKg,
             image_url: typeof p.image_url === "string" ? p.image_url : undefined,
+            // Always set dimensions from normalizer (API: length/width/height or *_cm). Enables 3D slot capacity.
+            width_cm: dims.width_cm || undefined,
+            depth_cm: dims.depth_cm || undefined,
+            height_cm: dims.height_cm || undefined,
+            orientation_type: ["any", "upright", "no_stack"].includes(String((p as { orientation_type?: string }).orientation_type)) ? (p as { orientation_type: "any" | "upright" | "no_stack" }).orientation_type : "any",
+            shape_type: ["box", "cylinder"].includes(String((p as { shape_type?: string }).shape_type)) ? (p as { shape_type: "box" | "cylinder" }).shape_type : "box",
+            stack_compressible: (p as { stack_compressible?: boolean }).stack_compressible ?? false,
+            compressed_height_cm: (p as { compressed_height_cm?: number | null }).compressed_height_cm ?? null,
+            max_stack_weight: (p as { max_stack_weight?: number | null }).max_stack_weight ?? null,
+            stack_behavior: ["stackable", "no_stack"].includes(String((p as { stack_behavior?: string }).stack_behavior)) ? (p as { stack_behavior: "stackable" | "no_stack" }).stack_behavior : "stackable",
           };
         });
         setProducts(list);
@@ -552,6 +733,7 @@ export default function WarehouseDesigner() {
         const vol = safeVolumeDm3(p.volume);
         const firstLoc = assigned[0];
         const location_id = firstLoc ? resolveLabel(firstLoc.locationUUID) : null;
+        const dims = normalizeProductDims(p);
         return {
           id,
           name: String(p.name ?? ""),
@@ -562,6 +744,16 @@ export default function WarehouseDesigner() {
           location_id: location_id ?? null,
           assignedLocations: assigned.length > 0 ? assigned : undefined,
           image_url: typeof p.image_url === "string" ? p.image_url : undefined,
+          // Always set dimensions from normalizer (API: length/width/height or *_cm). Enables 3D slot capacity in Magazyn.
+          width_cm: dims.width_cm || undefined,
+          depth_cm: dims.depth_cm || undefined,
+          height_cm: dims.height_cm || undefined,
+          orientation_type: ["any", "upright", "no_stack"].includes(String((p as { orientation_type?: string }).orientation_type)) ? (p as { orientation_type: "any" | "upright" | "no_stack" }).orientation_type : "any",
+          shape_type: ["box", "cylinder"].includes(String((p as { shape_type?: string }).shape_type)) ? (p as { shape_type: "box" | "cylinder" }).shape_type : "box",
+          stack_compressible: (p as { stack_compressible?: boolean }).stack_compressible ?? false,
+          compressed_height_cm: (p as { compressed_height_cm?: number | null }).compressed_height_cm ?? null,
+          max_stack_weight: (p as { max_stack_weight?: number | null }).max_stack_weight ?? null,
+          stack_behavior: ["stackable", "no_stack"].includes(String((p as { stack_behavior?: string }).stack_behavior)) ? (p as { stack_behavior: "stackable" | "no_stack" }).stack_behavior : "stackable",
         };
       });
       setProducts(list);
@@ -584,8 +776,8 @@ export default function WarehouseDesigner() {
   const addSpecialLocation = useCallback(
     async (cell: { x: number; y: number }, type: "PICK_START" | "PACKING" | "DOCK") => {
       if (selectedWarehouseId == null) return;
-      const x_cm = cell.x * SPECIAL_LOCATION_CELL_CM;
-      const y_cm = cell.y * SPECIAL_LOCATION_CELL_CM;
+      const x_cm = cellsToCm(cell.x);
+      const y_cm = cellsToCm(cell.y);
       try {
         await api.post("/warehouse/special-location", { warehouse_id: selectedWarehouseId, x: x_cm, y: y_cm, type });
         const { data } = await api.get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`);
@@ -593,6 +785,53 @@ export default function WarehouseDesigner() {
         setLayoutMode(LayoutMode.SELECT);
       } catch (err) {
         console.error("Add special location:", err);
+      }
+    },
+    [selectedWarehouseId]
+  );
+
+  const onCopyRack = useCallback((rack: RackState) => {
+    setClipboard([rack]);
+    setCopiedRack(rack);
+    setCopyPlacementMode(true);
+  }, []);
+
+  const placeCopiedRack = useCallback((cell: { x: number; y: number }) => {
+    if (!copiedRack) return;
+    setLayout((prev) => ({
+      ...prev,
+      racks: [...prev.racks, ...duplicateRacksAtPosition([copiedRack], cell, prev.racks.length + 1)],
+    }));
+    setCopyPlacementMode(false);
+    setCopiedRack(null);
+    setGhostPosition(null);
+  }, [copiedRack]);
+
+  const updateSpecialLocation = useCallback(
+    async (locationId: number, cell: { x: number; y: number }) => {
+      if (selectedWarehouseId == null) return;
+      const x_cm = cellsToCm(cell.x);
+      const y_cm = cellsToCm(cell.y);
+      try {
+        await api.patch(`/warehouse/special-location/${locationId}`, { x: x_cm, y: y_cm });
+        const { data } = await api.get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`);
+        setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });
+      } catch (err) {
+        console.error("Update special location:", err);
+      }
+    },
+    [selectedWarehouseId]
+  );
+
+  const deleteSpecialLocation = useCallback(
+    async (locationId: number) => {
+      if (selectedWarehouseId == null) return;
+      try {
+        await api.delete(`/warehouse/special-location/${locationId}`);
+        const { data } = await api.get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`);
+        setSpecialLocations(data ?? { pick_start: null, packing: null, dock: null });
+      } catch (err) {
+        console.error("Delete special location:", err);
       }
     },
     [selectedWarehouseId]
@@ -718,6 +957,7 @@ export default function WarehouseDesigner() {
         visual_elements: layout.visual_elements ?? [],
         picking_path: layout.picking_path ?? undefined,
         row_containers: layout.row_containers ?? [],
+        wall_elements: layout.wall_elements ?? [],
       };
       console.log("Saving payload (rack colors):", payload.racks.map((r, i) => ({ index: i, color: r.color })));
       console.log("Saving building", {
@@ -746,13 +986,45 @@ export default function WarehouseDesigner() {
     layout,
     template,
     rackRotation,
-    currentRowPrefix,
     aisleWidthCm,
     setLayout,
     setDraggingFromCatalog,
     setCatalogGhostPosition,
     setCatalogHoveredSlot,
   });
+
+  const wallLengthCm = useCallback((wall: WallSide) => {
+    switch (wall) {
+      case "north":
+      case "south":
+        return layout.grid_cols * GRID_UNIT_CM;
+      case "east":
+      case "west":
+        return layout.grid_rows * GRID_UNIT_CM;
+      default:
+        return 0;
+    }
+  }, [layout.grid_cols, layout.grid_rows]);
+
+  const addWallElement = useCallback((wall: WallSide, position_cm: number, type: "door" | "gate", gateType?: "courier" | "supplier" | "both") => {
+    const len = wallLengthCm(wall);
+    const width_cm = type === "door" ? 100 : 350;
+    const pos = Math.max(0, Math.min(len - width_cm, position_cm));
+    const el: WallElement = {
+      id: `we-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      type,
+      wall,
+      position_cm: pos,
+      width_cm,
+      ...(type === "gate" && gateType ? { gateType } : {}),
+    };
+    setLayout((prev) => ({
+      ...prev,
+      wall_elements: [...(prev.wall_elements ?? []), el],
+    }));
+    setSelectedWallElementId(el.id);
+    setWallElementTool(null);
+  }, [wallLengthCm]);
 
   const {
     getCellFromEvent,
@@ -809,6 +1081,8 @@ export default function WarehouseDesigner() {
       aisleWidthCm,
       ghostW,
       ghostH,
+      copyPlacementMode,
+      copiedRack,
     },
     setters: {
       setIsPanning,
@@ -844,10 +1118,17 @@ export default function WarehouseDesigner() {
       setProductSearchQuery,
       setShowAllProductsInSidebar,
       setRowToolTemplate,
+      setSelectedWallElementId,
     },
     callbacks: {
       stampRackAt,
       addSpecialLocation,
+      placeCopiedRack,
+      onAddWallElement: addWallElement,
+      onRequestGatePlacement: (wall: WallSide, position_cm: number) => {
+        setPendingGatePlacement({ wall, position_cm });
+        setShowGateTypeModal(true);
+      },
     },
     helpers: {
       findSnapToRowPosition,
@@ -866,6 +1147,10 @@ export default function WarehouseDesigner() {
       ghostH,
       panMode,
       aisleToolActive,
+      canvasWidthPx: layout.grid_cols * BASE_PX_PER_CELL,
+      canvasHeightPx: layout.grid_rows * BASE_PX_PER_CELL,
+      gridUnitCm: GRID_UNIT_CM,
+      wallElementTool,
     },
   });
 
@@ -885,7 +1170,6 @@ export default function WarehouseDesigner() {
   } = useDesignerRowOperations({
     layout,
     selectedRowContainerId,
-    currentRowPrefix,
     rowGapCm,
     setLayout,
     setSelectedRowContainerId,
@@ -907,8 +1191,57 @@ export default function WarehouseDesigner() {
   canMoveRowToRef.current = canMoveRowTo;
   moveRowToPositionRef.current = moveRowToPosition;
   moveRackWithinRowRef.current = moveRackWithinRow;
-  placeEmptyRowRef.current = placeEmptyRow;
-  placeRowWithTemplateRef.current = placeRowWithTemplate;
+
+  const openRowPrefixModalForEmptyRow = useCallback((start: { x: number; y: number }, end: { x: number; y: number }) => {
+    setPendingRowCreation({ type: "emptyRow", start, end });
+    setRowPrefixModalOpen(true);
+  }, []);
+  const openRowPrefixModalForRowWithTemplate = useCallback(
+    (start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem) => {
+      setPendingRowCreation({ type: "rowWithTemplate", start, end, item });
+      setRowPrefixModalOpen(true);
+    },
+    []
+  );
+  placeEmptyRowRef.current = openRowPrefixModalForEmptyRow;
+  placeRowWithTemplateRef.current = openRowPrefixModalForRowWithTemplate;
+
+  const handleRowPrefixConfirm = useCallback(
+    (prefix: string) => {
+      if (!pendingRowCreation) return;
+      if (pendingRowCreation.type === "emptyRow") {
+        placeEmptyRow(pendingRowCreation.start, pendingRowCreation.end, prefix);
+      } else if (pendingRowCreation.type === "rowWithTemplate") {
+        placeRowWithTemplate(pendingRowCreation.start, pendingRowCreation.end, pendingRowCreation.item, prefix);
+      } else if (pendingRowCreation.type === "stampRack") {
+        stampRackFromCatalogItem(pendingRowCreation.cell, pendingRowCreation.item, prefix);
+      }
+      setPendingRowCreation(null);
+      setRowPrefixModalOpen(false);
+    },
+    [pendingRowCreation, placeEmptyRow, placeRowWithTemplate, stampRackFromCatalogItem]
+  );
+
+  const handleCatalogDrop = useCallback(
+    (cell: { x: number; y: number }, item: CatalogItem) => {
+      const emptySlot = findEmptySlotAt(layout.row_containers, cell);
+      if (emptySlot) {
+        stampRackFromCatalogItem(cell, item);
+        return;
+      }
+      const spec = getCatalogItemSpec(item);
+      const w = cmToCells(spec.width_cm);
+      const h = cmToCells(spec.depth_cm);
+      const snap = findSnapToRowPosition(layout.racks, cell.x, cell.y, w, h);
+      if (snap) {
+        stampRackFromCatalogItem(cell, item);
+        return;
+      }
+      setPendingRowCreation({ type: "stampRack", cell, item });
+      setRowPrefixModalOpen(true);
+    },
+    [layout.row_containers, layout.racks, stampRackFromCatalogItem]
+  );
 
   const getDefaultVisualSize = useCallback((type: VisualElementType): { w: number; h: number } => {
     switch (type) {
@@ -941,10 +1274,10 @@ export default function WarehouseDesigner() {
       ...(type === "zone" ? {
         zoneType: "reception" as ZoneType,
         color: "#3b82f640",
-        width_cm: w * GRID_UNIT_CM,
+        width_cm: cellsToCm(w),
         depth_cm: 100,
-        height_cm: h * GRID_UNIT_CM,
-        total_volume_dm3: (w * GRID_UNIT_CM * 100 * h * GRID_UNIT_CM) / 1000,
+        height_cm: cellsToCm(h),
+        total_volume_dm3: (cellsToCm(w) * 100 * cellsToCm(h)) / 1000,
         current_occupancy_dm3: 0,
       } : {}),
     };
@@ -952,6 +1285,29 @@ export default function WarehouseDesigner() {
     setSelectedVisualId(newEl.id);
     setDraggingVisualType(null);
   }, [layout.visual_elements, layout.grid_cols, layout.grid_rows, getDefaultVisualSize]);
+
+  const updateWallElementPosition = useCallback((id: string, position_cm: number) => {
+    setLayout((prev) => {
+      const list = prev.wall_elements ?? [];
+      const el = list.find((e) => e.id === id);
+      if (!el) return prev;
+      const len = el.wall === "north" || el.wall === "south" ? prev.grid_cols * GRID_UNIT_CM : prev.grid_rows * GRID_UNIT_CM;
+      const pos = Math.max(0, Math.min(len - el.width_cm, position_cm));
+      return {
+        ...prev,
+        wall_elements: list.map((e) => (e.id === id ? { ...e, position_cm: pos } : e)),
+      };
+    });
+  }, []);
+
+  const deleteSelectedWallElement = useCallback(() => {
+    if (!selectedWallElementId) return;
+    setLayout((prev) => ({
+      ...prev,
+      wall_elements: (prev.wall_elements ?? []).filter((e) => e.id !== selectedWallElementId),
+    }));
+    setSelectedWallElementId(null);
+  }, [selectedWallElementId]);
 
   const onSaveEditTemplate = useCallback(
     (templateId: string, template: CustomRackTemplate, updateExistingRacks: boolean) => {
@@ -1036,10 +1392,15 @@ export default function WarehouseDesigner() {
     selectedObjectId,
     deleteObject,
     clipboard,
-    cursorCm,
+    getPastePosition,
     layout,
     selectedRackIds,
     selectedVisualIds,
+    copyPlacementMode,
+    setCopyPlacementMode,
+    setCopiedRack,
+    selectedWallElementId,
+    deleteSelectedWallElement,
   });
 
   const deleteSelectedRack = useCallback(() => {
@@ -1053,6 +1414,7 @@ export default function WarehouseDesigner() {
   void deleteSelectedRack;
 
   const totalCapacity = layout.racks.reduce((sum, r) => sum + (r.total_capacity_dm3 ?? r.bins.reduce((s, b) => s + (b.volume_dm3 ?? 0), 0)), 0);
+
   /** Volume (dm³) of all assigned products – location_id or assignedLocations; decimals parsed safely (comma → dot). */
   const productsAssignedVolumeDm3 = useMemo(() => {
     let total = 0;
@@ -1066,6 +1428,27 @@ export default function WarehouseDesigner() {
     }
     return total;
   }, [products]);
+
+  /** Primary vs reserve occupancy (dm³) using storageType ?? bin.storage_type ?? "primary". */
+  const { primaryUsedDm3, reserveUsedDm3 } = useMemo(() => {
+    let primary = 0;
+    let reserve = 0;
+    for (const p of products) {
+      const vol = safeVolumeDm3(p.volume_dm3);
+      if (p.assignedLocations?.length) {
+        for (const a of p.assignedLocations) {
+          const type = a.storageType ?? uuidToBin.get(a.locationUUID)?.storage_type ?? "primary";
+          const qty = safeQuantity(a.quantity) * vol;
+          if (type === "reserve") reserve += qty;
+          else primary += qty;
+        }
+      } else if (p.location_id != null && p.location_id.trim() !== "") {
+        primary += safeQuantity(p.quantity) * vol;
+      }
+    }
+    return { primaryUsedDm3: primary, reserveUsedDm3: reserve };
+  }, [products, uuidToBin]);
+
   const totalUsed = productsAssignedVolumeDm3;
   const utilizationPct = totalCapacity > 0 ? (productsAssignedVolumeDm3 / totalCapacity) * 100 : 0;
 
@@ -1088,6 +1471,32 @@ export default function WarehouseDesigner() {
   const cellPx = BASE_PX_PER_CELL;
   const width = layout.grid_cols * cellPx;
   const height = layout.grid_rows * cellPx;
+
+  useEffect(() => {
+    if (!draggingWallElementId || !svgRef.current) return;
+    const el = layout.wall_elements?.find((e) => e.id === draggingWallElementId);
+    if (!el) return;
+    const onMove = (e: PointerEvent) => {
+      if (!svgRef.current) return;
+      const rect = svgRef.current.getBoundingClientRect();
+      const pos = getPositionCmAlongWall(e.clientX, e.clientY, el.wall, rect, width, height, layout.grid_cols, layout.grid_rows, GRID_UNIT_CM);
+      wallElementDragPosRef.current = pos;
+      setDragPreviewPositionCm(pos);
+    };
+    const onUp = () => {
+      const pos = wallElementDragPosRef.current;
+      if (pos != null) updateWallElementPosition(draggingWallElementId, pos);
+      setDraggingWallElementId(null);
+      setDragPreviewPositionCm(null);
+      wallElementDragPosRef.current = null;
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [draggingWallElementId, layout.wall_elements, layout.grid_cols, layout.grid_rows, width, height, updateWallElementPosition]);
 
   const ghostCollision = placementMode && ghostPosition && layout.racks.some((r) =>
     rectsOverlap(
@@ -1239,6 +1648,16 @@ export default function WarehouseDesigner() {
         setSnackbar={setSnackbar}
       />
 
+      <RowPrefixModal
+        open={rowPrefixModalOpen}
+        onClose={() => {
+          setRowPrefixModalOpen(false);
+          setPendingRowCreation(null);
+        }}
+        onConfirm={handleRowPrefixConfirm}
+        defaultPrefix="A"
+      />
+
       <div className="flex flex-1 min-h-0 -mx-6 -mb-6">
         {mainView === "magazyn" ? (
           <div className="w-[250px] shrink-0 flex flex-col min-h-0 overflow-hidden gap-3">
@@ -1283,11 +1702,12 @@ export default function WarehouseDesigner() {
             onExportCsv={handleExportCsv}
             onExportJson={handleExportJson}
             onExportLocationsMapCsv={handleExportLocationsMapCsv}
-            currentRowPrefix={currentRowPrefix}
-            setCurrentRowPrefix={setCurrentRowPrefix}
-            onReindexRow={(rackId: number | string | null, prefix: string) => setLayout((prev) => ({ ...prev, racks: rackId != null ? reindexGeometricRow(prev.racks, rackId) : reindexRowByPrefix(prev.racks, prefix) }))}
             showOnlyCatalog
             onOpenEditBuilding={() => setShowEditBuilding(true)}
+            showGenerateLayoutModal={showGenerateLayoutModal}
+            setShowGenerateLayoutModal={setShowGenerateLayoutModal}
+            wallElementTool={wallElementTool}
+            setWallElementTool={setWallElementTool}
           />
           </div>
         ) : mainView === "layout" ? (
@@ -1324,10 +1744,11 @@ export default function WarehouseDesigner() {
             onExportCsv={handleExportCsv}
             onExportJson={handleExportJson}
             onExportLocationsMapCsv={handleExportLocationsMapCsv}
-            currentRowPrefix={currentRowPrefix}
-            setCurrentRowPrefix={setCurrentRowPrefix}
-            onReindexRow={(rackId: number | string | null, prefix: string) => setLayout((prev) => ({ ...prev, racks: rackId != null ? reindexGeometricRow(prev.racks, rackId) : reindexRowByPrefix(prev.racks, prefix) }))}
             onOpenEditBuilding={() => setShowEditBuilding(true)}
+            showGenerateLayoutModal={showGenerateLayoutModal}
+            setShowGenerateLayoutModal={setShowGenerateLayoutModal}
+            wallElementTool={wallElementTool}
+            setWallElementTool={setWallElementTool}
           />
         ) : null}
 
@@ -1342,17 +1763,227 @@ export default function WarehouseDesigner() {
                 <>
                   <div className="flex-1 min-h-0 overflow-hidden flex flex-col shrink-0">
                     {selectedRackIdForSideView == null ? (
-                      <WarehouseFullMap
-                        layout={layout}
-                        selectedRackId={null}
-                        rackOccupancyPct={rackOccupancyPct}
-                        onSelectRack={(id) => {
-                          setSelectedRackIdForSideView(id);
-                          setSelectedLocationForProducts(null);
-                          setProductSearchQuery("");
-                          setShowAllProductsInSidebar(false);
-                        }}
-                      />
+                      <div className="flex flex-1 min-w-0 min-h-0">
+                        <div className="flex-1 min-w-0 min-h-0 flex flex-col shrink-0 overflow-hidden">
+                          <div className="shrink-0 px-3 py-2 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-2">
+                            <label className="text-xs font-medium text-slate-600">Szukaj produktu (mapa)</label>
+                            <input
+                              type="text"
+                              value={productSearchQuery}
+                              onChange={(e) => setProductSearchQuery(e.target.value)}
+                              placeholder="Nazwa, SKU lub EAN..."
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                            />
+                            {productSearchQuery.trim() && (() => {
+                              const q = productSearchQuery.trim().toLowerCase();
+                              const filtered = products.filter(
+                                (p) =>
+                                  (p.name ?? "").toLowerCase().includes(q) ||
+                                  (p.sku ?? "").toLowerCase().includes(q) ||
+                                  (p.ean ?? "").toLowerCase().includes(q)
+                              );
+                              return filtered.length > 0 ? (
+                                <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+                                  {filtered.slice(0, 15).map((p) => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => setSelectedProductIdOnMap(p.id)}
+                                      className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-100 last:border-b-0 ${selectedProductIdOnMap === p.id ? "bg-cyan-50 text-cyan-800" : "text-slate-700"}`}
+                                    >
+                                      {p.name} <span className="text-slate-400 text-xs">({p.sku})</span>
+                                    </button>
+                                  ))}
+                                  {filtered.length > 15 && <div className="px-3 py-1 text-xs text-slate-400">+ {filtered.length - 15} więcej</div>}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-500">Brak produktów</p>
+                              );
+                            })()}
+                            {selectedProductIdOnMap != null && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedProductIdOnMap(null)}
+                                className="self-start text-xs text-slate-500 hover:text-slate-700 underline"
+                              >
+                                Wyczyść wybór produktu
+                              </button>
+                            )}
+                          </div>
+                          <WarehouseLayoutRenderer
+                            mode="read"
+                            layout={layout}
+                            selectedWarehouseId={selectedWarehouseId}
+                            loading={loading}
+                            zoom={zoom}
+                            setZoom={setZoom}
+                            pan={pan}
+                            setPan={setPan}
+                            placementMode={placementMode}
+                            ghostPosition={ghostPosition}
+                            ghostW={ghostW}
+                            ghostH={ghostH}
+                            ghostCollision={ghostCollision ?? false}
+                            draggingFromCatalog={draggingFromCatalog}
+                            catalogGhostPosition={catalogGhostPosition}
+                            setCatalogGhostPosition={setCatalogGhostPosition}
+                            stampRackFromCatalogItem={handleCatalogDrop}
+                            stampRackIntoSlot={stampRackIntoSlot}
+                            getCatalogDropCell={getCatalogDropCell}
+                            setCatalogHoveredSlotFromCell={setCatalogHoveredSlotFromCell}
+                            setCatalogHoveredSlot={setCatalogHoveredSlot}
+                            catalogHoveredSlot={catalogHoveredSlot}
+                            getCellFromEvent={getCellFromEvent}
+                            minEmptySlotWidthCells={rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).width_cm) : undefined}
+                            minEmptySlotDepthCells={rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).depth_cm) : undefined}
+                            snapPosition={snapPosition}
+                            rectsOverlap={rectsOverlap}
+                            cellPx={cellPx}
+                            width={width}
+                            height={height}
+                            svgRef={svgRef}
+                            canvasContainerRef={canvasContainerRef}
+                            onMouseMove={handleCanvasMouseMove}
+                            onMouseDown={handleCanvasMouseDown}
+                            onMouseUp={handleCanvasMouseUp}
+                            onMouseLeave={handleCanvasMouseLeave}
+                            panMode={panMode}
+                            isPanning={isPanning}
+                            selectedRackIds={selectedRackIds}
+                            collisionRackId={collisionRackId}
+                            collisionRackIds={collisionRackIds}
+                            selectedRack={selectedRack}
+                            isMultiSelect={isMultiSelect}
+                            setInternalLayoutRackId={setInternalLayoutRackId}
+                            setShowElevationForRackId={setShowElevationForRackId}
+                            setLayout={setLayout}
+                            setSelectedRackId={setSelectedRackId}
+                            setSelectedRackIds={setSelectedRackIds}
+                            marqueeStart={marqueeStart}
+                            marqueeEnd={marqueeEnd}
+                            cursorCm={cursorCm}
+                            getPastePosition={getPastePosition}
+                            draggingRackId={draggingRackId}
+                            rackDragPreviewPosition={rackDragPreviewPosition}
+                            rackDragPreviewPositions={rackDragPreviewPositions}
+                            dragSlotHighlights={dragSlotHighlights}
+                            defaultRowSlotW={DEFAULT_ROW_SLOT_W}
+                            defaultRowSlotH={DEFAULT_ROW_SLOT_H}
+                            selectedRowContainerId={selectedRowContainerId}
+                            selectedRowContainerIds={selectedRowContainerIds}
+                            onSelectRowContainer={onSelectRowContainer}
+                            fillSelectedRowWithTemplate={fillSelectedRowWithTemplate}
+                            deleteSelectedRow={deleteSelectedRow}
+                            trimSelectedRowEnd={trimSelectedRowEnd}
+                            rotateSelectedRow={rotateSelectedRow}
+                            draggingRowId={draggingRowId}
+                            rowDragPreviewStart={rowDragPreviewStart}
+                            onStartRowDrag={onStartRowDrag}
+                            aisleToolActive={aisleToolActive}
+                            setAisleToolActive={setAisleToolActive}
+                            rowToolActive={rowToolActive}
+                            setRowToolActive={setRowToolActive}
+                            setRowToolTemplate={setRowToolTemplate}
+                            rowToolTemplate={rowToolTemplate}
+                            rowDrawStart={rowDrawStart}
+                            rowDrawEnd={rowDrawEnd}
+                            rowPreviewCursor={rowPreviewCursor}
+                            rowGapCm={rowGapCm}
+                            setRowGapCm={setRowGapCm}
+                            aisleWidthCm={aisleWidthCm}
+                            setAisleWidthCm={setAisleWidthCm}
+                            showGrid={showGrid}
+                            setShowGrid={setShowGrid}
+                            snapToGrid={snapToGrid}
+                            setSnapToGrid={setSnapToGrid}
+                            showRackLabels={showRackLabels}
+                            setShowRackLabels={setShowRackLabels}
+                            selectedAisleIndex={selectedAisleIndex}
+                            draggingVisualType={draggingVisualType}
+                            setDraggingVisualType={setDraggingVisualType}
+                            visualGhostPosition={visualGhostPosition}
+                            setVisualGhostPosition={setVisualGhostPosition}
+                            addVisualElement={addVisualElement}
+                            getDefaultVisualSize={getDefaultVisualSize}
+                            selectedVisualId={selectedVisualId}
+                            setLayoutMode={setLayoutMode}
+                            specialLocations={specialLocations}
+                            onUpdateSpecialLocation={updateSpecialLocation}
+                            onDeleteSpecialLocation={deleteSpecialLocation}
+                            layoutModeLabel={layoutModeDisplay.modeLabel}
+                            layoutModeColor={layoutModeDisplay.modeColor}
+                            layoutMode={layoutMode}
+                            selectedVisualIds={selectedVisualIds}
+                            outsideRackIds={outsideRackIds}
+                            isLiveView={isLiveView}
+                            setSelectedVisualId={setSelectedVisualId}
+                            setSelectedVisualIds={setSelectedVisualIds}
+                            setSelectedAisleIndex={setSelectedAisleIndex}
+                            selectedRacks={selectedRacks}
+                            onCopyRack={onCopyRack}
+                            copyPlacementMode={copyPlacementMode}
+                            copiedRack={copiedRack}
+                            wallElements={layout.wall_elements ?? []}
+                            selectedWallElementId={selectedWallElementId}
+                            setSelectedWallElementId={setSelectedWallElementId}
+                            draggingWallElementId={draggingWallElementId}
+                            dragPreviewPositionCm={dragPreviewPositionCm}
+                            onStartWallElementDrag={(el) => setDraggingWallElementId(el.id)}
+                            highlightedRackIds={rackIdsContainingSelectedProduct}
+                            onRackClick={(id) => {
+                              setSelectedRackIdOnMap(String(id));
+                              setSelectedRackId(id);
+                              setSelectedRackIds([id]);
+                            }}
+                            onRackDoubleClick={(id) => {
+                              setSelectedRackIdOnMap(null);
+                              setSelectedProductIdOnMap(null);
+                              setSelectedRackIdForSideView(id);
+                              setSelectedLocationForProducts(null);
+                              setProductSearchQuery("");
+                              setShowAllProductsInSidebar(false);
+                            }}
+                          />
+                        </div>
+                        {selectedRackIdOnMap != null && selectedRackForMap != null ? (
+                          <MagazynProductsSidebar
+                            layout={layout}
+                            products={rackProductsForMap}
+                            productSearchQuery={productSearchQuery}
+                            setProductSearchQuery={setProductSearchQuery}
+                            selectedLocationForProducts={null}
+                            showAllProductsInSidebar={true}
+                            setShowAllProductsInSidebar={() => {}}
+                            selectedRackForMagazyn={selectedRackForMap}
+                            selectedRackBinUUIDs={mapRackBinUUIDs}
+                            selectedRackBinLabels={mapRackBinLabels}
+                            safeQuantity={safeQuantity}
+                            safeVolumeDm3={safeVolumeDm3}
+                            getProductImageUrl={getProductImageUrl}
+                            formatVolume={formatVolume}
+                            rackProductMode
+                          />
+                        ) : selectedProductIdOnMap != null && selectedProductQuantityBreakdown != null ? (
+                          <ProductLocatorSidebar
+                            product={selectedProductQuantityBreakdown.product}
+                            totalQuantity={selectedProductQuantityBreakdown.totalQuantity}
+                            primaryQuantity={selectedProductQuantityBreakdown.primaryQuantity}
+                            reserveQuantity={selectedProductQuantityBreakdown.reserveQuantity}
+                            layout={layout}
+                            getProductImageUrl={getProductImageUrl}
+                            onSelectLocation={(locationUUID) => {
+                              const rackId = uuidToRackId.get(locationUUID);
+                              setSelectedRackIdOnMap(rackId ?? null);
+                            }}
+                          />
+                        ) : (
+                          <TopProductsSidebar
+                            topProducts={sortedProductsByVolume}
+                            getProductImageUrl={getProductImageUrl}
+                            formatVolume={formatVolume}
+                          />
+                        )}
+                      </div>
                     ) : (() => {
                 const rack = displayRack ?? selectedRackForMagazyn;
                 return (
@@ -1379,6 +2010,10 @@ export default function WarehouseDesigner() {
                           selectedLocation={selectedLocationForProducts}
                           binItemCounts={binItemCounts}
                           binUniqueProductCounts={binUniqueProductCounts}
+                          binMaxCapacityPieces={binMaxCapacityPieces}
+                          binCapacityDetails={binCapacityDetails}
+                          binPackingPreview={binPackingPreview}
+                          showPhysicalCapacity={mainView === "magazyn"}
                           levelLoadKg={levelLoadKg}
                           levelMaxLoadKg={(() => {
                             const r = displayRack ?? rack;
@@ -1395,13 +2030,14 @@ export default function WarehouseDesigner() {
                   </div>
                   <WarehouseLegend
                     viewMode={selectedRackIdForSideView == null ? "fullMap" : "rackDetail"}
-                    stats={{ rackCount: layout.racks.length, usedDm3: totalUsed, totalDm3: totalCapacity }}
+                    stats={{ rackCount: layout.racks.length, usedDm3: totalUsed, totalDm3: totalCapacity, primaryUsedDm3, reserveUsedDm3 }}
                   />
                 </>
               )}
             </div>
             {mainView === "magazyn" && selectedRackIdForSideView != null && layout.racks.some((r) => String(r.id ?? r.rack_index) === String(selectedRackIdForSideView)) && (
               <MagazynProductsSidebar
+                layout={layout}
                 products={products}
                 productSearchQuery={productSearchQuery}
                 setProductSearchQuery={setProductSearchQuery}
@@ -1436,7 +2072,7 @@ export default function WarehouseDesigner() {
               draggingFromCatalog,
               catalogGhostPosition,
               setCatalogGhostPosition,
-              stampRackFromCatalogItem,
+              stampRackFromCatalogItem: handleCatalogDrop,
               stampRackIntoSlot,
               getCatalogDropCell,
               setCatalogHoveredSlotFromCell,
@@ -1471,6 +2107,7 @@ export default function WarehouseDesigner() {
               marqueeStart,
               marqueeEnd,
               cursorCm,
+              getPastePosition,
               draggingRackId,
               rackDragPreviewPosition,
               rackDragPreviewPositions,
@@ -1516,6 +2153,8 @@ export default function WarehouseDesigner() {
               selectedVisualId,
               setLayoutMode,
               specialLocations,
+              onUpdateSpecialLocation: updateSpecialLocation,
+              onDeleteSpecialLocation: deleteSpecialLocation,
               layoutModeLabel: layoutModeDisplay.modeLabel,
               layoutModeColor: layoutModeDisplay.modeColor,
               layoutMode,
@@ -1526,12 +2165,44 @@ export default function WarehouseDesigner() {
               setSelectedVisualIds,
               setSelectedAisleIndex,
               selectedRacks,
-              setClipboard,
-              clipboard,
+              onCopyRack,
+              copyPlacementMode,
+              copiedRack,
+              wallElements: layout.wall_elements ?? [],
+              selectedWallElementId,
+              setSelectedWallElementId,
+              draggingWallElementId,
+              dragPreviewPositionCm,
+              onStartWallElementDrag: (el) => setDraggingWallElementId(el.id),
             }}
           />
         ) : null}
       </div>
+
+      {showGateTypeModal && pendingGatePlacement && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="gate-type-title">
+          <div className="bg-white rounded-xl shadow-xl p-4 min-w-[200px]" onClick={(e) => e.stopPropagation()}>
+            <h3 id="gate-type-title" className="text-sm font-semibold text-slate-800 mb-3">Typ bramy</h3>
+            <div className="flex flex-col gap-2">
+              {(["courier", "supplier", "both"] as const).map((gt) => (
+                <button
+                  key={gt}
+                  type="button"
+                  onClick={() => {
+                    addWallElement(pendingGatePlacement.wall, pendingGatePlacement.position_cm, "gate", gt);
+                    setShowGateTypeModal(false);
+                    setPendingGatePlacement(null);
+                  }}
+                  className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-left text-sm"
+                >
+                  {gt === "courier" ? "Kurier" : gt === "supplier" ? "Dostawca" : "Oba"}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => { setShowGateTypeModal(false); setPendingGatePlacement(null); setWallElementTool(null); }} className="mt-3 text-xs text-slate-500 hover:underline">Anuluj</button>
+          </div>
+        </div>
+      )}
 
       {showRackLabelDownload && mainView === "magazyn" && selectedRackIdForSideView != null && (
         (() => {
