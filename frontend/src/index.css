@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
   body {
     @apply antialiased;
     line-height: 1.6;

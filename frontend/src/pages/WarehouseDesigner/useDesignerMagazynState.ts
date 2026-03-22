@@ -7,11 +7,51 @@ import {
   calculatePackingLayout,
   type PackingLayoutResult,
 } from "../../components/warehouse/warehouseUtils";
+import { normalizeInventoryLocationUuid, type InventoryMaps, type InventoryRow } from "./inventoryMaps";
+
+function assignedLocationEntryUuid(a: {
+  locationUUID?: string;
+  location_uuid?: string;
+}): string | undefined {
+  if (typeof a.locationUUID === "string" && a.locationUUID.trim() !== "") return a.locationUUID.trim();
+  if (typeof a.location_uuid === "string" && a.location_uuid.trim() !== "") return a.location_uuid.trim();
+  return undefined;
+}
+
+/** Quantity from assigned_locations or legacy location_id for this bin. */
+function quantityFromAssignedForBin(
+  p: WarehouseProduct,
+  binLabel: string,
+  uuid: string | undefined
+): number {
+  if (uuid && p.assignedLocations?.length) {
+    const ent = p.assignedLocations.find((x) => assignedLocationEntryUuid(x) === uuid);
+    if (ent) return safeQuantity(ent.quantity);
+  }
+  if (binLabel && p.location_id === binLabel) {
+    return safeQuantity(p.quantity);
+  }
+  return 0;
+}
+
+/** Per-product aggregated Stock qty at a bin (only rows with qty > 0). */
+function stockQtyByProductIdAtBin(invRows: InventoryRow[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const inv of invRows) {
+    const q = safeQuantity(inv.quantity);
+    if (q <= 0) continue;
+    const pid = String(inv.product_id);
+    m.set(pid, (m.get(pid) ?? 0) + q);
+  }
+  return m;
+}
 
 export interface UseDesignerMagazynStateParams {
   layout: LayoutState;
   products: WarehouseProduct[];
   selectedRackIdForSideView: number | string | null;
+  inventoryRows?: InventoryRow[];
+  inventoryMaps?: InventoryMaps | null;
 }
 
 /** Effective height (cm) for stacking: compressed when stack_compressible and compressed_height_cm > 0. */
@@ -166,22 +206,32 @@ function packingLayoutForProduct(
 }
 
 export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
-  const { layout, products, selectedRackIdForSideView } = params;
+  const { layout, products, selectedRackIdForSideView, inventoryRows, inventoryMaps } = params;
+  const hasInventory = (inventoryRows?.length ?? 0) > 0 && inventoryMaps != null;
+
+  const productsById = useMemo(() => {
+    const map = new Map<string, WarehouseProduct>();
+    for (const p of products) map.set(String(p.id), p);
+    return map;
+  }, [products]);
+
+  const getBinKey = (bin: BinState) => (bin.label ?? bin.location_id ?? "").trim();
+  /** Stock rows for a bin (join inventory.location_uuid ↔ bin.locationUUID). */
+  const getInventoryRowsForBin = useCallback(
+    (locationUuid?: string | null) => {
+      if (!hasInventory) return [];
+      const u = normalizeInventoryLocationUuid(locationUuid);
+      if (!u) return [];
+      return inventoryMaps!.byLocationUuid.get(u) ?? [];
+    },
+    [hasInventory, inventoryMaps]
+  );
 
   /** Selected rack for Magazyn view (for product/location and display rack). */
   const selectedRackForMagazyn = useMemo(
     () => (selectedRackIdForSideView != null ? layout.racks.find((r) => String(r.id ?? r.rack_index) === String(selectedRackIdForSideView)) ?? null : null),
     [layout.racks, selectedRackIdForSideView]
   );
-  /** Set of location_id / label values for bins in the selected rack (for filtering products to this rack only). */
-  const selectedRackBinLabels = useMemo(() => {
-    if (!selectedRackForMagazyn) return new Set<string>();
-    return new Set(
-      selectedRackForMagazyn.bins
-        .map((b) => (b.label ?? b.location_id ?? "").trim())
-        .filter(Boolean)
-    );
-  }, [selectedRackForMagazyn]);
   /** Set of locationUUIDs for bins in the selected rack (for filtering by assignedLocations). */
   const selectedRackBinUUIDs = useMemo(() => {
     if (!selectedRackForMagazyn) return new Set<string>();
@@ -191,24 +241,27 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
         .filter((u): u is string => Boolean(u))
     );
   }, [selectedRackForMagazyn]);
-  /** Helper: used volume (dm³) at a bin from products (location_id or assignedLocations by locationUUID). Uses safe parsing for decimals. */
+  /** Helper: used volume (dm³) at a bin — Stock + assigned_locations; skip assigned when same product already has Stock at this bin. */
   const usedVolumeAtBin = useCallback(
     (bin: BinState) => {
-      const locId = (bin.label ?? bin.location_id ?? "").trim();
-      const uuid = bin.locationUUID;
       let used = 0;
+      const binLabel = getBinKey(bin);
+      const uuid = bin.locationUUID;
+      const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
+      for (const [pid, q] of stockByPid) {
+        const p = productsById.get(pid);
+        if (!p) continue;
+        used += q * safeVolumeDm3(p.volume_dm3);
+      }
       for (const p of products) {
-        const vol = safeVolumeDm3(p.volume_dm3);
-        if (uuid && p.assignedLocations?.length) {
-          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
-          if (a) used += safeQuantity(a.quantity) * vol;
-        } else if (locId && p.location_id === locId) {
-          used += safeQuantity(p.quantity) * vol;
-        }
+        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        if (aQty <= 0) continue;
+        if (stockByPid.has(p.id)) continue;
+        used += aQty * safeVolumeDm3(p.volume_dm3);
       }
       return used;
     },
-    [products]
+    [products, productsById, getInventoryRowsForBin]
   );
   /** Rack with bins' used_volume_dm3 derived from products (for occupancy bar). */
   const displayRack = useMemo(() => {
@@ -219,66 +272,78 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     });
     return { ...selectedRackForMagazyn, bins };
   }, [selectedRackForMagazyn, products, usedVolumeAtBin]);
-  /** Per-bin total quantity (szt.) and unique product count for grid display. */
+  /** Per-bin total quantity (szt.) — Stock + assigned_locations; skip assigned when product already in Stock at this bin. */
   const binItemCounts = useMemo(() => {
     if (!selectedRackForMagazyn) return {};
     const out: Record<string, number> = {};
     for (const b of selectedRackForMagazyn.bins) {
-      const locId = (b.label ?? b.location_id ?? "").trim();
+      const binLabel = getBinKey(b);
       const uuid = b.locationUUID;
+      const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       let qty = 0;
+      for (const q of stockByPid.values()) qty += q;
       for (const p of products) {
-        if (uuid && p.assignedLocations?.length) {
-          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
-          if (a) qty += safeQuantity(a.quantity);
-        } else if (locId && p.location_id === locId) qty += safeQuantity(p.quantity);
+        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        if (aQty <= 0) continue;
+        if (stockByPid.has(p.id)) continue;
+        qty += aQty;
       }
       out[`${b.level_index}-${b.segment_index}`] = qty;
     }
     return out;
-  }, [selectedRackForMagazyn, products]);
-  /** Per-bin count of different products (unique product rows in that bin). */
+  }, [selectedRackForMagazyn, products, getInventoryRowsForBin]);
+  /** Per-bin count of different products — union of Stock and assigned_locations (assigned skipped if product has Stock at bin). */
   const binUniqueProductCounts = useMemo(() => {
     if (!selectedRackForMagazyn) return {};
     const out: Record<string, number> = {};
     for (const b of selectedRackForMagazyn.bins) {
-      const locId = (b.label ?? b.location_id ?? "").trim();
+      const binLabel = getBinKey(b);
       const uuid = b.locationUUID;
+      const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       const seen = new Set<string>();
+      for (const pid of stockByPid.keys()) seen.add(pid);
       for (const p of products) {
-        if (uuid && p.assignedLocations?.length) {
-          if (p.assignedLocations.some((a) => a.locationUUID === uuid)) seen.add(p.id);
-        } else if (locId && p.location_id === locId) seen.add(p.id);
+        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        if (aQty <= 0) continue;
+        if (stockByPid.has(p.id)) continue;
+        seen.add(p.id);
       }
       out[`${b.level_index}-${b.segment_index}`] = seen.size;
     }
     return out;
-  }, [selectedRackForMagazyn, products]);
+  }, [selectedRackForMagazyn, products, getInventoryRowsForBin]);
 
-  /** Per-bin load in kg: Σ(productWeight × quantity) for products in that bin; productWeight = weight_kg ?? weight ?? 0. */
+  /** Per-bin load in kg: Stock + assigned_locations; skip assigned when product has Stock at bin. */
   const binLoadKg = useMemo(() => {
     if (!selectedRackForMagazyn) return {};
     const out: Record<string, number> = {};
     for (const b of selectedRackForMagazyn.bins) {
-      const locId = (b.label ?? b.location_id ?? "").trim();
-      const uuid = b.locationUUID;
       let load = 0;
-      for (const p of products) {
+      const binLabel = getBinKey(b);
+      const uuid = b.locationUUID;
+      const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
+      for (const [pid, q] of stockByPid) {
+        const p = productsById.get(pid);
+        if (!p) continue;
         const weight = (p as { weight_kg?: number; weight?: number }).weight_kg ?? (p as { weight?: number }).weight ?? 0;
         const productWeight = Number(weight);
         if (!Number.isFinite(productWeight) || productWeight < 0) continue;
-        let qty = 0;
-        if (uuid && p.assignedLocations?.length) {
-          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
-          if (a) qty = safeQuantity(a.quantity);
-        } else if (locId && p.location_id === locId) qty = safeQuantity(p.quantity);
-        load += productWeight * qty;
+        load += productWeight * q;
+      }
+      for (const p of products) {
+        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        if (aQty <= 0) continue;
+        if (stockByPid.has(p.id)) continue;
+        const weight = (p as { weight_kg?: number; weight?: number }).weight_kg ?? (p as { weight?: number }).weight ?? 0;
+        const productWeight = Number(weight);
+        if (!Number.isFinite(productWeight) || productWeight < 0) continue;
+        load += productWeight * aQty;
       }
       const safeLoad = Number.isFinite(load) ? load : 0;
       out[`${b.level_index}-${b.segment_index}`] = safeLoad;
     }
     return out;
-  }, [selectedRackForMagazyn, products]);
+  }, [selectedRackForMagazyn, products, productsById, getInventoryRowsForBin]);
 
   /** Per-level total load in kg: sum of bin loads for that level. */
   const levelLoadKg = useMemo(() => {
@@ -303,16 +368,20 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
       const quantity = binItemCounts[key] ?? 0;
       if (quantity <= 0) continue;
 
-      const locId = (bin.label ?? bin.location_id ?? "").trim();
+      const binLabel = getBinKey(bin);
       const uuid = bin.locationUUID;
+      const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       let firstProduct: WarehouseProduct | null = null;
-      for (const p of products) {
-        if (uuid && p.assignedLocations?.length) {
-          if (p.assignedLocations.some((a) => a.locationUUID === uuid)) {
-            firstProduct = p;
-            break;
-          }
-        } else if (locId && p.location_id === locId) {
+      for (const inv of getInventoryRowsForBin(uuid)) {
+        if (safeQuantity(inv.quantity) <= 0) continue;
+        firstProduct = productsById.get(String(inv.product_id)) ?? null;
+        if (firstProduct) break;
+      }
+      if (!firstProduct) {
+        for (const p of products) {
+          const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+          if (aQty <= 0) continue;
+          if (stockByPid.has(p.id)) continue;
           firstProduct = p;
           break;
         }
@@ -345,7 +414,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
       if (Number.isFinite(capacity) && capacity >= 0) out[key] = capacity;
     }
     return out;
-  }, [selectedRackForMagazyn, products, binItemCounts]);
+  }, [selectedRackForMagazyn, products, binItemCounts, productsById, getInventoryRowsForBin]);
 
   /** Per-bin list of products with quantity and capacity (for tooltip: capacity per product). */
   const binCapacityDetails = useMemo(() => {
@@ -357,19 +426,27 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     > = {};
     for (const bin of rack.bins) {
       const key = `${bin.level_index}-${bin.segment_index}`;
-      const locId = (bin.label ?? bin.location_id ?? "").trim();
+      const binLabel = getBinKey(bin);
       const uuid = bin.locationUUID;
-      const assigned: { product: WarehouseProduct; quantity: number }[] = [];
-      for (const p of products) {
-        let qty = 0;
-        if (uuid && p.assignedLocations?.length) {
-          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
-          if (a) qty = safeQuantity(a.quantity);
-        } else if (locId && p.location_id === locId) {
-          qty = safeQuantity(p.quantity);
-        }
-        if (qty > 0) assigned.push({ product: p, quantity: qty });
+      const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
+      const qtyByProduct = new Map<string, { product: WarehouseProduct; quantity: number }>();
+      for (const inv of getInventoryRowsForBin(uuid)) {
+        const qty = safeQuantity(inv.quantity);
+        if (qty <= 0) continue;
+        const pid = String(inv.product_id);
+        const p = productsById.get(pid);
+        if (!p) continue;
+        const existing = qtyByProduct.get(pid);
+        if (existing) existing.quantity += qty;
+        else qtyByProduct.set(pid, { product: p, quantity: qty });
       }
+      for (const p of products) {
+        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        if (aQty <= 0) continue;
+        if (stockByPid.has(p.id)) continue;
+        qtyByProduct.set(p.id, { product: p, quantity: aQty });
+      }
+      const assigned = Array.from(qtyByProduct.values());
       if (assigned.length === 0) continue;
 
       const slotVol = binVolumeDm3(bin, rack);
@@ -404,7 +481,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
       if (details.length > 0) out[key] = details;
     }
     return out;
-  }, [selectedRackForMagazyn, products]);
+  }, [selectedRackForMagazyn, products, productsById, getInventoryRowsForBin]);
 
   /** Packing layout preview for bins with exactly one product (dimensions required). Used for hover overlay. */
   const binPackingPreview = useMemo(() => {
@@ -431,19 +508,27 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     > = {};
     for (const bin of rack.bins) {
       const key = `${bin.level_index}-${bin.segment_index}`;
-      const locId = (bin.label ?? bin.location_id ?? "").trim();
+      const binLabel = getBinKey(bin);
       const uuid = bin.locationUUID;
-      const assigned: { product: WarehouseProduct; quantity: number }[] = [];
-      for (const p of products) {
-        let qty = 0;
-        if (uuid && p.assignedLocations?.length) {
-          const a = p.assignedLocations.find((a) => a.locationUUID === uuid);
-          if (a) qty = safeQuantity(a.quantity);
-        } else if (locId && p.location_id === locId) {
-          qty = safeQuantity(p.quantity);
-        }
-        if (qty > 0) assigned.push({ product: p, quantity: qty });
+      const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
+      const qtyByProduct = new Map<string, { product: WarehouseProduct; quantity: number }>();
+      for (const inv of getInventoryRowsForBin(uuid)) {
+        const qty = safeQuantity(inv.quantity);
+        if (qty <= 0) continue;
+        const pid = String(inv.product_id);
+        const p = productsById.get(pid);
+        if (!p) continue;
+        const existing = qtyByProduct.get(pid);
+        if (existing) existing.quantity += qty;
+        else qtyByProduct.set(pid, { product: p, quantity: qty });
       }
+      for (const p of products) {
+        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        if (aQty <= 0) continue;
+        if (stockByPid.has(p.id)) continue;
+        qtyByProduct.set(p.id, { product: p, quantity: aQty });
+      }
+      const assigned = Array.from(qtyByProduct.values());
       if (assigned.length !== 1) continue;
 
       const product = assigned[0].product;
@@ -478,11 +563,10 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
       }
     }
     return out;
-  }, [selectedRackForMagazyn, products]);
+  }, [selectedRackForMagazyn, products, productsById, getInventoryRowsForBin]);
 
   return {
     selectedRackForMagazyn,
-    selectedRackBinLabels,
     selectedRackBinUUIDs,
     displayRack,
     binItemCounts,

@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 from ...models.order import Order
 from ...models.order_item import OrderItem
 from ...models.pick import Pick
-from ...models.inventory import Inventory
 from ...models.location import Location
 from ...models.warehouse_graph import WarehouseNode
+from ..picking_simulation._pick_helpers import resolve_product_to_location
 
 from .warehouse_graph_service import (
     get_location_to_node_map,
@@ -127,20 +127,12 @@ def simulate_single_order(
             "node_to_location": {},
         }
 
-    inventory_rows = (
-        db.query(Inventory)
-        .filter(
-            Inventory.warehouse_id == warehouse_id,
-            Inventory.tenant_id == order.tenant_id,
-            Inventory.product_id.in_(product_ids),
-            Inventory.quantity > 0,
-        )
-        .all()
+    product_to_location = resolve_product_to_location(
+        db,
+        warehouse_id=warehouse_id,
+        tenant_id=order.tenant_id,
+        product_ids=product_ids,
     )
-    product_to_location: dict[int, int] = {}
-    for inv in inventory_rows:
-        if inv.product_id not in product_to_location:
-            product_to_location[inv.product_id] = inv.location_id
     location_ids = list(set(product_to_location.values()))
     if not location_ids:
         return {

@@ -26,7 +26,7 @@ export const PRESET_LABELS: Record<PresetType, string> = {
   LOCATION_BARCODE_LARGE: "Location (barcode large)",
   RACK_SEGMENT_STRIP: "Rack segment strip",
   PALLET_LABEL: "Pallet label",
-  AISLE_LABEL: "Aisle label",
+  AISLE_LABEL: "Etykieta oznaczenia rzędu",
   FLOOR_LOCATION: "Floor location",
   RACK_BEAM_MULTISECTION: "Rack beam (multi-section)",
 };

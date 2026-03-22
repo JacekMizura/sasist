@@ -113,7 +113,7 @@ export const UI_STRINGS = {
       bringForward: "Do przodu",
       sendBackward: "Do tyłu",
       delete: "Usuń",
-      deleteAisle: "Usuń alejkę",
+      deleteAisle: "Usuń strefę",
       name: "Nazwa",
       column: "Słupy",
       mezzanine: "Antresole",

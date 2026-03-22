@@ -226,7 +226,9 @@ function ProductRackMap({
               width={Math.max(0.04, a.width - 0.04)}
               height={Math.max(0.04, a.height - 0.04)}
               fill="#94a3b8"
+              fillOpacity={0.38}
               stroke="#64748b"
+              strokeOpacity={0.85}
               strokeWidth={0.02}
               rx={0.2}
             />

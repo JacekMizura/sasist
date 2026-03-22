@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect, useMemo } from "react";
-import type { RackState, BinState, WarehouseProduct } from "../../types/warehouse";
-import { getLevelConfig, binUsedVolumeDm3, binVolumeDm3, type PackingLayoutResult } from "./warehouseUtils";
-import { RESERVE_BG, RESERVE_BORDER } from "./reserveLocationStyle";
+import type { RackState, BinState, WarehouseProduct, LayoutState } from "../../types/warehouse";
+import { getLevelConfig, binUsedVolumeDm3, binVolumeDm3, getBinDisplayLabel, type PackingLayoutResult } from "./warehouseUtils";
+import { getStorageTypeStyle, getStorageTypeLabel, normalizeStorageType } from "../../utils/storageTypes";
+import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
 /** Blue – vertical rack columns (uprights) for non-top levels */
 const UPRIGHT_BLUE = "#1e63a7";
@@ -15,8 +16,6 @@ const UPRIGHT_WIDTH = 8;
 const BEAM_HEIGHT_VIEWBOX = 22;
 const BIN_BG = "#f4f4f4";
 const BIN_BORDER = "#ddd";
-const RESERVE_FILL = RESERVE_BG;
-const RESERVE_STROKE = RESERVE_BORDER;
 
 function getBinAt(rack: RackState, levelIndex: number, segmentIndex: number): BinState | undefined {
   return rack.bins.find((b) => b.level_index === levelIndex && b.segment_index === segmentIndex);
@@ -53,6 +52,9 @@ export function RackSideViewGrid({
   showPhysicalCapacity = false,
   levelLoadKg = {},
   levelMaxLoadKg,
+  hoveredLocationUUID = null,
+  showLabels = true,
+  layout = null,
 }: {
   rack: RackState;
   className?: string;
@@ -83,13 +85,21 @@ export function RackSideViewGrid({
   levelLoadKg?: Record<number, number>;
   /** Max allowed load per level in kg (from template/rack). Default 500 when missing. */
   levelMaxLoadKg?: number;
+  /** Magazyn sidebar: temporary highlight when hovering a location row (UUID match). */
+  hoveredLocationUUID?: string | null;
+  /** Bin/slot address badges on beams (A1, B2, …); same toggle as map „Pokaż etykiety”. */
+  showLabels?: boolean;
+  /** When set, beam/bin labels respect row `direction` (RTL mirrors columns). */
+  layout?: LayoutState | null;
 }) {
+  const hoveredUuidNorm = (hoveredLocationUUID ?? "").trim();
   const hasLevelMaxLoad = levelMaxLoadKg != null && levelMaxLoadKg > 0;
   const effectiveMaxKg = hasLevelMaxLoad ? levelMaxLoadKg! : DEFAULT_LEVEL_MAX_LOAD_KG;
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(400);
   const [hoveredBinKey, setHoveredBinKey] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ left: number; top: number } | null>(null);
+  const [highlightedStorageType, setHighlightedStorageType] = useState<string | null>(null);
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -185,7 +195,9 @@ export function RackSideViewGrid({
               const exceeded = hasLevelMaxLoad && loadKg > maxKg;
               const addresses = Array.from({ length: locs }, (_, seg) => {
                 const b = getBinAt(rack, lev, seg);
-                return b?.label ?? b?.location_id ?? `L${lev + 1}-${seg + 1}`;
+                if (!b) return `L${lev + 1}-${seg + 1}`;
+                const raw = b.label ?? b.location_id ?? `L${lev + 1}-${seg + 1}`;
+                return layout ? getBinDisplayLabel(rack, b, layout) : raw;
               });
               const weightText = hasLevelMaxLoad
                 ? `${Math.round(loadKg)} / ${maxKg} kg${exceeded ? " ⚠" : ""}`
@@ -208,39 +220,41 @@ export function RackSideViewGrid({
                     fill={beamFill}
                     rx={2}
                   />
-                  <g aria-label="Beam labels">
-                    {addresses.map((addr, seg) => {
-                      const displayAddr = String(addr).length > 12 ? String(addr).slice(0, 10) + "…" : String(addr);
-                      const slotCenterX = ox + cellWLev * (seg + 0.5);
-                      const rectX = slotCenterX - labelW / 2;
-                      const rectY = beamCenterY - labelH / 2;
-                      return (
-                        <g key={seg} filter="url(#rack-beam-badge-shadow)">
-                          <rect
-                            x={rectX}
-                            y={rectY}
-                            width={labelW}
-                            height={labelH}
-                            rx={6}
-                            fill="#ffffff"
-                            stroke="#d1d5db"
-                          />
-                          <text
-                            x={slotCenterX}
-                            y={beamCenterY}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            fontSize={13}
-                            fontWeight={700}
-                            fill="#111827"
-                            fontFamily="system-ui, sans-serif"
-                          >
-                            {displayAddr}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </g>
+                  {showLabels && (
+                    <g aria-label="Beam labels">
+                      {addresses.map((addr, seg) => {
+                        const displayAddr = String(addr).length > 12 ? String(addr).slice(0, 10) + "…" : String(addr);
+                        const slotCenterX = ox + cellWLev * (seg + 0.5);
+                        const rectX = slotCenterX - labelW / 2;
+                        const rectY = beamCenterY - labelH / 2;
+                        return (
+                          <g key={seg} filter="url(#rack-beam-badge-shadow)">
+                            <rect
+                              x={rectX}
+                              y={rectY}
+                              width={labelW}
+                              height={labelH}
+                              rx={6}
+                              fill="#ffffff"
+                              stroke="#d1d5db"
+                            />
+                            <text
+                              x={slotCenterX}
+                              y={beamCenterY}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fontSize={13}
+                              fontWeight={700}
+                              fill="#111827"
+                              fontFamily="system-ui, sans-serif"
+                            >
+                              {displayAddr}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  )}
                   <g filter="url(#rack-beam-badge-shadow)">
                     <rect
                       x={badgeX}
@@ -328,15 +342,19 @@ export function RackSideViewGrid({
                 const pct = vol > 0 ? (used / vol) * 100 : 0;
                 const quantity = binItemCounts?.[`${lev}-${bin}`] ?? 0;
                 const uniqueCount = binUniqueProductCounts?.[`${lev}-${bin}`] ?? 0;
-                const isReserve = binState?.storage_type === "reserve";
+                const storageType = normalizeStorageType(binState?.storage_type);
+                const storageTypeLabel = getStorageTypeLabel(storageType);
                 const isSelected = selectedLocation?.level_index === lev && selectedLocation?.segment_index === bin;
+                const typeHighlightActive = highlightedStorageType != null;
+                const isSameTypeHighlighted = highlightedStorageType === storageType;
                 const x = ox + bin * cellWLev + pad;
                 const y = binRowY + pad;
                 const w = cellWLev - pad * 2;
                 const h = contentH;
                 const cx = x + w / 2;
-                const fill = isSelected ? "#eff6ff" : isReserve ? RESERVE_FILL : BIN_BG;
-                const stroke = isSelected ? "#1d4ed8" : isReserve ? RESERVE_STROKE : BIN_BORDER;
+                const style = getStorageTypeStyle(storageType);
+                const fill = isSelected ? "#eff6ff" : storageType === "primary" ? BIN_BG : style.bg;
+                const stroke = isSelected ? "#1d4ed8" : storageType === "primary" ? BIN_BORDER : style.border;
                 const strokeWidth = isSelected ? 4 : 1;
                 const line1Y = y + textPadding + startOff;
                 const line2Y = line1Y + linePx + gapPx;
@@ -348,8 +366,20 @@ export function RackSideViewGrid({
                 const barX = x + barPad;
                 const fontSize = Math.max(8, Math.min(14, w * 0.26, (h - 24) * 0.2) * scale);
                 const fontSizeSub = Math.max(7, fontSize - 2);
-                const binLabel = binState?.label ?? binState?.location_id ?? `L${lev + 1}-${bin + 1}`;
+                const binLabel =
+                  binState != null
+                    ? layout
+                      ? getBinDisplayLabel(rack, binState, layout)
+                      : (binState.label ?? binState.location_id ?? `L${lev + 1}-${bin + 1}`)
+                    : `L${lev + 1}-${bin + 1}`;
+                const binUuidNorm = (binState?.locationUUID ?? "").trim();
+                const isSidebarLocationHover =
+                  hoveredUuidNorm.length > 0 && binUuidNorm.length > 0 && binUuidNorm === hoveredUuidNorm;
                 const usedDm3 = used;
+                const iconX = x + w - 16;
+                const iconY = y + 4;
+                const showTypeIndicator = storageType === "reserve" || storageType === "damaged";
+                const iconColorClass = storageType === "damaged" ? "text-red-700" : "text-slate-600";
 
                 return (
                   <g
@@ -367,7 +397,59 @@ export function RackSideViewGrid({
                       stroke={stroke}
                       strokeWidth={strokeWidth}
                       rx={2}
+                      opacity={typeHighlightActive && !isSameTypeHighlighted ? 0.35 : 1}
                     />
+                    {isSameTypeHighlighted && (
+                      <rect
+                        x={x}
+                        y={y}
+                        width={w}
+                        height={h}
+                        fill="none"
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        rx={2}
+                      />
+                    )}
+                    {isSidebarLocationHover && (
+                      <rect
+                        x={x + 1}
+                        y={y + 1}
+                        width={Math.max(0, w - 2)}
+                        height={Math.max(0, h - 2)}
+                        fill="rgba(34,211,238,0.14)"
+                        stroke="#22d3ee"
+                        strokeWidth={2.5}
+                        rx={2}
+                        pointerEvents="none"
+                        style={{ filter: "drop-shadow(0 0 4px rgba(34,211,238,0.55))" }}
+                      />
+                    )}
+                    {showTypeIndicator && (
+                      <g
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHighlightedStorageType((prev) => (prev === storageType ? null : storageType));
+                        }}
+                        style={{ cursor: "pointer", opacity: 0.7 }}
+                      >
+                        <title>{storageTypeLabel}</title>
+                        <rect
+                          x={iconX - 1}
+                          y={iconY - 1}
+                          width={14}
+                          height={14}
+                          fill="transparent"
+                        />
+                        <g transform={`translate(${iconX}, ${iconY})`}>
+                          <StorageTypeIcon
+                            storageType={storageType}
+                            size={11}
+                            className={iconColorClass}
+                          />
+                        </g>
+                      </g>
+                    )}
                     {/* Bin data: different products, total quantity, volume usage; then utilization bar */}
                     <text x={cx} y={line1Y} textAnchor="middle" fontSize={fontSizeSub} fill="#64748b" fontFamily="system-ui, sans-serif">
                       Różnych produktów: {uniqueCount}

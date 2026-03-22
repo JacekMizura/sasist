@@ -1,0 +1,16 @@
+---
+description: Use the workspace memory bank for persistent context
+alwaysApply: true
+---
+
+# Memory Bank
+
+- Store persistent session context only in the workspace `memory/` directory.
+- At the start of each session, read these files if they exist:
+  - `memory/project-context.md`
+  - `memory/current-context.md`
+  - `memory/change-log.md`
+- After significant changes, update the relevant memory files with concise notes.
+- Prefer short, high-signal entries: current goals, active constraints, recent architectural decisions, and notable completed changes.
+- Do not store memory notes in `.cursor/memory` or other directories for this project.
+- If a memory file is missing but needed, create it inside `memory/`.

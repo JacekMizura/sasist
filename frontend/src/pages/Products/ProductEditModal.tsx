@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
-import type { AssignedLocation } from "../../types/warehouse";
+import type { AssignedLocation, StorageType } from "../../types/warehouse";
 import { LocationPicker } from "../../components/warehouse/LocationPicker";
 import { getPositionsFromLayoutRacks, positionFitsDimensions } from "../../components/warehouse/warehouseUtils";
 import type { SelectablePosition } from "../../components/warehouse/warehouseUtils";
@@ -206,7 +206,8 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
       const res = await api.get("/warehouse/layout", {
         params: { tenant_id: 1, warehouse_id: warehouse.id },
       });
-      const rawRacks = res.data?.racks ?? [];
+      const layoutData = res.data?.layout ?? res.data;
+      const rawRacks = layoutData?.racks ?? [];
       setPositions(getPositionsFromLayoutRacks(rawRacks));
     } catch {
       setPositions([]);
@@ -234,7 +235,7 @@ export function ProductEditModal({ product, tenants, onSave, onClose }: ProductE
               locationUUID: a.locationUUID,
               quantity: a.quantity,
               locationAddress: pos?.locationAddress ?? (a as AssignedLocation & { locationAddress?: string }).locationAddress ?? a.locationUUID,
-              storageType: pos?.storageType ?? (a as AssignedLocation & { storageType?: "primary" | "reserve" }).storageType,
+              storageType: pos?.storageType ?? (a as AssignedLocation & { storageType?: StorageType }).storageType,
             };
           })
         : undefined;

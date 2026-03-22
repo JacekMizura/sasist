@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from pydantic import BaseModel, field_validator
 from typing import List, Optional, Any
 
@@ -22,10 +22,149 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from ..models.warehouse import Bin, Rack, WarehouseLayout
+from ..models.tenant_warehouse import TenantWarehouse
 from ..services.randomize_locations_service import randomize_product_locations
 
 
 logger = logging.getLogger(__name__)
+
+
+def _location_uuids_from_assigned_locations(assigned_locations: Optional[List[dict]]) -> List[str]:
+    """Collect non-empty location UUID strings from assignment entries (locationUUID or location_uuid)."""
+    if not assigned_locations or not isinstance(assigned_locations, list):
+        return []
+    out: List[str] = []
+    for ent in assigned_locations:
+        if not isinstance(ent, dict):
+            continue
+        u = ent.get("locationUUID") or ent.get("location_uuid")
+        if isinstance(u, str):
+            s = u.strip()
+            if s:
+                out.append(s)
+    return out
+
+
+def _raise_invalid_assigned_locations(
+    *,
+    invalid_uuids: List[str],
+    not_found: Optional[List[str]] = None,
+    inactive: Optional[List[str]] = None,
+    wrong_warehouse: Optional[List[str]] = None,
+) -> None:
+    detail: dict = {
+        "detail": "Invalid location assignment",
+        "invalid_uuids": sorted(dict.fromkeys(invalid_uuids)),
+    }
+    nf = sorted(dict.fromkeys(not_found or []))
+    ia = sorted(dict.fromkeys(inactive or []))
+    ww = sorted(dict.fromkeys(wrong_warehouse or []))
+    if nf:
+        detail["not_found"] = nf
+    if ia:
+        detail["inactive"] = ia
+    if ww:
+        detail["wrong_warehouse"] = ww
+    raise HTTPException(status_code=400, detail=detail)
+
+
+def _validate_assigned_locations_for_tenant(
+    db: Session,
+    tenant_id: int,
+    assigned_locations: Optional[List[dict]],
+) -> None:
+    """
+    Ensure every assigned location UUID refers to an active bin on an active rack in a layout
+    warehouse linked to the tenant. All UUIDs must resolve to the same warehouse.
+    Uses default session filters (active bin/rack only); inactive bins are rejected.
+    """
+    uuids = _location_uuids_from_assigned_locations(assigned_locations)
+    if not uuids:
+        return
+    unique = list(dict.fromkeys(uuids))
+    rows = (
+        db.query(Bin.location_uuid, WarehouseLayout.warehouse_id)
+        .join(Rack, Bin.rack_id == Rack.id)
+        .join(WarehouseLayout, Rack.layout_id == WarehouseLayout.id)
+        .join(
+            TenantWarehouse,
+            and_(
+                TenantWarehouse.warehouse_id == WarehouseLayout.warehouse_id,
+                TenantWarehouse.tenant_id == tenant_id,
+            ),
+        )
+        .filter(Bin.location_uuid.in_(unique))
+        .all()
+    )
+    found = set()
+    warehouse_ids = set()
+    for loc_uuid, wh_id in rows:
+        if loc_uuid is None:
+            continue
+        s = str(loc_uuid).strip()
+        if s:
+            found.add(s)
+            warehouse_ids.add(int(wh_id))
+    if len(found) == len(unique) and len(warehouse_ids) == 1:
+        return
+
+    not_found: list[str] = []
+    inactive: list[str] = []
+    wrong_warehouse: list[str] = []
+
+    if len(found) == len(unique) and len(warehouse_ids) != 1:
+        wrong_warehouse.extend(unique)
+    elif len(warehouse_ids) > 1:
+        wrong_warehouse.extend(sorted(found))
+
+    missing = [u for u in unique if u not in found]
+    if missing:
+        tenant_wh_ids = {
+            int(r[0])
+            for r in db.query(TenantWarehouse.warehouse_id)
+            .filter(TenantWarehouse.tenant_id == tenant_id)
+            .all()
+        }
+        broad_rows = (
+            db.query(Bin.location_uuid, WarehouseLayout.warehouse_id, Bin.is_active, Rack.is_active)
+            .join(Rack, Bin.rack_id == Rack.id)
+            .join(WarehouseLayout, Rack.layout_id == WarehouseLayout.id)
+            .filter(Bin.location_uuid.in_(missing))
+            .execution_options(include_inactive=True)
+            .all()
+        )
+        by_uuid: dict[str, list[tuple[int, bool, bool]]] = {}
+        for loc_uuid, wh_id, bin_active, rack_active in broad_rows:
+            if loc_uuid is None:
+                continue
+            s = str(loc_uuid).strip()
+            if not s:
+                continue
+            by_uuid.setdefault(s, []).append(
+                (int(wh_id), bool(bin_active), bool(rack_active))
+            )
+
+        for u in missing:
+            entries = by_uuid.get(u) or []
+            if not entries:
+                not_found.append(u)
+                continue
+            tenant_entries = [(wh, b, r) for wh, b, r in entries if wh in tenant_wh_ids]
+            if not tenant_entries:
+                wrong_warehouse.append(u)
+                continue
+            if any(b and r for wh, b, r in tenant_entries):
+                wrong_warehouse.append(u)
+            else:
+                inactive.append(u)
+
+    _raise_invalid_assigned_locations(
+        invalid_uuids=sorted(unique),
+        not_found=not_found,
+        inactive=inactive,
+        wrong_warehouse=wrong_warehouse,
+    )
 
 router = APIRouter(
     prefix="/products",
@@ -89,6 +228,8 @@ class ProductBody(BaseModel):
     compressed_height_cm: Optional[float] = None
     max_stack_weight: Optional[float] = None
     stack_behavior: Optional[str] = None  # stackable | no_stack
+    # When True on update with assigned_locations: persist JSON without Inventory sync/delete.
+    skip_inventory_sync: Optional[bool] = None
 
     @field_validator(
         "length", "width", "height", "weight", "volume",
@@ -496,6 +637,8 @@ def create_product(
     tid = body.tenant_id if body.tenant_id is not None else tenant_id
     if tid is None:
         raise HTTPException(status_code=400, detail="tenant_id is required when creating a product")
+    if body.assigned_locations is not None:
+        _validate_assigned_locations_for_tenant(db, tid, body.assigned_locations)
     assigned_json = json.dumps(body.assigned_locations) if body.assigned_locations is not None else None
     len_ = _round_float(body.length, 2)
     wid_ = _round_float(body.width, 2)
@@ -567,6 +710,17 @@ def get_product(
     return out
 
 
+@router.patch("/{product_id}/")
+def patch_product(
+    product_id: int,
+    body: ProductBody,
+    db: Session = Depends(get_db),
+    tenant_id: Optional[int] = None,
+):
+    """Partial update; same rules as PUT for fields present in the body."""
+    return update_product(product_id, body, db, tenant_id)
+
+
 @router.put("/{product_id}/")
 def update_product(
     product_id: int,
@@ -619,9 +773,10 @@ def update_product(
     if body.image_url is not None:
         product.image_url = (body.image_url or "").strip() or None
     if body.assigned_locations is not None:
+        _validate_assigned_locations_for_tenant(db, product.tenant_id, body.assigned_locations)
         product.assigned_locations = json.dumps(body.assigned_locations)
-        # Sync inventory with assigned_locations: one inventory row per assigned location
-        _sync_inventory_from_assigned_locations(db, product, body.assigned_locations)
+        if body.skip_inventory_sync is not True:
+            _sync_inventory_from_assigned_locations(db, product, body.assigned_locations)
     if body.label_template_id is not None:
         product.label_template_id = body.label_template_id
     if body.sale_price is not None:

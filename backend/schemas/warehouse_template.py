@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 class WarehouseTemplatePayload(BaseModel):
@@ -19,6 +19,7 @@ class WarehouseTemplatePayload(BaseModel):
     naming_pattern: Optional[str] = None
     binNamingType: str = "numeric"
     autoSectionNumbering: bool = False
+    bin_type_map: Optional[Dict[str, str]] = None
     reserve_bin_keys: Optional[List[str]] = None
     level_max_load_kg: Optional[float] = None
 
@@ -40,6 +41,7 @@ class WarehouseTemplateResponse(BaseModel):
     naming_pattern: Optional[str] = None
     binNamingType: str
     autoSectionNumbering: bool
+    bin_type_map: Optional[Dict[str, str]] = None
     reserve_bin_keys: Optional[List[str]] = None
     level_max_load_kg: Optional[float] = None
 

@@ -153,7 +153,7 @@ export function useSelectionInteraction(params: UseSelectionInteractionParams) {
         const h = Math.max(1, Math.abs(end.y - aisleDrawStart.y) + 1);
         setLayout((prev) => ({
           ...prev,
-          aisles: [...prev.aisles, { x, y, width: w, height: h, two_way: true, name: `Alejka ${prev.aisles.length + 1}` }],
+          aisles: [...prev.aisles, { x, y, width: w, height: h, two_way: true, name: `Strefa ${prev.aisles.length + 1}` }],
         }));
       }
       setAisleDrawStart(null);

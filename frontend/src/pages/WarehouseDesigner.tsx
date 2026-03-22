@@ -1,9 +1,24 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo, type MouseEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/axios";
-import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide } from "../types/warehouse";
+import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
-import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition } from "../components/warehouse/warehouseUtils";
+import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid } from "../components/warehouse/warehouseUtils";
+import {
+  aisleHalfWidthCellsFromCm,
+  collectPackingCentersCells,
+  getRackPickPointCell,
+  pickNearestPackingCell,
+} from "../components/warehouse/rackAccessPoint";
+import { computePickingRouteOrder } from "../components/warehouse/aisleRouteOrder";
+import {
+  buildAisleGraphRoutePath,
+  buildAisleGraphRoutePathPickStartToRack,
+  buildAisleGraphRoutePathSegment,
+  computeManhattanPathLengthCells,
+  getRackRouteWaypoint,
+} from "../components/warehouse/aisleGraphRoute";
+import { buildWalkabilityGrid, nearestWalkableCell } from "../components/warehouse/gridRoutePathfinding";
 import { RackSidebar } from "../components/warehouse/RackSidebar";
 import { RackSideViewGrid } from "../components/warehouse/RackSideViewGrid";
 import { WarehouseModals } from "../components/warehouse/WarehouseModals";
@@ -17,8 +32,10 @@ import { ProductLocatorSidebar } from "../components/warehouse/magazyn/ProductLo
 import { TopProductsSidebar } from "../components/warehouse/magazyn/TopProductsSidebar";
 import { UI_STRINGS } from "../constants/uiStrings";
 import PageLayout from "../components/layout/PageLayout";
+import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
+import { normalizeBinTypeMap, normalizeStorageType } from "../utils/storageTypes";
 import {
   CELLS_PER_METER,
   BASE_PX_PER_CELL,
@@ -51,17 +68,171 @@ import { useDesignerRackPlacement } from "./WarehouseDesigner/useDesignerRackPla
 import { useDesignerCanvas } from "./WarehouseDesigner/useDesignerCanvas";
 import { useDesignerProductModal } from "./WarehouseDesigner/useDesignerProductModal";
 import { useDesignerMagazynState } from "./WarehouseDesigner/useDesignerMagazynState";
-import { useDesignerTemplateSummary } from "./WarehouseDesigner/useDesignerTemplateSummary";
 import { useDesignerRowState } from "./WarehouseDesigner/useDesignerRowState";
 import { RowPrefixModal } from "../components/warehouse/RowPrefixModal";
 import { getWallFromClientPosition, getPositionCmAlongWall } from "./WarehouseDesigner/utils/designerMouseUtils";
 import { normalizeProductDims } from "../utils/productNormalizer";
+import { buildPathAvoidingRacks, buildPickingRoutePolyline, simplifyPath, type PathStop } from "./WarehouseDesigner/pathVisualizationUtils";
+import { fetchRoutePath } from "../api/routeApi";
+import { generateWarehouseGraph } from "../api/warehouseGraphApi";
+import { buildInventoryMaps, normalizeInventoryLocationUuid, type InventoryRow, type InventoryMaps } from "./WarehouseDesigner/inventoryMaps";
+
+/** Resolve slot UUID from an assigned_locations entry (API JSON may use location_uuid). */
+function assignedLocationEntryUuid(a: {
+  locationUUID?: string;
+  location_uuid?: string;
+}): string | undefined {
+  if (typeof a.locationUUID === "string" && a.locationUUID.trim() !== "") return a.locationUUID.trim();
+  if (typeof a.location_uuid === "string" && a.location_uuid.trim() !== "") return a.location_uuid.trim();
+  return undefined;
+}
+
+/** Legacy product.location_id (no assigned_locations): label matches a bin on this rack. */
+function legacyProductLocationMatchesRack(p: WarehouseProduct, rack: RackState): boolean {
+  if (p.location_id == null || (p.assignedLocations?.length ?? 0) > 0) return false;
+  const want = String(p.location_id).trim().replace(/\s+/g, " ");
+  for (const b of rack.bins ?? []) {
+    const bl = (b.label ?? b.location_id ?? "").trim().replace(/\s+/g, " ");
+    if (bl && bl === want) return true;
+  }
+  return false;
+}
+
+/**
+ * Total pieces of product `p` in the layout: per-bin, inventory at bin UUID wins; else assigned_locations for that UUID;
+ * else legacy `location_id === bin.label` (same rules as `usedVolumeAtBin` / `quantityFromAssignedForBin`).
+ * Volume for dashboards is always qty × product.volume_dm3 — never bin capacity.
+ */
+function quantityAssignedInLayoutBins(
+  p: WarehouseProduct,
+  validLayoutLocationUUIDs: Set<string>,
+  inventoryMaps: InventoryMaps | null,
+  hasInventoryRows: boolean,
+  layoutRacks: RackState[]
+): number {
+  let total = 0;
+  for (const rack of layoutRacks) {
+    for (const bin of rack.bins ?? []) {
+      const binLabel = (bin.label ?? bin.location_id ?? "").trim();
+      const uuid = normalizeInventoryLocationUuid(bin.locationUUID);
+      if (uuid && !validLayoutLocationUUIDs.has(uuid)) continue;
+
+      let invQty = 0;
+      if (hasInventoryRows && inventoryMaps && uuid) {
+        for (const inv of inventoryMaps.byLocationUuid.get(uuid) ?? []) {
+          if (String(inv.product_id) !== p.id) continue;
+          invQty += safeQuantity(inv.quantity);
+        }
+      }
+      if (invQty > 0) {
+        total += invQty;
+        continue;
+      }
+      let assignedQty = 0;
+      if (uuid && p.assignedLocations?.length) {
+        const ent = p.assignedLocations.find((x) => assignedLocationEntryUuid(x) === uuid);
+        if (ent) assignedQty = safeQuantity(ent.quantity);
+      }
+      if (assignedQty > 0) {
+        total += assignedQty;
+        continue;
+      }
+      if (binLabel && p.location_id === binLabel) {
+        total += safeQuantity(p.quantity);
+      }
+    }
+  }
+  return total;
+}
+
+function productHasAssignmentOrInventoryInLayout(
+  p: WarehouseProduct,
+  validLayoutLocationUUIDs: Set<string>,
+  inventoryMaps: InventoryMaps | null,
+  hasInventoryRows: boolean,
+  layoutRacks: RackState[]
+): boolean {
+  return quantityAssignedInLayoutBins(p, validLayoutLocationUUIDs, inventoryMaps, hasInventoryRows, layoutRacks) > 0;
+}
 
 type PendingRowCreation =
   | { type: "emptyRow"; start: { x: number; y: number }; end: { x: number; y: number } }
   | { type: "rowWithTemplate"; start: { x: number; y: number }; end: { x: number; y: number }; item: CatalogItem }
   | { type: "stampRack"; cell: { x: number; y: number }; item: CatalogItem }
   | null;
+
+type PendingVariantSave = {
+  rackId: number | string;
+  baseTemplate: CustomRackTemplate;
+  internalStructure: InternalStructure;
+  bins?: BinState[];
+};
+
+function templateSlotDimensions(template: CustomRackTemplate, levelIndex: number): { width_cm: number; depth_cm: number; height_cm: number } {
+  const levelCfg = Array.isArray(template.levelConfig) && template.levelConfig.length > 0
+    ? template.levelConfig
+    : Array.from({ length: Math.max(1, template.levels) }, (_, i) => ({ level: i + 1, locations: Math.max(1, template.bins_per_level) }));
+  const locs = Math.max(1, levelCfg[levelIndex]?.locations ?? template.bins_per_level ?? 1);
+  const totalLevels = Math.max(1, levelCfg.length || template.levels || 1);
+  // Use direct template/rack data only (no external helper dependency).
+  const levelHeight = template.height_cm / totalLevels;
+  return {
+    width_cm: Number((template.width_cm / locs).toFixed(2)),
+    depth_cm: Number(template.depth_cm.toFixed(2)),
+    height_cm: Number(levelHeight.toFixed(2)),
+  };
+}
+
+function levelConfigFromInternalStructure(internalStructure: InternalStructure): LevelConfigItem[] {
+  return (internalStructure.levels ?? []).map((level, idx) => ({
+    level: idx + 1,
+    locations: Math.max(1, level.locations?.length ?? 1),
+  }));
+}
+
+function structureDiffersFromTemplate(template: CustomRackTemplate, internalStructure: InternalStructure): boolean {
+  const variantCfg = levelConfigFromInternalStructure(internalStructure);
+  const baseCfg = Array.isArray(template.levelConfig) && template.levelConfig.length > 0
+    ? template.levelConfig
+    : Array.from({ length: Math.max(1, template.levels) }, (_, i) => ({ level: i + 1, locations: Math.max(1, template.bins_per_level) }));
+  if (variantCfg.length !== baseCfg.length) return true;
+  for (let i = 0; i < variantCfg.length; i++) {
+    if ((variantCfg[i]?.locations ?? 1) !== (baseCfg[i]?.locations ?? 1)) return true;
+  }
+  return false;
+}
+
+function buildVariantTemplate(
+  base: CustomRackTemplate,
+  internalStructure: InternalStructure,
+  bins: BinState[] | undefined,
+  variantName?: string
+): CustomRackTemplate {
+  const levelConfig = levelConfigFromInternalStructure(internalStructure);
+  const binTypeMap: Record<string, StorageType> = {};
+  (bins ?? []).forEach((b) => {
+    binTypeMap[`${b.level_index}-${b.segment_index}`] = normalizeStorageType(b.storage_type);
+  });
+  const variantId = typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `variant-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const existingVariantSuffix = /\s\[Wariant\s\d+\]$/.test(base.name);
+  const baseName = existingVariantSuffix ? base.name.replace(/\s\[Wariant\s\d+\]$/, "") : base.name;
+  const resolvedName = variantName?.trim() ? variantName.trim() : `${baseName} [Wariant ${Date.now().toString().slice(-4)}]`;
+  return {
+    ...base,
+    id: variantId,
+    templateId: base.id,
+    name: resolvedName,
+    width_cm: base.width_cm,
+    depth_cm: base.depth_cm,
+    height_cm: base.height_cm,
+    levels: Math.max(1, levelConfig.length),
+    bins_per_level: levelConfig[0]?.locations ?? base.bins_per_level,
+    levelConfig,
+    bin_type_map: Object.keys(binTypeMap).length > 0 ? binTypeMap : base.bin_type_map,
+  };
+}
 
 export default function WarehouseDesigner() {
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -79,7 +250,233 @@ export default function WarehouseDesigner() {
     row_containers: [],
     wall_elements: [],
   });
+  const getRackDisplayIdWithLayout = useCallback((r: RackState) => getRackDisplayId(r, layout), [layout]);
   const [selectedRackId, setSelectedRackId] = useState<number | string | null>(null);
+  const [pathPoints, setPathPoints] = useState<{ x: number; y: number }[] | null>(null);
+  const [pathSegments, setPathSegments] = useState<{ x: number; y: number }[][] | null>(null);
+  const [pathMarkers, setPathMarkers] = useState<{ x: number; y: number; label: string }[] | null>(null);
+  const [highlightedStopIndex, setHighlightedStopIndex] = useState<number | null>(null);
+  const [currentStopIndex, setCurrentStopIndex] = useState<number | null>(null);
+  const [pathLoading, setPathLoading] = useState(false);
+  const [pathError, setPathError] = useState<string | null>(null);
+  const [graphGenerating, setGraphGenerating] = useState(false);
+  const [retryPathKey, setRetryPathKey] = useState(0);
+  type SpecialLocationsState = { pick_start: { id: number; x: number; y: number } | null; packing: { id: number; x: number; y: number } | null; dock: { id: number; x: number; y: number } | null };
+  const [specialLocations, setSpecialLocations] = useState<SpecialLocationsState>({ pick_start: null, packing: null, dock: null });
+  type RouteStop = { rackId: string; position: { x: number; y: number } }; // position in cells (float)
+  const [routeRackIds, setRouteRackIds] = useState<string[]>([]);
+  const [isRouteActive, setIsRouteActive] = useState(false);
+  const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
+
+  useEffect(() => {
+    console.log("[WarehouseDesigner][effect:routeStopsGuard] run", {
+      highlightedStopIndex,
+      routeStopsLength: routeRackIds.length,
+      modifiesRack: false,
+    });
+    if (highlightedStopIndex != null && (highlightedStopIndex < 0 || highlightedStopIndex >= routeRackIds.length)) {
+      setHighlightedStopIndex(null);
+    }
+  }, [routeRackIds.length, highlightedStopIndex]);
+
+
+  const isPointInsideRect = useCallback(
+    (point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) => {
+      return (
+        point.x >= rect.x &&
+        point.x <= rect.x + rect.width &&
+        point.y >= rect.y &&
+        point.y <= rect.y + rect.height
+      );
+    },
+    []
+  );
+
+  const computeApproachPointCells = useCallback(
+    (params: {
+      fromCm: { x: number; y: number };
+      rack: { x: number; y: number; width: number; height: number };
+      layout: { grid_cols?: number; grid_rows?: number; racks?: Array<{ x: number; y: number; width: number; height: number }>; visual_elements?: Array<{ x: number; y: number; width: number; height: number; type: string }>; aisles?: Array<{ x: number; y: number; width: number; height: number }> };
+    }): { x: number; y: number } => {
+      const { fromCm, rack, layout } = params;
+      const rx = rack.x;
+      const ry = rack.y;
+      const rw = rack.width;
+      const rh = rack.height;
+      const gridCols = layout.grid_cols ?? 24;
+      const gridRows = layout.grid_rows ?? 16;
+      const racks = layout.racks ?? [];
+      const visuals = layout.visual_elements ?? [];
+      const aisles = layout.aisles ?? [];
+      const blockingVisualTypes = new Set<string>(["wall", "door", "column", "mezzanine"]);
+
+      const candidates = [
+        { x: rx - 0.5, y: ry + rh / 2 },
+        { x: rx + rw + 0.5, y: ry + rh / 2 },
+        { x: rx + rw / 2, y: ry - 0.5 },
+        { x: rx + rw / 2, y: ry + rh + 0.5 },
+      ];
+      console.log("APPROACH CANDIDATES:", candidates);
+
+      const isValid = (c: { x: number; y: number }): boolean => {
+        if (c.x < 0 || c.x > gridCols || c.y < 0 || c.y > gridRows) return false;
+        for (const r of racks) {
+          if (isPointInsideRect(c, r)) return false;
+        }
+        for (const ve of visuals) {
+          if (blockingVisualTypes.has(ve.type) && isPointInsideRect(c, ve)) return false;
+        }
+        return true;
+      };
+
+      let validCandidates = candidates.filter(isValid);
+      console.log("VALID APPROACH:", validCandidates);
+      if (validCandidates.length === 0) {
+        validCandidates = candidates;
+        console.warn("No valid approach point; using nearest candidate (may be inside rack or obstacle).");
+      }
+
+      const isInAisle = (c: { x: number; y: number }): boolean =>
+        aisles.length > 0 && aisles.some((a) => isPointInsideRect(c, a));
+
+      const aisleCandidates = validCandidates.filter(isInAisle);
+      const pool = aisleCandidates.length > 0 ? aisleCandidates : validCandidates;
+
+      let best = pool[0];
+      let bestD2 = Infinity;
+      for (const c of pool) {
+        const cx = cellsToCm(c.x);
+        const cy = cellsToCm(c.y);
+        const d2 = (fromCm.x - cx) ** 2 + (fromCm.y - cy) ** 2;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = c;
+        }
+      }
+      console.log("CHOSEN:", best);
+      return best;
+    },
+    [isPointInsideRect]
+  );
+
+  const addRackToRoute = useCallback((rackId: number | string) => {
+    if (!isRouteActive) return;
+    console.log("ROUTE CLICK", rackId);
+    const rid = String(rackId);
+    setRouteRackIds((prev) => (prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]));
+  }, [isRouteActive]);
+
+  const pickStartCell = useMemo(
+    () =>
+      specialLocations.pick_start
+        ? { x: specialLocations.pick_start.x / GRID_UNIT_CM, y: specialLocations.pick_start.y / GRID_UNIT_CM }
+        : null,
+    [specialLocations.pick_start]
+  );
+
+  /** Visit order: row bands + serpentine (not click order, not TSP). */
+  const orderedRouteRackIds = useMemo(
+    () => computePickingRouteOrder(routeRackIds, layout.racks, pickStartCell),
+    [routeRackIds, layout.racks, pickStartCell]
+  );
+
+  const {
+    aisleDrawStart,
+    setAisleDrawStart,
+    rowToolTemplate,
+    setRowToolTemplate,
+    rowDrawStart,
+    setRowDrawStart,
+    rowDrawEnd,
+    setRowDrawEnd,
+    rowPreviewCursor,
+    setRowPreviewCursor,
+    rowGapCm,
+    setRowGapCm,
+    selectedRowContainerId,
+    setSelectedRowContainerId,
+    selectedRowContainerIds,
+    setSelectedRowContainerIds,
+    draggingRowId,
+    setDraggingRowId,
+    rowDragPreviewStart,
+    setRowDragPreviewStart,
+    catalogHoveredSlot,
+    setCatalogHoveredSlot,
+    aisleWidthCm,
+    setAisleWidthCm,
+  } = useDesignerRowState();
+
+  const aisleHalfCells = useMemo(() => aisleHalfWidthCellsFromCm(aisleWidthCm), [aisleWidthCm]);
+  const aisleRouteOpts = useMemo(() => ({ aisleHalfWidthCells: aisleHalfCells }), [aisleHalfCells]);
+
+  const [routeStepIndex, setRouteStepIndex] = useState(0);
+
+  useEffect(() => {
+    setRouteStepIndex(0);
+  }, [orderedRouteRackIds.join(",")]);
+
+  /**
+   * One stop per ordered rack id. Position: nearest walkable cell to rack pick point (grid routing).
+   */
+  const routeStops = useMemo<RouteStop[]>(() => {
+    const half = aisleHalfCells;
+    return orderedRouteRackIds
+      .map((rid) => {
+        const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === rid);
+        if (!rack) return null;
+        const pos = getRackRouteWaypoint(rack, layout, half) ?? getRackPickPointCell(rack, half);
+        return { rackId: rid, position: pos };
+      })
+      .filter((x): x is RouteStop => x != null);
+  }, [orderedRouteRackIds, layout, aisleHalfCells]);
+
+  /** Nearest packing (DB or visual packing_station) to last rack access — snapped to walkable grid cell. */
+  const routePackingCell = useMemo(() => {
+    if (routeStops.length === 0) return null;
+    const last = routeStops[routeStops.length - 1].position;
+    const candidates = collectPackingCentersCells(layout, specialLocations.packing ?? undefined);
+    const nearest = pickNearestPackingCell(last, candidates);
+    if (!nearest) return null;
+    const walkable = buildWalkabilityGrid(layout);
+    const cell = nearestWalkableCell(nearest.x, nearest.y, walkable);
+    if (!cell) return nearest;
+    return { x: cell.ix + 0.5, y: cell.iy + 0.5 };
+  }, [routeStops, layout, specialLocations.packing]);
+
+  /** Full route polyline (total distance). */
+  const routePathFull = useMemo(() => {
+    if (routeRackIds.length <= 1 || !pickStartCell || routeStops.length === 0) return null;
+    return buildAisleGraphRoutePath(layout, pickStartCell, routeStops, routePackingCell, layout.racks, aisleRouteOpts);
+  }, [routeRackIds.length, orderedRouteRackIds, routeStops, pickStartCell, routePackingCell, layout, aisleRouteOpts]);
+
+  /** Single leg for canvas: current rack → next rack (or START → first rack when only one stop). */
+  const routeSegmentPath = useMemo(() => {
+    const ids = orderedRouteRackIds;
+    if (!pickStartCell || ids.length === 0) return null;
+    if (ids.length === 1) {
+      return buildAisleGraphRoutePathPickStartToRack(layout, pickStartCell, ids[0], layout.racks, aisleRouteOpts);
+    }
+    const i = Math.min(routeStepIndex, ids.length - 1);
+    if (i < ids.length - 1) {
+      return buildAisleGraphRoutePathSegment(layout, ids[i], ids[i + 1], layout.racks, aisleRouteOpts);
+    }
+    return null;
+  }, [orderedRouteRackIds, routeStepIndex, layout, pickStartCell, aisleRouteOpts]);
+
+  /** Stops for PathLayer / RouteStopLayer: only the current leg (avoids full-route fallback when polyline is null). */
+  const routeStopsForCanvas = useMemo(() => {
+    const ids = orderedRouteRackIds;
+    if (ids.length < 2) return routeStops;
+    const i = Math.min(routeStepIndex, ids.length - 1);
+    if (i < ids.length - 1) {
+      const a = ids[i];
+      const b = ids[i + 1];
+      return routeStops.filter((s) => s.rackId === a || s.rackId === b);
+    }
+    return [];
+  }, [routeStops, orderedRouteRackIds, routeStepIndex]);
+
   const [placementMode, setPlacementMode] = useState(false);
   const [ghostPosition, setGhostPosition] = useState<{ x: number; y: number } | null>(null);
   const [copyPlacementMode, setCopyPlacementMode] = useState(false);
@@ -130,6 +527,8 @@ export default function WarehouseDesigner() {
     bins_per_level: 4,
     aisle_letter: "A",
   });
+  /** Used by stamp tool when placing racks without a template (default: Warehouse). */
+  const [manualRackType, setManualRackType] = useState<RackType>("warehouse");
   const {
     zoom,
     setZoom,
@@ -142,6 +541,10 @@ export default function WarehouseDesigner() {
   } = useDesignerCanvas();
   const lastCursorCmRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:cursorMemo] run", {
+      hasCursor: cursorCm != null,
+      modifiesRack: false,
+    });
     if (cursorCm != null) lastCursorCmRef.current = cursorCm;
   }, [cursorCm]);
   const getPastePosition = useCallback(() => {
@@ -164,6 +567,13 @@ export default function WarehouseDesigner() {
   const [selectedRackIdOnMap, setSelectedRackIdOnMap] = useState<string | null>(null);
   /** Magazyn tab: product selected from global search on map; highlights racks and shows ProductLocatorSidebar. */
   const [selectedProductIdOnMap, setSelectedProductIdOnMap] = useState<string | null>(null);
+  /** Magazyn sidebar: product picked to highlight all its bin locations on the map (toggle). */
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [hoveredProductIdOnMap, setHoveredProductIdOnMap] = useState<string | null>(null);
+  /** Magazyn: sidebar location row hover → highlight bin on top-down map (location UUID). */
+  const [hoveredLocationUUID, setHoveredLocationUUID] = useState<string | null>(null);
+  /** Magazyn tab: selected template for type-based rack highlighting. */
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   /** Magazyn tab: selected location (level_index, segment_index) for inventory filter and highlight. */
   const [selectedLocationForProducts, setSelectedLocationForProducts] = useState<{ level_index: number; segment_index: number } | null>(null);
   /** Inventory products (Magazyn); drive bin occupancy and quantity display. */
@@ -195,34 +605,15 @@ export default function WarehouseDesigner() {
   }, []);
   useLayoutModeShortcuts(layoutMode, setLayoutMode);
   const layoutModeDisplay = useLayoutModeDisplay(layoutMode);
-  type SpecialLocationsState = { pick_start: { id: number; x: number; y: number } | null; packing: { id: number; x: number; y: number } | null; dock: { id: number; x: number; y: number } | null };
-  const [specialLocations, setSpecialLocations] = useState<SpecialLocationsState>({ pick_start: null, packing: null, dock: null });
-  const {
-    aisleDrawStart,
-    setAisleDrawStart,
-    rowToolTemplate,
-    setRowToolTemplate,
-    rowDrawStart,
-    setRowDrawStart,
-    rowDrawEnd,
-    setRowDrawEnd,
-    rowPreviewCursor,
-    setRowPreviewCursor,
-    rowGapCm,
-    setRowGapCm,
-    selectedRowContainerId,
-    setSelectedRowContainerId,
-    selectedRowContainerIds,
-    setSelectedRowContainerIds,
-    draggingRowId,
-    setDraggingRowId,
-    rowDragPreviewStart,
-    setRowDragPreviewStart,
-    catalogHoveredSlot,
-    setCatalogHoveredSlot,
-    aisleWidthCm,
-    setAisleWidthCm,
-  } = useDesignerRowState();
+  useEffect(() => {
+    console.log("[WarehouseDesigner][effect:rackTypeSwitchReset] run", {
+      manualRackType,
+      modifiesRack: false,
+    });
+    // Rack type switch changes the working template universe, so clear dependent selections.
+    setRowToolTemplate(null);
+    setSelectedTemplateId(null);
+  }, [manualRackType, setRowToolTemplate]);
 
   const [rowPrefixModalOpen, setRowPrefixModalOpen] = useState(false);
   const [pendingRowCreation, setPendingRowCreation] = useState<PendingRowCreation>(null);
@@ -231,10 +622,10 @@ export default function WarehouseDesigner() {
   /** Latest preview position for row drag (so window mouseup can read it). */
   const rowDragPreviewStartRef = useRef<{ x: number; y: number } | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
-  const [showRackLabels, setShowRackLabels] = useState(true);
+  const [showLabels, setShowLabels] = useState(true);
   const [selectedAisleIndex, setSelectedAisleIndex] = useState<number | null>(null);
-  const [showGrid, setShowGrid] = useState(true);
-  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [showGridMagazyn, setShowGridMagazyn] = useState(false);
+  const [showGridLayout, setShowGridLayout] = useState(true);
   const [draggingVisualType, setDraggingVisualType] = useState<VisualElementType | null>(null);
   const [selectedVisualId, setSelectedVisualId] = useState<string | null>(null);
   const [draggingVisualId, setDraggingVisualId] = useState<string | null>(null);
@@ -249,12 +640,66 @@ export default function WarehouseDesigner() {
   const deletedForUndoRef = useRef<{ racks?: RackState[]; visuals?: VisualElementState[]; row_containers?: LayoutState["row_containers"] } | null>(null);
   const [draggingWallEnd, setDraggingWallEnd] = useState<{ visualId: string; end: 0 | 1 } | null>(null);
   const [searchParams] = useSearchParams();
-  /** Single view mode: Magazyn (live) | Projektant Layoutu */
+  /** Single view mode: Magazyn (live) | Projektant Layoutu (kept in sync with `?view=`). */
   const [mainView, setMainView] = useState<"magazyn" | "layout">(() =>
-    searchParams.get("view") === "layout" ? "layout" : "layout"
+    searchParams.get("view") === "layout" ? "layout" : "magazyn"
   );
+  /** Pointer semantics for the shared mouse hook: layout canvas must never run Magazyn map rack/aisle logic (elevation, etc.). */
+  const magazynMapInteractions = mainView === "magazyn" && searchParams.get("view") !== "layout";
+  const showGrid = mainView === "magazyn" ? showGridMagazyn : showGridLayout;
+  const setShowGrid = useCallback((fn: (v: boolean) => boolean) => {
+    if (mainView === "magazyn") {
+      setShowGridMagazyn(fn);
+    } else {
+      setShowGridLayout(fn);
+    }
+  }, [mainView]);
   const svgRef = useRef<SVGSVGElement>(null);
   const isLiveView = mainView === "magazyn";
+  useEffect(() => {
+    if (mainView !== "magazyn") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mainView]);
+  /** Magazyn map column (`overflow-y-auto`): block wheel chaining at scroll extremes (non-passive). */
+  const magazynMapScrollRef = useRef<HTMLDivElement>(null);
+  /** Magazyn rack side view scroll wrapper: same wheel containment. */
+  const magazynRackSideScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (mainView !== "magazyn" || layout.racks.length === 0 || selectedRackIdForSideView != null) return;
+    const el = magazynMapScrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const isScrollingUp = e.deltaY < 0;
+      const isScrollingDown = e.deltaY > 0;
+      const atTop = el.scrollTop === 0;
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight;
+      if ((isScrollingUp && atTop) || (isScrollingDown && atBottom)) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [mainView, layout.racks.length, selectedRackIdForSideView]);
+  useEffect(() => {
+    if (mainView !== "magazyn" || layout.racks.length === 0 || selectedRackIdForSideView == null) return;
+    const el = magazynRackSideScrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const isScrollingUp = e.deltaY < 0;
+      const isScrollingDown = e.deltaY > 0;
+      const atTop = el.scrollTop === 0;
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight;
+      if ((isScrollingUp && atTop) || (isScrollingDown && atBottom)) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [mainView, layout.racks.length, selectedRackIdForSideView]);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const lastMouseRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const rafIdRef = useRef<number>(0);
@@ -270,14 +715,46 @@ export default function WarehouseDesigner() {
   const moveRackWithinRowRef = useRef<((rowId: string, rackId: number | string, fromSlotIndex: number, toSlotIndex: number) => void) | null>(null);
   const wallElementDragPosRef = useRef<number | null>(null);
   const [showRackLabelDownload, setShowRackLabelDownload] = useState(false);
+  const [clearRackConfirmOpen, setClearRackConfirmOpen] = useState(false);
+  const [clearRackBusy, setClearRackBusy] = useState(false);
   const [wallElementTool, setWallElementTool] = useState<"door" | "gate" | null>(null);
   const [selectedWallElementId, setSelectedWallElementId] = useState<string | null>(null);
   const [draggingWallElementId, setDraggingWallElementId] = useState<string | null>(null);
   const [dragPreviewPositionCm, setDragPreviewPositionCm] = useState<number | null>(null);
   const [showGateTypeModal, setShowGateTypeModal] = useState(false);
   const [pendingGatePlacement, setPendingGatePlacement] = useState<{ wall: WallSide; position_cm: number } | null>(null);
+  const [pendingVariantSave, setPendingVariantSave] = useState<PendingVariantSave | null>(null);
+  const [variantNameInput, setVariantNameInput] = useState("");
+
+  const countLayoutVariantLocations = useCallback((rack: RackState | undefined | null): number => {
+    if (!rack?.layoutVariant?.levels?.length) return 0;
+    return rack.layoutVariant.levels.reduce((sum, level) => sum + Math.max(0, level.locations ?? 0), 0);
+  }, []);
+
+  const logRackDebugSnapshot = useCallback(
+    (scope: string, rack: RackState | undefined | null) => {
+      if (!rack) {
+        console.log(`[WarehouseDesigner][${scope}] rack: <not-found>`);
+        return;
+      }
+      console.log(`[WarehouseDesigner][${scope}]`, {
+        rackId: String(rack.id ?? rack.rack_index),
+        binsLength: rack.bins?.length ?? 0,
+        layoutVariantLocations: countLayoutVariantLocations(rack),
+        binLocationIds: (rack.bins ?? []).map((b) => b.location_id),
+        levels: rack.levels,
+        internalStructureLevels: rack.internal_structure?.levels?.length ?? 0,
+        layoutVariantLevels: rack.layoutVariant?.levels?.length ?? 0,
+      });
+    },
+    [countLayoutVariantLocations]
+  );
 
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:sideViewSelection] run", {
+      selectedRackIdForSideView,
+      modifiesRack: false,
+    });
     if (selectedRackIdForSideView == null) {
       setShowRackLabelDownload(false);
     }
@@ -285,6 +762,10 @@ export default function WarehouseDesigner() {
 
   /** When "Rysuj Rząd" is turned off, clear all temp row-draw state so no extra slot can leak into rows. */
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:rowToolCleanup] run", {
+      rowToolActive,
+      modifiesRack: false,
+    });
     if (rowToolActive) return;
     setRowDrawStart(null);
     setRowDrawEnd(null);
@@ -298,9 +779,19 @@ export default function WarehouseDesigner() {
   }, [rowToolActive]);
 
   useEffect(() => {
-    const v = searchParams.get("view") === "layout" ? "layout" : "layout";
-    setMainView((prev) => (prev === "magazyn" ? prev : v));
+    const v = searchParams.get("view") === "layout" ? "layout" : "magazyn";
+    setMainView(v);
   }, [searchParams]);
+
+  const prevMainViewRef = useRef(mainView);
+  useEffect(() => {
+    const prev = prevMainViewRef.current;
+    prevMainViewRef.current = mainView;
+    if (mainView === "layout" && prev === "magazyn") {
+      setShowElevationForRackId(null);
+      setSelectedRackIdForSideView(null);
+    }
+  }, [mainView]);
 
   /** Top-level state to avoid ReferenceError; synced from selection. */
   const selectedObjectIdDerived = useMemo<string | null>(() => {
@@ -312,12 +803,42 @@ export default function WarehouseDesigner() {
   /** Top-level state to avoid ReferenceError; synced from selection. */
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:selectedObjectSync] run", {
+      selectedObjectIdDerived,
+      modifiesRack: false,
+    });
     setSelectedObjectId(selectedObjectIdDerived);
   }, [selectedObjectIdDerived]);
 
+  const inventoryMaps = useMemo(() => {
+    if (inventoryRows.length === 0) return null;
+    return buildInventoryMaps(inventoryRows, layout);
+  }, [inventoryRows, layout]);
+
+  /** Dev visibility: stock rows missing location_uuid (should be empty in normal operation). */
+  useEffect(() => {
+    if (inventoryRows.length === 0) return;
+    const missing = inventoryRows.filter((r) => {
+      const u = r.location_uuid;
+      return u == null || (typeof u === "string" && u.trim() === "");
+    });
+    if (missing.length === 0) return;
+    const cap = 100;
+    const slice = missing.slice(0, cap);
+    const details = slice.map((r) => ({
+      id: r.id,
+      product_id: r.product_id,
+      location_id: r.location_id,
+      location_name: r.location_name,
+    }));
+    console.warn(
+      `[WarehouseDesigner] Inventory rows missing location_uuid: ${missing.length} of ${inventoryRows.length} (showing ${slice.length} row(s)${missing.length > cap ? `, +${missing.length - cap} more` : ""})`,
+      details
+    );
+  }, [inventoryRows]);
+
   const {
     selectedRackForMagazyn,
-    selectedRackBinLabels,
     selectedRackBinUUIDs,
     displayRack,
     binItemCounts,
@@ -332,7 +853,38 @@ export default function WarehouseDesigner() {
     layout,
     products,
     selectedRackIdForSideView,
+    inventoryRows,
+    inventoryMaps,
   });
+  const usedStorageTypesForLegend = useMemo<StorageType[]>(() => {
+    const rackForLegend = displayRack ?? selectedRackForMagazyn;
+    if (!rackForLegend) return [];
+    const order: StorageType[] = ["primary", "reserve", "store", "buffer", "damaged"];
+    const used = new Set<StorageType>();
+    for (const b of rackForLegend.bins ?? []) {
+      used.add(normalizeStorageType(b.storage_type));
+    }
+    return order.filter((t) => used.has(t));
+  }, [displayRack, selectedRackForMagazyn]);
+  const globalLocationStatsForLegend = useMemo(() => {
+    let primary = 0;
+    let reserve = 0;
+    let damaged = 0;
+    for (const rack of layout.racks) {
+      for (const bin of rack.bins ?? []) {
+        const type = normalizeStorageType(bin.storage_type);
+        if (type === "reserve") reserve += 1;
+        else if (type === "damaged") damaged += 1;
+        else primary += 1;
+      }
+    }
+    return {
+      primary,
+      reserve,
+      damaged,
+      total: primary + reserve + damaged,
+    };
+  }, [layout.racks]);
 
   /** Map locationUUID → bin (for storage_type and primary/reserve split). Declared before mapRackState and occupancy useMemos. */
   const uuidToBin = useMemo(() => {
@@ -361,33 +913,228 @@ export default function WarehouseDesigner() {
     return map;
   }, [layout.racks]);
 
-  /** Map product id → Set of rack ids that contain that product (from assignedLocations). */
+  /** Layout-scoped location identity: valid UUIDs for current rack bins only. */
+  const validLayoutLocationUUIDs = useMemo(() => {
+    const out = new Set<string>();
+    for (const rack of layout.racks) {
+      for (const bin of rack.bins ?? []) {
+        const uuid = (bin.locationUUID ?? "").trim();
+        if (uuid) out.add(uuid);
+      }
+    }
+    return out;
+  }, [layout.racks]);
+
+  /** Map product id → Set of rack ids that contain that product. Merges Stock (inventoryMaps) and assigned_locations (uuidToRackId). */
   const productToRackIds = useMemo(() => {
     const map = new Map<string, Set<string>>();
     products.forEach((p) => {
-      const racks = new Set<string>();
+      map.set(p.id, new Set<string>());
+    });
+    if (inventoryMaps && inventoryRows.length > 0) {
+      for (const [rackId, rows] of inventoryMaps.byRackId.entries()) {
+        for (const inv of rows) {
+          const qty = safeQuantity(inv.quantity);
+          if (qty <= 0) continue;
+          const pid = String(inv.product_id);
+          if (!map.has(pid)) map.set(pid, new Set<string>());
+          map.get(pid)!.add(rackId);
+        }
+      }
+    }
+    products.forEach((p) => {
+      const racks = map.get(p.id);
+      if (!racks) return;
       p.assignedLocations?.forEach((a) => {
-        const rackId = uuidToRackId.get(a.locationUUID);
+        const locUuid = assignedLocationEntryUuid(a);
+        if (!locUuid) return;
+        const rackId = uuidToRackId.get(locUuid);
         if (rackId) racks.add(rackId);
       });
-      map.set(p.id, racks);
     });
     return map;
-  }, [products, uuidToRackId]);
+  }, [inventoryMaps, inventoryRows.length, products, uuidToRackId]);
 
   /** Rack ids to highlight when a product is selected on the map (global locator). */
+  const activeProductIdOnMap = hoveredProductIdOnMap ?? selectedProductIdOnMap;
   const rackIdsContainingSelectedProduct =
-    selectedProductIdOnMap != null ? productToRackIds.get(selectedProductIdOnMap) ?? null : null;
+    activeProductIdOnMap != null ? productToRackIds.get(activeProductIdOnMap) ?? null : null;
+  const productRackQuantities = useMemo(() => {
+    if (activeProductIdOnMap == null) return null;
+    const product = products.find((x) => x.id === activeProductIdOnMap);
+    const quantities = new Map<string, number>();
+    /** Avoid double-count when Stock row already covers the same bin UUID as an assigned entry on that rack. */
+    const invRackUuidKeys = new Set<string>();
+
+    if (inventoryMaps && inventoryRows.length > 0) {
+      const invRows = inventoryMaps.byProduct.get(activeProductIdOnMap) ?? [];
+      for (const inv of invRows) {
+        const locUuid = normalizeInventoryLocationUuid(inv.location_uuid);
+        if (!locUuid) continue;
+        const rackId = uuidToRackId.get(locUuid);
+        if (!rackId) continue;
+        const quantity = safeQuantity(inv.quantity);
+        if (quantity <= 0) continue;
+        quantities.set(rackId, (quantities.get(rackId) ?? 0) + quantity);
+        invRackUuidKeys.add(`${rackId}|${locUuid}`);
+      }
+    }
+
+    if (product?.assignedLocations?.length) {
+      for (const assigned of product.assignedLocations) {
+        const locUuid = assignedLocationEntryUuid(assigned);
+        if (!locUuid) continue;
+        const rackId = uuidToRackId.get(locUuid);
+        if (!rackId) continue;
+        const quantity = safeQuantity(assigned.quantity);
+        if (quantity <= 0) continue;
+        if (invRackUuidKeys.has(`${rackId}|${locUuid}`)) continue;
+        quantities.set(rackId, (quantities.get(rackId) ?? 0) + quantity);
+      }
+    }
+
+    return quantities.size > 0 ? quantities : null;
+  }, [activeProductIdOnMap, products, uuidToRackId, uuidToBin, inventoryMaps, inventoryRows.length]);
+
+  /** Rack ids to highlight when a template is selected in Magazyn dashboard. */
+  const rackIdsForSelectedTemplate = useMemo(() => {
+    if (!selectedTemplateId) return new Set<string>();
+    return new Set(
+      layout.racks
+        .filter((r) => r.templateId === selectedTemplateId)
+        .map((r) => String(r.id ?? r.rack_index))
+    );
+  }, [layout.racks, selectedTemplateId]);
+
+  /** Bin UUIDs to draw on map when a product is selected in Magazyn sidebar (inventory + assigned_locations). */
+  const highlightedBinUUIDsForSidebarProduct = useMemo(() => {
+    if (selectedProductId == null) return null;
+    const product = products.find((p) => p.id === selectedProductId);
+    const set = new Set<string>();
+    if (inventoryMaps && inventoryRows.length > 0) {
+      const rows = inventoryMaps.byProduct.get(selectedProductId) ?? [];
+      for (const inv of rows) {
+        if (safeQuantity(inv.quantity) <= 0) continue;
+        const u = normalizeInventoryLocationUuid(inv.location_uuid);
+        if (u && validLayoutLocationUUIDs.has(u)) set.add(u);
+      }
+    }
+    if (product?.assignedLocations?.length) {
+      for (const a of product.assignedLocations) {
+        const u = assignedLocationEntryUuid(a);
+        if (!u) continue;
+        if (safeQuantity(a.quantity) <= 0) continue;
+        if (validLayoutLocationUUIDs.has(u)) set.add(u);
+      }
+    }
+    return set.size > 0 ? set : null;
+  }, [selectedProductId, products, inventoryMaps, inventoryRows.length, validLayoutLocationUUIDs]);
+
+  const toggleProductMapHighlight = useCallback((productId: string) => {
+    setSelectedProductId((prev) => (prev === productId ? null : productId));
+  }, []);
+
+  /** For canvas: merge product/template highlights with full route selection + focused stops. */
+  const canvasHighlightedRackIds = useMemo(() => {
+    const base =
+      selectedProductId != null
+        ? new Set<string>()
+        : rackIdsContainingSelectedProduct ?? new Set<string>();
+    const out = new Set(base);
+    for (const rid of rackIdsForSelectedTemplate) out.add(rid);
+    if (routeStops.length > 0) {
+      for (const stop of routeStops) out.add(stop.rackId);
+      if (highlightedStopIndex != null && routeStops[highlightedStopIndex]) {
+        out.add(routeStops[highlightedStopIndex].rackId);
+      }
+      if (currentStopIndex != null && routeStops[currentStopIndex]) {
+        out.add(routeStops[currentStopIndex].rackId);
+      }
+    }
+    return out;
+  }, [
+    selectedProductId,
+    rackIdsContainingSelectedProduct,
+    rackIdsForSelectedTemplate,
+    routeStops,
+    highlightedStopIndex,
+    currentStopIndex,
+  ]);
+
+  const routeStepBadges = useMemo(() => {
+    const ids = orderedRouteRackIds;
+    if (ids.length === 0) return null;
+    const idx = Math.min(routeStepIndex, ids.length - 1);
+    const cur = ids[idx];
+    if (ids.length === 1) {
+      return {
+        currentRackId: cur,
+        nextRackId: null as string | null,
+        currentOrder: 1,
+        nextOrder: null as number | null,
+      };
+    }
+    const next = idx < ids.length - 1 ? ids[idx + 1] : null;
+    return {
+      currentRackId: cur,
+      nextRackId: next,
+      currentOrder: idx + 1,
+      nextOrder: next != null ? idx + 2 : null,
+    };
+  }, [orderedRouteRackIds, routeStepIndex]);
+
+  const routeStopsForCanvasMode = routeStops;
+  const routeGraphPolylineForCanvas = routePathFull && routePathFull.length >= 2 ? routePathFull : routeSegmentPath;
+  const routeStepBadgesForCanvas = routeRackIds.length >= 1 ? routeStepBadges : null;
+  const highlightedStopIndexForCanvas = highlightedStopIndex;
+  const currentStopIndexForCanvas = currentStopIndex;
+  const showRouteEndpointMarkersForCanvas = routeRackIds.length === 0;
+
+  /** Total walking distance (full route, or single-leg when only one rack). */
+  const routeLengthMeters = useMemo(() => {
+    if (routeRackIds.length < 1) return 0;
+    if (routePathFull && routePathFull.length >= 2) {
+      return (computeManhattanPathLengthCells(routePathFull) * GRID_UNIT_CM) / 100;
+    }
+    if (routeRackIds.length === 1 && routeSegmentPath && routeSegmentPath.length >= 2) {
+      return (computeManhattanPathLengthCells(routeSegmentPath) * GRID_UNIT_CM) / 100;
+    }
+    return 0;
+  }, [routeRackIds.length, routePathFull, routeSegmentPath]);
+
+  /** Current leg distance (step view). */
+  const routeLegMeters = useMemo(() => {
+    if (!routeSegmentPath || routeSegmentPath.length < 2) return 0;
+    return (computeManhattanPathLengthCells(routeSegmentPath) * GRID_UNIT_CM) / 100;
+  }, [routeSegmentPath]);
+
+  const handleRouteStepNext = useCallback(() => {
+    setRouteStepIndex((i) => Math.min(i + 1, Math.max(0, orderedRouteRackIds.length - 1)));
+  }, [orderedRouteRackIds.length]);
 
   /** Quantity breakdown for the globally selected product (for ProductLocatorSidebar). */
   const selectedProductQuantityBreakdown = useMemo(() => {
     if (selectedProductIdOnMap == null) return null;
     const p = products.find((x) => x.id === selectedProductIdOnMap);
     if (!p) return null;
+
     let totalQuantity = 0;
     let primaryQuantity = 0;
     let reserveQuantity = 0;
-    if (p.assignedLocations?.length) {
+
+    if (inventoryMaps && inventoryRows.length > 0) {
+      const invRows = inventoryMaps.byProduct.get(selectedProductIdOnMap) ?? [];
+      for (const inv of invRows) {
+        const locUuid = normalizeInventoryLocationUuid(inv.location_uuid);
+        if (!locUuid) continue;
+        const type = uuidToBin.get(locUuid)?.storage_type ?? "primary";
+        const q = safeQuantity(inv.quantity);
+        if (q <= 0) continue;
+        totalQuantity += q;
+        if (type === "reserve") reserveQuantity += q;
+        else primaryQuantity += q;
+      }
+    } else if (p.assignedLocations?.length) {
       for (const a of p.assignedLocations) {
         const type = a.storageType ?? uuidToBin.get(a.locationUUID)?.storage_type ?? "primary";
         const q = safeQuantity(a.quantity);
@@ -399,67 +1146,144 @@ export default function WarehouseDesigner() {
       totalQuantity = safeQuantity(p.quantity);
       primaryQuantity = totalQuantity;
     }
-    return { product: p, totalQuantity, primaryQuantity, reserveQuantity };
-  }, [selectedProductIdOnMap, products, uuidToBin]);
 
-  /** Products sorted by occupied volume in warehouse (for map view sidebar). totalVolume = sum(assignedLocations.quantity * volume_dm3) or quantity * volume_dm3. No fixed limit; sidebar scrolls. */
+    return { product: p, totalQuantity, primaryQuantity, reserveQuantity };
+  }, [selectedProductIdOnMap, products, uuidToBin, inventoryMaps, inventoryRows.length]);
+
+  /** Map sidebar: products with stock or assignments on this layout only; qty/volume from locations (not global product.quantity). */
   const sortedProductsByVolume = useMemo(() => {
-    const withVolume = products.map((p) => {
+    const hasInv = inventoryMaps != null && inventoryRows.length > 0;
+    const out: { product: WarehouseProduct; quantityAssigned: number; volumeAssignedDm3: number }[] = [];
+    for (const p of products) {
+      if (!productHasAssignmentOrInventoryInLayout(p, validLayoutLocationUUIDs, inventoryMaps, hasInv, layout.racks)) continue;
+      const quantityAssigned = quantityAssignedInLayoutBins(p, validLayoutLocationUUIDs, inventoryMaps, hasInv, layout.racks);
+      if (quantityAssigned <= 0) continue;
       const vol = safeVolumeDm3(p.volume_dm3);
-      let totalQuantity = 0;
-      if (p.assignedLocations?.length) {
-        for (const a of p.assignedLocations) totalQuantity += safeQuantity(a.quantity);
-      } else {
-        totalQuantity = safeQuantity(p.quantity);
-      }
-      const totalVolumeDm3 = totalQuantity * vol;
-      return { product: p, totalQuantity, totalVolumeDm3 };
-    });
-    return withVolume.sort((a, b) => b.totalVolumeDm3 - a.totalVolumeDm3);
-  }, [products]);
+      out.push({ product: p, quantityAssigned, volumeAssignedDm3: quantityAssigned * vol });
+    }
+    return out.sort((a, b) => b.volumeAssignedDm3 - a.volumeAssignedDm3);
+  }, [products, inventoryMaps, inventoryRows.length, validLayoutLocationUUIDs, layout.racks]);
 
   /** When a rack is selected on the full map (single click): rack ref and products in that rack (sorted, with quantity breakdown). */
   const mapRackState = useMemo(() => {
-    if (selectedRackIdOnMap == null) return { selectedRackForMap: null as RackState | null, mapRackBinUUIDs: new Set<string>(), mapRackBinLabels: new Set<string>(), rackProductsForMap: [] as (WarehouseProduct & { totalQuantity: number; primaryQuantity: number; reserveQuantity: number })[] };
+    if (selectedRackIdOnMap == null)
+      return {
+        selectedRackForMap: null as RackState | null,
+        mapRackBinUUIDs: new Set<string>(),
+        rackProductsForMap: [] as (WarehouseProduct & { totalQuantity: number; primaryQuantity: number; reserveQuantity: number })[],
+      };
     const selectedRackForMap = layout.racks.find((r) => String(r.id ?? r.rack_index) === selectedRackIdOnMap) ?? null;
-    if (!selectedRackForMap) return { selectedRackForMap: null, mapRackBinUUIDs: new Set<string>(), mapRackBinLabels: new Set<string>(), rackProductsForMap: [] as (WarehouseProduct & { totalQuantity: number; primaryQuantity: number; reserveQuantity: number })[] };
+    if (!selectedRackForMap)
+      return {
+        selectedRackForMap: null,
+        mapRackBinUUIDs: new Set<string>(),
+        rackProductsForMap: [] as (WarehouseProduct & { totalQuantity: number; primaryQuantity: number; reserveQuantity: number })[],
+      };
     const mapRackBinUUIDs = new Set<string>(selectedRackForMap.bins.map((b) => b.locationUUID).filter((u): u is string => Boolean(u)));
-    const mapRackBinLabels = new Set<string>(selectedRackForMap.bins.map((b) => (b.label ?? b.location_id ?? "").trim()).filter(Boolean));
-    const belongsToRack = (p: WarehouseProduct) => {
-      if (p.assignedLocations?.length) return p.assignedLocations.some((a) => mapRackBinUUIDs.has(a.locationUUID));
-      return p.location_id != null && mapRackBinLabels.has(p.location_id);
-    };
-    const rackProducts = products.filter(belongsToRack);
-    const rackProductsForMap = rackProducts.map((p) => {
-      let totalQuantity = 0;
-      let primaryQuantity = 0;
-      let reserveQuantity = 0;
-      if (p.assignedLocations?.length) {
-        for (const a of p.assignedLocations) {
-          const type = a.storageType ?? uuidToBin.get(a.locationUUID)?.storage_type ?? "primary";
-          const q = safeQuantity(a.quantity);
-          totalQuantity += q;
-          if (type === "reserve") reserveQuantity += q;
-          else primaryQuantity += q;
+    const rackKey = String(selectedRackForMap.id ?? selectedRackForMap.rack_index);
+    const productsById = new Map(products.map((p) => [p.id, p] as const));
+    const totals = new Map<string, { product: WarehouseProduct; totalQuantity: number; primaryQuantity: number; reserveQuantity: number }>();
+    const stockProductInventoryKeys = new Set<string>();
+
+    if (inventoryMaps && inventoryRows.length > 0) {
+      const rackInvRows = inventoryMaps.byRackId.get(rackKey) ?? [];
+      for (const inv of rackInvRows) {
+        const qty = safeQuantity(inv.quantity);
+        if (qty <= 0) continue;
+        const pid = String(inv.product_id);
+        const product = productsById.get(pid);
+        if (!product) continue;
+        const locUuid = normalizeInventoryLocationUuid(inv.location_uuid);
+        if (locUuid) stockProductInventoryKeys.add(`${pid}|${locUuid}`);
+        const type = locUuid ? uuidToBin.get(locUuid)?.storage_type ?? "primary" : "primary";
+        const existing = totals.get(pid);
+        if (existing) {
+          existing.totalQuantity += qty;
+          if (type === "reserve") existing.reserveQuantity += qty;
+          else existing.primaryQuantity += qty;
+        } else {
+          totals.set(pid, {
+            product,
+            totalQuantity: qty,
+            primaryQuantity: type === "reserve" ? 0 : qty,
+            reserveQuantity: type === "reserve" ? qty : 0,
+          });
         }
-      } else {
-        totalQuantity = safeQuantity(p.quantity);
-        primaryQuantity = totalQuantity;
       }
-      return { ...p, totalQuantity, primaryQuantity, reserveQuantity };
-    }).sort((a, b) => b.totalQuantity - a.totalQuantity);
-    return { selectedRackForMap, mapRackBinUUIDs, mapRackBinLabels, rackProductsForMap };
-  }, [selectedRackIdOnMap, products, layout.racks, uuidToBin]);
+    }
+
+    const mergeAssignedQtyIntoTotals = (p: WarehouseProduct, q: number, locUuid: string, storageType?: StorageType) => {
+      if (q <= 0) return;
+      const type = storageType ?? uuidToBin.get(locUuid)?.storage_type ?? "primary";
+      if (inventoryMaps && inventoryRows.length > 0 && stockProductInventoryKeys.has(`${p.id}|${locUuid}`)) {
+        return;
+      }
+      const existing = totals.get(p.id);
+      if (existing) {
+        existing.totalQuantity += q;
+        if (type === "reserve") existing.reserveQuantity += q;
+        else existing.primaryQuantity += q;
+      } else {
+        totals.set(p.id, {
+          product: p,
+          totalQuantity: q,
+          primaryQuantity: type === "reserve" ? 0 : q,
+          reserveQuantity: type === "reserve" ? q : 0,
+        });
+      }
+    };
+
+    for (const p of products) {
+      if (!p.assignedLocations?.length) continue;
+      for (const a of p.assignedLocations) {
+        const locUuid = assignedLocationEntryUuid(a);
+        if (!locUuid || !mapRackBinUUIDs.has(locUuid)) continue;
+        mergeAssignedQtyIntoTotals(p, safeQuantity(a.quantity), locUuid, a.storageType);
+      }
+    }
+
+    if (!(inventoryMaps && inventoryRows.length > 0)) {
+      for (const p of products) {
+        if (p.assignedLocations?.length) continue;
+        if (!legacyProductLocationMatchesRack(p, selectedRackForMap)) continue;
+        if (totals.has(p.id)) continue;
+        const q = safeQuantity(p.quantity);
+        if (q <= 0) continue;
+        totals.set(p.id, {
+          product: p,
+          totalQuantity: q,
+          primaryQuantity: q,
+          reserveQuantity: 0,
+        });
+      }
+    }
+
+    const rackProductsForMap = Array.from(totals.values())
+      .map((t) => ({
+        ...t.product,
+        totalQuantity: t.totalQuantity,
+        primaryQuantity: t.primaryQuantity,
+        reserveQuantity: t.reserveQuantity,
+      }))
+      .sort((a, b) => b.totalQuantity - a.totalQuantity);
+    return { selectedRackForMap, mapRackBinUUIDs, rackProductsForMap };
+  }, [selectedRackIdOnMap, products, layout.racks, uuidToBin, inventoryMaps, inventoryRows.length]);
 
 
-  const { selectedRackForMap, mapRackBinUUIDs, mapRackBinLabels, rackProductsForMap } = mapRackState;
+  const { selectedRackForMap, mapRackBinUUIDs, rackProductsForMap } = mapRackState;
 
   const deleteObject = useCallback((objectId: string | null) => {
     if (!objectId) return;
     if (objectId.startsWith("rack:")) {
       const toDelete = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
       deletedForUndoRef.current = { racks: toDelete, row_containers: layout.row_containers };
-      const removedIds = new Set(selectedRackIds.map(String));
+      // Row slots may reference either rack.id or rack.rack_index. Include both to avoid ghost rackIds in rows.
+      const removedIds = new Set<string>();
+      for (const sel of selectedRackIds) {
+        removedIds.add(String(sel));
+        const r = layout.racks.find((rk) => String(rk.id ?? rk.rack_index) === String(sel));
+        if (r) removedIds.add(String(r.rack_index));
+      }
       setLayout((prev) => ({
         ...prev,
         racks: prev.racks.filter((r) => !selectedRackIds.includes(r.id ?? r.rack_index)),
@@ -510,11 +1334,14 @@ export default function WarehouseDesigner() {
 
   const loadLayout = useCallback(async (warehouseId: number) => {
     setLoading(true);
+    setInventoryRows([]);
     try {
       const res = await api.get("/warehouse/layout", {
         params: { tenant_id: TENANT_ID, warehouse_id: warehouseId },
       });
-      const d = res.data;
+      const payload = res.data as { layout?: Record<string, unknown>; special_locations?: SpecialLocationsState } | undefined;
+      const d = (payload?.layout ?? payload ?? {}) as Record<string, unknown>;
+      setSpecialLocations(payload?.special_locations ?? { pick_start: null, packing: null, dock: null });
       console.log("Data from backend (rack colors):", (d.racks || []).map((r: Record<string, unknown>, i: number) => ({ index: i, color: r.color })));
       const rawGridCols = (d.grid_cols ?? 24) <= 24 ? (d.grid_cols ?? 24) * CELLS_PER_METER : (d.grid_cols ?? GRID_COLS);
       const rawGridRows = (d.grid_rows ?? 16) <= 16 ? (d.grid_rows ?? 16) * CELLS_PER_METER : (d.grid_rows ?? GRID_ROWS);
@@ -551,18 +1378,13 @@ export default function WarehouseDesigner() {
                 depth_cm: typeof (b as { depth_cm?: number }).depth_cm === "number" ? (b as { depth_cm: number }).depth_cm : undefined,
                 height_cm: typeof (b as { height_cm?: number }).height_cm === "number" ? (b as { height_cm: number }).height_cm : undefined,
                 barcode_data: typeof (b as { barcode_data?: string }).barcode_data === "string" ? (b as { barcode_data: string }).barcode_data : String((b as { label?: string }).label ?? ""),
-                storage_type: (() => {
-                  const raw = (b as { storage_type?: string }).storage_type;
-                  if (!raw) return undefined;
-                  const lower = String(raw).trim().toLowerCase();
-                  if (lower === "reserve" || lower === "reserved" || lower === "reservation") return "reserve" as const;
-                  if (lower === "primary") return "primary" as const;
-                  return undefined;
-                })(),
+                storage_type: normalizeStorageType((b as { storage_type?: string }).storage_type),
               }; })
             : [];
           return {
           id: r.id,
+          uuid: typeof r.uuid === "string" && r.uuid.trim() !== "" ? r.uuid : generateRackUuid(),
+          rack_type: (r as { rack_type?: string }).rack_type === "store" ? "store" : "warehouse",
           name: typeof r.name === "string" ? r.name.trim() || undefined : undefined,
           x: Number(r.x) * scale,
           y: Number(r.y) * scale,
@@ -584,7 +1406,12 @@ export default function WarehouseDesigner() {
           total_capacity_dm3: Number(r.total_capacity_dm3 ?? 0),
           used_dm3: Number(r.used_dm3 ?? 0),
           color: (typeof r.color === "string" && r.color.trim() !== "") ? r.color.trim() : "#3b82f6",
-          templateId: typeof r.templateId === "string" ? r.templateId : undefined,
+          templateId:
+            typeof r.templateId === "string"
+              ? r.templateId
+              : typeof (r as { template_id?: unknown }).template_id === "string"
+                ? (r as { template_id: string }).template_id
+                : undefined,
           level_max_load_kg: typeof (r as { level_max_load_kg?: number }).level_max_load_kg === "number" ? (r as { level_max_load_kg: number }).level_max_load_kg : undefined,
           show_label: typeof r.show_label === "boolean" ? r.show_label : undefined,
           rowPrefix: typeof (r as { row_prefix?: string }).row_prefix === "string" ? (r as { row_prefix: string }).row_prefix.trim() || undefined : typeof (r as { rowPrefix?: string }).rowPrefix === "string" ? (r as { rowPrefix: string }).rowPrefix.trim() || undefined : undefined,
@@ -688,6 +1515,7 @@ export default function WarehouseDesigner() {
         // Keep existing products state on error (e.g. no products API)
       }
     } catch {
+      setSpecialLocations({ pick_start: null, packing: null, dock: null });
       setLayout((prev) => ({ ...prev, warehouse_id: warehouseId, warehouse_name: "", racks: [], aisles: [], visual_elements: prev.visual_elements ?? [] }));
     } finally {
       setLoading(false);
@@ -695,14 +1523,27 @@ export default function WarehouseDesigner() {
   }, []);
 
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:initialLoadWarehouses] run", { modifiesRack: false });
     loadWarehouses();
   }, []);
 
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:selectedWarehouseLoadLayout] run", {
+      selectedWarehouseId,
+      modifiesRack: true,
+      fields: ["layout.racks", "rack.bins", "rack.levels", "rack.internal_structure", "rack.layoutVariant"],
+    });
     if (selectedWarehouseId != null) loadLayout(selectedWarehouseId);
+    else setSpecialLocations({ pick_start: null, packing: null, dock: null });
   }, [selectedWarehouseId, loadLayout]);
 
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:liveViewReloadLayout] run", {
+      isLiveView,
+      selectedWarehouseId,
+      modifiesRack: true,
+      fields: ["layout.racks", "rack.bins", "rack.levels", "rack.internal_structure", "rack.layoutVariant"],
+    });
     if (isLiveView && selectedWarehouseId != null) loadLayout(selectedWarehouseId);
   }, [isLiveView, selectedWarehouseId, loadLayout]);
 
@@ -710,11 +1551,12 @@ export default function WarehouseDesigner() {
   const fetchProductsForMap = useCallback(async () => {
     if (selectedWarehouseId == null) return;
     try {
-      const [layoutRes, prodRes] = await Promise.all([
+      const [layoutRes, prodRes, inventoryRes] = await Promise.all([
         api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId } }),
         api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000 } }),
+        api.get<InventoryRow[]>("/inventory/", { params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId } }),
       ]);
-      const d = layoutRes.data;
+      const d = ((layoutRes.data as { layout?: Record<string, unknown> } | undefined)?.layout ?? layoutRes.data) as Record<string, unknown>;
       const racksFromRes = (d?.racks || []) as Array<{ bins?: Array<{ locationUUID?: string; location_uuid?: string; label?: string; location_id?: string }> }>;
       const resolveLabel = (locationUUID: string): string | null => {
         for (const r of racksFromRes) {
@@ -757,21 +1599,143 @@ export default function WarehouseDesigner() {
         };
       });
       setProducts(list);
+      setInventoryRows(Array.isArray(inventoryRes.data) ? inventoryRes.data : []);
     } catch {
       // Keep existing products
+      setInventoryRows([]);
     }
   }, [selectedWarehouseId]);
 
-  useEffect(() => {
-    if (selectedWarehouseId == null) {
-      setSpecialLocations({ pick_start: null, packing: null, dock: null });
+  /** Drop one assigned_locations slot without syncing Inventory (backend skip_inventory_sync). */
+  const removeProductAssignmentAtLocation = useCallback(
+    async (productId: string, locationUUID: string) => {
+      const pid = Number(productId);
+      if (!Number.isInteger(pid) || pid < 1) return;
+      const locUuid = locationUUID.trim();
+      const p = products.find((x) => x.id === productId);
+      if (!p?.assignedLocations?.length) return;
+      const nextAssigned = p.assignedLocations.filter((a) => assignedLocationEntryUuid(a) !== locUuid);
+      if (nextAssigned.length === p.assignedLocations.length) return;
+
+      const positions = getAllPositionsFromRacks(layout.racks, layout);
+      const posByUuid = new Map(positions.map((pos) => [pos.locationUUID, pos]));
+      const enriched = nextAssigned
+        .map((a) => {
+          const u = assignedLocationEntryUuid(a);
+          if (!u) return null;
+          const pos = posByUuid.get(u);
+          return {
+            locationUUID: u,
+            quantity: safeQuantity(a.quantity),
+            locationAddress: a.locationAddress ?? pos?.locationAddress ?? u,
+            storageType: a.storageType ?? pos?.storageType,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row != null);
+
+      await api.patch(`/products/${pid}/`, {
+        assigned_locations: enriched,
+        skip_inventory_sync: true,
+      }, { params: { tenant_id: TENANT_ID } });
+
+      await fetchProductsForMap();
+    },
+    [products, layout, fetchProductsForMap]
+  );
+
+  const selectedRackHasBinUuids = useMemo(() => {
+    if (selectedRackIdForSideView == null) return false;
+    const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === String(selectedRackIdForSideView));
+    if (!rack) return false;
+    return (rack.bins ?? []).some((b) => (b.locationUUID ?? "").trim() !== "");
+  }, [layout.racks, selectedRackIdForSideView]);
+
+  /** Side-view rack id, else map-selected rack (for clear-rack modal + PATCH scope). */
+  const clearRackTargetKey = useMemo(() => {
+    if (selectedRackIdForSideView != null) return String(selectedRackIdForSideView);
+    if (selectedRackIdOnMap != null) return selectedRackIdOnMap;
+    return null;
+  }, [selectedRackIdForSideView, selectedRackIdOnMap]);
+
+  /** Modal copy only: rack label + count of assignment rows that would be removed (same bins as clear action). */
+  const clearRackConfirmPreview = useMemo(() => {
+    if (clearRackTargetKey == null) return { rackLabel: "", assignmentCount: 0 };
+    const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === clearRackTargetKey);
+    if (!rack) return { rackLabel: "", assignmentCount: 0 };
+    const binUuids = new Set((rack.bins ?? []).map((b) => (b.locationUUID ?? "").trim()).filter(Boolean));
+    let n = 0;
+    for (const p of products) {
+      if (!p.assignedLocations?.length) continue;
+      for (const a of p.assignedLocations) {
+        const u = assignedLocationEntryUuid(a);
+        if (u && binUuids.has(u)) n += 1;
+      }
+    }
+    return { rackLabel: getRackDisplayIdWithLayout(rack), assignmentCount: n };
+  }, [clearRackTargetKey, layout.racks, products]);
+
+  /** Remove all assigned_locations entries pointing at bins of the selected rack (Inventory unchanged via skip_inventory_sync). */
+  const clearAssignmentsOnSelectedRack = useCallback(async () => {
+    if (clearRackTargetKey == null) return;
+    const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === clearRackTargetKey);
+    if (!rack) return;
+    const binUuids = new Set(
+      (rack.bins ?? []).map((b) => (b.locationUUID ?? "").trim()).filter(Boolean)
+    );
+    if (binUuids.size === 0) return;
+
+    const positions = getAllPositionsFromRacks(layout.racks, layout);
+    const posByUuid = new Map(positions.map((pos) => [pos.locationUUID, pos]));
+
+    const patches: Promise<unknown>[] = [];
+    for (const p of products) {
+      if (!p.assignedLocations?.length) continue;
+      const next = p.assignedLocations.filter((a) => {
+        const u = assignedLocationEntryUuid(a);
+        return !u || !binUuids.has(u);
+      });
+      if (next.length === p.assignedLocations.length) continue;
+
+      const pid = Number(p.id);
+      if (!Number.isInteger(pid) || pid < 1) continue;
+
+      const enriched = next.map((a) => {
+        const u = assignedLocationEntryUuid(a)!;
+        const pos = posByUuid.get(u);
+        return {
+          locationUUID: u,
+          quantity: safeQuantity(a.quantity),
+          locationAddress: a.locationAddress ?? pos?.locationAddress ?? u,
+          storageType: a.storageType ?? pos?.storageType,
+        };
+      });
+
+      patches.push(
+        api.patch(`/products/${pid}/`, {
+          assigned_locations: enriched,
+          skip_inventory_sync: true,
+        }, { params: { tenant_id: TENANT_ID } })
+      );
+    }
+
+    if (patches.length === 0) {
+      setClearRackConfirmOpen(false);
+      alert("Brak przypisań produktów do lokalizacji tego regału.");
       return;
     }
-    api
-      .get<SpecialLocationsState>(`/warehouse/${selectedWarehouseId}/special-locations`)
-      .then((res) => setSpecialLocations(res.data ?? { pick_start: null, packing: null, dock: null }))
-      .catch(() => setSpecialLocations({ pick_start: null, packing: null, dock: null }));
-  }, [selectedWarehouseId]);
+
+    setClearRackBusy(true);
+    try {
+      await Promise.all(patches);
+      await fetchProductsForMap();
+      setClearRackConfirmOpen(false);
+    } catch (e) {
+      console.error(e);
+      alert("Nie udało się opróżnić regału. Spróbuj ponownie.");
+    } finally {
+      setClearRackBusy(false);
+    }
+  }, [clearRackTargetKey, layout, products, fetchProductsForMap]);
 
   const addSpecialLocation = useCallback(
     async (cell: { x: number; y: number }, type: "PICK_START" | "PACKING" | "DOCK") => {
@@ -838,10 +1802,16 @@ export default function WarehouseDesigner() {
   );
 
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:fetchProductsForMap] run", {
+      isLiveView,
+      racksLength: layout.racks.length,
+      modifiesRack: false,
+    });
     if (isLiveView && layout.racks.length > 0) fetchProductsForMap();
   }, [isLiveView, layout.racks.length, fetchProductsForMap]);
 
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:loadTemplates] run", { modifiesRack: false });
     let cancelled = false;
     (async () => {
       try {
@@ -851,6 +1821,8 @@ export default function WarehouseDesigner() {
         if (!cancelled && Array.isArray(data)) {
           setCustomTemplates(data.map((t) => ({
             ...t,
+            rack_type: (t.rack_type ?? "warehouse") === "store" ? "store" : "warehouse",
+            bin_type_map: normalizeBinTypeMap(t.bin_type_map, t.reserve_bin_keys),
             color: (typeof t.color === "string" && t.color.trim() !== "") ? t.color.trim() : "#3b82f6",
           })));
         }
@@ -861,12 +1833,89 @@ export default function WarehouseDesigner() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    console.log("[WarehouseDesigner][effect:normalizeTemplateLinkedRacks] run", {
+      customTemplatesLength: customTemplates.length,
+      racksLength: layout.racks.length,
+      modifiesRack: true,
+      fields: ["rack.bins", "rack.internal_structure", "rack.width_cm", "rack.length_cm", "rack.height_cm"],
+    });
+    if (!Array.isArray(customTemplates) || customTemplates.length === 0 || layout.racks.length === 0) return;
+    const templateById = new Map(customTemplates.map((t) => [t.id, t]));
+    setLayout((prev) => {
+      let changed = false;
+      const racks = prev.racks.map((rack) => {
+        if (!rack.templateId) return rack;
+        const template = templateById.get(rack.templateId);
+        if (!template) return rack;
+
+        const normalizedInternal = rack.internal_structure?.levels?.length
+          ? {
+              ...rack.internal_structure,
+              levels: rack.internal_structure.levels.map((level, levelIndex) => {
+                const expected = templateSlotDimensions(template, levelIndex);
+                const locations = level.locations.map((loc) => {
+                  if (
+                    Number(loc.width_cm) === expected.width_cm &&
+                    Number(loc.depth_cm) === expected.depth_cm &&
+                    Number(loc.height_cm) === expected.height_cm
+                  ) {
+                    return loc;
+                  }
+                  changed = true;
+                  return { ...loc, width_cm: expected.width_cm, depth_cm: expected.depth_cm, height_cm: expected.height_cm };
+                });
+                return locations === level.locations ? level : { ...level, locations };
+              }),
+            }
+          : rack.internal_structure;
+
+        const normalizedBins = rack.bins.map((bin) => {
+          const expected = templateSlotDimensions(template, bin.level_index);
+          if (
+            Number(bin.width_cm ?? 0) === expected.width_cm &&
+            Number(bin.depth_cm ?? 0) === expected.depth_cm &&
+            Number(bin.height_cm ?? 0) === expected.height_cm
+          ) {
+            return bin;
+          }
+          changed = true;
+          return { ...bin, width_cm: expected.width_cm, depth_cm: expected.depth_cm, height_cm: expected.height_cm };
+        });
+
+        return {
+          ...rack,
+          width_cm: template.width_cm,
+          length_cm: template.depth_cm,
+          height_cm: template.height_cm,
+          internal_structure: normalizedInternal,
+          bins: normalizedBins,
+        };
+      });
+      if (changed) {
+        console.log("[WarehouseDesigner][effect:normalizeTemplateLinkedRacks] applied", {
+          changedRackIds: racks
+            .filter((rack, idx) => rack !== prev.racks[idx])
+            .map((rack) => String(rack.id ?? rack.rack_index)),
+          note: "This effect can overwrite rack.bins/internal_structure dimensions.",
+        });
+      } else {
+        console.log("[WarehouseDesigner][effect:normalizeTemplateLinkedRacks] no-op");
+      }
+      return changed ? { ...prev, racks } : prev;
+    });
+  }, [customTemplates, layout.layout_id, layout.racks.length]);
+
   const saveNewTemplate = useCallback(async (payload: CustomRackTemplate): Promise<CustomRackTemplate | null> => {
     try {
       const { data } = await api.post<CustomRackTemplate>("/warehouse/templates/", payload, {
         params: { tenant_id: TENANT_ID },
       });
-      return data ?? null;
+      return data ? {
+        ...data,
+        rack_type: (payload.rack_type ?? data.rack_type ?? "warehouse") === "store" ? "store" : "warehouse",
+        bin_type_map: normalizeBinTypeMap(data.bin_type_map, data.reserve_bin_keys),
+      } : null;
     } catch (e) {
       console.error("Save template:", e);
       return null;
@@ -922,7 +1971,9 @@ export default function WarehouseDesigner() {
           : {}),
         racks: layout.racks.map((r) => ({
           id: r.id,
-          name: r.name ?? getRackDisplayId(r),
+          uuid: r.uuid ?? generateRackUuid(),
+          rack_type: r.rack_type ?? "warehouse",
+          name: r.name ?? getRackDisplayIdWithLayout(r),
           x: r.x,
           y: r.y,
           width: r.width,
@@ -936,7 +1987,16 @@ export default function WarehouseDesigner() {
           height_cm: r.height_cm,
           aisle_letter: r.aisle_letter,
           rack_index: r.rack_index,
-          bins: r.bins,
+          bins: r.bins.map((b) => ({
+            id: b.id,
+            label: b.label,
+            level_index: b.level_index,
+            segment_index: b.segment_index,
+            volume_dm3: b.volume_dm3,
+            current_load_dm3: b.current_load_dm3 ?? b.used_volume_dm3 ?? 0,
+            location_uuid: b.locationUUID,
+            storage_type: b.storage_type,
+          })),
           internal_structure: r.internal_structure ?? undefined,
           color: (typeof r.color === "string" && r.color.trim() !== "") ? r.color.trim() : "#3b82f6",
           templateId: r.templateId ?? undefined,
@@ -986,12 +2046,25 @@ export default function WarehouseDesigner() {
     layout,
     template,
     rackRotation,
+    rackType: manualRackType,
     aisleWidthCm,
     setLayout,
     setDraggingFromCatalog,
     setCatalogGhostPosition,
     setCatalogHoveredSlot,
   });
+
+  /** Magazyn map (read mode): click empty canvas to reset rack / bin / product focus. */
+  const handleMagazynMapBackgroundClick = useCallback((_e: MouseEvent<SVGSVGElement>) => {
+    setSelectedRackIdOnMap(null);
+    setSelectedRackId(null);
+    setSelectedRackIds([]);
+    setSelectedLocationForProducts(null);
+    setSelectedProductId(null);
+    setHoveredProductIdOnMap(null);
+    setSelectedProductIdOnMap(null);
+    setHoveredLocationUUID(null);
+  }, []);
 
   const wallLengthCm = useCallback((wall: WallSide) => {
     switch (wall) {
@@ -1071,18 +2144,18 @@ export default function WarehouseDesigner() {
       draggingRowId,
       rowDragPreviewStart,
       rackDragPreviewPosition,
-      isLiveView,
+      magazynMapInteractions,
       mainView,
       layoutMode,
       selectedWarehouseId,
       selectedRackIds,
       selectedVisualIds,
-      snapToGrid,
       aisleWidthCm,
       ghostW,
       ghostH,
       copyPlacementMode,
       copiedRack,
+      routeMode: isRouteActive,
     },
     setters: {
       setIsPanning,
@@ -1112,7 +2185,6 @@ export default function WarehouseDesigner() {
       setSelectedRowContainerId,
       setSelectedRowContainerIds,
       setDraggingRowId,
-      setMainView,
       setSelectedRackIdForSideView,
       setSelectedLocationForProducts,
       setProductSearchQuery,
@@ -1124,6 +2196,7 @@ export default function WarehouseDesigner() {
       stampRackAt,
       addSpecialLocation,
       placeCopiedRack,
+      addRackToRoute,
       onAddWallElement: addWallElement,
       onRequestGatePlacement: (wall: WallSide, position_cm: number) => {
         setPendingGatePlacement({ wall, position_cm });
@@ -1171,6 +2244,7 @@ export default function WarehouseDesigner() {
     layout,
     selectedRowContainerId,
     rowGapCm,
+    defaultRackType: manualRackType,
     setLayout,
     setSelectedRowContainerId,
     setSelectedRackId,
@@ -1323,9 +2397,10 @@ export default function WarehouseDesigner() {
         ...prev,
         racks: prev.racks.map((r) => {
           if (r.templateId !== templateId) return r;
-          const bins = createBinsForRack(template.aisle_letter, r.rack_index, template.levels, template.bins_per_level, volPerBin, "M1", template.naming_pattern, template.width_cm, template.depth_cm, template.height_cm, template.reserve_bin_keys, template.addressPattern, template.rowId, template.sectionStartIndex, template.binNamingType, lcEdit, template.namingStrategy, template.namingOrientation, template.namingPattern ?? template.addressPattern, template.manualLabels, template.overrides, template.indexPadding, template.startIndex);
+          const bins = createBinsForRack(template.aisle_letter, r.rack_index, template.levels, template.bins_per_level, volPerBin, "M1", template.naming_pattern, template.width_cm, template.depth_cm, template.height_cm, template.bin_type_map, template.addressPattern, template.rowId, template.sectionStartIndex, template.binNamingType, lcEdit, template.namingStrategy, template.namingOrientation, template.namingPattern ?? template.addressPattern, template.manualLabels, template.overrides, template.indexPadding, template.startIndex);
           return {
             ...r,
+            rack_type: template.rack_type ?? "warehouse",
             width: w,
             height: h,
             width_cm: template.width_cm,
@@ -1413,41 +2488,40 @@ export default function WarehouseDesigner() {
   }, [selectedRackId]);
   void deleteSelectedRack;
 
-  const totalCapacity = layout.racks.reduce((sum, r) => sum + (r.total_capacity_dm3 ?? r.bins.reduce((s, b) => s + (b.volume_dm3 ?? 0), 0)), 0);
+  /** Layout capacity (dm³): same per-rack rule as rack header / map coloring (total_capacity_dm3 or sum of bin volumes). */
+  const totalCapacity = useMemo(
+    () =>
+      layout.racks.reduce((sum, r) => {
+        const rackTotal =
+          r.total_capacity_dm3 ?? (r.bins ?? []).reduce((s, b) => s + binVolumeDm3(b, r), 0);
+        return sum + rackTotal;
+      }, 0),
+    [layout.racks]
+  );
 
-  /** Volume (dm³) of all assigned products – location_id or assignedLocations; decimals parsed safely (comma → dot). */
-  const productsAssignedVolumeDm3 = useMemo(() => {
-    let total = 0;
-    for (const p of products) {
-      const vol = safeVolumeDm3(p.volume_dm3);
-      if (p.assignedLocations?.length) {
-        for (const a of p.assignedLocations) total += safeQuantity(a.quantity) * vol;
-      } else if (p.location_id != null && p.location_id.trim() !== "") {
-        total += safeQuantity(p.quantity) * vol;
-      }
-    }
-    return total;
-  }, [products]);
+  /**
+   * Used volume (dm³) from products only: Σ (layout-scoped qty × product.volume_dm3).
+   * Same quantities as sidebar / Top products (`sortedProductsByVolume`); never bin capacity or max-load fields.
+   */
+  const productsAssignedVolumeDm3 = useMemo(
+    () => sortedProductsByVolume.reduce((s, x) => s + x.volumeAssignedDm3, 0),
+    [sortedProductsByVolume]
+  );
 
-  /** Primary vs reserve occupancy (dm³) using storageType ?? bin.storage_type ?? "primary". */
+  /** Primary vs reserve split of used volume by bin storage_type (same buckets as LOKALIZACJE counts). */
   const { primaryUsedDm3, reserveUsedDm3 } = useMemo(() => {
     let primary = 0;
     let reserve = 0;
-    for (const p of products) {
-      const vol = safeVolumeDm3(p.volume_dm3);
-      if (p.assignedLocations?.length) {
-        for (const a of p.assignedLocations) {
-          const type = a.storageType ?? uuidToBin.get(a.locationUUID)?.storage_type ?? "primary";
-          const qty = safeQuantity(a.quantity) * vol;
-          if (type === "reserve") reserve += qty;
-          else primary += qty;
-        }
-      } else if (p.location_id != null && p.location_id.trim() !== "") {
-        primary += safeQuantity(p.quantity) * vol;
+    for (const r of layout.racks) {
+      for (const b of r.bins ?? []) {
+        const used = usedVolumeAtBin(b);
+        if (used <= 0) continue;
+        if (normalizeStorageType(b.storage_type) === "reserve") reserve += used;
+        else primary += used;
       }
     }
     return { primaryUsedDm3: primary, reserveUsedDm3: reserve };
-  }, [products, uuidToBin]);
+  }, [layout.racks, usedVolumeAtBin]);
 
   const totalUsed = productsAssignedVolumeDm3;
   const utilizationPct = totalCapacity > 0 ? (productsAssignedVolumeDm3 / totalCapacity) * 100 : 0;
@@ -1473,6 +2547,10 @@ export default function WarehouseDesigner() {
   const height = layout.grid_rows * cellPx;
 
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:dragWallElement] run", {
+      draggingWallElementId,
+      modifiesRack: false,
+    });
     if (!draggingWallElementId || !svgRef.current) return;
     const el = layout.wall_elements?.find((e) => e.id === draggingWallElementId);
     if (!el) return;
@@ -1538,6 +2616,80 @@ export default function WarehouseDesigner() {
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
   const isMultiSelect = selectedRackIds.length > 1;
 
+  const fetchPathToRack = useCallback(async () => {
+    if (!specialLocations.pick_start || !selectedRack) return;
+    const warehouseId = selectedWarehouseId ?? layout.warehouse_id ?? null;
+    if (warehouseId == null) {
+      setPathError("Wybierz magazyn.");
+      return;
+    }
+    setPathLoading(true);
+    setPathError(null);
+    const from = { x: specialLocations.pick_start.x, y: specialLocations.pick_start.y };
+    const approach = computeApproachPointCells({ fromCm: from, rack: selectedRack, layout });
+    console.log("APPROACH POINT:", approach);
+    const to = { x: cellsToCm(approach.x), y: cellsToCm(approach.y) };
+    const payload = { warehouseId: String(warehouseId), from, to };
+    console.log("ROUTE PATH REQUEST:", payload);
+    try {
+      const res = await fetchRoutePath(payload);
+      console.log("ROUTE PATH RESPONSE points count:", res.points?.length ?? 0);
+      if (res.points && res.points.length >= 2) {
+        const points = res.points.map((p) => ({ x: p.x / GRID_UNIT_CM, y: p.y / GRID_UNIT_CM }));
+        setPathPoints(simplifyPath(points));
+        setPathSegments(null);
+        setCurrentStopIndex(null);
+        setPathMarkers(null);
+      } else {
+        setPathPoints(null);
+        setPathSegments(null);
+        setCurrentStopIndex(null);
+        if (res.message) setPathError(res.message);
+      }
+    } catch (e: unknown) {
+      setPathPoints(null);
+      setPathSegments(null);
+      setCurrentStopIndex(null);
+      const err = e as { response?: { data?: { detail?: string } }; message?: string };
+      setPathError(err?.response?.data?.detail ?? err?.message ?? "Nie udało się pobrać trasy.");
+    } finally {
+      setPathLoading(false);
+    }
+  }, [specialLocations, selectedRack, selectedWarehouseId, layout, computeApproachPointCells]);
+
+  useEffect(() => {
+    console.log("[WarehouseDesigner][effect:autoFetchPathToRack] run", {
+      mainView,
+      routeMode: routeRackIds.length > 0,
+      hasSelectedRack: !!selectedRack,
+      hasPickStart: !!specialLocations.pick_start,
+      modifiesRack: false,
+    });
+    if (mainView !== "layout" || routeRackIds.length > 0 || isRouteActive || !selectedRack || !specialLocations.pick_start) return;
+    const warehouseId = selectedWarehouseId ?? layout.warehouse_id;
+    if (warehouseId == null) return;
+    fetchPathToRack();
+  }, [mainView, routeRackIds.length, isRouteActive, selectedRack, specialLocations, selectedWarehouseId, layout.warehouse_id, fetchPathToRack]);
+
+  const handleGenerateGraph = useCallback(async () => {
+    const warehouseId = selectedWarehouseId ?? layout.warehouse_id ?? null;
+    if (warehouseId == null) return;
+    setGraphGenerating(true);
+    setPathError(null);
+    try {
+      await generateWarehouseGraph(warehouseId);
+      setSnackbar({ message: "Graf magazynu wygenerowany." });
+      setPathError(null);
+      setRetryPathKey((k) => k + 1);
+      await fetchPathToRack();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string };
+      setSnackbar({ message: err?.response?.data?.detail ?? err?.message ?? "Nie udało się wygenerować grafu." });
+    } finally {
+      setGraphGenerating(false);
+    }
+  }, [selectedWarehouseId, layout.warehouse_id, fetchPathToRack]);
+
   const buildingDepthM = layout.building_depth_m ?? layout.building_height_m;
   const outsideRackIds = useMemo(() => {
     const bw = layout.building_width_m;
@@ -1551,6 +2703,10 @@ export default function WarehouseDesigner() {
   }, [layout.racks, layout.building_width_m, buildingDepthM]);
 
   useEffect(() => {
+    console.log("[WarehouseDesigner][effect:outsideRackSnackbar] run", {
+      outsideRackCount: outsideRackIds.length,
+      modifiesRack: false,
+    });
     if (outsideRackIds.length > 0) {
       setSnackbar({
         message:
@@ -1561,24 +2717,236 @@ export default function WarehouseDesigner() {
     }
   }, [outsideRackIds.length]);
 
-  const { summaryByTemplate } = useDesignerTemplateSummary({
-    layout,
-    customTemplates,
-  });
+  // v1: visual path / picking route in layout view. Single-rack path from backend API; route mode builds segments via POST /route/path.
+  useEffect(() => {
+    console.log("[WarehouseDesigner][effect:pathVisualization] run", {
+      mainView,
+      routeMode: routeRackIds.length > 0,
+      routeRackIdsLength: routeRackIds.length,
+      routeStopsLength: routeStops.length,
+      hasPickStart: !!specialLocations?.pick_start,
+      modifiesRack: false,
+    });
+    if (!specialLocations?.pick_start) {
+      setPathPoints(null);
+      setPathSegments(null);
+      setCurrentStopIndex(null);
+      setPathMarkers(null);
+      setPathError(null);
+      return;
+    }
+    if (mainView !== "layout") {
+      setPathPoints(null);
+      setPathSegments(null);
+      setCurrentStopIndex(null);
+      setPathMarkers(null);
+      setPathError(null);
+      return;
+    }
+
+    const start = {
+      x: specialLocations.pick_start.x / GRID_UNIT_CM,
+      y: specialLocations.pick_start.y / GRID_UNIT_CM,
+    };
+    const gridCols = layout.grid_cols ?? 24;
+    const gridRows = layout.grid_rows ?? 16;
+
+    if (routeRackIds.length > 0) {
+      console.log("ROUTE BUILD", {
+        routeMode: true,
+        routeRackIdsCount: routeRackIds.length,
+        stopsCount: routeStops.length,
+        stops: routeStops,
+      });
+
+      let cancelled = false;
+      (async () => {
+        setPathLoading(true);
+        setPathError(null);
+        const warehouseId = selectedWarehouseId ?? layout.warehouse_id ?? null;
+        if (warehouseId == null) {
+          setPathLoading(false);
+          setPathError("Wybierz magazyn.");
+          return;
+        }
+
+        const finalStops = routeStops;
+
+        const segmentsCount = finalStops.length;
+        const full: Array<{ x: number; y: number }> = [];
+        const segmentsArray: Array<{ x: number; y: number }[]> = [];
+
+        const cmFromCells = (p: { x: number; y: number }) => ({ x: cellsToCm(p.x), y: cellsToCm(p.y) });
+        const cellsFromCm = (p: { x: number; y: number }) => ({ x: p.x / GRID_UNIT_CM, y: p.y / GRID_UNIT_CM });
+        const samePoint = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+          Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+
+        for (let i = 0; i < finalStops.length; i++) {
+          const fromCm = i === 0
+            ? { x: specialLocations.pick_start!.x, y: specialLocations.pick_start!.y }
+            : cmFromCells(finalStops[i - 1].position);
+          const toCm = cmFromCells(finalStops[i].position);
+
+          const payload = { warehouseId: String(warehouseId), from: fromCm, to: toCm };
+          console.log("ROUTE PATH REQUEST:", payload);
+          const res = await fetchRoutePath(payload);
+          if (cancelled) return;
+          console.log("ROUTE PATH RESPONSE points count:", res.points?.length ?? 0);
+          const segCells = (res.points ?? []).map(cellsFromCm);
+          if (segCells.length < 2) {
+            setPathError(res.message ?? "Brak ścieżki dla segmentu trasy.");
+            break;
+          }
+
+          segmentsArray.push(simplifyPath(segCells));
+          if (full.length === 0) {
+            full.push(...segCells);
+          } else {
+            const startIdx = samePoint(full[full.length - 1], segCells[0]) ? 1 : 0;
+            full.push(...segCells.slice(startIdx));
+          }
+        }
+
+        const packingCell =
+          finalStops.length > 0
+            ? pickNearestPackingCell(
+                finalStops[finalStops.length - 1].position,
+                collectPackingCentersCells(layout, specialLocations.packing ?? undefined)
+              )
+            : null;
+        if (packingCell && !cancelled && finalStops.length > 0) {
+          const fromCm = cmFromCells(finalStops[finalStops.length - 1].position);
+          const toCm = cmFromCells(packingCell);
+          const payload = { warehouseId: String(warehouseId), from: fromCm, to: toCm };
+          const res = await fetchRoutePath(payload);
+          if (cancelled) return;
+          const segCells = (res.points ?? []).map(cellsFromCm);
+          if (segCells.length >= 2) {
+            segmentsArray.push(simplifyPath(segCells));
+            const startIdx = full.length > 0 && samePoint(full[full.length - 1], segCells[0]) ? 1 : 0;
+            full.push(...segCells.slice(startIdx));
+          }
+        }
+
+        if (!cancelled) {
+          console.log("ROUTE TOTAL POINTS:", full.length);
+          setPathPoints(full.length >= 2 ? simplifyPath(full) : null);
+          setPathSegments(segmentsArray.length > 0 ? segmentsArray : null);
+          setPathMarkers(null);
+          setCurrentStopIndex(null);
+          setPathLoading(false);
+        }
+      })().catch((e: unknown) => {
+        const err = e as { response?: { data?: { detail?: string } }; message?: string };
+        setPathLoading(false);
+        setPathError(err?.response?.data?.detail ?? err?.message ?? "Nie udało się pobrać trasy.");
+      });
+
+      return () => { cancelled = true; };
+    }
+
+    if (selectedRack == null) {
+      setPathPoints(null);
+      setPathSegments(null);
+      setCurrentStopIndex(null);
+      setPathMarkers(null);
+      return;
+    }
+
+    const rawStops = (layout.picking_path ?? []).filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y));
+    if (routeRackIds.length === 0 && rawStops.length >= 2) {
+      const stops: PathStop[] = rawStops.map((p) => ({ x: p.x, y: p.y }));
+      const route = buildPickingRoutePolyline(start, stops, layout.racks, gridRows);
+      setPathPoints(simplifyPath(route.polylinePoints));
+      setPathSegments(null);
+      setCurrentStopIndex(null);
+      setPathMarkers(route.orderedStops.map((s, i) => ({ x: s.x, y: s.y, label: String(i + 1) })));
+      if (typeof console !== "undefined" && console.log) {
+        console.log("[picking-route] stops", { count: route.orderedStops.length, totalLenCells: route.totalLenCells, order: route.orderedStops });
+      }
+      return;
+    }
+
+    // Single target (selected rack): path comes from backend API (fetchPathToRack), do not overwrite here.
+    if (routeRackIds.length === 0) return;
+  }, [mainView, selectedRack, specialLocations, layout, routeStops, routeRackIds.length, selectedWarehouseId, retryPathKey]);
+
+  useEffect(() => {
+    const mismatches = layout.racks
+      .map((rack) => {
+        const layoutVariantLocations = countLayoutVariantLocations(rack);
+        const binsLength = rack.bins?.length ?? 0;
+        if (layoutVariantLocations <= 0) return null;
+        if (binsLength === layoutVariantLocations) return null;
+        return {
+          rackId: String(rack.id ?? rack.rack_index),
+          binsLength,
+          layoutVariantLocations,
+          binLocationIds: (rack.bins ?? []).map((b) => b.location_id),
+        };
+      })
+      .filter((item): item is { rackId: string; binsLength: number; layoutVariantLocations: number; binLocationIds: (string | undefined)[] } => item != null);
+
+    if (mismatches.length > 0) {
+      console.warn("[WarehouseDesigner][effect:rackLayoutMismatchDetector] mismatch-detected", {
+        mismatches,
+      });
+    } else {
+      console.log("[WarehouseDesigner][effect:rackLayoutMismatchDetector] no mismatches", {
+        racksLength: layout.racks.length,
+      });
+    }
+  }, [layout.racks, countLayoutVariantLocations]);
+
+  const applyInternalLayoutSave = useCallback(
+    (rackId: number | string, internal_structure: InternalStructure, bins: BinState[] | undefined, variant?: CustomRackTemplate | null) => {
+      setLayout((prev) => {
+        const next = {
+          ...prev,
+          racks: prev.racks.map((r) => {
+            if ((r.id ?? r.rack_index) !== rackId) return r;
+            const levelConfig = levelConfigFromInternalStructure(internal_structure);
+            return {
+              ...r,
+              templateId: variant?.id ?? r.templateId,
+              levels: Math.max(1, levelConfig.length),
+              bins_per_level: levelConfig[0]?.locations ?? r.bins_per_level,
+              levelConfig,
+              internal_structure,
+              layoutVariant: { levels: levelConfig, internal_structure },
+              ...(bins ? { bins } : {}),
+            };
+          }),
+        };
+        const savedRack = next.racks.find((r) => (r.id ?? r.rack_index) === rackId);
+        logRackDebugSnapshot("STEP 1: applyInternalLayoutSave (after save)", savedRack);
+        return next;
+      });
+      if (variant) setCustomTemplates((prev) => [...prev, variant]);
+      setInternalLayoutRackId(null);
+    },
+    [logRackDebugSnapshot]
+  );
 
   const onSaveInternalLayout = useCallback(
     (internal_structure: InternalStructure, bins: BinState[] | undefined) => {
-      setLayout((prev) => ({
-        ...prev,
-        racks: prev.racks.map((r) =>
-          (r.id ?? r.rack_index) === internalLayoutRackId
-            ? { ...r, internal_structure, ...(bins ? { bins } : {}) }
-            : r
-        ),
-      }));
-      setInternalLayoutRackId(null);
+      const rackId = internalLayoutRackId;
+      if (rackId == null) return;
+      console.log("[WarehouseDesigner][onSaveInternalLayout] triggered", {
+        rackId: String(rackId),
+        incomingBinsLength: bins?.length ?? 0,
+      });
+      const currentRack = layout.racks.find((r) => (r.id ?? r.rack_index) === rackId) ?? null;
+      logRackDebugSnapshot("onSaveInternalLayout (before save)", currentRack);
+      const baseTemplate = currentRack?.templateId ? customTemplates.find((t) => t.id === currentRack.templateId) ?? null : null;
+      if (baseTemplate && structureDiffersFromTemplate(baseTemplate, internal_structure)) {
+        setPendingVariantSave({ rackId, baseTemplate, internalStructure: internal_structure, bins });
+        setVariantNameInput(`${baseTemplate.name} [Wariant]`);
+        return;
+      }
+      applyInternalLayoutSave(rackId, internal_structure, bins, null);
     },
-    [internalLayoutRackId]
+    [internalLayoutRackId, layout.racks, customTemplates, applyInternalLayoutSave, logRackDebugSnapshot]
   );
 
   const { editProductModalProps } = useDesignerProductModal({
@@ -1593,7 +2961,6 @@ export default function WarehouseDesigner() {
     safeVolumeDm3,
     binVolumeDm3,
     binsToLevels,
-    getAllPositionsFromRacks,
   });
 
   return (
@@ -1610,6 +2977,8 @@ export default function WarehouseDesigner() {
           setSelectedWarehouseId={setSelectedWarehouseId}
           warehouseName={layout.warehouse_name}
           lastSavedAt={lastSavedAt}
+          saveLayout={saveLayout}
+          saving={saving}
           layout={layout}
           setLayout={setLayout}
           warehouseUsagePct={(() => {
@@ -1623,6 +2992,17 @@ export default function WarehouseDesigner() {
           })()}
           showEditBuilding={showEditBuilding}
           setShowEditBuilding={setShowEditBuilding}
+          isRouteActive={isRouteActive}
+          onToggleRoutePlanning={() => {
+            setIsRouteActive((prev) => {
+              const next = !prev;
+              if (next) {
+                setRouteRackIds([]);
+                setRouteStepIndex(0);
+              }
+              return next;
+            });
+          }}
         />
       }
     >
@@ -1647,6 +3027,53 @@ export default function WarehouseDesigner() {
         snackbar={snackbar}
         setSnackbar={setSnackbar}
       />
+      {pendingVariantSave != null && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl p-5">
+            <h3 className="text-base font-bold text-slate-800">Save as new variant</h3>
+            <p className="mt-2 text-sm text-slate-600">Układ różni się od szablonu bazowego. Zapisz jako nowy wariant?</p>
+            <label className="block mt-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nazwa wariantu</label>
+            <input
+              type="text"
+              value={variantNameInput}
+              onChange={(e) => setVariantNameInput(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+              placeholder="Np. Regał A - Wariant 2"
+            />
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingVariantSave(null)}
+                className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!pendingVariantSave) return;
+                  const variant = buildVariantTemplate(
+                    pendingVariantSave.baseTemplate,
+                    pendingVariantSave.internalStructure,
+                    pendingVariantSave.bins,
+                    variantNameInput
+                  );
+                  applyInternalLayoutSave(
+                    pendingVariantSave.rackId,
+                    pendingVariantSave.internalStructure,
+                    pendingVariantSave.bins,
+                    variant
+                  );
+                  setPendingVariantSave(null);
+                }}
+                className="px-3 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500"
+              >
+                Potwierdź
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <RowPrefixModal
         open={rowPrefixModalOpen}
@@ -1658,61 +3085,40 @@ export default function WarehouseDesigner() {
         defaultPrefix="A"
       />
 
-      <div className="flex flex-1 min-h-0 -mx-6 -mb-6">
+      <div
+        className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-row overflow-hidden"
+        style={mainView === "magazyn" ? { overscrollBehavior: "contain" } : undefined}
+      >
         {mainView === "magazyn" ? (
-          <div className="w-[250px] shrink-0 flex flex-col min-h-0 overflow-hidden gap-3">
+          <div className="flex h-full min-h-0 w-[260px] shrink-0 flex-none flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-y-contain">
             <MagazynDashboardPanel
               layout={layout}
-              summaryByTemplate={summaryByTemplate}
+              customTemplates={customTemplates}
+              rackTypeFilter={manualRackType}
+              selectedTemplateId={selectedTemplateId}
+              onSelectTemplate={(templateId) =>
+                setSelectedTemplateId((prev) => (prev === templateId ? null : templateId))
+              }
+              onClearTemplateSelection={() => setSelectedTemplateId(null)}
               productsAssignedVolumeDm3={productsAssignedVolumeDm3}
               totalCapacity={totalCapacity}
               utilizationPct={utilizationPct}
+              primaryUsedDm3={primaryUsedDm3}
+              reserveUsedDm3={reserveUsedDm3}
+              locationStats={{
+                primary: globalLocationStatsForLegend.primary,
+                reserve: globalLocationStatsForLegend.reserve,
+                damaged: globalLocationStatsForLegend.damaged,
+              }}
               formatVolume={formatVolume}
             />
-            <RackSidebar
-            layout={layout}
-            selectedRackId={selectedRackId}
-            selectedRackIds={selectedRackIds}
-            setSelectedRackId={setSelectedRackId}
-            setSelectedRackIds={setSelectedRackIds}
-            setDraggingFromCatalog={setDraggingFromCatalog}
-            setCatalogGhostPosition={setCatalogGhostPosition}
-            customTemplates={customTemplates}
-            setCustomTemplates={setCustomTemplates}
-            editingTemplateId={editingTemplateId}
-            setEditingTemplateId={setEditingTemplateId}
-            onSaveEditTemplate={onSaveEditTemplate}
-            onSaveNewTemplate={saveNewTemplate}
-            onDeleteTemplate={deleteTemplate}
-            setLayout={setLayout}
-            rowToolActive={rowToolActive}
-            rowToolTemplate={rowToolTemplate}
-            setRowToolTemplate={setRowToolTemplate}
-            rowGapCm={rowGapCm}
-            setRowGapCm={setRowGapCm}
-            draggingVisualType={draggingVisualType}
-            setDraggingVisualType={setDraggingVisualType}
-            setVisualGhostPosition={setVisualGhostPosition}
-            saveLayout={saveLayout}
-            saving={saving}
-            selectedWarehouseId={selectedWarehouseId}
-            totalUsed={totalUsed}
-            totalCapacity={totalCapacity}
-            onExportPdf={handleExportPdf}
-            onExportCsv={handleExportCsv}
-            onExportJson={handleExportJson}
-            onExportLocationsMapCsv={handleExportLocationsMapCsv}
-            showOnlyCatalog
-            onOpenEditBuilding={() => setShowEditBuilding(true)}
-            showGenerateLayoutModal={showGenerateLayoutModal}
-            setShowGenerateLayoutModal={setShowGenerateLayoutModal}
-            wallElementTool={wallElementTool}
-            setWallElementTool={setWallElementTool}
-          />
           </div>
         ) : mainView === "layout" ? (
-          <RackSidebar
+            <RackSidebar
+            mode="edit"
             layout={layout}
+            manualRackType={manualRackType}
+            setManualRackType={setManualRackType}
             selectedRackId={selectedRackId}
             selectedRackIds={selectedRackIds}
             setSelectedRackId={setSelectedRackId}
@@ -1735,9 +3141,6 @@ export default function WarehouseDesigner() {
             draggingVisualType={draggingVisualType}
             setDraggingVisualType={setDraggingVisualType}
             setVisualGhostPosition={setVisualGhostPosition}
-            saveLayout={saveLayout}
-            saving={saving}
-            selectedWarehouseId={selectedWarehouseId}
             totalUsed={totalUsed}
             totalCapacity={totalCapacity}
             onExportPdf={handleExportPdf}
@@ -1754,64 +3157,25 @@ export default function WarehouseDesigner() {
 
         {mainView === "magazyn" ? (
           <>
-            <div className="flex-1 min-w-0 flex flex-col bg-white rounded-xl border border-slate-100 shadow-md overflow-hidden" style={{ height: "calc(100vh - 200px)", minHeight: 0 }}>
+            <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col self-stretch overflow-hidden rounded-xl border border-slate-100 bg-white shadow-md">
               {layout.racks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center flex-1 p-8 text-slate-500">
+                <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-center justify-center p-8 text-slate-500">
                   <p className="text-sm">Brak regałów. Przejdź do Projektu Layoutu, aby dodać regały i zobaczyć widok z boku.</p>
                 </div>
               ) : (
                 <>
-                  <div className="flex-1 min-h-0 overflow-hidden flex flex-col shrink-0">
+                  <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden">
                     {selectedRackIdForSideView == null ? (
-                      <div className="flex flex-1 min-w-0 min-h-0">
-                        <div className="flex-1 min-w-0 min-h-0 flex flex-col shrink-0 overflow-hidden">
-                          <div className="shrink-0 px-3 py-2 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-2">
-                            <label className="text-xs font-medium text-slate-600">Szukaj produktu (mapa)</label>
-                            <input
-                              type="text"
-                              value={productSearchQuery}
-                              onChange={(e) => setProductSearchQuery(e.target.value)}
-                              placeholder="Nazwa, SKU lub EAN..."
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                            />
-                            {productSearchQuery.trim() && (() => {
-                              const q = productSearchQuery.trim().toLowerCase();
-                              const filtered = products.filter(
-                                (p) =>
-                                  (p.name ?? "").toLowerCase().includes(q) ||
-                                  (p.sku ?? "").toLowerCase().includes(q) ||
-                                  (p.ean ?? "").toLowerCase().includes(q)
-                              );
-                              return filtered.length > 0 ? (
-                                <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-                                  {filtered.slice(0, 15).map((p) => (
-                                    <button
-                                      key={p.id}
-                                      type="button"
-                                      onClick={() => setSelectedProductIdOnMap(p.id)}
-                                      className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-100 last:border-b-0 ${selectedProductIdOnMap === p.id ? "bg-cyan-50 text-cyan-800" : "text-slate-700"}`}
-                                    >
-                                      {p.name} <span className="text-slate-400 text-xs">({p.sku})</span>
-                                    </button>
-                                  ))}
-                                  {filtered.length > 15 && <div className="px-3 py-1 text-xs text-slate-400">+ {filtered.length - 15} więcej</div>}
-                                </div>
-                              ) : (
-                                <p className="text-xs text-slate-500">Brak produktów</p>
-                              );
-                            })()}
-                            {selectedProductIdOnMap != null && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedProductIdOnMap(null)}
-                                className="self-start text-xs text-slate-500 hover:text-slate-700 underline"
-                              >
-                                Wyczyść wybór produktu
-                              </button>
-                            )}
-                          </div>
+                      <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-row items-stretch overflow-hidden">
+                        <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden">
+                          <div
+                            ref={magazynMapScrollRef}
+                            className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto overscroll-y-contain"
+                            style={{ overscrollBehavior: "contain" }}
+                          >
                           <WarehouseLayoutRenderer
                             mode="read"
+                            // Magazyn map renders real rack instances from layout state.
                             layout={layout}
                             selectedWarehouseId={selectedWarehouseId}
                             loading={loading}
@@ -1841,6 +3205,20 @@ export default function WarehouseDesigner() {
                             cellPx={cellPx}
                             width={width}
                             height={height}
+                            pathPoints={pathPoints}
+                            pathSegments={pathSegments}
+                            pathMarkers={pathMarkers}
+                            routeStops={routeStopsForCanvasMode}
+                            showRoute={routeRackIds.length >= 1 && routeStops.length > 0}
+                            routeStepBadges={routeStepBadgesForCanvas}
+                            routeEndCell={routePackingCell}
+                            routeGraphPolyline={routeGraphPolylineForCanvas}
+                            showRouteEndpointMarkers={showRouteEndpointMarkersForCanvas}
+                            // Magazyn map is navigation-only: no quantity badges, only rack highlighting + labels.
+                            rackQuantities={mainView === "magazyn" ? undefined : productRackQuantities ?? undefined}
+                            getRackDisplayId={getRackDisplayIdWithLayout}
+                            highlightedStopIndex={highlightedStopIndexForCanvas}
+                            currentStopIndex={currentStopIndexForCanvas}
                             svgRef={svgRef}
                             canvasContainerRef={canvasContainerRef}
                             onMouseMove={handleCanvasMouseMove}
@@ -1894,10 +3272,8 @@ export default function WarehouseDesigner() {
                             setAisleWidthCm={setAisleWidthCm}
                             showGrid={showGrid}
                             setShowGrid={setShowGrid}
-                            snapToGrid={snapToGrid}
-                            setSnapToGrid={setSnapToGrid}
-                            showRackLabels={showRackLabels}
-                            setShowRackLabels={setShowRackLabels}
+                            showLabels={showLabels}
+                            setShowLabels={setShowLabels}
                             selectedAisleIndex={selectedAisleIndex}
                             draggingVisualType={draggingVisualType}
                             setDraggingVisualType={setDraggingVisualType}
@@ -1929,26 +3305,44 @@ export default function WarehouseDesigner() {
                             draggingWallElementId={draggingWallElementId}
                             dragPreviewPositionCm={dragPreviewPositionCm}
                             onStartWallElementDrag={(el) => setDraggingWallElementId(el.id)}
-                            highlightedRackIds={rackIdsContainingSelectedProduct}
+                            highlightedRackIds={canvasHighlightedRackIds}
+                            highlightedBinUUIDs={highlightedBinUUIDsForSidebarProduct ?? undefined}
+                            hoveredLocationUUID={hoveredLocationUUID}
                             onRackClick={(id) => {
+                              setSelectedProductId(null);
+                              setHoveredProductIdOnMap(null);
+                              setSelectedProductIdOnMap(null);
                               setSelectedRackIdOnMap(String(id));
                               setSelectedRackId(id);
                               setSelectedRackIds([id]);
+                              // Magazyn regression fix:
+                              // Keep full map visible on single click (so racks never "disappear").
+                              // Side view can be opened via double-click.
+                              if (mainView === "magazyn") {
+                                setSelectedRackIdForSideView(null);
+                                setSelectedLocationForProducts(null);
+                                setShowAllProductsInSidebar(false);
+                              }
                             }}
                             onRackDoubleClick={(id) => {
+                              setSelectedProductId(null);
                               setSelectedRackIdOnMap(null);
+                              setHoveredProductIdOnMap(null);
                               setSelectedProductIdOnMap(null);
                               setSelectedRackIdForSideView(id);
                               setSelectedLocationForProducts(null);
                               setProductSearchQuery("");
                               setShowAllProductsInSidebar(false);
                             }}
+                            onReadModeCanvasBackgroundClick={handleMagazynMapBackgroundClick}
                           />
+                          </div>
                         </div>
                         {selectedRackIdOnMap != null && selectedRackForMap != null ? (
                           <MagazynProductsSidebar
                             layout={layout}
                             products={rackProductsForMap}
+                            inventoryMaps={inventoryMaps}
                             productSearchQuery={productSearchQuery}
                             setProductSearchQuery={setProductSearchQuery}
                             selectedLocationForProducts={null}
@@ -1956,12 +3350,19 @@ export default function WarehouseDesigner() {
                             setShowAllProductsInSidebar={() => {}}
                             selectedRackForMagazyn={selectedRackForMap}
                             selectedRackBinUUIDs={mapRackBinUUIDs}
-                            selectedRackBinLabels={mapRackBinLabels}
                             safeQuantity={safeQuantity}
                             safeVolumeDm3={safeVolumeDm3}
                             getProductImageUrl={getProductImageUrl}
                             formatVolume={formatVolume}
                             rackProductMode
+                            onHoverProductIdChange={setHoveredProductIdOnMap}
+                            onHoverLocationUUIDChange={setHoveredLocationUUID}
+                            onRemoveProductAssignment={removeProductAssignmentAtLocation}
+                            onRequestClearRack={() => setClearRackConfirmOpen(true)}
+                            clearRackBusy={clearRackBusy}
+                            productsForRackAssignmentCheck={products}
+                            selectedProductId={selectedProductId}
+                            onToggleProductMapHighlight={toggleProductMapHighlight}
                           />
                         ) : selectedProductIdOnMap != null && selectedProductQuantityBreakdown != null ? (
                           <ProductLocatorSidebar
@@ -1970,6 +3371,7 @@ export default function WarehouseDesigner() {
                             primaryQuantity={selectedProductQuantityBreakdown.primaryQuantity}
                             reserveQuantity={selectedProductQuantityBreakdown.reserveQuantity}
                             layout={layout}
+                            inventoryMaps={inventoryMaps}
                             getProductImageUrl={getProductImageUrl}
                             onSelectLocation={(locationUUID) => {
                               const rackId = uuidToRackId.get(locationUUID);
@@ -1979,15 +3381,27 @@ export default function WarehouseDesigner() {
                         ) : (
                           <TopProductsSidebar
                             topProducts={sortedProductsByVolume}
+                            products={products}
+                            productSearchQuery={productSearchQuery}
+                            setProductSearchQuery={setProductSearchQuery}
+                            selectedProductIdOnMap={selectedProductIdOnMap}
+                            setSelectedProductIdOnMap={setSelectedProductIdOnMap}
+                            setHoveredProductIdOnMap={setHoveredProductIdOnMap}
+                            onClearMapProductSelection={() => {
+                              setSelectedProductId(null);
+                              setHoveredProductIdOnMap(null);
+                              setSelectedProductIdOnMap(null);
+                            }}
                             getProductImageUrl={getProductImageUrl}
                             formatVolume={formatVolume}
+                            onHoverProductIdChange={setHoveredProductIdOnMap}
                           />
                         )}
                       </div>
                     ) : (() => {
                 const rack = displayRack ?? selectedRackForMagazyn;
                 return (
-                  <>
+                  <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden">
                     <MagazynRackDetailHeader
                       rack={rack}
                       onBackToMap={() => {
@@ -1999,15 +3413,28 @@ export default function WarehouseDesigner() {
                       formatVolume={formatVolume}
                       binUsedVolumeDm3={binUsedVolumeDm3}
                       binVolumeDm3={binVolumeDm3}
-                      getRackDisplayId={getRackDisplayId}
+                      getRackDisplayId={getRackDisplayIdWithLayout}
                       onShowLabelDownload={() => setShowRackLabelDownload(true)}
+                      onEmptyRack={() => setClearRackConfirmOpen(true)}
+                      emptyRackDisabled={clearRackBusy}
+                      hideEmptyRackButton={
+                        !selectedRackHasBinUuids || clearRackConfirmPreview.assignmentCount === 0
+                      }
                     />
                     {rack && (
-                      <div className="flex-1 min-h-0 overflow-hidden flex flex-col shrink-0" style={{ minHeight: 0 }}>
+                      <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden">
+                        <div
+                          ref={magazynRackSideScrollRef}
+                          className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto overscroll-y-contain"
+                          style={{ overscrollBehavior: "contain" }}
+                        >
                         <RackSideViewGrid
                           rack={displayRack ?? rack}
+                          layout={layout}
+                          showLabels={showLabels}
                           onBinClick={(level_index, segment_index) => setSelectedLocationForProducts({ level_index, segment_index })}
                           selectedLocation={selectedLocationForProducts}
+                          hoveredLocationUUID={hoveredLocationUUID}
                           binItemCounts={binItemCounts}
                           binUniqueProductCounts={binUniqueProductCounts}
                           binMaxCapacityPieces={binMaxCapacityPieces}
@@ -2022,15 +3449,18 @@ export default function WarehouseDesigner() {
                             return fromRack ?? fromTemplate ?? 500;
                           })()}
                         />
+                        </div>
                       </div>
                     )}
-                  </>
+                  </div>
                 );
                     })()}
                   </div>
                   <WarehouseLegend
                     viewMode={selectedRackIdForSideView == null ? "fullMap" : "rackDetail"}
                     stats={{ rackCount: layout.racks.length, usedDm3: totalUsed, totalDm3: totalCapacity, primaryUsedDm3, reserveUsedDm3 }}
+                    usedStorageTypes={usedStorageTypesForLegend}
+                    globalLocationStats={globalLocationStatsForLegend}
                   />
                 </>
               )}
@@ -2039,6 +3469,7 @@ export default function WarehouseDesigner() {
               <MagazynProductsSidebar
                 layout={layout}
                 products={products}
+                inventoryMaps={inventoryMaps}
                 productSearchQuery={productSearchQuery}
                 setProductSearchQuery={setProductSearchQuery}
                 selectedLocationForProducts={selectedLocationForProducts}
@@ -2046,11 +3477,16 @@ export default function WarehouseDesigner() {
                 setShowAllProductsInSidebar={setShowAllProductsInSidebar}
                 selectedRackForMagazyn={selectedRackForMagazyn}
                 selectedRackBinUUIDs={selectedRackBinUUIDs}
-                selectedRackBinLabels={selectedRackBinLabels}
                 safeQuantity={safeQuantity}
                 safeVolumeDm3={safeVolumeDm3}
                 getProductImageUrl={getProductImageUrl}
                 formatVolume={formatVolume}
+                onRemoveProductAssignment={removeProductAssignmentAtLocation}
+                onRequestClearRack={() => setClearRackConfirmOpen(true)}
+                clearRackBusy={clearRackBusy}
+                selectedProductId={selectedProductId}
+                onToggleProductMapHighlight={toggleProductMapHighlight}
+                onHoverLocationUUIDChange={setHoveredLocationUUID}
               />
             )}
           </>
@@ -2099,6 +3535,8 @@ export default function WarehouseDesigner() {
               collisionRackIds,
               selectedRack,
               isMultiSelect,
+              onRackClickPassthrough: undefined,
+              isRoutePlanningMode: isRouteActive,
               setInternalLayoutRackId,
               setShowElevationForRackId,
               setLayout,
@@ -2139,10 +3577,8 @@ export default function WarehouseDesigner() {
               setAisleWidthCm,
               showGrid,
               setShowGrid,
-              snapToGrid,
-              setSnapToGrid,
-              showRackLabels,
-              setShowRackLabels,
+              showLabels,
+              setShowLabels,
               selectedAisleIndex,
               draggingVisualType,
               setDraggingVisualType,
@@ -2174,6 +3610,39 @@ export default function WarehouseDesigner() {
               draggingWallElementId,
               dragPreviewPositionCm,
               onStartWallElementDrag: (el) => setDraggingWallElementId(el.id),
+              pathPoints,
+              pathSegments,
+              routeStops: routeStopsForCanvasMode,
+              showRoute: routeRackIds.length >= 1 && routeStops.length > 0,
+              highlightedStopIndex: highlightedStopIndexForCanvas,
+              currentStopIndex: currentStopIndexForCanvas,
+              getRackDisplayId: getRackDisplayIdWithLayout,
+              routeStepBadges: routeStepBadgesForCanvas,
+              routeEndCell: routePackingCell,
+              routeGraphPolyline: routeGraphPolylineForCanvas,
+              showRouteEndpointMarkers: showRouteEndpointMarkersForCanvas,
+              pathMarkers,
+              routeRackIds: orderedRouteRackIds,
+              routeRackLabels: routeStops.map((s) => {
+                const stopRack = layout.racks.find((r) => String(r.id ?? r.rack_index) === s.rackId);
+                return stopRack ? getRackDisplayIdWithLayout(stopRack) : `Regał ${s.rackId}`;
+              }),
+              routeLengthMeters,
+              routeLegMeters,
+              routeStepIndex,
+              routeStepCount: orderedRouteRackIds.length,
+              onRouteStepNext: handleRouteStepNext,
+              isRouteActive,
+              clearRoute: () => {
+                setRouteRackIds([]);
+                setRouteStepIndex(0);
+              },
+              optimizeRoute: () => {
+                setRouteRackIds((prev) => computePickingRouteOrder(prev, layout.racks, pickStartCell));
+                setSnackbar({ message: "Kolejność dopasowana (tryb wąż)." });
+              },
+              finishRoute: () => setIsRouteActive(false),
+              routePanelVisible: isRouteActive || routeRackIds.length > 0,
             }}
           />
         ) : null}
@@ -2217,6 +3686,34 @@ export default function WarehouseDesigner() {
           );
         })()
       )}
+
+      {clearRackConfirmOpen &&
+        mainView === "magazyn" &&
+        clearRackTargetKey != null &&
+        layout.racks.some((r) => String(r.id ?? r.rack_index) === clearRackTargetKey) && (
+          <ConfirmModal
+            title="Opróżnij regał"
+            message={
+              <>
+                <p>
+                  Czy na pewno chcesz opróżnić regał {clearRackConfirmPreview.rackLabel || "—"}?
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {clearRackConfirmPreview.assignmentCount === 1
+                    ? "Zostanie usunięte 1 przypisanie produktu."
+                    : clearRackConfirmPreview.assignmentCount >= 2 && clearRackConfirmPreview.assignmentCount <= 4
+                      ? `Zostaną usunięte ${clearRackConfirmPreview.assignmentCount} przypisania produktów.`
+                      : `Zostanie usuniętych ${clearRackConfirmPreview.assignmentCount} przypisań produktów.`}
+                </p>
+              </>
+            }
+            onCancel={() => {
+              if (!clearRackBusy) setClearRackConfirmOpen(false);
+            }}
+            pending={clearRackBusy}
+            onConfirm={clearAssignmentsOnSelectedRack}
+          />
+        )}
 
     </PageLayout>
   );

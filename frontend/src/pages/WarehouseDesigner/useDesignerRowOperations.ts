@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { RackState, LayoutState, CatalogItem, EmptyRowSlot, RowContainer } from "../../types/warehouse";
+import type { RackState, LayoutState, CatalogItem, EmptyRowSlot, RowContainer, StorageType, RackType } from "../../types/warehouse";
 import {
   getRowStart,
   computeRowSlotPositions,
@@ -21,6 +21,7 @@ import {
   ROW_LABEL_ADDRESS_PATTERN,
   reindexGeometricRow,
   getNextIndexInRow,
+  generateRackUuid,
 } from "../../components/warehouse/warehouseUtils";
 import type { Dispatch, SetStateAction } from "react";
 
@@ -28,6 +29,8 @@ export interface UseDesignerRowOperationsParams {
   layout: LayoutState;
   selectedRowContainerId: string | null;
   rowGapCm: number;
+  /** Fallback rack type for presets or templates without rack_type (default: warehouse). */
+  defaultRackType: RackType;
   setLayout: Dispatch<SetStateAction<LayoutState>>;
   setSelectedRowContainerId: Dispatch<SetStateAction<string | null>>;
   setSelectedRackId: Dispatch<SetStateAction<number | string | null>>;
@@ -51,6 +54,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
     layout,
     selectedRowContainerId,
     rowGapCm,
+    defaultRackType,
     setLayout,
     setSelectedRowContainerId,
     setSelectedRackId,
@@ -285,6 +289,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const prefix = (row.rowPrefix || "A").trim() || "A";
       const templateColor = item.type === "custom" ? item.template.color : spec.color;
       const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
+      const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : defaultRackType;
       const { x: startX, y: startY } = getRowStart(row);
       const isVertical = row.orientation === "vertical";
       const slotFits = (s: EmptyRowSlot) => isVertical ? (s.w >= h && s.h >= w) : (s.w >= w);
@@ -320,7 +325,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.width_cm,
             spec.depth_cm,
             spec.height_cm,
-            spec.reserve_bin_keys,
+            spec.bin_type_map,
             spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
             rackLabel,
             spec.sectionStartIndex ?? 1,
@@ -335,6 +340,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.startIndex
           );
           newRacks.push({
+            uuid: generateRackUuid(),
+            rack_type: resolvedRackType,
             x: 0,
             y: startY,
             width: isVertical ? h : w,
@@ -382,13 +389,14 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         };
       });
     },
-    [selectedRowContainerId, layout.row_containers, setLayout]
+    [selectedRowContainerId, layout.row_containers, defaultRackType, setLayout]
   );
 
   /** Place a row of racks from cell A to cell B. Template properties (color, reserve bins, dimensions, rowId) are strictly inherited from the selected template. Section numbering is per-template (no global counter). */
   const _placeRowFromCatalogItem = useCallback(
     (start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem) => {
       const spec = getCatalogItemSpec(item);
+      const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : defaultRackType;
       const templateToApply: {
         color: string;
         rowId: string;
@@ -405,7 +413,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         naming_pattern?: string;
         addressPattern?: string;
         binNamingType?: "numeric" | "alpha";
-        reserve_bin_keys?: string[];
+        bin_type_map?: Record<string, StorageType>;
         namingStrategy?: "pattern" | "rack-index" | "custom" | "manual";
         namingOrientation?: "column-first" | "row-first";
         namingPattern?: string;
@@ -413,6 +421,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         overrides?: Record<string, string>;
         indexPadding?: number;
         startIndex?: number;
+        level_max_load_kg?: number;
       } = item.type === "custom"
         ? (JSON.parse(JSON.stringify({
           color: item.template.color ?? spec.color ?? "#3b82f6",
@@ -431,7 +440,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           naming_pattern: item.template.naming_pattern,
           addressPattern: item.template.addressPattern,
           binNamingType: item.template.binNamingType ?? "numeric",
-          reserve_bin_keys: item.template.reserve_bin_keys ? [...item.template.reserve_bin_keys] : undefined,
+          bin_type_map: item.template.bin_type_map ? { ...item.template.bin_type_map } : undefined,
           namingStrategy: item.template.namingStrategy,
           namingOrientation: item.template.namingOrientation,
           namingPattern: item.template.namingPattern ?? item.template.addressPattern,
@@ -456,7 +465,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           naming_pattern: spec.naming_pattern,
           addressPattern: spec.addressPattern,
           binNamingType: spec.binNamingType ?? "numeric",
-          reserve_bin_keys: spec.reserve_bin_keys ? [...spec.reserve_bin_keys] : undefined,
+          bin_type_map: spec.bin_type_map ? { ...spec.bin_type_map } : undefined,
           namingStrategy: spec.namingStrategy,
           namingOrientation: spec.namingOrientation,
           namingPattern: spec.namingPattern ?? spec.addressPattern,
@@ -525,7 +534,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               templateToApply.width_cm,
               templateToApply.length_cm,
               templateToApply.height_cm,
-              templateToApply.reserve_bin_keys,
+              templateToApply.bin_type_map,
               templateToApply.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
               rackLabel,
               templateToApply.sectionStartIndex ?? 1,
@@ -540,6 +549,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               templateToApply.startIndex
             );
             return {
+              uuid: generateRackUuid(),
+              rack_type: resolvedRackType,
               x: pos.x,
               y: pos.y,
               width: pw,
@@ -579,7 +590,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       setRowDrawEnd(null);
       return rackStubs.length;
     },
-    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, selectedRowContainerId, rowGapCm, setLayout, setCustomTemplates, setRowDrawStart, setRowDrawEnd]
+    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, selectedRowContainerId, rowGapCm, defaultRackType, setLayout, setCustomTemplates, setRowDrawStart, setRowDrawEnd]
   );
   void _placeRowFromCatalogItem;
 
@@ -631,7 +642,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const prefix = (rowPrefix || "A").trim() || "A";
       const orientation: "horizontal" | "vertical" = isHorizontal ? "horizontal" : "vertical";
-      const newRow: RowContainer = { id, rowPrefix: prefix, orientation, slots };
+      const newRow: RowContainer = { id, rowPrefix: prefix, orientation, direction: "LTR", slots };
       setLayout((prev) => ({ ...prev, row_containers: [...(prev.row_containers ?? []), newRow] }));
       setRowDrawStart(null);
       setRowDrawEnd(null);
@@ -679,6 +690,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const cellH = cmToCells(spec.depth_cm);
       const templateColor = item.type === "custom" ? item.template.color : spec.color;
       const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
+      const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : defaultRackType;
       const startX = clampedX;
       const startY = clampedY;
       const isVertical = orientation === "vertical";
@@ -716,7 +728,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.width_cm,
             spec.depth_cm,
             spec.height_cm,
-            spec.reserve_bin_keys,
+            spec.bin_type_map,
             spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
             rackLabel,
             spec.sectionStartIndex ?? 1,
@@ -731,6 +743,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.startIndex
           );
           newRacks.push({
+            uuid: generateRackUuid(),
+            rack_type: resolvedRackType,
             x: 0,
             y: startY,
             width: isVertical ? cellH : cellW,
@@ -782,14 +796,14 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         const nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
         return {
           ...prev,
-          row_containers: [...(prev.row_containers ?? []), { id, rowPrefix: prefix, orientation, slots: newSlots }],
+          row_containers: [...(prev.row_containers ?? []), { id, rowPrefix: prefix, orientation, direction: "LTR", slots: newSlots }],
           racks: nextRacks,
         };
       });
       setRowDrawStart(null);
       setRowDrawEnd(null);
     },
-    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, setLayout, setRowDrawStart, setRowDrawEnd]
+    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, defaultRackType, setLayout, setRowDrawStart, setRowDrawEnd]
   );
 
   return {

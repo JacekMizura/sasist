@@ -11,7 +11,8 @@ export interface UsePlacementInteractionParams {
   ghostH: number;
   selectedWarehouseId: number | null;
   layoutMode: string;
-  isLiveView: boolean;
+  /** True only for the Magazyn live map canvas (not Projektant Layoutu). Uses URL + mainView so a stale mainView cannot run map click semantics on the layout canvas. */
+  magazynMapInteractions: boolean;
   refs: {
     lastMouseRef: React.MutableRefObject<{ clientX: number; clientY: number } | null>;
     svgRef: React.RefObject<SVGSVGElement | null>;
@@ -40,7 +41,7 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
     ghostH,
     selectedWarehouseId,
     layoutMode,
-    isLiveView,
+    magazynMapInteractions,
     refs,
     getCellFromEvent,
     setGhostPosition,
@@ -71,7 +72,7 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
         addSpecialLocation(cell, type);
         return true;
       }
-      if (isLiveView && e.button === 0) {
+      if (magazynMapInteractions && e.button === 0) {
         const hit = layout.racks.find((r) => isCellInsideRack(cell, r));
         if (hit) {
           const rid = hit.id ?? hit.rack_index;
@@ -108,7 +109,7 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
     [
       selectedWarehouseId,
       layoutMode,
-      isLiveView,
+      magazynMapInteractions,
       layout.racks,
       layout.aisles,
       placementMode,

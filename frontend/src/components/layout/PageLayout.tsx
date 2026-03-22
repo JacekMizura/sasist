@@ -12,20 +12,38 @@ type PageLayoutProps = {
   tabs?: React.ReactNode;
   /** Main content. */
   children: React.ReactNode;
-  /** Optional: container and content grow to fill viewport (min-h-screen, flex-1). */
+  /** Optional: fill main column height (flex chain + overflow-hidden; no page scroll in designer). */
   fillHeight?: boolean;
 };
 
-export function PageHeader({ title, actions }: { title: React.ReactNode; actions?: React.ReactNode }) {
+export function PageHeader({
+  title,
+  actions,
+  compact,
+}: {
+  title: React.ReactNode;
+  actions?: React.ReactNode;
+  /** Tighter spacing for fill-height pages (flex height chain). */
+  compact?: boolean;
+}) {
   return (
-    <header className="flex items-center justify-between shrink-0" style={{ marginBottom: "12px" }}>
+    <header
+      className={`flex min-w-0 shrink-0 items-center justify-between gap-3 ${compact ? "mb-0 pb-3" : ""}`}
+      style={compact ? undefined : { marginBottom: "12px" }}
+    >
       <h1
-        className="text-2xl font-semibold text-left text-slate-800"
+        className="min-w-0 shrink-0 truncate text-2xl font-semibold text-left text-slate-800"
         style={{ fontSize: "24px", fontWeight: 600, textAlign: "left" }}
       >
         {title}
       </h1>
-      {actions != null ? <div className="flex items-center gap-2 shrink-0">{actions}</div> : null}
+      {actions != null ? (
+        <div
+          className={`flex min-w-0 items-center gap-2 ${compact ? "flex-1 justify-end overflow-x-auto" : "shrink-0"}`}
+        >
+          {actions}
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -33,8 +51,12 @@ export function PageHeader({ title, actions }: { title: React.ReactNode; actions
 export function PageContent({ children, fillHeight }: { children: React.ReactNode; fillHeight?: boolean }) {
   return (
     <div
-      className={`flex flex-col gap-6 ${fillHeight ? "flex-1 min-h-0" : ""}`}
-      style={{ gap: "24px" }}
+      className={
+        fillHeight
+          ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden gap-0"
+          : "flex min-w-0 flex-col gap-6"
+      }
+      style={fillHeight ? undefined : { gap: "24px" }}
     >
       {children}
     </div>
@@ -44,15 +66,15 @@ export function PageContent({ children, fillHeight }: { children: React.ReactNod
 export default function PageLayout({ title, actions, tabs, children, fillHeight = false }: PageLayoutProps) {
   return (
     <div
-      className={`w-full ${fillHeight ? "min-h-screen flex flex-col" : ""}`}
+      className={`w-full ${fillHeight ? "flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : ""}`}
       style={{
         width: "100%",
         paddingLeft: "24px",
         paddingRight: "24px",
       }}
     >
-      <PageHeader title={title} actions={actions} />
-      {tabs != null ? <div className="shrink-0 mb-4">{tabs}</div> : null}
+      <PageHeader title={title} actions={actions} compact={fillHeight} />
+      {tabs != null ? <div className="mb-4 shrink-0">{tabs}</div> : null}
       <PageContent fillHeight={fillHeight}>{children}</PageContent>
     </div>
   );

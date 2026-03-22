@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import type { LayoutState, CustomRackTemplate, CatalogItem, CatalogPresetId } from "../../types/warehouse";
+import { useEffect, useState, useMemo } from "react";
+import type { LayoutState, CustomRackTemplate, CatalogItem, CatalogPresetId, RackType } from "../../types/warehouse";
 import { CATALOG_PRESETS } from "../../types/warehouse";
 import { getCatalogItemSpec, metersToCells, cmToCells } from "./warehouseUtils";
 import {
@@ -19,6 +19,7 @@ export type GenerateWarehouseLayoutModalProps = {
   onConfirm: (result: LayoutGeneratorResult, mode: GenerateLayoutMode) => void;
   layout: LayoutState;
   customTemplates: CustomRackTemplate[];
+  rackType: RackType;
   /** Pre-selected catalog item (e.g. from sidebar). */
   initialTemplate?: CatalogItem | null;
 };
@@ -33,13 +34,16 @@ export function GenerateWarehouseLayoutModal({
   onConfirm,
   layout,
   customTemplates,
+  rackType,
   initialTemplate = null,
 }: GenerateWarehouseLayoutModalProps) {
   const catalogItems: CatalogItem[] = useMemo(() => {
     const presets: CatalogItem[] = CATALOG_PRESETS.map((p) => ({ type: "preset", id: p.id }));
-    const custom: CatalogItem[] = customTemplates.map((t) => ({ type: "custom", template: t }));
+    const custom: CatalogItem[] = customTemplates
+      .filter((t) => (t.rack_type ?? "warehouse") === rackType)
+      .map((t) => ({ type: "custom", template: t }));
     return [...presets, ...custom];
-  }, [customTemplates]);
+  }, [customTemplates, rackType]);
 
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(() => initialTemplate ?? catalogItems[0] ?? null);
   const [rows, setRows] = useState(DEFAULT_ROWS);
@@ -54,16 +58,37 @@ export function GenerateWarehouseLayoutModal({
   const [overlapWarning, setOverlapWarning] = useState(false);
   const [autoFillWarehouse, setAutoFillWarehouse] = useState(false);
 
+  useEffect(() => {
+    if (catalogItems.length === 0) {
+      setSelectedItem(null);
+      return;
+    }
+    if (
+      selectedItem != null &&
+      catalogItems.some((item) =>
+        item.type === "preset" && selectedItem.type === "preset"
+          ? item.id === selectedItem.id
+          : item.type === "custom" && selectedItem.type === "custom"
+            ? item.template.id === selectedItem.template.id
+            : false
+      )
+    ) {
+      return;
+    }
+    setSelectedItem(catalogItems[0] ?? null);
+  }, [catalogItems, selectedItem]);
+
   const spec = useMemo(() => (selectedItem ? getCatalogItemSpec(selectedItem) : null), [selectedItem]);
 
   const templateForGenerator: LayoutGeneratorTemplate | null = useMemo(() => {
     if (!spec) return null;
     const base = {
       ...spec,
+      rack_type: selectedItem?.type === "custom" ? (selectedItem.template.rack_type ?? "warehouse") : rackType,
       templateId: selectedItem?.type === "custom" ? selectedItem.template.id : undefined,
     };
     return base as LayoutGeneratorTemplate;
-  }, [spec, selectedItem]);
+  }, [spec, selectedItem, rackType]);
 
   const buildingDepthM = layout.building_depth_m ?? layout.building_height_m;
   const maxCols = layout.building_width_m != null ? metersToCells(layout.building_width_m) : layout.grid_cols;

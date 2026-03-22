@@ -247,35 +247,68 @@ export function snapPosition(
   aisleWidthCm: number = DEFAULT_AISLE_WIDTH_CM
 ): { x: number; y: number } {
   const aisleCells = cmToCells(aisleWidthCm);
-  const candX = new Set<number>([0, gridCols - ghostW, snapToGrid(desired.x)]);
-  const candY = new Set<number>([0, gridRows - ghostH, snapToGrid(desired.y)]);
+  // Snap priority (lower = stronger):
+  // 1) walls/boundaries  2) rack edge-to-edge  3) aisle offsets  4) grid
+  const P_WALL = 1;
+  const P_EDGE = 2;
+  const P_AISLE = 3;
+  const P_GRID = 4;
+
+  type Cand = { v: number; p: number };
+  const candX = new Map<number, number>();
+  const candY = new Map<number, number>();
+  const add = (m: Map<number, number>, v: number, p: number) => {
+    const prev = m.get(v);
+    if (prev == null || p < prev) m.set(v, p);
+  };
+
+  // Walls (hard boundary snap)
+  add(candX, 0, P_WALL);
+  add(candX, gridCols - ghostW, P_WALL);
+  add(candY, 0, P_WALL);
+  add(candY, gridRows - ghostH, P_WALL);
+
+  // Grid (lowest priority)
+  add(candX, snapToGrid(desired.x), P_GRID);
+  add(candY, snapToGrid(desired.y), P_GRID);
+
+  // Rack edges and aisle offsets
   racks.forEach((r) => {
-    candX.add(r.x);
-    candX.add(r.x + r.width);
-    candX.add(Math.max(0, r.x - ghostW));
-    candX.add(Math.min(gridCols - ghostW, r.x + r.width));
-    candX.add(Math.max(0, r.x + r.width + aisleCells));
-    candX.add(Math.min(gridCols - ghostW, r.x - ghostW - aisleCells));
+    // Edge-to-edge alignment (flush)
+    add(candX, r.x, P_EDGE); // align left edges
+    add(candX, r.x + r.width - ghostW, P_EDGE); // align right edges
+    add(candX, r.x - ghostW, P_EDGE); // touch left (our right to rack left)
+    add(candX, r.x + r.width, P_EDGE); // touch right (our left to rack right)
+
+    add(candY, r.y, P_EDGE);
+    add(candY, r.y + r.height - ghostH, P_EDGE);
+    add(candY, r.y - ghostH, P_EDGE);
+    add(candY, r.y + r.height, P_EDGE);
+
+    // Aisle offsets (magnetic gaps)
+    add(candX, r.x + r.width + aisleCells, P_AISLE);
+    add(candX, r.x - ghostW - aisleCells, P_AISLE);
+    add(candY, r.y + r.height + aisleCells, P_AISLE);
+    add(candY, r.y - ghostH - aisleCells, P_AISLE);
   });
-  racks.forEach((r) => {
-    candY.add(r.y);
-    candY.add(r.y + r.height);
-    candY.add(Math.max(0, r.y - ghostH));
-    candY.add(Math.min(gridRows - ghostH, r.y + r.height));
-    candY.add(Math.max(0, r.y + r.height + aisleCells));
-    candY.add(Math.min(gridRows - ghostH, r.y - ghostH - aisleCells));
-  });
-  let best = { x: Math.max(0, Math.min(gridCols - ghostW, snapToGrid(desired.x))), y: Math.max(0, Math.min(gridRows - ghostH, snapToGrid(desired.y))) };
+
+  let best = {
+    x: Math.max(0, Math.min(gridCols - ghostW, snapToGrid(desired.x))),
+    y: Math.max(0, Math.min(gridRows - ghostH, snapToGrid(desired.y))),
+  };
   let bestDist = Infinity;
+  let bestPriority = P_GRID;
   const otherRacks = racks;
-  for (const x of candX) {
-    for (const y of candY) {
+  for (const [x, px] of candX.entries()) {
+    for (const [y, py] of candY.entries()) {
       const xx = Math.max(0, Math.min(gridCols - ghostW, x));
       const yy = Math.max(0, Math.min(gridRows - ghostH, y));
       const overlaps = otherRacks.some((r) => rectsOverlap({ x: xx, y: yy, width: ghostW, height: ghostH }, r));
       if (overlaps) continue;
+      const priority = Math.min(px, py);
       const dist = (desired.x - xx) ** 2 + (desired.y - yy) ** 2;
-      if (dist < bestDist) {
+      if (priority < bestPriority || (priority === bestPriority && dist < bestDist)) {
+        bestPriority = priority;
         bestDist = dist;
         best = { x: xx, y: yy };
       }

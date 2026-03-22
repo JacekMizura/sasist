@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timedelta, date
 from typing import Any
 
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from ..models.order import Order
@@ -22,8 +22,10 @@ from ..models.pick import Pick
 from ..models.product import Product
 from ..models.inventory import Inventory
 from ..models.location import Location
+from ..models.warehouse import Bin
 from ..models.warehouse import Warehouse
 from ..models.warehouse_graph import WarehouseNode, WarehouseEdge, LocationNode
+from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority
 from ..domain.simulation import (
     get_adjacency,
     get_start_node_for_warehouse,
@@ -805,22 +807,32 @@ def generate_simulated_picks(
         for item in items:
             # Inventory rows for this product in this warehouse, with location pick_sequence
             inv_rows = (
-                db.query(Inventory, Location.pick_sequence)
+                db.query(Inventory, Location.pick_sequence, Bin.storage_type)
                 .join(Location, Inventory.location_id == Location.id)
+                .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
                 .filter(
                     Inventory.tenant_id == tenant_id,
                     Inventory.warehouse_id == warehouse_id,
                     Inventory.product_id == item.product_id,
                     Inventory.quantity > 0,
-                )
-                .order_by(
-                    Location.pick_sequence.asc().nullslast(),
-                    Location.id.asc(),
+                    or_(
+                        Bin.id.is_(None),
+                        Bin.storage_type.is_(None),
+                        ~func.lower(Bin.storage_type).in_(tuple(NON_PICKABLE_STORAGE_TYPE_ALIASES)),
+                    ),
                 )
                 .all()
             )
+            inv_rows = sorted(
+                inv_rows,
+                key=lambda row: (
+                    get_storage_priority(row[2]) or 999999,
+                    row[1] if row[1] is not None else 999999,
+                    row[0].location_id,
+                ),
+            )
             remaining = float(item.quantity)
-            for inv, pick_seq in inv_rows:
+            for inv, _pick_seq, _storage_type in inv_rows:
                 if remaining <= 0:
                     break
                 qty = min(remaining, float(inv.quantity))
@@ -1025,17 +1037,38 @@ def walking_cost(
     # (warehouse_id, product_id) -> location_id
     inv_filter = [Inventory.tenant_id == tenant_id, Inventory.warehouse_id.in_(wh_ids)]
     inv_rows = (
-        db.query(Inventory.warehouse_id, Inventory.product_id, Inventory.location_id)
-        .filter(*inv_filter)
-        .distinct()
+        db.query(
+            Inventory.warehouse_id,
+            Inventory.product_id,
+            Inventory.location_id,
+            Location.pick_sequence,
+            Bin.storage_type,
+        )
+        .join(Location, Inventory.location_id == Location.id)
+        .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
+        .filter(
+            *inv_filter,
+            or_(
+                Bin.id.is_(None),
+                Bin.storage_type.is_(None),
+                ~func.lower(Bin.storage_type).in_(tuple(NON_PICKABLE_STORAGE_TYPE_ALIASES)),
+            ),
+        )
         .all()
     )
-    key_to_loc: dict[tuple[int, int], int] = {}
+    key_to_loc: dict[tuple[int, int], tuple[int, int, int]] = {}
     for r in inv_rows:
         k = (r.warehouse_id, r.product_id)
-        if k not in key_to_loc:
-            key_to_loc[k] = r.location_id
-    loc_ids = list(set(key_to_loc.values()))
+        priority = get_storage_priority(r.storage_type) or 999999
+        effective_seq = r.pick_sequence if r.pick_sequence is not None else 999999
+        candidate = (r.location_id, priority, effective_seq)
+        if k not in key_to_loc or (priority, effective_seq, r.location_id) < (
+            key_to_loc[k][1],
+            key_to_loc[k][2],
+            key_to_loc[k][0],
+        ):
+            key_to_loc[k] = candidate
+    loc_ids = list({loc_id for loc_id, _, _ in key_to_loc.values()})
     if not loc_ids:
         return [
             {
@@ -1071,7 +1104,7 @@ def walking_cost(
         total_items = 0
         for product_id, qty in items_by_order.get(o.id) or []:
             total_items += qty
-            loc_id = key_to_loc.get((wh_id, product_id))
+            loc_id = key_to_loc.get((wh_id, product_id), (None, 0, 0))[0]
             node_id = loc_to_node.get(loc_id) if loc_id else None
             if node_id is not None:
                 path_nodes.append(node_id)

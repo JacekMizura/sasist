@@ -51,7 +51,7 @@ export function WallElementsLayer({
   const elements = wallElements ?? [];
 
   return (
-    <g data-layer="wall-elements">
+    <g data-layer="wall-elements" pointerEvents="none">
       {elements.map((el) => {
         const isSelected = selectedWallElementId === el.id;
         const isDragging = draggingWallElementId === el.id;
@@ -104,7 +104,7 @@ export function WallElementsLayer({
             key={el.id}
             onPointerDown={onPointerDown ? (e) => { e.preventDefault(); e.stopPropagation(); onPointerDown(e, el); } : undefined}
             onClick={(e) => { e.stopPropagation(); onSelect(el.id); }}
-            style={{ cursor: onPointerDown ? "grab" : "pointer" }}
+            style={{ pointerEvents: "auto", cursor: onPointerDown ? "grab" : "pointer" }}
           >
             <rect
               x={x + 1}

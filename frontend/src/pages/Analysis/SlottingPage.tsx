@@ -20,7 +20,7 @@ const ABC_COLORS: Record<string, string> = {
   C: "#22c55e",
 };
 
-/** Raw layout from API (racks with bins, aisles, grid). */
+/** Raw layout from API (racks with bins, visual zones, grid). */
 type SlottingLayout = {
   layout_id: number | null;
   warehouse_id: number;
@@ -536,7 +536,7 @@ export default function SlottingPage() {
 
 /**
  * Renders warehouse layout (racks and storage bins) with bins colored by slotting ABC class.
- * Reuses same coordinate system as Warehouse Designer: viewBox grid_cols × grid_rows, aisles, racks with bin grid.
+ * Reuses same coordinate system as Warehouse Designer: viewBox grid_cols × grid_rows, visual zones, racks with bin grid.
  */
 function SlottingLayoutMap({
   layout,
@@ -563,7 +563,7 @@ function SlottingLayoutMap({
         className="w-full block"
         style={{ maxHeight: 420 }}
       >
-        {/* Aisles (same as WarehouseFullMap) */}
+        {/* Visual zones (same as WarehouseFullMap) */}
         {layout.aisles?.map((a, i) => (
           <rect
             key={a.id ?? `a-${i}`}
@@ -572,7 +572,9 @@ function SlottingLayoutMap({
             width={Math.max(0.04, a.width - 0.04)}
             height={Math.max(0.04, a.height - 0.04)}
             fill="#94a3b8"
+            fillOpacity={0.38}
             stroke="#64748b"
+            strokeOpacity={0.85}
             strokeWidth={0.02}
             rx={0.2}
           />

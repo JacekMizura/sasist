@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import type { CustomRackTemplate, LevelConfigItem, LayoutState } from "../../types/warehouse";
-import { RESERVE_BG, RESERVE_BORDER } from "./reserveLocationStyle";
-import { snapCm, expandAddressPattern, getRackTemplateLabel, levelHeightsForRack, type RackTemplateLabelOptions } from "./warehouseUtils";
+import type { CustomRackTemplate, LevelConfigItem, LayoutState, StorageType, RackType } from "../../types/warehouse";
+import { snapCm, generateLocationLabel, levelHeightsForRack, type RackTemplateLabelOptions } from "./warehouseUtils";
+import { getStorageTypeStyle, normalizeBinTypeMap, normalizeStorageType, TEMPLATE_STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
+import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
 const DEFAULT_ADDRESS_PATTERN = "{Row}{Section}-{Bin}-{Level}";
 
@@ -10,27 +11,17 @@ const DEFAULT_COLORS = ["#3b82f6", "#22c55e", "#eab308", "#ef4444", "#8b5cf6", "
 const UPRIGHT_BLUE = "#2563eb";
 const SHELF_ORANGE = "#ea580c";
 const SHELF_GREY = "#64748b";
-const RESERVE_FILL = RESERVE_BG;
-const RESERVE_STROKE = RESERVE_BORDER;
 const CELL_STROKE = "#cbd5e1";
 
 function cellKey(levelIndex: number, binIndex: number): string {
   return `${levelIndex}-${binIndex}`;
 }
 
-/** Volume per bin dm³: (RackWidth/LocationsPerLevel) × RackDepth × (RackHeight/TotalLevels) / 1000, 2 decimals. */
-function volumePerBinForLevelDm3(
-  width_cm: number,
-  depth_cm: number,
-  height_cm: number,
-  totalLevels: number,
-  locationsOnLevel: number
-): number {
-  if (totalLevels <= 0 || locationsOnLevel <= 0) return 0;
-  const binWidthCm = width_cm / locationsOnLevel;
-  const heightPerLevelCm = height_cm / totalLevels;
-  const volCm3 = binWidthCm * depth_cm * heightPerLevelCm;
-  return Number((volCm3 / 1000).toFixed(2));
+function cycleTemplateStorageType(current: StorageType | undefined): StorageType {
+  const currentType = normalizeStorageType(current);
+  const idx = TEMPLATE_STORAGE_TYPE_OPTIONS.findIndex((option) => option.value === currentType);
+  const nextIdx = idx >= 0 ? (idx + 1) % TEMPLATE_STORAGE_TYPE_OPTIONS.length : 0;
+  return TEMPLATE_STORAGE_TYPE_OPTIONS[nextIdx]?.value ?? "primary";
 }
 
 /** Volume per bin for one level when level heights sum exactly to rack height (from levelHeightsForRack). */
@@ -46,14 +37,11 @@ function volumePerBinForLevelHeightDm3(
   return Number((volCm3 / 1000).toFixed(2));
 }
 
-export type RackPreviewMode = "structure" | "names";
-
 /**
  * Industrial rack preview: blue vertical uprights (no top cap), orange/grey shelf beams
  * between levels only (no floor beam, no top beam). Last level open at top.
  * Per-bin: dynamic address (large bold), then W/H dimensions and Volume in smaller font; all centered.
  * When onBinClick is omitted, the preview is read-only (no pointer cursor, no click).
- * previewMode "structure" shows coordinates only (L1-C1); "names" shows generated or manual labels.
  */
 export function RackPreview({
   width_cm,
@@ -66,12 +54,11 @@ export function RackPreview({
   rowId,
   sectionStartIndex,
   binNamingType,
-  reserveBinKeys,
+  binTypeMap,
   color: _color,
   className = "",
   onBinClick,
   title: titleProp,
-  previewMode = "names",
   labelOptions,
   onLabelEdit,
 }: {
@@ -86,14 +73,12 @@ export function RackPreview({
   rowId: string;
   sectionStartIndex: number;
   binNamingType: "numeric" | "alpha";
-  reserveBinKeys: Set<string>;
+  binTypeMap: Record<string, StorageType>;
   color: string;
   className?: string;
   onBinClick?: (levelIndex: number, binIndex: number) => void;
   /** Optional title above the preview (default: "Podgląd regału — na żywo"). */
   title?: string;
-  /** "structure" = coordinates only (L1-C1); "names" = generated/manual labels. */
-  previewMode?: RackPreviewMode;
   /** When set, labels come from getRackTemplateLabel (same as createBinsForRack). */
   labelOptions?: RackTemplateLabelOptions | null;
   /** When set, cells in names view are clickable to edit label (manual or override). */
@@ -106,18 +91,23 @@ export function RackPreview({
   const pattern = (addressPattern || DEFAULT_ADDRESS_PATTERN).trim() || DEFAULT_ADDRESS_PATTERN;
   const rackIdForPreview = (rowId || "A").replace(/\./g, "") + "1";
   const levelHeights = levelHeightsForRack(height_cm, L);
-  const cells: { level: number; bin: number; label: string; isReserve: boolean; locationsOnLevel: number; volPerBin: number; levelHeightCm: number }[] = [];
+  const cells: { level: number; bin: number; label: string; storageType: StorageType; locationsOnLevel: number; volPerBin: number; levelHeightCm: number }[] = [];
   for (let lev = 0; lev < L; lev++) {
     const locs = Math.max(1, levelRows[lev].locations);
     const levelHeightCm = levelHeights[lev] ?? height_cm / L;
     const volPerBinLev = volumePerBinForLevelHeightDm3(width_cm, depth_cm, levelHeightCm, locs);
     for (let bin = 0; bin < locs; bin++) {
-      const structuralLabel = `L${lev + 1}-C${bin + 1}`;
-      const nameLabel = labelOptions
-        ? getRackTemplateLabel(lev, bin, levelRows, { ...labelOptions, rackId: rackIdForPreview })
-        : expandAddressPattern(pattern, rowId, sectionStartIndex, binNamingType, lev + 1, bin + 1);
-      const displayLabel = previewMode === "structure" ? structuralLabel : nameLabel;
-      cells.push({ level: lev, bin, label: displayLabel, isReserve: reserveBinKeys.has(cellKey(lev, bin)), locationsOnLevel: locs, volPerBin: volPerBinLev, levelHeightCm });
+      const nameLabel = generateLocationLabel({
+        levelIndex: lev,
+        segmentIndex: bin,
+        levelRows,
+        labelOptions: labelOptions ? { ...labelOptions, rackId: rackIdForPreview } : null,
+        addressPattern: pattern,
+        rowId,
+        sectionStartIndex,
+        binNamingType,
+      });
+      cells.push({ level: lev, bin, label: nameLabel, storageType: normalizeStorageType(binTypeMap[cellKey(lev, bin)]), locationsOnLevel: locs, volPerBin: volPerBinLev, levelHeightCm });
     }
   }
   const containerRef = useRef<HTMLDivElement>(null);
@@ -139,17 +129,24 @@ export function RackPreview({
   const viewBoxH = containerHeight;
   const contentW = viewBoxW - 2 * margin - 2 * beamW;
   const contentAreaH = viewBoxH - 2 * margin;
-  const levelHeight = contentAreaH / Math.max(1, L);
-  const cellH = levelHeight;
+  const totalLevelHeightCm = Math.max(1, levelHeights.reduce((sum, v) => sum + Math.max(1, v), 0));
   const ox = margin + beamW;
   const contentAreaY = margin;
   const pad = 2;
   const textPadding = 5;
-  const levelToY = (level: number) => contentAreaY + (L - 1 - level) * cellH + pad;
-  const cellInsetH = Math.max(0, cellH - pad * 2);
+  const levelPixelHeight = (level: number) => {
+    const levelHeightCm = Math.max(1, levelHeights[level] ?? 1);
+    return (levelHeightCm / totalLevelHeightCm) * contentAreaH;
+  };
+  const levelToY = (level: number) => {
+    let y = contentAreaY + pad;
+    for (let lev = L - 1; lev > level; lev--) y += levelPixelHeight(lev);
+    return y;
+  };
+  const cellInsetH = (level: number) => Math.max(0, levelPixelHeight(level) - pad * 2);
 
-  const floorY = levelToY(0) + cellInsetH;
-  const topLevelRowBottomY = levelToY(L - 1) + cellInsetH;
+  const floorY = levelToY(0) + cellInsetH(0);
+  const topLevelRowBottomY = levelToY(L - 1) + cellInsetH(L - 1);
   const uprightTopY = topLevelRowBottomY;
   const uprightHeight = floorY - topLevelRowBottomY;
   const internalShelfYs = Array.from({ length: L - 1 }, (_, i) => levelToY(L - 2 - i));
@@ -186,6 +183,7 @@ export function RackPreview({
                   y2={y}
                   stroke={SHELF_ORANGE}
                   strokeWidth={1}
+                  strokeOpacity={0.45}
                   strokeLinecap="butt"
                 />
               ))}
@@ -194,15 +192,14 @@ export function RackPreview({
                 {levelRows.map((row, lev) => {
                   const locs = Math.max(1, row.locations);
                   if (locs <= 1) return null;
-                  const cellWLev = contentW / locs;
                   const yStart = levelToY(lev);
-                  const yEnd = yStart + cellInsetH;
+                  const yEnd = yStart + cellInsetH(lev);
                   return Array.from({ length: locs - 1 }, (_, i) => (
                     <line
                       key={`div-${lev}-${i}`}
-                      x1={ox + (i + 1) * cellWLev}
+                      x1={ox + ((i + 1) / locs) * contentW}
                       y1={yStart}
-                      x2={ox + (i + 1) * cellWLev}
+                      x2={ox + ((i + 1) / locs) * contentW}
                       y2={yEnd}
                       stroke={SHELF_GREY}
                       strokeWidth={1}
@@ -211,61 +208,70 @@ export function RackPreview({
                   ));
                 })}
                 {/* Bins: Line1 ID 16px bold, Line2/3 12px; 5px padding; flex-like vertical center; scale down to min 10px when narrow. */}
-                {cells.map(({ level, bin, label, isReserve, locationsOnLevel, volPerBin: cellVol, levelHeightCm }) => {
-                  const cellWLev = contentW / Math.max(1, locationsOnLevel);
-                  const x = ox + bin * cellWLev + pad;
+                {cells.map(({ level, bin, label, storageType, locationsOnLevel, volPerBin: cellVol, levelHeightCm }) => {
+                  const levelTotalWidthCm = Math.max(1, width_cm);
+                  const locationWidthsCm = Array.from({ length: Math.max(1, locationsOnLevel) }, () => levelTotalWidthCm / Math.max(1, locationsOnLevel));
+                  const totalWidthThisLevel = locationWidthsCm.reduce((sum, value) => sum + value, 0) || 1;
+                  const widthPct = (locationWidthsCm[bin] ?? 0) / totalWidthThisLevel;
+                  const offsetPct = locationWidthsCm.slice(0, bin).reduce((sum, value) => sum + value, 0) / totalWidthThisLevel;
+                  const cellWLev = contentW * widthPct;
+                  const x = ox + contentW * offsetPct + pad;
                   const y = levelToY(level);
                   const w = cellWLev - pad * 2;
-                  const h = cellInsetH;
-                  const fill = isReserve ? RESERVE_FILL : "white";
-                  const stroke = isReserve ? RESERVE_STROKE : CELL_STROKE;
-                  const cx = x + w / 2;
+                  const h = cellInsetH(level);
+                  const style = getStorageTypeStyle(storageType);
+                  const tunedTypeStyle = storageType === "reserve"
+                    ? { bg: "#fef9c3", border: "#fde68a" } // light yellow
+                    : storageType === "damaged"
+                      ? { bg: "#fee2e2", border: "#fecaca" } // light red
+                      : { bg: "#eff6ff", border: "#bfdbfe" }; // primary light blue
+                  const fill = tunedTypeStyle.bg;
+                  const stroke = tunedTypeStyle.border;
                   const volStr = `${Number(cellVol).toFixed(2)} dm³`;
-                  const title = `${label}\nW:${width_cm} × H:${Math.round(levelHeightCm)}\n${volStr}`;
+                  const locationWidthCm = locationWidthsCm[bin] ?? 0;
+                  const title = `${label}\nSZ:${Math.round(locationWidthCm)} × GŁ:${Math.round(depth_cm)} × WYS:${Math.round(levelHeightCm)}\n${volStr}`;
                   const textColor = "#0f172a";
                   const subColor = "#334155";
-                  const line1H = 16;
-                  const line2H = 12;
-                  const line3H = 12;
-                  const gap = 4;
-                  const blockH = line1H + gap + line2H + gap + line3H;
-                  const contentH = Math.max(0, h - 2 * textPadding);
-                  const scaleByHeight = contentH >= blockH ? 1 : Math.max(0, contentH / blockH);
-                  const minWidthForFullFont = 56;
-                  const scaleByWidth = w >= minWidthForFullFont ? 1 : Math.max(0, w / minWidthForFullFont);
-                  const scale = Math.min(scaleByHeight, scaleByWidth);
-                  const line1Px = line1H * scale;
-                  const line2Px = line2H * scale;
-                  const line3Px = line3H * scale;
-                  const gapPx = gap * scale;
-                  const totalBlock = line1Px + gapPx + line2Px + gapPx + line3Px;
-                  const startOff = (contentH - totalBlock) / 2;
-                  const line1Y = y + textPadding + startOff + line1Px;
-                  const line2Y = line1Y + gapPx + line2Px;
-                  const line3Y = line2Y + gapPx + line3Px;
-                  const minFontPx = 10;
-                  const fontSize1 = Math.max(minFontPx, 16 * scale);
-                  const fontSize2 = Math.max(minFontPx, 12 * scale);
+                  const isCompact = w < 90 || h < 52;
+                  const dimsLine = `SZ ${Math.round(locationWidthCm)} · GŁ ${Math.round(depth_cm)} · WYS ${Math.round(levelHeightCm)}`;
+                  const labelText = label.length > 14 ? `${label.slice(0, 12)}…` : label;
+                  const cx = x + w / 2;
+                  const cy = y + h / 2;
+                  const nameFont = w < 120 ? 16 : 20;
+                  const dimsFont = 12;
+                  const capFont = 11;
+                  const lineGap = 4;
+                  const dimsOpacity = 0.7;
+                  const capOpacity = 0.58;
+                  const nameBaselineY = isCompact
+                    ? cy + nameFont * 0.35
+                    : cy - (dimsFont + capFont + lineGap * 2) / 2 + nameFont * 0.35;
+                  const dimsY = nameBaselineY + lineGap + dimsFont;
+                  const capY = dimsY + lineGap + capFont;
                   return (
                     <g
                       key={`${level}-${bin}`}
                       onClick={() => {
-                        if (previewMode === "names" && onLabelEdit) onLabelEdit(level, bin, label);
+                        if (onLabelEdit) onLabelEdit(level, bin, label);
                         else onBinClick?.(level, bin);
                       }}
-                      style={{ cursor: (onLabelEdit && previewMode === "names") || onBinClick ? "pointer" : undefined }}
+                      style={{ cursor: onLabelEdit || onBinClick ? "pointer" : undefined }}
                     >
                       <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={1} rx={2} />
                       <title>{title}</title>
-                      <text x={cx} y={line1Y} textAnchor="middle" fontSize={fontSize1} fill={textColor} fontFamily="system-ui, sans-serif" fontWeight="700">
-                        {label.length > 14 ? label.slice(0, 12) + "…" : label}
+                      <text x={cx} y={nameBaselineY} textAnchor="middle" fontSize={nameFont} fill={textColor} fontFamily="system-ui, sans-serif" fontWeight="700">
+                        {labelText}
                       </text>
-                      <text x={cx} y={line2Y} textAnchor="middle" fontSize={fontSize2} fill={subColor} fontFamily="system-ui, sans-serif">
-                        W×H: {width_cm}×{Math.round(levelHeightCm)}
-                      </text>
-                      <text x={cx} y={line3Y} textAnchor="middle" fontSize={fontSize2} fill={subColor} fontFamily="system-ui, sans-serif">
-                        {volStr}
-                      </text>
+                      {!isCompact && (
+                        <>
+                          <text x={cx} y={dimsY} textAnchor="middle" fontSize={dimsFont} fill={subColor} opacity={dimsOpacity} fontFamily="system-ui, sans-serif">
+                            {dimsLine}
+                          </text>
+                          <text x={cx} y={capY} textAnchor="middle" fontSize={capFont} fill={subColor} opacity={capOpacity} fontFamily="system-ui, sans-serif">
+                            {volStr}
+                          </text>
+                        </>
+                      )}
                     </g>
                   );
                 })}
@@ -297,8 +303,10 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
   const [height_cm, setHeightCm] = useState(200);
   const [levels, setLevels] = useState(4);
   const [locationsPerLevel, setLocationsPerLevel] = useState<number[]>([4]);
+  const [beamBetweenLevelsCm, setBeamBetweenLevelsCm] = useState<number[]>([8, 8, 8]);
   const [color, setColor] = useState(DEFAULT_COLORS[0]);
-  const [reserveBinKeys, setReserveBinKeys] = useState<Set<string>>(new Set());
+  const [rackType, setRackType] = useState<RackType>("warehouse");
+  const [binTypeMap, setBinTypeMap] = useState<Record<string, StorageType>>({});
   const [updateExistingRacks, setUpdateExistingRacks] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -316,7 +324,6 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
   const [manualLabels, setManualLabels] = useState<Record<string, string>>({});
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [allowOverrides, setAllowOverrides] = useState(false);
-  const [previewMode, setPreviewMode] = useState<RackPreviewMode>("names");
   const [levelMaxLoadKg, setLevelMaxLoadKg] = useState(500);
 
   useEffect(() => {
@@ -326,15 +333,22 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       setDepthCm(initialTemplate.depth_cm);
       setHeightCm(initialTemplate.height_cm);
       setLevels(initialTemplate.levels);
+      setRackType(initialTemplate.rack_type ?? "warehouse");
       if (Array.isArray(initialTemplate.levelConfig) && initialTemplate.levelConfig.length > 0) {
         setLocationsPerLevel(initialTemplate.levelConfig.map((row) => Math.max(1, row.locations)));
+        setBeamBetweenLevelsCm(
+          initialTemplate.levelConfig
+            .slice(0, Math.max(0, initialTemplate.levelConfig.length - 1))
+            .map((row) => Math.max(1, row.beamBelowCm ?? 8))
+        );
       } else {
         const B = Math.max(1, initialTemplate.bins_per_level ?? 4);
         setLocationsPerLevel(Array.from({ length: Math.max(1, initialTemplate.levels) }, () => B));
+        setBeamBetweenLevelsCm(Array.from({ length: Math.max(0, initialTemplate.levels - 1) }, () => 8));
       }
       setColor(initialTemplate.color);
       setLevelMaxLoadKg(initialTemplate.level_max_load_kg ?? 500);
-      setReserveBinKeys(new Set(initialTemplate.reserve_bin_keys ?? []));
+      setBinTypeMap(normalizeBinTypeMap(initialTemplate.bin_type_map, initialTemplate.reserve_bin_keys));
       const strat = initialTemplate.namingStrategy ?? "pattern";
       setNamingStrategy(strat as NamingStrategyId);
       setNamingOrientation(initialTemplate.namingOrientation ?? "column-first");
@@ -355,8 +369,10 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       setHeightCm(200);
       setLevels(4);
       setLocationsPerLevel([4]);
+      setBeamBetweenLevelsCm([8, 8, 8]);
       setColor(DEFAULT_COLORS[0]);
-      setReserveBinKeys(new Set());
+      setRackType("warehouse");
+      setBinTypeMap({});
       setNamingStrategy("pattern");
       setNamingOrientation("column-first");
       setNamingPattern(DEFAULT_ADDRESS_PATTERN);
@@ -372,20 +388,34 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     }
   }, [initialTemplate]);
 
+  useEffect(() => {
+    const targetLen = Math.max(0, levels - 1);
+    setBeamBetweenLevelsCm((prev) => {
+      if (prev.length === targetLen) return prev;
+      if (targetLen <= 0) return [];
+      if (prev.length > targetLen) return prev.slice(0, targetLen);
+      return [...prev, ...Array.from({ length: targetLen - prev.length }, () => 8)];
+    });
+  }, [levels]);
+
   const levelConfigForSave = useMemo((): LevelConfigItem[] => {
     const L = Math.max(1, Math.min(20, levels));
     const arr = locationsPerLevel.length >= L ? locationsPerLevel.slice(0, L) : [...locationsPerLevel, ...Array.from({ length: L - locationsPerLevel.length }, () => 1)];
-    return arr.map((loc, i) => ({ level: i + 1, locations: Math.max(1, Math.min(50, loc)) }));
-  }, [levels, locationsPerLevel]);
+    return arr.map((loc, i) => ({
+      level: i + 1,
+      locations: Math.max(1, Math.min(50, loc)),
+      ...(i < L - 1 ? { beamBelowCm: Math.max(1, Math.round(beamBetweenLevelsCm[i] ?? 8)) } : {}),
+    }));
+  }, [levels, locationsPerLevel, beamBetweenLevelsCm]);
 
   const isDirty = useMemo(() => {
-    if (!initialTemplate) return name.trim() !== "" || reserveBinKeys.size > 0;
+    if (!initialTemplate) return name.trim() !== "" || Object.keys(binTypeMap).length > 0;
     const t = initialTemplate;
     const same = t.name === name.trim()
       && t.width_cm === width_cm && t.depth_cm === depth_cm && t.height_cm === height_cm
       && t.levels === levels && t.color === color
-      && (t.reserve_bin_keys?.length ?? 0) === reserveBinKeys.size
-      && (t.reserve_bin_keys ?? []).every((k) => reserveBinKeys.has(k))
+      && (t.rack_type ?? "warehouse") === rackType
+      && JSON.stringify(normalizeBinTypeMap(t.bin_type_map, t.reserve_bin_keys)) === JSON.stringify(binTypeMap)
       && (t.namingStrategy ?? "pattern") === namingStrategy
       && (t.namingOrientation ?? "column-first") === namingOrientation
       && (t.namingPattern ?? t.addressPattern ?? DEFAULT_ADDRESS_PATTERN) === namingPattern
@@ -399,6 +429,11 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     if (t.levelConfig) {
       for (let i = 0; i < t.levelConfig.length; i++) {
         if ((locationsPerLevel[i] ?? 0) !== (t.levelConfig[i]?.locations ?? 0)) return true;
+        if (i < t.levelConfig.length - 1) {
+          const prevBeam = Math.max(1, Math.round(t.levelConfig[i]?.beamBelowCm ?? 8));
+          const nextBeam = Math.max(1, Math.round(beamBetweenLevelsCm[i] ?? 8));
+          if (prevBeam !== nextBeam) return true;
+        }
       }
     }
     const ovKeys = Object.keys(t.overrides ?? {});
@@ -406,7 +441,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     if (Object.keys(overrides).length !== ovKeys.length || ovKeys.some((k) => (t.overrides ?? {})[k] !== overrides[k])) return true;
     if (Object.keys(manualLabels).length !== manualKeys.length || manualKeys.some((k) => (t.manualLabels ?? {})[k] !== manualLabels[k])) return true;
     return false;
-  }, [initialTemplate, name, width_cm, depth_cm, height_cm, levels, color, reserveBinKeys, locationsPerLevel, namingStrategy, namingOrientation, namingPattern, rowId, sectionStartIndex, binNamingType, indexPadding, startIndex, overrides, manualLabels]);
+  }, [initialTemplate, name, width_cm, depth_cm, height_cm, levels, color, rackType, binTypeMap, locationsPerLevel, beamBetweenLevelsCm, namingStrategy, namingOrientation, namingPattern, rowId, sectionStartIndex, binNamingType, indexPadding, startIndex, overrides, manualLabels]);
 
   useEffect(() => {
     if (!isDirty || saving) return;
@@ -445,13 +480,14 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
       levelConfig: cfg,
       aisle_letter: rowIdVal,
       color,
+      rack_type: rackType,
       naming_pattern: `${rowIdVal}-{R}-{L}-{B}`,
       addressPattern: patternVal,
       rowId: rowIdVal,
       sectionStartIndex: Math.max(0, sectionStartIndex),
       autoSectionNumbering: autoSectionNumbering,
       binNamingType,
-      reserve_bin_keys: Array.from(reserveBinKeys),
+      bin_type_map: binTypeMap,
       namingStrategy,
       namingOrientation,
       namingPattern: patternVal,
@@ -539,6 +575,29 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus transition-shadow"
             />
           </div>
+          <div>
+            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Typ regału</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRackType("warehouse")}
+                className={`flex-1 px-3 py-2 text-sm font-semibold rounded-xl border transition-colors ${
+                  rackType === "warehouse" ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Magazyn
+              </button>
+              <button
+                type="button"
+                onClick={() => setRackType("store")}
+                className={`flex-1 px-3 py-2 text-sm font-semibold rounded-xl border transition-colors ${
+                  rackType === "store" ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Sklep
+              </button>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Szer. (cm)</label>
@@ -574,11 +633,13 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
           <div>
             <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Lokalizacje na poziom</label>
             <div className="space-y-2">
-              {Array.from({ length: Math.max(1, levels) }, (_, i) => {
-                const val = locationsPerLevel[i] ?? 1;
+              {Array.from({ length: Math.max(1, levels) }, (_, orderIdx) => {
+                const levelNumber = Math.max(1, levels) - orderIdx; // top -> bottom
+                const levelIndex = levelNumber - 1;
+                const val = locationsPerLevel[levelIndex] ?? 1;
                 return (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-slate-600 font-semibold w-20 shrink-0 text-[16px]">Poziom {i + 1}:</span>
+                  <div key={levelNumber} className="flex items-center gap-2">
+                    <span className="text-slate-600 font-semibold w-20 shrink-0 text-[16px]">Poziom {levelNumber}:</span>
                     <input
                       type="number"
                       min={1}
@@ -586,8 +647,8 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
                       value={val}
                       onChange={(e) => setLocationsPerLevel((prev) => {
                         const next = [...prev];
-                        while (next.length <= i) next.push(1);
-                        next[i] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                        while (next.length <= levelIndex) next.push(1);
+                        next[levelIndex] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
                         return next;
                       })}
                       className="flex-1 rounded-lg border border-slate-200 bg-slate-50 text-[#1E293B] px-2.5 py-1.5 text-[16px] input-focus"
@@ -598,6 +659,43 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
               })}
             </div>
           </div>
+          {levels > 1 && (
+            <div>
+              <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Traversy między poziomami (cm)</label>
+              <div className="space-y-2">
+                {Array.from({ length: Math.max(0, levels - 1) }, (_, orderIdx) => {
+                  // Attach beam to lower level; show top->bottom as: below top, below next, ...
+                  const lowerLevelNumber = (levels - 1) - orderIdx;
+                  const beamIndex = lowerLevelNumber - 1;
+                  const val = beamBetweenLevelsCm[beamIndex] ?? 8;
+                  return (
+                    <div key={`beam-${lowerLevelNumber}`} className="flex items-center gap-2">
+                      <span className="text-slate-600 font-semibold shrink-0 text-[16px] min-w-[170px]">
+                        Poziom {lowerLevelNumber}:
+                      </span>
+                      <span className="text-slate-500 text-[14px] shrink-0">Trawers nad:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={val}
+                        onChange={(e) =>
+                          setBeamBetweenLevelsCm((prev) => {
+                            const next = [...prev];
+                            while (next.length <= beamIndex) next.push(8);
+                            next[beamIndex] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                            return next;
+                          })
+                        }
+                        className="flex-1 rounded-lg border border-slate-200 bg-slate-50 text-[#1E293B] px-2.5 py-1.5 text-[16px] input-focus"
+                      />
+                      <span className="text-slate-400 text-[16px]">cm</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Obciążenie na poziom (kg)</label>
             <input
@@ -621,6 +719,21 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             </div>
           </div>
           <p className="text-slate-500 text-[14px]">Kliknij komórki w podglądzie, aby oznaczyć lokalizacje rezerwowe.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {TEMPLATE_STORAGE_TYPE_OPTIONS.map((option) => {
+              const style = getStorageTypeStyle(option.value);
+              return (
+                <span
+                  key={option.value}
+                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[12px]"
+                  style={{ backgroundColor: style.bg, borderColor: style.border, color: style.text }}
+                >
+                  <StorageTypeIcon storageType={option.value} size={12} />
+                  {option.label}
+                </span>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -710,7 +823,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
 
           {namingStrategy === "manual" && (
             <>
-              <p className="text-slate-600 text-[14px]">Kliknij komórki w widoku „Nazwy”, aby wpisać etykiety. Możesz też wkleić listę (jedna etykieta na linię).</p>
+              <p className="text-slate-600 text-[14px]">Kliknij komórki w podglądzie, aby wpisać etykiety. Możesz też wkleić listę (jedna etykieta na linię).</p>
               <button type="button" onClick={handlePasteList} className="rounded-lg border border-slate-300 bg-slate-100 text-slate-700 px-3 py-2 text-[14px] font-medium hover:bg-slate-200">
                 Wklej listę
               </button>
@@ -720,7 +833,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
           {namingStrategy !== "manual" && (
             <label className="flex items-center gap-2 text-slate-600 cursor-pointer text-[14px]">
               <input type="checkbox" checked={allowOverrides} onChange={(e) => setAllowOverrides(e.target.checked)} className="rounded" />
-              Nadpisz pojedyncze etykiety (kliknij komórkę w widoku Nazwy)
+              Nadpisz pojedyncze etykiety (kliknij komórkę w podglądzie)
             </label>
           )}
         </div>
@@ -758,11 +871,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
         </div>
         <div className="flex-1 min-w-0 flex flex-col p-6 bg-white overflow-hidden min-h-0">
           <div className="flex items-center gap-2 mb-2 shrink-0">
-            <span className="text-slate-600 text-sm font-semibold">Podgląd:</span>
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-              <button type="button" onClick={() => setPreviewMode("structure")} className={`px-3 py-1.5 text-sm font-medium ${previewMode === "structure" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>Struktura</button>
-              <button type="button" onClick={() => setPreviewMode("names")} className={`px-3 py-1.5 text-sm font-medium ${previewMode === "names" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>Nazwy</button>
-            </div>
+            <span className="text-slate-600 text-sm font-semibold">Podgląd (proporcje fizyczne)</span>
           </div>
           <RackPreview
             width_cm={width_cm}
@@ -775,17 +884,14 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             rowId={rowId.trim() || "A"}
             sectionStartIndex={sectionStartIndex}
             binNamingType={binNamingType}
-            reserveBinKeys={reserveBinKeys}
+            binTypeMap={binTypeMap}
             color={color}
-            previewMode={previewMode}
             labelOptions={labelOptionsForPreview}
             onLabelEdit={(namingStrategy === "manual" || allowOverrides) ? handleLabelEdit : undefined}
-            onBinClick={(levelIndex, binIndex) => setReserveBinKeys((prev) => {
+            onBinClick={(levelIndex, binIndex) => setBinTypeMap((prev) => {
               const key = cellKey(levelIndex, binIndex);
-              const next = new Set(prev);
-              if (next.has(key)) next.delete(key);
-              else next.add(key);
-              return next;
+              const current = normalizeStorageType(prev[key]);
+              return { ...prev, [key]: cycleTemplateStorageType(current) };
             })}
             className="flex-1 min-h-0"
           />

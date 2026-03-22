@@ -4,6 +4,9 @@
 
 export const GRID_UNIT_CM = 10;
 
+export type StorageType = "primary" | "reserve" | "store" | "buffer" | "damaged";
+export type RackType = "warehouse" | "store";
+
 export type BinState = {
   id?: number;
   label: string;
@@ -24,8 +27,8 @@ export type BinState = {
   locationUUID?: string;
   /** Barcode string for label printing */
   barcode_data?: string;
-  /** Primary = picking; Reserve = overstock, excluded from picking list */
-  storage_type?: "primary" | "reserve";
+  /** Storage type for the slot. Unknown values should be normalized to primary. */
+  storage_type?: StorageType;
 };
 
 /** One assigned warehouse location for a product: position UUID and quantity at that spot. */
@@ -34,8 +37,8 @@ export type AssignedLocation = {
   quantity: number;
   /** Human-readable address (e.g. A1-4-1). Optional, set when saving from location picker. */
   locationAddress?: string;
-  /** When true, location is reserve (zapasowa). Optional, set when saving from picker. */
-  storageType?: "primary" | "reserve";
+  /** Storage type for the assigned position. Optional, set when saving from picker. */
+  storageType?: StorageType;
 };
 
 /** Product in warehouse inventory (for Magazyn view); location_id matches bin.label or bin.location_id */
@@ -98,7 +101,12 @@ export interface PathNode {
 export type InternalStructure = { levels: InternalLevel[] };
 
 /** Per-level configuration: level (1-based) and number of storage locations on that level. */
-export type LevelConfigItem = { level: number; locations: number };
+export type LevelConfigItem = {
+  level: number;
+  locations: number;
+  /** Beam (travers) directly below this level in cm. Top level has no beamBelowCm. */
+  beamBelowCm?: number;
+};
 
 /** Single storage position within a level (smallest addressable unit). */
 export type RackPosition = {
@@ -113,8 +121,8 @@ export type RackPosition = {
   max_depth_cm?: number;
   max_width_cm?: number;
   max_height_cm?: number;
-  /** primary = picking; reserve = zapasowa (overstock). */
-  storage_type?: "primary" | "reserve";
+  /** Storage type for the position. Unknown values should be normalized to primary. */
+  storage_type?: StorageType;
 };
 
 /** One level of a rack, containing multiple positions. */
@@ -125,6 +133,8 @@ export type RackLevel = {
 
 export type RackState = {
   id?: number;
+  uuid?: string;
+  rack_type: RackType;
   name?: string;
   x: number;
   y: number;
@@ -146,6 +156,11 @@ export type RackState = {
   /** Levels and positions with permanent locationUUIDs. When set, use for sub-location addressing; otherwise derived from bins. */
   rackLevels?: RackLevel[];
   internal_structure?: InternalStructure | null;
+  /** Unified resolved layout override used by editor/views when structure diverges from template/base. */
+  layoutVariant?: {
+    levels: LevelConfigItem[];
+    internal_structure?: InternalStructure | null;
+  } | null;
   total_capacity_dm3?: number;
   used_dm3?: number;
   /** Optional fill color for map display (hex) */
@@ -236,6 +251,8 @@ export type RowContainer = {
   rowPrefix?: string;
   /** Horizontal: slots stack left-to-right (x increases). Vertical: slots stack top-to-bottom (y increases). */
   orientation?: "horizontal" | "vertical";
+  /** Rack numbering and bin column letters: LTR = first slot → 1 / A…; RTL = reversed. Default LTR. */
+  direction?: "LTR" | "RTL";
   slots: EmptyRowSlot[];
 };
 
@@ -286,6 +303,8 @@ export type RackTemplate = {
   levels: number;
   bins_per_level: number;
   aisle_letter: string;
+  /** Optional source custom template id used to persist rack-template linkage. */
+  templateId?: string;
 };
 
 /** Catalog preset for drag-and-drop. Each has a distinct color for UI and saved racks. */
@@ -300,12 +319,15 @@ export type CatalogPresetId = (typeof CATALOG_PRESETS)[number]["id"];
 /** User-created template with color and optional naming pattern. {R}=Rack, {S}=Section, {L}=Level, {B}=Bin */
 export type CustomRackTemplate = {
   id: string;
+  /** Optional parent/base template id when this entry is a structural variant. */
+  templateId?: string;
   name: string;
   width_cm: number;
   depth_cm: number;
   height_cm: number;
   levels: number;
   bins_per_level: number;
+  rack_type?: RackType;
   /** When set, per-level locations (level 1-based). When absent, all levels use bins_per_level. */
   levelConfig?: LevelConfigItem[];
   /** Legacy; use naming_pattern. Default "A" when not set. */
@@ -325,7 +347,9 @@ export type CustomRackTemplate = {
   autoSectionNumbering?: boolean;
   /** Bin naming: numeric (1,2,3) or alpha (A,B,C). */
   binNamingType?: "numeric" | "alpha";
-  /** Bin keys "level_index-segment_index" to mark as reserve (overstock). Preserved when placing racks from this template. */
+  /** Per-cell storage type map keyed by "level_index-segment_index". */
+  bin_type_map?: Record<string, StorageType>;
+  /** Legacy reserve-only storage for backward compatibility when reading old templates. */
   reserve_bin_keys?: string[];
 
   /** Naming strategy: pattern (Row/Section/Bin/Level), rack-index, custom, or manual. When absent, treated as "pattern" with addressPattern. */

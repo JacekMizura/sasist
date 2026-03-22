@@ -10,7 +10,7 @@ import json
 import logging
 import re
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from ..models.wave import Wave
 from ..models.order import Order
@@ -21,6 +21,8 @@ from ..models.stock import Stock
 from ..models.stock_reservation import StockReservation
 from ..models.product import Product
 from ..models.location import Location
+from ..models.warehouse import Bin
+from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority, is_pickable
 
 logger = logging.getLogger(__name__)
 
@@ -141,17 +143,24 @@ def select_stock_by_pick_sequence(
     has no pick_sequence set.
     """
     stock_rows = (
-        db.query(Stock)
+        db.query(Stock, Location.pick_sequence, Bin.storage_type)
+        .join(Location, Stock.location_id == Location.id)
+        .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
         .filter(
             Stock.tenant_id == tenant_id,
             Stock.product_id == product_id,
             Stock.warehouse_id == warehouse_id,
             Stock.quantity >= need,
+            or_(
+                Bin.id.is_(None),
+                Bin.storage_type.is_(None),
+                ~func.lower(Bin.storage_type).in_(tuple(NON_PICKABLE_STORAGE_TYPE_ALIASES)),
+            ),
         )
         .all()
     )
-    candidates: list[Stock] = []
-    for row in stock_rows:
+    candidates: list[tuple[Stock, int | None, str | None]] = []
+    for row, pick_sequence, storage_type in stock_rows:
         reserved = (
             db.query(func.coalesce(func.sum(StockReservation.quantity), 0))
             .filter(
@@ -163,28 +172,28 @@ def select_stock_by_pick_sequence(
             .scalar()
         ) or 0
         if float(row.quantity) - float(reserved) >= need:
-            candidates.append(row)
+            candidates.append((row, pick_sequence, storage_type))
     if not candidates:
         return (None, current_pick_sequence)
-    location_ids = [c.location_id for c in candidates]
-    loc_map = {loc.id: loc for loc in db.query(Location).filter(Location.id.in_(location_ids)).all()}
-    # Sort by (effective_sequence, location_id) so we can pick "first >= current" or "first" on wrap.
-    def sort_key(stock_row: Stock) -> tuple[int, int]:
-        loc = loc_map.get(stock_row.location_id)
-        seq = _effective_pick_sequence(loc.pick_sequence if loc else None)
-        return (seq, stock_row.location_id)
-    candidates.sort(key=sort_key)
-    # First try: smallest sequence >= current_pick_sequence
-    for row in candidates:
-        loc = loc_map.get(row.location_id)
-        seq = _effective_pick_sequence(loc.pick_sequence if loc else None)
+    # Reserve is only for replenishment, never direct picking.
+    # Future feature may allow override per warehouse.
+    best_priority = min(get_storage_priority(item[2]) or EFFECTIVE_SEQ_UNSEQUENCED for item in candidates)
+    candidates = [item for item in candidates if (get_storage_priority(item[2]) or EFFECTIVE_SEQ_UNSEQUENCED) == best_priority]
+    candidates.sort(
+        key=lambda item: (
+            _effective_pick_sequence(item[1]),
+            item[0].location_id,
+        )
+    )
+    # First try: smallest sequence >= current_pick_sequence within the best pickable storage type.
+    for row, pick_sequence, _storage_type in candidates:
+        seq = _effective_pick_sequence(pick_sequence)
         if seq >= current_pick_sequence:
-            next_seq = (loc.pick_sequence if loc and loc.pick_sequence is not None else current_pick_sequence)
+            next_seq = pick_sequence if pick_sequence is not None else current_pick_sequence
             return (row, next_seq)
     # Wrap: take first (smallest sequence)
-    chosen = candidates[0]
-    loc = loc_map.get(chosen.location_id)
-    next_seq = (loc.pick_sequence if loc and loc.pick_sequence is not None else current_pick_sequence)
+    chosen, pick_sequence, _storage_type = candidates[0]
+    next_seq = pick_sequence if pick_sequence is not None else current_pick_sequence
     return (chosen, next_seq)
 
 
@@ -199,9 +208,15 @@ def _get_order_locations_sets(
 
     def first_location(p) -> str:
         locs = _parse_assigned_locations(getattr(p, "assigned_locations", None))
-        if not locs or not isinstance(locs[0], dict):
+        if not locs:
             return ""
-        return (locs[0].get("locationUUID") or locs[0].get("locationAddress") or locs[0].get("label") or "").strip()
+        for loc in locs:
+            if not isinstance(loc, dict):
+                continue
+            if not is_pickable(loc.get("storageType") or loc.get("storage_type")):
+                continue
+            return (loc.get("locationUUID") or loc.get("locationAddress") or loc.get("label") or "").strip()
+        return ""
 
     order_locs: dict[int, set[str]] = {}
     for oid in order_ids:

@@ -5,12 +5,15 @@ Used by simulation_engine and all strategy modules to avoid circular imports.
 
 from typing import Any
 
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ...models.order_item import OrderItem
 from ...models.inventory import Inventory
 from ...models.location import Location
+from ...models.warehouse import Bin
 from ...models.warehouse_graph import WarehouseNode
+from ...storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority
 
 from ..simulation.warehouse_graph_service import (
     get_location_to_node_map,
@@ -33,26 +36,39 @@ def resolve_product_to_location(
 ) -> dict[int, int]:
     """
     Resolve product_id -> location_id using inventory.
-    Prefer location with smallest pick_sequence when multiple exist.
+    Prefer pickable locations only. Priority: primary first, then store,
+    then location pick_sequence for path ordering.
     """
     inventory_rows = (
-        db.query(Inventory, Location.pick_sequence)
+        db.query(Inventory, Location.pick_sequence, Bin.storage_type)
         .join(Location, Inventory.location_id == Location.id)
+        .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
         .filter(
             Inventory.warehouse_id == warehouse_id,
             Inventory.tenant_id == tenant_id,
             Inventory.product_id.in_(product_ids),
             Inventory.quantity > 0,
+            or_(
+                Bin.id.is_(None),
+                Bin.storage_type.is_(None),
+                ~func.lower(Bin.storage_type).in_(tuple(NON_PICKABLE_STORAGE_TYPE_ALIASES)),
+            ),
         )
         .all()
     )
     EFFECTIVE_UNSEQUENCED = 999999
-    best: dict[int, tuple[int, int]] = {}
-    for inv, seq in inventory_rows:
+    best: dict[int, tuple[int, int, int]] = {}
+    for inv, seq, storage_type in inventory_rows:
+        priority = get_storage_priority(storage_type) or 999999
         effective = seq if seq is not None else EFFECTIVE_UNSEQUENCED
-        if inv.product_id not in best or effective < best[inv.product_id][1]:
-            best[inv.product_id] = (inv.location_id, effective)
-    return {p: loc_id for p, (loc_id, _) in best.items()}
+        candidate = (inv.location_id, priority, effective)
+        if inv.product_id not in best or (priority, effective, inv.location_id) < (
+            best[inv.product_id][1],
+            best[inv.product_id][2],
+            best[inv.product_id][0],
+        ):
+            best[inv.product_id] = candidate
+    return {p: loc_id for p, (loc_id, _, _) in best.items()}
 
 
 def get_order_pick_locations(

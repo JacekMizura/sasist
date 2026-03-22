@@ -2,7 +2,7 @@
 MODEL: WarehouseTemplate
 
 Stores rack templates (Twórca szablonu) per tenant: name, color, dimensions,
-rowId, sectionStartIndex, addressPattern, reserve_bin_keys (Rezerwa locations).
+rowId, sectionStartIndex, addressPattern, and per-bin storage types.
 """
 
 from sqlalchemy import Column, String, Integer, Float, Text, ForeignKey, Boolean
@@ -13,7 +13,7 @@ from .base import BaseModelMixin
 
 
 class WarehouseTemplate(Base, BaseModelMixin):
-    """Rack template: dimensions, naming, color, reserve bin keys. Scoped by tenant."""
+    """Rack template: dimensions, naming, color, and per-bin storage types. Scoped by tenant."""
     __tablename__ = "warehouse_templates"
 
     template_uid = Column(String(64), unique=True, nullable=False, index=True)
@@ -33,6 +33,7 @@ class WarehouseTemplate(Base, BaseModelMixin):
     naming_pattern = Column(String(255), nullable=True)
     bin_naming_type = Column(String(16), nullable=False, default="numeric")
     auto_section_numbering = Column(Boolean, nullable=False, default=False)
+    bin_type_map_json = Column(Text, nullable=True)
     reserve_bin_keys = Column(Text, nullable=True)
     """Maximum allowed load per rack level (kg). Used for level beam capacity visualization. Default 500."""
     level_max_load_kg = Column(Float, nullable=True, default=500)

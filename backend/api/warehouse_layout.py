@@ -34,6 +34,29 @@ def _pdf_response(pdf_bytes: bytes, filename: str) -> Response:
     )
 
 
+def _get_special_locations_payload(db: Session, warehouse_id: int) -> dict:
+    rows = (
+        db.query(Location)
+        .filter(
+            Location.warehouse_id == warehouse_id,
+            Location.location_type.in_(["PICK_START", "PACKING", "DOCK"]),
+        )
+        .all()
+    )
+    pick_start = None
+    packing = None
+    dock = None
+    for loc in rows:
+        d = {"id": loc.id, "x": float(loc.x or 0), "y": float(loc.y or 0)}
+        if loc.location_type == "PICK_START":
+            pick_start = d
+        elif loc.location_type == "PACKING":
+            packing = d
+        elif loc.location_type == "DOCK":
+            dock = d
+    return {"pick_start": pick_start, "packing": packing, "dock": dock}
+
+
 @router.get("/layout")
 def get_layout(
     tenant_id: int,
@@ -41,7 +64,10 @@ def get_layout(
     db: Session = Depends(get_db),
 ):
     service = WarehouseLayoutService(db)
-    return service.get_layout(tenant_id, warehouse_id)
+    return {
+        "layout": service.get_layout(tenant_id, warehouse_id),
+        "special_locations": _get_special_locations_payload(db, warehouse_id),
+    }
 
 
 logger = logging.getLogger(__name__)
@@ -127,26 +153,7 @@ def get_special_locations(
     db: Session = Depends(get_db),
 ):
     """Return pick_start, packing, and dock locations for the warehouse (id, x, y)."""
-    rows = (
-        db.query(Location)
-        .filter(
-            Location.warehouse_id == warehouse_id,
-            Location.location_type.in_(["PICK_START", "PACKING", "DOCK"]),
-        )
-        .all()
-    )
-    pick_start = None
-    packing = None
-    dock = None
-    for loc in rows:
-        d = {"id": loc.id, "x": float(loc.x or 0), "y": float(loc.y or 0)}
-        if loc.location_type == "PICK_START":
-            pick_start = d
-        elif loc.location_type == "PACKING":
-            packing = d
-        elif loc.location_type == "DOCK":
-            dock = d
-    return {"pick_start": pick_start, "packing": packing, "dock": dock}
+    return _get_special_locations_payload(db, warehouse_id)
 
 
 @router.patch("/special-location/{location_id}")

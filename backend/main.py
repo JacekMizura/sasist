@@ -10,6 +10,7 @@ from starlette.requests import Request
 from .database import Base, engine
 from .db.schema_upgrade import (
     ensure_locations_columns,
+    ensure_warehouse_layout_identity_columns,
     ensure_warehouse_layout_building_columns,
     ensure_products_physical_columns,
     ensure_products_stack_columns,
@@ -38,6 +39,7 @@ from .api.consolidation_rack import router as consolidation_rack_router
 from .api.warehouse_map import router as warehouse_map_router
 from .api.warehouse_layout import router as warehouse_layout_router
 from .api.warehouse_graph import router as warehouse_graph_router
+from .api.route import router as route_router
 from .api.warehouse_template import router as warehouse_template_router
 from .api.label_template import router as label_template_router
 from .api.label_sizes import router as label_sizes_router
@@ -82,7 +84,13 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     await record_error(request, exc)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    origin = request.headers.get("origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 # ==================================================
 # DB INIT
@@ -197,7 +205,7 @@ def _ensure_pick_columns():
 
 
 def _ensure_warehouse_template_level_max_load_kg():
-    """Add level_max_load_kg to warehouse_templates if missing (safe SQLite schema upgrade)."""
+    """Add template storage columns to warehouse_templates if missing (safe SQLite schema upgrade)."""
     from sqlalchemy import text
     try:
         with engine.begin() as conn:
@@ -206,6 +214,10 @@ def _ensure_warehouse_template_level_max_load_kg():
             if "level_max_load_kg" not in cols:
                 conn.execute(text(
                     "ALTER TABLE warehouse_templates ADD COLUMN level_max_load_kg FLOAT DEFAULT 500"
+                ))
+            if "bin_type_map_json" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE warehouse_templates ADD COLUMN bin_type_map_json TEXT"
                 ))
             conn.execute(text(
                 "UPDATE warehouse_templates SET level_max_load_kg = 500 WHERE level_max_load_kg IS NULL"
@@ -224,6 +236,7 @@ _ensure_warehouse_template_level_max_load_kg()
 def upgrade_schema():
     """Run schema upgrades so existing SQLite DBs gain new columns."""
     ensure_locations_columns(engine)
+    ensure_warehouse_layout_identity_columns(engine)
     ensure_warehouse_layout_building_columns(engine)
     ensure_products_physical_columns(engine)
     ensure_products_stack_columns(engine)
@@ -252,6 +265,7 @@ app.include_router(consolidation_rack_router)
 app.include_router(warehouse_map_router)
 app.include_router(warehouse_layout_router)
 app.include_router(warehouse_graph_router)
+app.include_router(route_router)
 app.include_router(warehouse_template_router)
 app.include_router(label_template_router)
 app.include_router(label_sizes_router)

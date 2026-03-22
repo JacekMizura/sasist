@@ -3,6 +3,7 @@ import api from "../../api/axios";
 import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
 import type { EditProductModalProps } from "../../components/warehouse/EditProductModal";
 import { TENANT_ID, safeQuantity, safeVolumeDm3 } from "./DesignerRackPlacement";
+import { getAllPositionsFromRacks } from "../../components/warehouse/warehouseUtils";
 
 export interface UseDesignerProductModalParams {
   mainView: "magazyn" | "layout";
@@ -16,7 +17,6 @@ export interface UseDesignerProductModalParams {
   safeVolumeDm3: (v: unknown) => number;
   binVolumeDm3: (bin: { volume_dm3?: number; label?: string; location_id?: string; locationUUID?: string }, rack: { width?: number; height?: number }) => number;
   binsToLevels: (bins: unknown[]) => unknown[];
-  getAllPositionsFromRacks: (racks: LayoutState["racks"]) => unknown[];
 }
 
 export function useDesignerProductModal(params: UseDesignerProductModalParams) {
@@ -32,7 +32,6 @@ export function useDesignerProductModal(params: UseDesignerProductModalParams) {
     safeVolumeDm3,
     binVolumeDm3,
     binsToLevels,
-    getAllPositionsFromRacks,
   } = params;
 
   const editProductModalProps = useMemo((): EditProductModalProps | null => {
@@ -42,7 +41,7 @@ export function useDesignerProductModal(params: UseDesignerProductModalParams) {
     return {
       product: editingProductId === "new" ? null : products.find((p) => p.id === editingProductId) ?? null,
       locationOptions: rackForModal.bins.map((b) => ({ value: b.label ?? b.location_id ?? "", label: b.label ?? b.location_id ?? "" })),
-      positionsForPicker: getAllPositionsFromRacks(layout.racks),
+      positionsForPicker: getAllPositionsFromRacks(layout.racks, layout),
       initialLocationId: undefined,
       getBinCapacityDm3: (locId) => {
         const b = rackForModal.bins.find((bin) => (bin.label ?? bin.location_id) === locId);
@@ -147,7 +146,6 @@ export function useDesignerProductModal(params: UseDesignerProductModalParams) {
     safeVolumeDm3,
     binVolumeDm3,
     binsToLevels,
-    getAllPositionsFromRacks,
   ]);
 
   return { editProductModalProps };

@@ -132,6 +132,7 @@ export function RowLayer(props: RowLayerProps) {
           return (
             <g
               key={`${rc.id}-${i}`}
+              data-row-empty-slot=""
               onDragOver={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -151,7 +152,7 @@ export function RowLayer(props: RowLayerProps) {
                   stampRackIntoSlot(rc.id, i, item);
                 }
               }}
-              style={{ cursor: isHoveredByCatalog ? "copy" : "pointer" }}
+              style={{ pointerEvents: "auto", cursor: isHoveredByCatalog ? "copy" : "pointer" }}
             >
               <rect
                 x={cellToPx(slot.x, cellPx) + 1}

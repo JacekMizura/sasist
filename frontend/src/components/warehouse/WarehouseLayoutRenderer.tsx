@@ -11,6 +11,8 @@ export type WarehouseLayoutRendererProps = WarehouseCanvasProps & {
   onRackClick?: (rackId: number | string) => void;
   /** Double click a rack (read mode): open rack detail. */
   onRackDoubleClick?: (rackId: number | string) => void;
+  /** Click map background (read mode): clear selection. */
+  onReadModeCanvasBackgroundClick?: (e: React.MouseEvent<SVGSVGElement>) => void;
 };
 
 export function WarehouseLayoutRenderer({
@@ -18,6 +20,7 @@ export function WarehouseLayoutRenderer({
   highlightedRackIds,
   onRackClick,
   onRackDoubleClick,
+  onReadModeCanvasBackgroundClick,
   ...canvasProps
 }: WarehouseLayoutRendererProps) {
   return (
@@ -27,6 +30,7 @@ export function WarehouseLayoutRenderer({
       highlightedRackIds={highlightedRackIds}
       onRackClick={onRackClick}
       onRackDoubleClick={onRackDoubleClick}
+      onReadModeCanvasBackgroundClick={onReadModeCanvasBackgroundClick}
     />
   );
 }

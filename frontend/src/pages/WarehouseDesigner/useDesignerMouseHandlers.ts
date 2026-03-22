@@ -13,7 +13,7 @@ import {
   snapRowPreviewToDistance,
   snapPosition,
 } from "./DesignerRackPlacement";
-import { getCellFromClientPosition, getWallFromClientPosition } from "./utils/designerMouseUtils";
+import { getCellFromClientPosition, getWallFromClientPosition, isCellInsideRack } from "./utils/designerMouseUtils";
 import type { CatalogItem } from "../../types/warehouse";
 import type { Dispatch, SetStateAction } from "react";
 import { usePanInteraction } from "./interactions/usePanInteraction";
@@ -61,16 +61,18 @@ export interface UseDesignerMouseHandlersState {
   draggingRowId: string | null;
   rowDragPreviewStart: { x: number; y: number } | null;
   rackDragPreviewPosition: { x: number; y: number } | null;
-  isLiveView: boolean;
+  /** True only when mouse handlers are used on the Magazyn live map (not Projektant Layoutu). */
+  magazynMapInteractions: boolean;
   mainView: "magazyn" | "layout";
   layoutMode: LayoutMode;
   selectedWarehouseId: number | null;
   selectedRackIds: Array<number | string>;
   selectedVisualIds: string[];
-  snapToGrid: boolean;
   aisleWidthCm: number;
   ghostW: number;
   ghostH: number;
+  /** When true, rack clicks add to route instead of selecting/dragging. */
+  routeMode?: boolean;
   copyPlacementMode?: boolean;
   copiedRack?: import("../../types/warehouse").RackState | null;
 }
@@ -103,7 +105,6 @@ export interface UseDesignerMouseHandlersSetters {
   setSelectedRowContainerId: Dispatch<SetStateAction<string | null>>;
   setSelectedRowContainerIds: Dispatch<SetStateAction<string[]>>;
   setDraggingRowId: Dispatch<SetStateAction<string | null>>;
-  setMainView: (v: "magazyn" | "layout") => void;
   setSelectedRackIdForSideView: Dispatch<SetStateAction<number | string | null>>;
   setSelectedLocationForProducts: Dispatch<SetStateAction<{ level_index: number; segment_index: number } | null>>;
   setProductSearchQuery: (v: string) => void;
@@ -115,6 +116,7 @@ export interface UseDesignerMouseHandlersSetters {
 export interface UseDesignerMouseHandlersCallbacks {
   stampRackAt: (cell: { x: number; y: number }) => void;
   addSpecialLocation: (cell: { x: number; y: number }, type: "PICK_START" | "PACKING" | "DOCK") => void;
+  addRackToRoute?: (rackId: number | string) => void;
   placeCopiedRack?: (cell: { x: number; y: number }) => void;
   onAddWallElement?: (wall: "north" | "south" | "east" | "west", position_cm: number, type: "door" | "gate", gateType?: "courier" | "supplier" | "both") => void;
   onRequestGatePlacement?: (wall: "north" | "south" | "east" | "west", position_cm: number) => void;
@@ -152,7 +154,7 @@ export interface UseDesignerMouseHandlersParams {
 
 export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams) {
   const { layout, refs, state, setters, callbacks, helpers, options } = params;
-  const { placeCopiedRack, onAddWallElement, onRequestGatePlacement } = callbacks;
+  const { placeCopiedRack, onAddWallElement, onRequestGatePlacement, addRackToRoute } = callbacks;
   const { canvasWidthPx = 0, canvasHeightPx = 0, gridUnitCm = 10, wallElementTool } = options;
   const {
     svgRef,
@@ -185,12 +187,11 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     draggingRowId,
     rowDragPreviewStart,
     rackDragPreviewPosition,
-    isLiveView,
+    magazynMapInteractions,
     mainView,
     selectedWarehouseId,
   selectedRackIds,
   selectedVisualIds,
-  snapToGrid,
   aisleWidthCm,
   ghostW,
   ghostH,
@@ -225,7 +226,6 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setSelectedRowContainerId,
     setSelectedRowContainerIds,
     setDraggingRowId,
-    setMainView,
     setSelectedRackIdForSideView,
     setSelectedLocationForProducts,
     setProductSearchQuery,
@@ -237,6 +237,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
   const { placeRowWithTemplateRef, placeEmptyRowRef, canMoveRowToRef, moveRowToPositionRef, moveRackWithinRowRef } = refs;
   const { snapRowPreviewToDistance: snapRowPreview } = helpers;
   const { panMode, aisleToolActive } = options;
+  const routeMode = state.routeMode ?? false;
 
   const getCellFromEvent = useCallback(
     (e: { clientX: number; clientY: number }) => {
@@ -278,7 +279,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     ghostH,
     selectedWarehouseId,
     layoutMode: state.layoutMode,
-    isLiveView,
+    magazynMapInteractions,
     refs: { lastMouseRef, svgRef, rafIdRef },
     getCellFromEvent,
     setGhostPosition,
@@ -349,9 +350,11 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     dragOffset,
     selectedRackIds,
     rackDragPreviewPosition,
+    magazynMapInteractions,
     mainView,
-    snapToGrid,
     aisleWidthCm,
+    routeMode,
+    addRackToRoute,
     refs: { moveRackWithinRowRef },
     helpers: {
       findSnapToRowPosition: helpers.findSnapToRowPosition,
@@ -370,7 +373,6 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setDragOffset,
     setRackDragPreviewPosition,
     setLayout,
-    setMainView,
     setSelectedRackIdForSideView,
     setSelectedLocationForProducts,
     setProductSearchQuery,
@@ -452,6 +454,14 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
         if (e.button === 0) clearAllSelections();
         return;
       }
+      if (routeMode && addRackToRoute) {
+        const rack = layout.racks.find((r) => isCellInsideRack(cell, r));
+        if (rack) {
+          const rid = rack.id ?? rack.rack_index;
+          addRackToRoute(rid);
+          return;
+        }
+      }
       if (placement.handleMouseDown(e, cell)) return;
       if (row.handleMouseDown(e, cell)) return;
       if (selection.handleAislePart(e, cell)) return;
@@ -459,7 +469,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       if (rack.handleMouseDown(e, cell)) return;
       selection.handleMarqueePart(e, cell);
     },
-    [getCellFromEvent, clearAllSelections, pan, placement, row, selection, visual, rack, wallElementTool, onAddWallElement, onRequestGatePlacement, layout.grid_cols, layout.grid_rows, canvasWidthPx, canvasHeightPx, gridUnitCm]
+    [getCellFromEvent, clearAllSelections, pan, placement, row, selection, visual, rack, wallElementTool, onAddWallElement, onRequestGatePlacement, layout.grid_cols, layout.grid_rows, layout.racks, canvasWidthPx, canvasHeightPx, gridUnitCm, routeMode, addRackToRoute]
   );
 
   const handleCanvasMouseUp = useCallback(() => {

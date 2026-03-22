@@ -14,6 +14,8 @@ export interface DesignerToolbarProps {
   setSelectedWarehouseId: (v: number | null) => void;
   warehouseName: string;
   lastSavedAt: number | null;
+  saveLayout: () => void;
+  saving: boolean;
   layout: LayoutState;
   setLayout: React.Dispatch<React.SetStateAction<LayoutState>>;
   /** Warehouse usage % (rack area / building area). When building not set, undefined. */
@@ -21,6 +23,8 @@ export interface DesignerToolbarProps {
   /** When provided, building modal is controlled by parent (e.g. so RackSidebar can open it). */
   showEditBuilding?: boolean;
   setShowEditBuilding?: (v: boolean) => void;
+  isRouteActive: boolean;
+  onToggleRoutePlanning: () => void;
 }
 
 export function DesignerToolbar({
@@ -32,11 +36,15 @@ export function DesignerToolbar({
   setSelectedWarehouseId,
   warehouseName,
   lastSavedAt,
+  saveLayout,
+  saving,
   layout,
   setLayout,
   warehouseUsagePct,
   showEditBuilding: showEditBuildingProp,
   setShowEditBuilding: setShowEditBuildingProp,
+  isRouteActive,
+  onToggleRoutePlanning,
 }: DesignerToolbarProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showEditBuildingLocal, setShowEditBuildingLocal] = useState(false);
@@ -93,6 +101,30 @@ export function DesignerToolbar({
         <span className={`text-xs font-mono px-2 py-1 rounded ${lastSavedAt != null ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
           {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
         </span>
+        {mainView === "layout" && (
+          <button
+            type="button"
+            onClick={onToggleRoutePlanning}
+            aria-pressed={isRouteActive}
+            className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors border-2 ${
+              isRouteActive
+                ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                : "bg-white text-blue-700 border-blue-600 hover:bg-blue-50"
+            }`}
+          >
+            {isRouteActive ? "Zakończ trasę" : "Planuj trasę"}
+          </button>
+        )}
+        {mainView === "layout" && (
+          <button
+            type="button"
+            onClick={saveLayout}
+            disabled={saving || selectedWarehouseId == null}
+            className="px-3 py-2 rounded-lg bg-cyan-600 text-white text-xs font-semibold hover:bg-cyan-500 disabled:opacity-50 transition-colors"
+          >
+            {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
+          </button>
+        )}
       </div>
       {showEditBuilding && (
         <EditBuildingModal

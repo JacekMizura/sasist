@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { RackState, LayoutState, CatalogItem, EmptyRowSlot } from "../../types/warehouse";
+import type { RackState, LayoutState, CatalogItem, EmptyRowSlot, RackType } from "../../types/warehouse";
 import type { RackTemplate } from "../../types/warehouse";
 import {
   snapPosition,
@@ -19,9 +19,10 @@ import {
   findSnapToRowPosition,
   reindexGeometricRow,
   binsToLevels,
+  generateRackUuid,
   ROW_LABEL_ADDRESS_PATTERN,
 } from "../../components/warehouse/warehouseUtils";
-import type { LevelConfigItem } from "../../types/warehouse";
+import type { LevelConfigItem, StorageType } from "../../types/warehouse";
 import type { Dispatch, SetStateAction } from "react";
 
 export interface UseDesignerRackPlacementParams {
@@ -29,6 +30,8 @@ export interface UseDesignerRackPlacementParams {
   template: RackTemplate;
   rackRotation: "vertical" | "horizontal";
   aisleWidthCm: number;
+  /** Manual default rack type used for placements that don't come from a custom template. */
+  rackType: RackType;
   setLayout: Dispatch<SetStateAction<LayoutState>>;
   setDraggingFromCatalog: Dispatch<SetStateAction<CatalogItem | null>>;
   setCatalogGhostPosition: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
@@ -41,6 +44,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     template,
     rackRotation,
     aisleWidthCm,
+    rackType,
     setLayout,
     setDraggingFromCatalog,
     setCatalogGhostPosition,
@@ -53,15 +57,17 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
   const stampRackAt = useCallback((cell: { x: number; y: number }) => {
     const w = ghostW;
     const h = ghostH;
-    const x = Math.max(0, Math.min(layout.grid_cols - w, cell.x));
-    const y = Math.max(0, Math.min(layout.grid_rows - h, cell.y));
+    const desired = { x: cell.x, y: cell.y };
+    const snapped = snapPosition(desired, w, h, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm);
+    const x = snapped.x;
+    const y = snapped.y;
     const volPerBin = volumePerBin(template.width_cm, template.depth_cm, template.height_cm, template.levels, template.bins_per_level);
     const prefix = (template.aisle_letter || "A").trim() || "A";
     setLayout((prev) => {
       const rackIndex = prev.racks.length + 1;
       const indexInRow = getNextIndexInRow(prev.racks, prefix);
       const rackLabel = `${prefix}${indexInRow}`;
-      const t = template as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha"; levelConfig?: LevelConfigItem[]; namingStrategy?: "pattern" | "rack-index" | "custom" | "manual"; namingOrientation?: "column-first" | "row-first"; namingPattern?: string; manualLabels?: Record<string, string>; overrides?: Record<string, string>; indexPadding?: number; startIndex?: number; naming_pattern?: string; reserve_bin_keys?: string[] };
+      const t = template as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha"; levelConfig?: LevelConfigItem[]; namingStrategy?: "pattern" | "rack-index" | "custom" | "manual"; namingOrientation?: "column-first" | "row-first"; namingPattern?: string; manualLabels?: Record<string, string>; overrides?: Record<string, string>; indexPadding?: number; startIndex?: number; naming_pattern?: string; bin_type_map?: Record<string, StorageType>; templateId?: string };
       const bins = createBinsForRack(
         template.aisle_letter,
         rackIndex,
@@ -73,7 +79,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         template.width_cm,
         template.depth_cm,
         template.height_cm,
-        t.reserve_bin_keys,
+        t.bin_type_map,
         t.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
         t.rowId ?? rackLabel,
         t.sectionStartIndex ?? 1,
@@ -92,6 +98,8 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         racks: [
           ...prev.racks,
           {
+            uuid: generateRackUuid(),
+            rack_type: rackType,
             x,
             y,
             width: w,
@@ -112,11 +120,12 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
             ...(t.addressPattern != null ? { addressPattern: t.addressPattern } : {}),
             ...(t.sectionStartIndex != null ? { sectionStartIndex: t.sectionStartIndex } : {}),
             ...(t.binNamingType != null ? { binNamingType: t.binNamingType } : {}),
+            ...(typeof t.templateId === "string" && t.templateId.trim() !== "" ? { templateId: t.templateId } : {}),
           } as RackState,
         ],
       };
     });
-  }, [template, rackRotation, layout.racks.length, layout.grid_cols, layout.grid_rows, ghostW, ghostH, setLayout]);
+  }, [template, rackRotation, layout.racks, layout.grid_cols, layout.grid_rows, ghostW, ghostH, aisleWidthCm, rackType, setLayout]);
 
   const stampRackIntoSlot = useCallback(
     (rowId: string, slotIndex: number, item: CatalogItem) => {
@@ -172,7 +181,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         spec.width_cm,
         spec.depth_cm,
         spec.height_cm,
-        spec.reserve_bin_keys,
+        spec.bin_type_map,
         spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
         rackLabel,
         spec.sectionStartIndex ?? 1,
@@ -188,6 +197,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       );
       const templateColor = item.type === "custom" ? item.template.color : spec.color;
       const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
+      const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : rackType;
       const { x: startX, y: startY } = getRowStart(row);
 
       const thickness = isVertical ? slot0.w : slot0.h;
@@ -221,6 +231,8 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       const rackWidthCells = isVertical ? reqD : reqW;
       const rackHeightCells = isVertical ? reqW : reqD;
       const newRack: RackState = {
+        uuid: generateRackUuid(),
+        rack_type: resolvedRackType,
         x: filledSlotWithPos?.x ?? slot0.x,
         y: filledSlotWithPos?.y ?? slot0.y,
         width: rackWidthCells,
@@ -264,7 +276,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       setCatalogGhostPosition(null);
       setCatalogHoveredSlot(null);
     },
-    [layout.racks, layout.row_containers, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]
+    [layout.racks, layout.row_containers, rackType, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]
   );
 
   const stampRackFromCatalogItem = useCallback((cell: { x: number; y: number }, item: CatalogItem, rowPrefix?: string) => {
@@ -302,7 +314,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       spec.width_cm,
       spec.depth_cm,
       spec.height_cm,
-      spec.reserve_bin_keys,
+      spec.bin_type_map,
       spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
       rackLabel,
       spec.sectionStartIndex ?? 1,
@@ -318,7 +330,10 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     );
     const templateColor = item.type === "custom" ? item.template.color : spec.color;
     const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
+    const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : rackType;
     const newRack: RackState = {
+      uuid: generateRackUuid(),
+      rack_type: resolvedRackType,
       x,
       y,
       width: w,
@@ -347,7 +362,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     setDraggingFromCatalog(null);
     setCatalogGhostPosition(null);
     setCatalogHoveredSlot(null);
-  }, [layout.racks, layout.row_containers, layout.grid_cols, layout.grid_rows, stampRackIntoSlot, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]);
+  }, [layout.racks, layout.row_containers, layout.grid_cols, layout.grid_rows, stampRackIntoSlot, rackType, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]);
 
   const getCatalogDropCell = useCallback(
     (cell: { x: number; y: number }, item: CatalogItem) => {

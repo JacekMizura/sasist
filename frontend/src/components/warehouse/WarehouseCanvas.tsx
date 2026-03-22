@@ -12,6 +12,8 @@ import { RowLayer } from "./WarehouseCanvas/RowLayer";
 import { VisualLayer } from "./WarehouseCanvas/VisualLayer";
 import { SelectionOverlay } from "./WarehouseCanvas/SelectionOverlay";
 import { WallElementsLayer } from "./WarehouseCanvas/WallElementsLayer";
+import { PathLayer } from "./WarehouseCanvas/PathLayer";
+import { RouteStopLayer } from "./WarehouseCanvas/RouteStopLayer";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 
@@ -92,8 +94,14 @@ export type WarehouseCanvasProps = {
   highlightedRackIds?: Set<string>;
   /** Optional rack click handler (primarily for read mode). */
   onRackClick?: (rackId: number | string) => void;
+  /** Optional rack click handler that should not prevent canvas click behavior. */
+  onRackClickPassthrough?: (rackId: number | string) => void;
+  /** When true, racks show route-planning hover affordance (pointer + highlight). Clicks use canvas mousedown, not passthrough. */
+  isRoutePlanningMode?: boolean;
   /** Optional rack double-click handler (primarily for read mode). */
   onRackDoubleClick?: (rackId: number | string) => void;
+  /** Read mode only: click on map background (not rack, visual zone overlay, etc.) — e.g. clear map selection. */
+  onReadModeCanvasBackgroundClick?: (e: React.MouseEvent<SVGSVGElement>) => void;
   /** Racks outside building boundary; drawn with red stroke. */
   outsideRackIds?: Array<number | string>;
   selectedRack: RackState | undefined;
@@ -148,16 +156,14 @@ export type WarehouseCanvasProps = {
   /** Cursor position (clientX, clientY) while dragging to draw a row; for RowPreviewOverlay. */
   rowPreviewCursor?: { x: number; y: number } | null;
   rowGapCm: number;
-  /** Optional: when provided, shown in toolbar and passed to snapPosition for magnetic aisle width */
+  /** Optional: when provided, „Siła przyciągania” in toolbar; passed to snapPosition for magnetic snapping (catalog drag). */
   aisleWidthCm?: number;
   setAisleWidthCm?: (v: number) => void;
   setRowGapCm?: (v: number) => void;
   showGrid: boolean;
   setShowGrid: (fn: (v: boolean) => boolean) => void;
-  snapToGrid: boolean;
-  setSnapToGrid: (fn: (v: boolean) => boolean) => void;
-  showRackLabels: boolean;
-  setShowRackLabels: (fn: (v: boolean) => boolean) => void;
+  showLabels: boolean;
+  setShowLabels: (fn: (v: boolean) => boolean) => void;
   selectedAisleIndex: number | null;
   draggingVisualType: VisualElementType | null;
   setDraggingVisualType: (t: VisualElementType | null) => void;
@@ -199,6 +205,40 @@ export type WarehouseCanvasProps = {
   draggingWallElementId?: string | null;
   dragPreviewPositionCm?: number | null;
   onStartWallElementDrag?: (el: WallElement) => void;
+  /** Optional: simple visual path in grid cells (v1). */
+  pathPoints?: { x: number; y: number }[] | null;
+  /** Optional: path split into segments (e.g. route stop-to-stop); when set, drawn as single neutral line when routeMode. */
+  pathSegments?: { x: number; y: number }[][] | null;
+  /** Optional numbered markers for path (used when not in route stop-first mode). */
+  pathMarkers?: { x: number; y: number; label: string }[] | null;
+  /** Stop-first route: stops to show as primary markers (numbered on racks). When set, path is secondary neutral line. */
+  routeStops?: { rackId: string; position: { x: number; y: number } }[] | null;
+  /** Toggle route visualization layers without changing route data. */
+  showRoute?: boolean;
+  /** Optional product quantity badge per highlighted rack. */
+  rackQuantities?: Map<string, number>;
+  /** Magazyn: highlight specific bins (location UUIDs) on the map. */
+  highlightedBinUUIDs?: Set<string>;
+  /** Magazyn: single bin highlight from sidebar location row hover (does not affect selection). */
+  hoveredLocationUUID?: string | null;
+  getRackDisplayId?: (r: RackState) => string;
+  /** Stop index highlighted from sidebar click (highlight marker + rack). */
+  highlightedStopIndex?: number | null;
+  /** Current step: this stop strong, previous dimmed, next normal. */
+  currentStopIndex?: number | null;
+  /** Step navigation: badges only on current + next rack (see RackLayer). */
+  routeStepBadges?: {
+    currentRackId: string;
+    nextRackId: string | null;
+    currentOrder: number;
+    nextOrder: number | null;
+  } | null;
+  /** Packing / route end in grid cells (optional path terminus). */
+  routeEndCell?: { x: number; y: number } | null;
+  /** Precomputed aisle-graph polyline for route mode (overrides point-to-point path). */
+  routeGraphPolyline?: { x: number; y: number }[] | null;
+  /** When false, hide START/PACK on the map (step-by-step navigation). */
+  showRouteEndpointMarkers?: boolean;
 };
 
 function WarehouseCanvasInner({
@@ -245,7 +285,10 @@ function WarehouseCanvasInner({
   collisionRackIds = null,
   highlightedRackIds,
   onRackClick,
+  onRackClickPassthrough,
+  isRoutePlanningMode = false,
   onRackDoubleClick,
+  onReadModeCanvasBackgroundClick,
   outsideRackIds,
   selectedRack,
   isMultiSelect,
@@ -288,10 +331,8 @@ function WarehouseCanvasInner({
   setRowGapCm,
   showGrid,
   setShowGrid,
-  snapToGrid,
-  setSnapToGrid,
-  showRackLabels,
-  setShowRackLabels,
+  showLabels,
+  setShowLabels,
   selectedAisleIndex,
   draggingVisualType,
   setDraggingVisualType,
@@ -319,8 +360,45 @@ function WarehouseCanvasInner({
   draggingWallElementId = null,
   dragPreviewPositionCm = null,
   onStartWallElementDrag,
+  pathPoints = null,
+  pathSegments = null,
+  pathMarkers = null,
+  routeStops = null,
+  showRoute = true,
+  rackQuantities,
+  highlightedBinUUIDs,
+  hoveredLocationUUID = null,
+  getRackDisplayId,
+  highlightedStopIndex = null,
+  currentStopIndex = null,
+  routeStepBadges = null,
+  routeEndCell = null,
+  routeGraphPolyline = null,
+  /** When false, START/PACK markers are hidden (step-by-step uses rack badges only). */
+  showRouteEndpointMarkers = true,
 }: WarehouseCanvasProps) {
   const isReadMode = mode === "read";
+  /** True when the event target is inside an interactive map layer (rack, zone overlay, wall, …). */
+  const readModeClickTargetIsInteractive = useCallback((target: EventTarget | null) => {
+    const el = target as Element | null;
+    if (!el || typeof el.closest !== "function") return false;
+    if (el.closest("[data-rack-interactive]")) return true;
+    if (el.closest("[data-special-location]")) return true;
+    if (el.closest('[data-layer="wall-elements"]')) return true;
+    if (el.closest("[data-row-empty-slot]")) return true;
+    if (el.closest("[data-visual-elements]")) return true;
+    if (el.closest("[data-visual-zone-cell]")) return true;
+    return false;
+  }, []);
+
+  const handleReadModeCanvasBackgroundClick = useCallback(
+    (e: React.MouseEvent<HTMLElement>) => {
+      if (!onReadModeCanvasBackgroundClick) return;
+      if (readModeClickTargetIsInteractive(e.target)) return;
+      onReadModeCanvasBackgroundClick(e as unknown as React.MouseEvent<SVGSVGElement>);
+    },
+    [onReadModeCanvasBackgroundClick, readModeClickTargetIsInteractive]
+  );
   type SpecialKey = "pick_start" | "packing" | "dock";
   const [draggingSpecial, setDraggingSpecial] = useState<{ key: SpecialKey; id: number } | null>(null);
   const [dragPreviewCell, setDragPreviewCell] = useState<{ x: number; y: number } | null>(null);
@@ -337,6 +415,25 @@ function WarehouseCanvasInner({
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
   }, [contextMenu]);
+
+  useEffect(() => {
+    if (!showRoute && !pathPoints && !pathSegments) return;
+    console.log("[WarehouseCanvas] route visibility", {
+      showRoute,
+      pathPointsCount: pathPoints?.length ?? 0,
+      pathSegmentsCount: pathSegments?.length ?? 0,
+      routeStopsCount: routeStops?.length ?? 0,
+      willRenderPathLayer: Boolean(
+        showRoute &&
+          specialLocations.pick_start &&
+          ((pathSegments && pathSegments.length > 0) ||
+            (pathPoints && pathPoints.length >= 2) ||
+            (routeGraphPolyline && routeGraphPolyline.length >= 2) ||
+            (routeStops && routeStops.length >= 2))
+      ),
+      willRenderRouteStopLayer: Boolean(showRoute && routeStops && routeStops.length > 0 && specialLocations.pick_start),
+    });
+  }, [showRoute, pathPoints, pathSegments, routeStops, routeGraphPolyline, specialLocations.pick_start, getRackDisplayId]);
 
   const handleSpecialPointerDown = useCallback(
     (e: React.PointerEvent, key: SpecialKey, id: number) => {
@@ -357,22 +454,22 @@ function WarehouseCanvasInner({
   );
 
   const handleCanvasMouseMove = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+    (e: React.MouseEvent<HTMLElement>) => {
       if (isReadMode) return;
       if (draggingSpecial && getCellFromEvent(e)) {
         setDragPreviewCell(getCellFromEvent(e)!);
         return;
       }
-      onMouseMove(e);
+      onMouseMove(e as unknown as React.MouseEvent<SVGSVGElement>);
     },
     [isReadMode, draggingSpecial, getCellFromEvent, onMouseMove]
   );
 
   const handleCanvasMouseDown = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+    (e: React.MouseEvent<HTMLElement>) => {
       if (isReadMode) return;
       if (draggingSpecial) return;
-      onMouseDown(e);
+      onMouseDown(e as unknown as React.MouseEvent<SVGSVGElement>);
     },
     [isReadMode, draggingSpecial, onMouseDown]
   );
@@ -402,21 +499,30 @@ function WarehouseCanvasInner({
     const pw = rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).width_cm) : defaultRowSlotW;
     const ph = rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).depth_cm) : defaultRowSlotH;
     const gapCells = cmToCells(rowGapCm);
-    const stepW = pw + gapCells;
-    const stepH = ph + gapCells;
     const isHorizontal = Math.abs(rowDrawEnd.x - rowDrawStart.x) >= Math.abs(rowDrawEnd.y - rowDrawStart.y);
+    const orientedW = isHorizontal ? pw : ph;
+    const orientedH = isHorizontal ? ph : pw;
+    const stepX = orientedW + gapCells;
+    const stepY = orientedH + gapCells;
     if (isHorizontal) {
       const x0 = Math.min(rowDrawStart.x, rowDrawEnd.x);
       const x1 = Math.max(rowDrawStart.x, rowDrawEnd.x);
       const span = x1 - x0;
-      const count = stepW > 0 ? Math.max(1, Math.floor(span / stepW)) : 1;
-      return Array.from({ length: count }, (_, i) => ({ x: x0 + i * stepW, y: rowDrawStart.y }));
+      const count = stepX > 0 ? Math.max(1, Math.floor(span / stepX)) : 1;
+      return Array.from({ length: count }, (_, i) => ({ x: x0 + i * stepX, y: rowDrawStart.y }));
     }
     const y0 = Math.min(rowDrawStart.y, rowDrawEnd.y);
     const y1 = Math.max(rowDrawStart.y, rowDrawEnd.y);
     const span = y1 - y0;
-    const count = stepH > 0 ? Math.max(1, Math.floor(span / stepH)) : 1;
-    return Array.from({ length: count }, (_, i) => ({ x: rowDrawStart.x, y: y0 + i * stepH }));
+    console.assert(stepY >= orientedH, "[row-ghost] vertical stepY is smaller than ghostH", {
+      stepY,
+      ghostH: orientedH,
+      gapCells,
+      pw,
+      ph,
+    });
+    const count = stepY > 0 ? Math.max(1, Math.floor(span / stepY)) : 1;
+    return Array.from({ length: count }, (_, i) => ({ x: rowDrawStart.x, y: y0 + i * stepY }));
   })();
   const rowGhostSpec = rowToolTemplate ? getCatalogItemSpec(rowToolTemplate) : null;
   const rowGhostPw = rowGhostSpec ? cmToCells(rowGhostSpec.width_cm) : defaultRowSlotW;
@@ -437,7 +543,7 @@ function WarehouseCanvasInner({
     rowPreviewCursor != null;
   const [hoveredRackId, setHoveredRackId] = React.useState<number | string | null>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
-  const [_viewportSize, setViewportSize] = React.useState<{ w: number; h: number } | null>(null);
+  const [viewportSize, setViewportSize] = React.useState<{ w: number; h: number } | null>(null);
   const [enableTransition, setEnableTransition] = React.useState(false);
 
   React.useLayoutEffect(() => {
@@ -451,6 +557,49 @@ function WarehouseCanvasInner({
     return () => ro.disconnect();
   }, []);
 
+  /** Fit full grid in viewport; user `zoom` multiplies on top (wheel / toolbar). */
+  const baseFitScale =
+    viewportSize != null &&
+    viewportSize.w > 0 &&
+    viewportSize.h > 0 &&
+    width > 0 &&
+    height > 0
+      ? Math.min(viewportSize.w / width, viewportSize.h / height)
+      : 1;
+  const displayScale = baseFitScale * zoom;
+  const scaledLayoutW = width * displayScale;
+  const scaledLayoutH = height * displayScale;
+
+  React.useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const cw = viewportSize?.w ?? 0;
+    const ch = viewportSize?.h ?? 0;
+    const base =
+      cw > 0 && ch > 0 && width > 0 && height > 0 ? Math.min(cw / width, ch / height) : 0;
+    console.log("[WarehouseCanvas][dimensions]", {
+      containerCssPx: { w: cw, h: ch },
+      gridLogicalPx: { w: width, h: height },
+      baseFitScale: base > 0 ? base : null,
+      userZoom: zoom,
+      displayScale: base > 0 ? base * zoom : null,
+      scrollWrapperCssPx:
+        base > 0 ? { w: width * base * zoom, h: height * base * zoom } : null,
+    });
+  }, [viewportSize, width, height, zoom]);
+
+  /** Ctrl/⌘ + wheel → zoom only (non-passive so preventDefault works). Plain wheel uses native scroll on the viewport. */
+  React.useLayoutEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z + (e.deltaY > 0 ? -0.1 : 0.1))));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [setZoom, loading, selectedWarehouseId]);
+
   const fitToContent = React.useCallback(() => {
     const racks = layout.racks ?? [];
     if (racks.length === 0) return;
@@ -458,7 +607,9 @@ function WarehouseCanvasInner({
     if (!el) return;
     const canvasWidth = el.clientWidth;
     const canvasHeight = el.clientHeight;
-    if (canvasWidth <= 0 || canvasHeight <= 0) return;
+    if (canvasWidth <= 0 || canvasHeight <= 0 || width <= 0 || height <= 0) return;
+
+    const baseFit = Math.min(canvasWidth / width, canvasHeight / height);
 
     const minX = Math.min(...racks.map((r) => r.x));
     const minY = Math.min(...racks.map((r) => r.y));
@@ -470,39 +621,45 @@ function WarehouseCanvasInner({
     const paddedWidth = layoutWidth * 1.3;
     const paddedHeight = layoutHeight * 1.3;
 
-    const zoomX = paddedWidth > 0 ? canvasWidth / paddedWidth : 1;
-    const zoomY = paddedHeight > 0 ? canvasHeight / paddedHeight : 1;
+    const zoomX = paddedWidth > 0 ? canvasWidth / (paddedWidth * baseFit) : 1;
+    const zoomY = paddedHeight > 0 ? canvasHeight / (paddedHeight * baseFit) : 1;
     let newZoom = Math.min(zoomX, zoomY);
     newZoom = Math.max(FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, newZoom));
 
     const minXpx = minX * cellPx;
     const minYpx = minY * cellPx;
-    const offsetX = (canvasWidth - layoutWidth * newZoom) / 2 - minXpx * newZoom;
-    const offsetY = 60 - minYpx * newZoom;
+    const display = baseFit * newZoom;
+    const offsetX = -minXpx * display;
+    const offsetY = -minYpx * display;
 
     setEnableTransition(true);
     setZoom(() => newZoom);
     setPan(() => ({ x: offsetX, y: offsetY }));
     setTimeout(() => setEnableTransition(false), VIEWPORT_TRANSITION_MS);
-  }, [layout.racks, cellPx, setZoom, setPan]);
+  }, [layout.racks, cellPx, width, height, setZoom, setPan]);
 
   const gridOpacity = React.useMemo(() => {
-    const minor = zoom > 1.5 ? 0.02 * 0.8 : 0.02;
-    const major = zoom < 0.5 ? Math.min(1, 0.05 * 1.1) : 0.05;
+    const z = displayScale;
+    const minor = z > 1.5 ? 0.02 * 0.8 : 0.02;
+    const major = z < 0.5 ? Math.min(1, 0.05 * 1.1) : 0.05;
     const strong = 0.08;
     return {
       minor: `rgba(60,90,110,${minor})`,
       major: `rgba(60,90,110,${major})`,
       strong: `rgba(60,90,110,${strong})`,
     };
-  }, [zoom]);
+  }, [displayScale]);
 
   return (
-    <main ref={canvasContainerRef} className="flex-1 min-w-0 flex flex-col overflow-hidden" style={{ backgroundColor: colors.background }}>
+    <main
+      ref={canvasContainerRef}
+      className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden pl-4 pt-4"
+      style={{ backgroundColor: colors.background, ...(isLiveView ? { overscrollBehavior: "contain" as const } : {}) }}
+    >
       {selectedWarehouseId == null ? (
-        <div className="flex items-center justify-center flex-1" style={{ color: colors.textSecondary }}>Wybierz magazyn lub utwórz nowy.</div>
+        <div className="flex flex-1 items-start justify-start p-3" style={{ color: colors.textSecondary }}>Wybierz magazyn lub utwórz nowy.</div>
       ) : loading ? (
-        <div className="flex items-center justify-center flex-1" style={{ color: colors.textSecondary }}>Ładowanie…</div>
+        <div className="flex flex-1 items-start justify-start p-3" style={{ color: colors.textSecondary }}>Ładowanie…</div>
       ) : (
         <>
           {contextMenu && onDeleteSpecialLocation && (
@@ -525,7 +682,7 @@ function WarehouseCanvasInner({
             </div>
           )}
           <div
-            className="shrink-0 flex items-center gap-3 px-3"
+            className="flex min-w-0 shrink-0 items-center gap-3 overflow-x-auto px-3"
             style={{
               background: "#ffffff",
               borderBottom: "1px solid #e5e7eb",
@@ -537,14 +694,18 @@ function WarehouseCanvasInner({
               <button type="button" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.25))} className="px-2 py-1 rounded bg-[#f3f4f6] text-sm font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }}>+</button>
               <span className="text-xs font-mono w-10 min-w-0" style={{ color: colors.textSecondary }}>{Math.round(zoom * 100)}%</span>
               <button type="button" onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.25))} className="px-2 py-1 rounded bg-[#f3f4f6] text-sm font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }}>−</button>
-              <button type="button" onClick={fitToContent} className="px-2 py-1 rounded bg-[#f3f4f6] text-xs font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }} title="Dopasuj widok do zawartości">Dopasuj</button>
+              {!isLiveView && (
+                <button type="button" onClick={fitToContent} className="px-2 py-1 rounded bg-[#f3f4f6] text-xs font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }} title="Dopasuj widok do zawartości">Dopasuj</button>
+              )}
             </div>
             <span className="text-[#e5e7eb]" aria-hidden>|</span>
             {!isLiveView && (
-              <div className="flex items-center gap-1.5">
-                <button type="button" onClick={() => setAisleToolActive((a) => !a)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${aisleToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`}>Alejka</button>
+              <div
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-slate-50/90 px-1.5 py-0.5"
+                role="group"
+                aria-label="Narzędzia rysowania i lokalizacji"
+              >
                 <button type="button" onClick={() => { const next = !rowToolActive; if (next) setRowToolTemplate?.(null); setRowToolActive((a) => !a); }} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${rowToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Narysuj rząd pustych slotów (bez szablonu). Później przeciągnij szablon do slotu.">Rysuj Rząd</button>
-                <button type="button" onClick={() => setSnapToGrid((g) => !g)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${snapToGrid ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Przyciągnij do siatki">Przyciągnij do siatki</button>
                 {setLayoutMode && (
                   <>
                     <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_START ? "bg-[#dcfce7] text-[#166534]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Punkt startowy kompletacji">Punkt startowy</button>
@@ -553,16 +714,56 @@ function WarehouseCanvasInner({
                 )}
               </div>
             )}
+            {!isLiveView && (
+              <>
+                <span className="text-[#e5e7eb]" aria-hidden>|</span>
+                <div className="flex items-center gap-2 shrink-0" role="group" aria-label="Elementy pomocnicze">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500 whitespace-nowrap">Elementy pomocnicze</span>
+                  <div className="flex items-center gap-1.5 rounded-lg border border-slate-200/70 bg-slate-50/70 px-1.5 py-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setAisleToolActive((a) => !a)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${aisleToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`}
+                      title="Strefa to element wizualny – nie wpływa na routing ani logistykę"
+                    >
+                      Rysuj strefę
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
             <span className="text-[#e5e7eb]" aria-hidden>|</span>
             <div className="flex items-center gap-1.5">
               <button type="button" onClick={() => setShowGrid((g) => !g)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${showGrid ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Widoczna siatka">Widoczna siatka</button>
-              <button type="button" onClick={() => setShowRackLabels((v) => !v)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${showRackLabels ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Nazwy regałów i etykiety elementów">Pokaż etykiety</button>
+              <button type="button" onClick={() => setShowLabels((v) => !v)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${showLabels ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Nazwy regałów i etykiety elementów">Pokaż etykiety</button>
             </div>
             {rowToolActive && rowGhostPositions.length > 0 && (
               <span className="text-xs font-mono" style={{ color: colors.textSecondary }}>→ {rowGhostPositions.length} {rowToolTemplate ? "regałów" : "slotów"}</span>
             )}
             {selectedRowContainerId && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <label className="flex items-center gap-1 text-[10px] font-medium text-slate-600">
+                  Kierunek liczenia
+                  <select
+                    className="max-w-[148px] rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-800"
+                    aria-label="Kierunek liczenia regałów w rzędzie"
+                    value={
+                      (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId)?.direction ?? "LTR"
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value as "LTR" | "RTL";
+                      setLayout((prev) => ({
+                        ...prev,
+                        row_containers: (prev.row_containers ?? []).map((rc) =>
+                          rc.id === selectedRowContainerId ? { ...rc, direction: v } : rc
+                        ),
+                      }));
+                    }}
+                  >
+                    <option value="LTR">Lewo → prawo</option>
+                    <option value="RTL">Prawo → lewo</option>
+                  </select>
+                </label>
                 {onStartRowDrag && (
                   <button
                     type="button"
@@ -600,36 +801,31 @@ function WarehouseCanvasInner({
                 )}
               </div>
             )}
-            {rowToolActive && setRowGapCm && (
-              <span className="flex items-center gap-1.5">
-                <label className="text-[10px]" style={{ color: colors.textSecondary }}>Odstęp (cm):</label>
-                <input type="number" min={0} step={5} value={rowGapCm} onChange={(e) => setRowGapCm(Number(e.target.value) || 0)} className="w-14 rounded-md border border-slate-200/80 bg-white px-1.5 py-0.5 text-xs" style={{ color: colors.textPrimary }} />
-              </span>
-            )}
             {!isLiveView && setAisleWidthCm != null && (
               <span className="flex items-center gap-1.5">
-                <label className="text-[10px]" style={{ color: colors.textSecondary }}>Szer. alejki (cm):</label>
-                <input type="number" min={50} step={10} value={aisleWidthCm ?? 250} onChange={(e) => setAisleWidthCm(Number(e.target.value) || 250)} className="w-16 rounded-md border border-slate-200/80 bg-white px-1.5 py-0.5 text-xs" style={{ color: colors.textPrimary }} title="Odległość przyciągania (magnetic edges)" />
+                <label className="text-[10px]" style={{ color: colors.textSecondary }}>Siła przyciągania (cm):</label>
+                <input type="number" min={50} step={10} value={aisleWidthCm ?? 250} onChange={(e) => setAisleWidthCm(Number(e.target.value) || 250)} className="w-16 rounded-md border border-slate-200/80 bg-white px-1.5 py-0.5 text-xs" style={{ color: colors.textPrimary }} title="Odległość magnetycznego przyciągania przy przeciąganiu z katalogu" />
               </span>
             )}
           </div>
           <div
             ref={viewportRef}
-            className="flex-1 min-h-0 overflow-auto relative"
+            className="relative m-0 min-h-0 min-w-0 max-w-full flex-1 basis-0 overflow-auto p-0"
             style={{
-              margin: "16px",
               backgroundColor: "#ffffff",
               border: "1px solid #e5e7eb",
               borderRadius: "12px",
-              overflow: "hidden",
-              cursor: draggingFromCatalog ? "copy" : draggingRowId ? "grabbing" : rowToolActive ? "crosshair" : rowToolTemplate ? "cell" : "default",
+              overscrollBehavior: "contain",
+              cursor: draggingFromCatalog ? "copy" : draggingRowId ? "grabbing" : rowToolActive || aisleToolActive ? "crosshair" : rowToolTemplate ? "cell" : "default",
             }}
             tabIndex={0}
             role="application"
             aria-label="Kanwa magazynu"
+            title="Ctrl lub ⌘ + kółko myszy: zoom • kółko: przewijanie"
             onWheel={(e) => {
-              e.preventDefault();
-              setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z + (e.deltaY > 0 ? -0.1 : 0.1))));
+              if (import.meta.env.DEV && !e.ctrlKey && !e.metaKey) {
+                console.log("wheel");
+              }
             }}
             onDragOver={(e) => {
               e.preventDefault();
@@ -652,9 +848,7 @@ function WarehouseCanvasInner({
                     const spec = getCatalogItemSpec(draggingFromCatalog);
                     const pw = cmToCells(spec.width_cm);
                     const ph = cmToCells(spec.depth_cm);
-                    return snapToGrid
-                      ? snapPosition(cell, pw, ph, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm)
-                      : { x: Math.max(0, Math.min(layout.grid_cols - pw, cell.x)), y: Math.max(0, Math.min(layout.grid_rows - ph, cell.y)) };
+                    return snapPosition(cell, pw, ph, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm);
                   })();
               setCatalogGhostPosition(pos);
             }}
@@ -706,16 +900,44 @@ function WarehouseCanvasInner({
               useFixedPosition
             />
             <div
+              className="min-h-0 min-w-0 shrink-0"
               style={{
-                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                transformOrigin: "0 0",
-                width,
-                height,
-                transition: enableTransition ? `transform ${VIEWPORT_TRANSITION_MS}ms ease-in-out` : "none",
+                width: scaledLayoutW,
+                height: scaledLayoutH,
+                position: "relative",
               }}
-              className="min-w-0 min-h-0"
             >
-              <div className="relative" style={{ width, height }}>
+              <div
+                className="relative min-h-0 min-w-0"
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  width,
+                  height,
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${displayScale})`,
+                  transformOrigin: "0 0",
+                  transition: enableTransition ? `transform ${VIEWPORT_TRANSITION_MS}ms ease-in-out` : "none",
+                  cursor: isPanning
+                    ? "grabbing"
+                    : panMode
+                      ? "grab"
+                      : placementMode || copyPlacementMode
+                        ? "none"
+                        : draggingRackId
+                          ? "grabbing"
+                          : isRoutePlanningMode
+                            ? "pointer"
+                            : layoutMode != null
+                              ? LAYOUT_MODE_CURSORS[layoutMode]
+                              : "default",
+                }}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseUp={handleCanvasMouseUp}
+                onMouseLeave={handleCanvasMouseLeave}
+                onClick={isReadMode && onReadModeCanvasBackgroundClick ? handleReadModeCanvasBackgroundClick : undefined}
+              >
                 {showGrid && (
                   <>
                     <div
@@ -759,11 +981,11 @@ function WarehouseCanvasInner({
                   height={height}
                   viewBox={`0 0 ${width} ${height}`}
                   className="relative z-10 block bg-transparent"
-                  style={{ cursor: isPanning ? "grabbing" : panMode ? "grab" : (placementMode || copyPlacementMode) ? "none" : draggingRackId ? "grabbing" : (layoutMode != null ? LAYOUT_MODE_CURSORS[layoutMode] : "default"), overflow: "visible" }}
-                  onMouseMove={handleCanvasMouseMove}
-                  onMouseDown={handleCanvasMouseDown}
-                  onMouseUp={handleCanvasMouseUp}
-                  onMouseLeave={handleCanvasMouseLeave}
+                  style={{
+                    /* Root is transparent to hits except on descendants with pointer-events: auto — wheel over empty map hits the HTML wrapper / viewport for native scroll. */
+                    pointerEvents: "none",
+                    overflow: "visible",
+                  }}
                 >
                   <rect
                     x={0}
@@ -773,6 +995,7 @@ function WarehouseCanvasInner({
                     fill="none"
                     stroke="#666"
                     strokeWidth={2}
+                    pointerEvents="none"
                   />
                   {wallElements.length > 0 && (
                     <WallElementsLayer
@@ -796,6 +1019,29 @@ function WarehouseCanvasInner({
                       cellPx={cellPx}
                     />
                   )}
+                  {/* Temporary snap guidelines: show dragged rack's snapped x/y lines. */}
+                  {draggingRackId != null && rackDragPreviewPosition != null && (
+                    <g pointerEvents="none" opacity={0.85}>
+                      <line
+                        x1={rackDragPreviewPosition.x * cellPx}
+                        y1={0}
+                        x2={rackDragPreviewPosition.x * cellPx}
+                        y2={height}
+                        stroke="#06b6d4"
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                      />
+                      <line
+                        x1={0}
+                        y1={rackDragPreviewPosition.y * cellPx}
+                        x2={width}
+                        y2={rackDragPreviewPosition.y * cellPx}
+                        stroke="#06b6d4"
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                      />
+                    </g>
+                  )}
                   <RowLayer
                     part="emptySlots"
                     layout={layout}
@@ -813,19 +1059,53 @@ function WarehouseCanvasInner({
                     return (
                       <rect
                         key={a.id ?? `a-${a.x}-${a.y}-${i}`}
+                        data-visual-zone-cell=""
                         x={a.x * cellPx + 1}
                         y={a.y * cellPx + 1}
                         width={a.width * cellPx - 2}
                         height={a.height * cellPx - 2}
                         fill={isSelected ? "#0ea5e9" : "#94a3b8"}
+                        fillOpacity={isSelected ? 0.55 : 0.38}
                         stroke={isSelected ? "#e0f2fe" : "#64748b"}
+                        strokeOpacity={isSelected ? 1 : 0.85}
                         strokeWidth={isSelected ? 2 : 0.5}
                         rx={RACK_RADIUS_PX}
+                        pointerEvents="auto"
                       />
                     );
                   })}
+                  {/* Route path under rack tiles (no line through rack bodies) */}
+                  {showRoute &&
+                    specialLocations.pick_start &&
+                    ((pathSegments && pathSegments.length > 0) ||
+                      (pathPoints && pathPoints.length >= 2) ||
+                      (routeGraphPolyline && routeGraphPolyline.length >= 2) ||
+                      (routeStops && routeStops.length >= 2)) && (
+                    <PathLayer
+                      points={pathPoints ?? []}
+                      cellPx={cellPx}
+                      markers={
+                        routeStops && routeStops.length > 0 ? undefined : pathMarkers ?? undefined
+                      }
+                      segments={pathSegments && pathSegments.length > 0 ? pathSegments : undefined}
+                      routeMode={Boolean(routeStops && routeStops.length > 0)}
+                      highlightedStopIndex={highlightedStopIndex ?? undefined}
+                      routeStops={routeStops ?? undefined}
+                      routeStart={
+                        specialLocations.pick_start
+                          ? {
+                              x: specialLocations.pick_start.x / GRID_UNIT_CM,
+                              y: specialLocations.pick_start.y / GRID_UNIT_CM,
+                            }
+                          : undefined
+                      }
+                      routeEnd={routeEndCell ?? undefined}
+                      routeGraphPolyline={routeGraphPolyline ?? undefined}
+                    />
+                  )}
                   <RackLayer
                     racks={layout.racks}
+                    layout={layout}
                     cellPx={cellPx}
                     draggingRackId={draggingRackId}
                     selectedRackIds={selectedRackIds}
@@ -834,13 +1114,38 @@ function WarehouseCanvasInner({
                     collisionRackId={collisionRackId}
                     collisionRackIds={collisionRackIds}
                     outsideRackIds={outsideRackIds}
-                    showRackLabels={showRackLabels}
+                    showLabels={showLabels}
                     hoveredRackId={hoveredRackId}
                     setHoveredRackId={setHoveredRackId}
                     highlightedRackIds={highlightedRackIds}
+                    rackQuantities={rackQuantities}
+                    highlightedBinUUIDs={highlightedBinUUIDs}
+                    hoveredLocationUUID={hoveredLocationUUID}
                     onRackClick={onRackClick}
+                    onRackClickPassthrough={onRackClickPassthrough}
                     onRackDoubleClick={onRackDoubleClick}
+                    routeStepBadges={routeStepBadges}
+                    routeStops={routeStops ?? null}
+                    isRoutePlanningMode={isRoutePlanningMode}
                   />
+                  {/* START / PACK only — visit order on rack badges */}
+                  {showRoute && routeStops && routeStops.length > 0 && specialLocations.pick_start && (
+                    <RouteStopLayer
+                      routeStops={routeStops}
+                      racks={layout.racks}
+                      pickStartCell={{
+                        x: specialLocations.pick_start.x / GRID_UNIT_CM,
+                        y: specialLocations.pick_start.y / GRID_UNIT_CM,
+                      }}
+                      cellPx={cellPx}
+                      getRackDisplayId={getRackDisplayId}
+                      highlightedStopIndex={highlightedStopIndex ?? null}
+                      currentStopIndex={currentStopIndex ?? null}
+                      markerPlacement={mode === "read" ? "path" : "rack"}
+                      routeEndCell={routeEndCell}
+                      showEndpointMarkers={showRouteEndpointMarkers}
+                    />
+                  )}
                   {/* Special warehouse nodes (above shelves) — draggable, right-click to delete */}
                   {specialLocations.pick_start && (() => {
                     const isDragging = draggingSpecial?.key === "pick_start";
@@ -858,7 +1163,11 @@ function WarehouseCanvasInner({
                         data-special-location="pick_start"
                         data-special-id={specialLocations.pick_start.id}
                         transform={`translate(${px - half}, ${py - half})`}
-                        style={{ color: "#22c55e", cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default" }}
+                        style={{
+                          pointerEvents: "auto",
+                          color: "#22c55e",
+                          cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default",
+                        }}
                         onPointerDown={(e) => handleSpecialPointerDown(e, "pick_start", specialLocations.pick_start!.id)}
                         onContextMenu={(e) => handleSpecialContextMenu(e, "pick_start", specialLocations.pick_start!.id)}
                       >
@@ -883,7 +1192,11 @@ function WarehouseCanvasInner({
                         data-special-location="packing"
                         data-special-id={specialLocations.packing.id}
                         transform={`translate(${px - half}, ${py - half})`}
-                        style={{ color: "#1d4ed8", cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default" }}
+                        style={{
+                          pointerEvents: "auto",
+                          color: "#1d4ed8",
+                          cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default",
+                        }}
                         onPointerDown={(e) => handleSpecialPointerDown(e, "packing", specialLocations.packing!.id)}
                         onContextMenu={(e) => handleSpecialContextMenu(e, "packing", specialLocations.packing!.id)}
                       >
@@ -907,7 +1220,10 @@ function WarehouseCanvasInner({
                         key="special-dock"
                         data-special-location="dock"
                         data-special-id={specialLocations.dock.id}
-                        style={{ cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default" }}
+                        style={{
+                          pointerEvents: "auto",
+                          cursor: isDragging ? "grabbing" : onUpdateSpecialLocation ? "grab" : "default",
+                        }}
                         onPointerDown={(e) => handleSpecialPointerDown(e, "dock", specialLocations.dock!.id)}
                         onContextMenu={(e) => handleSpecialContextMenu(e, "dock", specialLocations.dock!.id)}
                       >
@@ -919,7 +1235,7 @@ function WarehouseCanvasInner({
                   <VisualLayer
                     visualElements={layout.visual_elements ?? []}
                     cellPx={cellPx}
-                    showRackLabels={showRackLabels}
+                    showLabels={showLabels}
                     isVisualSelected={isVisualSelected}
                     draggingVisualType={draggingVisualType}
                     visualGhostPosition={visualGhostPosition}
@@ -936,6 +1252,7 @@ function WarehouseCanvasInner({
                       strokeWidth={2}
                       strokeDasharray="4 2"
                       rx={RACK_RADIUS_PX}
+                      pointerEvents="none"
                     />
                   )}
                   {copyPlacementMode && ghostPosition && copiedRack && (
@@ -949,16 +1266,19 @@ function WarehouseCanvasInner({
                       strokeWidth={2}
                       strokeDasharray="4 2"
                       rx={RACK_RADIUS_PX}
+                      pointerEvents="none"
                     />
                   )}
                   {rowToolActive && rowGhostPositions.length > 0 && (
-                    <g>
+                    <g pointerEvents="none">
                       {(() => {
                         const isHorizontal = rowDrawStart && rowDrawEnd
                           ? Math.abs(rowDrawEnd.x - rowDrawStart.x) >= Math.abs(rowDrawEnd.y - rowDrawStart.y)
                           : true;
-                        const ghostW = isHorizontal ? rowGhostPw : rowGhostPh;
-                        const ghostH = isHorizontal ? rowGhostPh : rowGhostPw;
+                        const orientedW = isHorizontal ? rowGhostPw : rowGhostPh;
+                        const orientedH = isHorizontal ? rowGhostPh : rowGhostPw;
+                        const ghostW = orientedW;
+                        const ghostH = orientedH;
                         return rowGhostPositions.map((pos, i) => {
                           const overlap = layout.racks.some((r) =>
                             rectsOverlap({ x: pos.x, y: pos.y, width: ghostW, height: ghostH }, r)
@@ -994,7 +1314,7 @@ function WarehouseCanvasInner({
                       const ghostFill = overlap ? "rgba(239,68,68,0.4)" : spec.color ? `${spec.color}66` : "rgba(34,211,238,0.35)";
                       const ghostStroke = overlap ? "#f87171" : spec.color || "#22d3ee";
                       return (
-                        <g>
+                        <g pointerEvents="none">
                           <rect
                             x={catalogGhostPosition.x * cellPx + 2}
                             y={catalogGhostPosition.y * cellPx + 2}

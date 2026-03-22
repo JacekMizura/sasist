@@ -8,6 +8,12 @@ export interface MagazynRackDetailHeaderProps {
   binVolumeDm3: (b: BinState, r: RackState) => number;
   getRackDisplayId: (r: RackState) => string;
   onShowLabelDownload?: () => void;
+  /** Clear all product assignments (assigned_locations) for bins on this rack; parent shows confirmation. */
+  onEmptyRack?: () => void;
+  /** Disable "Opróżnij regał" (e.g. operation in progress). */
+  emptyRackDisabled?: boolean;
+  /** Hide the button when there is nothing to clear (no assigned_locations on this rack). */
+  hideEmptyRackButton?: boolean;
 }
 
 export function MagazynRackDetailHeader({
@@ -18,6 +24,9 @@ export function MagazynRackDetailHeader({
   binVolumeDm3,
   getRackDisplayId,
   onShowLabelDownload,
+  onEmptyRack,
+  emptyRackDisabled,
+  hideEmptyRackButton,
 }: MagazynRackDetailHeaderProps) {
   const used = rack ? rack.bins.reduce((s, b) => s + binUsedVolumeDm3(b), 0) : 0;
   const total = rack ? (rack.total_capacity_dm3 ?? rack.bins.reduce((s, b) => s + binVolumeDm3(b, rack), 0)) : 0;
@@ -41,6 +50,16 @@ export function MagazynRackDetailHeader({
             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-600 text-white hover:bg-cyan-500"
           >
             Pobierz etykiety
+          </button>
+        )}
+        {rack && onEmptyRack && !hideEmptyRackButton && (
+          <button
+            type="button"
+            onClick={onEmptyRack}
+            disabled={emptyRackDisabled}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 text-red-700 bg-white hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Opróżnij regał
           </button>
         )}
       </div>

@@ -2,7 +2,13 @@ import { useState, useMemo } from "react";
 import type { AssignedLocation } from "../../types/warehouse";
 import type { SelectablePosition, ProductDimensionsCm } from "./warehouseUtils";
 import { positionFitsDimensions } from "./warehouseUtils";
-import { formatLocationWithQuantity, isReserveLocation, RESERVE_BG, RESERVE_BORDER, ReserveLockIcon } from "./reserveLocationStyle";
+import { getStorageTypeLabel, getStorageTypeStyle, isReserveStorageType, normalizeStorageType } from "../../utils/storageTypes";
+import { StorageTypeIcon } from "../../utils/storageTypeIcons";
+
+function formatLocationWithQuantity(address: string, quantity: number): string {
+  const q = Number.isFinite(quantity) && quantity >= 0 ? quantity : 0;
+  return `${address} (${q} szt.)`;
+}
 
 export type LocationPickerProps = {
   /** All positions from warehouse layout (e.g. from getAllPositionsFromRacks). */
@@ -122,20 +128,23 @@ export function LocationPicker({
             const pos = positions.find((p) => p.locationUUID === a.locationUUID);
             const fitsDims = !pos || positionFits(pos);
             const volumeOver = assignedVolumeOverflow.has(a.locationUUID);
-            const isReserve = isReserveLocation(a) || pos?.storageType === "reserve";
+            const storageType = normalizeStorageType(a.storageType ?? pos?.storageType);
+            const typeStyle = getStorageTypeStyle(storageType);
+            const typeLabel = getStorageTypeLabel(storageType);
+            const isReserve = isReserveStorageType(storageType);
             const address = getAddress(a.locationUUID);
             const isEditing = editingLocationUUID === a.locationUUID;
             return (
             <li
               key={a.locationUUID}
               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                volumeOver ? "border-red-300 bg-red-50/50" : isReserve ? "" : "border-slate-200 bg-slate-50/50"
+                volumeOver ? "border-red-300 bg-red-50/50" : storageType === "primary" ? "border-slate-200 bg-slate-50/50" : ""
               }`}
-              style={isReserve && !volumeOver ? { backgroundColor: RESERVE_BG, borderColor: RESERVE_BORDER, borderWidth: 1 } : undefined}
+              style={storageType !== "primary" && !volumeOver ? { backgroundColor: typeStyle.bg, borderColor: typeStyle.border, borderWidth: 1 } : undefined}
             >
               {isReserve && (
-                <span className="shrink-0 text-amber-800" title="Lokalizacja zapasowa (Rezerwa)" aria-label="Rezerwa">
-                  <ReserveLockIcon size={14} />
+                <span className="shrink-0" style={{ color: typeStyle.text }} title="Lokalizacja zapasowa (Rezerwa)" aria-label="Rezerwa">
+                  <StorageTypeIcon storageType={storageType} size={14} />
                 </span>
               )}
               {isEditing ? (
@@ -159,7 +168,7 @@ export function LocationPicker({
                 <>
                   <span className="font-mono text-slate-800 flex-1 truncate" title={a.locationUUID}>
                     {formatLocationWithQuantity(address, a.quantity)}
-                    {isReserve && <span className="ml-1 text-amber-800 text-xs font-medium">Rezerwa</span>}
+                    {storageType !== "primary" && <span className="ml-1 text-xs font-medium" style={{ color: typeStyle.text }}>{typeLabel}</span>}
                   </span>
                   {!fitsDims && (
                     <span className="shrink-0 text-amber-600" title="Produkt nie mieści się w wymiarach tej lokalizacji">⚠</span>
@@ -230,23 +239,26 @@ export function LocationPicker({
                 <ul className="divide-y divide-slate-100">
                   {availableToAdd.slice(0, 50).map((p) => {
                     const fits = positionFits(p);
-                    const isReserve = p.storageType === "reserve";
+                    const storageType = normalizeStorageType(p.storageType);
+                    const typeStyle = getStorageTypeStyle(storageType);
+                    const typeLabel = getStorageTypeLabel(storageType);
+                    const isReserve = isReserveStorageType(storageType);
                     return (
                       <li
                         key={p.locationUUID}
-                        className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded border ${isReserve ? "" : "border-transparent"} ${fits ? (isReserve ? "hover:opacity-95" : "hover:bg-slate-50") : "opacity-60"} ${!fits && !isReserve ? "bg-slate-50" : ""}`}
-                        style={isReserve ? { backgroundColor: RESERVE_BG, borderColor: RESERVE_BORDER } : undefined}
-                        title={!fits ? "Produkt nie mieści się w wymiarach tej lokalizacji" : isReserve ? "Lokalizacja zapasowa (Rezerwa)" : undefined}
+                        className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded border ${storageType !== "primary" ? "" : "border-transparent"} ${fits ? (storageType !== "primary" ? "hover:opacity-95" : "hover:bg-slate-50") : "opacity-60"} ${!fits && storageType === "primary" ? "bg-slate-50" : ""}`}
+                        style={storageType !== "primary" ? { backgroundColor: typeStyle.bg, borderColor: typeStyle.border } : undefined}
+                        title={!fits ? "Produkt nie mieści się w wymiarach tej lokalizacji" : storageType !== "primary" ? `Lokalizacja typu ${typeLabel}` : undefined}
                       >
-                        <span className={`font-mono text-sm truncate flex items-center gap-1 min-w-0 ${isReserve ? "text-amber-900" : "text-slate-800"}`}>
+                        <span className="font-mono text-sm truncate flex items-center gap-1 min-w-0" style={storageType !== "primary" ? { color: typeStyle.text } : undefined}>
                           {isReserve && (
-                            <span className="shrink-0 text-amber-800" title="Rezerwa" aria-label="Rezerwa">
-                              <ReserveLockIcon size={12} />
+                            <span className="shrink-0" style={{ color: typeStyle.text }} title="Rezerwa" aria-label="Rezerwa">
+                              <StorageTypeIcon storageType={storageType} size={12} />
                             </span>
                           )}
                           {!fits && <span className="text-amber-600 shrink-0">⚠</span>}
                           {p.locationAddress}
-                          {isReserve && <span className="text-amber-800 text-xs font-medium shrink-0">(Rezerwa)</span>}
+                          {storageType !== "primary" && <span className="text-xs font-medium shrink-0" style={{ color: typeStyle.text }}>({typeLabel})</span>}
                         </span>
                         <button
                           type="button"

@@ -3,41 +3,109 @@ import type { WarehouseProduct } from "../../../types/warehouse";
 
 export interface TopProductItem {
   product: WarehouseProduct;
-  totalQuantity: number;
-  totalVolumeDm3: number;
+  quantityAssigned: number;
+  volumeAssignedDm3: number;
 }
 
 export interface TopProductsSidebarProps {
   topProducts: TopProductItem[];
   getProductImageUrl: (p: WarehouseProduct) => string | null;
   formatVolume: (n: number) => string;
+  onHoverProductIdChange?: (productId: string | null) => void;
+  /** Global catalog search (same state as rack sidebar); drives map product locator. */
+  products: WarehouseProduct[];
+  productSearchQuery: string;
+  setProductSearchQuery: (v: string) => void;
+  selectedProductIdOnMap: string | null;
+  setSelectedProductIdOnMap: (id: string | null) => void;
+  setHoveredProductIdOnMap: (id: string | null) => void;
+  onClearMapProductSelection: () => void;
 }
 
 export function TopProductsSidebar({
   topProducts,
   getProductImageUrl,
   formatVolume,
+  onHoverProductIdChange,
+  products,
+  productSearchQuery,
+  setProductSearchQuery,
+  selectedProductIdOnMap,
+  setSelectedProductIdOnMap,
+  setHoveredProductIdOnMap,
+  onClearMapProductSelection,
 }: TopProductsSidebarProps) {
   return (
     <aside
-      className="w-[320px] shrink-0 flex flex-col h-full bg-slate-800 border-l border-slate-700 rounded-r-xl overflow-hidden"
+      className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-hidden rounded-r-xl border-l border-slate-700 bg-slate-800"
       aria-label="Produkty w magazynie"
     >
-      <div className="flex flex-col h-full min-h-0">
-        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-600 shrink-0">
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-slate-600 flex flex-col gap-2 px-4 py-3">
           <h2 className="text-xs font-black uppercase text-slate-300">PRODUKTY W MAGAZYNIE</h2>
+          <input
+            type="text"
+            value={productSearchQuery}
+            onChange={(e) => setProductSearchQuery(e.target.value)}
+            placeholder="Szukaj (nazwa, SKU...)"
+            className="w-full rounded-lg border border-slate-600 bg-slate-700/50 text-slate-100 placeholder-slate-500 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+          />
+          {productSearchQuery.trim() && (() => {
+            const q = productSearchQuery.trim().toLowerCase();
+            const filtered = products.filter(
+              (p) =>
+                (p.name ?? "").toLowerCase().includes(q) ||
+                (p.sku ?? "").toLowerCase().includes(q) ||
+                (p.ean ?? "").toLowerCase().includes(q)
+            );
+            return filtered.length > 0 ? (
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-600 bg-slate-900/50 shadow-sm">
+                {filtered.slice(0, 15).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onMouseEnter={() => setHoveredProductIdOnMap(p.id)}
+                    onMouseLeave={() => setHoveredProductIdOnMap(null)}
+                    onClick={() => {
+                      setHoveredProductIdOnMap(null);
+                      setSelectedProductIdOnMap(p.id);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-700/80 border-b border-slate-600 last:border-b-0 ${
+                      selectedProductIdOnMap === p.id ? "bg-cyan-900/40 text-cyan-200" : "text-slate-200"
+                    }`}
+                  >
+                    {p.name} <span className="text-slate-400 text-xs">({p.sku})</span>
+                  </button>
+                ))}
+                {filtered.length > 15 && <div className="px-3 py-1 text-xs text-slate-400">+ {filtered.length - 15} więcej</div>}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">Brak produktów</p>
+            );
+          })()}
+          {selectedProductIdOnMap != null && (
+            <button
+              type="button"
+              onClick={onClearMapProductSelection}
+              className="self-start text-xs text-slate-400 hover:text-slate-200 underline"
+            >
+              Wyczyść wybór produktu
+            </button>
+          )}
         </div>
-        <div className="flex-1 overflow-y-auto min-h-0 p-3 flex flex-col gap-3">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
         {topProducts.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-6">Brak produktów</p>
         ) : (
-          topProducts.map(({ product, totalQuantity, totalVolumeDm3 }) => {
+          topProducts.map(({ product, quantityAssigned, volumeAssignedDm3 }) => {
             const imageUrl = getProductImageUrl(product);
             return (
               <Link
                 key={product.id}
                 to={`/products/${product.id}`}
                 title={`Otwórz produkt: ${product.name}`}
+                onMouseEnter={() => onHoverProductIdChange?.(product.id)}
+                onMouseLeave={() => onHoverProductIdChange?.(null)}
                 className="block rounded-xl border border-slate-600 bg-slate-700/80 p-3 shadow transition hover:bg-slate-600/100 hover:shadow-sm cursor-pointer"
               >
                 <div className="flex items-start gap-3">
@@ -59,8 +127,12 @@ export function TopProductsSidebar({
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-slate-100 break-words line-clamp-2">{product.name}</div>
                     <div className="text-xs text-slate-400 mt-1 truncate">SKU: {product.sku ?? "—"} · EAN: {product.ean ?? "—"}</div>
-                    <div className="text-xs text-slate-300 mt-1">Łączna liczba sztuk: <span className="font-mono font-semibold text-slate-100">{totalQuantity}</span></div>
-                    <div className="text-xs text-slate-300 mt-0.5">Objętość w magazynie: <span className="font-mono font-semibold text-cyan-300">{formatVolume(totalVolumeDm3)} dm³</span></div>
+                    <div className="text-xs text-slate-300 mt-1">
+                      W lokalizacjach: <span className="font-mono font-semibold text-slate-100">{quantityAssigned}</span> szt.
+                    </div>
+                    <div className="text-xs text-slate-300 mt-0.5">
+                      Objętość: <span className="font-mono font-semibold text-cyan-300">{formatVolume(volumeAssignedDm3)} dm³</span>
+                    </div>
                   </div>
                 </div>
               </Link>

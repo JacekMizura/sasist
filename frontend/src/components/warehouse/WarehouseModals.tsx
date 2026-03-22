@@ -86,11 +86,11 @@ export function WarehouseModals(props: WarehouseModalsProps) {
         return rack ? (
           <div className="fixed right-0 top-0 bottom-0 z-40 w-96 bg-white border-l border-[#E2E8F0] shadow-xl flex flex-col overflow-hidden">
             <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#E2E8F0]">
-              <h3 className="font-bold text-[#1E293B]">Widok z boku – {getRackDisplayId(rack)}</h3>
+              <h3 className="font-bold text-[#1E293B]">Widok z boku – {getRackDisplayId(rack, layout)}</h3>
               <button type="button" onClick={() => { setShowElevationForRackId(null); setSelectedBinForFilter(null); }} className="p-2 rounded-lg hover:bg-slate-100 text-[#1E293B]">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <ElevationPanel rack={rack} products={products} selectedBinForFilter={selectedBinForFilter} setSelectedBinForFilter={setSelectedBinForFilter} onAddProduct={() => setEditingProductId("new")} onEditProduct={setEditingProductId} />
+              <ElevationPanel layout={layout} rack={rack} products={products} selectedBinForFilter={selectedBinForFilter} setSelectedBinForFilter={setSelectedBinForFilter} onAddProduct={() => setEditingProductId("new")} onEditProduct={setEditingProductId} />
             </div>
           </div>
         ) : null;
@@ -100,6 +100,7 @@ export function WarehouseModals(props: WarehouseModalsProps) {
         const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === internalLayoutRackId);
         return rack ? (
           <InternalLayoutModal
+            layout={layout}
             rack={rack}
             onSave={onSaveInternalLayout}
             onClose={onCloseInternalLayout}

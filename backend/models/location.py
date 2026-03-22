@@ -8,7 +8,7 @@ Coordinates (x, y, z) and dimensions (width, depth, height) are stored in centim
 Locations represent real storage bins in the warehouse.
 """
 
-from sqlalchemy import Column, String, Integer, Float, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -24,6 +24,8 @@ class Location(Base, BaseModelMixin):
         index=True,
     )
     name = Column(String, nullable=False)
+    location_uuid = Column(String(64), nullable=True, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
     type = Column(String(20), nullable=False, default="pick")  # pick | reserve | floor
 
     # Structural coordinates (optional). When set, avoid parsing name for ordering/labels. Backfill from Bin when available.

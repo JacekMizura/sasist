@@ -1,15 +1,16 @@
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 from typing import List, Optional, Any, Literal
 
 
 class BinSchema(BaseModel):
     id: Optional[int] = None
+    location_uuid: Optional[str] = Field(default=None, validation_alias=AliasChoices("location_uuid", "locationUUID"))
     label: str
     level_index: int
     segment_index: int
     volume_dm3: float = 0
     current_load_dm3: float = 0
-    storage_type: Optional[str] = None  # "primary" | "reserve"; frontend sends these
+    storage_type: Optional[str] = None  # normalized to primary | reserve | store | buffer | damaged
 
 
 class InternalLocationSchema(BaseModel):
@@ -30,6 +31,8 @@ class InternalStructureSchema(BaseModel):
 
 class RackSchema(BaseModel):
     id: Optional[int] = None
+    uuid: Optional[str] = None
+    rack_type: Optional[str] = "warehouse"
     name: Optional[str] = None
     x: int = 0   # in 10cm units
     y: int = 0   # in 10cm units
@@ -69,6 +72,31 @@ class WallElementSchema(BaseModel):
     gateType: Optional[Literal["courier", "supplier", "both"]] = None
 
 
+class VisualElementSchema(BaseModel):
+    id: str
+    type: str
+    x: float = 0
+    y: float = 0
+    width: float = 1
+    height: float = 1
+    rotation: Optional[float] = None
+    color: Optional[str] = None
+    zIndex: Optional[int] = None
+    name: Optional[str] = None
+    label: Optional[str] = None
+    columnShape: Optional[str] = None
+    diameter: Optional[float] = None
+    length: Optional[float] = None
+    thickness: Optional[float] = None
+    doorStyle: Optional[str] = None
+    zoneType: Optional[str] = None
+    width_cm: Optional[float] = None
+    depth_cm: Optional[float] = None
+    height_cm: Optional[float] = None
+    total_volume_dm3: Optional[float] = None
+    current_occupancy_dm3: Optional[float] = None
+
+
 class WarehouseLayoutPayload(BaseModel):
     name: str = "Layout 1"
     grid_cols: int = 24
@@ -80,5 +108,6 @@ class WarehouseLayoutPayload(BaseModel):
     building_height_m: Optional[float] = None
     racks: List[RackSchema] = []
     aisles: List[AisleSchema] = []
+    visual_elements: Optional[List[VisualElementSchema]] = None
     row_containers: Optional[List[Any]] = None  # Empty row slots; [{ id, rowPrefix?, slots: [{ x,y,w,h, rackId? }] }]
     wall_elements: Optional[List[WallElementSchema]] = None

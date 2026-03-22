@@ -1,6 +1,8 @@
 import type React from "react";
+import { useRef } from "react";
 import type { RackState, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType } from "../../types/warehouse";
 import { GRID_UNIT_CM } from "../../types/warehouse";
+import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import { WarehouseCanvas, type WarehouseCanvasProps } from "./WarehouseCanvas";
 import { RackPropertiesSidebar } from "./RackPropertiesSidebar";
 import { UI_STRINGS } from "../../constants/uiStrings";
@@ -10,6 +12,19 @@ export type WarehouseMainViewProps = WarehouseCanvasProps & {
   setSelectedVisualIds: React.Dispatch<React.SetStateAction<string[]>>;
   setSelectedAisleIndex: (v: number | null) => void;
   selectedRacks: RackState[];
+  routeRackIds: string[];
+  routeRackLabels: string[];
+  routeLengthMeters: number;
+  /** Current leg length (step-by-step navigation). */
+  routeLegMeters?: number;
+  routeStepIndex?: number;
+  routeStepCount?: number;
+  onRouteStepNext?: () => void;
+  isRouteActive: boolean;
+  clearRoute: () => void;
+  optimizeRoute: () => void;
+  finishRoute: () => void;
+  routePanelVisible: boolean;
 };
 
 export function WarehouseMainView(props: WarehouseMainViewProps) {
@@ -22,6 +37,18 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     setSelectedAisleIndex,
     selectedRack,
     selectedRacks,
+    routeRackIds,
+    routeRackLabels,
+    routeLengthMeters,
+    routeLegMeters = 0,
+    routeStepIndex = 0,
+    routeStepCount = 0,
+    onRouteStepNext,
+    isRouteActive,
+    clearRoute,
+    optimizeRoute,
+    finishRoute,
+    routePanelVisible,
     isMultiSelect,
     selectedRackIds,
     setShowElevationForRackId,
@@ -31,12 +58,25 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     cursorCm,
   } = props;
 
+  const visualAsideRef = useRef<HTMLElement>(null);
+  const aisleAsideRef = useRef<HTMLElement>(null);
+  const scrollResubKey = `${selectedVisualIds.join(",")}|${selectedAisleIndex ?? ""}`;
+  useWheelScrollBoundaryContain(visualAsideRef, selectedVisualIds.length > 0, scrollResubKey);
+  useWheelScrollBoundaryContain(
+    aisleAsideRef,
+    selectedAisleIndex != null && selectedVisualIds.length === 0,
+    scrollResubKey
+  );
+
   return (
-    <>
-      <WarehouseCanvas {...canvasProps} />
-      <>
-        {/* Right: WŁAŚCIWOŚCI (Properties) – only in Projekt Layoutu */}
-        {selectedVisualIds.length > 0 && (() => {
+    <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-row items-stretch overflow-hidden">
+      <div className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden p-0">
+        <div className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto">
+          <WarehouseCanvas {...canvasProps} />
+        </div>
+      </div>
+      {/* Right: WŁAŚCIWOŚCI (Properties) – only in Projekt Layoutu */}
+      {selectedVisualIds.length > 0 && (() => {
           const ve = (layout.visual_elements ?? []).find((v) => v.id === selectedVisualIds[0]);
           if (!ve) return null;
           const typeLabels: Record<VisualElementType, string> = {
@@ -59,7 +99,11 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
           const fillColor = ve.color ?? defaultColor(ve.type);
           const hex6 = fillColor.length >= 7 ? fillColor.slice(0, 7) : fillColor;
           return (
-            <aside className="w-64 shrink-0 flex flex-col bg-white/95 p-4 overflow-y-auto" style={{ borderLeft: "1px solid rgba(0,0,0,0.06)" }}>
+            <aside
+              ref={visualAsideRef}
+              className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-y-auto overscroll-y-contain bg-white/95 p-4"
+              style={{ borderLeft: "1px solid rgba(0,0,0,0.06)", overscrollBehavior: "contain" }}
+            >
               <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b7280] mb-4">Element wizualny – Edycja</h3>
               {selectedVisualIds.length > 1 && <p className="text-[10px] text-slate-600 mb-1">Zaznaczono {selectedVisualIds.length} elementów</p>}
               <p className="text-[#1E293B] text-sm font-semibold">{typeLabels[ve.type]}</p>
@@ -192,8 +236,15 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
           const aisle = layout.aisles[selectedAisleIndex];
           if (!aisle) return null;
           return (
-            <aside className="w-64 shrink-0 flex flex-col bg-white border-l border-[#E2E8F0] p-3 overflow-y-auto">
-              <h3 className="text-xs font-black uppercase text-slate-600 mb-2">Alejka</h3>
+            <aside
+              ref={aisleAsideRef}
+              className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-y-auto overscroll-y-contain border-l border-[#E2E8F0] bg-white p-3"
+              style={{ overscrollBehavior: "contain" }}
+            >
+              <h3 className="text-xs font-black uppercase text-slate-600 mb-1">Strefa wizualna</h3>
+              <p className="text-[10px] text-slate-500 mb-2 leading-snug" title="Strefa to element wizualny – nie wpływa na routing ani logistykę">
+                Element pomocniczy na planie — wyłącznie do oznaczeń; nie steruje trasami ani kompletacją.
+              </p>
               <div className="space-y-2 text-[11px]">
                 <div>
                   <label className="block text-slate-400 uppercase mb-0.5">{UI_STRINGS.warehouse.visuals.name}</label>
@@ -288,8 +339,9 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
             </aside>
           );
         })()}
-        {selectedRack && selectedAisleIndex == null && selectedVisualIds.length === 0 && (
+        {(selectedRack || routePanelVisible) && selectedAisleIndex == null && selectedVisualIds.length === 0 && (
           <RackPropertiesSidebar
+            layout={layout}
             selectedRack={selectedRack}
             selectedRacks={selectedRacks}
             isMultiSelect={isMultiSelect}
@@ -299,9 +351,19 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
             setInternalLayoutRackId={setInternalLayoutRackId}
             setSelectedRackId={setSelectedRackId}
             setSelectedRackIds={setSelectedRackIds}
+            routeRackIds={routeRackIds}
+            routeRackLabels={routeRackLabels}
+            routeLengthMeters={routeLengthMeters}
+            routeLegMeters={routeLegMeters}
+            routeStepIndex={routeStepIndex}
+            routeStepCount={routeStepCount}
+            onRouteStepNext={onRouteStepNext}
+            isRouteActive={isRouteActive}
+            clearRoute={clearRoute}
+            optimizeRoute={optimizeRoute}
+            finishRoute={finishRoute}
           />
         )}
-      </>
-    </>
+    </div>
   );
 }

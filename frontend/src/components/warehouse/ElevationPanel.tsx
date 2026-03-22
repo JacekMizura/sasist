@@ -1,8 +1,9 @@
-import type { RackState, BinState, WarehouseProduct } from "../../types/warehouse";
+import type { LayoutState, RackState, BinState, WarehouseProduct } from "../../types/warehouse";
 import { formatVolume, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId } from "./warehouseUtils";
 
 /** Slide-over panel content for elevation (side) view + inventory list. Used only in Layout tab; onAddProduct/onEditProduct allow adding/editing products. */
 export function ElevationPanel({
+  layout,
   rack,
   products,
   selectedBinForFilter,
@@ -10,6 +11,7 @@ export function ElevationPanel({
   onAddProduct,
   onEditProduct,
 }: {
+  layout?: LayoutState | null;
   rack: RackState;
   products: WarehouseProduct[];
   selectedBinForFilter: { level_index: number; segment_index: number } | null;
@@ -48,7 +50,7 @@ export function ElevationPanel({
       });
 
   const occupancyPct = total > 0 ? (used / total) * 100 : 0;
-  const rackLabel = `Regał ${getRackDisplayId(rack)}`;
+  const rackLabel = `Regał ${getRackDisplayId(rack, layout ?? undefined)}`;
 
   return (
     <>

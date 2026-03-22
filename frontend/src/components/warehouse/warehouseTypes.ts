@@ -8,6 +8,7 @@ export type {
   RackLevel,
   RackPosition,
   RackState,
+  StorageType,
   AisleState,
   LayoutState,
   RackTemplate,

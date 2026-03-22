@@ -7,7 +7,7 @@
 import { useState, useCallback } from "react";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
-import type { AssignedLocation } from "../../types/warehouse";
+import type { AssignedLocation, StorageType } from "../../types/warehouse";
 import { positionFitsDimensions } from "../../components/warehouse/warehouseUtils";
 import type { SelectablePosition } from "../../components/warehouse/warehouseUtils";
 import { getPositionsFromLayoutRacks } from "../../components/warehouse/warehouseUtils";
@@ -108,7 +108,8 @@ export function LocationMappingExportImport({ onExportComplete, onImportComplete
         api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: warehouse.id } }),
         api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000 } }),
       ]);
-      const racks = layoutRes.data?.racks ?? [];
+      const layoutData = layoutRes.data?.layout ?? layoutRes.data;
+      const racks = layoutData?.racks ?? [];
       const bins = collectBinsFromLayout(racks);
       const rawProducts = productsRes.data?.items ?? (Array.isArray(productsRes.data) ? productsRes.data : []);
       const productList: ProductForExport[] = rawProducts.map((p: Record<string, unknown>) => ({
@@ -277,7 +278,7 @@ function LocationMappingImportModal({
     }
   }, []);
 
-  type Assignment = { locationUUID: string; quantity: number; locationAddress?: string; storageType?: "primary" | "reserve" };
+  type Assignment = { locationUUID: string; quantity: number; locationAddress?: string; storageType?: StorageType };
 
   const runImport = useCallback(async () => {
     setImporting(true);
@@ -287,7 +288,8 @@ function LocationMappingImportModal({
         api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: warehouseId } }),
         api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000 } }),
       ]);
-      const rawRacks = layoutRes.data?.racks ?? [];
+      const layoutData = layoutRes.data?.layout ?? layoutRes.data;
+      const rawRacks = layoutData?.racks ?? [];
       const positions = getPositionsFromLayoutRacks(rawRacks);
       const raw = productsRes.data?.items ?? (Array.isArray(productsRes.data) ? productsRes.data : []);
       const allProducts: (ProductForExport & { length?: number; width?: number; height?: number; volume?: number; weight?: number })[] = raw.map((p: Record<string, unknown>) => ({
@@ -326,7 +328,7 @@ function LocationMappingImportModal({
             locationUUID: a.locationUUID,
             quantity: typeof a.quantity === "number" ? a.quantity : Number(a.quantity) || 0,
             locationAddress: (a as AssignedLocation & { locationAddress?: string }).locationAddress,
-            storageType: (a as AssignedLocation & { storageType?: "primary" | "reserve" }).storageType,
+            storageType: (a as AssignedLocation & { storageType?: StorageType }).storageType,
           }));
           productAssignments.set(p.id, locs);
         }

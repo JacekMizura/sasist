@@ -19,7 +19,7 @@ export type LayoutMode = (typeof LayoutMode)[keyof typeof LayoutMode];
 export const LAYOUT_MODE_LABELS: Record<LayoutMode, string> = {
   [LayoutMode.SELECT]: "Select",
   [LayoutMode.DRAW_ROW]: "Draw Row",
-  [LayoutMode.DRAW_AISLE]: "Draw Aisle",
+  [LayoutMode.DRAW_AISLE]: "Rysuj strefę",
   [LayoutMode.PATH_TOOL]: "Path Tool",
   [LayoutMode.ADD_START]: "Punkt startowy",
   [LayoutMode.ADD_PACK]: "Stacja pakowania",

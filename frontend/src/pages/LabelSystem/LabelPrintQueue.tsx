@@ -160,7 +160,7 @@ export function LabelPrintQueue({ template }: Props) {
       const res = await api.get("/warehouse/layout", {
         params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId },
       });
-      setLayout(res.data);
+      setLayout(res.data?.layout ?? res.data);
     } catch {
       setLayout(null);
     } finally {

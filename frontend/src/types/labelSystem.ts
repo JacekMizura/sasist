@@ -2,6 +2,8 @@
  * Label System (System Etykiet) – template and print queue types.
  */
 
+import type { StorageType } from "./warehouse";
+
 export type BarcodeFormat = "Code128" | "QR" | "DataMatrix";
 
 export const DYNAMIC_BINDINGS = [
@@ -430,7 +432,7 @@ export interface LabelRecord {
   zone_name?: string;
   volume_capacity?: number;
   barcode_data: string;
-  storage_type?: "primary" | "reserve";
+  storage_type?: StorageType;
   aisle_letter?: string;
   rack_index?: number;
   isBottomLevel?: boolean;

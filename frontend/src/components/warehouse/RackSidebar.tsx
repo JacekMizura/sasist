@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import { Plus, Wand2 } from "lucide-react";
-import type { LayoutState, CustomRackTemplate, CatalogItem, VisualElementType } from "../../types/warehouse";
+import type { LayoutState, CustomRackTemplate, CatalogItem, VisualElementType, RackType } from "../../types/warehouse";
 import { formatVolume, getLevelConfig, getTotalLocations, getRackDisplayId, type RackTemplateLabelOptions } from "./warehouseUtils";
 
 function sameCatalogItem(a: CatalogItem | null, b: CatalogItem): boolean {
@@ -14,14 +15,24 @@ function sameCatalogItem(a: CatalogItem | null, b: CatalogItem): boolean {
 function normalize(s: string): string {
   return s.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
+function formatMeters(value: number | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Number(value.toFixed(2));
+}
 import { TemplateCreator, RackPreview } from "./TemplateCreator";
 import { GenerateWarehouseLayoutModal } from "./GenerateWarehouseLayoutModal";
 import { UI_STRINGS } from "../../constants/uiStrings";
+import { normalizeBinTypeMap } from "../../utils/storageTypes";
+import { buildTemplateUsageData } from "./templateUsage";
 
 const DEFAULT_ADDRESS_PATTERN = "{Row}{Section}-{Bin}-{Level}";
 
 export type RackSidebarProps = {
+  mode?: "edit" | "read";
   layout: LayoutState;
+  /** Used when placing racks without a template (e.g. stamp tool). */
+  manualRackType: RackType;
+  setManualRackType: (v: RackType) => void;
   selectedRackId: number | string | null;
   selectedRackIds: Array<number | string>;
   setSelectedRackId: (id: number | string | null) => void;
@@ -45,9 +56,6 @@ export type RackSidebarProps = {
   draggingVisualType: VisualElementType | null;
   setDraggingVisualType: (t: VisualElementType | null) => void;
   setVisualGhostPosition: (p: { x: number; y: number } | null) => void;
-  saveLayout: () => void;
-  saving: boolean;
-  selectedWarehouseId: number | null;
   totalUsed: number;
   totalCapacity: number;
   onExportPdf?: () => void | Promise<void>;
@@ -68,7 +76,10 @@ export type RackSidebarProps = {
 };
 
 export function RackSidebar({
+  mode = "edit",
   layout,
+  manualRackType,
+  setManualRackType,
   selectedRackId,
   selectedRackIds,
   setSelectedRackId,
@@ -91,9 +102,6 @@ export function RackSidebar({
   draggingVisualType: _draggingVisualType,
   setDraggingVisualType,
   setVisualGhostPosition,
-  saveLayout,
-  saving,
-  selectedWarehouseId,
   totalUsed,
   totalCapacity,
   onExportPdf,
@@ -119,7 +127,7 @@ export function RackSidebar({
   const filteredRacks = layout.racks.filter(
     (r) =>
       !rackSearch.trim() ||
-      normalize(getRackDisplayId(r)).includes(normalize(rackSearch)) ||
+      normalize(getRackDisplayId(r, layout)).includes(normalize(rackSearch)) ||
       normalize(r.name ?? "").includes(normalize(rackSearch)) ||
       normalize(r.label ?? "").includes(normalize(rackSearch)) ||
       normalize(r.rowPrefix ?? "").includes(normalize(rackSearch))
@@ -128,7 +136,11 @@ export function RackSidebar({
   const editingTemplate = editingTemplateId ? customTemplates.find((t) => t.id === editingTemplateId) ?? null : null;
   const showTemplateCreator = showTemplateModal || editingTemplateId != null;
   const buildingDepthM = layout.building_depth_m ?? layout.building_height_m;
+  const displayBuildingWidthM = formatMeters(layout.building_width_m);
+  const displayBuildingDepthM = formatMeters(buildingDepthM);
+  const displayBuildingHeightM = formatMeters(layout.building_height_m);
   const hasBuilding = layout.building_width_m != null && buildingDepthM != null && layout.building_width_m > 0 && buildingDepthM > 0;
+  const isReadMode = mode === "read";
   const VISUAL_ITEMS: { type: VisualElementType; label: string; size: string }[] = [
     { type: "column", label: UI_STRINGS.warehouse.visuals.column, size: "2×2" },
     { type: "mezzanine", label: UI_STRINGS.warehouse.visuals.mezzanine, size: "20×15" },
@@ -139,10 +151,21 @@ export function RackSidebar({
     { type: "zone", label: UI_STRINGS.warehouse.visuals.zone, size: "8×6" },
   ];
   const sectionTitleClass = "text-[12px] font-semibold text-[#374151] mb-2";
+  const { templatesForSidebar, usageCountById: templateUsageCounts, usedTemplates, availableTemplates } = buildTemplateUsageData(
+    layout,
+    customTemplates,
+    showOnlyCatalog,
+    manualRackType
+  );
+
+  const sidebarScrollRef = useRef<HTMLElement>(null);
+  useWheelScrollBoundaryContain(sidebarScrollRef, true, `${activeTab}-${showOnlyCatalog}`);
+
   return (
     <aside
-      className={`${showOnlyCatalog ? "w-[250px]" : "w-56"} shrink-0 flex flex-col overflow-y-auto`}
-      style={{ background: "#ffffff", borderRight: "1px solid #e5e7eb", padding: "16px" }}
+      ref={sidebarScrollRef}
+      className="flex h-full min-h-0 w-[260px] flex-none flex-col self-stretch overflow-y-auto overscroll-y-contain"
+      style={{ background: "#ffffff", borderRight: "1px solid #e5e7eb", padding: "16px", overscrollBehavior: "contain" }}
     >
       {!showOnlyCatalog && (
       <div className="flex rounded-lg bg-[#f3f4f6] p-0.5 mb-4">
@@ -204,16 +227,21 @@ export function RackSidebar({
           {hasBuilding ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-slate-700">{layout.building_width_m} × {buildingDepthM}{layout.building_height_m != null && layout.building_height_m > 0 ? ` × ${layout.building_height_m}` : ""} m</span>
-                <button
-                  type="button"
-                  onClick={onOpenEditBuilding}
-                  className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700"
-                  title="Edytuj budynek"
-                  aria-label="Edytuj budynek"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                </button>
+                <span className="text-sm text-slate-700">
+                  {displayBuildingWidthM ?? layout.building_width_m} × {displayBuildingDepthM ?? buildingDepthM}
+                  {layout.building_height_m != null && layout.building_height_m > 0 ? ` × ${displayBuildingHeightM ?? layout.building_height_m}` : ""} m
+                </span>
+                {!isReadMode && (
+                  <button
+                    type="button"
+                    onClick={onOpenEditBuilding}
+                    className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700"
+                    title="Edytuj budynek"
+                    aria-label="Edytuj budynek"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                  </button>
+                )}
               </div>
               <div className="mt-1.5 text-[10px] text-slate-600 space-y-0.5">
                 <div>Powierzchnia: {Math.round((layout.building_width_m ?? 0) * (buildingDepthM ?? 0))} m²</div>
@@ -223,11 +251,38 @@ export function RackSidebar({
               </div>
             </>
           ) : (
-            <button type="button" onClick={onOpenEditBuilding} className="text-sm text-cyan-600 hover:underline">Ustaw wymiary budynku</button>
+            isReadMode
+              ? <div className="text-sm text-slate-600">Brak ustawionych wymiarów</div>
+              : <button type="button" onClick={onOpenEditBuilding} className="text-sm text-cyan-600 hover:underline">Ustaw wymiary budynku</button>
           )}
         </div>
       )}
       <div className="rounded-lg p-3 overflow-hidden mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
+        {!isReadMode && !showOnlyCatalog && (
+          <div className="mb-3">
+            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Typ regału</div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setManualRackType("warehouse")}
+                className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                  manualRackType === "warehouse" ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Magazyn
+              </button>
+              <button
+                type="button"
+                onClick={() => setManualRackType("store")}
+                className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                  manualRackType === "store" ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Sklep
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-2" style={{ marginBottom: "8px" }}>
           <button
             type="button"
@@ -282,10 +337,201 @@ export function RackSidebar({
         <p className="text-[10px] text-amber-700 mb-1">{UI_STRINGS.warehouse.rackSidebar.rowToolHint}</p>
       )}
       <div className="space-y-2 mb-4">
-        {customTemplates.length === 0 && (
+        {templatesForSidebar.length === 0 && (
           <p className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.noTemplatesHint}</p>
         )}
-        {customTemplates.map((t) => {
+
+        {usedTemplates.length > 0 && (
+          <div className="mt-1">
+            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Użyte w układzie</div>
+            <div className="space-y-2">
+              {usedTemplates.map((t) => {
+                const count = templateUsageCounts.get(t.id) ?? 0;
+                const item: CatalogItem = { type: "custom", template: t };
+                const isRowSelected = !showOnlyCatalog && sameCatalogItem(rowToolTemplate, item);
+                return (
+                  <div
+                    key={t.id}
+                    draggable={!showOnlyCatalog}
+                    onDragStart={!showOnlyCatalog ? (e) => {
+                      if ((e.target as HTMLElement).closest("[data-no-row-select]")) {
+                        e.preventDefault();
+                        return;
+                      }
+                      setDraggingFromCatalog(item);
+                      e.dataTransfer.setData("application/x-warehouse-catalog", JSON.stringify(item));
+                      e.dataTransfer.effectAllowed = "copy";
+                    } : undefined}
+                    onDragEnd={!showOnlyCatalog ? () => {
+                      setDraggingFromCatalog(null);
+                      setCatalogGhostPosition(null);
+                    } : undefined}
+                    onClick={!showOnlyCatalog ? (e) => {
+                      if ((e.target as HTMLElement).closest("[data-no-row-select]")) return;
+                      if (sameCatalogItem(rowToolTemplate, item)) {
+                        setRowToolTemplate(null);
+                        return;
+                      }
+                      setRowToolTemplate(item);
+                    } : () => setPreviewTemplateId(t.id)}
+                    className={`rounded-lg border p-3 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:opacity-90 ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
+                    style={showOnlyCatalog ? { borderColor: "#e5e7eb", backgroundColor: "#f9fafb" } : { borderColor: isRowSelected ? "#3b82f6" : "#e5e7eb", backgroundColor: isRowSelected ? "#eff6ff" : "#f9fafb", boxShadow: "none" }}
+                  >
+                    <div className={`flex items-center gap-2 ${showOnlyCatalog ? "" : "justify-between gap-1"}`}>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                        <span className="font-semibold text-[#1E293B] text-sm truncate">{t.name}</span>
+                        {/* Only show "placed" usage count for templates actually present on the layout. */}
+                        <span className="shrink-0 rounded-md bg-cyan-100 text-cyan-800 text-[10px] font-bold px-1.5 py-0.5" title={`Liczba regałów tego typu na mapie: ${count}`}>
+                          ({count})
+                        </span>
+                      </div>
+                      {!showOnlyCatalog && (
+                        <div className="flex items-center gap-0.5 shrink-0" data-no-row-select>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setEditingTemplateId(t.id); }}
+                            className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700"
+                            title="Edytuj"
+                            aria-label="Edytuj"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              if (!window.confirm(UI_STRINGS.warehouse.rackSidebar.deleteTemplateConfirm)) return;
+                              if (onDeleteTemplate) {
+                                onDeleteTemplate(t);
+                              } else {
+                                setCustomTemplates((prev) => prev.filter((x) => x.id !== t.id));
+                                setEditingTemplateId((id: string | null) => (id === t.id ? null : id));
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-red-100 text-slate-500 hover:text-red-600"
+                            title="Usuń"
+                            aria-label="Usuń"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {t.width_cm}×{t.depth_cm} cm, {(() => {
+                        const lc = getLevelConfig(t);
+                        const total = getTotalLocations(lc);
+                        const uniform = lc.length === 0 || lc.every((r) => r.locations === lc[0].locations);
+                        return uniform
+                          ? `${lc.length || t.levels} poziomy, ${lc[0]?.locations ?? (t.bins_per_level && t.bins_per_level > 0 ? t.bins_per_level : 1)} ${UI_STRINGS.warehouse.rackSidebar.locationsPerLevelShort}`
+                          : `${lc.length} poziomy, Suma: ${total} lok.`;
+                      })()}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {availableTemplates.length > 0 && (
+          <div className="mt-2">
+            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Dostępne szablony</div>
+            <div className="space-y-2">
+              {availableTemplates.map((t) => {
+                const item: CatalogItem = { type: "custom", template: t };
+                const isRowSelected = !showOnlyCatalog && sameCatalogItem(rowToolTemplate, item);
+                return (
+                  <div
+                    key={t.id}
+                    draggable={!showOnlyCatalog}
+                    onDragStart={!showOnlyCatalog ? (e) => {
+                      if ((e.target as HTMLElement).closest("[data-no-row-select]")) {
+                        e.preventDefault();
+                        return;
+                      }
+                      setDraggingFromCatalog(item);
+                      e.dataTransfer.setData("application/x-warehouse-catalog", JSON.stringify(item));
+                      e.dataTransfer.effectAllowed = "copy";
+                    } : undefined}
+                    onDragEnd={!showOnlyCatalog ? () => {
+                      setDraggingFromCatalog(null);
+                      setCatalogGhostPosition(null);
+                    } : undefined}
+                    onClick={!showOnlyCatalog ? (e) => {
+                      if ((e.target as HTMLElement).closest("[data-no-row-select]")) return;
+                      if (sameCatalogItem(rowToolTemplate, item)) {
+                        setRowToolTemplate(null);
+                        return;
+                      }
+                      setRowToolTemplate(item);
+                    } : () => setPreviewTemplateId(t.id)}
+                    className={`rounded-lg border p-3 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:opacity-90 ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
+                    // Available templates are not "placed" — keep them visually neutral (no cyan usage badge).
+                    style={showOnlyCatalog ? { borderColor: "#e5e7eb", backgroundColor: "#f9fafb" } : { borderColor: isRowSelected ? "#3b82f6" : "#e5e7eb", backgroundColor: isRowSelected ? "#eff6ff" : "#f9fafb", boxShadow: "none" }}
+                  >
+                    <div className={`flex items-center gap-2 ${showOnlyCatalog ? "" : "justify-between gap-1"}`}>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                        <span className="font-semibold text-[#1E293B] text-sm truncate">{t.name}</span>
+                      </div>
+                      {!showOnlyCatalog && (
+                        <div className="flex items-center gap-0.5 shrink-0" data-no-row-select>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setEditingTemplateId(t.id); }}
+                            className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700"
+                            title="Edytuj"
+                            aria-label="Edytuj"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              if (!window.confirm(UI_STRINGS.warehouse.rackSidebar.deleteTemplateConfirm)) return;
+                              if (onDeleteTemplate) {
+                                onDeleteTemplate(t);
+                              } else {
+                                setCustomTemplates((prev) => prev.filter((x) => x.id !== t.id));
+                                setEditingTemplateId((id: string | null) => (id === t.id ? null : id));
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-red-100 text-slate-500 hover:text-red-600"
+                            title="Usuń"
+                            aria-label="Usuń"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {t.width_cm}×{t.depth_cm} cm, {(() => {
+                        const lc = getLevelConfig(t);
+                        const total = getTotalLocations(lc);
+                        const uniform = lc.length === 0 || lc.every((r) => r.locations === lc[0].locations);
+                        return uniform
+                          ? `${lc.length || t.levels} poziomy, ${lc[0]?.locations ?? (t.bins_per_level && t.bins_per_level > 0 ? t.bins_per_level : 1)} ${UI_STRINGS.warehouse.rackSidebar.locationsPerLevelShort}`
+                          : `${lc.length} poziomy, Suma: ${total} lok.`;
+                      })()}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* If both lists are empty but there are templates, fallback to the original renderer is not needed. */}
+      </div>
+
+      {/* Existing template renderer block removed by UI split above. */}
+      {false && customTemplates.map((t) => {
           const item: CatalogItem = { type: "custom", template: t };
           const isRowSelected = !showOnlyCatalog && sameCatalogItem(rowToolTemplate, item);
           return (
@@ -370,7 +616,6 @@ export function RackSidebar({
             </div>
           );
         })}
-      </div>
       </>
         )}
       </div>
@@ -464,7 +709,7 @@ export function RackSidebar({
               >
                 <div className="flex flex-col items-start">
                   <div className="font-medium">
-                    {getRackDisplayId(r)}
+                    {getRackDisplayId(r, layout)}
                   </div>
                   <div className="text-sm text-slate-600">
                     {w}×{len}×{h} cm
@@ -482,14 +727,6 @@ export function RackSidebar({
         <p className="text-[10px] text-slate-600 leading-relaxed">
           {formatVolume(totalUsed)} / {formatVolume(totalCapacity)} {UI_STRINGS.warehouse.rackSidebar.dm3}
         </p>
-        <button
-          type="button"
-          onClick={saveLayout}
-          disabled={saving || selectedWarehouseId == null}
-          className="w-full px-3 py-2 rounded-lg bg-cyan-600 text-white text-xs font-semibold hover:bg-cyan-500 disabled:opacity-50 transition-colors"
-        >
-          {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
-        </button>
       </div>
       </>
         )}
@@ -537,7 +774,7 @@ export function RackSidebar({
                   rowId={(template.rowId ?? template.aisle_letter ?? "A").trim() || "A"}
                   sectionStartIndex={template.sectionStartIndex ?? 1}
                   binNamingType={template.binNamingType ?? "numeric"}
-                  reserveBinKeys={new Set(template.reserve_bin_keys ?? [])}
+                  binTypeMap={normalizeBinTypeMap(template.bin_type_map, template.reserve_bin_keys)}
                   color={template.color}
                   labelOptions={template.namingStrategy != null || template.manualLabels != null || (template.overrides != null && Object.keys(template.overrides).length > 0) ? {
                     namingStrategy: template.namingStrategy ?? "pattern",
@@ -581,6 +818,7 @@ export function RackSidebar({
           }}
           layout={layout}
           customTemplates={customTemplates}
+          rackType={manualRackType}
           initialTemplate={rowToolTemplate}
         />
       )}
@@ -594,10 +832,14 @@ export function RackSidebar({
                 if (onSaveNewTemplate) {
                   const saved = await onSaveNewTemplate(t);
                   if (saved != null) {
-                    setCustomTemplates((prev) => [...prev, saved]);
+                    const savedWithType: CustomRackTemplate = {
+                      ...saved,
+                      rack_type: t.rack_type ?? saved.rack_type ?? "warehouse",
+                    };
+                    setCustomTemplates((prev) => [...prev, savedWithType]);
                     setShowTemplateModal(false);
                     setEditingTemplateId(null);
-                    setRowToolTemplate({ type: "custom", template: saved });
+                    setRowToolTemplate({ type: "custom", template: savedWithType });
                   } else {
                     return false;
                   }
@@ -613,7 +855,11 @@ export function RackSidebar({
               onSaveEdit={editingTemplateId && onSaveNewTemplate ? async (templateId, template, updateExistingRacks) => {
                 const saved = await onSaveNewTemplate(template);
                 if (saved == null) throw new Error("Nie udało się zapisać szablonu.");
-                setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? saved : t)));
+                const savedWithType: CustomRackTemplate = {
+                  ...saved,
+                  rack_type: template.rack_type ?? saved.rack_type ?? "warehouse",
+                };
+                setCustomTemplates((prev) => prev.map((t) => (t.id === templateId ? savedWithType : t)));
                 onSaveEditTemplate(templateId, template, updateExistingRacks);
                 // Modal is closed by TemplateCreator via onCancelEdit after success message
               } : editingTemplateId ? (templateId, template, updateExistingRacks) => {

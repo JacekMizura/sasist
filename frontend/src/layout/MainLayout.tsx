@@ -81,11 +81,16 @@ function NavLink({
   );
 }
 
+function isWarehouseDesignerRoute(pathname: string): boolean {
+  return pathname.startsWith("/designer") || pathname.startsWith("/warehouse-designer");
+}
+
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
+  const designerFill = isWarehouseDesignerRoute(pathname);
 
   return (
-    <div className="flex h-screen bg-slate-100">
+    <div className="flex h-screen min-h-0 overflow-hidden bg-slate-100">
       <aside className="w-60 bg-white rounded-r-xl shadow-md border-r border-slate-100 p-6 flex flex-col shrink-0">
         <h2 className="text-xl font-bold mb-8 text-slate-800">{UI_STRINGS.app.title}</h2>
         <nav className="flex flex-col gap-1 text-sm flex-1 overflow-y-auto">
@@ -101,12 +106,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </nav>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <header className="shrink-0 flex items-center gap-4 px-6 py-3 bg-white border-b border-slate-200">
           <GlobalScanSearch />
           <span className="text-xs text-slate-400 hidden sm:inline">Ctrl+K</span>
         </header>
-        <div className="flex-1 overflow-y-auto p-10">
+        <div
+          className={`flex min-h-0 min-w-0 flex-1 flex-col p-10 ${designerFill ? "overflow-hidden" : "overflow-y-auto"}`}
+        >
           {children}
         </div>
       </div>

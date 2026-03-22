@@ -8,7 +8,7 @@ const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 export type VisualLayerProps = {
   visualElements: VisualElementState[];
   cellPx: number;
-  showRackLabels: boolean;
+  showLabels: boolean;
   isVisualSelected: (id: string) => boolean;
   draggingVisualType: VisualElementType | null;
   visualGhostPosition: { x: number; y: number } | null;
@@ -18,14 +18,14 @@ export type VisualLayerProps = {
 export function VisualLayer({
   visualElements,
   cellPx,
-  showRackLabels,
+  showLabels,
   isVisualSelected,
   draggingVisualType,
   visualGhostPosition,
   getDefaultVisualSize,
 }: VisualLayerProps) {
   return (
-    <>
+    <g data-visual-elements="">
       {([...visualElements].sort((a, b) => a.zIndex - b.zIndex)).map((ve) => {
         const isSelected = isVisualSelected(ve.id);
         const defaultFill: Record<VisualElementType, string> = {
@@ -116,9 +116,9 @@ export function VisualLayer({
           if (rot !== 0) return <g transform={`rotate(${rot} ${cx} ${cy})`}>{content}</g>;
           return <g>{content}</g>;
         };
-        const showLabel = showRackLabels && (ve.label ?? ve.name);
+        const showLabel = showLabels && (ve.label ?? ve.name);
         return (
-          <g key={ve.id}>
+          <g key={ve.id} style={{ pointerEvents: "auto" }}>
             {ve.type === "column" && drawColumn()}
             {ve.type === "cart" && drawCart()}
             {ve.type === "wall" && drawWall()}
@@ -153,9 +153,10 @@ export function VisualLayer({
             strokeWidth={2}
             strokeDasharray="4 2"
             rx={RACK_RADIUS_PX}
+            pointerEvents="none"
           />
         );
       })()}
-    </>
+    </g>
   );
 }

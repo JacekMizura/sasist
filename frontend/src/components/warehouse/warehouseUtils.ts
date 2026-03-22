@@ -1,6 +1,13 @@
 import { GRID_UNIT_CM, CATALOG_PRESETS } from "./warehouseTypes";
 import type { BinState, RackLevel } from "./warehouseTypes";
-import type { CatalogItem, RackState, LevelConfigItem } from "../../types/warehouse";
+import type { CatalogItem, RackState, LevelConfigItem, StorageType, LayoutState, RowContainer } from "../../types/warehouse";
+import { buildBinTypeMapFromBins, normalizeBinTypeMap, normalizeStorageType } from "../../utils/storageTypes";
+
+export function generateRackUuid(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `rack-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 /** Dimensions and optional color / naming / reserve for a catalog item (preset or custom template) */
 export function getCatalogItemSpec(item: CatalogItem): {
@@ -17,7 +24,7 @@ export function getCatalogItemSpec(item: CatalogItem): {
   sectionStartIndex?: number;
   autoSectionNumbering?: boolean;
   binNamingType?: "numeric" | "alpha";
-  reserve_bin_keys?: string[];
+  bin_type_map?: Record<string, StorageType>;
   levelConfig?: LevelConfigItem[];
   namingStrategy?: "pattern" | "rack-index" | "custom" | "manual";
   namingOrientation?: "column-first" | "row-first";
@@ -56,7 +63,7 @@ export function getCatalogItemSpec(item: CatalogItem): {
     sectionStartIndex: t.sectionStartIndex,
     autoSectionNumbering: t.autoSectionNumbering,
     binNamingType: t.binNamingType,
-    reserve_bin_keys: t.reserve_bin_keys,
+    bin_type_map: normalizeBinTypeMap(t.bin_type_map, t.reserve_bin_keys),
     levelConfig: t.levelConfig,
     namingStrategy: t.namingStrategy,
     namingOrientation: t.namingOrientation,
@@ -131,15 +138,54 @@ export function getNextIndexInRow(racks: { rowPrefix?: string; indexInRow?: numb
 /** Address pattern for row-based labels: rack label is Row (e.g. G1), bins get G1-1-1, G1-1-A, … */
 export const ROW_LABEL_ADDRESS_PATTERN = "{Row}-{Level}-{Bin}";
 
-/** Persistent display label from DB (rack.name or rack.label). Use this so map and details always match after save. */
-export function getRackDisplayId(r: {
-  name?: string;
-  label?: string;
-  rowPrefix?: string;
-  indexInRow?: number;
-  aisle_letter?: string;
-  rack_index?: number;
-}): string {
+/** Row container that holds this rack (by slot rackId), if any. */
+export function findRowContainerForRack(layout: LayoutState | undefined | null, rack: RackState): RowContainer | null {
+  const rid = rack.id ?? rack.rack_index;
+  for (const rc of layout?.row_containers ?? []) {
+    if (rc.slots.some((s) => s.rackId != null && String(s.rackId) === String(rid))) return rc;
+  }
+  return null;
+}
+
+/** Counting direction for rack numbers / bin column letters from row container. Defaults to LTR. */
+export function getRowDirectionForRack(rack: RackState, layout?: LayoutState | null): "LTR" | "RTL" {
+  const rc = layout ? findRowContainerForRack(layout, rack) : null;
+  return rc?.direction === "RTL" ? "RTL" : "LTR";
+}
+
+/** Persistent display label from DB (rack.name or rack.label). Use this so map and details always match after save.
+ * When `layout` is passed and the rack sits in a `row_container`, numbering follows slot order and `direction` (LTR vs RTL). */
+export function getRackDisplayId(
+  r: {
+    name?: string;
+    label?: string;
+    rowPrefix?: string;
+    indexInRow?: number;
+    aisle_letter?: string;
+    rack_index?: number;
+    id?: number | string;
+  },
+  layout?: LayoutState
+): string {
+  const rack = r as RackState;
+  if (layout?.row_containers?.length) {
+    const rc = findRowContainerForRack(layout, rack);
+    if (rc?.slots?.length) {
+      const filled = rc.slots
+        .filter((s) => s.rackId != null)
+        .sort((a, b) => ((rc.orientation ?? "horizontal") === "horizontal" ? a.x - b.x : a.y - b.y));
+      const rid = rack.id ?? rack.rack_index;
+      const i = filled.findIndex((s) => String(s.rackId) === String(rid));
+      if (i >= 0 && filled.length > 0) {
+        const dir = rc.direction === "RTL" ? "RTL" : "LTR";
+        const n = filled.length;
+        const num = dir === "RTL" ? n - i : i + 1;
+        const rawPrefix = String(rc.rowPrefix ?? rack.rowPrefix ?? rack.aisle_letter ?? "A").trim() || "A";
+        const letter = (rawPrefix.match(/[A-Za-z0-9]/)?.[0] ?? "A").toUpperCase();
+        return `${letter}${num}`;
+      }
+    }
+  }
   const persistent = typeof (r as { name?: string }).name === "string" && (r as { name: string }).name.trim() !== ""
     ? (r as { name: string }).name.trim()
     : typeof (r as { label?: string }).label === "string" && (r as { label: string }).label.trim() !== ""
@@ -407,10 +453,31 @@ export function getDragSlotHighlights(
   return { validSlots, invalidSlots };
 }
 
-/** Normalize rack/template to level config array. Uses levelConfig when present, else builds from levels + bins_per_level. */
-export function getLevelConfig(r: { levelConfig?: LevelConfigItem[]; levels?: number; bins_per_level?: number }): LevelConfigItem[] {
-  if (Array.isArray(r.levelConfig) && r.levelConfig.length > 0)
-    return r.levelConfig;
+/** Unified layout resolver for rack/template consumers. */
+export function getRackLayout(r: {
+  layoutVariant?: { levels?: LevelConfigItem[] | null } | null;
+  levelConfig?: LevelConfigItem[];
+  levels?: number;
+  bins_per_level?: number;
+}): { levels: LevelConfigItem[]; levelsCount: number; binsPerLevel: number } {
+  if (Array.isArray(r.layoutVariant?.levels) && r.layoutVariant.levels.length > 0) {
+    const lv = r.layoutVariant.levels.map((row, i) => ({ level: Number(row.level ?? i + 1), locations: Math.max(1, Number(row.locations ?? 1)) }));
+    return { levels: lv, levelsCount: lv.length, binsPerLevel: lv[0]?.locations ?? 1 };
+  }
+  if (Array.isArray(r.levelConfig) && r.levelConfig.length > 0) {
+    const lv = r.levelConfig.map((row, i) => ({ level: Number(row.level ?? i + 1), locations: Math.max(1, Number(row.locations ?? 1)) }));
+    return { levels: lv, levelsCount: lv.length, binsPerLevel: lv[0]?.locations ?? 1 };
+  }
+  const L = Math.max(1, Number(r.levels ?? 4));
+  const B = Math.max(1, Number(r.bins_per_level ?? 4));
+  const levels = Array.from({ length: L }, (_, i) => ({ level: i + 1, locations: B }));
+  return { levels, levelsCount: L, binsPerLevel: B };
+}
+
+/** Normalize rack/template to level config array. Uses layoutVariant/levelConfig when present, else builds from levels + bins_per_level. */
+export function getLevelConfig(r: { layoutVariant?: { levels?: LevelConfigItem[] | null } | null; levelConfig?: LevelConfigItem[]; levels?: number; bins_per_level?: number }): LevelConfigItem[] {
+  const resolved = getRackLayout(r);
+  if (resolved.levels.length > 0) return resolved.levels;
   const L = Math.max(1, Number(r.levels ?? 4));
   const B = Math.max(1, Number(r.bins_per_level ?? 4));
   return Array.from({ length: L }, (_, i) => ({ level: i + 1, locations: B }));
@@ -433,6 +500,7 @@ export function duplicateRacksAtPosition(
   const rAny = (r: RackState) => r as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha" };
   return racks.map((r, i) => {
     const lc = getLevelConfig(r);
+    const binTypeMap = buildBinTypeMapFromBins(r.bins);
     const total = getTotalLocations(lc);
     const volPerBin = total > 0
       ? volumePerBinFromTotal(r.width_cm, r.length_cm, r.height_cm, total)
@@ -448,7 +516,7 @@ export function duplicateRacksAtPosition(
       r.width_cm,
       r.length_cm,
       r.height_cm,
-      undefined,
+      binTypeMap,
       rAny(r).addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
       rAny(r).rowId ?? r.name,
       rAny(r).sectionStartIndex ?? 1,
@@ -458,6 +526,7 @@ export function duplicateRacksAtPosition(
     return {
       ...r,
       id: undefined,
+      uuid: generateRackUuid(),
       x: cell.x + (i % 3) * (r.width + 1),
       y: cell.y + Math.floor(i / 3) * (r.height + 1),
       rack_index: nextRackIndexBase + i,
@@ -487,9 +556,7 @@ export function reindexRowByPrefix(racks: RackState[], prefix: string): RackStat
     const volPerBin = totalBins > 0
       ? volumePerBinFromTotal(r.width_cm ?? 120, r.length_cm ?? 80, r.height_cm ?? 200, totalBins)
       : 0;
-    const reserveBinKeys = r.bins
-      ?.filter((b) => b.storage_type === "reserve")
-      .map((b) => `${b.level_index}-${b.segment_index}`);
+    const binTypeMap = buildBinTypeMapFromBins(r.bins);
     const addrPattern = (r as { addressPattern?: string }).addressPattern ?? ROW_LABEL_ADDRESS_PATTERN;
     const sectionStart = (r as { sectionStartIndex?: number }).sectionStartIndex ?? 1;
     const binType = (r as { binNamingType?: "numeric" | "alpha" }).binNamingType ?? "numeric";
@@ -504,7 +571,7 @@ export function reindexRowByPrefix(racks: RackState[], prefix: string): RackStat
       r.width_cm,
       r.length_cm,
       r.height_cm,
-      reserveBinKeys?.length ? reserveBinKeys : undefined,
+      binTypeMap,
       addrPattern,
       rackLabel,
       sectionStart,
@@ -542,9 +609,7 @@ export function reindexGeometricRow(racks: RackState[], refRackId: number | stri
     const volPerBin = totalBins > 0
       ? volumePerBinFromTotal(r.width_cm ?? 120, r.length_cm ?? 80, r.height_cm ?? 200, totalBins)
       : 0;
-    const reserveBinKeys = r.bins
-      ?.filter((b) => b.storage_type === "reserve")
-      .map((b) => `${b.level_index}-${b.segment_index}`);
+    const binTypeMap = buildBinTypeMapFromBins(r.bins);
     const addrPattern = (r as { addressPattern?: string }).addressPattern ?? ROW_LABEL_ADDRESS_PATTERN;
     const sectionStart = (r as { sectionStartIndex?: number }).sectionStartIndex ?? 1;
     const binType = (r as { binNamingType?: "numeric" | "alpha" }).binNamingType ?? "numeric";
@@ -559,7 +624,7 @@ export function reindexGeometricRow(racks: RackState[], refRackId: number | stri
       r.width_cm,
       r.length_cm,
       r.height_cm,
-      reserveBinKeys?.length ? reserveBinKeys : undefined,
+      binTypeMap,
       addrPattern,
       rackLabel,
       sectionStart,
@@ -671,6 +736,20 @@ export type RackTemplateLabelOptions = {
   startIndex?: number;
 };
 
+export type GenerateLocationLabelParams = {
+  levelIndex: number;
+  segmentIndex: number;
+  levelRows: { level: number; locations: number }[];
+  labelOptions?: RackTemplateLabelOptions | null;
+  addressPattern?: string;
+  rowId?: string;
+  sectionStartIndex?: number;
+  binNamingType?: "numeric" | "alpha";
+  namingPattern?: string;
+  rackIndex?: number;
+  aisleLetter?: string;
+};
+
 function globalIndexColumnFirst(levelIndex: number, segmentIndex: number, levelRows: { level: number; locations: number }[]): number {
   let idx = 1;
   for (let lev = 0; lev < levelIndex; lev++) idx += Math.max(1, levelRows[lev]?.locations ?? 0);
@@ -733,6 +812,54 @@ export function getRackTemplateLabel(
     out = expandRackIndexPattern(out, options.rackId, globalIndex1, padding);
   }
   return out;
+}
+
+/** Single source of truth for location label generation in preview and real bin creation. */
+export function generateLocationLabel(params: GenerateLocationLabelParams): string {
+  const {
+    levelIndex,
+    segmentIndex,
+    levelRows,
+    labelOptions,
+    addressPattern,
+    rowId,
+    sectionStartIndex,
+    binNamingType,
+    namingPattern,
+    rackIndex,
+    aisleLetter,
+  } = params;
+
+  if (labelOptions) {
+    return getRackTemplateLabel(levelIndex, segmentIndex, levelRows, labelOptions);
+  }
+
+  const useAddressPattern =
+    addressPattern != null &&
+    rowId != null &&
+    sectionStartIndex != null &&
+    binNamingType != null;
+
+  if (useAddressPattern) {
+    const addrPattern = (addressPattern?.trim() || DEFAULT_ADDRESS_PATTERN);
+    return expandAddressPattern(
+      addrPattern,
+      rowId!,
+      sectionStartIndex!,
+      binNamingType!,
+      levelIndex + 1,
+      segmentIndex + 1
+    );
+  }
+
+  const pattern = (namingPattern?.trim() || `${aisleLetter ?? "A"}-{R}-{L}-{B}`);
+  return expandNamingPattern(
+    pattern,
+    rackIndex ?? 1,
+    levelIndex + 1,
+    segmentIndex + 1,
+    aisleLetter
+  );
 }
 
 /** Bin volume from dimensions (dm³). */
@@ -871,7 +998,7 @@ export function createBinsForRack(
   rackWidthCm?: number,
   rackDepthCm?: number,
   rackHeightCm?: number,
-  reserveBinKeys?: string[],
+  binTypeMap?: Record<string, StorageType>,
   addressPattern?: string,
   rowId?: string,
   sectionStartIndex?: number,
@@ -891,7 +1018,7 @@ export function createBinsForRack(
   const levelCount = levelRows.length;
   const levelHeights = rackHeightCm != null && rackHeightCm > 0 ? levelHeightsForRack(rackHeightCm, levelCount) : [];
   const depth_cm = rackDepthCm ?? undefined;
-  const reserveSet = reserveBinKeys ? new Set(reserveBinKeys) : undefined;
+  const normalizedBinTypeMap = normalizeBinTypeMap(binTypeMap);
   const row = (rowId ?? aisleLetter).toString().replace(/\./g, "");
   const sectionStart = sectionStartIndex ?? 1;
   const binType = binNamingType ?? "numeric";
@@ -933,12 +1060,20 @@ export function createBinsForRack(
     const height_cm = levelHeights[lev] ?? undefined;
     for (let seg = 0; seg < locs; seg++) {
       const key = `${lev}-${seg}`;
-      const isReserve = reserveSet?.has(key) ?? false;
-      const label = labelOptions
-        ? getRackTemplateLabel(lev, seg, levelRows, labelOptions)
-        : useAddressPattern
-          ? expandAddressPattern(addrPattern, row, sectionStart, binType, lev + 1, seg + 1)
-          : expandNamingPattern(pattern, rackIndex, lev + 1, seg + 1, aisleLetter);
+      const type = normalizedBinTypeMap[key] ?? "primary";
+      const label = generateLocationLabel({
+        levelIndex: lev,
+        segmentIndex: seg,
+        levelRows,
+        labelOptions,
+        addressPattern: useAddressPattern ? addrPattern : undefined,
+        rowId: useAddressPattern ? row : undefined,
+        sectionStartIndex: useAddressPattern ? sectionStart : undefined,
+        binNamingType: useAddressPattern ? binType : undefined,
+        namingPattern: pattern,
+        rackIndex,
+        aisleLetter,
+      });
       const locId = (labelOptions || useAddressPattern || namingPattern) ? label : locationId(warehouseCode, aisleLetter, rackIndex, lev + 1, seg + 1);
       const locationUUID = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `loc-${Date.now()}-${lev}-${seg}-${Math.random().toString(36).slice(2, 9)}`;
       const vol = (width_cm != null && depth_cm != null && height_cm != null)
@@ -957,11 +1092,96 @@ export function createBinsForRack(
         location_id: locId,
         locationUUID,
         barcode_data: locId,
-        ...(isReserve ? { storage_type: "reserve" as const } : {}),
+        storage_type: type,
       });
     }
   }
   return out;
+}
+
+/**
+ * Single-cell location label using the same rules as createBinsForRack (for mirrored RTL display).
+ */
+export function generateLocationLabelForRackCell(rack: RackState, levelIndex: number, segmentIndex: number): string {
+  const levelCfg = getLevelConfig(rack);
+  const levelRows = levelCfg.map((row) => ({ level: row.level, locations: row.locations }));
+  const aisleLetter = rack.aisle_letter ?? "A";
+  const rackIndex = rack.rack_index ?? 1;
+  const rAny = rack as {
+    addressPattern?: string;
+    rowId?: string;
+    sectionStartIndex?: number;
+    binNamingType?: "numeric" | "alpha";
+    namingStrategy?: "pattern" | "rack-index" | "custom" | "manual";
+    namingOrientation?: "column-first" | "row-first";
+    namingPattern?: string;
+    manualLabels?: Record<string, string>;
+    overrides?: Record<string, string>;
+    indexPadding?: number;
+    startIndex?: number;
+  };
+  const row = (rAny.rowId ?? rack.name ?? aisleLetter).toString().replace(/\./g, "");
+  const sectionStart = rAny.sectionStartIndex ?? 1;
+  const binType = rAny.binNamingType ?? "numeric";
+  const useNewNaming =
+    rAny.namingStrategy != null ||
+    rAny.manualLabels != null ||
+    (rAny.overrides != null && Object.keys(rAny.overrides).length > 0);
+  const effectiveStrategy: "pattern" | "rack-index" | "custom" | "manual" = rAny.namingStrategy ?? "pattern";
+  const effectivePattern =
+    (rAny.addressPattern ?? rAny.namingPattern)?.trim() || DEFAULT_ADDRESS_PATTERN;
+  const rackId = `${row}${rackIndex}`;
+
+  const labelOptions: RackTemplateLabelOptions | null = useNewNaming
+    ? {
+        namingStrategy: effectiveStrategy,
+        namingOrientation: rAny.namingOrientation ?? "column-first",
+        namingPattern: effectivePattern,
+        rowId: row,
+        sectionStartIndex: sectionStart,
+        binNamingType: binType,
+        manualLabels: rAny.manualLabels,
+        overrides: rAny.overrides,
+        rackId,
+        indexPadding: rAny.indexPadding ?? 2,
+        startIndex: rAny.startIndex ?? 1,
+      }
+    : null;
+
+  const useAddressPattern =
+    !labelOptions &&
+    rAny.addressPattern != null &&
+    row !== "" &&
+    rAny.sectionStartIndex != null &&
+    rAny.binNamingType != null;
+  const pattern = (rAny.namingPattern?.trim() || `${aisleLetter}-{R}-{L}-{B}`);
+  const addrPattern = (rAny.addressPattern?.trim() || DEFAULT_ADDRESS_PATTERN);
+
+  return generateLocationLabel({
+    levelIndex,
+    segmentIndex,
+    levelRows,
+    labelOptions,
+    addressPattern: useAddressPattern ? addrPattern : undefined,
+    rowId: useAddressPattern ? row : undefined,
+    sectionStartIndex: useAddressPattern ? sectionStart : undefined,
+    binNamingType: useAddressPattern ? binType : undefined,
+    namingPattern: pattern,
+    rackIndex,
+    aisleLetter,
+  });
+}
+
+/** Bin label for UI when row direction is RTL (mirrors column letters / bin indices without moving geometry). */
+export function getBinDisplayLabel(rack: RackState, bin: BinState, layout?: LayoutState | null): string {
+  const base = bin.label ?? bin.location_id ?? "";
+  if (getRowDirectionForRack(rack, layout ?? undefined) !== "RTL") return base;
+  const lc = getLevelConfig(rack);
+  const locs = Math.max(1, lc[bin.level_index]?.locations ?? rack.bins_per_level ?? 1);
+  if (locs <= 1) return base;
+  const segMir = locs - 1 - bin.segment_index;
+  if (segMir === bin.segment_index) return base;
+  return generateLocationLabelForRackCell(rack, bin.level_index, segMir);
 }
 
 /** Product dimensions (cm) for fit-check. D = depth, S = width, W = height. */
@@ -996,14 +1216,14 @@ export type SelectablePosition = {
   /** Capacity in dm³ for volume fit-check. */
   capacityDm3?: number;
   /** primary = picking; reserve = zapasowa (orange on map). */
-  storageType?: "primary" | "reserve";
+  storageType?: StorageType;
 };
 
 /** Build flat list of all positions from layout racks (for location picker). Uses rackLevels when present, else bins. */
-export function getAllPositionsFromRacks(racks: RackState[]): SelectablePosition[] {
+export function getAllPositionsFromRacks(racks: RackState[], layout?: LayoutState | null): SelectablePosition[] {
   const out: SelectablePosition[] = [];
   for (const rack of racks) {
-    const rowLabel = getRackDisplayId(rack);
+    const rowLabel = getRackDisplayId(rack, layout ?? undefined);
     const levels = rack.rackLevels ?? binsToLevels(rack.bins ?? []);
     for (const lev of levels) {
       for (const pos of lev.positions) {
@@ -1018,7 +1238,7 @@ export function getAllPositionsFromRacks(racks: RackState[]): SelectablePosition
           maxWidthCm: pos.max_width_cm,
           maxHeightCm: pos.max_height_cm,
           capacityDm3: pos.volume_dm3,
-          storageType: pos.storage_type,
+          storageType: normalizeStorageType(pos.storage_type),
         });
       }
     }
@@ -1072,10 +1292,7 @@ export function getPositionsFromLayoutRacks(rawRacks: RawLayoutRack[]): Selectab
             ? b.locationUUID
             : `gen-${rid}-${lev}-${seg}`;
       const locationAddress = (b.location_id ?? b.label ?? locationUUID).toString().trim();
-      const storageType =
-        (typeof b.storage_type === "string" && b.storage_type.toLowerCase() === "reserve")
-          ? "reserve" as const
-          : "primary" as const;
+      const storageType = normalizeStorageType(b.storage_type);
       out.push({
         locationUUID,
         locationAddress: locationAddress || locationUUID,

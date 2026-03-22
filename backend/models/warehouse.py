@@ -7,7 +7,7 @@ Rack: linked to layout, X/Y coordinates, orientation, number of levels.
 Bin: smallest unit (location); label (e.g. A-01-01), volume, current load.
 """
 
-from sqlalchemy import Column, String, ForeignKey, Integer, Float, Text
+from sqlalchemy import Column, String, ForeignKey, Integer, Float, Text, Boolean
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -108,6 +108,7 @@ class WarehouseLayout(Base, BaseModelMixin):
     grid_cols = Column(Integer, nullable=False, default=24)
     grid_rows = Column(Integer, nullable=False, default=16)
     row_containers_json = Column(Text, nullable=True)  # JSON: list of row containers (empty slots)
+    visual_elements_json = Column(Text, nullable=True)  # JSON: list of visual canvas elements
     wall_elements_json = Column(Text, nullable=True)  # JSON: list of WallElement (doors/gates on perimeter)
     building_width_m = Column(Float, nullable=True)
     building_depth_m = Column(Float, nullable=True)
@@ -123,6 +124,9 @@ class Rack(Base, BaseModelMixin):
     __tablename__ = "warehouse_layout_racks"
 
     layout_id = Column(Integer, ForeignKey("warehouse_layouts.id", ondelete="CASCADE"), nullable=False)
+    uuid = Column(String(64), nullable=True, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    rack_type = Column(String(32), nullable=False, default="warehouse")
     name = Column(String, nullable=True)
     x = Column(Integer, nullable=False)  # in 10cm units
     y = Column(Integer, nullable=False)  # in 10cm units
@@ -160,17 +164,19 @@ class Aisle(Base, BaseModelMixin):
 
 
 class Bin(Base, BaseModelMixin):
-    """The smallest unit (location). Label e.g. A-01-01, volume (max), current load. storage_type: primary (picking) or reserve (overstock)."""
+    """The smallest unit (location). Label e.g. A-01-01, volume (max), current load. storage_type is a free-form string normalized by the service layer."""
     __tablename__ = "warehouse_bins"
 
     rack_id = Column(Integer, ForeignKey("warehouse_layout_racks.id", ondelete="CASCADE"), nullable=False)
+    location_uuid = Column(String(64), nullable=True, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
     label = Column(String, nullable=False)
     barcode = Column(String(64), unique=True, nullable=True, index=True)  # LOC-{rack}-{level}-{bin} e.g. LOC-A01-03-02
     level_index = Column(Integer, nullable=False)
     segment_index = Column(Integer, nullable=False)
     volume_dm3 = Column(Float, nullable=False, default=0)
     current_load_dm3 = Column(Float, nullable=False, default=0)
-    storage_type = Column(String(32), nullable=True, default="primary")  # "primary" | "reserve"
+    storage_type = Column(String(32), nullable=True, default="primary")  # normalized to primary | reserve | store | buffer | damaged
 
     rack = relationship("Rack", back_populates="bins")
 
@@ -180,8 +186,10 @@ class StorageLocation(Base, BaseModelMixin):
     __tablename__ = "storage_locations"
 
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
     rack_id = Column(Integer, ForeignKey("warehouse_layout_racks.id", ondelete="CASCADE"), nullable=False)
     bin_id = Column(Integer, ForeignKey("warehouse_bins.id", ondelete="CASCADE"), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
     x_cm = Column(Float, nullable=False, default=0)
     y_cm = Column(Float, nullable=False, default=0)
     z_cm = Column(Float, nullable=False, default=0)

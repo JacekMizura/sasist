@@ -1,4 +1,5 @@
 import type { LabelRecord, FormattingRules, SelectionMode } from "../../types/labelSystem";
+import { normalizeStorageType } from "../../utils/storageTypes";
 
 type LayoutRack = {
   aisle_letter?: string;
@@ -82,7 +83,7 @@ export function getRecordsFromLayout(
         zone_name: zoneName,
         volume_capacity: b.volume_dm3,
         barcode_data,
-        storage_type: (b.storage_type === "reserve" ? "reserve" : "primary") as "primary" | "reserve",
+        storage_type: normalizeStorageType(b.storage_type),
         aisle_letter: aisleLetter,
         rack_index: rackIndex,
         isBottomLevel: levelIndex === 0,

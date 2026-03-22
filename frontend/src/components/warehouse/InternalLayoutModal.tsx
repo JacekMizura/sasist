@@ -1,8 +1,12 @@
-import { useState } from "react";
-import type { RackState, InternalStructure, InternalLevel, BinState } from "./warehouseTypes";
+import { useMemo, useState } from "react";
+import type { LayoutState } from "../../types/warehouse";
+import type { RackState, InternalStructure, InternalLevel, BinState, StorageType } from "./warehouseTypes";
 import { snapCm, binVolumeFromDimensions, getRackDisplayId, levelHeightsForRack } from "./warehouseUtils";
+import { getStorageTypeStyle, normalizeStorageType, STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
+import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
 export type InternalLayoutModalProps = {
+  layout?: LayoutState | null;
   rack: RackState;
   onSave: (internal_structure: InternalStructure, bins?: BinState[]) => void;
   onClose: () => void;
@@ -15,16 +19,23 @@ const DEFAULT_BIN_HEIGHT_CM = 150;
 
 function getInitialLevels(rack: RackState): InternalLevel[] {
   const defaultDepthCm = rack.length_cm ?? DEFAULT_BIN_DEPTH_CM;
-  const defaultWidthCm = rack.width_cm ? snapCm(rack.width_cm / rack.bins_per_level) : DEFAULT_BIN_WIDTH_CM;
+  const fallbackBinWidth = (() => {
+    const withWidth = (rack.bins ?? []).find((b) => typeof b.width_cm === "number" && Number.isFinite(b.width_cm) && b.width_cm > 0);
+    return withWidth?.width_cm;
+  })();
+  const defaultWidthCm = fallbackBinWidth;
   if (rack.internal_structure?.levels?.length) {
     const defaultHeightCm = rack.height_cm ? Math.floor(rack.height_cm / rack.levels) : DEFAULT_BIN_HEIGHT_CM;
-    return rack.internal_structure.levels.map((l) => ({
+    return rack.internal_structure.levels.map((l, levelIndex) => ({
       height_cm: l.height_cm,
-      locations: l.locations.map((loc) => ({
-        width_cm: loc.width_cm ?? defaultWidthCm,
+      locations: l.locations.map((loc, segmentIndex) => {
+        const bin = rack.bins.find((b) => b.level_index === levelIndex && b.segment_index === segmentIndex);
+        return {
+        // Prefer rack bin width (template-propagated) during initialization.
+        width_cm: bin?.width_cm ?? defaultWidthCm ?? loc.width_cm ?? DEFAULT_BIN_WIDTH_CM,
         depth_cm: loc.depth_cm ?? defaultDepthCm,
         height_cm: loc.height_cm ?? l.height_cm ?? defaultHeightCm,
-      })),
+      };}),
     }));
   }
   const levelHeights = rack.height_cm && rack.levels > 0
@@ -48,24 +59,53 @@ function binKey(levIdx: number, segIdx: number) {
   return `${levIdx}-${segIdx}`;
 }
 
-export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutModalProps) {
+function getColumnLetter(index: number): string {
+  return String.fromCharCode(65 + index);
+}
+
+function structureSignature(levels: InternalLevel[]): string {
+  const levelCounts = levels.map((l) => l.locations.length).join(",");
+  return `${levels.length}|${levelCounts}`;
+}
+
+export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: InternalLayoutModalProps) {
   const rackWidthCm = rack.width_cm;
-  const [levels, setLevels] = useState<Array<InternalLevel>>(() => getInitialLevels(rack));
-  const [labelOverrides, setLabelOverrides] = useState<Record<string, string>>({});
-  const [storageTypeOverrides, setStorageTypeOverrides] = useState<Record<string, "primary" | "reserve">>(() => {
-    const out: Record<string, "primary" | "reserve"> = {};
-    rack.bins.forEach((b) => {
+  const initialLevels = useMemo(() => getInitialLevels(rack), [rack]);
+  const [levels, setLevels] = useState<Array<InternalLevel>>(() => initialLevels);
+  const [editingDimensionsKey, setEditingDimensionsKey] = useState<string | null>(null);
+  const [customNames, setCustomNames] = useState<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    (rack.bins ?? []).forEach((b) => {
       const key = binKey(b.level_index, b.segment_index);
-      if (b.storage_type) out[key] = b.storage_type;
+      const code = `${getColumnLetter(b.segment_index)}-${b.level_index + 1}`;
+      const candidate = String(b.label ?? "").trim();
+      if (candidate && candidate !== code) out[key] = candidate;
     });
     return out;
   });
+  const [editingNameKey, setEditingNameKey] = useState<string | null>(null);
+  const [storageTypeOverrides, setStorageTypeOverrides] = useState<Record<string, StorageType>>(() => {
+    const out: Record<string, StorageType> = {};
+    rack.bins.forEach((b) => {
+      const key = binKey(b.level_index, b.segment_index);
+      out[key] = normalizeStorageType(b.storage_type);
+    });
+    return out;
+  });
+  const initialStructureSig = useMemo(() => structureSignature(initialLevels), [initialLevels]);
+  const currentStructureSig = useMemo(() => structureSignature(levels), [levels]);
+  const isVariantMode = currentStructureSig !== initialStructureSig;
 
-  const totalWidth = (lev: InternalLevel) => lev.locations.reduce((s, loc) => s + loc.width_cm, 0);
+  const levelWidthSum = (lev: InternalLevel) => lev.locations.reduce((sum, loc) => sum + Number(loc.width_cm ?? 0), 0);
+  const rackWidthLimit = typeof rackWidthCm === "number" && Number.isFinite(rackWidthCm) ? rackWidthCm : Number.POSITIVE_INFINITY;
   const totalHeightCm = levels.reduce((s, lev) => s + lev.height_cm, 0);
+  const totalStructureHeightCm = Math.max(
+    1,
+    levels.reduce((sum, lev) => sum + Math.max(0, Number(lev.height_cm ?? 0)), 0)
+  );
   const heightExceeded = totalHeightCm > rack.height_cm;
-  const widthExceeded = levels.some((lev) => totalWidth(lev) > rackWidthCm + 0.01);
-  const valid = !heightExceeded && !widthExceeded;
+  const hasAnyLevelWidthExceeded = levels.some((lev) => levelWidthSum(lev) > rackWidthLimit + 0.01);
+  const valid = !heightExceeded && !hasAnyLevelWidthExceeded;
   const maxLocsPerLevel = levels.length ? Math.max(...levels.map((l) => l.locations.length)) : 0;
   const fitsWithoutVerticalScroll = levels.length <= 8;
   const fitsWithoutHorizontalScroll = maxLocsPerLevel <= 10;
@@ -84,102 +124,157 @@ export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutMod
     setLevels((prev) =>
       prev.map((l, i) => (i === levIdx ? { ...l, locations: l.locations.map((loc, j) => (j === locIdx ? { ...loc, height_cm: snapCm(h) } : loc)) } : l))
     );
-  const addLocation = (levIdx: number) => {
+  const addLocation = (levIdx: number, sourceLocIdx?: number) => {
     const lev = levels[levIdx];
     const lastLoc = lev?.locations[lev.locations.length - 1];
-    setLevels((prev) => prev.map((l, i) => (i === levIdx ? { ...l, locations: [...l.locations, { width_cm: lastLoc?.width_cm ?? DEFAULT_BIN_WIDTH_CM, depth_cm: lastLoc?.depth_cm ?? rack.length_cm ?? DEFAULT_BIN_DEPTH_CM, height_cm: lastLoc?.height_cm ?? l.height_cm ?? DEFAULT_BIN_HEIGHT_CM }] } : l)));
+    const nextLocIdx = lev?.locations.length ?? 0;
+    const sourceType = sourceLocIdx != null ? getBinStorageType(levIdx, sourceLocIdx) : undefined;
+    const fallbackType = lev && lev.locations.length > 0 ? getBinStorageType(levIdx, lev.locations.length - 1) : "primary";
+    const inheritedType = normalizeStorageType(sourceType ?? fallbackType ?? "primary");
+    setLevels((prev) => prev.map((l, i) => {
+      if (i !== levIdx) return l;
+      const nextLocations = [...l.locations, { width_cm: lastLoc?.width_cm ?? DEFAULT_BIN_WIDTH_CM, depth_cm: lastLoc?.depth_cm ?? rack.length_cm ?? DEFAULT_BIN_DEPTH_CM, height_cm: lastLoc?.height_cm ?? l.height_cm ?? DEFAULT_BIN_HEIGHT_CM }];
+      // Optional UX: when structure changes, distribute width across new count for easier recovery.
+      const autoWidth = rackWidthCm && Number.isFinite(rackWidthCm) && rackWidthCm > 0 ? snapCm(rackWidthCm / Math.max(1, nextLocations.length)) : null;
+      return {
+        ...l,
+        locations: autoWidth != null ? nextLocations.map((loc) => ({ ...loc, width_cm: autoWidth })) : nextLocations,
+      };
+    }));
+    setStorageTypeOverrides((prev) => ({ ...prev, [binKey(levIdx, nextLocIdx)]: inheritedType }));
   };
   const removeLocation = (levIdx: number, locIdx: number) =>
     setLevels((prev) => prev.map((l, i) => (i === levIdx ? { ...l, locations: l.locations.filter((_, j) => j !== locIdx) } : l)));
 
-  const getBinLabel = (levIdx: number, segIdx: number) => {
-    const key = binKey(levIdx, segIdx);
-    if (key in labelOverrides) return labelOverrides[key];
-    const bin = rack.bins.find((b) => b.level_index === levIdx && b.segment_index === segIdx);
-    return bin?.barcode_data ?? bin?.location_id ?? bin?.label ?? "";
-  };
-  const setBinLabel = (levIdx: number, segIdx: number, value: string) => {
-    setLabelOverrides((prev) => ({ ...prev, [binKey(levIdx, segIdx)]: value }));
-  };
-  const getBinStorageType = (levIdx: number, segIdx: number): "primary" | "reserve" => {
+  const getBinStorageType = (levIdx: number, segIdx: number): StorageType => {
     const key = binKey(levIdx, segIdx);
     if (key in storageTypeOverrides) return storageTypeOverrides[key];
     const bin = rack.bins.find((b) => b.level_index === levIdx && b.segment_index === segIdx);
-    return bin?.storage_type ?? "primary";
+    return normalizeStorageType(bin?.storage_type);
   };
-  const setBinStorageType = (levIdx: number, segIdx: number, value: "primary" | "reserve") => {
+  const setBinStorageType = (levIdx: number, segIdx: number, value: StorageType) => {
     setStorageTypeOverrides((prev) => ({ ...prev, [binKey(levIdx, segIdx)]: value }));
   };
 
   const handleSave = () => {
-    const mergedBins: BinState[] = rack.bins.map((b) => {
-      const key = binKey(b.level_index, b.segment_index);
-      const labelOverride = labelOverrides[key];
-      const storageType = storageTypeOverrides[key] ?? b.storage_type ?? "primary";
-      const lev = levels[b.level_index];
-      const loc = lev?.locations[b.segment_index];
-      const width_cm = loc?.width_cm ?? b.width_cm ?? rack.width_cm / rack.bins_per_level;
-      const depth_cm = loc?.depth_cm ?? b.depth_cm ?? rack.length_cm;
-      const height_cm = loc?.height_cm ?? b.height_cm ?? (lev?.height_cm ?? rack.height_cm / rack.levels);
-      const volume_dm3 = binVolumeFromDimensions(width_cm, depth_cm, height_cm);
-      const used = b.used_volume_dm3 ?? b.current_load_dm3 ?? 0;
-      return {
-        ...b,
-        width_cm,
-        depth_cm,
-        height_cm,
-        volume_dm3,
-        used_volume_dm3: used,
-        current_load_dm3: used,
-        ...(labelOverride !== undefined && labelOverride.trim() !== ""
-          ? { label: labelOverride.trim(), location_id: labelOverride.trim(), barcode_data: labelOverride.trim() }
-          : {}),
-        storage_type: storageType,
-      };
+    const existingByKey = new Map<string, BinState>();
+    rack.bins.forEach((b) => {
+      existingByKey.set(binKey(b.level_index, b.segment_index), b);
     });
-    onSave({ levels }, mergedBins);
+
+    const newBins: BinState[] = [];
+
+    levels.forEach((lev, levelIndex) => {
+      const levelNumber = levelIndex + 1;
+      lev.locations.forEach((loc, segmentIndex) => {
+        const key = binKey(levelIndex, segmentIndex);
+        const existing = existingByKey.get(key);
+        const generatedLabel = `${getColumnLetter(segmentIndex)}-${levelNumber}`;
+        const customName = String(customNames[key] ?? "").trim();
+        const width_cm = loc?.width_cm ?? existing?.width_cm ?? DEFAULT_BIN_WIDTH_CM;
+        const depth_cm = loc?.depth_cm ?? existing?.depth_cm ?? rack.length_cm ?? DEFAULT_BIN_DEPTH_CM;
+        const height_cm = loc?.height_cm ?? existing?.height_cm ?? lev.height_cm ?? DEFAULT_BIN_HEIGHT_CM;
+        const volume_dm3 = binVolumeFromDimensions(width_cm, depth_cm, height_cm);
+        const used = existing?.used_volume_dm3 ?? existing?.current_load_dm3 ?? 0;
+        const storageType = normalizeStorageType(storageTypeOverrides[key] ?? existing?.storage_type ?? "primary");
+
+        newBins.push({
+          id: existing?.id,
+          label: customName || generatedLabel,
+          level_index: levelIndex,
+          segment_index: segmentIndex,
+          volume_dm3,
+          current_load_dm3: used,
+          used_volume_dm3: used,
+          width_cm,
+          depth_cm,
+          height_cm,
+          location_id: generatedLabel,
+          locationUUID:
+            existing?.locationUUID ??
+            (typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `loc-${Date.now()}-${levelIndex}-${segmentIndex}-${Math.random().toString(36).slice(2, 9)}`),
+          barcode_data: generatedLabel,
+          storage_type: storageType,
+        });
+      });
+    });
+
+    const totalLocations = levels.reduce((sum, lev) => sum + lev.locations.length, 0);
+    if (totalLocations !== newBins.length) {
+      console.error("BIN SYNC ERROR", { totalLocations, bins: newBins.length });
+    }
+
+    onSave({ levels }, newBins);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-[95vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
-          <h3 className="font-bold text-slate-800">Układ wewnętrzny – {getRackDisplayId(rack)}</h3>
-          <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100">✕</button>
+          <h3 className="font-bold text-slate-800">Układ wewnętrzny – {getRackDisplayId(rack, layout ?? undefined)}</h3>
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] px-2 py-1 rounded border ${isVariantMode ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-slate-50 border-slate-200 text-slate-600"}`}>
+              {isVariantMode ? "Tryb wariantu" : "Tryb szablonu"}
+            </span>
+            <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100">✕</button>
+          </div>
         </div>
-        <p className="text-xs text-slate-500 px-5 py-1 shrink-0">Szerokość regału: {rackWidthCm} cm. Wysokość regału: {rack.height_cm} cm. Suma szerokości lokalizacji na każdym poziomie nie może przekroczyć szerokości regału; suma wysokości poziomów nie może przekroczyć wysokości regału.</p>
-        {(heightExceeded || widthExceeded) && (
+        <p className="text-xs text-slate-500 px-5 py-1 shrink-0">Szerokość regału: {rackWidthCm} cm. Wysokość regału: {rack.height_cm} cm. Suma wysokości poziomów i suma szerokości lokalizacji na poziom nie mogą przekraczać limitów regału.</p>
+        {heightExceeded && (
           <p className="text-sm font-semibold text-red-600 px-5 py-1 shrink-0" role="alert">
-            {heightExceeded && `Suma wysokości poziomów (${totalHeightCm} cm) przekracza wysokość regału (${rack.height_cm} cm). `}
-            {widthExceeded && "Suma szerokości lokalizacji na co najmniej jednym poziomie przekracza szerokość regału."}
+            {`Suma wysokości poziomów (${totalHeightCm} cm) przekracza wysokość regału (${rack.height_cm} cm).`}
           </p>
         )}
         <div className={`flex-1 min-h-0 flex flex-col p-5 ${fitsWithoutVerticalScroll ? "overflow-hidden" : "overflow-y-auto"}`}>
           <div className={`flex flex-col gap-0 flex-1 min-h-0 ${fitsWithoutVerticalScroll ? "flex" : ""}`}>
+            <button type="button" onClick={addLevel} className="w-full py-2 rounded-lg border-2 border-dashed border-slate-300 text-slate-500 text-sm mb-2 hover:bg-slate-50 shrink-0">
+              + Dodaj poziom
+            </button>
             {/* Levels rendered top-to-bottom: highest level (Poziom L) at top, Poziom 1 at bottom */}
             {[...levels].reverse().map((lev, revIdx) => {
               const levIdx = levels.length - 1 - revIdx;
               const levelNumber = levIdx + 1;
-              const totalW = totalWidth(lev);
+              const levelHeightPercent = (Math.max(0, Number(lev.height_cm ?? 0)) / totalStructureHeightCm) * 100;
+              const levelTotalWidth = levelWidthSum(lev);
+              const levelWidthExceeded = levelTotalWidth > rackWidthLimit + 0.01;
               return (
                 <div
                   key={levIdx}
-                  className={`border-b-2 bg-slate-50/50 first:border-t-2 first:border-t-slate-300 flex flex-col min-h-0 ${fitsWithoutVerticalScroll ? "flex-1" : ""} ${revIdx < levels.length - 1 ? "border-b-orange-500" : "border-b-slate-300"}`}
+                  className={`border-b-2 first:border-t-2 first:border-t-slate-300 flex flex-col min-h-0 ${
+                    levelWidthExceeded
+                      ? "bg-red-50/60 border-b-red-400"
+                      : `bg-slate-50/50 ${revIdx < levels.length - 1 ? "border-b-orange-500" : "border-b-slate-300"}`
+                  }`}
+                  style={{
+                    height: `${levelHeightPercent}%`,
+                    minHeight: "60px",
+                    transition: "height 0.2s ease",
+                  }}
                 >
                   <div className="flex items-center gap-3 px-3 py-2 border-b border-slate-200 bg-white/80 shrink-0">
                     <span className="text-xs font-bold text-slate-700">Poziom {levelNumber}</span>
                     <label className="text-[10px] text-slate-500 flex items-center gap-1">Wys. (cm): <input type="number" min={10} step={10} value={lev.height_cm} onChange={(e) => setLevelHeight(levIdx, Number(e.target.value))} className="w-14 rounded border border-slate-200 px-1 py-0.5 text-xs bg-white" /></label>
                     <button type="button" onClick={() => removeLevel(levIdx)} className="text-red-600 text-xs font-semibold hover:underline">Usuń poziom</button>
                   </div>
-                  <div className={`flex flex-nowrap gap-1 p-2 items-stretch flex-1 min-h-0 ${fitsWithoutHorizontalScroll ? "overflow-hidden" : "overflow-x-auto"}`}>
+                  <div className="flex p-2 items-start min-h-0">
                     {lev.locations.map((loc, locIdx) => {
-                      const displayLabel = getBinLabel(levIdx, locIdx);
+                      const displayLabel = `${getColumnLetter(locIdx)}-${levelNumber}`;
+                      const cellKey = binKey(levIdx, locIdx);
+                      const customName = customNames[cellKey]?.trim() ?? "";
+                      const showPrimaryName = customName || displayLabel;
                       const storageType = getBinStorageType(levIdx, locIdx);
-                      const isReserve = storageType === "reserve";
+                      const storageStyle = getStorageTypeStyle(storageType);
+                      const widthCm = loc.width_cm;
+                      const totalWidth = lev.locations.reduce((sum, l) => sum + Math.max(0, Number(l.width_cm ?? 0)), 0);
+                      const count = Math.max(1, lev.locations.length);
+                      const widthPct = totalWidth > 0 ? (Math.max(0, Number(widthCm ?? 0)) / totalWidth) * 100 : 100 / count;
+                      const gapPx = 8;
+                      const widthCss = `calc(${widthPct}% - ${(gapPx * (count - 1)) / count}px)`;
                       const depthCm = loc.depth_cm ?? rack.length_cm;
                       const heightCm = loc.height_cm ?? lev.height_cm;
-                      const volDm3 = binVolumeFromDimensions(loc.width_cm, depthCm, heightCm);
-                      const technicalId = `Poziom ${levelNumber}, lokalizacja ${locIdx + 1}`;
+                      const volDm3 = binVolumeFromDimensions(widthCm, depthCm, heightCm);
                       const parseDim = (v: string) => {
                         const n = parseFloat(String(v).replace(",", "."));
                         return Number.isNaN(n) ? null : Math.max(10, n);
@@ -191,114 +286,192 @@ export function InternalLayoutModal({ rack, onSave, onClose }: InternalLayoutMod
                       return (
                         <div
                           key={locIdx}
-                          className={`relative flex flex-col rounded-xl border shadow-sm p-3 ${fitsWithoutHorizontalScroll ? "flex-1 min-w-0 min-h-[140px]" : "flex-shrink-0 min-w-[220px] min-h-[140px]"} ${isReserve ? "bg-amber-100 border-amber-300" : "bg-white border-slate-100"}`}
+                          className="relative flex flex-col rounded-xl border shadow-sm min-w-0 overflow-hidden p-2.5 h-[170px] shrink-0"
+                          style={{
+                            width: widthCss,
+                            marginRight: locIdx < lev.locations.length - 1 ? `${gapPx}px` : "0px",
+                            transition: "width 0.2s ease",
+                            boxSizing: "border-box",
+                            backgroundColor: storageStyle.bg,
+                            borderColor: storageStyle.border,
+                          }}
                         >
-                          {/* Top-right: Usuń – compact */}
-                          <div className="absolute right-1.5 top-1.5 z-10">
-                            <button
-                              type="button"
-                              onClick={() => removeLocation(levIdx, locIdx)}
-                              className="min-w-[28px] min-h-[26px] px-1.5 py-0.5 rounded-md bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold border border-red-200"
-                              title="Usuń lokalizację"
-                            >
-                              Usuń
-                            </button>
-                          </div>
+                          <>
+                              <button
+                                type="button"
+                                onClick={() => removeLocation(levIdx, locIdx)}
+                                className="absolute top-2 right-2 h-5 w-5 rounded border border-red-200 bg-red-100 text-[11px] font-bold text-red-700 hover:bg-red-200 z-10"
+                                title="Usuń lokalizację"
+                              >
+                                ✕
+                              </button>
+                              <div className="flex items-start justify-between gap-2 pr-7">
+                                <div className="min-w-0 flex-1">
+                                  {editingNameKey === cellKey ? (
+                                    <input
+                                      type="text"
+                                      autoFocus
+                                      value={customNames[cellKey] ?? ""}
+                                      onChange={(e) => setCustomNames((prev) => ({ ...prev, [cellKey]: e.target.value }))}
+                                      onBlur={() => setEditingNameKey(null)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          setEditingNameKey(null);
+                                        }
+                                        if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          setEditingNameKey(null);
+                                        }
+                                      }}
+                                      placeholder="Nazwa własna lokalizacji"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[14px] font-semibold text-slate-800"
+                                    />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingNameKey(cellKey)}
+                                      className="text-left w-full"
+                                      title="Kliknij, aby edytować nazwę lokalizacji"
+                                    >
+                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-2 py-0.5 text-[16px] font-bold text-slate-800 max-w-full truncate leading-tight">
+                                        {showPrimaryName}
+                                      </span>
+                                      {customName ? (
+                                        <span className="block mt-0.5 text-[10px] text-slate-500 font-mono">
+                                          {displayLabel}
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {editingDimensionsKey === cellKey ? (
+                                    <div className="inline-flex items-center gap-1 bg-white/80 border border-slate-200 rounded-md px-1 py-0.5">
+                                      <span className="text-[10px] font-bold text-slate-600">SZ</span>
+                                      {isVariantMode ? (
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={widthCm}
+                                          onChange={(e) => handleDimChange(setLocationWidth, e.target.value)}
+                                          className="w-[44px] rounded border border-slate-200 px-1 py-0.5 text-[10px] text-right bg-white"
+                                          title="Szerokość (cm)"
+                                        />
+                                      ) : (
+                                        <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] text-right text-slate-700 min-w-[44px] justify-end" title="Szerokość (cm), tylko do odczytu w trybie szablonu">
+                                          {widthCm}
+                                        </span>
+                                      )}
+                                      <span className="text-[10px] font-bold text-slate-600">GŁ</span>
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={depthCm}
+                                        onChange={(e) => handleDimChange(setLocationDepth, e.target.value)}
+                                        className="w-[44px] rounded border border-slate-200 px-1 py-0.5 text-[10px] text-right bg-white"
+                                        title="Głębokość (cm)"
+                                      />
+                                      <span className="text-[10px] font-bold text-slate-600">WYS</span>
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={heightCm}
+                                        onChange={(e) => handleDimChange(setLocationHeight, e.target.value)}
+                                        className="w-[44px] rounded border border-slate-200 px-1 py-0.5 text-[10px] text-right bg-white"
+                                        title="Wysokość (cm)"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingDimensionsKey(null)}
+                                        className="px-1.5 py-0.5 rounded border border-slate-200 text-[10px] text-slate-600 hover:bg-slate-50"
+                                      >
+                                        OK
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingDimensionsKey(cellKey)}
+                                      className="inline-flex items-center gap-1 text-left"
+                                      title="Kliknij, aby edytować wymiary"
+                                    >
+                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">SZ {widthCm} cm</span>
+                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">GŁ {Number(depthCm.toFixed(0))}</span>
+                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">WYS {Number(heightCm.toFixed(0))}</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
 
-                          {/* Two columns: left = address + type, right = dimensions grid */}
-                          <div className="flex gap-3 pr-14 flex-1 min-h-0">
-                            {/* Left: address + Podstawowa/Rezerwa */}
-                            <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                              <input
-                                type="text"
-                                value={displayLabel}
-                                onChange={(e) => setBinLabel(levIdx, locIdx, e.target.value)}
-                                placeholder="np. A1-A-1"
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-bold font-mono bg-white text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                                title="Adres lokalizacji (edytowalny)"
-                              />
-                              <p className="text-[10px] text-slate-500 font-normal">{technicalId}</p>
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-[9px] text-slate-500 font-medium">Typ:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setBinStorageType(levIdx, locIdx, "primary")}
-                                  className={`text-[10px] px-2 py-1 rounded-md ${!isReserve ? "bg-blue-100 border border-blue-300 font-semibold text-blue-800" : "bg-slate-100 border border-slate-200 text-slate-600"}`}
-                                  title="Lokalizacja podstawowa (kompletowanie)"
-                                >
-                                  Podstawowa
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setBinStorageType(levIdx, locIdx, "reserve")}
-                                  className={`text-[10px] px-2 py-1 rounded-md flex items-center gap-1 ${isReserve ? "bg-amber-200 border border-amber-400 font-semibold text-amber-900" : "bg-slate-100 border border-slate-200 text-slate-600"}`}
-                                  title="Rezerwa (wyłączona z listy kompletowania)"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                  Rezerwa
-                                </button>
-                              </div>
-                            </div>
+                              <div className="mt-2 pt-2 border-t border-slate-200/70 space-y-2 overflow-hidden">
+                                <div className="flex items-center gap-2 min-h-6">
+                                  {(() => {
+                                    const selected = STORAGE_TYPE_OPTIONS.find((option) => option.value === storageType);
+                                    if (!selected) return null;
+                                    const selectedStyle = getStorageTypeStyle(selected.value);
+                                    return (
+                                      <span
+                                        className="h-6 px-2 rounded-full border text-[10px] font-bold inline-flex items-center gap-1 shrink-0"
+                                        style={{
+                                          backgroundColor: selectedStyle.bg,
+                                          borderColor: selectedStyle.border,
+                                          color: selectedStyle.text,
+                                        }}
+                                      >
+                                        <StorageTypeIcon storageType={selected.value} size={11} />
+                                        {selected.label}
+                                      </span>
+                                    );
+                                  })()}
+                                  <div className="flex items-center gap-1">
+                                    {STORAGE_TYPE_OPTIONS.map((option) => {
+                                      const isSelected = storageType === option.value;
+                                      const optionStyle = getStorageTypeStyle(option.value);
+                                      return (
+                                        <button
+                                          key={option.value}
+                                          type="button"
+                                          onClick={() => {
+                                            setBinStorageType(levIdx, locIdx, option.value);
+                                          }}
+                                          className="h-6 w-6 rounded-md border inline-flex items-center justify-center"
+                                          style={{
+                                          backgroundColor: isSelected ? optionStyle.bg : "#f8fafc",
+                                          borderColor: isSelected ? optionStyle.border : "#e2e8f0",
+                                          color: isSelected ? optionStyle.text : "#94a3b8",
+                                          }}
+                                          title={option.label}
+                                        >
+                                          <StorageTypeIcon storageType={option.value} size={12} />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
 
-                            {/* Right: 3x1 grid – W / D / H with text inputs and "cm" */}
-                            <div className="flex flex-col gap-1.5 justify-start shrink-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold text-slate-600 w-5">W:</span>
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={loc.width_cm}
-                                  onChange={(e) => handleDimChange(setLocationWidth, e.target.value)}
-                                  className="w-14 rounded border border-slate-200 px-1.5 py-0.5 text-xs text-right bg-white"
-                                  title="Szerokość (cm)"
-                                />
-                                <span className="text-[10px] text-slate-500">cm</span>
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-[12px] text-slate-800 font-semibold whitespace-nowrap">Pojemność: {volDm3.toFixed(0)} dm³</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => addLocation(levIdx, locIdx)}
+                                    className="text-[10px] bg-blue-600 text-white rounded-md px-2 py-1 hover:bg-blue-700 shrink-0 mt-3"
+                                  >
+                                    + Lokalizacja
+                                  </button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold text-slate-600 w-5">D:</span>
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={depthCm}
-                                  onChange={(e) => handleDimChange(setLocationDepth, e.target.value)}
-                                  className="w-14 rounded border border-slate-200 px-1.5 py-0.5 text-xs text-right bg-white"
-                                  title="Głębokość (cm)"
-                                />
-                                <span className="text-[10px] text-slate-500">cm</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold text-slate-600 w-5">H:</span>
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={heightCm}
-                                  onChange={(e) => handleDimChange(setLocationHeight, e.target.value)}
-                                  className="w-14 rounded border border-slate-200 px-1.5 py-0.5 text-xs text-right bg-white"
-                                  title="Wysokość (cm)"
-                                />
-                                <span className="text-[10px] text-slate-500">cm</span>
-                              </div>
-                              <p className="text-[10px] text-slate-600 font-medium mt-0.5">
-                                Pojemność: {volDm3.toFixed(0)} dm³
-                              </p>
-                            </div>
-                          </div>
+                          </>
                         </div>
                       );
                     })}
-                    <button type="button" onClick={() => addLocation(levIdx)} className="flex-shrink-0 text-xs text-blue-600 border-2 border-dashed border-blue-200 rounded-lg px-3 py-2 self-center hover:bg-blue-50">
-                      + Lokalizacja
-                    </button>
                   </div>
-                  <p className={`text-[10px] px-3 py-1 ${totalW > (rackWidthCm ?? 0) + 0.01 ? "text-red-600 font-semibold" : "text-slate-500"}`}>
-                    Suma szer.: {totalW.toFixed(0)} cm {totalW > (rackWidthCm ?? 0) + 0.01 ? " (przekroczono)" : ""}
+                  <p className={`text-[10px] px-3 py-1 ${levelWidthExceeded ? "text-red-700 font-semibold" : "text-slate-500"}`}>
+                    Szerokość lokacji (szablon): {Number((lev.locations[0]?.width_cm ?? 0).toFixed(2))} cm · Suma szerokości: {levelTotalWidth.toFixed(2)} cm {levelWidthExceeded ? "(przekroczono)" : ""}
                   </p>
                 </div>
               );
             })}
-            <button type="button" onClick={addLevel} className="w-full py-2 rounded-b-lg border-2 border-dashed border-slate-300 text-slate-500 text-sm mt-1 hover:bg-slate-50 shrink-0">
-              + Dodaj poziom
-            </button>
           </div>
         </div>
         <div className="flex gap-2 justify-end px-5 py-4 border-t border-slate-200 shrink-0">

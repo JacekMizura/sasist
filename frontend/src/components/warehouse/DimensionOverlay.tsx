@@ -101,7 +101,7 @@ function DimensionOverlayInner({
               )}
               <rect x={cx - 28} y={cy - 10} width={56} height={20} rx={4} fill="white" stroke="#3b82f6" strokeWidth={1.5} />
               <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fill="#1e40af" fontSize={11} fontWeight="bold" style={{ userSelect: "none" }}>
-                Alejka {zone.widthCm} cm
+                Strefa {zone.widthCm} cm
               </text>
             </g>
           );
@@ -113,7 +113,7 @@ function DimensionOverlayInner({
           const y2 = line.to.y * cellPx;
           const mx = (x1 + x2) / 2;
           const my = (y1 + y2) / 2;
-          const label = line.isAisle ? `Alejka ${line.distanceCm} cm` : `${line.distanceCm} cm`;
+          const label = line.isAisle ? `Strefa ${line.distanceCm} cm` : `${line.distanceCm} cm`;
           const labelW = Math.max(44, label.length * 6);
           return (
             <g key={line.id}>

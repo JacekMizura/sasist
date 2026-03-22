@@ -39,7 +39,7 @@ export default function BarcodeManagement() {
       const res = await api.get("/warehouse/layout", {
         params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId },
       });
-      const d = res.data;
+      const d = res.data?.layout ?? res.data;
       setLayout({
         name: d?.name ?? "Layout",
         warehouse_name: d?.warehouse_name,

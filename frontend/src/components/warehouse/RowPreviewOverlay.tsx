@@ -23,6 +23,9 @@ export function RowPreviewOverlay({
 }: RowPreviewOverlayProps) {
   if (!visible) return null;
 
+  const formatMeters = (value: number): number => Number(value.toFixed(2));
+  const formattedTotalLength = formatMeters(totalLength);
+
   const pos = useFixedPosition ? { left: x + CURSOR_OFFSET_PX, top: y + CURSOR_OFFSET_PX } : { left: x, top: y };
   const animate = rackCount > 0;
 
@@ -51,10 +54,10 @@ export function RowPreviewOverlay({
           }),
         }}
       >
-        <div style={{ fontSize: "10px", fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: colors.textSecondary }}>Racks</div>
+        <div style={{ fontSize: "10px", fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: colors.textSecondary }}>Liczba regałów</div>
         <div style={{ fontSize: "13px", fontWeight: 600, color: colors.textPrimary, marginTop: "2px" }}>{rackCount}</div>
-        <div style={{ fontSize: "10px", fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: colors.textSecondary, marginTop: "6px" }}>Length</div>
-        <div style={{ fontSize: "13px", fontWeight: 600, color: colors.textPrimary, marginTop: "2px" }}>{totalLength} m</div>
+        <div style={{ fontSize: "10px", fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: colors.textSecondary, marginTop: "6px" }}>Długość rzędu</div>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: colors.textPrimary, marginTop: "2px" }}>{formattedTotalLength} m</div>
       </div>
     </>
   );

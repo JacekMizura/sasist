@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { EmptyRowSlot, LayoutState, RackState, RowContainer } from "../../../types/warehouse";
 import { isCellInsideRack } from "../utils/designerMouseUtils";
 
@@ -20,9 +20,13 @@ export interface UseRackInteractionParams {
   dragOffset: { dx: number; dy: number } | null;
   selectedRackIds: Array<number | string>;
   rackDragPreviewPosition: { x: number; y: number } | null;
+  /** Magazyn live map only — never run side-view / product-sidebar side effects on the layout designer canvas. */
+  magazynMapInteractions: boolean;
+  /** For dev logging only (Projektant vs Magazyn tab). */
   mainView: "magazyn" | "layout";
-  snapToGrid: boolean;
   aisleWidthCm: number;
+  routeMode?: boolean;
+  addRackToRoute?: (rackId: number | string) => void;
   refs: {
     moveRackWithinRowRef: React.MutableRefObject<((rowId: string, rackId: number | string, fromSlotIndex: number, toSlotIndex: number) => void) | null>;
   };
@@ -33,7 +37,6 @@ export interface UseRackInteractionParams {
   setDragOffset: React.Dispatch<React.SetStateAction<{ dx: number; dy: number } | null>>;
   setRackDragPreviewPosition: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
   setLayout: React.Dispatch<React.SetStateAction<LayoutState>>;
-  setMainView: (v: "magazyn" | "layout") => void;
   setSelectedRackIdForSideView: React.Dispatch<React.SetStateAction<number | string | null>>;
   setSelectedLocationForProducts: React.Dispatch<React.SetStateAction<{ level_index: number; segment_index: number } | null>>;
   setProductSearchQuery: (v: string) => void;
@@ -47,9 +50,11 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     dragOffset,
     selectedRackIds,
     rackDragPreviewPosition,
+    magazynMapInteractions,
     mainView,
-    snapToGrid,
     aisleWidthCm,
+    routeMode = false,
+    addRackToRoute,
     refs,
     helpers,
     setSelectedRackId,
@@ -58,7 +63,6 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     setDragOffset,
     setRackDragPreviewPosition,
     setLayout,
-    setMainView,
     setSelectedRackIdForSideView,
     setSelectedLocationForProducts,
     setProductSearchQuery,
@@ -66,12 +70,18 @@ export function useRackInteraction(params: UseRackInteractionParams) {
   } = params;
   const { findSnapToRowPosition: findSnap, snapPosition: snapPos, canPlaceGroup, getRowStart, computeRowSlotPositions, filterEmptyRowContainers, findRowAndSlotForRack, findEmptySlotAt, reindexGeometricRow } = helpers;
   const { moveRackWithinRowRef } = refs;
+  // Sticky snapping: keep last snapped position until user moves clearly away.
+  const lastSnapRef = useRef<{ x: number; y: number } | null>(null);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, cell: { x: number; y: number }) => {
       const hit = layout.racks.find((r) => isCellInsideRack(cell, r));
       if (!hit) return false;
       const rid = hit.id ?? hit.rack_index;
+      if (routeMode) {
+        addRackToRoute?.(rid);
+        return true;
+      }
       if (e.ctrlKey || e.metaKey) {
         setSelectedRackIds((prev) => (prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]));
         setSelectedRackId(rid);
@@ -81,26 +91,33 @@ export function useRackInteraction(params: UseRackInteractionParams) {
         setDraggingRackId(rid);
         setDragOffset({ dx: cell.x - hit.x, dy: cell.y - hit.y });
         setRackDragPreviewPosition({ x: hit.x, y: hit.y });
-        if (mainView !== "layout") {
-          setMainView("magazyn");
+        /* Magazyn live map only: mousedown selects rack + side context; cancel rack drag (map is not for moving racks). */
+        if (magazynMapInteractions) {
+          if (import.meta.env.DEV) {
+            console.log("RACK CLICK", { selectedRackId: rid, mainView, magazynMapInteractions: true });
+          }
           setSelectedRackIdForSideView(rid);
           setSelectedLocationForProducts(null);
           setProductSearchQuery("");
           setShowAllProductsInSidebar(false);
           setDraggingRackId(null);
+        } else if (import.meta.env.DEV) {
+          console.log("RACK CLICK", { selectedRackId: rid, mainView, magazynMapInteractions: false });
         }
       }
       return true;
     },
     [
       layout.racks,
+      routeMode,
+      addRackToRoute,
+      magazynMapInteractions,
       mainView,
       setSelectedRackId,
       setSelectedRackIds,
       setDraggingRackId,
       setDragOffset,
       setRackDragPreviewPosition,
-      setMainView,
       setSelectedRackIdForSideView,
       setSelectedLocationForProducts,
       setProductSearchQuery,
@@ -116,28 +133,53 @@ export function useRackInteraction(params: UseRackInteractionParams) {
       const w = anchorRack?.width ?? 1;
       const h = anchorRack?.height ?? 1;
       if (selectedRackIds.length > 1 && anchorRack) {
-        const snappedAnchor = { x: Math.round(desired.x), y: Math.round(desired.y) };
+        const excludeIds = selectedRackIds.length > 1 ? selectedRackIds : [draggingRackId];
+        const snappedAnchor = snapPos(
+          desired,
+          w,
+          h,
+          layout.racks.filter((r) => !excludeIds.includes(r.id ?? r.rack_index)),
+          layout.grid_cols,
+          layout.grid_rows,
+          aisleWidthCm
+        );
         setRackDragPreviewPosition(snappedAnchor);
       } else {
         const excludeIds = selectedRackIds.length > 1 ? selectedRackIds : [draggingRackId];
         const rowSnap = findSnap(layout.racks, desired.x, desired.y, w, h, draggingRackId);
-        const freeSnap = snapToGrid
-          ? snapPos(desired, w, h, layout.racks.filter((r) => !excludeIds.includes(r.id ?? r.rack_index)), layout.grid_cols, layout.grid_rows, aisleWidthCm)
-          : { x: Math.max(0, Math.min(layout.grid_cols - w, Math.round(desired.x))), y: Math.max(0, Math.min(layout.grid_rows - h, Math.round(desired.y))) };
-        const SNAP_THRESHOLD = 2.5;
+        const freeSnap = snapPos(
+          desired,
+          w,
+          h,
+          layout.racks.filter((r) => !excludeIds.includes(r.id ?? r.rack_index)),
+          layout.grid_cols,
+          layout.grid_rows,
+          aisleWidthCm
+        );
+        const SNAP_THRESHOLD = 3.5;
+        const RELEASE_BUFFER = 1.0;
         const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
         let pos: { x: number; y: number };
+        const last = lastSnapRef.current;
+        if (last && dist(desired, last) <= (SNAP_THRESHOLD + RELEASE_BUFFER) * (SNAP_THRESHOLD + RELEASE_BUFFER)) {
+          pos = last;
+          setRackDragPreviewPosition(pos);
+          return;
+        }
         if (rowSnap && dist(desired, rowSnap) <= SNAP_THRESHOLD * SNAP_THRESHOLD) {
           pos = { x: rowSnap.x, y: rowSnap.y };
         } else if (dist(desired, freeSnap) <= SNAP_THRESHOLD * SNAP_THRESHOLD) {
           pos = freeSnap;
         } else {
-          pos = { x: Math.max(0, Math.min(layout.grid_cols - w, Math.round(desired.x))), y: Math.max(0, Math.min(layout.grid_rows - h, Math.round(desired.y))) };
+          pos = freeSnap;
         }
+        // Lock snap if we are within threshold (prevents micro-jitter and micro-gaps).
+        if (dist(desired, pos) <= SNAP_THRESHOLD * SNAP_THRESHOLD) lastSnapRef.current = pos;
+        else lastSnapRef.current = null;
         setRackDragPreviewPosition(pos);
       }
     },
-    [draggingRackId, dragOffset, layout.racks, layout.grid_cols, layout.grid_rows, selectedRackIds, snapToGrid, aisleWidthCm, findSnap, snapPos, setRackDragPreviewPosition]
+    [draggingRackId, dragOffset, layout.racks, layout.grid_cols, layout.grid_rows, selectedRackIds, aisleWidthCm, findSnap, snapPos, setRackDragPreviewPosition]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -146,6 +188,12 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     const finalPos = rackDragPreviewPosition ?? (rack ? { x: rack.x, y: rack.y } : { x: 0, y: 0 });
     if (selectedRackIds.length > 1 && rack) {
       const groupIds = new Set(selectedRackIds);
+      const groupIdStrings = new Set<string>();
+      for (const id of selectedRackIds) {
+        groupIdStrings.add(String(id));
+        const r = layout.racks.find((ra) => String(ra.id ?? ra.rack_index) === String(id));
+        if (r) groupIdStrings.add(String(r.rack_index));
+      }
       const positions = new Map<number | string, { x: number; y: number }>();
       for (const id of selectedRackIds) {
         const r = layout.racks.find((ra) => (ra.id ?? ra.rack_index) === id);
@@ -160,7 +208,7 @@ export function useRackInteraction(params: UseRackInteractionParams) {
           const clearedRowSlots: RowContainer[] = (prev.row_containers ?? []).map((rc) => ({
             ...rc,
             slots: rc.slots.map((s: EmptyRowSlot) =>
-              s.rackId != null && groupIds.has(s.rackId) ? { ...s, rackId: undefined } : s
+              s.rackId != null && groupIdStrings.has(String(s.rackId)) ? { ...s, rackId: undefined } : s
             ),
           }));
           const newSlotsByRow: RowContainer[] = clearedRowSlots.map((rc) => {
@@ -183,6 +231,15 @@ export function useRackInteraction(params: UseRackInteractionParams) {
       }
       setRackDragPreviewPosition(null);
     } else {
+      // Validate single-rack placement before committing any position changes.
+      const groupIds = new Set<number | string>([draggingRackId]);
+      const positions = new Map<number | string, { x: number; y: number }>([[draggingRackId, finalPos]]);
+      if (!canPlaceGroup(layout, groupIds, positions)) {
+        setRackDragPreviewPosition(null);
+        setDraggingRackId(null);
+        setDragOffset(null);
+        return;
+      }
       const rowSlot = findRowAndSlotForRack(layout.row_containers, draggingRackId);
       const emptyAtDrop = findEmptySlotAt(layout.row_containers, finalPos);
       const moveRackWithinRow = moveRackWithinRowRef.current;
@@ -227,6 +284,7 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     }
     setDraggingRackId(null);
     setDragOffset(null);
+    lastSnapRef.current = null;
   }, [draggingRackId, rackDragPreviewPosition, layout, selectedRackIds, helpers, refs, setLayout, setDraggingRackId, setDragOffset, setRackDragPreviewPosition]);
 
   return { handleMouseDown, handleMouseMove, handleMouseUp };

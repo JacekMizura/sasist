@@ -71,7 +71,9 @@ export function WarehouseFullMap({
               width={Math.max(0.04, a.width - 0.04)}
               height={Math.max(0.04, a.height - 0.04)}
               fill="#94a3b8"
+              fillOpacity={0.38}
               stroke="#64748b"
+              strokeOpacity={0.85}
               strokeWidth={0.02}
               rx={0.2}
             />
@@ -87,7 +89,7 @@ export function WarehouseFullMap({
               : hasSelectedProduct
                 ? RACK_PRODUCT_HIGHLIGHT_FILL
                 : rackFillByOccupancy(occupancyPct);
-            const label = getRackDisplayId(r);
+            const label = getRackDisplayId(r, layout);
             const rectW = Math.max(0.04, r.width - 0.04);
             const rectH = Math.max(0.04, r.height - 0.04);
             const showLabel = showRackLabels && Math.min(rectW, rectH) >= MIN_RACK_VIEWBOX_FOR_LABEL;

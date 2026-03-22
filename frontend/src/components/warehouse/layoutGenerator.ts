@@ -3,7 +3,7 @@
  * Reuses createBinsForRack and the same RackState shape as drag-and-drop placement.
  */
 
-import type { RackState, RowContainer, LevelConfigItem } from "../../types/warehouse";
+import type { RackState, RowContainer, LevelConfigItem, StorageType, RackType } from "../../types/warehouse";
 import {
   createBinsForRack,
   getLevelConfig,
@@ -12,6 +12,7 @@ import {
   cmToCells,
   binsToLevels,
   ROW_LABEL_ADDRESS_PATTERN,
+  generateRackUuid,
 } from "./warehouseUtils";
 
 /** Template spec passed to the generator (same shape as getCatalogItemSpec result + templateId). */
@@ -23,12 +24,14 @@ export type LayoutGeneratorTemplate = {
   bins_per_level: number;
   aisle_letter: string;
   color?: string;
+  /** Rack footprint type (WH/STORE) to persist on generated racks. */
+  rack_type?: RackType;
   naming_pattern?: string;
   addressPattern?: string;
   rowId?: string;
   sectionStartIndex?: number;
   binNamingType?: "numeric" | "alpha";
-  reserve_bin_keys?: string[];
+  bin_type_map?: Record<string, StorageType>;
   levelConfig?: LevelConfigItem[];
   namingStrategy?: "pattern" | "rack-index" | "custom" | "manual";
   namingOrientation?: "column-first" | "row-first";
@@ -232,7 +235,7 @@ export function buildRackFromTemplate(
     template.width_cm,
     template.depth_cm,
     template.height_cm,
-    template.reserve_bin_keys,
+    template.bin_type_map,
     template.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
     rackLabel,
     template.sectionStartIndex ?? 1,
@@ -253,6 +256,7 @@ export function buildRackFromTemplate(
   const height = orientation === "horizontal" ? rackH : rackW;
 
   return {
+    uuid: generateRackUuid(),
     x,
     y,
     width,
@@ -269,6 +273,7 @@ export function buildRackFromTemplate(
     bins,
     rackLevels: binsToLevels(bins),
     color: template.color ?? "#3b82f6",
+    rack_type: template.rack_type ?? "warehouse",
     name: rackLabel,
     rowPrefix,
     indexInRow,
@@ -314,6 +319,9 @@ export function generateWarehouseLayout(config: LayoutGeneratorConfig): LayoutGe
   const rackH = cmToCells(template.depth_cm);
   const spacingCells = Math.max(0, cmToCells(rackSpacingCm));
   const aisleCells = Math.max(0, cmToCells(aisleWidthCm));
+  // Footprint on canvas depends on orientation (buildRackFromTemplate rotates for vertical).
+  const orientedRackWidth = orientation === "horizontal" ? rackW : rackH;
+  const orientedRackHeight = orientation === "horizontal" ? rackH : rackW;
 
   let rows = configRows;
   let plannedRows: string[] | undefined;
@@ -340,7 +348,7 @@ export function generateWarehouseLayout(config: LayoutGeneratorConfig): LayoutGe
 
   if (orientation === "horizontal") {
     // Rows increase Y. Running currentY: within a pair only rack depth; after each group add aisle.
-    const stepW = rackW + spacingCells;
+    const stepW = orientedRackWidth + spacingCells;
     let rackIdx = baseRackIndex;
     let rowCounter = 0;
     let currentY = startY;
@@ -348,8 +356,8 @@ export function generateWarehouseLayout(config: LayoutGeneratorConfig): LayoutGe
       const group = groups[g]!;
       for (let ri = 0; ri < group.length; ri++) {
         const y = currentY;
-        currentY += rackH;
-        if (maxRows != null && y + rackH > maxRows) {
+        currentY += orientedRackHeight;
+        if (maxRows != null && y + orientedRackHeight > maxRows) {
           truncated = true;
           break;
         }
@@ -358,7 +366,7 @@ export function generateWarehouseLayout(config: LayoutGeneratorConfig): LayoutGe
         const rotated = ri === 1; // second row in pair faces opposite aisle (180°)
         for (let c = 0; c < columns; c++) {
           const x = startX + c * stepW;
-          if (maxCols != null && x + rackW > maxCols) {
+          if (maxCols != null && x + orientedRackWidth > maxCols) {
             truncated = true;
             break;
           }
@@ -376,13 +384,14 @@ export function generateWarehouseLayout(config: LayoutGeneratorConfig): LayoutGe
             rotated ? 180 : undefined
           );
           racks.push(rack);
-          slots.push({ x, y, w: rackW, h: rackH, rackId: rackIndex });
+          slots.push({ x, y, w: orientedRackWidth, h: orientedRackHeight, rackId: rackIndex });
         }
         if (slots.length > 0) {
           rowContainers.push({
             id: `row-gen-${rowCounter - 1}-${Date.now()}`,
             rowPrefix,
             orientation: "horizontal",
+            direction: "LTR",
             slots,
           });
         }
@@ -391,15 +400,16 @@ export function generateWarehouseLayout(config: LayoutGeneratorConfig): LayoutGe
     }
   } else {
     // Rows increase X. Running currentX: same X for rows in a pair; after each group add aisle.
-    const stepInRow = rackH + spacingCells;
-    const stepBetweenRows = rackW + aisleCells;
+    // Vertical orientation: row axis is Y and rack is rotated (height becomes rackW).
+    const stepInRow = orientedRackHeight + spacingCells;
+    const stepBetweenRows = orientedRackWidth + aisleCells;
     let rackIdx = baseRackIndex;
     let rowCounter = 0;
     let currentX = startX;
     for (let g = 0; g < groups.length; g++) {
       const group = groups[g]!;
       const x = currentX;
-      if (maxCols != null && x + rackW > maxCols) {
+      if (maxCols != null && x + orientedRackWidth > maxCols) {
         truncated = true;
         break;
       }
@@ -408,9 +418,10 @@ export function generateWarehouseLayout(config: LayoutGeneratorConfig): LayoutGe
         const slots: RowContainer["slots"] = [];
         const rotated = ri === 1;
         const rowOffsetY = ri * columns * stepInRow;
+        let currentY = startY + rowOffsetY;
         for (let c = 0; c < columns; c++) {
-          const y = startY + rowOffsetY + c * stepInRow;
-          if (maxRows != null && y + rackH > maxRows) {
+          const y = currentY;
+          if (maxRows != null && y + orientedRackHeight > maxRows) {
             truncated = true;
             break;
           }
@@ -428,13 +439,15 @@ export function generateWarehouseLayout(config: LayoutGeneratorConfig): LayoutGe
             rotated ? 180 : undefined
           );
           racks.push(rack);
-          slots.push({ x, y, w: rackW, h: rackH, rackId: rackIndex });
+          slots.push({ x, y, w: orientedRackWidth, h: orientedRackHeight, rackId: rackIndex });
+          currentY += orientedRackHeight + spacingCells;
         }
         if (slots.length > 0) {
           rowContainers.push({
             id: `row-gen-${rowCounter - 1}-${Date.now()}`,
             rowPrefix,
             orientation: "vertical",
+            direction: "LTR",
             slots,
           });
         }
