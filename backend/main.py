@@ -355,6 +355,33 @@ def ensure_sqlite_tables(*, announce: bool = False) -> None:
 
 ensure_sqlite_tables()
 
+
+def _is_sqlite_engine() -> bool:
+    return engine.dialect.name == "sqlite"
+
+
+def _sqlite_only_schema_helper(fn):
+    def _wrapped(*args, **kwargs):
+        bind = args[0] if args else engine
+        if getattr(getattr(bind, "dialect", None), "name", None) != "sqlite":
+            return None
+        return fn(*args, **kwargs)
+
+    return _wrapped
+
+
+# Legacy schema helpers in backend.db.schema_upgrade use sqlite_master / PRAGMA /
+# SQLite ALTER-workarounds. PostgreSQL schema is managed via ORM metadata and the
+# one-time migration path, so those helpers must be no-ops outside SQLite.
+if not _is_sqlite_engine():
+    for _name, _fn in list(globals().items()):
+        if (
+            callable(_fn)
+            and getattr(_fn, "__module__", "").endswith(".db.schema_upgrade")
+            and (_name.startswith("ensure_") or _name.startswith("migrate_"))
+        ):
+            globals()[_name] = _sqlite_only_schema_helper(_fn)
+
 # Ensure new columns exist on existing SQLite DBs (create_all does not alter tables)
 def _ensure_order_columns():
     from sqlalchemy import text
@@ -515,10 +542,11 @@ def _ensure_warehouse_template_level_max_load_kg():
         pass
 
 
-_ensure_order_columns()
-_ensure_location_warehouse_columns()
-_ensure_pick_columns()
-_ensure_warehouse_template_level_max_load_kg()
+if _is_sqlite_engine():
+    _ensure_order_columns()
+    _ensure_location_warehouse_columns()
+    _ensure_pick_columns()
+    _ensure_warehouse_template_level_max_load_kg()
 
 # RMZ: add external_id / status on older DBs (create_all does not ALTER existing wms_order_returns)
 ensure_wms_order_returns_columns(engine)
