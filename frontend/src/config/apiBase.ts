@@ -22,9 +22,27 @@ function warnIfApiPointsToViteDev(base: string) {
   }
 }
 
+function normalizeApiBaseFromEnv(value: string): string {
+  const base = value.trim().replace(/\/+$/, "");
+  if (!base) return "";
+  if (base.startsWith("/")) return base;
+
+  try {
+    const u = new URL(base);
+    if (u.pathname === "" || u.pathname === "/") {
+      u.pathname = "/api";
+      return u.toString().replace(/\/+$/, "");
+    }
+  } catch {
+    /* keep original value */
+  }
+
+  return base;
+}
+
 export function getApiBaseUrl(): string {
   const v = import.meta.env.VITE_API_URL;
-  const fromEnv = typeof v === "string" ? v.trim().replace(/\/+$/, "") : "";
+  const fromEnv = typeof v === "string" ? normalizeApiBaseFromEnv(v) : "";
 
   if (fromEnv) {
     warnIfApiPointsToViteDev(fromEnv);
