@@ -3,6 +3,7 @@ import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
 import api from "../api/axios";
+import { useWarehouse } from "../context/WarehouseContext";
 
 type BarcodeFormat = "Code128" | "QR" | "DataMatrix";
 
@@ -11,26 +12,13 @@ type BinLocation = { label: string; barcode_data: string; location_id?: string; 
 const TENANT_ID = 1;
 
 export default function BarcodeManagement() {
-  const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
+  const { warehouse: activeWarehouse } = useWarehouse();
+  const selectedWarehouseId = activeWarehouse?.id ?? null;
   const [layout, setLayout] = useState<{ name: string; warehouse_name?: string; racks?: { aisle_letter: string; rack_index: number; bins: { label: string; barcode_data?: string; location_id?: string }[] }[] } | null>(null);
   const [format, setFormat] = useState<BarcodeFormat>("Code128");
   const [customText, setCustomText] = useState("");
   const [selectedRackIndex, setSelectedRackIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get(`/tenants/${TENANT_ID}/warehouses/`);
-        const list = Array.isArray(res.data) ? res.data : [];
-        setWarehouses(list);
-        if (list.length > 0 && selectedWarehouseId === null) setSelectedWarehouseId(list[0].id);
-      } catch {
-        setWarehouses([]);
-      }
-    })();
-  }, [selectedWarehouseId]);
 
   const loadLayout = useCallback(async () => {
     if (selectedWarehouseId == null) return;
@@ -124,23 +112,10 @@ export default function BarcodeManagement() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="w-full p-6">
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Zarządzanie kodami kreskowymi</h1>
 
       <div className="space-y-4 mb-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">Magazyn</label>
-          <select
-            value={selectedWarehouseId ?? ""}
-            onChange={(e) => setSelectedWarehouseId(e.target.value ? Number(e.target.value) : null)}
-            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-800"
-          >
-            <option value="">— Wybierz magazyn —</option>
-            {warehouses.map((w) => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
-          </select>
-        </div>
         <button
           type="button"
           onClick={loadLayout}

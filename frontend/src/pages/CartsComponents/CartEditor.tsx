@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from "react";
+import { log } from "../../utils/logger";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
+import CartImageUrlField from "./ui/CartImageUrlField";
 
 // ---------------------------------------------------------------------------
 // Typy: koszyk (sekcja), rząd poziomów, grupa, props edytora
@@ -48,6 +50,9 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
 
   // Stan formularza: nazwa, zdjęcie, grupa, poziomy z koszykami
   const [cartName, setCartName] = useState("");
+  const [cartCode, setCartCode] = useState("");
+  /** Wewnętrzny kod WMS (tylko odczyt), np. ESP:brck:7 */
+  const [cartScanCode, setCartScanCode] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string>("");
   const [groupId, setGroupId] = useState<number | null>(null);
   const [rows, setRows] = useState<Row[]>([{ baskets: [] }]);
@@ -105,6 +110,9 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
 
           const data = resCart.data;
           setCartName(data.name ?? "");
+          setCartCode(String(data.code ?? data.barcode ?? "").trim());
+          const sc = data.scan_code != null && String(data.scan_code).trim() !== "" ? String(data.scan_code).trim() : null;
+          setCartScanCode(sc);
           setImageUrl(data.image_url ?? "");
 
           const rawGroupId = data.group_id;
@@ -140,6 +148,8 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
             const wh = resWarehouses.data.find((w: { id: number }) => w.id === data.warehouse_id);
             if (wh) setWarehouse(wh);
           }
+        } else {
+          setCartScanCode(null);
         }
       } catch (err) {
         if (!cancelled) console.error("CartEditor init error:", err);
@@ -214,6 +224,11 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
   // -------------------------------------------------------------------------
   const handleSave = async () => {
     if (!isFormValid()) return;
+    const trimmedCode = cartCode.trim();
+    if (cartId && !trimmedCode) {
+      alert("Podaj kod wózka.");
+      return;
+    }
     setLoading(true);
     try {
       const basketsPayload = rows.flatMap((r, rIdx) =>
@@ -237,6 +252,11 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
         total_volume_dm3: vol,
         capacity_mode: capacityMode,
       };
+      if (cartId) {
+        payload.code = trimmedCode;
+      } else if (trimmedCode) {
+        payload.code = trimmedCode;
+      }
       if (capacityMode === "orders" || capacityMode === "mixed") {
         payload.max_orders = maxOrders === "" ? null : Number(maxOrders);
       }
@@ -250,15 +270,21 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
       } else {
         res = await api.post("/carts/multi/", { ...payload, tenant_id: 1 });
       }
-      console.log("[CartEditor] Save success", res?.status, res?.data);
+      log("[CartEditor] Save success", res?.status, res?.data);
       try {
         onClose();
       } catch (e) {
         console.error("[CartEditor] onClose failed:", e);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("[CartEditor] save error:", err);
-      alert(t.saveError);
+      const ax = err as { response?: { status?: number; data?: { detail?: string } } };
+      if (ax.response?.status === 409 || ax.response?.status === 422) {
+        const d = ax.response.data?.detail;
+        alert(typeof d === "string" ? d : t.saveError);
+      } else {
+        alert(t.saveError);
+      }
     } finally {
       setLoading(false);
     }
@@ -281,6 +307,35 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
   return (
     <div className="grid grid-cols-12 gap-6 items-start pb-20">
       <div className="col-span-12 lg:col-span-9 space-y-4">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {cartId ? (
+            <div className="space-y-1 sm:col-span-2">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ID</span>
+              <p className="font-mono text-sm font-bold text-slate-600 tabular-nums">{cartId}</p>
+            </div>
+          ) : null}
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="cart-editor-code">
+              Kod{cartId ? "" : " (opcjonalnie)"}
+            </label>
+            <input
+              id="cart-editor-code"
+              className="w-full bg-slate-50 rounded-xl px-4 py-3 font-mono text-sm font-bold text-slate-800 border border-slate-200 outline-none focus:border-blue-500"
+              value={cartCode}
+              onChange={(e) => setCartCode(e.target.value)}
+              placeholder={cartId ? "" : "Puste = wygeneruj CART-0001"}
+              autoComplete="off"
+            />
+          </div>
+          {cartId && cartScanCode ? (
+            <div className="space-y-1 sm:col-span-2">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Kod skanowania WMS
+              </span>
+              <p className="font-mono text-sm font-semibold text-slate-700">{cartScanCode}</p>
+            </div>
+          ) : null}
+        </div>
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
           <button
             onClick={onClose}
@@ -533,16 +588,7 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
           <h3 className="text-xs font-black uppercase mb-6 text-slate-400 border-b pb-4 tracking-widest text-center">
             {t.photo}
           </h3>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2">{t.imageUrlLabel}</label>
-            <input
-              type="text"
-              className="w-full bg-slate-50 rounded-2xl px-5 py-4 border border-slate-100 font-black text-slate-700 outline-none transition-all focus:border-blue-500"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder={t.imageUrlPlaceholder}
-            />
-          </div>
+          <CartImageUrlField value={imageUrl} onChange={setImageUrl} />
         </div>
 
         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">

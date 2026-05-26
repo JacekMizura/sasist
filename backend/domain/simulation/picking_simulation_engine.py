@@ -107,7 +107,11 @@ def simulate_single_order(
             "route_points": [],
         }
 
-    items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+    items = (
+        db.query(OrderItem)
+        .filter(OrderItem.order_id == order.id, OrderItem.is_bundle_parent.is_(False))
+        .all()
+    )
     product_ids = [i.product_id for i in items]
     if not product_ids:
         return {

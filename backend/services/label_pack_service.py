@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..models.label_pack import LabelPack, LabelPackItem
 from ..models.label_template import SavedLabelTemplate
 from ..models.cart import Cart
+from .label_pdf_generation_log import log_label_pdf_stage
 from .label_render_service import build_label_pdf_multi, template_json_to_dict
 
 logger = logging.getLogger(__name__)
@@ -165,4 +166,10 @@ def generate_pack_pdf(
         for rec in records:
             pairs.append((template, rec))
 
+    log_label_pdf_stage(
+        source="label_pack_service.generate_pack_pdf",
+        template_id=None,
+        template_json_present=None,
+        detail=f"pack_id={pack_id} cart_id={cart_id} tenant_id={tenant_id} pairs={len(pairs)} -> build_label_pdf_multi",
+    )
     return build_label_pdf_multi(pairs)

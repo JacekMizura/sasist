@@ -1,6 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -11,9 +12,31 @@ from ..schemas.label_template import SavedLabelTemplatePayload, LabelTemplateGro
 from ..services.label_engine import build_label_svg_engine
 from ..services.label_render_service import validate_template_json
 
-router = APIRouter(prefix="/label-templates", tags=["Label Templates"])
+router = APIRouter(tags=["Label templates"])
 
 TENANT_ID = 1
+
+
+def _ensure_group_id_valid(
+    db: Session,
+    tenant_id: int,
+    group_id: int | None,
+    template_type: str | None,
+) -> None:
+    """Raise HTTPException if group_id is set but no group row matches tenant (and type when known)."""
+    if group_id is None:
+        return
+    q = db.query(LabelTemplateGroup).filter(
+        LabelTemplateGroup.id == group_id,
+        LabelTemplateGroup.tenant_id == tenant_id,
+    )
+    if template_type:
+        q = q.filter(LabelTemplateGroup.template_type == template_type)
+    if q.first() is None:
+        raise HTTPException(
+            status_code=400,
+            detail="group_id must reference a label_template_group for this tenant and template type",
+        )
 
 
 # ---------- Groups ----------
@@ -142,6 +165,7 @@ def save_template(
     err = validate_template_json(payload.template_json)
     if err:
         raise HTTPException(status_code=400, detail=err)
+    _ensure_group_id_valid(db, tenant_id, payload.group_id, payload.template_type)
     row = SavedLabelTemplate(
         tenant_id=tenant_id,
         name=payload.name,
@@ -150,7 +174,11 @@ def save_template(
         group_id=payload.group_id,
     )
     db.add(row)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid group_id or database constraint violation")
     db.refresh(row)
     return {
         "id": row.id,
@@ -264,12 +292,20 @@ def update_template(
     err = validate_template_json(payload.template_json)
     if err:
         raise HTTPException(status_code=400, detail=err)
+    effective_type = (
+        payload.template_type if payload.template_type is not None else row.template_type
+    )
+    _ensure_group_id_valid(db, tenant_id, payload.group_id, effective_type)
     row.name = payload.name
     row.template_json = payload.template_json
     if payload.template_type is not None:
         row.template_type = payload.template_type
     row.group_id = payload.group_id
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid group_id or database constraint violation")
     db.refresh(row)
     return {
         "id": row.id,

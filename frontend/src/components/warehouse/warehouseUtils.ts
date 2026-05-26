@@ -1,12 +1,37 @@
+import { log } from "../../utils/logger";
 import { GRID_UNIT_CM, CATALOG_PRESETS } from "./warehouseTypes";
 import type { BinState, RackLevel } from "./warehouseTypes";
-import type { CatalogItem, RackState, LevelConfigItem, StorageType, LayoutState, RowContainer } from "../../types/warehouse";
+import type {
+  CatalogItem,
+  CatalogPresetId,
+  CustomRackTemplate,
+  RackState,
+  RackType,
+  LevelConfigItem,
+  NormalizedStorageType,
+  StorageType,
+  LayoutState,
+  RowContainer,
+  InternalLevel,
+  EmptyRowSlot,
+} from "../../types/warehouse";
 import { buildBinTypeMapFromBins, normalizeBinTypeMap, normalizeStorageType } from "../../utils/storageTypes";
+import { getLayoutMetersPerCell, layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
 
 export function generateRackUuid(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
     : `rack-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** Legacy-safe active check: missing flag is treated as active. */
+export function isBinActive(bin: Pick<BinState, "is_active">): boolean {
+  return bin.is_active !== false;
+}
+
+/** Prefer this helper whenever iterating rack bins in UI/reporting code. */
+export function activeBinsForRack(rack: Pick<RackState, "bins">): BinState[] {
+  return (rack.bins ?? []).filter(isBinActive);
 }
 
 /** Dimensions and optional color / naming / reserve for a catalog item (preset or custom template) */
@@ -24,7 +49,7 @@ export function getCatalogItemSpec(item: CatalogItem): {
   sectionStartIndex?: number;
   autoSectionNumbering?: boolean;
   binNamingType?: "numeric" | "alpha";
-  bin_type_map?: Record<string, StorageType>;
+  bin_type_map?: Record<string, NormalizedStorageType>;
   levelConfig?: LevelConfigItem[];
   namingStrategy?: "pattern" | "rack-index" | "custom" | "manual";
   namingOrientation?: "column-first" | "row-first";
@@ -74,6 +99,32 @@ export function getCatalogItemSpec(item: CatalogItem): {
     startIndex: t.startIndex,
     level_max_load_kg: t.level_max_load_kg,
   };
+}
+
+/** Stable key for template picker: `preset:<id>` or `custom:<uuid>`. */
+export function catalogItemTemplateKey(item: CatalogItem): string {
+  return item.type === "preset" ? `preset:${item.id}` : `custom:${item.template.id}`;
+}
+
+/** Persisted `RowContainer.templateId` / rack linkage: preset id or custom template id. */
+export function rowContainerTemplateIdFromCatalogItem(item: CatalogItem): string {
+  return item.type === "preset" ? item.id : item.template.id;
+}
+
+export function catalogItemFromTemplateKey(key: string, customTemplates: CustomRackTemplate[]): CatalogItem | null {
+  if (!key || typeof key !== "string") return null;
+  if (key.startsWith("preset:")) {
+    const id = key.slice(7) as CatalogPresetId;
+    if (!CATALOG_PRESETS.some((p) => p.id === id)) return null;
+    return { type: "preset", id };
+  }
+  if (key.startsWith("custom:")) {
+    const id = key.slice(7);
+    const t = customTemplates.find((x) => x.id === id);
+    if (!t) return null;
+    return { type: "custom", template: t };
+  }
+  return null;
 }
 
 /** Grid cells from cm (10cm = 1 cell) */
@@ -127,9 +178,52 @@ export function getPositionAddress(
   return `${row}-${r}-${l}-${p}`;
 }
 
+function segmentIndexToColumnLabel(segmentIndex: number): string {
+  let n = Math.max(0, Math.floor(segmentIndex));
+  let out = "";
+  do {
+    out = String.fromCharCode(65 + (n % 26)) + out;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return out || "A";
+}
+
+/**
+ * Canonical visible location code for UI: {rack}-{column}-{level}, e.g. A2-A-1.
+ * UUID/location_id remain internal identifiers and are not modified.
+ */
+export function buildVisibleLocationCode(
+  rackCode: string,
+  levelIndex: number,
+  segmentIndex: number
+): string {
+  const rack = (rackCode ?? "").trim() || "A1";
+  const col = segmentIndexToColumnLabel(segmentIndex);
+  const level = Math.max(1, Math.floor(levelIndex) + 1);
+  return `${rack}-${col}-${level}`;
+}
+
+function distributedWidthsCm(totalWidthCm: number, slots: number): number[] {
+  const safeSlots = Math.max(1, Math.floor(slots));
+  const total = Math.max(1, Math.round(totalWidthCm));
+  const base = Math.floor(total / safeSlots);
+  let rem = total - base * safeSlots;
+  const out = Array.from({ length: safeSlots }, () => base);
+  for (let i = 0; i < out.length && rem > 0; i++, rem--) out[i] += 1;
+  return out;
+}
+
+/** Row letter prefix only (A, AB, …). Strips digits and symbols; default "A". */
+export function normalizeRowPrefixLetters(input: string): string {
+  const letters = (input ?? "").replace(/[^A-Za-z]/g, "");
+  if (letters.length === 0) return "A";
+  return letters.slice(0, 4);
+}
+
 /** Next index in row for dynamic labeling (e.g. prefix "G" → 1, 2, 3…). */
 export function getNextIndexInRow(racks: { rowPrefix?: string; indexInRow?: number }[], rowPrefix: string): number {
-  const inRow = racks.filter((r) => r.rowPrefix === rowPrefix);
+  const np = normalizeRowPrefixLetters(rowPrefix);
+  const inRow = racks.filter((r) => normalizeRowPrefixLetters(r.rowPrefix ?? "A") === np);
   if (inRow.length === 0) return 1;
   const max = Math.max(...inRow.map((r) => r.indexInRow ?? 0));
   return max + 1;
@@ -140,21 +234,136 @@ export const ROW_LABEL_ADDRESS_PATTERN = "{Row}-{Level}-{Bin}";
 
 /** Row container that holds this rack (by slot rackId), if any. */
 export function findRowContainerForRack(layout: LayoutState | undefined | null, rack: RackState): RowContainer | null {
-  const rid = rack.id ?? rack.rack_index;
+  /** Slots may store `rack_index`, numeric `id`, or rack `uuid` string — match any. */
+  const keys = new Set<string>();
+  if (rack.id != null && String(rack.id) !== "") keys.add(String(rack.id));
+  if (rack.rack_index != null) keys.add(String(rack.rack_index));
+  if (rack.uuid != null && String(rack.uuid) !== "") keys.add(String(rack.uuid));
+  if (keys.size === 0) return null;
   for (const rc of layout?.row_containers ?? []) {
-    if (rc.slots.some((s) => s.rackId != null && String(s.rackId) === String(rid))) return rc;
+    if (rc.slots.some((s) => s.rackId != null && keys.has(String(s.rackId)))) return rc;
   }
   return null;
 }
 
-/** Counting direction for rack numbers / bin column letters from row container. Defaults to LTR. */
-export function getRowDirectionForRack(rack: RackState, layout?: LayoutState | null): "LTR" | "RTL" {
+/**
+ * Rack for `InternalLayoutModal` when `internalLayoutRackId` comes from `setInternalLayoutRackId`.
+ * Match `id`, `rack_index`, or `uuid` (same identifiers as row slot `rackId`).
+ */
+/** Row slot `rackId` may be rack `uuid`, DB `id`, or `rack_index` (legacy). */
+export function rackMatchesSlotRackId(
+  rack: RackState,
+  rackId: string | number | undefined | null
+): boolean {
+  if (rackId == null) return false;
+  const s = String(rackId);
+  if (rack.uuid != null && String(rack.uuid) !== "" && String(rack.uuid) === s) return true;
+  return String(rack.id ?? rack.rack_index) === s;
+}
+
+export function findRackForInternalLayoutModal(
+  layout: LayoutState | undefined | null,
+  internalLayoutRackId: number | string
+): RackState | undefined {
+  const racks = layout?.racks;
+  if (!racks?.length) return undefined;
+  return racks.find((r) => rackMatchesSlotRackId(r, internalLayoutRackId));
+}
+
+/** Resolve rack numbering direction; legacy `direction` applies when `rack_direction` is unset. */
+export function resolveRowContainerRackDirection(rc: RowContainer): "LTR" | "RTL" {
+  if (rc.rack_direction === "RTL" || rc.rack_direction === "LTR") return rc.rack_direction;
+  if (rc.direction === "RTL" || rc.direction === "LTR") return rc.direction;
+  return "LTR";
+}
+
+/** Resolve bin/location numbering direction; legacy `direction` applies when `bin_direction` is unset. */
+export function resolveRowContainerBinDirection(rc: RowContainer): "LTR" | "RTL" {
+  if (rc.bin_direction === "RTL" || rc.bin_direction === "LTR") return rc.bin_direction;
+  if (rc.direction === "RTL" || rc.direction === "LTR") return rc.direction;
+  return "LTR";
+}
+
+/** Rack index order along the row (for `getRackDisplayId`). Defaults to LTR when not in a row container. */
+export function getRackDirectionForRack(rack: RackState, layout?: LayoutState | null): "LTR" | "RTL" {
   const rc = layout ? findRowContainerForRack(layout, rack) : null;
-  return rc?.direction === "RTL" ? "RTL" : "LTR";
+  return rc ? resolveRowContainerRackDirection(rc) : "LTR";
+}
+
+/** Bin column order for display (for `getBinDisplayLabel`). Independent of rack numbering. */
+export function getBinDirectionForRack(rack: RackState, layout?: LayoutState | null): "LTR" | "RTL" {
+  const rc = layout ? findRowContainerForRack(layout, rack) : null;
+  return rc ? resolveRowContainerBinDirection(rc) : "LTR";
+}
+
+/** `true` when bin columns render right-to-left (same as `findRowContainerForRack` + `resolveRowContainerBinDirection` === RTL). */
+export function isBinDirectionRtl(layout: LayoutState | null | undefined, rack: RackState): boolean {
+  return getBinDirectionForRack(rack, layout) === "RTL";
+}
+
+/**
+ * Visual slot index `vis` (0 = left) → logical `segment_index` for `getBinAt` / keys.
+ * Use with `Array.from({ length: locs }, (_, vis) => …)`; matches RackSideViewGrid / internal layout modals.
+ */
+export function segmentIndexForVisualSlot(vis: number, locs: number, binDirectionRtl: boolean): number {
+  if (locs <= 0) return 0;
+  return binDirectionRtl ? locs - 1 - vis : vis;
+}
+
+/**
+ * `internal_structure.levels[].locations` must be indexed by segment_index (0 = column A, …).
+ * If legacy data stored widths in visual left→right order (so RTL rows matched screen order), array index
+ * no longer equals segment — infer from bin widths and permute back to canonical. (See also `binsToLevels`, which keeps segment order.)
+ */
+function inferLocationsArrayOrderForLevel(
+  lev: InternalLevel,
+  levIdx: number,
+  bins: BinState[],
+  binDirectionRtl: boolean
+): "canonical" | "visual" {
+  const locs = lev.locations.length;
+  if (locs <= 1) return "canonical";
+  const binsForLevel = bins
+    .filter((b) => b.level_index === levIdx)
+    .sort((a, b) => a.segment_index - b.segment_index);
+  if (binsForLevel.length < locs) return "canonical";
+
+  let canon = 0;
+  let visual = 0;
+  for (let i = 0; i < locs; i++) {
+    const wLoc = lev.locations[i]?.width_cm;
+    if (wLoc == null || !Number.isFinite(wLoc)) continue;
+    const binSeg = binsForLevel.find((b) => b.segment_index === i);
+    const segAtVisI = segmentIndexForVisualSlot(i, locs, binDirectionRtl);
+    const binVis = binsForLevel.find((b) => b.segment_index === segAtVisI);
+    const wSeg = binSeg?.width_cm;
+    const wVis = binVis?.width_cm;
+    if (wSeg != null && Math.abs(wLoc - wSeg) < 0.01) canon++;
+    if (wVis != null && Math.abs(wLoc - wVis) < 0.01) visual++;
+  }
+  return visual > canon ? "visual" : "canonical";
+}
+
+export function normalizeInternalLevelsToCanonicalSegmentOrder(
+  levels: InternalLevel[],
+  rack: RackState,
+  binDirectionRtl: boolean
+): InternalLevel[] {
+  const bins = rack.bins ?? [];
+  return levels.map((lev, levIdx) => {
+    const locs = lev.locations.length;
+    if (locs <= 1) return lev;
+    if (inferLocationsArrayOrderForLevel(lev, levIdx, bins, binDirectionRtl) === "canonical") return lev;
+    const nextLocs = Array.from({ length: locs }, (_, seg) => {
+      const vis = segmentIndexForVisualSlot(seg, locs, binDirectionRtl);
+      return lev.locations[vis]!;
+    });
+    return { ...lev, locations: nextLocs };
+  });
 }
 
 /** Persistent display label from DB (rack.name or rack.label). Use this so map and details always match after save.
- * When `layout` is passed and the rack sits in a `row_container`, numbering follows slot order and `direction` (LTR vs RTL). */
+ * When `layout` is passed and the rack sits in a `row_container`, rack index follows slot order and `rack_direction`. */
 export function getRackDisplayId(
   r: {
     name?: string;
@@ -177,7 +386,7 @@ export function getRackDisplayId(
       const rid = rack.id ?? rack.rack_index;
       const i = filled.findIndex((s) => String(s.rackId) === String(rid));
       if (i >= 0 && filled.length > 0) {
-        const dir = rc.direction === "RTL" ? "RTL" : "LTR";
+        const dir = resolveRowContainerRackDirection(rc);
         const n = filled.length;
         const num = dir === "RTL" ? n - i : i + 1;
         const rawPrefix = String(rc.rowPrefix ?? rack.rowPrefix ?? rack.aisle_letter ?? "A").trim() || "A";
@@ -196,6 +405,348 @@ export function getRackDisplayId(
   const letter = (raw.match(/[A-Za-z]/)?.[0] ?? "A").toUpperCase();
   const num = Math.floor(Number(r.indexInRow ?? r.rack_index ?? 1)) || 1;
   return `${letter}${num}`;
+}
+
+/** Name as persisted / shown on map: custom `name` or generated label. */
+export function effectiveRackDisplayName(rack: RackState, layout: LayoutState): string {
+  const n = (rack.name ?? "").trim();
+  if (n) return n;
+  return getRackDisplayId(rack, layout);
+}
+
+/** Next letter prefix for paired row (e.g. B → C, Z → AA). Uppercase, max 4 letters. */
+export function nextRowPrefixLetters(input: string): string {
+  const raw = normalizeRowPrefixLetters(input).toUpperCase();
+  if (!raw) return "B";
+  const A = 65;
+  const digits = raw.split("").map((c) => c.charCodeAt(0) - A);
+  let carry = 1;
+  for (let i = digits.length - 1; i >= 0 && carry; i--) {
+    digits[i] = (digits[i] ?? 0) + carry;
+    carry = 0;
+    if ((digits[i] ?? 0) > 25) {
+      digits[i] = 0;
+      carry = 1;
+    }
+  }
+  if (carry) digits.unshift(0);
+  const out = String.fromCharCode(...digits.map((d) => A + Math.max(0, Math.min(25, d))));
+  return out.slice(0, 4);
+}
+
+/** Offset (cells) between facing row centers: rack depth along aisle + row gap. */
+export function pairedAisleOffsetCells(
+  depthCm: number,
+  rowGapCm: number,
+  layout?: Pick<LayoutState, "grid_cols" | "grid_rows" | "building_width_m" | "building_depth_m" | "building_height_m">,
+  /** Axis perpendicular to the row where the aisle stacks (horizontal row → Y, vertical row → X). */
+  perpendicularAxis: "x" | "y" = "y"
+): number {
+  if (layout && getLayoutMetersPerCell(layout)) {
+    const depthCells =
+      perpendicularAxis === "x" ? layoutCmToCellsX(layout, depthCm) : layoutCmToCellsY(layout, depthCm);
+    const gapCells =
+      perpendicularAxis === "x" ? layoutCmToCellsX(layout, rowGapCm) : layoutCmToCellsY(layout, rowGapCm);
+    return Math.max(1, depthCells) + Math.max(0, gapCells);
+  }
+  const depth = Math.max(1, cmToCells(depthCm));
+  const gap = Math.max(0, cmToCells(rowGapCm));
+  return depth + gap;
+}
+
+/** Min/max on both axes, non-negative extents, row axis from extent comparison (no Math.abs on deltas). */
+export function rowDrawSegmentExtents(start: { x: number; y: number }, end: { x: number; y: number }) {
+  const minX = Math.min(start.x, end.x);
+  const maxX = Math.max(start.x, end.x);
+  const minY = Math.min(start.y, end.y);
+  const maxY = Math.max(start.y, end.y);
+  const extentX = maxX - minX;
+  const extentY = maxY - minY;
+  const isHorizontal = extentX >= extentY;
+  return { minX, maxX, minY, maxY, extentX, extentY, isHorizontal };
+}
+
+/**
+ * Rack start cells along one axis from mousedown (`startAlong`) toward the cursor (`cursorAlong`), stepping by `step`.
+ * Direction follows the drag (left↔right or up↔down). Cursor is the sole end bound — no span/count formula.
+ */
+export function rowDrawRackPositionsAlongCursor(
+  startAlong: number,
+  cursorAlong: number,
+  step: number
+): number[] {
+  if (step <= 0) return [];
+  if (startAlong === cursorAlong) return [startAlong];
+  const positions: number[] = [];
+  const dir = cursorAlong >= startAlong ? 1 : -1;
+  let x = startAlong;
+  while (true) {
+    if ((dir === 1 && x > cursorAlong) || (dir === -1 && x < cursorAlong)) break;
+    positions.push(x);
+    x += step * dir;
+  }
+  return positions;
+}
+
+/** Shift drag endpoints for the second facing row (horizontal → +Y, vertical → +X). */
+export function shiftRowDrawForPairedRow(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  offsetCells: number,
+  isHorizontal: boolean
+): { start: { x: number; y: number }; end: { x: number; y: number } } {
+  if (offsetCells <= 0) return { start: { ...start }, end: { ...end } };
+  if (isHorizontal) {
+    return {
+      start: { x: start.x, y: start.y + offsetCells },
+      end: { x: end.x, y: end.y + offsetCells },
+    };
+  }
+  return {
+    start: { x: start.x + offsetCells, y: start.y },
+    end: { x: end.x + offsetCells, y: end.y },
+  };
+}
+
+/** Matches `placeEmptyRow` slot count (DEFAULT_ROW_SLOT_W / H from designer). */
+export function countEmptyRowSlotsInDraw(
+  layout: LayoutState,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  rowGapCm: number
+): number {
+  const gridCols = layout.grid_cols;
+  const gridRows = layout.grid_rows;
+  const { isHorizontal } = rowDrawSegmentExtents(start, end);
+  const gapCells = Math.max(0, isHorizontal ? layoutCmToCellsX(layout, rowGapCm) : layoutCmToCellsY(layout, rowGapCm));
+  const slotW = 12;
+  const slotH = 8;
+  const sw = isHorizontal ? slotW : slotH;
+  const sh = isHorizontal ? slotH : slotW;
+  const step = (isHorizontal ? sw : sh) + gapCells;
+  let along = rowDrawRackPositionsAlongCursor(
+    isHorizontal ? start.x : start.y,
+    isHorizontal ? end.x : end.y,
+    step
+  );
+  along = along.filter((c) =>
+    isHorizontal ? c >= 0 && c + sw <= gridCols : c >= 0 && c + sh <= gridRows
+  );
+  return along.length;
+}
+
+/** Planned rack labels for a row: `${prefix}${1..count}` (prefix already normalized). */
+export function generateRackNames(prefix: string, count: number): string[] {
+  const p = normalizeRowPrefixLetters(prefix);
+  if (count <= 0) return [];
+  return Array.from({ length: count }, (_, i) => `${p}${i + 1}`);
+}
+
+export type GeneratedRackNamesValidation = { valid: boolean; duplicates: string[] };
+
+/**
+ * Ensures no generated name collides with existing racks (case-insensitive) or repeats within `names`.
+ */
+export function validateGeneratedRackNames(names: string[], layout: LayoutState): GeneratedRackNamesValidation {
+  const existing = new Set(layout.racks.map((r) => effectiveRackDisplayName(r, layout).toLowerCase()));
+  const batchSeen = new Set<string>();
+  const duplicates: string[] = [];
+  for (const raw of names) {
+    const n = raw.trim();
+    const key = n.toLowerCase();
+    if (existing.has(key) || batchSeen.has(key)) {
+      duplicates.push(n);
+    }
+    batchSeen.add(key);
+  }
+  const uniq = [...new Set(duplicates)];
+  return { valid: uniq.length === 0, duplicates: uniq };
+}
+
+/** Same as DEFAULT_ROW_SLOT_H in DesignerRackPlacement (draw row height / vertical row width). */
+const PLACE_ROW_PH = 8;
+
+/**
+ * How many racks `placeRowWithTemplate` will create for this drag (geometry only; matches implementation).
+ */
+export function countPlaceRowWithTemplateRacks(
+  layout: LayoutState,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  item: CatalogItem,
+  rowGapCm: number
+): number {
+  const gridCols = layout.grid_cols;
+  const gridRows = layout.grid_rows;
+  const spec = getCatalogItemSpec(item);
+  const cellW = layoutCmToCellsX(layout, spec.width_cm);
+  const cellH = layoutCmToCellsY(layout, spec.depth_cm);
+  const { minY, extentY, isHorizontal } = rowDrawSegmentExtents(start, end);
+  if (isHorizontal) {
+    const gapCellsX = Math.max(0, layoutCmToCellsX(layout, rowGapCm));
+    const stepW = cellW + gapCellsX;
+    let along = rowDrawRackPositionsAlongCursor(start.x, end.x, stepW);
+    along = along.filter((c) => c >= 0 && c + cellW <= gridCols);
+    return along.length;
+  }
+  const x0 = start.x;
+  const y0 = minY;
+  const extentAlong = Math.max(1, extentY);
+  const clampedX = Math.max(0, Math.min(gridCols - 1, x0));
+  const clampedY = Math.max(0, Math.min(gridRows - extentAlong, y0));
+  const w = PLACE_ROW_PH;
+  const h = Math.min(extentAlong, gridRows - clampedY);
+  const slotFits = (s: EmptyRowSlot) => s.w >= cellH && s.h >= cellW;
+  const remainderSlot = (s: EmptyRowSlot, startY: number): EmptyRowSlot =>
+    ({ x: 0, y: startY, w: s.w, h: s.h - cellW });
+  const startY = clampedY;
+  let count = 0;
+  const initialSlots: EmptyRowSlot[] = [{ x: clampedX, y: clampedY, w, h }];
+  const newSlotsRaw: EmptyRowSlot[] = [];
+  const toProcess = [...initialSlots];
+  while (toProcess.length > 0) {
+    const s = toProcess.shift()!;
+    if (s.rackId != null) {
+      newSlotsRaw.push(s);
+      continue;
+    }
+    if (!slotFits(s)) {
+      newSlotsRaw.push(s);
+      continue;
+    }
+    newSlotsRaw.push({
+      x: 0,
+      y: startY,
+      w: cellH,
+      h: cellW,
+      rackId: 1,
+    });
+    count += 1;
+    if (s.h > cellW) {
+      toProcess.unshift(remainderSlot(s, startY));
+    }
+  }
+  const minSlotAlongRow = cellW;
+  while (
+    newSlotsRaw.length > 0 &&
+    newSlotsRaw[newSlotsRaw.length - 1]?.rackId == null &&
+    (newSlotsRaw[newSlotsRaw.length - 1]?.h ?? 0) < minSlotAlongRow
+  ) {
+    newSlotsRaw.pop();
+  }
+  return count;
+}
+
+export type RackNameValidationResult = { valid: boolean; error?: string };
+
+/**
+ * Single source of truth for rack label uniqueness (case-insensitive trim).
+ * Pass `currentRackId` when editing so the current rack is ignored.
+ */
+export function validateRackName(
+  name: string | undefined | null,
+  layout: LayoutState,
+  currentRackId?: { id?: number | string; rack_index?: number; uuid?: string | null }
+): RackNameValidationResult {
+  const trimmed = (name ?? "").trim();
+  const current = currentRackId
+    ? layout.racks.find(
+        (r) =>
+          (currentRackId.uuid != null && r.uuid != null && String(r.uuid) === String(currentRackId.uuid)) ||
+          String(r.id ?? r.rack_index) === String(currentRackId.id ?? currentRackId.rack_index)
+      )
+    : undefined;
+
+  const candidateKey = trimmed
+    ? trimmed.toLowerCase()
+    : current
+      ? effectiveRackDisplayName({ ...current, name: undefined }, layout).toLowerCase()
+      : "";
+
+  if (candidateKey === "") {
+    return { valid: true as const };
+  }
+
+  for (const r of layout.racks) {
+    if (currentRackId) {
+      if (currentRackId.uuid != null && r.uuid != null && String(r.uuid) === String(currentRackId.uuid)) continue;
+      if (String(r.id ?? r.rack_index) === String(currentRackId.id ?? currentRackId.rack_index)) continue;
+    }
+    const otherKey = effectiveRackDisplayName(r, layout).toLowerCase();
+    if (otherKey === candidateKey) {
+      const display = trimmed || (current ? effectiveRackDisplayName({ ...current, name: undefined }, layout) : "?");
+      const result = {
+        valid: false as const,
+        error: `Regał o nazwie '${display}' już istnieje`,
+      };
+      log("VALIDATION", name, result);
+      return result;
+    }
+  }
+  return { valid: true as const };
+}
+
+/**
+ * Validates every rack's effective name against all others using `validateRackName` only.
+ * Deduplicates identical error messages.
+ */
+export function validateAllRackNamesInLayout(layout: LayoutState): { valid: boolean; errors: string[] } {
+  const errSet = new Set<string>();
+  for (const r of layout.racks) {
+    const eff = effectiveRackDisplayName(r, layout);
+    const id = { id: r.id, rack_index: r.rack_index, uuid: r.uuid };
+    const res = validateRackName(eff, layout, id);
+    if (!res.valid && res.error) errSet.add(res.error);
+  }
+  const errors = [...errSet];
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Base rack label (before nextUniqueRackName) when stamping from catalog after choosing a row prefix,
+ * matching `stampRackFromCatalogItem` (snap-to-row overrides prefix when snapping).
+ */
+export function getProposedFirstRackLabelForStampFromCatalog(
+  layout: LayoutState,
+  cell: { x: number; y: number },
+  item: CatalogItem,
+  modalRowPrefix: string
+): string {
+  const spec = getCatalogItemSpec(item);
+  const w = cmToCells(spec.width_cm);
+  const h = cmToCells(spec.depth_cm);
+  const snap = findSnapToRowPosition(layout.racks, cell.x, cell.y, w, h);
+  const prefix = snap ? normalizeRowPrefixLetters(snap.rowPrefix) : normalizeRowPrefixLetters(modalRowPrefix);
+  const indexInRow = snap ? snap.indexInRow : getNextIndexInRow(layout.racks, prefix);
+  return `${prefix}${indexInRow}`;
+}
+
+/** Ensures `baseName` does not collide with any existing rack's effective name (adds " (2)", " (3)", …). */
+export function nextUniqueRackName(baseName: string, layout: LayoutState): string {
+  const base = baseName.trim();
+  if (!base) return baseName;
+  let candidate = base;
+  let n = 1;
+  while (!validateRackName(candidate, layout).valid) {
+    n += 1;
+    candidate = `${base} (${n})`;
+  }
+  return candidate;
+}
+
+/** Renames generated racks so each has a unique `name` against existing layout racks (and within the batch). */
+export function assignUniqueRackNamesToNewRacks(newRacks: RackState[], existingLayout: LayoutState): RackState[] {
+  const acc: RackState[] = [...existingLayout.racks];
+  const out: RackState[] = [];
+  for (const r of newRacks) {
+    const partial: LayoutState = { ...existingLayout, racks: acc };
+    const base = (r.name ?? "").trim() || getRackDisplayId(r, partial);
+    const unique = nextUniqueRackName(base, partial);
+    const next = { ...r, name: unique };
+    acc.push(next);
+    out.push(next);
+  }
+  return out;
 }
 
 /** Minimum size (px) to show label. Below this, hide the label. */
@@ -636,6 +1187,7 @@ export function reindexGeometricRow(racks: RackState[], refRackId: number | stri
 }
 
 export function formatVolume(v: number): string {
+  if (!Number.isFinite(Number(v)) || Number(v) <= 0) return "Brak danych";
   return Number(v).toFixed(2);
 }
 
@@ -998,7 +1550,7 @@ export function createBinsForRack(
   rackWidthCm?: number,
   rackDepthCm?: number,
   rackHeightCm?: number,
-  binTypeMap?: Record<string, StorageType>,
+  binTypeMap?: Record<string, NormalizedStorageType>,
   addressPattern?: string,
   rowId?: string,
   sectionStartIndex?: number,
@@ -1056,7 +1608,7 @@ export function createBinsForRack(
   const out: BinState[] = [];
   for (let lev = 0; lev < levelRows.length; lev++) {
     const locs = Math.max(1, levelRows[lev].locations);
-    const width_cm = rackWidthCm != null ? snapCm(rackWidthCm / locs) : undefined;
+    const widthList = rackWidthCm != null ? distributedWidthsCm(rackWidthCm, locs) : [];
     const height_cm = levelHeights[lev] ?? undefined;
     for (let seg = 0; seg < locs; seg++) {
       const key = `${lev}-${seg}`;
@@ -1074,13 +1626,15 @@ export function createBinsForRack(
         rackIndex,
         aisleLetter,
       });
-      const locId = (labelOptions || useAddressPattern || namingPattern) ? label : locationId(warehouseCode, aisleLetter, rackIndex, lev + 1, seg + 1);
+      const visibleCode = buildVisibleLocationCode(`${aisleLetter}${rackIndex}`, lev, seg);
+      const locId = visibleCode;
       const locationUUID = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `loc-${Date.now()}-${lev}-${seg}-${Math.random().toString(36).slice(2, 9)}`;
+      const width_cm = widthList.length > seg ? widthList[seg] : undefined;
       const vol = (width_cm != null && depth_cm != null && height_cm != null)
         ? binVolumeFromDimensions(width_cm, depth_cm, height_cm)
         : volumePerBinDm3;
       out.push({
-        label: label || locId,
+        label: visibleCode,
         level_index: lev,
         segment_index: seg,
         volume_dm3: vol,
@@ -1172,16 +1726,130 @@ export function generateLocationLabelForRackCell(rack: RackState, levelIndex: nu
   });
 }
 
-/** Bin label for UI when row direction is RTL (mirrors column letters / bin indices without moving geometry). */
+/** Bin label for UI when `bin_direction` is RTL (mirrors column letters / bin indices without moving geometry). */
 export function getBinDisplayLabel(rack: RackState, bin: BinState, layout?: LayoutState | null): string {
   const base = bin.label ?? bin.location_id ?? "";
-  if (getRowDirectionForRack(rack, layout ?? undefined) !== "RTL") return base;
+  if (getBinDirectionForRack(rack, layout ?? undefined) !== "RTL") return base;
   const lc = getLevelConfig(rack);
   const locs = Math.max(1, lc[bin.level_index]?.locations ?? rack.bins_per_level ?? 1);
   if (locs <= 1) return base;
   const segMir = locs - 1 - bin.segment_index;
   if (segMir === bin.segment_index) return base;
   return generateLocationLabelForRackCell(rack, bin.level_index, segMir);
+}
+
+/** Merge rack naming prefix with bin display string so the first segment matches the rack line shown in UI (`effectiveRackDisplayName` / slot label). */
+function combineRackBinDisplayParts(rack: RackState, rackDisp: string, binDisp: string): string {
+  const trimmed = binDisp.trim();
+  if (!trimmed) return rackDisp;
+  const name = (rack.name ?? "").trim();
+  if (name && trimmed.startsWith(`${name}-`)) {
+    return rackDisp + trimmed.slice(name.length);
+  }
+  const parts = trimmed.split("-").map((p) => p.trim()).filter((p) => p.length > 0);
+  if (parts.length === 0) return rackDisp;
+  const first = parts[0] ?? "";
+  if (/^[A-Za-z]+\d+$/.test(first)) {
+    parts[0] = rackDisp;
+    return parts.join("-");
+  }
+  return `${rackDisp}-${trimmed}`;
+}
+
+/**
+ * Single human-readable location line for UI: rack naming prefix + bin (`bin_direction`), e.g. A3-C-1.
+ * Uses `effectiveRackDisplayName` when layout is known so the rack line matches the properties panel / custom `rack.name`.
+ * Does not mutate data; UUID remains the canonical identity.
+ */
+export function getDisplayLocationLabel(rack: RackState, bin: BinState, layout?: LayoutState | null): string {
+  const rackDisp =
+    layout != null
+      ? effectiveRackDisplayName(rack, layout).trim()
+      : getRackDisplayId(rack, layout ?? undefined).trim();
+  return buildVisibleLocationCode(rackDisp, bin.level_index, bin.segment_index);
+}
+
+/**
+ * Full location line using canonical `segment_index` for the bin part (no `getBinDisplayLabel` RTL mirroring).
+ * Use when tile order already follows `bin_direction` (e.g. internal layout left→right = vis 0..n).
+ */
+export function getDisplayLocationLabelPhysicalOrder(rack: RackState, bin: BinState, layout?: LayoutState | null): string {
+  const rackDisp =
+    layout != null
+      ? effectiveRackDisplayName(rack, layout).trim()
+      : getRackDisplayId(rack, layout ?? undefined).trim();
+  return buildVisibleLocationCode(rackDisp, bin.level_index, bin.segment_index);
+}
+
+/** Find rack + bin by permanent location UUID (layout identity). */
+export function findRackAndBinByLocationUuid(
+  layout: LayoutState | null | undefined,
+  locationUUID: string
+): { rack: RackState; bin: BinState } | null {
+  const u = (locationUUID ?? "").trim();
+  if (!u || !layout?.racks?.length) return null;
+  for (const rack of layout.racks) {
+    for (const bin of rack.bins ?? []) {
+      if ((bin.locationUUID ?? "").trim() === u) return { rack, bin };
+    }
+  }
+  return null;
+}
+
+/** Map rack key (id or rack_index) → walk order: row_container slots first (along row), then unracked racks. */
+export function buildRackOrderMap(layout: LayoutState): Map<string, number> {
+  const m = new Map<string, number>();
+  let ord = 0;
+  const seen = new Set<string>();
+  for (const rc of layout.row_containers ?? []) {
+    const horiz = (rc.orientation ?? "horizontal") === "horizontal";
+    const filled = [...rc.slots]
+      .filter((s) => s.rackId != null)
+      .sort((a, b) => (horiz ? a.x - b.x : a.y - b.y));
+    for (const s of filled) {
+      const k = String(s.rackId);
+      if (!seen.has(k)) {
+        m.set(k, ord++);
+        seen.add(k);
+      }
+    }
+  }
+  for (const r of layout.racks ?? []) {
+    const k = String(r.id ?? r.rack_index);
+    if (!seen.has(k)) {
+      m.set(k, ord++);
+      seen.add(k);
+    }
+  }
+  return m;
+}
+
+/** Stable sort key: rack walk order, then level, then segment (RTL/LTR does not change geometry indices). */
+export function getLocationLayoutSortOrdinal(rack: RackState, bin: BinState, layout: LayoutState | null | undefined): number {
+  const map = layout ? buildRackOrderMap(layout) : null;
+  const rk = String(rack.id ?? rack.rack_index);
+  const rackPart = map?.get(rk) ?? (rack.rack_index ?? 0) + 100_000;
+  const lev = bin.level_index;
+  const seg = bin.segment_index;
+  return rackPart * 1_000_000 + lev * 10_000 + seg;
+}
+
+export function compareLocationUuidsByLayoutOrder(
+  layout: LayoutState | null | undefined,
+  uuidA: string,
+  uuidB: string
+): number {
+  if (!layout) return uuidA.localeCompare(uuidB);
+  const fa = findRackAndBinByLocationUuid(layout, uuidA);
+  const fb = findRackAndBinByLocationUuid(layout, uuidB);
+  if (fa && fb) {
+    const oa = getLocationLayoutSortOrdinal(fa.rack, fa.bin, layout);
+    const ob = getLocationLayoutSortOrdinal(fb.rack, fb.bin, layout);
+    if (oa !== ob) return oa - ob;
+  }
+  if (fa && !fb) return -1;
+  if (!fa && fb) return 1;
+  return uuidA.localeCompare(uuidB);
 }
 
 /** Product dimensions (cm) for fit-check. D = depth, S = width, W = height. */
@@ -1204,11 +1872,15 @@ export function positionFitsDimensions(
 /** Single selectable position for location picker (Row > Rack > Level > Position). */
 export type SelectablePosition = {
   locationUUID: string;
+  /** Full display line — same as `getDisplayLocationLabel` (not raw bin.label). */
   locationAddress: string;
+  /** Rack-only prefix for search; same as `getRackDisplayId`. */
   rowLabel: string;
   rackIndex: number;
   levelIndex: number;
   positionIndex: number;
+  /** Primary sort: layout walk order + level + segment (stable when RTL toggles). */
+  layoutSortOrdinal?: number;
   /** Max dimensions (cm) for fit-check. When set, product dimensions must not exceed these. */
   maxDepthCm?: number;
   maxWidthCm?: number;
@@ -1216,44 +1888,78 @@ export type SelectablePosition = {
   /** Capacity in dm³ for volume fit-check. */
   capacityDm3?: number;
   /** primary = picking; reserve = zapasowa (orange on map). */
-  storageType?: StorageType;
+  storageType?: NormalizedStorageType;
 };
 
-/** Build flat list of all positions from layout racks (for location picker). Uses rackLevels when present, else bins. */
+/** Build flat list of all positions from layout racks (for location picker). Uses bins + display label helper. */
 export function getAllPositionsFromRacks(racks: RackState[], layout?: LayoutState | null): SelectablePosition[] {
+  const orderMap = layout ? buildRackOrderMap(layout) : null;
+  const rackList = [...racks].sort((a, b) => {
+    const ka = String(a.id ?? a.rack_index);
+    const kb = String(b.id ?? b.rack_index);
+    if (orderMap) {
+      const oa = orderMap.get(ka);
+      const ob = orderMap.get(kb);
+      if (oa != null && ob != null && oa !== ob) return oa - ob;
+    }
+    return (a.rack_index ?? 0) - (b.rack_index ?? 0);
+  });
   const out: SelectablePosition[] = [];
-  for (const rack of racks) {
+  for (const rack of rackList) {
     const rowLabel = getRackDisplayId(rack, layout ?? undefined);
-    const levels = rack.rackLevels ?? binsToLevels(rack.bins ?? []);
-    for (const lev of levels) {
-      for (const pos of lev.positions) {
-        out.push({
-          locationUUID: pos.locationUUID,
-          locationAddress: pos.locationAddress || pos.locationUUID,
-          rowLabel,
-          rackIndex: rack.rack_index ?? 0,
-          levelIndex: lev.levelIndex,
-          positionIndex: pos.positionIndex,
-          maxDepthCm: pos.max_depth_cm,
-          maxWidthCm: pos.max_width_cm,
-          maxHeightCm: pos.max_height_cm,
-          capacityDm3: pos.volume_dm3,
-          storageType: normalizeStorageType(pos.storage_type),
-        });
-      }
+    const orderedBins = [...(rack.bins ?? [])].sort((a, b) => {
+      if (a.level_index !== b.level_index) return a.level_index - b.level_index;
+      return a.segment_index - b.segment_index;
+    });
+    for (const bin of orderedBins) {
+      const u = (bin.locationUUID ?? "").trim();
+      if (!u) continue;
+      const display = getDisplayLocationLabel(rack, bin, layout);
+      const ordinal = getLocationLayoutSortOrdinal(rack, bin, layout);
+      const sameLevel = (rack.bins ?? []).filter((b) => b.level_index === bin.level_index).sort((a, b) => a.segment_index - b.segment_index);
+      const positionIndex = Math.max(1, sameLevel.findIndex((b) => b.locationUUID === bin.locationUUID) + 1);
+      out.push({
+        locationUUID: u,
+        locationAddress: display,
+        rowLabel,
+        rackIndex: rack.rack_index ?? 0,
+        levelIndex: bin.level_index + 1,
+        positionIndex,
+        layoutSortOrdinal: ordinal,
+        maxDepthCm: bin.depth_cm,
+        maxWidthCm: bin.width_cm,
+        maxHeightCm: bin.height_cm,
+        capacityDm3: bin.volume_dm3,
+        storageType: normalizeStorageType(bin.storage_type),
+      });
     }
   }
+  out.sort((a, b) => {
+    const oa = a.layoutSortOrdinal ?? 0;
+    const ob = b.layoutSortOrdinal ?? 0;
+    if (oa !== ob) return oa - ob;
+    return (a.locationAddress ?? "").localeCompare(b.locationAddress ?? "", undefined, { numeric: true });
+  });
   return out;
 }
 
 /** Raw rack from layout API (minimal shape). */
-type RawLayoutRack = {
+export type RawLayoutRack = {
   id?: number;
+  uuid?: string;
   rack_index?: number;
+  rack_type?: string;
   name?: string;
   row_prefix?: string;
   index_in_row?: number;
   aisle_letter?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  orientation?: string;
+  levels?: number;
+  bins_per_level?: number;
   width_cm?: number;
   length_cm?: number;
   height_cm?: number;
@@ -1272,43 +1978,75 @@ type RawLayoutRack = {
   }>;
 };
 
-/** Build SelectablePosition[] from raw layout API racks (for Products tab location picker). */
-export function getPositionsFromLayoutRacks(rawRacks: RawLayoutRack[]): SelectablePosition[] {
-  const out: SelectablePosition[] = [];
-  for (const r of rawRacks || []) {
-    const rowLabel =
-      (typeof r.name === "string" && r.name.trim() !== "" ? r.name.trim() : null) ||
-      `${(r.row_prefix ?? r.aisle_letter ?? "A").toString().replace(/[^A-Za-z0-9]/g, "")}${(r.index_in_row ?? r.rack_index ?? 1)}`;
-    const bins = r.bins ?? [];
-    for (let bi = 0; bi < bins.length; bi++) {
-      const b = bins[bi]!;
-      const lev = Number(b.level_index ?? 0);
-      const seg = Number(b.segment_index ?? bi);
-      const rid = r.id ?? r.rack_index ?? 0;
-      const locationUUID =
+/** Normalize API rack JSON to RackState for label helpers (Products page / import). */
+export function rawLayoutRackToRackState(r: RawLayoutRack): RackState {
+  const binsIn = r.bins ?? [];
+  const bins: BinState[] = binsIn.map((b) => {
+    const vol = Number(b.volume_dm3);
+    return {
+      label: (b.label ?? "").toString(),
+      level_index: Number(b.level_index ?? 0),
+      segment_index: Number(b.segment_index ?? 0),
+      volume_dm3: Number.isFinite(vol) ? vol : 0,
+      location_id: b.location_id,
+      locationUUID:
         typeof b.location_uuid === "string"
           ? b.location_uuid
           : typeof b.locationUUID === "string"
             ? b.locationUUID
-            : `gen-${rid}-${lev}-${seg}`;
-      const locationAddress = (b.location_id ?? b.label ?? locationUUID).toString().trim();
-      const storageType = normalizeStorageType(b.storage_type);
-      out.push({
-        locationUUID,
-        locationAddress: locationAddress || locationUUID,
-        rowLabel,
-        rackIndex: Number(r.rack_index ?? 0),
-        levelIndex: lev + 1,
-        positionIndex: seg + 1,
-        maxDepthCm: b.depth_cm,
-        maxWidthCm: b.width_cm,
-        maxHeightCm: b.height_cm,
-        capacityDm3: b.volume_dm3,
-        storageType,
-      });
-    }
-  }
-  return out;
+            : undefined,
+      width_cm: b.width_cm,
+      depth_cm: b.depth_cm,
+      height_cm: b.height_cm,
+      storage_type: normalizeStorageType(b.storage_type),
+    };
+  });
+  return {
+    id: r.id,
+    uuid: r.uuid,
+    rack_type: (r.rack_type as RackType) ?? "warehouse",
+    name: r.name,
+    x: r.x ?? 0,
+    y: r.y ?? 0,
+    width: r.width ?? 1,
+    height: r.height ?? 1,
+    orientation: r.orientation ?? "vertical",
+    levels: r.levels ?? 1,
+    bins_per_level: r.bins_per_level ?? 1,
+    length_cm: r.length_cm ?? 0,
+    width_cm: r.width_cm ?? 0,
+    height_cm: r.height_cm ?? 0,
+    aisle_letter: r.aisle_letter ?? "A",
+    rack_index: r.rack_index ?? 0,
+    bins,
+    rowPrefix: r.row_prefix,
+    indexInRow: r.index_in_row,
+  } as RackState;
+}
+
+/**
+ * Build SelectablePosition[] from layout API racks. Pass optional `layout` (grid + row_containers) so labels match designer / Magazyn.
+ */
+export function getPositionsFromLayoutRacks(rawRacks: RawLayoutRack[], layout?: LayoutState | null): SelectablePosition[] {
+  const racks = (rawRacks ?? []).map((r) => rawLayoutRackToRackState(r));
+  const merged: LayoutState = {
+    layout_id: layout?.layout_id ?? null,
+    warehouse_id: layout?.warehouse_id ?? null,
+    warehouse_name: layout?.warehouse_name ?? "",
+    name: layout?.name ?? "",
+    grid_cols: layout?.grid_cols ?? 0,
+    grid_rows: layout?.grid_rows ?? 0,
+    building_width_m: layout?.building_width_m,
+    building_depth_m: layout?.building_depth_m,
+    building_height_m: layout?.building_height_m,
+    racks,
+    aisles: layout?.aisles ?? [],
+    visual_elements: layout?.visual_elements ?? [],
+    picking_path: layout?.picking_path,
+    row_containers: layout?.row_containers ?? [],
+    wall_elements: layout?.wall_elements,
+  };
+  return getAllPositionsFromRacks(racks, merged);
 }
 
 /** Build levels[] with positions (each with locationUUID and locationAddress) from a rack's bins. Used when placing a rack to populate rack.levels. */

@@ -24,6 +24,7 @@ export type WarehouseLegendStats = {
   totalDm3: number;
   primaryUsedDm3?: number;
   reserveUsedDm3?: number;
+  damagedUsedDm3?: number;
 };
 
 export type WarehouseLegendProps = {

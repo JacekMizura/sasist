@@ -1,9 +1,10 @@
+import { warn } from "../../utils/logger";
 import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
 import type { InternalStructure, BinState } from "./warehouseTypes";
 import { ElevationPanel } from "./ElevationPanel";
 import { InternalLayoutModal } from "./InternalLayoutModal";
 import { EditProductModal, type EditProductModalProps } from "./EditProductModal";
-import { getRackDisplayId } from "./warehouseUtils";
+import { findRackForInternalLayoutModal, getRackDisplayId } from "./warehouseUtils";
 import { UI_STRINGS } from "../../constants/uiStrings";
 
 export type WarehouseModalsProps = {
@@ -96,8 +97,14 @@ export function WarehouseModals(props: WarehouseModalsProps) {
         ) : null;
       })()}
 
+      {/* Single “Układ wewnętrzny” UI: `InternalLayoutModal` only (no duplicate). */}
       {(mainView === "magazyn" || mainView === "layout") && internalLayoutRackId != null && (() => {
-        const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === internalLayoutRackId);
+        const rack = findRackForInternalLayoutModal(layout, internalLayoutRackId);
+        if (!rack) {
+          warn("[WarehouseModals] internal layout: rack not found for id", internalLayoutRackId, {
+            rackKeys: layout.racks.map((r) => ({ id: r.id, rack_index: r.rack_index, uuid: r.uuid })),
+          });
+        }
         return rack ? (
           <InternalLayoutModal
             layout={layout}

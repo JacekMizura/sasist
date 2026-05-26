@@ -38,12 +38,12 @@ export default function HotProductsPage() {
   }, []);
 
   if (loading && items.length === 0) {
-    return <div className="p-6"><p className="text-slate-500">Ładowanie…</p></div>;
+    return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
   }
 
   if (error && items.length === 0) {
     return (
-      <div className="p-6">
+      <div className="min-w-0">
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
           <p className="text-sm mt-1">{error}</p>
@@ -53,7 +53,7 @@ export default function HotProductsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <h2 className="text-lg font-semibold text-slate-800 mb-4">Gorące produkty</h2>
       <p className="text-slate-600 mb-4">
         Top produktów według łącznej ilości w zamówieniach (order_items).

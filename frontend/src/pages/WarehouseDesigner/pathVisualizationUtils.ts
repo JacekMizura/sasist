@@ -235,20 +235,12 @@ export function buildPathAvoidingRacks(
   if (DEBUG_FORCE_END_LEFT) {
     approach = { x: targetRack.x - 3, y: targetRack.y };
   }
-  const rackCenter = { x: targetRack.x + targetRack.width / 2, y: targetRack.y + targetRack.height / 2 };
-  if (typeof console !== "undefined" && console.log) {
-    console.log("[path] START", start);
-    console.log("[path] END (aisle approach)", approach);
-    console.log("[path] rack center (not used)", rackCenter);
-    console.log("[path] rack bounds", { x: targetRack.x, y: targetRack.y, w: targetRack.width, h: targetRack.height });
-  }
   const targetRid = targetRack.id ?? targetRack.rack_index;
   const otherRacks = allRacks.filter((r) => (r.id ?? r.rack_index) !== targetRid);
 
   // Try candidate Y levels and choose the shortest valid path:
   // start → (start.x, y) → (approach.x, y) → approach
   const candidateYs = buildCandidateYs(start.y, approach.y, allRacks, gridRows);
-  const failures: Array<{ y: number; reason: string }> = [];
   const candidates = candidateYs
     .map((y) => {
       const path = [start, { x: start.x, y }, { x: approach.x, y }, approach];
@@ -258,24 +250,11 @@ export function buildPathAvoidingRacks(
 
   const best = candidates.find((c) => !c.hits);
   if (best) {
-    if (typeof console !== "undefined" && console.log) {
-      console.log("[path] candidateY chosen", { y: best.y, len: best.len });
-    }
     return best.path;
   }
 
-  for (const c of candidates) {
-    if (c.hits) failures.push({ y: c.y, reason: "collision" });
-  }
   const fallbackYRaw = maxRackBottomY(allRacks) + 2;
   const fallbackY = Math.max(0, Math.min(gridRows - 1, fallbackYRaw));
-  if (typeof console !== "undefined" && console.log) {
-    console.log("[path] all candidateYs collide; falling back to bottom path", {
-      tried: failures.slice(0, 12),
-      fallbackY,
-      fallbackYRaw,
-    });
-  }
   const fallbackPath = [start, { x: start.x, y: fallbackY }, { x: approach.x, y: fallbackY }, approach];
   // Note: fallback may still collide if the grid ends before safeYRaw; we keep it simple.
   return fallbackPath;

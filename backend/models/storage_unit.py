@@ -21,3 +21,14 @@ class StorageUnit(Base):
 
     tenant = relationship("Tenant", back_populates="storage_units")
     warehouse = relationship("Warehouse", back_populates="storage_units")
+
+    levels = relationship(
+        "RackLevel",
+        back_populates="storage_unit",
+        cascade="all, delete-orphan",
+    )
+    slots = relationship(
+        "ZoneSlot",
+        back_populates="storage_unit",
+        cascade="all, delete-orphan",
+    )

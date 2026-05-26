@@ -1,45 +1,33 @@
-import { NavLink } from "react-router-dom";
+import { TabsContainer } from "./layout/TabsContainer";
+import { TabsNav, type TabsNavItem } from "./layout/TabsNav";
 
-export type TabItem = {
-  path: string;
-  label: string;
-};
+export type TabItem = TabsNavItem;
 
 type TopTabsNavigationProps = {
   tabs: TabItem[];
+  /** Np. ``?tenant_id=2`` — dopisywane do każdej ścieżki zakładki (zachowanie kontekstu podmiotu). */
+  tabLinkSearch?: string;
   /** When true, each tab is active only when the route exactly matches (no prefix). Default false. */
   exact?: boolean;
   className?: string;
+  /** Optional accessible name for the tablist (e.g. module name). */
+  "aria-label"?: string;
 };
 
 /**
  * Reusable horizontal tab navigation for WMS modules.
- * Renders NavLinks with uppercase, letter-spacing, active blue text + bottom border, hover.
  * Use under page title: PageHeader → TopTabsNavigation → PageContent.
  */
-export default function TopTabsNavigation({ tabs, exact = false, className = "" }: TopTabsNavigationProps) {
+export default function TopTabsNavigation({
+  tabs,
+  tabLinkSearch,
+  exact = false,
+  className = "",
+  "aria-label": ariaLabel,
+}: TopTabsNavigationProps) {
   return (
-    <nav
-      className={`flex gap-4 border-b border-slate-200 ${className}`}
-      role="tablist"
-    >
-      {tabs.map((tab) => (
-        <NavLink
-          key={tab.path}
-          to={tab.path}
-          end={exact}
-          className={({ isActive }) =>
-            `px-6 py-3 text-[11px] font-black uppercase tracking-widest transition-colors border-b-2 -mb-px ${
-              isActive
-                ? "text-blue-600 border-blue-600"
-                : "text-slate-400 border-transparent hover:text-slate-600"
-            }`
-          }
-          role="tab"
-        >
-          {tab.label}
-        </NavLink>
-      ))}
-    </nav>
+    <TabsContainer className={className.trim() || undefined}>
+      <TabsNav items={tabs} tabLinkSearch={tabLinkSearch} exact={exact} aria-label={ariaLabel} />
+    </TabsContainer>
   );
 }

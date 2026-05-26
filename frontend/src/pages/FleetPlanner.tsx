@@ -4,6 +4,7 @@ import { useWarehouse } from "../context/WarehouseContext";
 import { useCartsRefresh } from "../context/CartsRefreshContext";
 import api from "../api/axios";
 import PageLayout from "../components/layout/PageLayout";
+import { PageHeader } from "../components/layout/PageHeader";
 
 type AnalyzeResult = {
   orders_to_serve: number;
@@ -64,19 +65,20 @@ export default function FleetPlanner() {
   };
 
   return (
-    <PageLayout
-      title={t.optimizer_fleet_planner ?? "Planer floty"}
-      actions={
-        <button
-          type="button"
-          onClick={handleAnalyze}
-          disabled={loading}
-          className="px-6 py-3 rounded-lg bg-violet-600 text-white font-bold uppercase text-sm hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie na wózki")}
-        </button>
-      }
-    >
+    <PageLayout>
+      <PageHeader
+        title={t.optimizer_fleet_planner ?? "Planer floty"}
+        actions={
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={loading}
+            className="rounded-lg bg-violet-600 px-6 py-3 text-sm font-bold uppercase text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie na wózki")}
+          </button>
+        }
+      />
       <p className="text-sm text-slate-500">
         {t.optimizer_analyze_subtitle ?? "Oblicz minimalne zapotrzebowanie na wózki dla zamówień NEW."}
       </p>

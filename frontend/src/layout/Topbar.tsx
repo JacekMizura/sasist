@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { log } from "../utils/logger";
 import api from "../api/axios";
 import { useWarehouse } from "../context/WarehouseContext";
 
@@ -14,7 +15,7 @@ export default function Topbar() {
   useEffect(() => {
     api.get("/tenants/1/warehouses/")
       .then((res) => setWarehouses(res.data))
-      .catch(() => console.log("Błąd pobierania magazynów"));
+      .catch(() => log("Błąd pobierania magazynów"));
   }, []);
 
   return (

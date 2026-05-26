@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { CatalogItem, LayoutState } from "../../../types/warehouse";
-import { computeMarqueeBox, getCellFromClientPosition, isCellInsideRack } from "../utils/designerMouseUtils";
+import { computeMarqueeBox, getCellFromWarehouseLayoutSvg, isCellInsideRack } from "../utils/designerMouseUtils";
 
 export interface UseSelectionInteractionParams {
   layout: LayoutState;
@@ -28,6 +28,7 @@ export interface UseSelectionInteractionParams {
   setLayout: React.Dispatch<React.SetStateAction<LayoutState>>;
   setRowToolTemplate: React.Dispatch<React.SetStateAction<CatalogItem | null>>;
   clearAllSelections: () => void;
+  cellPx?: number;
 }
 
 export function useSelectionInteraction(params: UseSelectionInteractionParams) {
@@ -137,11 +138,10 @@ export function useSelectionInteraction(params: UseSelectionInteractionParams) {
     if (aisleDrawStart) {
       let end: { x: number; y: number } | null = aisleDrawStart;
       if (lastMouseRef.current && svgRef.current) {
-        const rect = svgRef.current.getBoundingClientRect();
-        end = getCellFromClientPosition(
+        end = getCellFromWarehouseLayoutSvg(
+          svgRef.current,
           lastMouseRef.current.clientX,
           lastMouseRef.current.clientY,
-          rect,
           layout.grid_cols,
           layout.grid_rows
         );

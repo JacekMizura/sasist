@@ -25,10 +25,10 @@ export default function ProductPairsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  if (loading) return <div className="p-6"><p className="text-slate-500">Ładowanie…</p></div>;
+  if (loading) return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
   if (error) {
     return (
-      <div className="p-6">
+      <div className="min-w-0">
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
           <p className="text-sm mt-1">{error}</p>
@@ -38,7 +38,7 @@ export default function ProductPairsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <h1 className="text-xl font-semibold text-slate-800">Produkty kupowane razem</h1>
       <p className="mt-2 text-slate-600 mb-4">
         Pary produktów często zamawianych w tym samym zamówieniu (order_items).

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { LayoutMode } from "../../../warehouse-layout";
-import { isCellInsideRack } from "../utils/designerMouseUtils";
+import { isCellInsideRack, pickRackAtCell } from "../utils/designerMouseUtils";
 
 import type { RackState } from "../../../types/warehouse";
 
@@ -73,7 +73,7 @@ export function usePlacementInteraction(params: UsePlacementInteractionParams) {
         return true;
       }
       if (magazynMapInteractions && e.button === 0) {
-        const hit = layout.racks.find((r) => isCellInsideRack(cell, r));
+        const hit = pickRackAtCell(layout.racks, cell);
         if (hit) {
           const rid = hit.id ?? hit.rack_index;
           if (rid != null) {

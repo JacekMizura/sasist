@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from "react";
-import api from "../../api/axios";
 import {
   getPickingAnalysisSummary,
   getPickingAnalysisPicks,
@@ -19,7 +18,9 @@ import {
   type WarehouseGraphEdge,
   type WarehouseLocationItem,
 } from "../../api/warehouseGraphApi";
-import PageLayout, { PageHeader, PageContent } from "../../components/layout/PageLayout";
+import { PageHeader } from "../../components/layout/PageHeader";
+import { FilterDateRange } from "../../components/filters";
+import { useWarehouse } from "../../context/WarehouseContext";
 
 const DEFAULT_TENANT_ID = 1;
 const SVG_WIDTH = 900;
@@ -27,8 +28,6 @@ const SVG_HEIGHT = 500;
 const PAD = 40;
 const NODE_R = 4;
 const LOC_SIZE = 6;
-
-type Warehouse = { id: number; name: string };
 
 function pickColorByActivity(totalPicks: number, maxPicks: number): string {
   if (maxPicks <= 0) return "rgb(34, 197, 94)"; // green
@@ -39,8 +38,8 @@ function pickColorByActivity(totalPicks: number, maxPicks: number): string {
 }
 
 export default function PickingAnalysis() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const { warehouse: activeWarehouse, showWarehouseSelector } = useWarehouse();
+  const warehouseId = activeWarehouse?.id ?? null;
   const [summary, setSummary] = useState<SummaryType | null>(null);
   const [picks, setPicks] = useState<PickingAnalysisPickRow[]>([]);
   const [heatmap, setHeatmap] = useState<PickingAnalysisHeatmapItem[]>([]);
@@ -61,17 +60,6 @@ export default function PickingAnalysis() {
     x: number;
     y: number;
   } | null>(null);
-
-  useEffect(() => {
-    api
-      .get<Warehouse[]>("/warehouses/")
-      .then((r) => {
-        const list = Array.isArray(r.data) ? r.data : [];
-        setWarehouses(list);
-        if (list.length > 0 && warehouseId === null) setWarehouseId(list[0].id);
-      })
-      .catch(() => setWarehouses([]));
-  }, []);
 
   useEffect(() => {
     if (warehouseId == null) {
@@ -188,34 +176,24 @@ export default function PickingAnalysis() {
 
   if (loading && !summary) {
     return (
-      <PageLayout title="Picking Analysis">
-        <PageContent>
-          <p className="text-slate-500">Ładowanie…</p>
-        </PageContent>
-      </PageLayout>
+      <>
+        <PageHeader title="Picking Analysis" />
+        <p className="text-slate-500">Ładowanie…</p>
+      </>
     );
   }
 
   return (
-    <PageLayout
-      title="Picking Analysis"
-      actions={
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-slate-600">Magazyn</label>
-            <select
-              className="rounded border border-slate-300 px-3 py-1.5 text-sm"
-              value={warehouseId ?? ""}
-              onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">—</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name ?? `Magazyn ${w.id}`}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div className="min-w-0 space-y-6">
+        <PageHeader
+          title="Picking Analysis"
+          actions={
+            <div className="flex flex-wrap items-center gap-4">
+          {showWarehouseSelector ? (
+            <span className="text-sm text-slate-600">
+              Magazyn: <span className="font-semibold text-slate-800">{activeWarehouse?.name ?? "—"}</span>
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={handleGenerateSimulatedPicks}
@@ -263,8 +241,7 @@ export default function PickingAnalysis() {
           )}
         </div>
       }
-    >
-      <PageContent>
+        />
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
             {error}
@@ -334,19 +311,15 @@ export default function PickingAnalysis() {
               value={filters.location ?? ""}
               onChange={(e) => setFilters((f) => ({ ...f, location: e.target.value || undefined }))}
             />
-            <input
-              type="date"
-              className="rounded border border-slate-300 px-2 py-1.5 text-sm"
-              value={filters.date_from ?? ""}
-              onChange={(e) => setFilters((f) => ({ ...f, date_from: e.target.value || undefined }))}
-            />
-            <span className="text-slate-400 self-center">–</span>
-            <input
-              type="date"
-              className="rounded border border-slate-300 px-2 py-1.5 text-sm"
-              value={filters.date_to ?? ""}
-              onChange={(e) => setFilters((f) => ({ ...f, date_to: e.target.value || undefined }))}
-            />
+            <div className="min-w-[min(100%,280px)] self-end">
+              <FilterDateRange
+                label="Data piku (od – do)"
+                from={filters.date_from ?? ""}
+                to={filters.date_to ?? ""}
+                onFromChange={(v) => setFilters((f) => ({ ...f, date_from: v || undefined }))}
+                onToChange={(v) => setFilters((f) => ({ ...f, date_to: v || undefined }))}
+              />
+            </div>
             <button
               type="button"
               onClick={applyFilters}
@@ -497,7 +470,6 @@ export default function PickingAnalysis() {
             {tooltip.text}
           </div>
         )}
-      </PageContent>
-    </PageLayout>
+      </div>
   );
 }

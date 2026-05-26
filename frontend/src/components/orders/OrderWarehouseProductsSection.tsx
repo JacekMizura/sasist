@@ -1,0 +1,936 @@
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { Package } from "lucide-react";
+
+import { OrderLineKebabMenu } from "./OrderLineKebabMenu";
+import type {
+  WmsOrderTimelineEventApi,
+  WmsPackingOrderCardApi,
+  WmsPackingOrderLineApi,
+} from "../../api/wmsPackingApi";
+import { fmtOmsQty, isOmsFulfillmentSubstituteIn } from "./omsFulfillmentLinePresentation";
+import OrderFulfillmentLineShortageInlineActions from "./OrderFulfillmentLineShortageInlineActions";
+import { OrderLineResolvedShortageCallout } from "./OrderLineResolvedShortageCallout";
+import { OrderLineOperationalWorkflowModule } from "./OrderLineOperationalWorkflowModule";
+import type { OrderSummaryLineMenuAction, OrderSummaryProductsListLine } from "./OrderSummaryProductsList";
+import { orderLineMenuLockedMessage } from "./orderLineMenuAction";
+import { OrderLineEventTimeline } from "./OrderLineEventTimeline";
+import {
+  findResolvedShortageForOrderLine,
+  isResolvedShortageReducedLine,
+  isResolvedShortageRemovedLine,
+  type PanelFulfillmentHistoryEntryUi,
+} from "./orderLineResolvedShortage";
+
+type OrderItemLike = {
+  id: number;
+  quantity: number;
+  list_price?: number | null;
+  unit_price?: number | null;
+  unit_price_net?: number | null;
+  oms_line_status?: string | null;
+  from_bundle?: boolean;
+  is_bundle_parent?: boolean;
+  parent_bundle_order_item_id?: number | null;
+  source_bundle?: { id?: number; name?: string | null; sku?: string | null } | null;
+  product?: { id?: number; name?: string | null; ean?: string | null; symbol?: string | null; sku?: string | null; image_url?: string | null } | null;
+  replaced_from_order_item_id?: number | null;
+  replaced_from_product_name?: string | null;
+};
+
+function pickFirstFinite(...vals: (number | null | undefined)[]): number | null {
+  for (const v of vals) {
+    if (v != null && Number.isFinite(Number(v))) return Number(v);
+  }
+  return null;
+}
+
+function lineArticleSurfaceClass(resolvedRemoved: boolean, resolvedReduced: boolean, isArchive: boolean): string {
+  if (resolvedRemoved) {
+    return "rounded-lg border-2 border-rose-300/90 bg-rose-50/95 p-3 shadow-sm";
+  }
+  if (resolvedReduced) {
+    return "rounded-lg border border-rose-200/90 bg-rose-50/50 p-3 shadow-sm";
+  }
+  return `rounded-lg border border-slate-200/90 bg-white p-3 shadow-[0_1px_1px_rgba(15,23,42,0.04)] ${
+    isArchive ? "opacity-[0.92]" : ""
+  }`;
+}
+
+function lineQtyBadgeClass(resolvedRemoved: boolean): string {
+  if (resolvedRemoved) {
+    return "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-rose-300 bg-rose-100 text-base font-extrabold tabular-nums text-rose-950";
+  }
+  return "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-base font-extrabold tabular-nums text-white shadow-sm";
+}
+
+function locationBadgeClass(storageType?: string | null): string {
+  const s = (storageType ?? "").toLowerCase();
+  if (s.includes("receive") || s.includes("przyj") || s.includes("inbound"))
+    return "border-blue-400/90 bg-blue-50 text-blue-950";
+  if (s.includes("reserve") || s.includes("rez"))
+    return "border-amber-400/90 bg-amber-50 text-amber-950";
+  return "border-emerald-400/90 bg-emerald-50 text-emerald-950";
+}
+
+function formatExpiryPl(iso: string | null | undefined): string | null {
+  const s = (iso ?? "").trim();
+  if (!s) return null;
+  const d = new Date(`${s}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
+  const picked = wm?.picked_locations;
+  if (picked?.length) {
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        {picked.map((loc, i) => {
+          const batch = (loc.batch_number ?? "").trim();
+          const exp = formatExpiryPl(loc.expiry_date);
+          return (
+            <span
+              key={`${loc.location_label}-${batch}-${loc.expiry_date ?? ""}-${i}`}
+              className="inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md border border-emerald-400/90 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-950"
+            >
+              <span className="truncate">{loc.location_label}</span>
+              {batch ? <span className="font-mono text-[10px] text-emerald-800">Partia {batch}</span> : null}
+              {exp ? <span className="text-[10px] font-semibold text-emerald-800">{exp}</span> : null}
+              {loc.quantity != null && Number(loc.quantity) > 0 ? (
+                <span className="tabular-nums text-slate-700">{Math.round(Number(loc.quantity))}</span>
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+  const slots = wm?.available_stock_locations;
+  if (slots?.length) {
+    return (
+      <div className="flex min-w-0 flex-wrap gap-1">
+        {slots.map((loc, i) => (
+          <span
+            key={`${loc.location_label}-${i}`}
+            className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-bold tabular-nums ${locationBadgeClass(loc.storage_type)}`}
+            title={loc.storage_type ?? undefined}
+          >
+            <span className="truncate">{loc.location_label}</span>
+            {loc.quantity != null && Number(loc.quantity) > 0 ? (
+              <span className="tabular-nums text-slate-700">{Math.round(Number(loc.quantity))}</span>
+            ) : null}
+          </span>
+        ))}
+      </div>
+    );
+  }
+  const lab = (wm?.location_label ?? "").trim();
+  if (!lab) return <span className="text-[11px] text-slate-500">—</span>;
+  return (
+    <span
+      className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-bold ${locationBadgeClass(wm?.location_storage_type)}`}
+    >
+      {lab}
+      {wm?.location_bin_qty != null && wm.location_bin_qty > 0 ? (
+        <span className="tabular-nums text-slate-700">({wm.location_bin_qty})</span>
+      ) : null}
+    </span>
+  );
+}
+
+const WH_METRIC_L = "text-[10px] font-bold uppercase tracking-wide text-slate-500 text-left lg:text-right";
+const WH_METRIC_V = "mt-1 text-sm font-semibold tabular-nums text-slate-900 text-left lg:text-right";
+
+function WarehouseMetricCell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className={WH_METRIC_L}>{label}</p>
+      <div className={WH_METRIC_V}>{children}</div>
+    </div>
+  );
+}
+
+function BundleSetPreviewBadge({
+  components,
+  wmsByItemId,
+}: {
+  components: OrderItemLike[];
+  wmsByItemId: Map<number, WmsPackingOrderLineApi>;
+}) {
+  return (
+    <span
+      tabIndex={0}
+      className="group relative inline-flex cursor-default items-center gap-1 rounded-full border border-violet-300/90 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-900 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-violet-400"
+      aria-label="Zestaw — podgląd składników"
+    >
+      <Package className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
+      Zestaw
+      <span
+        className="pointer-events-none invisible absolute left-0 top-[calc(100%+0.35rem)] z-50 w-[min(22rem,calc(100vw-2.5rem))] rounded-lg border border-slate-200 bg-white p-2 text-left text-[11px] font-normal normal-case opacity-0 shadow-xl ring-1 ring-slate-900/5 transition duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100"
+        role="tooltip"
+      >
+        <p className="border-b border-slate-100 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Skład zestawu</p>
+        <ul className="mt-1.5 max-h-64 space-y-2 overflow-y-auto pr-0.5">
+          {components.map((c) => {
+            const wm = wmsByItemId.get(c.id);
+            const img = (wm?.image_url?.trim() || c.product?.image_url?.trim()) ?? null;
+            const sku = (c.product?.symbol ?? c.product?.sku ?? wm?.sku ?? "").trim();
+            const ean = (c.product?.ean ?? wm?.ean ?? "").trim();
+            const name = (wm?.product_name?.trim() || c.product?.name?.trim() || "—") || "—";
+            const q = fmtOmsQty(c.quantity);
+            return (
+              <li key={c.id} className="flex gap-2 rounded-md border border-slate-100 bg-slate-50/80 p-1.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-slate-200 bg-white">
+                  {img ? <img src={img} alt="" className="max-h-10 max-w-10 object-contain" loading="lazy" /> : <span className="text-[9px] text-slate-400">—</span>}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold leading-snug text-slate-900">{name}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-slate-600">
+                    {sku ? (
+                      <>
+                        SKU: <span className="font-mono tabular-nums">{sku}</span>
+                      </>
+                    ) : null}
+                    {sku && ean ? <span className="text-slate-300"> · </span> : null}
+                    {ean ? (
+                      <>
+                        EAN: <span className="font-mono tabular-nums">{ean}</span>
+                      </>
+                    ) : null}
+                    {!sku && !ean ? <span className="text-slate-400">—</span> : null}
+                  </p>
+                  <p className="mt-0.5 text-[10px] font-medium tabular-nums text-slate-500">W zestawie: {q} szt.</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </span>
+    </span>
+  );
+}
+
+/** Jedna linia magazynowa składnika zestawu — osobny WMS, bez cen. */
+function BundleComponentWarehouseRow({
+  component,
+  wm,
+  timeline,
+  logisticsLines,
+}: {
+  component: OrderItemLike;
+  wm: WmsPackingOrderLineApi | undefined;
+  timeline: WmsOrderTimelineEventApi[] | null;
+  logisticsLines: string[] | null | undefined;
+}) {
+  const cq = Math.max(0, Number(component.quantity) || 0);
+  const picked = Number(wm?.picked_quantity ?? 0);
+  const packed = Number(wm?.quantity_packed ?? 0);
+  const shortageUi = Number(wm?.missing_quantity ?? 0) > 1e-6;
+  const img = (wm?.image_url?.trim() || component.product?.image_url?.trim()) ?? null;
+  const sku = (component.product?.symbol ?? component.product?.sku ?? wm?.sku ?? "").trim();
+  const ean = (component.product?.ean ?? wm?.ean ?? "").trim();
+  const name = (wm?.product_name?.trim() || component.product?.name?.trim() || "—") || "—";
+
+  return (
+    <div className="ml-4 rounded-r-lg border-l-2 border-violet-300 bg-slate-50 py-2 pl-3 pr-2 sm:ml-6">
+      <div className="flex gap-2.5">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+          {img ? (
+            <img src={img} alt="" className="max-h-12 max-w-12 object-contain" loading="lazy" />
+          ) : (
+            <span className="text-[10px] text-slate-400">—</span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          <div>
+            <p className="text-[13px] font-semibold leading-snug text-slate-900">{name}</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
+              {ean ? (
+                <>
+                  EAN: <span className="font-mono tabular-nums">{ean}</span>
+                </>
+              ) : null}
+              {ean && sku ? <span className="text-slate-300"> · </span> : null}
+              {sku ? (
+                <>
+                  SKU: <span className="font-mono tabular-nums">{sku}</span>
+                </>
+              ) : null}
+              {!ean && !sku ? <span className="text-slate-400">—</span> : null}
+            </p>
+            <p className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-500">
+              Do pobrania: {fmtOmsQty(component.quantity)} szt.
+            </p>
+          </div>
+
+          <div className="overflow-hidden rounded-md border border-slate-200/80 bg-white [&_section]:border-slate-200/70">
+            <OrderLineOperationalWorkflowModule
+              locationsSlot={<LocationsBadges wm={wm} />}
+              quantity={cq}
+              pickedQuantity={picked}
+              packedQuantity={packed}
+              pickedQuantityFinal={wm?.picked_quantity_final ?? null}
+              wmsPickingLineStatus={wm?.wms_picking_line_status ?? null}
+              shortageLine={shortageUi}
+              timeline={timeline}
+              pickSubtitle={wm?.last_pick_audit_summary ?? null}
+              packSubtitle={wm?.last_pack_audit_summary ?? null}
+              logisticsLines={logisticsLines}
+            />
+          </div>
+
+          {shortageUi ? (
+            <p className="text-[10px] font-semibold text-red-800">
+              Brak: {fmtOmsQty(Number(wm?.missing_quantity ?? 0))} szt. ·{" "}
+              <a href="#wms-braki-sekcja" className="underline underline-offset-2">
+                szczegóły braków
+              </a>
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export type OrderWarehouseProductsSectionProps = {
+  lines: OrderSummaryProductsListLine[];
+  orderItems: OrderItemLike[];
+  wmsByItemId: Map<number, WmsPackingOrderLineApi>;
+  wmsFulfillment: WmsPackingOrderCardApi | null;
+  wmsLoading: boolean;
+  currency: string | null | undefined;
+  productEditTenantId?: number | null;
+  orderId: number;
+  linesTotalDisplay: string;
+  itemWaitingById: Map<number, boolean>;
+  onRefreshOrder: () => void;
+  onRefreshWms: () => void;
+  onReplaceProduct: (orderItemId: number) => void;
+  onLineAction?: (action: OrderSummaryLineMenuAction, item: OrderSummaryProductsListLine["item"]) => void;
+  formatMoney: (value: number | null | undefined, currency: string | null | undefined) => string;
+  /** Ukrywa nagłówkowy blok sumy linii (jak „Razem brutto”) — zakładka Produkty i magazyn. */
+  hideLineTotalHeader?: boolean;
+  panelFulfillmentHistory?: PanelFulfillmentHistoryEntryUi[];
+  formatDetailDate?: (iso: string | null | undefined) => string;
+  showProductLineHistory?: boolean;
+};
+
+export function OrderWarehouseProductsSection({
+  lines,
+  orderItems,
+  wmsByItemId,
+  wmsFulfillment,
+  wmsLoading,
+  currency,
+  productEditTenantId,
+  orderId,
+  linesTotalDisplay,
+  itemWaitingById,
+  onRefreshOrder,
+  onRefreshWms,
+  onReplaceProduct,
+  onLineAction,
+  formatMoney,
+  hideLineTotalHeader = false,
+  panelFulfillmentHistory = [],
+  formatDetailDate = (iso) => (iso?.trim() ? iso.trim() : "—"),
+  showProductLineHistory = false,
+}: OrderWarehouseProductsSectionProps) {
+  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
+
+  const whKebabMenuKey = (slot: "mob" | "desk", itemId: number) => `${slot}-${itemId}`;
+
+  const whKebabBtn =
+    "flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50";
+
+  const timeline = wmsFulfillment?.timeline ?? wmsFulfillment?.wms_timeline ?? null;
+  const logisticsLines = wmsFulfillment?.wms_operational_logistics_lines ?? null;
+
+  if (lines.length === 0) {
+    return <p className="py-8 text-center text-sm text-slate-500">Brak pozycji</p>;
+  }
+
+  return (
+    <div className="space-y-5">
+      {lines.map((row) => {
+        const full = orderItems.find((x) => x.id === row.item.id);
+        const wm = wmsByItemId.get(row.item.id);
+        const qtyN = Number(row.item.quantity) || 0;
+        const components =
+          full?.is_bundle_parent === true
+            ? orderItems
+                .filter((x) => x.parent_bundle_order_item_id === row.item.id)
+                .sort((a, b) => (a.product?.name ?? "").localeCompare(b.product?.name ?? "", "pl"))
+            : [];
+        const isBundleCard = Boolean(full?.is_bundle_parent && components.length > 0);
+
+        if (isBundleCard) {
+          const anyComponentShortage = components.some(
+            (c) => Number(wmsByItemId.get(c.id)?.missing_quantity ?? 0) > 1e-6,
+          );
+          const bundleMeta = [
+            full?.source_bundle?.sku?.trim() ? `SKU ${full.source_bundle.sku.trim()}` : "",
+            row.ean?.trim() ? `EAN ${row.ean.trim()}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          const pid = row.item.product?.id;
+          const canProductLink =
+            pid != null &&
+            Number.isFinite(Number(pid)) &&
+            Number(pid) > 0 &&
+            productEditTenantId != null &&
+            productEditTenantId > 0;
+          const listP = full?.list_price != null && Number.isFinite(Number(full.list_price)) ? Number(full.list_price) : null;
+          const unitNet = pickFirstFinite(full?.unit_price_net, full?.unit_price);
+          const rabatDisplay =
+            listP != null && unitNet != null && listP > unitNet + 1e-6
+              ? `${formatMoney(listP - unitNet, currency)}`
+              : "—";
+          const ols = (full?.oms_line_status ?? "").trim().toUpperCase();
+          const isArchive = qtyN <= 0 || ols === "REPLACED";
+          const shortageUi = anyComponentShortage;
+          const lineLockedMessage = orderLineMenuLockedMessage(full);
+          const lineLocked = lineLockedMessage != null;
+
+          return (
+            <article
+              key={row.item.id}
+              className={`rounded-lg border border-slate-200/90 bg-white p-3 shadow-[0_1px_1px_rgba(15,23,42,0.04)] ${
+                isArchive ? "opacity-[0.92]" : ""
+              }`}
+            >
+              <div className="flex flex-wrap items-start gap-3 lg:hidden">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-base font-extrabold tabular-nums text-white shadow-sm">
+                  {row.quantityDisplay}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start gap-3">
+                    <div className="flex min-w-0 flex-1 gap-3">
+                      <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center">
+                        {row.imageUrl ? (
+                          <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain" loading="lazy" />
+                        ) : (
+                          <span className="text-[11px] text-slate-400">—</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {canProductLink ? (
+                            <Link
+                              to={`/products/${pid}/edit`}
+                              state={{ tenantId: productEditTenantId }}
+                              className="text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300"
+                            >
+                              {row.name}
+                            </Link>
+                          ) : (
+                            <span className="text-[15px] font-semibold leading-snug text-slate-900">{row.name}</span>
+                          )}
+                          {ols === "REPLACED" ? (
+                            <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-700">
+                              Archiwum
+                            </span>
+                          ) : null}
+                          <BundleSetPreviewBadge components={components} wmsByItemId={wmsByItemId} />
+                        </div>
+                        <p className="mt-1 text-[12px] text-slate-500">
+                          Składa się z {components.length}{" "}
+                          {components.length === 1 ? "produktu" : "produktów"}
+                        </p>
+                        {bundleMeta ? <p className="mt-0.5 text-[12px] leading-snug text-slate-500">{bundleMeta}</p> : null}
+                      </div>
+                    </div>
+                    {!hideLineTotalHeader ? (
+                      <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                        <p className="text-lg font-extrabold tabular-nums text-slate-900">{row.lineGross}</p>
+                        <p className="text-[12px] tabular-nums text-slate-600">
+                          {row.quantityDisplay} szt. × {row.unitGross}
+                        </p>
+                      </div>
+                    ) : null}
+                    <OrderLineKebabMenu
+                      lineId={row.item.id}
+                      anchorId={`order-wh-line-kebab-mob-${row.item.id}`}
+                      buttonClassName={whKebabBtn}
+                      open={openMenuKey === whKebabMenuKey("mob", row.item.id)}
+                      onOpenChange={(next) => setOpenMenuKey(next ? whKebabMenuKey("mob", row.item.id) : null)}
+                      locked={lineLocked}
+                      lockedMessage={lineLockedMessage ?? undefined}
+                      onEdit={() => onLineAction?.("edit", row.item)}
+                      onRabat={() => onLineAction?.("rabat", row.item)}
+                      onRemove={() => onLineAction?.("remove", row.item)}
+                      removeLabel="Usuń z zamówienia"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={
+                  hideLineTotalHeader
+                    ? "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_2.75rem_4.5rem_4.5rem_2.75rem_4rem_2.25rem]"
+                    : "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_2.75rem_4.5rem_4.5rem_2.75rem_4rem_5.25rem_2.25rem]"
+                }
+              >
+                <div className="min-w-0 pr-1">
+                  <div className="flex gap-3">
+                    <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center">
+                      {row.imageUrl ? (
+                        <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain" loading="lazy" />
+                      ) : (
+                        <span className="text-[11px] text-slate-400">—</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {canProductLink ? (
+                          <Link
+                            to={`/products/${pid}/edit`}
+                            state={{ tenantId: productEditTenantId }}
+                            className="text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300"
+                          >
+                            {row.name}
+                          </Link>
+                        ) : (
+                          <span className="text-[15px] font-semibold leading-snug text-slate-900">{row.name}</span>
+                        )}
+                        {ols === "REPLACED" ? (
+                          <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-700">
+                            Archiwum
+                          </span>
+                        ) : null}
+                        <BundleSetPreviewBadge components={components} wmsByItemId={wmsByItemId} />
+                      </div>
+                      <p className="mt-1 text-[12px] text-slate-500">
+                        Składa się z {components.length} {components.length === 1 ? "produktu" : "produktów"}
+                      </p>
+                      {bundleMeta ? <p className="mt-0.5 text-[12px] leading-snug text-slate-500">{bundleMeta}</p> : null}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-center pt-0.5">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-base font-extrabold tabular-nums text-white shadow-sm">
+                    {row.quantityDisplay}
+                  </span>
+                </div>
+                <WarehouseMetricCell label="Netto/szt">{row.unitNet}</WarehouseMetricCell>
+                <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
+                <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
+                <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
+                {hideLineTotalHeader ? null : (
+                  <WarehouseMetricCell label="Wartość">
+                    <span className="font-extrabold text-slate-900">{row.lineGross}</span>
+                  </WarehouseMetricCell>
+                )}
+                <div className="flex justify-end pt-0.5">
+                  <OrderLineKebabMenu
+                    lineId={row.item.id}
+                    anchorId={`order-wh-line-kebab-desk-${row.item.id}`}
+                    buttonClassName={whKebabBtn}
+                    open={openMenuKey === whKebabMenuKey("desk", row.item.id)}
+                    onOpenChange={(next) => setOpenMenuKey(next ? whKebabMenuKey("desk", row.item.id) : null)}
+                    locked={lineLocked}
+                    lockedMessage={lineLockedMessage ?? undefined}
+                    onEdit={() => onLineAction?.("edit", row.item)}
+                    onRabat={() => onLineAction?.("rabat", row.item)}
+                    onRemove={() => onLineAction?.("remove", row.item)}
+                    removeLabel="Usuń z zamówienia"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50/95 px-3 py-3 sm:grid-cols-3 lg:hidden">
+                <WarehouseMetricCell label="Ilość">{row.quantityDisplay}</WarehouseMetricCell>
+                <WarehouseMetricCell label="Netto/szt">{row.unitNet}</WarehouseMetricCell>
+                <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
+                <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
+                <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
+                {hideLineTotalHeader ? null : (
+                  <WarehouseMetricCell label="Wartość">
+                    <span className="font-extrabold">{row.lineGross}</span>
+                  </WarehouseMetricCell>
+                )}
+                <WarehouseMetricCell label="Stan mag.">
+                  —
+                  <span className="mt-0.5 block text-[9px] font-normal leading-tight text-slate-400">per składnik</span>
+                </WarehouseMetricCell>
+                <WarehouseMetricCell label="Rezerwacja">{row.quantityDisplay}</WarehouseMetricCell>
+              </div>
+
+              <div className="mt-4 border-t border-slate-200 pt-3">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-violet-900/90">
+                  Składniki do zebrania
+                </p>
+                <div className="space-y-2">
+                  {components.map((c) => (
+                    <BundleComponentWarehouseRow
+                      key={c.id}
+                      component={c}
+                      wm={wmsByItemId.get(c.id)}
+                      timeline={timeline}
+                      logisticsLines={logisticsLines}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {shortageUi ? (
+                <div className="mt-3 rounded-xl border border-amber-200/90 bg-amber-50/90 px-3 py-2 text-[11px] leading-snug text-amber-950">
+                  Uwaga: braki dotyczą składników zestawu — rozwiązania w{" "}
+                  <a href="#wms-braki-sekcja" className="font-semibold text-amber-950 underline underline-offset-2">
+                    sekcji braków
+                  </a>
+                  .
+                </div>
+              ) : null}
+            </article>
+          );
+        }
+
+        const meta = [row.sku, row.ean, row.catalog]
+          .map((x) => (x ?? "").trim())
+          .filter(Boolean)
+          .join(" · ");
+        const pid = row.item.product?.id;
+        const canProductLink =
+          pid != null && Number.isFinite(Number(pid)) && Number(pid) > 0 && productEditTenantId != null && productEditTenantId > 0;
+        const listP = full?.list_price != null && Number.isFinite(Number(full.list_price)) ? Number(full.list_price) : null;
+        const unitNet = pickFirstFinite(full?.unit_price_net, full?.unit_price);
+        const rabatDisplay =
+          listP != null && unitNet != null && listP > unitNet + 1e-6
+            ? `${formatMoney(listP - unitNet, currency)}`
+            : "—";
+        const stockDisp =
+          wmsLoading ? "…" : wm?.stock_quantity != null && Number.isFinite(Number(wm.stock_quantity)) ? String(wm.stock_quantity) : "—";
+        const resolvedMeta = findResolvedShortageForOrderLine({
+          orderItemId: row.item.id,
+          productName: row.name,
+          sku: row.sku,
+          ean: row.ean,
+          history: panelFulfillmentHistory,
+          lineageMemberIds: row.lineageMemberIds,
+        });
+        const resolvedRemoved = isResolvedShortageRemovedLine({
+          quantity: qtyN,
+          resolved: resolvedMeta,
+          shortageDisplayKind: wm?.shortage_display_kind,
+        });
+        const resolvedReduced = isResolvedShortageReducedLine({ quantity: qtyN, resolved: resolvedMeta });
+        const shortageUi =
+          !resolvedRemoved && !resolvedReduced && wm != null && Number(wm.missing_quantity ?? 0) > 1e-6;
+        const picked = Number(wm?.picked_quantity ?? 0);
+        const packed = Number(wm?.quantity_packed ?? 0);
+        const ols = (full?.oms_line_status ?? "").trim().toUpperCase();
+        const isArchive = !resolvedRemoved && !resolvedReduced && (qtyN <= 0 || ols === "REPLACED");
+        const qtyDisplay = resolvedRemoved ? fmtOmsQty(0) : row.quantityDisplay;
+        const productTitleClass = resolvedRemoved
+          ? "text-[15px] font-semibold leading-snug text-rose-900/80 line-through decoration-rose-300/80"
+          : "text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300";
+        const productTitleClassPlain = resolvedRemoved
+          ? "text-[15px] font-semibold leading-snug text-rose-900/80 line-through decoration-rose-300/80"
+          : "text-[15px] font-semibold leading-snug text-slate-900";
+        const lineLike: WmsPackingOrderLineApi =
+          wm ??
+          ({
+            order_item_id: row.item.id,
+            quantity: row.item.quantity,
+            quantity_packed: 0,
+            picked_quantity: 0,
+            missing_quantity: 0,
+            product_name: row.name,
+            ean: row.ean || null,
+            sku: row.sku || null,
+            image_url: row.imageUrl,
+            oms_line_status: row.item.oms_line_status ?? null,
+            replaced_from_order_item_id: full?.replaced_from_order_item_id ?? null,
+            replaced_from_product_name: full?.replaced_from_product_name ?? null,
+          } as WmsPackingOrderLineApi);
+        const subIn = isOmsFulfillmentSubstituteIn(lineLike);
+        const oldSub = String(wm?.replaced_from_product_name ?? full?.replaced_from_product_name ?? "").trim();
+        const showSubstituteBadge =
+          subIn ||
+          (wm?.replaced_from_order_item_id != null && wm.replaced_from_order_item_id > 0) ||
+          (full?.replaced_from_order_item_id != null && full.replaced_from_order_item_id > 0);
+        const lineLockedMessage = orderLineMenuLockedMessage(full, { resolvedShortageRemoved: resolvedRemoved });
+        const lineLocked = lineLockedMessage != null;
+
+        return (
+          <article
+            key={row.lineageRootId ?? row.item.id}
+            className={lineArticleSurfaceClass(resolvedRemoved, resolvedReduced, isArchive)}
+          >
+            <div className="flex flex-wrap items-start gap-3 lg:hidden">
+              <span className={lineQtyBadgeClass(resolvedRemoved)}>{qtyDisplay}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="flex min-w-0 flex-1 gap-3">
+                    <div
+                      className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
+                    >
+                      {row.imageUrl ? (
+                        <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain" loading="lazy" />
+                      ) : (
+                        <span className="text-[11px] text-slate-400">—</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {canProductLink ? (
+                          <Link
+                            to={`/products/${pid}/edit`}
+                            state={{ tenantId: productEditTenantId }}
+                            className={productTitleClass}
+                          >
+                            {row.name}
+                          </Link>
+                        ) : (
+                          <span className={productTitleClassPlain}>{row.name}</span>
+                        )}
+                        {resolvedRemoved && resolvedMeta ? (
+                          <span className="rounded-full border border-rose-400 bg-rose-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-950">
+                            USUNIĘTO PRZEZ BRAK MAGAZYNOWY
+                          </span>
+                        ) : null}
+                        {resolvedReduced && resolvedMeta && !resolvedRemoved ? (
+                          <span className="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-900">
+                            ZMNIEJSZONO (BRAK)
+                          </span>
+                        ) : null}
+                        {ols === "REPLACED" ? (
+                          <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-700">
+                            Archiwum
+                          </span>
+                        ) : null}
+                        {showSubstituteBadge ? (
+                          <span className="rounded-full border border-blue-400 bg-blue-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-blue-900">
+                            Produkt zastępczy
+                          </span>
+                        ) : null}
+                      </div>
+                      {meta ? <p className="mt-1 text-[12px] leading-snug text-slate-500">{meta}</p> : null}
+                      {resolvedMeta && (resolvedRemoved || resolvedReduced) ? (
+                        <div className="mt-2">
+                          <OrderLineResolvedShortageCallout meta={resolvedMeta} formatDetailDate={formatDetailDate} compact />
+                        </div>
+                      ) : null}
+                      {subIn && oldSub ? (
+                        <p className="mt-1 text-xs text-slate-600">
+                          Zamiast: <span className="font-medium text-slate-800">{oldSub}</span>
+                        </p>
+                      ) : null}
+                      {(wm?.oms_line_secondary_trace ?? "").trim() && !subIn && !resolvedRemoved ? (
+                        <p className="mt-1 text-xs leading-snug text-slate-600">{(wm?.oms_line_secondary_trace ?? "").trim()}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  {!hideLineTotalHeader ? (
+                    <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                      <p className={`text-lg font-extrabold tabular-nums ${resolvedRemoved ? "text-rose-800/70 line-through" : "text-slate-900"}`}>
+                        {row.lineGross}
+                      </p>
+                      <p className="text-[12px] tabular-nums text-slate-600">
+                        {qtyDisplay} szt. × {row.unitGross}
+                      </p>
+                    </div>
+                  ) : null}
+                  <OrderLineKebabMenu
+                    lineId={row.item.id}
+                    anchorId={`order-wh-line-kebab-mob-${row.item.id}`}
+                    buttonClassName={whKebabBtn}
+                    open={openMenuKey === whKebabMenuKey("mob", row.item.id)}
+                    onOpenChange={(next) => setOpenMenuKey(next ? whKebabMenuKey("mob", row.item.id) : null)}
+                    locked={lineLocked}
+                    lockedMessage={lineLockedMessage ?? undefined}
+                    onEdit={() => onLineAction?.("edit", row.item)}
+                    onRabat={() => onLineAction?.("rabat", row.item)}
+                    onRemove={() => onLineAction?.("remove", row.item)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={
+                hideLineTotalHeader
+                  ? "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_2.75rem_4rem_4rem_2.5rem_3.5rem_4.25rem_2.25rem]"
+                  : "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_2.75rem_4rem_4rem_2.5rem_3.5rem_4.5rem_4.25rem_2.25rem]"
+              }
+            >
+              <div className="min-w-0 pr-1">
+                <div className="flex gap-3">
+                  <div
+                    className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
+                  >
+                    {row.imageUrl ? (
+                      <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain" loading="lazy" />
+                    ) : (
+                      <span className="text-[11px] text-slate-400">—</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {canProductLink ? (
+                        <Link to={`/products/${pid}/edit`} state={{ tenantId: productEditTenantId }} className={productTitleClass}>
+                          {row.name}
+                        </Link>
+                      ) : (
+                        <span className={productTitleClassPlain}>{row.name}</span>
+                      )}
+                      {resolvedRemoved && resolvedMeta ? (
+                        <span className="rounded-full border border-rose-400 bg-rose-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-950">
+                          USUNIĘTO PRZEZ BRAK MAGAZYNOWY
+                        </span>
+                      ) : null}
+                      {resolvedReduced && resolvedMeta && !resolvedRemoved ? (
+                        <span className="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-900">
+                          ZMNIEJSZONO (BRAK)
+                        </span>
+                      ) : null}
+                      {ols === "REPLACED" ? (
+                        <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-700">
+                          Archiwum
+                        </span>
+                      ) : null}
+                      {showSubstituteBadge ? (
+                        <span className="rounded-full border border-blue-400 bg-blue-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-blue-900">
+                          Produkt zastępczy
+                        </span>
+                      ) : null}
+                    </div>
+                    {meta ? <p className="mt-1 text-[12px] leading-snug text-slate-500">{meta}</p> : null}
+                    {resolvedMeta && (resolvedRemoved || resolvedReduced) ? (
+                      <div className="mt-2">
+                        <OrderLineResolvedShortageCallout meta={resolvedMeta} formatDetailDate={formatDetailDate} />
+                      </div>
+                    ) : null}
+                    {subIn && oldSub ? (
+                      <p className="mt-1 text-xs text-slate-600">
+                        Zamiast: <span className="font-medium text-slate-800">{oldSub}</span>
+                      </p>
+                    ) : null}
+                    {(wm?.oms_line_secondary_trace ?? "").trim() && !subIn && !resolvedRemoved ? (
+                      <p className="mt-1 text-xs leading-snug text-slate-600">{(wm?.oms_line_secondary_trace ?? "").trim()}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-center pt-0.5">
+                <span className={lineQtyBadgeClass(resolvedRemoved)}>{qtyDisplay}</span>
+              </div>
+              <WarehouseMetricCell label="Netto/szt">{row.unitNet}</WarehouseMetricCell>
+              <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
+              <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
+              <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
+              {hideLineTotalHeader ? null : (
+                <WarehouseMetricCell label="Wartość">
+                  <span className="font-extrabold text-slate-900">{row.lineGross}</span>
+                </WarehouseMetricCell>
+              )}
+              <WarehouseMetricCell label="Stan / Rezerw.">
+                <div className="font-semibold text-slate-900">{stockDisp}</div>
+                <div className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-500">Rez.: {qtyDisplay}</div>
+              </WarehouseMetricCell>
+              <div className="flex justify-end pt-0.5">
+                <OrderLineKebabMenu
+                  lineId={row.item.id}
+                  anchorId={`order-wh-line-kebab-desk-${row.item.id}`}
+                  buttonClassName={whKebabBtn}
+                  open={openMenuKey === whKebabMenuKey("desk", row.item.id)}
+                  onOpenChange={(next) => setOpenMenuKey(next ? whKebabMenuKey("desk", row.item.id) : null)}
+                  locked={lineLocked}
+                  lockedMessage={lineLockedMessage ?? undefined}
+                  onEdit={() => onLineAction?.("edit", row.item)}
+                  onRabat={() => onLineAction?.("rabat", row.item)}
+                  onRemove={() => onLineAction?.("remove", row.item)}
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50/95 px-3 py-3 sm:grid-cols-3 lg:hidden">
+              <WarehouseMetricCell label="Ilość">{qtyDisplay}</WarehouseMetricCell>
+              <WarehouseMetricCell label="Netto/szt">{row.unitNet}</WarehouseMetricCell>
+              <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
+              <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
+              <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
+              {hideLineTotalHeader ? null : (
+                <WarehouseMetricCell label="Wartość">
+                  <span className="font-extrabold">{row.lineGross}</span>
+                </WarehouseMetricCell>
+              )}
+              <WarehouseMetricCell label="Stan mag.">{stockDisp}</WarehouseMetricCell>
+              <WarehouseMetricCell label="Rezerwacja">{qtyDisplay}</WarehouseMetricCell>
+            </div>
+
+            {shortageUi ? (
+              <div className="mt-3 rounded-xl border border-red-200/90 bg-red-50/50 px-3 py-2">
+                <p className="text-[11px] font-bold text-red-950">
+                  Zebrano {picked} / {qtyN} · Brak: {Number(wm?.missing_quantity ?? 0)}
+                </p>
+                <div className="mt-2">
+                  <OrderFulfillmentLineShortageInlineActions
+                    orderId={orderId}
+                    orderItemId={row.item.id}
+                    waiting={itemWaitingById.get(row.item.id) ?? false}
+                    onRefreshOrder={onRefreshOrder}
+                    onRefreshWms={onRefreshWms}
+                    onReplaceProduct={onReplaceProduct}
+                    productName={row.name}
+                    sku={row.sku || null}
+                    ean={row.ean || null}
+                    orderedQuantity={qtyN}
+                    missingQuantity={Number(wm?.missing_quantity ?? 0)}
+                    productImageUrl={row.imageUrl}
+                  />
+                  <a
+                    href="#wms-braki-sekcja"
+                    className="mt-1 inline-block text-[10px] font-medium text-red-800 underline underline-offset-2"
+                  >
+                    Pełna sekcja braków ↓
+                  </a>
+                </div>
+              </div>
+            ) : null}
+
+            {resolvedRemoved ? (
+              <p className="mt-3 rounded-lg border border-rose-200/80 bg-rose-50/60 px-3 py-2 text-[11px] font-medium text-rose-900/90">
+                Pozycja wyłączona z kompletacji i pakowania — usunięta podczas obsługi braków magazynowych.
+              </p>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200/80">
+                <OrderLineOperationalWorkflowModule
+                  locationsSlot={<LocationsBadges wm={wm} />}
+                  quantity={qtyN}
+                  pickedQuantity={picked}
+                  packedQuantity={packed}
+                  pickedQuantityFinal={wm?.picked_quantity_final ?? null}
+                  wmsPickingLineStatus={wm?.wms_picking_line_status ?? null}
+                  shortageLine={shortageUi}
+                  timeline={timeline}
+                  pickSubtitle={wm?.last_pick_audit_summary ?? null}
+                  packSubtitle={wm?.last_pack_audit_summary ?? null}
+                  logisticsLines={logisticsLines}
+                />
+              </div>
+            )}
+
+            {showProductLineHistory && row.eventTimeline && row.eventTimeline.length > 0 ? (
+              <OrderLineEventTimeline
+                events={row.eventTimeline}
+                formatDetailDate={(iso) => formatDetailDate(iso)}
+                defaultOpen
+              />
+            ) : null}
+          </article>
+        );
+      })}
+
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-4 text-sm">
+        <span className="font-semibold text-slate-600">Razem (produkty)</span>
+        <span className="text-base font-extrabold tabular-nums text-slate-900">{linesTotalDisplay}</span>
+      </div>
+    </div>
+  );
+}

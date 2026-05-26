@@ -1,17 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
+import { useWarehouse } from "../../context/WarehouseContext";
 import type { Printer } from "../../types/printer";
 import type { PrinterProfile } from "../../types/printerProfiles";
 
 const TENANT_ID = 1;
 
-type Warehouse = { id: number; name: string };
-
 export default function PrintersPage() {
+  const { warehouses, warehouse: activeWarehouse, showWarehouseSelector } = useWarehouse();
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [profiles, setProfiles] = useState<PrinterProfile[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -43,29 +42,20 @@ export default function PrintersPage() {
     }
   }, []);
 
-  const loadWarehouses = useCallback(async () => {
-    try {
-      const res = await api.get<Warehouse[]>(`/tenants/${TENANT_ID}/warehouses/`);
-      setWarehouses(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      setWarehouses([]);
-    }
-  }, []);
-
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadPrinters(), loadProfiles(), loadWarehouses()]);
+      await Promise.all([loadPrinters(), loadProfiles()]);
       setLoading(false);
     })();
-  }, [loadPrinters, loadProfiles, loadWarehouses]);
+  }, [loadPrinters, loadProfiles]);
 
   const openCreate = () => {
     setEditingId(null);
     setForm({
       name: "",
       profile_id: null,
-      warehouse_id: null,
+      warehouse_id: showWarehouseSelector ? null : activeWarehouse?.id ?? null,
       connection_type: "",
       description: "",
       provider: "",
@@ -139,17 +129,17 @@ export default function PrintersPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-4">
+      <div className="w-full p-4">
         <p className="text-gray-500">Ładowanie…</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6">
+    <div className="w-full space-y-6 p-4">
       <div className="flex items-center gap-4">
-        <Link to="/setup" className="text-slate-600 hover:text-slate-800 text-sm">
-          ← Ustawienia
+        <Link to="/settings/company" className="text-slate-600 hover:text-slate-800 text-sm">
+          ← Firma
         </Link>
         <h1 className="text-2xl font-semibold text-gray-800">Drukarki</h1>
       </div>
@@ -250,21 +240,23 @@ export default function PrintersPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Magazyn (opcjonalnie)</label>
-              <select
-                value={form.warehouse_id ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, warehouse_id: e.target.value ? Number(e.target.value) : null }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="">— wybierz —</option>
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {showWarehouseSelector ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Magazyn (opcjonalnie)</label>
+                <select
+                  value={form.warehouse_id ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, warehouse_id: e.target.value ? Number(e.target.value) : null }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">— wybierz —</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Typ połączenia</label>
               <input

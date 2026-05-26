@@ -1,9 +1,13 @@
 /**
  * Renders a text layout item to an SVG fragment.
  * Coordinates in mm, local to element (0,0) with size width_mm x height_mm.
- * Caller wraps in transform for position and rotation.
+ * Caller wraps in transform for position and rotation (see svgRenderer.wrapElement).
+ * Vertical centering matches PDF intent: middle uses box center + dominant-baseline="middle".
  */
 import type { LayoutItem } from "../utils/labelLayoutEngine";
+
+/** Font size in user units (mm) for SVG font-size attribute. */
+const POINTS_PER_MM = 2.83465;
 
 function escapeXml(s: string): string {
   return s
@@ -19,7 +23,8 @@ export function renderText(item: LayoutItem): string {
   const w = item.width_mm;
   const h = item.height_mm;
   const text = item.text ?? "";
-  const fontSizeMm = (item.fontSize ?? 10) * 0.35; // pt to approximate mm
+  const fontSizePt = item.fontSize ?? 10;
+  const fontSizeMm = fontSizePt / POINTS_PER_MM;
   const fontFamily = item.fontFamily ?? "sans-serif";
   const bold = item.bold ?? false;
   const color = item.textColor ?? "#000000";
@@ -28,18 +33,28 @@ export function renderText(item: LayoutItem): string {
 
   const textAnchor = align === "center" ? "middle" : align === "right" ? "end" : "start";
   const x = align === "center" ? w / 2 : align === "right" ? w : 0;
+
   let y: number;
-  if (vertAlign === "top") y = fontSizeMm * 0.6;
-  else if (vertAlign === "bottom") y = h - fontSizeMm * 0.6;
-  else y = h / 2;
+  let dominantBaseline: string;
+  if (vertAlign === "top") {
+    y = fontSizeMm / 2;
+    dominantBaseline = "middle";
+  } else if (vertAlign === "bottom") {
+    y = h - fontSizeMm / 2;
+    dominantBaseline = "middle";
+  } else {
+    y = h / 2;
+    dominantBaseline = "middle";
+  }
 
   if (item.verticalText && text) {
+    const yCenter = h / 2;
     const parts = text.split("").map((c, i) => {
       const dy = (i - (text.length - 1) / 2) * fontSizeMm * 0.6;
-      return `<text x="${w / 2}" y="${y + dy}" font-family="${escapeXml(fontFamily)}" font-size="${fontSizeMm}" font-weight="${bold ? "bold" : "normal"}" fill="${escapeXml(color)}" text-anchor="middle" dominant-baseline="middle">${escapeXml(c)}</text>`;
+      return `<text x="${w / 2}" y="${yCenter + dy}" font-family="${escapeXml(fontFamily)}" font-size="${fontSizeMm}" font-weight="${bold ? "bold" : "normal"}" fill="${escapeXml(color)}" text-anchor="middle" dominant-baseline="middle">${escapeXml(c)}</text>`;
     });
     return parts.join("");
   }
 
-  return `<text x="${x}" y="${y}" font-family="${escapeXml(fontFamily)}" font-size="${fontSizeMm}" font-weight="${bold ? "bold" : "normal"}" fill="${escapeXml(color)}" text-anchor="${textAnchor}" dominant-baseline="middle">${escapeXml(text)}</text>`;
+  return `<text x="${x}" y="${y}" font-family="${escapeXml(fontFamily)}" font-size="${fontSizeMm}" font-weight="${bold ? "bold" : "normal"}" fill="${escapeXml(color)}" text-anchor="${textAnchor}" dominant-baseline="${dominantBaseline}">${escapeXml(text)}</text>`;
 }

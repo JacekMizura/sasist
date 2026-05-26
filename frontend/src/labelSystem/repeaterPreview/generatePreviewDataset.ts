@@ -7,37 +7,46 @@ export const MAX_PREVIEW_ITEMS = 3;
 
 type PreviewItem = Record<string, unknown>;
 
-/** Rack strip style: rack-level-position (e.g. A1-1-1, A1-2-1, A1-3-1). Matches backend generate_rack_strip. */
+/** Hyphenated location codes (e.g. A1-C-6); layout engine injects {rack_name},{floor},{row}. */
 function locationsPreview(): PreviewItem[] {
-  const rack = "A1";
-  const level = 1;
-  const bins = ["A", "B", "C"];
-  return [1, 2, 3].map((position, i) => {
-    const bin = bins[i] ?? String(position);
-    const loc_name = `${bin}-${level}-${position}`;
-    return {
-      location_code: loc_name,
-      location_barcode: loc_name,
-      barcode_data: loc_name,
-      loc_name,
-      location_name: loc_name,
-      loc_barcode: loc_name,
-      rack_name: rack,
-      bin,
-      level,
-      position,
-      "{loc_name}": loc_name,
-      "{rack_name}": rack,
-      "{bin}": bin,
-    };
-  });
+  const codes = ["A1-C-6", "A1-D-1", "A2-A-12"];
+  return codes.map((loc_name) => ({
+    location_code: loc_name,
+    location_barcode: loc_name,
+    barcode_data: loc_name,
+    loc_name,
+    location_name: loc_name,
+    loc_barcode: loc_name,
+    "{loc_name}": loc_name,
+  }));
 }
 
 function levelsPreview(): PreviewItem[] {
   return [
-    { level: 1, level_name: "Level 1", barcode_data: "L1", level_code: "L1" },
-    { level: 2, level_name: "Level 2", barcode_data: "L2", level_code: "L2" },
-    { level: 3, level_name: "Level 3", barcode_data: "L3", level_code: "L3" },
+    {
+      level: 1,
+      level_name: "Level 1",
+      barcode_data: "L1",
+      level_code: "L1",
+      loc_name: "Level 1",
+      location_name: "Level 1",
+    },
+    {
+      level: 2,
+      level_name: "Level 2",
+      barcode_data: "L2",
+      level_code: "L2",
+      loc_name: "Level 2",
+      location_name: "Level 2",
+    },
+    {
+      level: 3,
+      level_name: "Level 3",
+      barcode_data: "L3",
+      level_code: "L3",
+      loc_name: "Level 3",
+      location_name: "Level 3",
+    },
   ];
 }
 

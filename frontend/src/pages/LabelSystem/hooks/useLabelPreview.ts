@@ -1,13 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
 import type { LabelTemplate } from "../../../types/labelSystem";
-import { buildPreviewRecord } from "../../../labelSystem/repeaterPreview/buildPreviewRecord";
+import {
+  buildPreviewRecord,
+  type BuildPreviewRecordOptions,
+} from "../../../labelSystem/repeaterPreview/buildPreviewRecord";
 import { findRepeaters } from "../../../labelSystem/repeaterAnalysis/findRepeaters";
 import { renderLabel } from "../../../labelRenderer";
 
-export function useLabelPreview(template: LabelTemplate) {
+export function useLabelPreview(template: LabelTemplate, options?: BuildPreviewRecordOptions) {
+  const grouped = Boolean(options?.groupedLocationLabels);
   const previewRecord: Record<string, unknown> = useMemo(
-    () => buildPreviewRecord(template),
-    [template.elements, template.template_type]
+    () => buildPreviewRecord(template, options),
+    [template.elements, template.template_type, grouped]
   );
 
   const hasRepeaterPreview = useMemo(() => findRepeaters(template).length > 0, [template.elements]);
@@ -15,7 +19,9 @@ export function useLabelPreview(template: LabelTemplate) {
   const [labelSvg, setLabelSvg] = useState<string>("");
   useEffect(() => {
     let cancelled = false;
-    renderLabel(template, previewRecord as Record<string, unknown>).then((svg) => {
+    renderLabel(template, previewRecord as Record<string, unknown>, {
+      layoutOptions: { editorEmptyBindingPlaceholder: "Brak danych" },
+    }).then((svg) => {
       if (!cancelled) setLabelSvg(svg);
     });
     return () => { cancelled = true; };

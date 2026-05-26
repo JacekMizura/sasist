@@ -1,13 +1,33 @@
 import api from "../api/axios";
 
-export type Warehouse = { id: number; name: string; tenant_id?: number | null };
-export type Tenant = { id: number; name: string };
+export type Warehouse = {
+  id: number;
+  name: string;
+  tenant_id?: number | null;
+  address?: string | null;
+  type?: string | null;
+  created_at?: string;
+};
+
+export type TenantDto = {
+  id: number;
+  name: string;
+  created_at: string;
+  default_warehouse_id?: number | null;
+};
+
 export type TenantWarehouseAssignment = {
   id: number;
   tenant_id: number;
   warehouse_id: number;
   role: string;
   is_default: boolean;
+};
+
+export const ASSIGNMENT_ROLE_LABELS: Record<string, string> = {
+  owner: "Właściciel",
+  client: "Klient",
+  operator: "Operator",
 };
 
 export const warehouseService = {
@@ -27,6 +47,10 @@ export const warehouseService = {
     return api.post<Warehouse>("/warehouses/", data);
   },
 
+  updateWarehouse(warehouseId: number, data: { name: string }) {
+    return api.put<Warehouse>(`warehouses/${warehouseId}`, data);
+  },
+
   getAssignments(params?: { tenant_id?: number; warehouse_id?: number }) {
     return api.get<TenantWarehouseAssignment[]>("/tenant-warehouses/", { params });
   },
@@ -38,5 +62,13 @@ export const warehouseService = {
     is_default?: boolean;
   }) {
     return api.post<TenantWarehouseAssignment>("/tenant-warehouses/", data);
+  },
+
+  listTenants() {
+    return api.get<TenantDto[]>("/tenants/");
+  },
+
+  createTenant(name: string) {
+    return api.post<TenantDto>("/tenants/", { name });
   },
 };

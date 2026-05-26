@@ -60,6 +60,8 @@ export function EditProductModal({
   const [assignedLocations, setAssignedLocations] = useState<AssignedLocation[]>(initialAssigned);
   const [image_url, setImageUrl] = useState<string>(product?.image_url ?? "");
   const [locationSearch, setLocationSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     setAssignedLocations(initialAssigned);
@@ -76,6 +78,15 @@ export function EditProductModal({
       setImageUrl(product.image_url ?? "");
     }
   }, [product?.id, product?.image_url]);
+
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
 
   const totalFromLocations = useMemo(
     () => assignedLocations.reduce((s, a) => s + a.quantity, 0),
@@ -125,7 +136,10 @@ export function EditProductModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (capacityExceeded || stockValidationBlocked) return;
+    setSaving(true);
+    setClosing(true);
     const firstAddress =
       usePicker && assignedLocations.length > 0
         ? positionsForPicker.find((p) => p.locationUUID === assignedLocations[0].locationUUID)?.locationAddress ?? null
@@ -141,19 +155,31 @@ export function EditProductModal({
       assignedLocations: usePicker ? assignedLocations : undefined,
       image_url: image_url.trim() || undefined,
     });
-    onClose();
+  };
+
+  const delayedClose = () => {
+    setClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 120);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={delayedClose}
+      style={{
+        pointerEvents: closing ? "none" : "auto",
+      }}
+    >
       <div
         className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-bold text-slate-800 px-6 py-4 border-b border-slate-100 shrink-0">
           {isNew ? "Dodaj nowy produkt" : "Edytuj produkt"}
         </h3>
-        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+        <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
           <div className="p-6 space-y-4 overflow-y-auto">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Nazwa produktu</label>
@@ -303,20 +329,21 @@ export function EditProductModal({
           <div className="px-6 py-4 border-t border-slate-100 flex gap-2 justify-end shrink-0">
             <button
               type="button"
-              onClick={onClose}
+              onClick={delayedClose}
               className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
             >
               Anuluj
             </button>
             <button
-              type="submit"
-              disabled={capacityExceeded || stockValidationBlocked}
-              className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving || capacityExceeded || stockValidationBlocked}
+              className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 active:scale-100 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isNew ? "Dodaj" : "Zapisz"}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

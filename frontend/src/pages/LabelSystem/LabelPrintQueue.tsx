@@ -1,6 +1,9 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { warn } from "../../utils/logger";
 import { jsPDF } from "jspdf";
 import api from "../../api/axios";
+import { useWarehouse } from "../../context/WarehouseContext";
 import type {
   LabelTemplate,
   LabelRecord,
@@ -10,9 +13,41 @@ import type {
 } from "../../types/labelSystem";
 import type { Printer } from "../../types/printer";
 import type { PrinterProfile } from "../../types/printerProfiles";
-import { applyCalibration } from "../../utils/labels/applyCalibration";
+import { jsPdfOrientationForLabelShape, labelPageSizePt } from "../../utils/labels/labelPdfPageSetup";
+import { chunkDataset } from "../../utils/labels/chunkDataset";
+import {
+  type LabelDatasetPrepareOptions,
+  type RackDatasetTransformMode,
+  transformLocations,
+} from "../../utils/labels/rackLabelDataset";
 import { drawSvgVector } from "../../utils/labels/svgToPdfVector";
 import { getRecordsFromLayout } from "./labelData";
+import { filterLabelRecordsByExcludeFloors } from "../../utils/labelFloorFilter";
+import {
+  allSuggestedLabelFieldsForCsvMapping,
+  buildColumnMappingWithPersistence,
+  filterDerivedGroupSlotsFromCsvMapping,
+  buildLabelRecordsFromCsvRows,
+  dedupeLabelRecordsByRackFloorRow,
+  sanitizeRecordsForRenderPdf,
+  extractTemplateDataBindingKeys,
+  mergeParsedCsvSources,
+  parseCsv,
+  saveCsvLabelMapping,
+  sanitizeTemplateJsonDimensionsForCsvExport,
+  type CsvFileRowStats,
+  validateCsvAgainstTemplate,
+  validateGroupedVariablesRequireGrouping,
+  csvGroupingPdfBlockedByTemplate,
+  polishLabelCsvFieldForUi,
+} from "./labelCsvImport";
+import {
+  CSV_GROUPING_PREVIEW_LIMIT,
+  getCsvGroupingPreview,
+  sanitizeFloorSetsMatrix,
+} from "../../utils/labels/csvGroupingPreview";
+import { FloorExclusionPanel, excludeFloorsFromUiState, type FloorFilterUiState } from "./FloorExclusionPanel";
+import { labelModuleBasePath } from "./labelModuleBasePath";
 import { LabelPreviewCard } from "./LabelPreviewCard";
 import { renderLabel } from "../../labelRenderer";
 import {
@@ -22,8 +57,22 @@ import {
   isQzAvailable,
   setQzSecurity,
 } from "../../printing/qzService";
+import {
+  PrintModeCards,
+  PrintQueueGhostButton,
+  PrintQueuePrimaryButton,
+  PrintQueueSecondaryButton,
+  PrintQueueSurfaceCard,
+  PrintQueueWorkflowStep,
+  humanizeCsvSanitizeWarning,
+} from "./printQueue/printQueueUi";
 
 const TENANT_ID = 1;
+
+/** Optional `POST /labels/render-pdf` body (CSV): backend merges rows by ``row`` / ``rack_name`` before PDF. */
+function labelRenderPdfCsvGroupBody(byRack: boolean): { group_mode: boolean; group_by_rack: boolean } {
+  return { group_mode: true, group_by_rack: byRack };
+}
 
 type Props = {
   template: LabelTemplate;
@@ -32,10 +81,22 @@ type Props = {
 
 type CartListItem = { id: number; name: string; type?: string };
 
+type ApiLabelTemplateRow = {
+  id: number;
+  name: string;
+  template_type?: string | null;
+  template_json?: string;
+};
+
 export function LabelPrintQueue({ template }: Props) {
-  const [printMode, setPrintMode] = useState<"location" | "cart_basket" | "rack" | "rack_strip" | "pdf_import">("location");
-  const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const labelBase = labelModuleBasePath(pathname);
+  const [printMode, setPrintMode] = useState<
+    "location" | "cart_basket" | "rack" | "rack_strip" | "pdf_import" | "csv_import"
+  >("location");
+  const { warehouse: activeWarehouse } = useWarehouse();
+  const selectedWarehouseId = activeWarehouse?.id ?? null;
   const [cartList, setCartList] = useState<CartListItem[]>([]);
   const [selectedCartId, setSelectedCartId] = useState<number | null>(null);
   const [generatingBasketLabels, setGeneratingBasketLabels] = useState(false);
@@ -50,6 +111,17 @@ export function LabelPrintQueue({ template }: Props) {
   const [pdfImportLoading, setPdfImportLoading] = useState(false);
   const [pdfImportError, setPdfImportError] = useState<string | null>(null);
   const [pdfImportPdfLoading, setPdfImportPdfLoading] = useState(false);
+  const [allLabelTemplatesForCsv, setAllLabelTemplatesForCsv] = useState<ApiLabelTemplateRow[]>([]);
+  const [selectedCsvTemplateId, setSelectedCsvTemplateId] = useState<number | null>(null);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
+  const [csvColumnToField, setCsvColumnToField] = useState<Record<string, string>>({});
+  const [csvImportError, setCsvImportError] = useState<string | null>(null);
+  const [csvImportLoading, setCsvImportLoading] = useState(false);
+  const [csvPdfLoading, setCsvPdfLoading] = useState(false);
+  const [csvPerFileStats, setCsvPerFileStats] = useState<CsvFileRowStats[]>([]);
+  const [csvMergeWarnings, setCsvMergeWarnings] = useState<string[]>([]);
+  const [csvDedupeRackFloorRow, setCsvDedupeRackFloorRow] = useState(false);
   const [stripRack, setStripRack] = useState("A");
   const [stripLevel, setStripLevel] = useState(1);
   const [stripStart, setStripStart] = useState(1);
@@ -87,19 +159,28 @@ export function LabelPrintQueue({ template }: Props) {
   const [qzChecking, setQzChecking] = useState(true);
   const [systemPrinters, setSystemPrinters] = useState<string[] | null>(null);
   const [printing, setPrinting] = useState(false);
+  /** Repeater strip: locations per physical label (auto = derive from template geometry). */
+  const [labelDatasetItemsPerLabel, setLabelDatasetItemsPerLabel] = useState<"auto" | 3 | 5 | 10>("auto");
+  /** Order flat locations before chunking (warehouse row/column semantics). */
+  const [labelDatasetTransformMode, setLabelDatasetTransformMode] =
+    useState<RackDatasetTransformMode>("sequential");
+  /** Optional bins-per-level hint for ordering (optional). */
+  const [labelDatasetColumnsHint, setLabelDatasetColumnsHint] = useState("");
+  /** Floors to exclude from location PDF (e.g. A, F). Matched to parsed loc_name or record.floor. */
+  const [floorFilterUi, setFloorFilterUi] = useState<FloorFilterUiState>({ mode: "exclude", tokens: [] });
+  const excludeFloors = useMemo(() => excludeFloorsFromUiState(floorFilterUi), [floorFilterUi]);
+  /** Backend `/labels/render-pdf`: bleed + crop marks when true (standard PDF when false). */
+  const [pdfPrintReady, setPdfPrintReady] = useState(false);
+  /** CSV → PDF only: merge up to 3 records per row before `render-pdf` (`floor_1..3`, `barcode_1..3`). */
+  const [csvGroupMode, setCsvGroupMode] = useState(false);
+  const [csvGroupByRack, setCsvGroupByRack] = useState(false);
+  /** CSV group_mode: optional `floor_sets` — merge by (row, set); built from chip UI (→ JSON w API). */
+  const [csvFloorSets, setCsvFloorSets] = useState<string[][]>([]);
+  const [csvFloorDraftInput, setCsvFloorDraftInput] = useState("");
+  const [csvFloorDraftTokens, setCsvFloorDraftTokens] = useState<string[]>([]);
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get(`/tenants/${TENANT_ID}/warehouses/`);
-        const list = Array.isArray(res.data) ? res.data : [];
-        setWarehouses(list);
-        if (list.length > 0 && selectedWarehouseId === null) setSelectedWarehouseId(list[0].id);
-      } catch {
-        setWarehouses([]);
-      }
-    })();
-  }, [selectedWarehouseId]);
+  const csvFloorSetsNormalized = useMemo(() => sanitizeFloorSetsMatrix(csvFloorSets), [csvFloorSets]);
 
   useEffect(() => {
     if (printMode !== "cart_basket") return;
@@ -180,6 +261,143 @@ export function LabelPrintQueue({ template }: Props) {
       .catch(() => setLocationTemplates([]));
   }, [printMode]);
 
+  useEffect(() => {
+    if (printMode !== "csv_import") return;
+    let cancelled = false;
+    api
+      .get<ApiLabelTemplateRow[]>("/label-templates", { params: { tenant_id: TENANT_ID } })
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res.data) ? res.data : [];
+        setAllLabelTemplatesForCsv(list);
+        if (list.length > 0) {
+          setSelectedCsvTemplateId((prev) => (prev != null && list.some((t) => t.id === prev) ? prev : list[0].id));
+        } else {
+          setSelectedCsvTemplateId(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAllLabelTemplatesForCsv([]);
+          setSelectedCsvTemplateId(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [printMode]);
+
+  const csvTemplateParsed = useMemo((): LabelTemplate | null => {
+    const row = allLabelTemplatesForCsv.find((t) => t.id === selectedCsvTemplateId);
+    const raw = row?.template_json;
+    if (!raw?.trim()) return null;
+    try {
+      return JSON.parse(raw) as LabelTemplate;
+    } catch {
+      return null;
+    }
+  }, [allLabelTemplatesForCsv, selectedCsvTemplateId]);
+
+  const csvTemplateBindingInfo = useMemo(
+    () => extractTemplateDataBindingKeys(csvTemplateParsed),
+    [csvTemplateParsed],
+  );
+
+  /** Warn / note when stored template_json uses office-sheet mm; PDF request uses sanitized dimensions. */
+  const csvTemplateDimensionHints = useMemo(() => {
+    const row = allLabelTemplatesForCsv.find((t) => t.id === selectedCsvTemplateId);
+    const raw = row?.template_json?.trim();
+    if (!raw) return { warnings: [] as string[], replacedA4Like: false };
+    return sanitizeTemplateJsonDimensionsForCsvExport(raw);
+  }, [allLabelTemplatesForCsv, selectedCsvTemplateId]);
+
+  const csvFieldOptions = useMemo(
+    () => allSuggestedLabelFieldsForCsvMapping([...csvTemplateBindingInfo.keys]),
+    [csvTemplateBindingInfo.keys],
+  );
+
+  const csvGroupingPdfBlocked = useMemo(
+    () => csvGroupingPdfBlockedByTemplate(csvTemplateBindingInfo.keys, csvGroupMode),
+    [csvTemplateBindingInfo.keys, csvGroupMode],
+  );
+
+  /** UI may keep grupowanie on, but PDF request skips merge when szablon nie ma slotów grupowych. */
+  const csvPdfRequestUsesGrouping = useMemo(
+    () => csvGroupMode && !csvGroupingPdfBlocked,
+    [csvGroupMode, csvGroupingPdfBlocked],
+  );
+
+  const csvValidationWarnings = useMemo(() => {
+    const base = validateCsvAgainstTemplate(
+      csvTemplateBindingInfo.keys,
+      csvTemplateBindingInfo.hasRepeater,
+      csvColumnToField,
+    );
+    const grouped = validateGroupedVariablesRequireGrouping(csvTemplateBindingInfo.keys, csvGroupMode);
+    return [...grouped, ...base];
+  }, [
+    csvTemplateBindingInfo.keys,
+    csvTemplateBindingInfo.hasRepeater,
+    csvColumnToField,
+    csvGroupMode,
+  ]);
+
+  useEffect(() => {
+    if (csvHeaders.length === 0) return;
+    setCsvColumnToField((prev) => {
+      const next = filterDerivedGroupSlotsFromCsvMapping(prev);
+      for (const h of csvHeaders) {
+        if ((prev[h] ?? "") !== (next[h] ?? "")) {
+          saveCsvLabelMapping(csvHeaders, next);
+          return next;
+        }
+      }
+      return prev;
+    });
+  }, [selectedCsvTemplateId, csvHeaders]);
+
+  const csvLabelRecords = useMemo(() => {
+    if (csvRows.length === 0) return [];
+    let rec = buildLabelRecordsFromCsvRows(csvRows, csvColumnToField);
+    if (csvDedupeRackFloorRow && rec.length > 0) {
+      rec = dedupeLabelRecordsByRackFloorRow(rec);
+    }
+    return sanitizeRecordsForRenderPdf(rec);
+  }, [csvRows, csvColumnToField, csvDedupeRackFloorRow]);
+
+  const csvRecordsFiltered = useMemo(
+    () => filterLabelRecordsByExcludeFloors(csvLabelRecords, excludeFloors),
+    [csvLabelRecords, excludeFloors],
+  );
+
+  /** Same record pipeline as PDF merge input: build → dedupe → exclude_floors → sanitize (server filters before merge). */
+  const csvGroupingPreviewState = useMemo(() => {
+    if (printMode !== "csv_import" || !csvPdfRequestUsesGrouping || csvRows.length === 0) return null;
+    let rec = buildLabelRecordsFromCsvRows(csvRows, csvColumnToField);
+    if (csvDedupeRackFloorRow && rec.length > 0) {
+      rec = dedupeLabelRecordsByRackFloorRow(rec);
+    }
+    rec = filterLabelRecordsByExcludeFloors(rec, excludeFloors);
+    if (rec.length === 0) {
+      return { kind: "no_rows" as const };
+    }
+    const sanitized = sanitizeRecordsForRenderPdf(rec);
+    const preview = getCsvGroupingPreview(sanitized as Record<string, unknown>[], {
+      byRack: csvGroupByRack,
+      floorSets: csvFloorSetsNormalized,
+    });
+    return { kind: "ready" as const, preview };
+  }, [
+    printMode,
+    csvPdfRequestUsesGrouping,
+    csvRows,
+    csvColumnToField,
+    csvDedupeRackFloorRow,
+    excludeFloors,
+    csvGroupByRack,
+    csvFloorSetsNormalized,
+  ]);
+
   const templateIdForPreview =
     selectedLocationTemplateId ??
     locationTemplates.find((t) => t.is_default)?.id ??
@@ -188,12 +406,79 @@ export function LabelPrintQueue({ template }: Props) {
 
   const records = layout ? getRecordsFromLayout(layout, selectionMode, selectedRackIds, manualLocationIds) : [];
 
+  const locationRecordsFiltered = useMemo(
+    () => filterLabelRecordsByExcludeFloors(records, excludeFloors),
+    [records, excludeFloors]
+  );
+
+  const csvFloorSummaryFooter = useMemo(() => {
+    const active =
+      (floorFilterUi.mode === "exclude" && excludeFloors.length > 0) ||
+      (floorFilterUi.mode === "include_only" && floorFilterUi.tokens.length > 0);
+    if (!active) return null;
+    return (
+      <>
+        {floorFilterUi.mode === "include_only" ? (
+          <>
+            Tylko piętra <span className="font-mono">{floorFilterUi.tokens.join(", ")}</span> — pozostaje{" "}
+          </>
+        ) : (
+          <>
+            Wykluczone: <span className="font-mono">{[...excludeFloors].sort().join(", ")}</span> — pozostaje{" "}
+          </>
+        )}
+        <strong>{csvRecordsFiltered.length}</strong> wierszy etykiet (z {csvRows.length}).
+      </>
+    );
+  }, [floorFilterUi, excludeFloors, csvRecordsFiltered.length, csvRows.length]);
+
+  const locationFloorSummaryFooter = useMemo(() => {
+    const active =
+      (floorFilterUi.mode === "exclude" && excludeFloors.length > 0) ||
+      (floorFilterUi.mode === "include_only" && floorFilterUi.tokens.length > 0);
+    if (!active) return null;
+    return (
+      <>
+        {floorFilterUi.mode === "include_only" ? (
+          <>
+            Tylko piętra <span className="font-mono">{floorFilterUi.tokens.join(", ")}</span> — pozostaje{" "}
+          </>
+        ) : (
+          <>
+            Wykluczone: <span className="font-mono">{[...excludeFloors].sort().join(", ")}</span> — pozostaje{" "}
+          </>
+        )}
+        <strong>{locationRecordsFiltered.length}</strong> lokalizacji (z {records.length}).
+      </>
+    );
+  }, [floorFilterUi, excludeFloors, locationRecordsFiltered.length, records.length]);
+
+  const labelDatasetPrepare = useMemo((): LabelDatasetPrepareOptions => {
+    const colHint = labelDatasetColumnsHint.trim();
+    const columnsParsed =
+      colHint === "" ? undefined : Math.max(1, Math.min(999, parseInt(colHint, 10) || 0));
+    return {
+      transformMode: labelDatasetTransformMode,
+      itemsPerLabel:
+        labelDatasetItemsPerLabel === "auto"
+          ? undefined
+          : labelDatasetItemsPerLabel,
+      columns: columnsParsed && columnsParsed > 0 ? columnsParsed : undefined,
+    };
+  }, [labelDatasetTransformMode, labelDatasetItemsPerLabel, labelDatasetColumnsHint]);
+
   /** Page records (dataset structure for repeaters) — same as PDF pipeline. Used for preview and PDF. */
   const locationPageRecords = useMemo(() => {
-    if (!records.length) return [];
+    if (!locationRecordsFiltered.length) return [];
     const t = locationPreviewTemplate ?? template;
-    return buildPageRecords(t, records);
-  }, [locationPreviewTemplate, template, records]);
+    return buildPageRecords(t, locationRecordsFiltered, labelDatasetPrepare);
+  }, [locationPreviewTemplate, template, locationRecordsFiltered, labelDatasetPrepare]);
+
+  const rackPageRecords = useMemo(() => {
+    if (!rackRecords.length) return [];
+    const tmpl = rackPreviewTemplate ?? template;
+    return buildRecordsLikeRackLabelModal(tmpl, rackRecords, labelDatasetPrepare);
+  }, [rackPreviewTemplate, template, rackRecords, labelDatasetPrepare]);
 
   useEffect(() => {
     if (printMode !== "location" || templateIdForPreview == null) {
@@ -246,7 +531,11 @@ export function LabelPrintQueue({ template }: Props) {
   }, [printMode, templateIdForPreview, rackRecords]);
 
   const handleGeneratePdf = useCallback(async () => {
-    if (records.length === 0) return;
+    if (printMode === "location") {
+      if (locationRecordsFiltered.length === 0) return;
+    } else if (records.length === 0) {
+      return;
+    }
     setBackendPdfFallbackWarning(false);
     // Location labels: use filtered records only. Prefer backend POST /labels/render-pdf (no GET /warehouse/layout/labels/).
     if (printMode === "location" && selectedLocationTemplateId != null) {
@@ -259,15 +548,20 @@ export function LabelPrintQueue({ template }: Props) {
           );
           templateForBackend = JSON.parse(tRes.data.template_json) as LabelTemplate;
         }
-        const recordsToSend = buildRecordsForBackendRenderPdf(templateForBackend, records);
+        const recordsToSend = buildRecordsForBackendRenderPdf(
+          templateForBackend,
+          locationRecordsFiltered,
+          labelDatasetPrepare
+        );
         const res = await api.post(
           "/labels/render-pdf",
           {
             template_id: selectedLocationTemplateId,
             records: recordsToSend,
+            exclude_floors: excludeFloors,
             ...((() => { const p = printers.find(pr => pr.id === selectedPrinterId); return p?.profile_id != null ? { printer_profile_id: p.profile_id } : {}; })()),
           },
-          { params: { tenant_id: TENANT_ID }, responseType: "blob" }
+          { params: { tenant_id: TENANT_ID, print_mode: pdfPrintReady }, responseType: "blob" }
         );
         const url = URL.createObjectURL(new Blob([res.data]));
         const a = document.createElement("a");
@@ -287,21 +581,41 @@ export function LabelPrintQueue({ template }: Props) {
         ? locationPreviewTemplate
         : template;
     if (printMode === "location" && locationPreviewTemplate == null) {
-      console.warn("Location preview template not loaded; PDF may use wrong template.");
+      warn("Location preview template not loaded; PDF may use wrong template.");
     }
     const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
-    const blob = await generatePdfBlob(templateForPdf, records, thermalMode, selectedPrinter?.profile ?? null);
+    const blob = await generatePdfBlob(
+      templateForPdf,
+      printMode === "location" ? locationRecordsFiltered : records,
+      thermalMode,
+      selectedPrinter?.profile ?? null,
+      labelDatasetPrepare
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `etykiety-${templateForPdf.name.replace(/\s+/g, "-")}-${Date.now()}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [template, records, thermalMode, printMode, selectedLocationTemplateId, printers, selectedPrinterId, locationPreviewTemplate]);
+  }, [
+    template,
+    records,
+    locationRecordsFiltered,
+    excludeFloors,
+    thermalMode,
+    printMode,
+    selectedLocationTemplateId,
+    printers,
+    selectedPrinterId,
+    locationPreviewTemplate,
+    labelDatasetPrepare,
+    pdfPrintReady,
+  ]);
 
   /** Returns the same PDF blob as Generate PDF (for direct print or fallback download). */
   const getLocationLabelPdfBlob = useCallback(async (): Promise<Blob> => {
-    if (records.length === 0) throw new Error("No records");
+    if (printMode === "location" && locationRecordsFiltered.length === 0) throw new Error("No records");
+    if (printMode !== "location" && records.length === 0) throw new Error("No records");
     if (printMode === "location" && selectedLocationTemplateId != null) {
       try {
         let templateForBackend: LabelTemplate | null = locationPreviewTemplate ?? template;
@@ -312,15 +626,20 @@ export function LabelPrintQueue({ template }: Props) {
           );
           templateForBackend = JSON.parse(tRes.data.template_json) as LabelTemplate;
         }
-        const recordsToSend = buildRecordsForBackendRenderPdf(templateForBackend, records);
+        const recordsToSend = buildRecordsForBackendRenderPdf(
+          templateForBackend,
+          locationRecordsFiltered,
+          labelDatasetPrepare
+        );
         const res = await api.post<Blob>(
           "/labels/render-pdf",
           {
             template_id: selectedLocationTemplateId,
             records: recordsToSend,
+            exclude_floors: excludeFloors,
             ...((() => { const p = printers.find(pr => pr.id === selectedPrinterId); return p?.profile_id != null ? { printer_profile_id: p.profile_id } : {}; })()),
           },
-          { params: { tenant_id: TENANT_ID }, responseType: "blob" }
+          { params: { tenant_id: TENANT_ID, print_mode: pdfPrintReady }, responseType: "blob" }
         );
         return res.data;
       } catch {
@@ -330,8 +649,27 @@ export function LabelPrintQueue({ template }: Props) {
     const templateForPdf =
       printMode === "location" && locationPreviewTemplate != null ? locationPreviewTemplate : template;
     const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
-    return await generatePdfBlob(templateForPdf, records, thermalMode, selectedPrinter?.profile ?? null);
-  }, [template, records, thermalMode, printMode, selectedLocationTemplateId, printers, selectedPrinterId, locationPreviewTemplate]);
+    return await generatePdfBlob(
+      templateForPdf,
+      printMode === "location" ? locationRecordsFiltered : records,
+      thermalMode,
+      selectedPrinter?.profile ?? null,
+      labelDatasetPrepare
+    );
+  }, [
+    template,
+    records,
+    locationRecordsFiltered,
+    excludeFloors,
+    thermalMode,
+    printMode,
+    selectedLocationTemplateId,
+    printers,
+    selectedPrinterId,
+    locationPreviewTemplate,
+    labelDatasetPrepare,
+    pdfPrintReady,
+  ]);
 
   const handlePrint = useCallback(async () => {
     const printer = selectedPrinterId != null ? printers.find((p) => p.id === selectedPrinterId) ?? null : null;
@@ -410,14 +748,19 @@ export function LabelPrintQueue({ template }: Props) {
     }
     setRackPdfLoading(true);
     try {
+      const tRes = await api.get<{ template_json: string }>(`/label-templates/${templateId}`, {
+        params: { tenant_id: TENANT_ID },
+      });
+      const templateObj = JSON.parse(tRes.data.template_json) as LabelTemplate;
+      const recordsToSend = buildRecordsLikeRackLabelModal(templateObj, rackRecords, labelDatasetPrepare);
       const res = await api.post(
         "/labels/render-pdf",
         {
           template_id: templateId,
-          records: rackRecords,
+          records: recordsToSend,
           ...((() => { const p = printers.find(pr => pr.id === selectedPrinterId); return p?.profile_id != null ? { printer_profile_id: p.profile_id } : {}; })()),
         },
-        { params: { tenant_id: TENANT_ID }, responseType: "blob" }
+        { params: { tenant_id: TENANT_ID, print_mode: pdfPrintReady }, responseType: "blob" }
       );
       const url = URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement("a");
@@ -430,7 +773,16 @@ export function LabelPrintQueue({ template }: Props) {
     } finally {
       setRackPdfLoading(false);
     }
-  }, [rackRecords, selectedLocationTemplateId, locationTemplates, rackRack, printers, selectedPrinterId]);
+  }, [
+    rackRecords,
+    selectedLocationTemplateId,
+    locationTemplates,
+    rackRack,
+    printers,
+    selectedPrinterId,
+    labelDatasetPrepare,
+    pdfPrintReady,
+  ]);
 
   const handlePdfImportUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -466,14 +818,13 @@ export function LabelPrintQueue({ template }: Props) {
     if (pdfImportBarcodes.length === 0) return;
     const templateId = selectedLocationTemplateId ?? locationTemplates.find((t) => t.is_default)?.id ?? locationTemplates[0]?.id;
     if (templateId == null) return;
-    const records: LabelRecord[] = pdfImportBarcodes.map((code) => ({
+    const recordsRaw: LabelRecord[] = pdfImportBarcodes.map((code) => ({
       loc_name: code,
       loc_barcode: code,
       location_name: code,
       barcode_data: code,
-      "{loc_name}": code,
-      "{loc_barcode}": code,
     }));
+    const records = sanitizeRecordsForRenderPdf(recordsRaw as Record<string, unknown>[]);
     setPdfImportPdfLoading(true);
     try {
       const res = await api.post(
@@ -483,7 +834,7 @@ export function LabelPrintQueue({ template }: Props) {
           records,
           ...((() => { const p = printers.find(pr => pr.id === selectedPrinterId); return p?.profile_id != null ? { printer_profile_id: p.profile_id } : {}; })()),
         },
-        { params: { tenant_id: TENANT_ID }, responseType: "blob" }
+        { params: { tenant_id: TENANT_ID, print_mode: pdfPrintReady }, responseType: "blob" }
       );
       const url = URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement("a");
@@ -497,7 +848,157 @@ export function LabelPrintQueue({ template }: Props) {
     } finally {
       setPdfImportPdfLoading(false);
     }
-  }, [pdfImportBarcodes, selectedLocationTemplateId, locationTemplates, printers, selectedPrinterId]);
+  }, [pdfImportBarcodes, selectedLocationTemplateId, locationTemplates, printers, selectedPrinterId, pdfPrintReady]);
+
+  const handleCsvFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files;
+    if (!list?.length) return;
+    const files = Array.from(list).filter((f) => f.name.toLowerCase().endsWith(".csv"));
+    if (!files.length) {
+      setCsvImportError("Wybierz co najmniej jeden plik CSV.");
+      return;
+    }
+    setCsvImportError(null);
+    setCsvMergeWarnings([]);
+    setCsvImportLoading(true);
+    try {
+      const parsed: { filename: string; headers: string[]; rows: Record<string, string>[] }[] = [];
+      for (const file of files) {
+        const text = await file.text();
+        const { headers, rows } = parseCsv(text);
+        if (headers.length === 0) {
+          setCsvImportError(`Plik „${file.name}” nie zawiera nagłówków.`);
+          setCsvHeaders([]);
+          setCsvRows([]);
+          setCsvColumnToField({});
+          setCsvPerFileStats([]);
+          return;
+        }
+        parsed.push({ filename: file.name, headers, rows });
+      }
+      const { headers, rows, perFile, warnings } = mergeParsedCsvSources(parsed);
+      setCsvPerFileStats(perFile);
+      setCsvMergeWarnings(warnings);
+      setCsvHeaders(headers);
+      setCsvRows(rows);
+      setCsvColumnToField(buildColumnMappingWithPersistence(headers));
+    } catch {
+      setCsvImportError("Nie udało się odczytać pliku CSV.");
+      setCsvHeaders([]);
+      setCsvRows([]);
+      setCsvColumnToField({});
+      setCsvPerFileStats([]);
+      setCsvMergeWarnings([]);
+    } finally {
+      setCsvImportLoading(false);
+    }
+    e.target.value = "";
+  }, []);
+
+  const handleCsvGeneratePdf = useCallback(async () => {
+    if (csvRows.length === 0 || selectedCsvTemplateId == null) return;
+    const csvTplRow = allLabelTemplatesForCsv.find((t) => t.id === selectedCsvTemplateId);
+    const templateJson = csvTplRow?.template_json?.trim();
+    if (!templateJson) {
+      setCsvImportError(
+        "Template required for CSV labels: brak template_json dla wybranego szablonu — odśwież listę lub zapisz szablon w edytorze.",
+      );
+      return;
+    }
+    const CSV_ROW_LIMIT = 5000;
+    if (csvRows.length > CSV_ROW_LIMIT) {
+      setCsvImportError(`Maksymalnie ${CSV_ROW_LIMIT} wierszy po połączeniu plików — zmniejsz zestaw CSV.`);
+      return;
+    }
+    const floorSetsPayload =
+      csvPdfRequestUsesGrouping && csvFloorSetsNormalized.length > 0 ? csvFloorSetsNormalized : [];
+    setCsvImportError(null);
+    setCsvPdfLoading(true);
+    try {
+      let records = buildLabelRecordsFromCsvRows(csvRows, csvColumnToField);
+      if (csvDedupeRackFloorRow) {
+        records = dedupeLabelRecordsByRackFloorRow(records);
+      }
+      if (filterLabelRecordsByExcludeFloors(records, excludeFloors).length === 0) {
+        setCsvImportError("Po wykluczeniu pięter nie zostało żadnego wiersza. Odznacz piętra lub zmień CSV.");
+        return;
+      }
+      records = sanitizeRecordsForRenderPdf(records);
+      for (const record of records) {
+        console.log("CLEAN RECORD", record);
+      }
+      if (import.meta.env.DEV) {
+        const sample = records[0];
+        const keys = sample && typeof sample === "object" ? Object.keys(sample as object) : [];
+        console.info("[csv labels] render-pdf records count", records.length);
+        console.info("[csv labels] first record keys (no `{binding}` keys)", keys);
+        console.info("[csv labels] first record", sample);
+      }
+      const { templateJson: templateJsonForPdf, warnings: dimWarnings } =
+        sanitizeTemplateJsonDimensionsForCsvExport(templateJson);
+      for (const w of dimWarnings) {
+        if (import.meta.env.DEV) console.warn("[csv labels]", w);
+      }
+      const res = await api.post(
+        "/labels/render-pdf",
+        {
+          template_id: selectedCsvTemplateId,
+          template_json: templateJsonForPdf,
+          records,
+          exclude_floors: excludeFloors,
+          ...(csvPdfRequestUsesGrouping ? labelRenderPdfCsvGroupBody(csvGroupByRack) : {}),
+          ...(csvPdfRequestUsesGrouping && floorSetsPayload.length > 0 ? { floor_sets: floorSetsPayload } : {}),
+          ...((() => {
+            const p = printers.find((pr) => pr.id === selectedPrinterId);
+            return p?.profile_id != null ? { printer_profile_id: p.profile_id } : {};
+          })()),
+        },
+        { params: { tenant_id: TENANT_ID, print_mode: pdfPrintReady }, responseType: "blob" },
+      );
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `csv-labels-${Date.now()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      console.error("CSV labels PDF failed:", err);
+      let msg = "Generowanie PDF nie powiodło się.";
+      const resp =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { status?: number; data?: unknown } }).response
+          : undefined;
+      if (resp?.status === 400 && resp.data instanceof Blob) {
+        try {
+          const text = await resp.data.text();
+          try {
+            const j = JSON.parse(text) as { detail?: unknown };
+            if (typeof j.detail === "string") msg = j.detail;
+          } catch {
+            if (text.trim()) msg = text.trim();
+          }
+        } catch {
+          /* keep default */
+        }
+      }
+      setCsvImportError(msg);
+    } finally {
+      setCsvPdfLoading(false);
+    }
+  }, [
+    csvRows,
+    csvColumnToField,
+    csvDedupeRackFloorRow,
+    selectedCsvTemplateId,
+    allLabelTemplatesForCsv,
+    printers,
+    selectedPrinterId,
+    excludeFloors,
+    pdfPrintReady,
+    csvPdfRequestUsesGrouping,
+    csvGroupByRack,
+    csvFloorSetsNormalized,
+  ]);
 
   const handleGenerateRackStrip = useCallback(async () => {
     setStripGenerating(true);
@@ -524,14 +1025,15 @@ export function LabelPrintQueue({ template }: Props) {
     setStripPdfLoading(true);
     try {
       const stripRecord = { locations: stripRecords };
+      const stripRecordsToSend = sanitizeRecordsForRenderPdf([stripRecord as Record<string, unknown>]);
       const res = await api.post(
         "/labels/render-pdf",
         {
           template_id: templateId,
-          records: [stripRecord],
+          records: stripRecordsToSend,
           ...((() => { const p = printers.find(pr => pr.id === selectedPrinterId); return p?.profile_id != null ? { printer_profile_id: p.profile_id } : {}; })()),
         },
-        { params: { tenant_id: TENANT_ID }, responseType: "blob" }
+        { params: { tenant_id: TENANT_ID, print_mode: pdfPrintReady }, responseType: "blob" }
       );
       const url = URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement("a");
@@ -544,7 +1046,7 @@ export function LabelPrintQueue({ template }: Props) {
     } finally {
       setStripPdfLoading(false);
     }
-  }, [stripRecords, stripRack, stripLevel, stripStart, stripEnd, selectedLocationTemplateId, locationTemplates, printers, selectedPrinterId]);
+  }, [stripRecords, stripRack, stripLevel, stripStart, stripEnd, selectedLocationTemplateId, locationTemplates, printers, selectedPrinterId, pdfPrintReady]);
 
   const handleGenerateBasketLabelsForCart = useCallback(async () => {
     if (selectedCartId == null) return;
@@ -575,7 +1077,13 @@ export function LabelPrintQueue({ template }: Props) {
       });
       if (records.length === 0) return;
       const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
-      const blob = await generatePdfBlob(template, records, thermalMode, selectedPrinter?.profile ?? null);
+      const blob = await generatePdfBlob(
+        template,
+        records,
+        thermalMode,
+        selectedPrinter?.profile ?? null,
+        undefined
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -596,368 +1104,825 @@ export function LabelPrintQueue({ template }: Props) {
     return { id, label: `Regał ${id}` };
   }) ?? [];
 
+  const summaryTemplateName = useMemo(() => {
+    if (printMode === "csv_import") {
+      return allLabelTemplatesForCsv.find((t) => t.id === selectedCsvTemplateId)?.name?.trim() || "—";
+    }
+    const pick =
+      locationTemplates.find((t) => t.id === selectedLocationTemplateId) ??
+      locationTemplates.find((t) => t.is_default) ??
+      locationTemplates[0];
+    return pick?.name?.trim() || "—";
+  }, [
+    printMode,
+    allLabelTemplatesForCsv,
+    selectedCsvTemplateId,
+    locationTemplates,
+    selectedLocationTemplateId,
+  ]);
+
+  const summaryDimsTemplate = useMemo(() => {
+    if (printMode === "csv_import" && csvTemplateParsed) return csvTemplateParsed;
+    if (printMode === "location" && locationPreviewTemplate) return locationPreviewTemplate;
+    if (printMode === "rack" && rackPreviewTemplate) return rackPreviewTemplate;
+    return template;
+  }, [printMode, csvTemplateParsed, locationPreviewTemplate, rackPreviewTemplate, template]);
+
+  const summaryPrinterLabel = useMemo(() => {
+    const p = printers.find((x) => x.id === selectedPrinterId);
+    return p?.name?.trim() || "—";
+  }, [printers, selectedPrinterId]);
+
   const labelsToPrintCount =
-    printMode === "location" ? records.length
-    : printMode === "rack" ? rackRecords.length
+    printMode === "location" ? locationPageRecords.length
+    : printMode === "rack" ? rackPageRecords.length
     : printMode === "rack_strip" ? stripRecords.length
     : printMode === "pdf_import" ? pdfImportBarcodes.length
+    : printMode === "csv_import" ? csvRecordsFiltered.length
     : null;
 
   return (
-    <div className="h-full overflow-y-auto p-4 max-w-4xl mx-auto space-y-6">
-      {/* Section 1 — Mode selector */}
-      <div>
-        <h2 className="text-lg font-semibold text-slate-800 mb-1">Print labels</h2>
-        <p className="text-sm text-slate-600 mb-2">Mode</p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setPrintMode("location")}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${printMode === "location" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-          >
-            Location labels
-          </button>
-          <button
-            type="button"
-            onClick={() => setPrintMode("cart_basket")}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${printMode === "cart_basket" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-          >
-            Cart / Basket labels
-          </button>
-          <button
-            type="button"
-            onClick={() => setPrintMode("rack")}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${printMode === "rack" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-          >
-            Generate rack labels
-          </button>
-          <button
-            type="button"
-            onClick={() => setPrintMode("rack_strip")}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${printMode === "rack_strip" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-          >
-            Rack Strip Builder
-          </button>
-          <button
-            type="button"
-            onClick={() => setPrintMode("pdf_import")}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${printMode === "pdf_import" ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-          >
-            Import PDF barcodes
-          </button>
-        </div>
-      </div>
+    <div className="h-full min-h-0 overflow-y-auto bg-gradient-to-b from-slate-50 via-white to-slate-50/90">
+      <div className="mx-auto w-full max-w-[1500px] px-3 py-5 pb-12 md:px-5">
+        <PrintQueueWorkflowStep
+          step={1}
+          title="Wybierz typ wydruku"
+          subtitle="Od tego zależy, skąd pobieramy dane i jakie kroki są dostępne poniżej."
+        />
+        <PrintModeCards value={printMode} onChange={setPrintMode} />
 
-      {/* Section 2 — Settings panel */}
-      <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 space-y-3">
-        <h3 className="text-base font-semibold text-slate-700">Settings</h3>
-        {printMode === "location" && (
-          <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Warehouse</label>
-            <select
-              value={selectedWarehouseId ?? ""}
-              onChange={(e) => setSelectedWarehouseId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
-            >
-              <option value="">— Wybierz magazyn —</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-        {(printMode === "location" || printMode === "rack" || printMode === "rack_strip" || printMode === "pdf_import") && (
-          <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Template</label>
-            <select
-              value={selectedLocationTemplateId ?? ""}
-              onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
-            >
-              <option value="">{printMode === "location" ? "Location default" : "— Select template —"}</option>
-              {locationTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}{t.is_default ? (printMode === "location" ? " (domyślny)" : " (default)") : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">Printer</label>
-          <select
-            value={selectedPrinterId ?? ""}
-            onChange={(e) => setSelectedPrinterId(e.target.value ? Number(e.target.value) : null)}
-            className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
-          >
-            <option value="">None</option>
-            {printers.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <p className="text-xs text-slate-500 mt-1">Calibration (offset/scale) is applied only when exporting or printing PDF.</p>
-        </div>
-        {labelsToPrintCount !== null && (
-          <p className="text-sm text-slate-600">
-            Labels to print: <strong>{labelsToPrintCount}</strong>
-          </p>
-        )}
-      </div>
+        <div className="mt-6 grid gap-6 lg:grid-cols-12 lg:items-start">
+          <div className="min-w-0 space-y-4 lg:col-span-8">
+            <PrintQueueWorkflowStep
+              step={2}
+              title="Wybierz szablon i drukarkę"
+            />
+            <PrintQueueSurfaceCard title="Szablon i drukarka">
+              <div className="grid gap-4 md:grid-cols-2">
+                {printMode === "csv_import" && (
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Szablon z biblioteki
+                    </label>
+                    <select
+                      value={selectedCsvTemplateId ?? ""}
+                      onChange={(e) => setSelectedCsvTemplateId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
+                    >
+                      <option value="">— Wybierz szablon —</option>
+                      {allLabelTemplatesForCsv.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                          {t.template_type ? ` (${t.template_type})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {csvTemplateDimensionHints.warnings.length > 0 && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950 space-y-1">
+                        {csvTemplateDimensionHints.warnings.map((w, i) => (
+                          <p key={i}>{humanizeCsvSanitizeWarning(w)}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(printMode === "location" ||
+                  printMode === "rack" ||
+                  printMode === "rack_strip" ||
+                  printMode === "pdf_import") && (
+                  <div className={printMode === "csv_import" ? "md:col-span-2" : "md:col-span-2"}>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Szablon etykiety (lokalizacja)
+                    </label>
+                    <select
+                      value={selectedLocationTemplateId ?? ""}
+                      onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
+                      className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
+                    >
+                      <option value="">
+                        {printMode === "location" ? "— Domyślny z listy —" : "— Wybierz szablon —"}
+                      </option>
+                      {locationTemplates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                          {t.is_default ? " (domyślny)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Drukarka</label>
+                  <select
+                    value={selectedPrinterId ?? ""}
+                    onChange={(e) => setSelectedPrinterId(e.target.value ? Number(e.target.value) : null)}
+                    className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
+                  >
+                    <option value="">— Bez profilu drukarki —</option>
+                    {printers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </PrintQueueSurfaceCard>
+
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <button
+                type="button"
+                onClick={() => setAdvancedSettingsOpen((o) => !o)}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-slate-50/80"
+              >
+                <div>
+                  <span className="text-[14px] font-semibold text-slate-900">Ustawienia zaawansowane</span>
+                  <p className="text-xs text-slate-500 mt-0.5">Grupowanie CSV, powtarzacz, PDF dla drukarni, termika, podpowiedzi PDF.</p>
+                </div>
+                <span className="text-slate-400 text-sm shrink-0">{advancedSettingsOpen ? "▲" : "▼"}</span>
+              </button>
+              {advancedSettingsOpen && (
+                <div className="space-y-3.5 border-t border-slate-100 px-3 py-3">
+                  <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+                    <input
+                      type="checkbox"
+                      className="mt-1 rounded border-slate-300"
+                      checked={pdfPrintReady}
+                      onChange={(e) => setPdfPrintReady(e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-medium">PDF pod druk profesjonalny</span>
+                      <span className="mt-0.5 block text-xs font-normal text-slate-600">
+                        Dodaje spady i znaczniki cięcia — włącz tylko, gdy przygotowujesz plik dla drukarni zewnętrznej.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+                    <input
+                      type="checkbox"
+                      className="mt-1 rounded border-slate-300"
+                      checked={thermalMode}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setThermalMode(checked);
+                        try {
+                          localStorage.setItem("label_print_thermal_mode", String(checked));
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                    />
+                    <span>
+                      <span className="font-medium">Tryb drukarki termicznej</span>
+                      <span className="mt-0.5 block text-xs font-normal text-slate-600">
+                        Monochrom i wyższy kontrast — zwykle włączony dla Zebra i podobnych.
+                      </span>
+                    </span>
+                  </label>
+                  {(printMode === "location" || printMode === "rack") && (
+                    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 space-y-3">
+                      <p className="text-xs font-semibold text-slate-800">Powtarzacz w szablonie — segmenty na jednej etykiecie</p>
+                      <p className="text-[11px] text-slate-600 leading-snug">
+                        Używane, gdy szablon łączy wiele lokacji w jednym polu powtarzalnym.
+                      </p>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Lokacji na etykietę</label>
+                        <select
+                          value={labelDatasetItemsPerLabel}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setLabelDatasetItemsPerLabel(v === "auto" ? "auto" : (Number(v) as 3 | 5 | 10));
+                          }}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="auto">Automatycznie (z szerokości szablonu)</option>
+                          <option value="3">3</option>
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Kolejność na etykiecie</label>
+                        <select
+                          value={labelDatasetTransformMode}
+                          onChange={(e) => setLabelDatasetTransformMode(e.target.value as RackDatasetTransformMode)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="sequential">Jak na liście</option>
+                          <option value="row">Wierszami (piętro, potem pozycja)</option>
+                          <option value="column">Kolumnami (pozycja, potem piętro)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          Opcjonalnie: kolumny siatki (stabilniejsze sortowanie)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={99}
+                          placeholder="np. 4"
+                          value={labelDatasetColumnsHint}
+                          onChange={(e) => setLabelDatasetColumnsHint(e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {printMode === "csv_import" && (
+                    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 space-y-3">
+                      <p className="text-xs font-semibold text-slate-800">Grupowanie wierszy CSV w PDF</p>
+                      <p className="text-[11px] text-slate-600 leading-snug">
+                        Łączy do trzech lokacji w jednej etykiecie, gdy szablon ma pola grupowe (np. piętra 1–3).
+                      </p>
+                      <label className="flex items-start gap-2 text-sm text-slate-800 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={csvGroupMode}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            setCsvGroupMode(on);
+                            if (!on) {
+                              setCsvGroupByRack(false);
+                              setCsvFloorSets([]);
+                              setCsvFloorDraftInput("");
+                              setCsvFloorDraftTokens([]);
+                            }
+                          }}
+                          className="mt-1 rounded border-slate-300"
+                        />
+                        <span>Włącz grupowanie wielu wierszy w jedną etykietę</span>
+                      </label>
+                      <label
+                        className={`flex items-start gap-2 text-sm text-slate-800 select-none ${
+                          csvGroupMode ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={csvGroupByRack}
+                          disabled={!csvGroupMode}
+                          onChange={(e) => setCsvGroupByRack(e.target.checked)}
+                          className="mt-1 rounded border-slate-300"
+                        />
+                        <span>Uwzględnij regał przy grupowaniu (regał + rząd)</span>
+                      </label>
+                      <div className={csvGroupMode ? "" : "opacity-50 pointer-events-none"}>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Zestawy pięter</label>
+                        {csvFloorSets.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            {csvFloorSets.map((set, si) =>
+                              set.length === 0 ? null : (
+                                <div
+                                  key={`set-${si}`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1"
+                                >
+                                  <span className="text-slate-400 text-[11px]">[</span>
+                                  {set.map((tok, ti) => (
+                                    <span
+                                      key={`${si}-${ti}-${tok}`}
+                                      className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-medium text-slate-800"
+                                    >
+                                      {tok}
+                                    </span>
+                                  ))}
+                                  <span className="text-slate-400 text-[11px]">]</span>
+                                  <button
+                                    type="button"
+                                    disabled={!csvGroupMode}
+                                    onClick={() => setCsvFloorSets((prev) => prev.filter((_, i) => i !== si))}
+                                    className="ml-0.5 rounded px-1 text-slate-500 hover:bg-red-50 hover:text-red-700 text-sm leading-none"
+                                    aria-label="Usuń zestaw"
+                                    title="Usuń zestaw"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 min-h-[2.25rem]">
+                          <span className="text-slate-400 text-[11px] shrink-0">[</span>
+                          {csvFloorDraftTokens.map((tok, i) => (
+                            <span
+                              key={`draft-${i}-${tok}`}
+                              className="inline-flex items-center gap-0.5 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 font-mono text-[11px] font-medium text-emerald-900"
+                            >
+                              {tok}
+                              <button
+                                type="button"
+                                disabled={!csvGroupMode}
+                                onClick={() => setCsvFloorDraftTokens((t) => t.filter((_, j) => j !== i))}
+                                className="rounded px-0.5 text-emerald-700 hover:bg-emerald-100 leading-none"
+                                aria-label={`Usuń ${tok}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                          <input
+                            type="text"
+                            disabled={!csvGroupMode}
+                            value={csvFloorDraftInput}
+                            onChange={(e) => setCsvFloorDraftInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter") return;
+                              e.preventDefault();
+                              const rawFromInput = e.currentTarget.value.trim();
+                              if (rawFromInput) {
+                                const parts = rawFromInput
+                                  .split(/[\s,;]+/)
+                                  .map((p) => p.trim().toUpperCase())
+                                  .filter(Boolean);
+                                if (parts.length > 0) {
+                                  setCsvFloorDraftTokens((t) => [...t, ...parts]);
+                                  setCsvFloorDraftInput("");
+                                }
+                                return;
+                              }
+                              setCsvFloorDraftTokens((curr) => {
+                                if (curr.length === 0) return curr;
+                                setCsvFloorSets((sets) => [...sets, [...curr]]);
+                                return [];
+                              });
+                            }}
+                            placeholder="Piętro… Enter = dodaj; pusty Enter = nowy zestaw"
+                            className="min-w-[8rem] flex-1 border-0 bg-transparent text-[12px] text-slate-900 outline-none focus:ring-0 placeholder:text-slate-400"
+                          />
+                          <span className="text-slate-400 text-[11px] shrink-0">]</span>
+                          <button
+                            type="button"
+                            disabled={!csvGroupMode}
+                            title="Dodaj zestaw (zapisz bieżące piętra w nawiasie)"
+                            onClick={() => {
+                              const raw = csvFloorDraftInput.trim();
+                              let merged = [...csvFloorDraftTokens];
+                              if (raw) {
+                                merged = [
+                                  ...merged,
+                                  ...raw
+                                    .split(/[\s,;]+/)
+                                    .map((p) => p.trim().toUpperCase())
+                                    .filter(Boolean),
+                                ];
+                              }
+                              if (merged.length === 0) return;
+                              setCsvFloorSets((sets) => [...sets, merged]);
+                              setCsvFloorDraftTokens([]);
+                              setCsvFloorDraftInput("");
+                            }}
+                            className="shrink-0 rounded border border-slate-300 bg-slate-50 px-2 py-0.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                          >
+                            +
+                          </button>
+                        </div>
+                        {csvGroupingPreviewState != null && (
+                          <div className="mt-2 rounded border border-slate-200 bg-white px-2.5 py-2">
+                            <p className="text-[10px] font-semibold text-slate-600 mb-1">Podgląd grupowania</p>
+                            {csvGroupingPreviewState.kind === "no_rows" && (
+                              <p className="text-[10px] text-slate-500">Brak wierszy po filtrach piętra — podgląd niedostępny.</p>
+                            )}
+                            {csvGroupingPreviewState.kind === "ready" && (
+                              <>
+                                {csvGroupingPreviewState.preview.kind === "empty" && (
+                                  <p className="text-[10px] text-slate-500">{csvGroupingPreviewState.preview.message}</p>
+                                )}
+                                {csvGroupingPreviewState.preview.kind === "skipped_repeater" && (
+                                  <p className="text-[10px] text-slate-500">{csvGroupingPreviewState.preview.message}</p>
+                                )}
+                                {csvGroupingPreviewState.preview.kind === "ok" && (
+                                  <>
+                                    <ul className="list-none space-y-0.5 font-mono text-[10px] text-slate-800 leading-snug">
+                                      {csvGroupingPreviewState.preview.lines.map((line, idx) => (
+                                        <li key={`${idx}-${line}`}>{line}</li>
+                                      ))}
+                                    </ul>
+                                    {csvGroupingPreviewState.preview.truncated && (
+                                      <p className="text-[10px] text-slate-500 mt-1.5">
+                                        Pokazano pierwsze {CSV_GROUPING_PREVIEW_LIMIT} z {csvGroupingPreviewState.preview.totalLabels}{" "}
+                                        etykiet.
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {labelsToPrintCount !== null && (
+                    <p className="text-sm text-slate-700">
+                      Szacowana liczba etykiet (stron): <strong className="text-slate-900">{labelsToPrintCount}</strong>
+                    </p>
+                  )}
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 p-3 text-xs leading-relaxed text-slate-600">
+                    <p className="font-medium text-slate-800">Druk z podglądu PDF w przeglądarce</p>
+                    <p className="mt-1">
+                      Ustaw skalę <strong>100&nbsp;%</strong> (rzeczywisty rozmiar), wyłącz „Dopasuj do strony” i wybierz brak marginesów, jeśli
+                      przeglądarka to umożliwia — wtedy unikniesz niechcianego powiększenia etykiety.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <PrintQueueWorkflowStep
+              step={3}
+              title="Wybierz dane"
+            />
 
         {printMode === "rack_strip" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-white p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700">Rack Strip Builder</h3>
-            <p className="text-xs text-slate-500">Generate one long beam label with multiple segments (e.g. A-1-1 | A-1-2 | A-1-3 …). Use a template with a repeater (dataset: locations).</p>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
+            <h3 className="text-sm font-semibold text-slate-700">Listwa regałowa</h3>
+            <p className="text-xs text-slate-500">
+              Zbiorcza etykieta z wieloma segmentami (np. A-1-1 … A-1-10). Wymaga szablonu z powtarzaczem i zbiorem danych „locations”.
+            </p>
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Rack</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Regał</label>
                 <input
                   type="text"
                   value={stripRack}
                   onChange={(e) => setStripRack(e.target.value)}
                   placeholder="A"
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Level</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Poziom</label>
                 <input
                   type="number"
                   min={1}
                   max={99}
                   value={stripLevel}
                   onChange={(e) => setStripLevel(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Start position</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Pozycja startowa</label>
                 <input
                   type="number"
                   min={1}
                   value={stripStart}
                   onChange={(e) => setStripStart(Math.max(1, Number(e.target.value) || 1))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">End position</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Pozycja końcowa</label>
                 <input
                   type="number"
                   min={1}
                   value={stripEnd}
                   onChange={(e) => setStripEnd(Math.max(stripStart, Number(e.target.value) || 1))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 />
               </div>
             </div>
-            <button
-              type="button"
+            <PrintQueueSecondaryButton
               onClick={handleGenerateRackStrip}
               disabled={stripGenerating || stripEnd < stripStart}
-              className="px-4 py-2 rounded-lg bg-cyan-600 text-white disabled:opacity-50 font-semibold"
             >
-              {stripGenerating ? "Generating…" : "Generate strip"}
-            </button>
+              {stripGenerating ? "Tworzenie listwy…" : "Utwórz segmenty listwy"}
+            </PrintQueueSecondaryButton>
             {stripRecords.length > 0 && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Template (repeater with dataset &quot;locations&quot;)</label>
-                  <select
-                    value={selectedLocationTemplateId ?? ""}
-                    onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
-                  >
-                    <option value="">— Select template —</option>
-                    {locationTemplates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}{t.is_default ? " (default)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadRackStripPdf}
-                  disabled={stripPdfLoading || locationTemplates.length === 0}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50 font-semibold"
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">
+                  Szablon (powtarzacz, zbiór „locations”)
+                </label>
+                <select
+                  value={selectedLocationTemplateId ?? ""}
+                  onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 >
-                  {stripPdfLoading ? "Generating PDF…" : "Download PDF"}
-                </button>
+                  <option value="">— Wybierz szablon —</option>
+                  {locationTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.is_default ? " (domyślny)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs text-slate-500">
+                  Plik PDF pobierzesz w kroku 5 po prawej stronie, gdy segmenty są gotowe.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {printMode === "csv_import" && (
+          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
+            <h3 className="text-sm font-semibold text-slate-700">Import CSV</h3>
+            <ol className="mb-3 list-decimal space-y-1 pl-5 text-xs text-slate-600">
+              <li>Wgraj jeden lub wiele plików CSV (wiersze zostaną połączone w przeglądarce).</li>
+              <li>Sprawdź wykryte nagłówki i liczbę wierszy po scaleniu.</li>
+              <li>Powiąż kolumny z polami etykiety — potem wygeneruj PDF w kroku 5.</li>
+            </ol>
+            <p className="text-xs text-slate-500">
+              Jedna linia CSV odpowiada jednej etykiecie. Przy wielu plikach obowiązuje jedno mapowanie kolumn (unia nagłówków; brakująca kolumna w pliku = puste pole).
+              Filtr pięter z lewej kolumny działa na scalonym zbiorze. Szablony z powtarzaczem CSV nie obsługujemy w tym imporcie.
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Plik(i) CSV</label>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                multiple
+                onChange={handleCsvFileChange}
+                disabled={csvImportLoading}
+                className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5 file:mr-2 file:rounded file:border-0 file:bg-cyan-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-cyan-700"
+              />
+            </div>
+            {csvImportLoading && <p className="text-sm text-slate-500">Wczytywanie…</p>}
+            {csvImportError && <p className="text-sm text-red-600">{csvImportError}</p>}
+            {csvHeaders.length > 0 && (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-slate-600">
+                    Łącznie wierszy: <strong>{csvRows.length}</strong>
+                    {csvPerFileStats.length > 1 ? (
+                      <span className="text-slate-500"> ({csvPerFileStats.length} plików)</span>
+                    ) : null}{" "}
+                    · nagłówków: {csvHeaders.length}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCsvColumnToField(buildColumnMappingWithPersistence(csvHeaders, { forceAuto: true }))
+                    }
+                    className="text-xs font-medium text-cyan-700 hover:underline"
+                  >
+                    Automatyczne mapowanie
+                  </button>
+                </div>
+                {csvPerFileStats.length > 0 && (
+                  <ul className="text-xs text-slate-600 list-disc pl-5 space-y-0.5">
+                    {csvPerFileStats.map((s) => (
+                      <li key={s.filename}>
+                        <span className="font-mono text-slate-800">{s.filename}</span> — {s.rowCount} wierszy
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {csvMergeWarnings.length > 0 && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 space-y-1">
+                    <p className="font-semibold">Scalanie plików</p>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {csvMergeWarnings.map((w, i) => (
+                        <li key={`${i}-${w.slice(0, 40)}`}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={csvDedupeRackFloorRow}
+                    onChange={(e) => setCsvDedupeRackFloorRow(e.target.checked)}
+                    className="mt-1 rounded border-[#E2E8F0]"
+                  />
+                  <span>
+                    Usuń duplikaty po <strong>Regał</strong> + <strong>Piętro</strong> + <strong>Rząd</strong> (po zmapowaniu
+                    kolumn; wiersze bez tych pól nie są łączone)
+                  </span>
+                </label>
+                <FloorExclusionPanel
+                  value={floorFilterUi}
+                  onChange={setFloorFilterUi}
+                  summaryFooter={csvFloorSummaryFooter}
+                />
+                {csvValidationWarnings.length > 0 && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 space-y-1">
+                    <p className="font-semibold">Uwagi (druk nadal możliwy):</p>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {csvValidationWarnings.map((w, i) => (
+                        <li key={`${i}-${w.slice(0, 48)}`}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="max-h-56 overflow-auto rounded border border-[#E2E8F0]">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-slate-50 border-b border-[#E2E8F0]">
+                      <tr>
+                        <th className="px-2 py-1.5 font-medium text-slate-600">Kolumna CSV</th>
+                        <th className="px-2 py-1.5 font-medium text-slate-600">Pole etykiety</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvHeaders.map((h) => (
+                        <tr key={h} className="border-b border-slate-100">
+                          <td className="px-2 py-1.5 text-slate-800 align-middle">{h}</td>
+                          <td className="px-2 py-1 align-middle">
+                            <select
+                              value={csvColumnToField[h] ?? ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setCsvColumnToField((prev) => {
+                                  const next = filterDerivedGroupSlotsFromCsvMapping({
+                                    ...prev,
+                                    [h]: v,
+                                  });
+                                  saveCsvLabelMapping(csvHeaders, next);
+                                  return next;
+                                });
+                              }}
+                              className="w-full min-w-[160px] rounded border border-[#E2E8F0] bg-white px-2 py-1 text-[#1E293B]"
+                            >
+                              <option value="">— Pomiń —</option>
+                              {csvFieldOptions.map((f) => (
+                                <option key={f} value={f}>
+                                  {polishLabelCsvFieldForUi(f)}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {csvGroupMode && csvGroupingPdfBlocked && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    <span>
+                      Szablon nie obsługuje grupowania — etykiety zostaną wygenerowane pojedynczo
+                    </span>
+                    {selectedCsvTemplateId != null && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`${labelBase}/${selectedCsvTemplateId}/edit`)}
+                        className="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
+                      >
+                        Dostosuj szablon
+                      </button>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-slate-500">
+                  Po zmapowaniu kolumn użyj przycisku „Generuj PDF” w panelu po prawej (krok 5).
+                </p>
               </>
             )}
           </div>
         )}
 
         {printMode === "pdf_import" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-white p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700">Import PDF barcodes</h3>
-            <p className="text-xs text-slate-500">Upload a PDF containing barcodes to extract codes and generate new labels.</p>
+          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
+            <h3 className="text-sm font-semibold text-slate-700">Import PDF</h3>
+            <p className="text-xs text-slate-500">Wgraj plik PDF z kodami kreskowymi, aby wyodrębnić dane i wygenerować nowe etykiety.</p>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">PDF file</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Plik PDF</label>
               <input
                 type="file"
                 accept=".pdf,application/pdf"
                 onChange={handlePdfImportUpload}
                 disabled={pdfImportLoading}
-                className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2 file:mr-2 file:rounded file:border-0 file:bg-cyan-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-cyan-700"
+                className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5 file:mr-2 file:rounded file:border-0 file:bg-cyan-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-cyan-700"
               />
             </div>
             {pdfImportError && <p className="text-sm text-red-600">{pdfImportError}</p>}
-            {pdfImportLoading && <p className="text-sm text-slate-500">Detecting barcodes…</p>}
+            {pdfImportLoading && <p className="text-sm text-slate-500">Odczytywanie kodów z pliku…</p>}
             {pdfImportBarcodes.length > 0 && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Template</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Szablon</label>
                   <select
                     value={selectedLocationTemplateId ?? ""}
                     onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                    className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                   >
-                    <option value="">— Select template —</option>
+                    <option value="">— Wybierz szablon —</option>
                     {locationTemplates.map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.name}{t.is_default ? " (default)" : ""}
+                        {t.name}
+                        {t.is_default ? " (domyślny)" : ""}
                       </option>
                     ))}
                   </select>
                 </div>
-                <button
-                  type="button"
-                  onClick={handlePdfImportGenerateLabels}
-                  disabled={pdfImportPdfLoading || locationTemplates.length === 0}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50 font-semibold"
-                >
-                  {pdfImportPdfLoading ? "Generating PDF…" : "Generate labels"}
-                </button>
+                <p className="text-xs text-slate-500">
+                  Gdy kody zostaną odczytane, wygeneruj PDF w panelu po prawej (krok 5).
+                </p>
               </>
             )}
           </div>
         )}
 
         {printMode === "rack" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-white p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700">Generate rack labels</h3>
-            <p className="text-xs text-slate-500">Generate location labels for a rack (e.g. A-1-1, A-1-2, …).</p>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
+            <h3 className="text-sm font-semibold text-slate-700">Twórz etykiety lokalizacji</h3>
+            <p className="text-xs text-slate-500">
+              Twórz siatkę lokalizacji dla jednego regału (np. A-1-1, A-1-2 …), a następnie pobierz PDF w kroku 5.
+            </p>
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Rack</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Regał</label>
                 <input
                   type="text"
                   value={rackRack}
                   onChange={(e) => setRackRack(e.target.value)}
                   placeholder="A"
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Levels</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Poziomy</label>
                 <input
                   type="number"
                   min={1}
                   max={99}
                   value={rackLevels}
                   onChange={(e) => setRackLevels(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Positions</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Kolumna</label>
                 <input
                   type="number"
                   min={1}
                   max={99}
                   value={rackPositions}
                   onChange={(e) => setRackPositions(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Zone (optional)</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Strefa (opcjonalnie)</label>
                 <input
                   type="text"
                   value={rackZone}
                   onChange={(e) => setRackZone(e.target.value)}
                   placeholder=""
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleGenerateRackLabels}
-              disabled={rackGenerating}
-              className="px-4 py-2 rounded-lg bg-cyan-600 text-white disabled:opacity-50 font-semibold"
-            >
-              {rackGenerating ? "Generating…" : "Generate"}
-            </button>
+            <PrintQueueSecondaryButton onClick={handleGenerateRackLabels} disabled={rackGenerating}>
+              {rackGenerating ? "Obliczanie siatki…" : "Przygotuj siatkę lokalizacji"}
+            </PrintQueueSecondaryButton>
             {rackRecords.length > 0 && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Template</label>
-                  <select
-                    value={selectedLocationTemplateId ?? ""}
-                    onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
-                  >
-                    <option value="">— Select template —</option>
-                    {locationTemplates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}{t.is_default ? " (default)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadRackPdf}
-                  disabled={rackRecords.length === 0 || rackPdfLoading || locationTemplates.length === 0}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50 font-semibold"
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Szablon</label>
+                <select
+                  value={selectedLocationTemplateId ?? ""}
+                  onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
                 >
-                  {rackPdfLoading ? "Generating PDF…" : "Download PDF"}
-                </button>
-              </>
+                  <option value="">— Wybierz szablon —</option>
+                  {locationTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.is_default ? " (domyślny)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs text-slate-500">
+                  Po wygenerowaniu siatki pobierz PDF w kroku 5 po prawej stronie.
+                </p>
+              </div>
             )}
           </div>
         )}
 
         {printMode === "cart_basket" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-white p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700">Generate basket labels for cart</h3>
+          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
+            <h3 className="text-sm font-semibold text-slate-700">Etykiety koszyków na wózku</h3>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Cart</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Wózek</label>
               <select
                 value={selectedCartId ?? ""}
                 onChange={(e) => setSelectedCartId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2"
+                className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
               >
-                <option value="">— Select cart —</option>
+                <option value="">Wybierz wózek</option>
                 {cartList.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name} (ID {c.id})</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name} (identyfikator {c.id})
+                  </option>
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              onClick={handleGenerateBasketLabelsForCart}
-              disabled={selectedCartId == null || generatingBasketLabels}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50 font-semibold"
-            >
-              {generatingBasketLabels ? "Generating…" : "Generate basket labels"}
-            </button>
+            <p className="text-xs text-slate-500">
+              Po wyborze wózka wygeneruj PDF w panelu po prawej (krok 5).
+            </p>
           </div>
         )}
 
         {printMode === "location" && (
           <>
-        <button
-          type="button"
+        <PrintQueueSecondaryButton
           onClick={loadLayout}
           disabled={selectedWarehouseId == null || loading}
-          className="px-4 py-2 rounded-lg bg-cyan-600 text-white disabled:opacity-50 text-sm font-semibold"
+          className="w-full sm:w-auto"
         >
-          {loading ? "Ładowanie…" : "Załaduj układ"}
-        </button>
+          {loading ? "Ładowanie układu…" : "Załaduj układ magazynu"}
+        </PrintQueueSecondaryButton>
 
         {layout && (
           <>
@@ -1045,10 +2010,10 @@ export function LabelPrintQueue({ template }: Props) {
                       <thead className="sticky top-0 bg-slate-50 border-b border-[#E2E8F0]">
                         <tr>
                           <th className="px-2 py-1.5 w-8" />
-                          <th className="px-2 py-1.5 font-medium text-slate-600">location_code</th>
-                          <th className="px-2 py-1.5 font-medium text-slate-600">rack</th>
-                          <th className="px-2 py-1.5 font-medium text-slate-600">level</th>
-                          <th className="px-2 py-1.5 font-medium text-slate-600">position</th>
+                          <th className="px-2 py-1.5 font-medium text-slate-600">Kod lokalizacji</th>
+                          <th className="px-2 py-1.5 font-medium text-slate-600">Regał</th>
+                          <th className="px-2 py-1.5 font-medium text-slate-600">Poziom</th>
+                          <th className="px-2 py-1.5 font-medium text-slate-600">Pozycja</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1081,100 +2046,25 @@ export function LabelPrintQueue({ template }: Props) {
               );
             })()}
 
-            <label className="flex items-center gap-2 text-slate-700">
-              <input
-                type="checkbox"
-                checked={thermalMode}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setThermalMode(checked);
-                  try {
-                    localStorage.setItem("label_print_thermal_mode", String(checked));
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-              />
-              Tryb drukarki termicznej (monochrom, wysoki kontrast)
-            </label>
-
-            {backendPdfFallbackWarning && (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                Backend PDF generation failed — using client renderer.
-              </p>
-            )}
+            <PrintQueueWorkflowStep
+              step={4}
+              title="Ustaw filtry"
+            />
+            <FloorExclusionPanel
+              value={floorFilterUi}
+              onChange={setFloorFilterUi}
+              summaryFooter={locationFloorSummaryFooter}
+            />
           </>
         )}
         </>
         )}
 
-      {/* Section 3 — Main action (location mode) */}
-      {printMode === "location" && (
-        <div className="pt-2 space-y-2">
-          <button
-            type="button"
-            onClick={handleGeneratePdf}
-            disabled={records.length === 0}
-            className="w-full px-4 py-3 rounded-lg bg-cyan-600 text-white disabled:opacity-50 font-semibold text-base hover:bg-cyan-700 transition-colors"
-          >
-            Generate PDF
-          </button>
-          <button
-            type="button"
-            onClick={handlePrint}
-            disabled={
-              records.length === 0 ||
-              printing ||
-              !qzReady ||
-              selectedPrinterId == null ||
-              !printers.find((p) => p.id === selectedPrinterId)?.system_printer_name
-            }
-            className="w-full px-4 py-3 rounded-lg bg-slate-700 text-white disabled:opacity-50 font-semibold text-base hover:bg-slate-800 transition-colors"
-          >
-            {printing ? "Printing…" : "Print"}
-          </button>
-          {!qzChecking && !qzReady && (
-            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Install QZ Tray to enable direct printing.
-            </p>
-          )}
-          {qzReady && selectedPrinterId != null && !printers.find((p) => p.id === selectedPrinterId)?.system_printer_name && (
-            <p className="text-sm text-slate-600">
-              Map a system printer in Settings → Printers for this printer to enable Print.
-            </p>
-          )}
-          <details className="text-sm text-slate-600">
-            <summary className="cursor-pointer font-medium">Detect system printers</summary>
-            <div className="mt-2 space-y-2">
-              <button
-                type="button"
-                onClick={handleDetectSystemPrinters}
-                disabled={!qzReady}
-                className="px-3 py-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm"
-              >
-                Detect system printers
-              </button>
-              {systemPrinters && (
-                <ul className="list-disc list-inside text-xs text-slate-600 max-h-32 overflow-y-auto">
-                  {systemPrinters.length === 0 ? (
-                    <li>No printers found</li>
-                  ) : (
-                    systemPrinters.map((name, i) => (
-                      <li key={i}>{name}</li>
-                    ))
-                  )}
-                </ul>
-              )}
-            </div>
-          </details>
-        </div>
-      )}
-
       {/* Section 4 — Preview area (location mode) */}
-      {printMode === "location" && layout && records.length > 0 && (
-        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white">
+      {printMode === "location" && layout && locationRecordsFiltered.length > 0 && (
+        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-slate-50/60">
           <h3 className="text-sm font-semibold text-slate-700 bg-slate-50 px-4 py-3 border-b border-[#E2E8F0]">
-            Preview (first 20 labels)
+            Podgląd (pierwsze 20 etykiet)
           </h3>
           <div className="p-4">
             {locationPreviewLoading ? (
@@ -1209,9 +2099,9 @@ export function LabelPrintQueue({ template }: Props) {
       )}
 
       {printMode === "rack_strip" && stripRecords.length > 0 && (
-        <div className="mt-6 border border-[#E2E8F0] rounded-lg overflow-hidden bg-white">
+        <div className="mt-6 border border-[#E2E8F0] rounded-lg overflow-hidden bg-slate-50/60">
           <h3 className="text-xs font-bold text-slate-600 bg-slate-50 px-3 py-2 border-b border-[#E2E8F0]">
-            Preview — rack strip ({stripRecords.length} segments)
+            Podgląd — pasek regału ({stripRecords.length} segmentów)
           </h3>
           <div className="p-3">
             <div className="flex flex-wrap gap-2 items-center text-xs font-mono text-slate-700">
@@ -1221,15 +2111,15 @@ export function LabelPrintQueue({ template }: Props) {
                 </span>
               ))}
             </div>
-            <p className="text-slate-500 text-[10px] mt-2">One label with repeater; barcode under each segment.</p>
+            <p className="text-slate-500 text-[10px] mt-2">Pojedyncza etykieta z powielaniem; kod kreskowy pod każdym segmentem</p>
           </div>
         </div>
       )}
 
       {printMode === "rack" && rackRecords.length > 0 && (
-        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white">
+        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-slate-50/60">
           <h3 className="text-sm font-semibold text-slate-700 bg-slate-50 px-4 py-3 border-b border-[#E2E8F0]">
-            Preview (first 20 labels)
+            Podgląd (pierwsze 20 etykiet)
           </h3>
           <div className="p-4">
             {rackPreviewLoading ? (
@@ -1239,7 +2129,7 @@ export function LabelPrintQueue({ template }: Props) {
             ) : (
               <div className="grid grid-cols-6 gap-3">
                 {rackPreviewTemplate &&
-                  rackRecords.slice(0, 20).map((record, i) => (
+                  rackPageRecords.slice(0, 20).map((record, i) => (
                     <div
                       key={i}
                       className="flex flex-col items-center rounded border border-slate-200 bg-white shadow-sm overflow-hidden"
@@ -1254,8 +2144,8 @@ export function LabelPrintQueue({ template }: Props) {
                       </span>
                     </div>
                   ))}
-                {rackRecords.length > 20 && (
-                  <span className="text-xs text-slate-500 self-center">+{rackRecords.length - 20} kolejnych</span>
+                {rackPageRecords.length > 20 && (
+                  <span className="text-xs text-slate-500 self-center">+{rackPageRecords.length - 20} kolejnych</span>
                 )}
               </div>
             )}
@@ -1264,20 +2154,171 @@ export function LabelPrintQueue({ template }: Props) {
       )}
 
       {printMode === "pdf_import" && pdfImportBarcodes.length > 0 && (
-        <div className="mt-6 border border-[#E2E8F0] rounded-lg overflow-hidden bg-white">
+        <div className="mt-6 border border-[#E2E8F0] rounded-lg overflow-hidden bg-slate-50/60">
           <h3 className="text-xs font-bold text-slate-600 bg-slate-50 px-3 py-2 border-b border-[#E2E8F0]">
-            Detected barcodes — {pdfImportBarcodes.length}
+            Wykryte kody ({pdfImportBarcodes.length})
           </h3>
           <ul className="max-h-64 overflow-y-auto p-2 space-y-1 text-xs text-slate-700 font-mono">
             {pdfImportBarcodes.slice(0, 100).map((code, i) => (
               <li key={i}>{code}</li>
             ))}
             {pdfImportBarcodes.length > 100 && (
-              <li className="text-slate-500">… +{pdfImportBarcodes.length - 100} more</li>
+              <li className="text-slate-500">… jeszcze {pdfImportBarcodes.length - 100}</li>
             )}
           </ul>
         </div>
       )}
+          </div>
+          <aside className="min-w-0 space-y-3 lg:col-span-4 lg:sticky lg:top-4 self-start">
+            <PrintQueueWorkflowStep
+              step={5}
+              title="Podgląd i generowanie"
+            />
+            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-900/5">
+              <h3 className="text-sm font-semibold text-slate-900">Podsumowanie wydruku</h3>
+              <dl className="mt-2 space-y-1.5 text-[13px]">
+                <div className="flex justify-between gap-3 border-b border-slate-100 pb-2">
+                  <dt className="text-slate-500">Szablon</dt>
+                  <dd className="text-right font-medium text-slate-900">{summaryTemplateName}</dd>
+                </div>
+                <div className="flex justify-between gap-3 border-b border-slate-100 pb-2">
+                  <dt className="text-slate-500">Etykiety (stron)</dt>
+                  <dd className="text-right font-medium text-slate-900">
+                    {labelsToPrintCount != null ? labelsToPrintCount : "—"}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3 border-b border-slate-100 pb-2">
+                  <dt className="text-slate-500">Rozmiar etykiety (mm)</dt>
+                  <dd className="text-right font-medium text-slate-900 tabular-nums">
+                    {Math.round(Number(summaryDimsTemplate?.widthMm) || 0)} ×{" "}
+                    {Math.round(Number(summaryDimsTemplate?.heightMm) || 0)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">Drukarka (profil)</dt>
+                  <dd className="text-right font-medium text-slate-900">{summaryPrinterLabel}</dd>
+                </div>
+              </dl>
+              <p className="mt-3 text-xs text-slate-500">
+                DPI w profilu: {summaryDimsTemplate?.dpi ?? 300}. Rozmiar strony PDF odpowiada polom szerokości i wysokości szablonu.
+              </p>
+            </div>
+
+            {printMode === "location" && (
+              <div className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                {backendPdfFallbackWarning && (
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    Nie udało się przygotować PDF na serwerze — używamy silnika w przeglądarce (wynik może nieznacznie różnić się od wersji serwerowej).
+                  </p>
+                )}
+                <PrintQueuePrimaryButton onClick={handleGeneratePdf} disabled={locationRecordsFiltered.length === 0}>
+                  Generuj PDF
+                </PrintQueuePrimaryButton>
+                <PrintQueueSecondaryButton
+                  onClick={handlePrint}
+                  disabled={
+                    locationRecordsFiltered.length === 0 ||
+                    printing ||
+                    !qzReady ||
+                    selectedPrinterId == null ||
+                    !printers.find((p) => p.id === selectedPrinterId)?.system_printer_name
+                  }
+                >
+                  {printing ? "Drukowanie…" : "Drukuj (QZ Tray)"}
+                </PrintQueueSecondaryButton>
+                {!qzChecking && !qzReady && (
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    Zainstaluj i uruchom QZ Tray, aby drukować bezpośrednio na drukarce USB lub sieciowej.
+                  </p>
+                )}
+                {qzReady &&
+                  selectedPrinterId != null &&
+                  !printers.find((p) => p.id === selectedPrinterId)?.system_printer_name && (
+                    <p className="text-sm text-slate-600">
+                      Wybrana drukarka nie ma powiązania z drukarką systemową — ustaw je w konfiguracji magazynu.
+                    </p>
+                  )}
+                <details className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-700">
+                  <summary className="cursor-pointer font-medium">Lista drukarek systemowych</summary>
+                  <div className="mt-2 space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleDetectSystemPrinters}
+                      disabled={!qzReady}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Odśwież listę drukarek
+                    </button>
+                    {systemPrinters && (
+                      <ul className="list-disc list-inside text-xs text-slate-600 max-h-32 overflow-y-auto">
+                        {systemPrinters.length === 0 ? (
+                          <li>Nie wykryto drukarek — sprawdź sterowniki i udostępnienie drukarki w systemie.</li>
+                        ) : (
+                          systemPrinters.map((name, i) => (
+                            <li key={i}>{name}</li>
+                          ))
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                </details>
+              </div>
+            )}
+
+            {printMode === "csv_import" && csvHeaders.length > 0 && (
+              <PrintQueuePrimaryButton
+                onClick={() => void handleCsvGeneratePdf()}
+                disabled={
+                  csvPdfLoading ||
+                  csvRows.length === 0 ||
+                  csvRecordsFiltered.length === 0 ||
+                  selectedCsvTemplateId == null ||
+                  allLabelTemplatesForCsv.length === 0 ||
+                  csvTemplateParsed == null
+                }
+              >
+                {csvPdfLoading ? "Generowanie PDF…" : "Generuj PDF"}
+              </PrintQueuePrimaryButton>
+            )}
+
+            {printMode === "rack_strip" && stripRecords.length > 0 && (
+              <PrintQueuePrimaryButton
+                onClick={handleDownloadRackStripPdf}
+                disabled={stripPdfLoading || locationTemplates.length === 0}
+              >
+                {stripPdfLoading ? "Tworzenie pliku PDF…" : "Pobierz PDF listwy"}
+              </PrintQueuePrimaryButton>
+            )}
+
+            {printMode === "rack" && rackRecords.length > 0 && (
+              <PrintQueuePrimaryButton
+                onClick={handleDownloadRackPdf}
+                disabled={rackRecords.length === 0 || rackPdfLoading || locationTemplates.length === 0}
+              >
+                {rackPdfLoading ? "Tworzenie pliku PDF…" : "Pobierz PDF regału"}
+              </PrintQueuePrimaryButton>
+            )}
+
+            {printMode === "pdf_import" && pdfImportBarcodes.length > 0 && (
+              <PrintQueuePrimaryButton
+                onClick={handlePdfImportGenerateLabels}
+                disabled={pdfImportPdfLoading || locationTemplates.length === 0}
+              >
+                {pdfImportPdfLoading ? "Tworzenie pliku PDF…" : "Generuj PDF z kodów"}
+              </PrintQueuePrimaryButton>
+            )}
+
+            {printMode === "cart_basket" && (
+              <PrintQueuePrimaryButton
+                onClick={handleGenerateBasketLabelsForCart}
+                disabled={selectedCartId == null || generatingBasketLabels}
+              >
+                {generatingBasketLabels ? "Tworzenie pliku PDF…" : "Generuj PDF etykiet koszyków"}
+              </PrintQueuePrimaryButton>
+            )}
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1325,27 +2366,35 @@ function findRepeater(elements: TemplateElement[]): RepeaterElement | null {
   return null;
 }
 
-/** Chunk array into groups of `size`; same as RackLabelDownloadModal. */
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    out.push(arr.slice(i, i + size));
-  }
-  return out;
-}
-
 /**
- * Capacity (slots per label) using same logic as RackLabelDownloadModal:
- * grid -> columns; else itemWidth -> floor(template.widthMm / itemWidth); else 1.
+ * How many repeater items fit on one physical label (record generation only).
+ * Grid: columns × floor(available height / itemHeight).
+ * Vertical: floor(available height / itemHeight).
+ * Horizontal: floor(available width / itemWidth).
  */
 function getSlotsPerLabelLikeRack(rep: RepeaterElement, template: LabelTemplate): number {
+  const itemW =
+    Number(rep.itemWidth) || Number((rep as { item_width?: number }).item_width) || 0;
+  const itemH = Number(rep.itemHeight ?? rep.itemWidth) || 0;
+  const repY = Number(rep.y ?? 0);
+  const repX = Number(rep.x ?? 0);
+
   if (rep.layout === "grid" && rep.columns != null && rep.columns > 0) {
-    return Math.max(1, rep.columns);
+    const cols = Math.max(1, rep.columns);
+    const cellH = itemH > 0 ? itemH : itemW > 0 ? itemW : 20;
+    const availH = Math.max(cellH, template.heightMm - repY);
+    const rows = Math.max(1, Math.floor(availH / cellH));
+    return Math.max(1, cols * rows);
   }
-  const itemWidth =
-    Number(rep.itemWidth) ?? Number((rep as { item_width?: number }).item_width) ?? 0;
-  if (itemWidth > 0) {
-    return Math.max(1, Math.floor(template.widthMm / itemWidth));
+
+  if (rep.direction === "vertical" && itemH > 0) {
+    const availH = Math.max(itemH, template.heightMm - repY);
+    return Math.max(1, Math.floor(availH / itemH));
+  }
+
+  if (itemW > 0) {
+    const availW = Math.max(itemW, template.widthMm - repX);
+    return Math.max(1, Math.floor(availW / itemW));
   }
   return 1;
 }
@@ -1373,27 +2422,26 @@ function normalizeRepeaterItem(r: LabelRecord): Record<string, unknown> {
  */
 function buildRecordsLikeRackLabelModal(
   template: LabelTemplate,
-  records: LabelRecord[]
+  records: LabelRecord[],
+  prepare?: LabelDatasetPrepareOptions
 ): Record<string, unknown>[] {
   const repeater = findRepeater(template.elements ?? []);
   if (!repeater) {
-    return records.map((r) => r as Record<string, unknown>);
+    return sanitizeRecordsForRenderPdf(records.map((r) => r as Record<string, unknown>));
   }
   const datasetKey = repeater.dataset?.trim() || "locations";
-  const capacity = getSlotsPerLabelLikeRack(repeater, template);
-  const chunks = chunk(records, capacity);
-
-  const groupedRecords: Record<string, unknown>[] = [];
-  for (const group of chunks) {
-    const datasetItems = group.map((loc) => normalizeRepeaterItem(loc));
-    const first = group[0];
-    const firstNormalized = first ? normalizeRepeaterItem(first) : {};
-    groupedRecords.push({
-      ...firstNormalized,
-      [datasetKey]: datasetItems,
-    });
-  }
-  return groupedRecords;
+  const autoCapacity = getSlotsPerLabelLikeRack(repeater, template);
+  const capacity =
+    prepare?.itemsPerLabel != null && prepare.itemsPerLabel > 0
+      ? prepare.itemsPerLabel
+      : autoCapacity;
+  const normalized = records.map((loc) => normalizeRepeaterItem(loc));
+  const transformed = transformLocations(
+    normalized,
+    prepare?.transformMode ?? "sequential",
+    prepare?.columns
+  );
+  return sanitizeRecordsForRenderPdf(chunkDataset(transformed, capacity, datasetKey));
 }
 
 /**
@@ -1401,10 +2449,13 @@ function buildRecordsLikeRackLabelModal(
  */
 function buildRecordsForBackendRenderPdf(
   template: LabelTemplate | null,
-  records: LabelRecord[]
+  records: LabelRecord[],
+  prepare?: LabelDatasetPrepareOptions
 ): Record<string, unknown>[] {
-  if (!template?.elements?.length) return records.map((r) => r as Record<string, unknown>);
-  return buildRecordsLikeRackLabelModal(template, records);
+  if (!template?.elements?.length) {
+    return sanitizeRecordsForRenderPdf(records.map((r) => r as Record<string, unknown>));
+  }
+  return buildRecordsLikeRackLabelModal(template, records, prepare);
 }
 
 /**
@@ -1413,67 +2464,61 @@ function buildRecordsForBackendRenderPdf(
  */
 function buildPageRecords(
   template: LabelTemplate,
-  records: LabelRecord[]
+  records: LabelRecord[],
+  prepare?: LabelDatasetPrepareOptions
 ): Record<string, unknown>[] {
-  return buildRecordsLikeRackLabelModal(template, records);
+  return buildRecordsLikeRackLabelModal(template, records, prepare);
 }
 
 /**
  * Client-side PDF: uses shared renderLabel so layout matches editor exactly.
  * Repeater templates: builds dataset records (e.g. { [datasetKey]: [r1, r2, r3] }) so repeater renders. Dataset key from repeater.dataset.
  * Tries vector render first (smaller PDF, sharper barcodes), falls back to raster.
+ * One page per label; page size = template mm × 2.83465 pt. Printer profile is not applied (no SVG transform).
  */
 async function generatePdfBlob(
   template: LabelTemplate,
   records: LabelRecord[],
   _thermal: boolean,
-  printerProfile?: PrinterProfile | null
+  _printerProfile?: PrinterProfile | null,
+  prepare?: LabelDatasetPrepareOptions
 ): Promise<Blob> {
-  // --- Diagnostic: template and repeater detection ---
-  console.log("TEMPLATE JSON", template);
-  const repeater = findRepeater(template.elements ?? []);
-  console.log("REPEATER FOUND:", repeater);
-  console.log("DATASET KEY:", repeater?.dataset);
+  const labelWmm = Math.max(0.01, Number(template.widthMm) || 100);
+  const labelHmm = Math.max(0.01, Number(template.heightMm) || 60);
+  const { widthPt: pageWPt, heightPt: pageHPt } = labelPageSizePt(labelWmm, labelHmm);
+  const orientation = jsPdfOrientationForLabelShape(labelWmm, labelHmm);
+  const pdf = new jsPDF({ orientation, unit: "pt", format: [pageWPt, pageHPt] });
+  if (import.meta.env.DEV) {
+    console.info("[label-pdf] LabelPrintQueue.generatePdfBlob", {
+      source: "LabelPrintQueue.generatePdfBlob",
+      template_id: template.id,
+      width_mm: labelWmm,
+      height_mm: labelHmm,
+      format_pt: `${pageWPt}×${pageHPt}`,
+      jsPdf_pageSize_pt: `${pdf.internal.pageSize.getWidth()}×${pdf.internal.pageSize.getHeight()}`,
+    });
+  }
 
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const margin = 10;
-  const labelW = template.widthMm;
-  const labelH = template.heightMm;
-  const cols = Math.floor((pageW - 2 * margin) / labelW);
-  const rows = Math.floor((pageH - 2 * margin) / labelH);
-  const stepX = (pageW - 2 * margin) / cols;
-  const stepY = (pageH - 2 * margin) / rows;
-
-  const pageRecords = buildPageRecords(template, records);
+  const pageRecords = buildPageRecords(template, records, prepare);
 
   const BATCH_SIZE = 20;
   let index = 0;
   for (let start = 0; start < pageRecords.length; start += BATCH_SIZE) {
     const chunk = pageRecords.slice(start, start + BATCH_SIZE);
     for (const record of chunk) {
-      const col = index % cols;
-      const row = Math.floor(index / cols) % rows;
-      const pageNum = Math.floor(index / (cols * rows));
-      if (pageNum > 0 && col === 0 && row === 0) pdf.addPage();
-
-      const x0 = margin + col * stepX;
-      const y0 = margin + row * stepY;
+      if (index > 0) pdf.addPage([pageWPt, pageHPt], orientation);
 
       const svg = await renderLabel(template, record, { thermal: _thermal });
-      const calibratedSvg = applyCalibration(svg, printerProfile);
-
       if (VECTOR_PDF_ENABLED) {
         try {
-          await drawSvgVector(pdf, calibratedSvg, x0, y0, labelW, labelH);
+          await drawSvgVector(pdf, svg, 0, 0, pageWPt, pageHPt);
         } catch {
-          const pngDataUrl = await svgToPngDataUrl(calibratedSvg, labelW, labelH);
-          pdf.addImage(pngDataUrl, "PNG", x0, y0, labelW, labelH);
+          const pngDataUrl = await svgToPngDataUrl(svg, labelWmm, labelHmm);
+          pdf.addImage(pngDataUrl, "PNG", 0, 0, pageWPt, pageHPt);
         }
       } else {
-        const pngDataUrl = await svgToPngDataUrl(calibratedSvg, labelW, labelH);
-        pdf.addImage(pngDataUrl, "PNG", x0, y0, labelW, labelH);
+        const pngDataUrl = await svgToPngDataUrl(svg, labelWmm, labelHmm);
+        pdf.addImage(pngDataUrl, "PNG", 0, 0, pageWPt, pageHPt);
       }
       index++;
     }

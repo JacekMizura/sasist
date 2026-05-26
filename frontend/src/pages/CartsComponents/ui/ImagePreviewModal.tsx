@@ -30,7 +30,7 @@ export default function ImagePreviewModal({ open, imageUrl, title, onClose }: Im
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+      <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div className="font-black text-slate-800 uppercase text-xs tracking-widest">{title ?? t.preview}</div>
           <button

@@ -36,14 +36,14 @@ export default function AnalysisDashboard() {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="min-w-0">
         <p className="text-slate-500">Ładowanie…</p>
       </div>
     );
   }
   if (error) {
     return (
-      <div className="p-6">
+      <div className="min-w-0">
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
           <p className="text-sm mt-1">{error}</p>
@@ -53,7 +53,7 @@ export default function AnalysisDashboard() {
   }
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <p className="text-slate-600 mb-6">Przegląd wskaźników analitycznych (tenant {DEFAULT_TENANT_ID}).</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">

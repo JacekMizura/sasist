@@ -76,7 +76,7 @@ export function LabelPreviewCard({ template, record }: Props) {
             marginBottom: 4,
           }}
         >
-          Preview: {MAX_PREVIEW_ITEMS} sample items
+          Podgląd: {MAX_PREVIEW_ITEMS} przykładowych pozycji
         </span>
       )}
       <div

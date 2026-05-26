@@ -4,7 +4,7 @@ available_quantity = quantity - reserved_quantity.
 """
 
 from datetime import date
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class InventoryUnitRead(BaseModel):
@@ -13,6 +13,7 @@ class InventoryUnitRead(BaseModel):
     product_id: int
     warehouse_id: int
     location_id: int
+    location_uuid: str | None = None
     quantity: float
     reserved_quantity: float
     available_quantity: float
@@ -28,6 +29,7 @@ class InventoryReadWithNames(InventoryUnitRead):
     product_name: str | None = None
     warehouse_name: str | None = None
     location_name: str | None = None
+    orphaned_inventory: bool = False
 
 
 class InventoryCreate(BaseModel):
@@ -35,6 +37,7 @@ class InventoryCreate(BaseModel):
     product_id: int
     warehouse_id: int
     location_id: int
+    stock_disposition: str | None = Field(default="SALEABLE", max_length=32)
     quantity: float = 0
     reserved_quantity: float = 0
     batch: str | None = None

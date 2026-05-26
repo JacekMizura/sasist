@@ -13,7 +13,13 @@ import {
   snapRowPreviewToDistance,
   snapPosition,
 } from "./DesignerRackPlacement";
-import { getCellFromClientPosition, getWallFromClientPosition, isCellInsideRack } from "./utils/designerMouseUtils";
+import {
+  getCellFromWarehouseLayoutSvg,
+  getSvgLayoutSizePx,
+  getWallFromClientPosition,
+  isCellInsideRack,
+  pickRackAtCell,
+} from "./utils/designerMouseUtils";
 import type { CatalogItem } from "../../types/warehouse";
 import type { Dispatch, SetStateAction } from "react";
 import { usePanInteraction } from "./interactions/usePanInteraction";
@@ -149,6 +155,8 @@ export interface UseDesignerMouseHandlersParams {
     canvasHeightPx?: number;
     gridUnitCm?: number;
     wallElementTool?: "door" | "gate" | null;
+    /** Must match WarehouseCanvas / layout SVG cell size (px per grid cell). */
+    cellPx?: number;
   };
 }
 
@@ -243,11 +251,10 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     (e: { clientX: number; clientY: number }) => {
       const svg = svgRef.current;
       if (!svg) return null;
-      const rect = svg.getBoundingClientRect();
-      return getCellFromClientPosition(
+      return getCellFromWarehouseLayoutSvg(
+        svg,
         e.clientX,
         e.clientY,
-        rect,
         layout.grid_cols,
         layout.grid_rows
       );
@@ -429,7 +436,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       rack.handleMouseMove(e, cell);
       visual.handleMouseMove(e, cell);
     },
-    [getCellFromEvent, pan, placement, row, selection, rack, visual]
+    [getCellFromEvent, pan, placement, row, selection, rack, visual, rowToolActive, rowDrawStart, layout.grid_cols]
   );
 
   const handleCanvasMouseDown = useCallback(
@@ -437,8 +444,18 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       const cell = getCellFromEvent(e);
       if (pan.handlePanStart(e)) return;
       if (wallElementTool && (onAddWallElement || onRequestGatePlacement) && svgRef.current && canvasWidthPx > 0 && canvasHeightPx > 0) {
-        const rect = svgRef.current.getBoundingClientRect();
-        const hit = getWallFromClientPosition(e.clientX, e.clientY, rect, canvasWidthPx, canvasHeightPx, layout.grid_cols, layout.grid_rows, gridUnitCm);
+        const svg = svgRef.current;
+        const { widthPx, heightPx } = getSvgLayoutSizePx(svg, canvasWidthPx, canvasHeightPx);
+        const hit = getWallFromClientPosition(
+          e.clientX,
+          e.clientY,
+          svg,
+          widthPx,
+          heightPx,
+          layout.grid_cols,
+          layout.grid_rows,
+          gridUnitCm
+        );
         if (hit) {
           e.preventDefault();
           e.stopPropagation();
@@ -455,7 +472,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
         return;
       }
       if (routeMode && addRackToRoute) {
-        const rack = layout.racks.find((r) => isCellInsideRack(cell, r));
+        const rack = pickRackAtCell(layout.racks, cell);
         if (rack) {
           const rid = rack.id ?? rack.rack_index;
           addRackToRoute(rid);
@@ -469,7 +486,7 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
       if (rack.handleMouseDown(e, cell)) return;
       selection.handleMarqueePart(e, cell);
     },
-    [getCellFromEvent, clearAllSelections, pan, placement, row, selection, visual, rack, wallElementTool, onAddWallElement, onRequestGatePlacement, layout.grid_cols, layout.grid_rows, layout.racks, canvasWidthPx, canvasHeightPx, gridUnitCm, routeMode, addRackToRoute]
+    [getCellFromEvent, clearAllSelections, pan, placement, row, selection, visual, rack, wallElementTool, onAddWallElement, onRequestGatePlacement, layout.grid_cols, layout.grid_rows, canvasWidthPx, canvasHeightPx, gridUnitCm, routeMode, addRackToRoute]
   );
 
   const handleCanvasMouseUp = useCallback(() => {

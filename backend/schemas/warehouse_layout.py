@@ -10,7 +10,7 @@ class BinSchema(BaseModel):
     segment_index: int
     volume_dm3: float = 0
     current_load_dm3: float = 0
-    storage_type: Optional[str] = None  # normalized to primary | reserve | store | buffer | damaged
+    storage_type: Optional[str] = None  # normalized: primary | pick | buffer | reserve | damaged | unknown
 
 
 class InternalLocationSchema(BaseModel):

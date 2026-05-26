@@ -21,6 +21,14 @@ export type WarehouseGraphEdge = {
 export type WarehouseLocationItem = {
   id: number;
   name: string;
+  /** Same as name; explicit code for WMS badges */
+  code?: string;
+  /** WMS badge kind: PICK | BUFFER | BULK | INBOUND | OUTBOUND */
+  type?: string;
+  /** Layout bin chrome (primary | pick | buffer | reserve | damaged | unknown) */
+  storage_type?: string;
+  zone?: string | null;
+  capacity_type?: string | null;
   x: number | null;
   y: number | null;
 };

@@ -2,25 +2,182 @@
 MAIN APPLICATION ENTRY POINT
 """
 
+if __name__ == "__main__" and __package__ is None:
+    raise RuntimeError("Run backend using: python -m backend")
+
+from pathlib import Path
+import logging
+import traceback
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
-from .database import Base, engine
+# Import all ORM models first so every table is registered on Base.metadata before create_all.
+from . import models  # noqa: F401
+
+from .database import create_all_tables, engine
 from .db.schema_upgrade import (
     ensure_locations_columns,
     ensure_warehouse_layout_identity_columns,
     ensure_warehouse_layout_building_columns,
+    ensure_warehouse_layout_rack_name_unique_index,
     ensure_products_physical_columns,
     ensure_products_stack_columns,
     ensure_products_stack_behavior_column,
+    ensure_products_import_metadata_columns,
+    ensure_products_replenishment_levels_columns,
+    ensure_products_reserve_replenishment_columns,
+    ensure_replenishment_tasks_table,
+    ensure_replenishment_tasks_sources_json_column,
+    ensure_warehouse_carrier_tables,
+    ensure_inventory_carrier_id_column,
+    ensure_inventory_carrier_unique_indexes,
+    ensure_stock_document_item_suggested_carrier_column,
+    ensure_receiving_document_carriers_table,
+    ensure_stock_document_item_line_warehouse_carrier_column,
+    ensure_wms_product_warehouse_operations_table,
+    ensure_products_stock_alert_columns,
+    ensure_products_carton_columns,
+    ensure_products_carton_stacking_columns,
+    ensure_products_receiving_requirements_columns,
+    ensure_products_deleted_at_column,
+    ensure_orders_deleted_at_column,
+    ensure_customers_deleted_at_column,
+    ensure_bundles_deleted_at_column,
+    ensure_wms_order_returns_deleted_at_column,
+    ensure_inventory_location_uuid_columns,
+    ensure_damage_report_columns,
+    ensure_wms_order_returns_columns,
+    ensure_rmz_line_split_columns,
+    ensure_rmz_line_damage_entries_json,
+    ensure_wms_refunds_columns,
+    ensure_return_statuses_and_rmz,
+    ensure_return_ui_statuses_and_column,
+    ensure_order_ui_statuses_and_column,
+    ensure_order_ui_statuses_is_system_column,
+    ensure_panel_ui_statuses_advanced_columns,
+    ensure_orders_complaint_origin_columns,
+    ensure_complaints_and_complaint_ui_statuses,
+    ensure_complaint_shipments_tables,
+    ensure_complaint_order_and_lines,
+    ensure_complaint_process_status_column,
+    ensure_complaint_deleted_at_column,
+    ensure_complaint_defects_reason_columns,
+    ensure_complaint_response_deadline_columns,
+    ensure_complaint_decision_hierarchy_columns,
+    ensure_complaint_resolution_columns,
+    ensure_complaint_documents_table,
+    ensure_order_documents_and_activity_logs_tables,
+    ensure_complaint_logistics_columns,
+    ensure_complaint_customer_snapshot_columns,
+    ensure_complaint_production_columns,
+    ensure_complaint_events_table,
+    ensure_bundles_tables_and_order_item_bundle_columns,
+    ensure_manufacturers_table_and_product_manufacturer_id,
+    ensure_suppliers_and_inbound_deliveries_tables,
+    ensure_deliveries_name_column,
+    ensure_supplier_assortment_columns_and_product_default_supplier,
+    ensure_supplier_products_table,
+    ensure_supplier_purchasing_columns,
+    ensure_purchase_orders_tables,
+    ensure_currency_exchange_rates_table,
+    ensure_purchase_order_tax_invoice_columns,
+    ensure_products_purchase_snapshot_columns,
+    ensure_products_extra_cost_columns,
+    ensure_purchasing_alert_tables,
+    ensure_purchase_auto_reorder_tables,
+    ensure_deliveries_purchase_order_id_column,
+    ensure_manufacturer_supplier_business_entity_columns,
+    ensure_tenant_business_profile_columns,
+    ensure_tenant_default_warehouse_column,
+    ensure_stock_documents_tables,
+    ensure_stock_document_item_ordered_received_columns,
+    ensure_stock_documents_receiving_status_column,
+    ensure_wms_ad_hoc_receiving_schema,
+    ensure_stock_documents_created_by_columns,
+    ensure_stock_documents_updated_at_column,
+    migrate_stock_documents_nullable_warehouse_location,
+    ensure_stock_document_items_return_receipt_columns,
+    ensure_warehouse_sqlite_schema_stabilization,
+    ensure_return_product_decisions_creates_stock_document_column,
+    ensure_workforce_operational_tables,
+    ensure_workforce_user_groups_schema,
+    migrate_orders_sales_document_misassigned_number,
+    ensure_product_barcodes_table,
+    ensure_product_track_batch_expiry_columns,
+    ensure_inventory_serials_table,
+    ensure_stock_document_item_lot_columns,
+    ensure_stock_document_item_quantity_putaway_column,
+    ensure_stock_document_item_putaway_meta_columns,
+    ensure_stock_document_item_mm_line_from_location_column,
+    ensure_stock_document_item_wms_line_source_column,
+    ensure_stock_document_items_wm_receipt_columns,
+    ensure_stock_document_item_receiving_split_columns,
+    ensure_receiving_scan_logs_table,
+    ensure_stock_item_locations_table,
+    ensure_stock_documents_financial_columns,
+    ensure_stock_documents_relocation_status_column,
+    ensure_stock_documents_mm_location_columns,
+    ensure_stock_documents_return_receipt_schema,
+    ensure_stock_operations_unit_price_net_column,
+    migrate_inventory_lot_unique_sqlite,
+    ensure_inventory_stock_disposition_columns,
+    ensure_stock_document_items_stock_disposition_column,
+    ensure_stock_operations_stock_disposition_column,
+    ensure_stock_reservation_lot_columns,
+    ensure_pick_task_lot_columns,
+    ensure_pick_lot_columns,
+    ensure_order_item_pick_allocations_table,
+    ensure_wms_product_warehouse_operations_traceability_columns,
+    ensure_warehouse_inventory_movements_table,
+    ensure_picks_cart_id_column,
+    ensure_picking_config_workflow_columns,
+    ensure_picking_shortage_support,
+    ensure_carts_code_column,
+    ensure_esp_scan_code_columns,
+    ensure_order_items_packing_quantity_packed_column,
+    ensure_wms_packing_settings_table,
+    ensure_shipping_methods_table_and_order_fk,
+    ensure_warehouse_materials_tables,
+    ensure_warehouse_materials_bdo_columns,
+    ensure_warehouse_materials_master_data,
+    ensure_warehouse_materials_purchasing_columns,
+    ensure_wm_last_purchase_extension_columns,
+    ensure_delivery_items_warehouse_material_lines,
+    ensure_supplier_product_tiers_and_delivery_price_manual_columns,
+    ensure_delivery_item_catalog_snapshot_columns,
+    ensure_bdo_packaging_wm_ref_migration,
+    ensure_document_series_extended_columns,
+    ensure_sale_documents_table,
+    ensure_orders_customer_id_column,
+    ensure_order_issue_tasks_table,
+    ensure_wms_operational_tasks_table,
+    ensure_orders_fulfillment_state_columns,
+    ensure_orders_priority_color_column,
+    ensure_orders_discount_columns,
+    ensure_orders_wms_timeline_columns,
+    ensure_orders_wms_packing_automation_finished_at_column,
+    ensure_wms_packing_sessions_automation_finished_at_column,
+    ensure_order_items_wms_picking_line_missing_qty,
+    ensure_order_items_wms_picking_line_status,
+    ensure_order_items_fulfillment_sync_columns,
+    ensure_order_items_bundle_hierarchy_columns,
+    ensure_order_items_oms_line_status,
+    ensure_fulfillment_events_table,
+    ensure_export_templates_table,
+    ensure_order_notes_table,
+    ensure_order_operational_notes_table,
+    ensure_order_custom_fields_tables,
+    ensure_app_users_bootstrap_columns,
+    ensure_user_wms_profiles_table,
+    ensure_wms_audit_tables,
+    ensure_company_profile_table,
 )
-from .middleware.request_metrics import record_request, record_error
-
-# Import all models so SQLAlchemy mappers (and relationships like Tenant.storage_units) are registered
-# before Base.metadata.create_all() runs.
-from . import models  # noqa: F401
+from .middleware.request_metrics import record_request
+from .services.pdf_deps import PdfGenerationUnavailable
 
 from .api.warehouse import router as warehouse_router
 from .api.warehouses import router as warehouses_router
@@ -31,8 +188,25 @@ from .api.tenant import router as tenant_router
 from .api.planning import router as planning_router
 from .api.cart import router as cart_router
 from .api.import_api import router as import_router
+from .api.export_api import router as export_router
 from .api.order import router as order_router
+from .api.order_custom_fields import router as order_custom_fields_router
+from .api.returns_bulk import router as returns_bulk_router
+from .api.shipping_methods import router as shipping_methods_router
+from .api.cartons import router as cartons_router
+from .api.packaging_materials import router as packaging_materials_router
 from .api.product import router as product_router
+from .api.bundle import router as bundle_router
+from .api.manufacturer import router as manufacturer_router
+from .api.purchasing import router as purchasing_router
+from .api.supplier import router as supplier_router
+from .api.customers import router as customers_router
+from .api.supplier_product import router as supplier_product_router
+from .api.supplier_product_links import router as supplier_product_links_router
+from .api.delivery import router as inbound_delivery_router
+from .api.stock_documents import documents_router as documents_alias_router
+from .api.stock_documents import router as stock_documents_router
+from .api.supplier_orders import router as supplier_orders_router
 from .api.optimizer import router as optimizer_router
 from .api.picking_zone import router as picking_zone_router
 from .api.consolidation_rack import router as consolidation_rack_router
@@ -42,6 +216,8 @@ from .api.warehouse_graph import router as warehouse_graph_router
 from .api.route import router as route_router
 from .api.warehouse_template import router as warehouse_template_router
 from .api.label_template import router as label_template_router
+from .api.label_template_portability import router as label_template_portability_router
+from .api.message_templates import router as message_templates_router
 from .api.label_sizes import router as label_sizes_router
 from .api.labels import router as labels_router
 from .api.label_pack import router as label_pack_router
@@ -55,6 +231,49 @@ from .api.inventory_api import router as inventory_router
 from .api.picks import router as picks_router
 from .api.system import router as system_router
 from .api.dev import router as dev_router
+from .api.reports import router as reports_router
+from .api.damage_reports import router as damage_reports_router
+from .api.wms_returns import router as wms_returns_router
+from .api.wms_receiving import router as wms_receiving_router
+from .api.wms_putaway import router as wms_putaway_router
+from .api.wms_relocation import router as wms_relocation_router
+from .api.wms_mm_transfer import router as wms_mm_transfer_router
+from .api.wms_replenishment import router as wms_replenishment_router
+from .api.wms_carriers import router as wms_carriers_router
+from .api.office_return_ui import router as office_return_ui_router
+from .api.office_return_module import router as office_return_module_router
+from .api.wms_return_module import router as wms_return_module_router
+from .api.office_order_ui import router as office_order_ui_router
+from .api.order_substatuses import router as order_substatuses_router
+from .api.office_complaint_ui import router as office_complaint_ui_router
+from .api.complaint import router as complaint_router
+from .api.complaint_line import router as complaint_line_router
+from .api.complaint_shipment import router as complaint_shipment_router
+from .api.return_statuses import router as return_statuses_router
+from .api.wms_settings import router as wms_settings_router
+from .api.order_statuses import router as order_statuses_router
+from .api.document_series import router as document_series_router
+from .api.wms_picking_config import router as wms_picking_config_router
+from .api.wms_picking_entry import router as wms_picking_entry_router
+from .api.wms_order_issue_tasks import router as wms_order_issue_tasks_router
+from .api.wms_operational_tasks import router as wms_operational_tasks_router
+from .api.wms_packing_entry import router as wms_packing_entry_router
+from .api.wms_packing_basket_entry import router as wms_packing_basket_entry_router
+from .api.wms_dashboard import router as wms_dashboard_router
+from .api.warehouse_operations import router as warehouse_operations_router
+from .api.packaging_intelligence import router as packaging_intelligence_router
+from .api.wms_products import router as wms_products_router
+from .api.wms_photo_upload import router as wms_photo_upload_router
+from .api.auth import router as auth_router
+from .api.workforce_api import router as workforce_router
+from .api.company_profile import router as company_profile_router
+from .api.admin_users import router as admin_users_router
+from .api.uploads import router as uploads_router
+from .api.bdo_packaging import router as bdo_packaging_router
+
+
+# On-disk damage evidence (same path as `services/damage_image_upload.UPLOAD_ROOT`).
+UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 
 
 # ==================================================
@@ -62,6 +281,12 @@ from .api.dev import router as dev_router
 # ==================================================
 
 app = FastAPI(title="WMS Backend V2")
+
+
+@app.get("/")
+def root_health() -> dict[str, bool]:
+    """Liveness check. API: ``/api/...``; docs: ``/docs``; OpenAPI: ``/openapi.json``."""
+    return {"ok": True}
 
 
 # ==================================================
@@ -76,10 +301,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 # ==================================================
 # GLOBAL EXCEPTION HANDLER (error count last 24h)
 # ==================================================
+
+
+async def record_error(request: Request, exc: Exception):
+    print(f"[EXCEPTION] {request.method} {request.url.path}")
+    # exc is explicit here; print_exc() often has no active traceback in async handlers.
+    traceback.print_exception(type(exc), exc, exc.__traceback__, chain=True)
+
+
+@app.exception_handler(PdfGenerationUnavailable)
+async def pdf_generation_unavailable_handler(request: Request, exc: PdfGenerationUnavailable):
+    response = JSONResponse(status_code=503, content={"detail": str(exc)})
+    if request.headers.get("origin"):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -95,9 +339,21 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ==================================================
 # DB INIT
 # ==================================================
-# All models are imported via "from . import models" above so they are
-# registered with Base.metadata before create_all.
-Base.metadata.create_all(bind=engine)
+# models package imported at top; create_all_tables() runs after all API imports
+# (APIs do not define new ORM tables).
+
+
+def ensure_sqlite_tables(*, announce: bool = False) -> None:
+    """
+    Create the SQLite file (on first connect) and all ORM tables.
+    Idempotent — safe on every import and on FastAPI startup (e.g. after test.db was removed).
+    """
+    if announce:
+        print("Creating database tables...")
+    create_all_tables()
+
+
+ensure_sqlite_tables()
 
 # Ensure new columns exist on existing SQLite DBs (create_all does not alter tables)
 def _ensure_order_columns():
@@ -106,13 +362,38 @@ def _ensure_order_columns():
         with engine.begin() as conn:
             r = conn.execute(text("PRAGMA table_info(order_items)"))
             cols = {row[1] for row in r}
-            for col, typ in [("unit_price", "REAL"), ("total_price", "REAL"), ("unit", "TEXT")]:
+            for col, typ in [
+                ("unit_price", "REAL"),
+                ("total_price", "REAL"),
+                ("unit", "TEXT"),
+                ("metadata_json", "TEXT"),
+                ("vat_percent", "REAL"),
+                ("list_price", "REAL"),
+            ]:
                 if col not in cols:
                     conn.execute(text(f"ALTER TABLE order_items ADD COLUMN {col} {typ}"))
             r = conn.execute(text("PRAGMA table_info(orders)"))
             cols = {row[1] for row in r}
             if "created_at" not in cols:
                 conn.execute(text("ALTER TABLE orders ADD COLUMN created_at DATETIME"))
+            for col, typ in [
+                ("external_id", "VARCHAR(128)"),
+                ("sales_document_number", "VARCHAR(128)"),
+                ("import_metadata_json", "TEXT"),
+                ("addresses_json", "TEXT"),
+                ("selected_carton_id", "VARCHAR(36)"),
+                ("discount_type", "VARCHAR(16)"),
+                ("discount_value", "REAL"),
+            ]:
+                if col not in cols:
+                    conn.execute(text(f"ALTER TABLE orders ADD COLUMN {col} {typ}"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_sales_document_number ON orders(sales_document_number)"))
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_order_tenant_warehouse_external_id "
+                    "ON orders(tenant_id, warehouse_id, external_id)"
+                )
+            )
     except Exception:
         pass
 
@@ -143,7 +424,7 @@ def _ensure_location_warehouse_columns():
 
 
 def _ensure_pick_columns():
-    """Add Pick event fields: warehouse_id, order_item_id, picked_at, picker_id. Make inventory_unit_id nullable for simulated picks."""
+    """Add Pick fields: warehouse_id, order_item_id, picked_at, picker_id, cart_id. Make inventory_unit_id nullable for simulated picks."""
     from sqlalchemy import text
     try:
         with engine.begin() as conn:
@@ -200,6 +481,14 @@ def _ensure_pick_columns():
                 """))
                 conn.execute(text("DROP TABLE picks"))
                 conn.execute(text("ALTER TABLE picks_new RENAME TO picks"))
+            # WMS / karty wózków: nullable cart_id (dopiero po ewentualnym recreate — PRAGMA ponownie)
+            r3 = conn.execute(text("PRAGMA table_info(picks)"))
+            cols_final = {row[1] for row in r3.fetchall()}
+            if "cart_id" not in cols_final:
+                conn.execute(
+                    text("ALTER TABLE picks ADD COLUMN cart_id INTEGER REFERENCES carts(id) ON DELETE SET NULL")
+                )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_picks_cart_id ON picks(cart_id)"))
     except Exception:
         pass
 
@@ -231,53 +520,705 @@ _ensure_location_warehouse_columns()
 _ensure_pick_columns()
 _ensure_warehouse_template_level_max_load_kg()
 
+# RMZ: add external_id / status on older DBs (create_all does not ALTER existing wms_order_returns)
+ensure_wms_order_returns_columns(engine)
+ensure_wms_order_returns_deleted_at_column(engine)
+ensure_orders_deleted_at_column(engine)
+ensure_rmz_line_split_columns(engine)
+ensure_rmz_line_damage_entries_json(engine)
+ensure_wms_refunds_columns(engine)
+# Panel return UI statuses: run at import so first request works even before startup hook.
+try:
+    ensure_return_ui_statuses_and_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_return_ui_statuses_and_column failed at import")
+try:
+    ensure_order_ui_statuses_and_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_order_ui_statuses_and_column failed at import")
+try:
+    ensure_order_ui_statuses_is_system_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_order_ui_statuses_is_system_column failed at import")
+try:
+    ensure_panel_ui_statuses_advanced_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_panel_ui_statuses_advanced_columns failed at import")
+try:
+    ensure_orders_complaint_origin_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_orders_complaint_origin_columns failed at import")
+try:
+    ensure_complaints_and_complaint_ui_statuses(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaints_and_complaint_ui_statuses failed at import")
+try:
+    ensure_complaint_shipments_tables(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_shipments_tables failed at import")
+try:
+    ensure_complaint_order_and_lines(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_order_and_lines failed at import")
+try:
+    ensure_complaint_response_deadline_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_response_deadline_columns failed at import")
+try:
+    ensure_complaint_decision_hierarchy_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_decision_hierarchy_columns failed at import")
+try:
+    ensure_complaint_resolution_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_resolution_columns failed at import")
+try:
+    ensure_complaint_documents_table(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_documents_table failed at import")
+try:
+    ensure_order_documents_and_activity_logs_tables(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_order_documents_and_activity_logs_tables failed at import")
+try:
+    ensure_complaint_logistics_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_logistics_columns failed at import")
+try:
+    ensure_complaint_customer_snapshot_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_customer_snapshot_columns failed at import")
+try:
+    ensure_complaint_production_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_complaint_production_columns failed at import")
+try:
+    ensure_bundles_tables_and_order_item_bundle_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_bundles_tables_and_order_item_bundle_columns failed at import")
+try:
+    ensure_manufacturers_table_and_product_manufacturer_id(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_manufacturers_table_and_product_manufacturer_id failed at import")
+try:
+    ensure_suppliers_and_inbound_deliveries_tables(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_suppliers_and_inbound_deliveries_tables failed at import")
+try:
+    ensure_deliveries_name_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_deliveries_name_column failed at import")
+try:
+    ensure_supplier_assortment_columns_and_product_default_supplier(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_supplier_assortment_columns_and_product_default_supplier failed at import")
+try:
+    ensure_supplier_products_table(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_supplier_products_table failed at import")
+try:
+    ensure_supplier_purchasing_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_supplier_purchasing_columns failed at import")
+try:
+    ensure_purchase_orders_tables(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_purchase_orders_tables failed at import")
+try:
+    ensure_currency_exchange_rates_table(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_currency_exchange_rates_table failed at import")
+try:
+    ensure_purchase_order_tax_invoice_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_purchase_order_tax_invoice_columns failed at import")
+try:
+    ensure_products_purchase_snapshot_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_products_purchase_snapshot_columns failed at import")
+try:
+    ensure_products_extra_cost_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_products_extra_cost_columns failed at import")
+try:
+    ensure_purchasing_alert_tables(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_purchasing_alert_tables failed at import")
+try:
+    ensure_purchase_auto_reorder_tables(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_purchase_auto_reorder_tables failed at import")
+try:
+    ensure_deliveries_purchase_order_id_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_deliveries_purchase_order_id_column failed at import")
+try:
+    ensure_manufacturer_supplier_business_entity_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_manufacturer_supplier_business_entity_columns failed at import")
+try:
+    ensure_tenant_business_profile_columns(engine)
+    ensure_tenant_default_warehouse_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_tenant_business_profile_columns failed at import")
+try:
+    ensure_stock_documents_tables(engine)
+    ensure_stock_document_item_ordered_received_columns(engine)
+    ensure_stock_document_item_quantity_putaway_column(engine)
+    ensure_stock_document_item_putaway_meta_columns(engine)
+    ensure_stock_document_item_mm_line_from_location_column(engine)
+    ensure_stock_document_item_wms_line_source_column(engine)
+    ensure_stock_document_items_wm_receipt_columns(engine)
+    ensure_stock_document_item_receiving_split_columns(engine)
+    ensure_receiving_scan_logs_table(engine)
+    ensure_stock_item_locations_table(engine)
+    ensure_stock_documents_financial_columns(engine)
+    ensure_stock_documents_relocation_status_column(engine)
+    ensure_stock_documents_mm_location_columns(engine)
+    ensure_stock_operations_unit_price_net_column(engine)
+    ensure_stock_operations_stock_disposition_column(engine)
+    ensure_stock_documents_receiving_status_column(engine)
+    ensure_wms_ad_hoc_receiving_schema(engine)
+    ensure_stock_documents_created_by_columns(engine)
+    ensure_stock_documents_updated_at_column(engine)
+    migrate_stock_documents_nullable_warehouse_location(engine)
+    ensure_stock_documents_return_receipt_schema(engine)
+    ensure_stock_document_items_return_receipt_columns(engine)
+    ensure_stock_document_items_stock_disposition_column(engine)
+    ensure_return_product_decisions_creates_stock_document_column(engine)
+    ensure_workforce_operational_tables(engine)
+    ensure_workforce_user_groups_schema(engine)
+    ensure_company_profile_table(engine)
+    ensure_stock_document_item_lot_columns(engine)
+    migrate_inventory_lot_unique_sqlite(engine)
+    ensure_inventory_stock_disposition_columns(engine)
+    ensure_warehouse_sqlite_schema_stabilization(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_documents_tables failed at import")
+try:
+    ensure_stock_documents_created_by_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_documents_created_by_columns failed at import")
+try:
+    ensure_product_barcodes_table(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_product_barcodes_table failed at import")
+
 
 @app.on_event("startup")
 def upgrade_schema():
-    """Run schema upgrades so existing SQLite DBs gain new columns."""
+    """Ensure tables exist, then run schema upgrades so existing SQLite DBs gain new columns."""
+    from . import models as _orm_models  # noqa: F401 — all tables on Base.metadata before create_all
+
+    ensure_sqlite_tables(announce=True)
     ensure_locations_columns(engine)
     ensure_warehouse_layout_identity_columns(engine)
+    ensure_warehouse_layout_rack_name_unique_index(engine)
     ensure_warehouse_layout_building_columns(engine)
     ensure_products_physical_columns(engine)
     ensure_products_stack_columns(engine)
     ensure_products_stack_behavior_column(engine)
+    ensure_products_import_metadata_columns(engine)
+    ensure_products_replenishment_levels_columns(engine)
+    ensure_products_reserve_replenishment_columns(engine)
+    ensure_replenishment_tasks_table(engine)
+    ensure_replenishment_tasks_sources_json_column(engine)
+    try:
+        ensure_warehouse_carrier_tables(engine)
+        ensure_inventory_carrier_id_column(engine)
+        ensure_inventory_carrier_unique_indexes(engine)
+        ensure_stock_document_item_suggested_carrier_column(engine)
+        ensure_receiving_document_carriers_table(engine)
+        ensure_stock_document_item_line_warehouse_carrier_column(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("warehouse carriers schema failed")
+    ensure_wms_product_warehouse_operations_table(engine)
+    ensure_wms_product_warehouse_operations_traceability_columns(engine)
+    ensure_warehouse_inventory_movements_table(engine)
+    ensure_order_item_pick_allocations_table(engine)
+    ensure_products_stock_alert_columns(engine)
+    ensure_products_carton_columns(engine)
+    ensure_products_carton_stacking_columns(engine)
+    ensure_products_receiving_requirements_columns(engine)
+    ensure_products_deleted_at_column(engine)
+    ensure_orders_deleted_at_column(engine)
+    ensure_customers_deleted_at_column(engine)
+    ensure_bundles_deleted_at_column(engine)
+    ensure_inventory_location_uuid_columns(engine)
+    ensure_damage_report_columns(engine)
+    ensure_wms_refunds_columns(engine)
+    try:
+        migrate_orders_sales_document_misassigned_number(engine)
+    except Exception:
+        pass
+    try:
+        ensure_return_statuses_and_rmz(engine)
+    except Exception:
+        pass
+    try:
+        ensure_wms_order_returns_deleted_at_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_return_ui_statuses_and_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_order_ui_statuses_and_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_order_ui_statuses_is_system_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_panel_ui_statuses_advanced_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_orders_complaint_origin_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaints_and_complaint_ui_statuses(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_shipments_tables(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_order_and_lines(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_process_status_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_deleted_at_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_defects_reason_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_response_deadline_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_decision_hierarchy_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_resolution_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_documents_table(engine)
+    except Exception:
+        pass
+    try:
+        ensure_order_documents_and_activity_logs_tables(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_logistics_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_customer_snapshot_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_production_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_complaint_events_table(engine)
+    except Exception:
+        pass
+    try:
+        ensure_bundles_tables_and_order_item_bundle_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_manufacturers_table_and_product_manufacturer_id(engine)
+    except Exception:
+        pass
+    try:
+        ensure_suppliers_and_inbound_deliveries_tables(engine)
+    except Exception:
+        pass
+    try:
+        ensure_deliveries_name_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_supplier_assortment_columns_and_product_default_supplier(engine)
+    except Exception:
+        pass
+    try:
+        ensure_supplier_products_table(engine)
+    except Exception:
+        pass
+    try:
+        ensure_supplier_purchasing_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_purchase_orders_tables(engine)
+    except Exception:
+        pass
+    try:
+        ensure_currency_exchange_rates_table(engine)
+    except Exception:
+        pass
+    try:
+        ensure_purchase_order_tax_invoice_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_products_purchase_snapshot_columns(engine)
+        ensure_products_extra_cost_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_purchasing_alert_tables(engine)
+    except Exception:
+        pass
+    try:
+        ensure_purchase_auto_reorder_tables(engine)
+    except Exception:
+        pass
+    try:
+        ensure_deliveries_purchase_order_id_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_manufacturer_supplier_business_entity_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_tenant_business_profile_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_tenant_default_warehouse_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_stock_documents_tables(engine)
+        ensure_stock_document_item_ordered_received_columns(engine)
+        ensure_stock_document_item_quantity_putaway_column(engine)
+        ensure_stock_document_item_putaway_meta_columns(engine)
+        ensure_stock_document_item_mm_line_from_location_column(engine)
+        ensure_stock_document_item_wms_line_source_column(engine)
+        ensure_stock_document_items_wm_receipt_columns(engine)
+        ensure_stock_document_item_receiving_split_columns(engine)
+        ensure_receiving_scan_logs_table(engine)
+        ensure_stock_item_locations_table(engine)
+        ensure_stock_documents_financial_columns(engine)
+        ensure_stock_documents_relocation_status_column(engine)
+        ensure_stock_documents_mm_location_columns(engine)
+        ensure_stock_operations_unit_price_net_column(engine)
+        ensure_stock_operations_stock_disposition_column(engine)
+        ensure_stock_documents_receiving_status_column(engine)
+        ensure_wms_ad_hoc_receiving_schema(engine)
+        ensure_stock_documents_created_by_columns(engine)
+        ensure_stock_documents_updated_at_column(engine)
+        migrate_stock_documents_nullable_warehouse_location(engine)
+        ensure_stock_documents_return_receipt_schema(engine)
+        ensure_stock_document_items_return_receipt_columns(engine)
+        ensure_stock_document_items_stock_disposition_column(engine)
+        ensure_return_product_decisions_creates_stock_document_column(engine)
+        ensure_workforce_operational_tables(engine)
+        ensure_workforce_user_groups_schema(engine)
+        ensure_company_profile_table(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("stock_documents schema upgrade block failed")
+    try:
+        ensure_stock_documents_created_by_columns(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_documents_created_by_columns failed at startup")
+    try:
+        from .database import SessionLocal
+        from .services.wms_putaway_service import (
+            backfill_stock_item_locations_if_needed,
+            migrate_sil_to_stock_operations,
+        )
+
+        _db_bf = SessionLocal()
+        try:
+            migrate_sil_to_stock_operations(_db_bf)
+            backfill_stock_item_locations_if_needed(_db_bf)
+        finally:
+            _db_bf.close()
+    except Exception:
+        logging.getLogger(__name__).exception("migrate_sil_to_stock_operations / backfill_putaway failed")
+    try:
+        ensure_product_barcodes_table(engine)
+    except Exception:
+        pass
+    try:
+        ensure_product_track_batch_expiry_columns(engine)
+        ensure_inventory_serials_table(engine)
+        ensure_stock_document_item_lot_columns(engine)
+        migrate_inventory_lot_unique_sqlite(engine)
+        ensure_inventory_stock_disposition_columns(engine)
+        ensure_stock_reservation_lot_columns(engine)
+        ensure_pick_task_lot_columns(engine)
+        ensure_pick_lot_columns(engine)
+        ensure_order_item_pick_allocations_table(engine)
+        ensure_wms_product_warehouse_operations_traceability_columns(engine)
+        ensure_warehouse_inventory_movements_table(engine)
+        ensure_picks_cart_id_column(engine)
+        ensure_carts_code_column(engine)
+        ensure_esp_scan_code_columns(engine)
+        ensure_picking_config_workflow_columns(engine)
+        ensure_picking_shortage_support(engine)
+        ensure_order_items_packing_quantity_packed_column(engine)
+        ensure_wms_packing_settings_table(engine)
+        ensure_shipping_methods_table_and_order_fk(engine)
+        ensure_warehouse_materials_tables(engine)
+        ensure_warehouse_materials_bdo_columns(engine)
+        ensure_warehouse_materials_master_data(engine)
+        ensure_warehouse_materials_purchasing_columns(engine)
+        ensure_wm_last_purchase_extension_columns(engine)
+        ensure_delivery_items_warehouse_material_lines(engine)
+        ensure_supplier_product_tiers_and_delivery_price_manual_columns(engine)
+        ensure_delivery_item_catalog_snapshot_columns(engine)
+        ensure_bdo_packaging_wm_ref_migration(engine)
+        ensure_sale_documents_table(engine)
+        ensure_orders_customer_id_column(engine)
+        ensure_order_issue_tasks_table(engine)
+        ensure_wms_operational_tasks_table(engine)
+        ensure_orders_fulfillment_state_columns(engine)
+        ensure_orders_priority_color_column(engine)
+        ensure_orders_discount_columns(engine)
+        ensure_orders_wms_timeline_columns(engine)
+        ensure_orders_wms_packing_automation_finished_at_column(engine)
+        ensure_wms_packing_sessions_automation_finished_at_column(engine)
+        ensure_order_items_wms_picking_line_missing_qty(engine)
+        ensure_order_items_wms_picking_line_status(engine)
+        ensure_order_items_fulfillment_sync_columns(engine)
+        ensure_order_items_bundle_hierarchy_columns(engine)
+        ensure_order_items_oms_line_status(engine)
+        ensure_fulfillment_events_table(engine)
+        ensure_export_templates_table(engine)
+        ensure_order_notes_table(engine)
+        ensure_order_operational_notes_table(engine)
+        ensure_order_custom_fields_tables(engine)
+        ensure_wms_audit_tables(engine)
+        ensure_workforce_operational_tables(engine)
+        ensure_workforce_user_groups_schema(engine)
+        ensure_company_profile_table(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("batch/expiry schema migration failed")
+    try:
+        ensure_warehouse_sqlite_schema_stabilization(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_warehouse_sqlite_schema_stabilization failed")
+    try:
+        ensure_app_users_bootstrap_columns(engine)
+        ensure_user_wms_profiles_table(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_app_users_bootstrap_columns failed")
+    try:
+        from .database import SessionLocal
+        from .db.seed_basic_data import seed_app_users, seed_basic_data, seed_wms_panel_defaults
+
+        _seed_db = SessionLocal()
+        try:
+            seed_basic_data(_seed_db)
+            seed_app_users(_seed_db)
+            seed_wms_panel_defaults(_seed_db)
+        finally:
+            _seed_db.close()
+    except Exception:
+        logging.getLogger(__name__).exception("seed_basic_data failed")
+    try:
+        from .services.replenishment_automation import install_replenishment_listeners
+
+        install_replenishment_listeners()
+    except Exception:
+        logging.getLogger(__name__).exception("install_replenishment_listeners failed")
+
+
+try:
+    ensure_document_series_extended_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_document_series_extended_columns failed at import")
+try:
+    ensure_sale_documents_table(engine)
+    ensure_orders_customer_id_column(engine)
+    ensure_order_issue_tasks_table(engine)
+    ensure_wms_operational_tasks_table(engine)
+    ensure_orders_fulfillment_state_columns(engine)
+    ensure_orders_priority_color_column(engine)
+    ensure_orders_discount_columns(engine)
+    ensure_orders_wms_timeline_columns(engine)
+    ensure_orders_wms_packing_automation_finished_at_column(engine)
+    ensure_wms_packing_sessions_automation_finished_at_column(engine)
+    ensure_order_items_wms_picking_line_missing_qty(engine)
+    ensure_order_items_wms_picking_line_status(engine)
+    ensure_order_items_fulfillment_sync_columns(engine)
+    ensure_order_items_bundle_hierarchy_columns(engine)
+    ensure_order_items_oms_line_status(engine)
+    ensure_fulfillment_events_table(engine)
+    ensure_order_notes_table(engine)
+    ensure_order_operational_notes_table(engine)
+    ensure_order_custom_fields_tables(engine)
+    ensure_wms_audit_tables(engine)
+    ensure_workforce_operational_tables(engine)
+    ensure_workforce_user_groups_schema(engine)
+    ensure_company_profile_table(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_sale_documents_table failed at import")
+try:
+    from .database import SessionLocal as _SessImp
+    from .services.fulfillment_event_service import backfill_all_fulfillment_events as _bff
+
+    _dbi = _SessImp()
+    try:
+        _bff(_dbi)
+        _dbi.commit()
+    finally:
+        _dbi.close()
+except Exception:
+    logging.getLogger(__name__).exception("fulfillment_events backfill failed at import")
 
 
 # ==================================================
-# ROUTERS
+# ROUTERS (most HTTP API under /api — set VITE_API_URL to e.g. http://host:8010/api)
+# Exception: wms_photo_upload_router → /wms/photo-upload (see below).
 # ==================================================
 
-app.include_router(tenant_router)
-app.include_router(warehouse_router)
-app.include_router(warehouses_router)
-app.include_router(tenant_warehouse_router)
-app.include_router(product_router)
-app.include_router(order_router)
-app.include_router(import_router)
-app.include_router(cart_router)
-app.include_router(planning_router)
-app.include_router(simulation_router)
-app.include_router(simulation_assign_router)
-app.include_router(analysis_router)
-app.include_router(optimizer_router)
-app.include_router(picking_zone_router)
-app.include_router(consolidation_rack_router)
-app.include_router(warehouse_map_router)
-app.include_router(warehouse_layout_router)
-app.include_router(warehouse_graph_router)
-app.include_router(route_router)
-app.include_router(warehouse_template_router)
-app.include_router(label_template_router)
-app.include_router(label_sizes_router)
-app.include_router(labels_router)
-app.include_router(label_pack_router)
-app.include_router(label_preview_router)
-app.include_router(printer_profiles_router)
-app.include_router(printers_router)
-app.include_router(qz_router)
-app.include_router(wave_router)
-app.include_router(scan_router)
-app.include_router(inventory_router)
-app.include_router(picks_router)
-app.include_router(system_router)
-app.include_router(dev_router)
+API_PREFIX = "/api"
+_API_ROUTERS = (
+    auth_router,
+    workforce_router,
+    company_profile_router,
+    admin_users_router,
+    uploads_router,
+    tenant_router,
+    warehouse_router,
+    warehouses_router,
+    tenant_warehouse_router,
+    product_router,
+    bundle_router,
+    manufacturer_router,
+    purchasing_router,
+    supplier_router,
+    customers_router,
+    supplier_product_links_router,
+    inbound_delivery_router,
+    stock_documents_router,
+    documents_alias_router,
+    supplier_orders_router,
+    order_router,
+    order_custom_fields_router,
+    returns_bulk_router,
+    shipping_methods_router,
+    cartons_router,
+    packaging_materials_router,
+    import_router,
+    export_router,
+    cart_router,
+    planning_router,
+    simulation_router,
+    simulation_assign_router,
+    analysis_router,
+    optimizer_router,
+    picking_zone_router,
+    consolidation_rack_router,
+    warehouse_map_router,
+    warehouse_layout_router,
+    warehouse_graph_router,
+    route_router,
+    warehouse_template_router,
+    label_sizes_router,
+    labels_router,
+    label_pack_router,
+    label_preview_router,
+    printer_profiles_router,
+    printers_router,
+    qz_router,
+    wave_router,
+    scan_router,
+    inventory_router,
+    picks_router,
+    system_router,
+    dev_router,
+    reports_router,
+    damage_reports_router,
+    wms_settings_router,
+    order_statuses_router,
+    document_series_router,
+    wms_picking_config_router,
+    wms_picking_entry_router,
+    wms_order_issue_tasks_router,
+    wms_operational_tasks_router,
+    wms_packing_entry_router,
+    wms_packing_basket_entry_router,
+    wms_dashboard_router,
+    warehouse_operations_router,
+    packaging_intelligence_router,
+    wms_products_router,
+    return_statuses_router,
+    wms_returns_router,
+    wms_receiving_router,
+    wms_putaway_router,
+    wms_relocation_router,
+    wms_mm_transfer_router,
+    wms_replenishment_router,
+    wms_carriers_router,
+    office_return_ui_router,
+    office_return_module_router,
+    wms_return_module_router,
+    office_order_ui_router,
+    order_substatuses_router,
+    office_complaint_ui_router,
+    complaint_router,
+    complaint_line_router,
+    complaint_shipment_router,
+    bdo_packaging_router,
+)
+for _r in _API_ROUTERS:
+    app.include_router(_r, prefix=API_PREFIX)
+
+_MSG_ADMIN = f"{API_PREFIX}/admin/message-templates"
+_MSG_LEGACY = f"{API_PREFIX}/message-templates"
+app.include_router(message_templates_router, prefix=_MSG_ADMIN)
+app.include_router(message_templates_router, prefix=_MSG_LEGACY)
+
+# Szablony etykiet / wydruków: ta sama logika pod `/label-templates`, `/print-templates` i `/admin/print-templates`.
+_LABEL_TPL_API = f"{API_PREFIX}/label-templates"
+_PRINT_TPL_API = f"{API_PREFIX}/print-templates"
+_ADMIN_PRINT_TPL_API = f"{API_PREFIX}/admin/print-templates"
+app.include_router(label_template_router, prefix=_LABEL_TPL_API)
+app.include_router(label_template_portability_router, prefix=_LABEL_TPL_API)
+app.include_router(label_template_router, prefix=_PRINT_TPL_API)
+app.include_router(label_template_portability_router, prefix=_PRINT_TPL_API)
+app.include_router(label_template_router, prefix=_ADMIN_PRINT_TPL_API)
+app.include_router(label_template_portability_router, prefix=_ADMIN_PRINT_TPL_API)
+
+# Alias for warehouse-materials UI: same handlers as /cartons under /materials/cartons
+app.include_router(cartons_router, prefix=f"{API_PREFIX}/materials")
+
+app.include_router(supplier_product_router, prefix=API_PREFIX)
+
+# WMS phone QR upload: mounted at /wms/photo-upload (not under /api) so same-origin dev proxy + phones work.
+app.include_router(wms_photo_upload_router)
+
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+
+
+@app.on_event("startup")
+async def _log_backend_startup() -> None:
+    print("Backend started OK", flush=True)
+
+
+if __name__ == "__main__":
+    raise RuntimeError("Run backend using: python -m backend")

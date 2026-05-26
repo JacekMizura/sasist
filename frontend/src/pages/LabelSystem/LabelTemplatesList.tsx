@@ -1,14 +1,26 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { Eye } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import {
+  Box,
+  Eye,
+  FileSpreadsheet,
+  Package,
+  Plus,
+  ShoppingBasket,
+  ShoppingCart,
+  Warehouse,
+} from "lucide-react";
 import api from "../../api/axios";
+import { exportLabelTemplatesJson } from "../../api/labelTemplatesPortabilityApi";
 import { formatMm } from "../../utils/formatMm";
 import { TemplatePreview } from "../../components/labels/TemplatePreview";
+import { labelModuleBasePath } from "./labelModuleBasePath";
+import {
+  LABEL_PRINT_MODULE_TYPE_LABELS,
+  LABEL_PRINT_MODULE_TYPE_ORDER,
+} from "./labelPrintModuleTypes";
 
 const TENANT_ID = 1;
-const PREVIEW_MAX_HEIGHT_PX = 260;
-const PREVIEW_HOVER_DELAY_MS = 200;
-const PREVIEW_LEAVE_DELAY_MS = 150;
 const PAGE_SIZE = 24;
 const SORT_OPTIONS = [
   { value: "updated_at_desc", label: "Ostatnio edytowane" },
@@ -42,20 +54,59 @@ type GroupRow = {
   updated_at: string | null;
 };
 
-const TYPE_ORDER = ["location", "cart", "basket", "product", "order"] as const;
-const TYPE_LABELS: Record<string, string> = {
-  location: "Lokalizacja",
-  cart: "Wózek",
-  basket: "Koszyk",
-  product: "Produkt",
-  order: "Zamówienie",
-};
-
 const UNGROUPED_ID = "__ungrouped__";
+
+function parseTemplateJson(templateJson: string): Record<string, unknown> {
+  try {
+    return JSON.parse(templateJson) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function getCardPreviewSize(widthMm = 50, heightMm = 30): { width: number; height: number } {
+  const safeHeight = Math.max(heightMm, 1);
+  const ratio = widthMm / safeHeight;
+  if (ratio >= 1.7) return { width: 304, height: 102 };
+  if (ratio <= 1.1) return { width: 126, height: 126 };
+  return { width: 244, height: 124 };
+}
+
+function getModalPreviewSize(widthMm = 50, heightMm = 30): { width: number; height: number } {
+  const safeHeight = Math.max(heightMm, 1);
+  const ratio = widthMm / safeHeight;
+  const maxWidth = 760;
+  const maxHeight = 360;
+  const minWidth = 300;
+  const minHeight = 180;
+
+  let width = maxWidth;
+  let height = Math.round(width / ratio);
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = Math.round(height * ratio);
+  }
+  width = Math.max(minWidth, width);
+  height = Math.max(minHeight, height);
+  return { width, height };
+}
+
+/** Większy podgląd w wierszu listy — lepsze rozpoznanie szablonu bez trybu kart. */
+function getListRowPreviewSize(widthMm = 50, heightMm = 30): { boxW: number; boxH: number; cw: number; ch: number } {
+  const safeH = Math.max(heightMm, 1);
+  const ratio = widthMm / safeH;
+  const boxW = 120;
+  const boxH = 76;
+  if (ratio >= 1.65) return { boxW, boxH, cw: 108, ch: 40 };
+  if (ratio <= 1.08) return { boxW, boxH, cw: 58, ch: 58 };
+  return { boxW, boxH, cw: 96, ch: 52 };
+}
 
 export function LabelTemplatesList() {
   const navigate = useNavigate();
-  const [selectedType, setSelectedType] = useState<string>(TYPE_ORDER[0]);
+  const { pathname } = useLocation();
+  const labelBase = labelModuleBasePath(pathname);
+  const [selectedType, setSelectedType] = useState<string>(LABEL_PRINT_MODULE_TYPE_ORDER[0]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | number | null>(UNGROUPED_ID);
   const [groups, setGroups] = useState<GroupRow[]>([]);
   const [templates, setTemplates] = useState<TemplateWithMeta[]>([]);
@@ -64,19 +115,14 @@ export function LabelTemplatesList() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<typeof SORT_OPTIONS[number]["value"]>("updated_at_desc");
-  const [viewMode, setViewMode] = useState<"card" | "list">("card");
+  const [viewMode, setViewMode] = useState<"card" | "list">("list");
   const [page, setPage] = useState(1);
   const [newGroupName, setNewGroupName] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [movingToGroupId, setMovingToGroupId] = useState<number | null>(null);
-  const [previewState, setPreviewState] = useState<{
-    template: TemplateWithMeta;
-    left: number;
-    top: number;
-    width: number;
-  } | null>(null);
-  const previewLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [exportBusy, setExportBusy] = useState(false);
+  const [previewModalTemplate, setPreviewModalTemplate] = useState<TemplateWithMeta | null>(null);
 
   const fetchGroups = useCallback(async () => {
     try {
@@ -143,67 +189,6 @@ export function LabelTemplatesList() {
     fetchTemplates();
   }, [fetchTemplates]);
 
-  const clearPreviewLeaveTimer = useCallback(() => {
-    if (previewLeaveTimerRef.current) {
-      clearTimeout(previewLeaveTimerRef.current);
-      previewLeaveTimerRef.current = null;
-    }
-  }, []);
-
-  const schedulePreviewHide = useCallback(() => {
-    clearPreviewLeaveTimer();
-    previewLeaveTimerRef.current = setTimeout(() => setPreviewState(null), PREVIEW_LEAVE_DELAY_MS);
-  }, [clearPreviewLeaveTimer]);
-
-  const showPreview = useCallback(
-    (template: TemplateWithMeta, el: HTMLElement) => {
-      if (previewHoverTimerRef.current) {
-        clearTimeout(previewHoverTimerRef.current);
-        previewHoverTimerRef.current = null;
-      }
-      clearPreviewLeaveTimer();
-      const rect = el.getBoundingClientRect();
-      setPreviewState({
-        template,
-        left: rect.left,
-        top: rect.bottom + 8,
-        width: rect.width,
-      });
-    },
-    [clearPreviewLeaveTimer]
-  );
-
-  const handleCardMouseEnter = useCallback(
-    (t: TemplateWithMeta, e: React.MouseEvent<HTMLElement>) => {
-      if (previewHoverTimerRef.current) clearTimeout(previewHoverTimerRef.current);
-      previewHoverTimerRef.current = setTimeout(
-        () => showPreview(t, e.currentTarget),
-        PREVIEW_HOVER_DELAY_MS
-      );
-    },
-    [showPreview]
-  );
-
-  const handleCardMouseLeave = useCallback(() => {
-    if (previewHoverTimerRef.current) {
-      clearTimeout(previewHoverTimerRef.current);
-      previewHoverTimerRef.current = null;
-    }
-    schedulePreviewHide();
-  }, [schedulePreviewHide]);
-
-  const handlePreviewPanelMouseEnter = useCallback(() => {
-    clearPreviewLeaveTimer();
-    if (previewLeaveTimerRef.current) {
-      clearTimeout(previewLeaveTimerRef.current);
-      previewLeaveTimerRef.current = null;
-    }
-  }, [clearPreviewLeaveTimer]);
-
-  const handlePreviewPanelMouseLeave = useCallback(() => {
-    schedulePreviewHide();
-  }, [schedulePreviewHide]);
-
   const filteredAndSorted = useMemo(() => {
     let list = templates;
     if (searchQuery.trim()) {
@@ -232,8 +217,71 @@ export function LabelTemplatesList() {
     setPage(1);
   }, [searchQuery, sortBy, selectedGroupId, selectedType]);
 
-  const handleEdit = (id: number) => navigate(`/labels/designer/${id}`);
-  const handleNew = () => navigate("/labels/designer/new");
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [selectedGroupId, selectedType]);
+
+  const toggleSelectId = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }, []);
+
+  const selectAllOnPage = useCallback(() => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      paginated.forEach((t) => n.add(t.id));
+      return n;
+    });
+  }, [paginated]);
+
+  const handleExportSelected = useCallback(async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setExportBusy(true);
+    try {
+      await exportLabelTemplatesJson(TENANT_ID, ids);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setExportBusy(false);
+    }
+  }, [selectedIds]);
+
+  const handleEdit = (id: number) => navigate(`${labelBase}/${id}/edit`);
+  const handleNew = () => navigate(`${labelBase}/new`);
+
+  const formatEditedMeta = (iso: string | null): string => {
+    if (!iso) return "Brak daty edycji";
+    const date = new Date(iso);
+    const now = new Date();
+    const sameDay =
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate();
+    if (sameDay) return "Edytowano dziś";
+    return `Edytowano ${date.toLocaleDateString("pl-PL")}`;
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case "location":
+        return <Warehouse className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
+      case "cart":
+        return <ShoppingCart className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
+      case "basket":
+        return <ShoppingBasket className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
+      case "product":
+        return <Package className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
+      case "order":
+        return <Box className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
+      default:
+        return <Box className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
+    }
+  };
 
   const handleDuplicate = async (row: TemplateWithMeta) => {
     try {
@@ -305,67 +353,76 @@ export function LabelTemplatesList() {
   const templateCard = (t: TemplateWithMeta) => (
     <div
       key={t.id}
-      className="template-card relative w-full max-w-[320px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all duration-200 hover:shadow-md hover:scale-[1.02] hover:border-slate-300"
-      onMouseEnter={(e) => handleCardMouseEnter(t, e)}
-      onMouseLeave={handleCardMouseLeave}
+      className="template-card relative flex w-full max-w-[320px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:scale-[1.01] hover:border-slate-300 hover:shadow-md"
     >
-      <div className="p-3 flex flex-col gap-2 min-w-0">
+      <button
+        type="button"
+        onClick={() => setPreviewModalTemplate(t)}
+        className="group border-b border-slate-100 bg-slate-50/70 p-2 text-left"
+        aria-label={`Podgląd szablonu ${t.name}`}
+      >
+        <div className="relative flex h-32 w-full items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white p-1">
+          <TemplatePreview
+            templateId={t.id}
+            template={parseTemplateJson(t.template_json)}
+            containerWidthPx={getCardPreviewSize(t.widthMm, t.heightMm).width}
+            containerHeightPx={getCardPreviewSize(t.widthMm, t.heightMm).height}
+          />
+          <div className="pointer-events-none absolute inset-0 bg-slate-900/0 transition-colors group-hover:bg-slate-900/[0.03]" />
+        </div>
+      </button>
+      <div className="flex min-w-0 flex-col gap-2 p-2.5">
         <div className="flex items-start justify-between gap-2">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300"
+            checked={selectedIds.has(t.id)}
+            onChange={() => toggleSelectId(t.id)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Zaznacz szablon ${t.name}`}
+          />
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-slate-800 truncate text-sm">{t.name}</div>
-            <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <div className="truncate text-sm font-semibold text-slate-800">{t.name}</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500">
               <span>{formatMm(t.widthMm)} × {formatMm(t.heightMm)} mm</span>
-              <span
-                className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-600 cursor-default"
-                title="Powiększ podgląd"
-                onMouseEnter={(e) => {
-                  e.stopPropagation();
-                  if (previewHoverTimerRef.current) {
-                    clearTimeout(previewHoverTimerRef.current);
-                    previewHoverTimerRef.current = null;
-                  }
-                  const card = (e.currentTarget as HTMLElement).closest(".template-card") as HTMLElement;
-                  if (card) showPreview(t, card);
-                }}
-                onMouseLeave={(e) => e.stopPropagation()}
-              >
-                <Eye className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
-                <span className="text-[10px]">Podgląd</span>
-              </span>
+              <span>•</span>
+              <span>{formatEditedMeta(t.updated_at)}</span>
+              <span>•</span>
+              <span>Brak statystyk użyć</span>
             </div>
           </div>
           {t.is_default && (
-            <span className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-bold bg-cyan-100 text-cyan-800">
+            <span className="shrink-0 rounded-md bg-cyan-100 px-2 py-0.5 text-[10px] font-bold text-cyan-800">
               Domyślny
             </span>
           )}
         </div>
-        <div className="flex flex-wrap gap-1.5 pt-1">
-            <button
-              type="button"
-              onClick={() => handleEdit(t.id)}
-              className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
-            >
-              Edytuj
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDuplicate(t)}
-              className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
-            >
-              Duplikuj
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDelete(t.id)}
-              disabled={deletingId === t.id}
-              className="px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50"
-            >
-              {deletingId === t.id ? "…" : "Usuń"}
-            </button>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleEdit(t.id)}
+            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          >
+            Edytuj
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDuplicate(t)}
+            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          >
+            Duplikuj
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDelete(t.id)}
+            disabled={deletingId === t.id}
+            className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+          >
+            {deletingId === t.id ? "…" : "Usuń"}
+          </button>
         </div>
         {groups.length > 0 && (
-          <div className="pt-1 border-t border-slate-100">
+          <div className="border-t border-slate-100 pt-1">
             <label className="text-[10px] text-slate-500 block mb-1">Przenieś do grupy</label>
             <select
               value={t.group_id ?? ""}
@@ -387,47 +444,72 @@ export function LabelTemplatesList() {
     </div>
   );
 
-  const templateRow = (t: TemplateWithMeta) => (
+  const templateRow = (t: TemplateWithMeta) => {
+    const listPv = getListRowPreviewSize(t.widthMm, t.heightMm);
+    return (
     <div
       key={t.id}
-      className="template-row flex items-center justify-between gap-4 py-2 px-3 rounded-lg hover:bg-slate-50 border-b border-slate-100 last:border-0"
+      className="template-row group flex items-center justify-between gap-3 rounded-lg border-b border-slate-100 px-2.5 py-1.5 transition-all duration-150 last:border-0 hover:bg-white hover:shadow-sm"
     >
-      <div className="min-w-0">
-        <div className="font-medium text-slate-800 truncate">{t.name}</div>
-        <div className="text-xs text-slate-500">
-          {formatMm(t.widthMm)} × {formatMm(t.heightMm)} mm
-          {t.is_default && " · Domyślny"}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <input
+          type="checkbox"
+          className="h-4 w-4 shrink-0 rounded border-slate-300"
+          checked={selectedIds.has(t.id)}
+          onChange={() => toggleSelectId(t.id)}
+          aria-label={`Zaznacz szablon ${t.name}`}
+        />
+        <button
+          type="button"
+          onClick={() => setPreviewModalTemplate(t)}
+          className="flex shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white p-1 transition hover:border-cyan-300 hover:shadow-sm"
+          style={{ width: listPv.boxW, height: listPv.boxH }}
+          aria-label={`Podgląd szablonu ${t.name}`}
+        >
+          <TemplatePreview
+            templateId={t.id}
+            template={parseTemplateJson(t.template_json)}
+            containerWidthPx={listPv.cw}
+            containerHeightPx={listPv.ch}
+          />
+        </button>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-slate-800">{t.name}</div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+            <span>{formatMm(t.widthMm)} × {formatMm(t.heightMm)} mm</span>
+            <span>•</span>
+            <span>{formatEditedMeta(t.updated_at)}</span>
+            <span>•</span>
+            <span>Brak statystyk użyć</span>
+            {t.is_default && (
+              <>
+                <span>•</span>
+                <span className="rounded-sm bg-cyan-100 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-800">Domyślny</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span
-          className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-700 cursor-pointer"
-          title="Podgląd"
-          onMouseEnter={(e) => {
-            clearPreviewLeaveTimer();
-            if (previewHoverTimerRef.current) {
-              clearTimeout(previewHoverTimerRef.current);
-              previewHoverTimerRef.current = null;
-            }
-            const row = (e.currentTarget as HTMLElement).closest(".template-row") as HTMLElement;
-            if (row) showPreview(t, row);
-          }}
-          onMouseLeave={schedulePreviewHide}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setPreviewModalTemplate(t)}
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
-          <Eye className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
-          <span className="text-xs">Podgląd</span>
-        </span>
+          <Eye className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
+          Podgląd
+        </button>
         <button
           type="button"
           onClick={() => handleEdit(t.id)}
-          className="px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
+          className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
         >
           Edytuj
         </button>
         <button
           type="button"
           onClick={() => handleDuplicate(t)}
-          className="px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
+          className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
         >
           Duplikuj
         </button>
@@ -435,23 +517,25 @@ export function LabelTemplatesList() {
           type="button"
           onClick={() => handleDelete(t.id)}
           disabled={deletingId === t.id}
-          className="px-2 py-1 rounded text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50"
+          className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
         >
           {deletingId === t.id ? "…" : "Usuń"}
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <>
-    <div className="flex-1 min-h-0 flex bg-[#F8FAFC]">
+    <div className="flex min-h-0 min-w-0 gap-4">
+      <div className="flex shrink-0 gap-3 border-r border-slate-200 pr-4">
       {/* Left: Label type */}
-      <div className="w-48 shrink-0 border-r border-slate-200 bg-white p-3 flex flex-col gap-1">
-        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider px-2 py-1">
+      <div className="flex w-48 shrink-0 flex-col gap-1 p-0">
+        <h2 className="px-2 py-1 text-xs font-bold uppercase tracking-wider text-slate-500">
           Typ etykiety
         </h2>
-        {TYPE_ORDER.map((type) => (
+        {LABEL_PRINT_MODULE_TYPE_ORDER.map((type) => (
           <button
             key={type}
             type="button"
@@ -459,27 +543,30 @@ export function LabelTemplatesList() {
               setSelectedType(type);
               setSelectedGroupId(UNGROUPED_ID);
             }}
-            className={`text-left px-3 py-2 rounded-lg text-sm font-medium ${
+            className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
               selectedType === type
-                ? "bg-cyan-600 text-white"
+                ? "bg-cyan-600 text-white shadow-sm"
                 : "text-slate-700 hover:bg-slate-100"
             }`}
           >
-            {TYPE_LABELS[type] || type}
+            <span className={`${selectedType === type ? "text-white" : "text-slate-500 group-hover:text-slate-700"}`}>
+              {getTypeIcon(type)}
+            </span>
+            {LABEL_PRINT_MODULE_TYPE_LABELS[type] || type}
           </button>
         ))}
       </div>
 
       {/* Middle: Groups */}
-      <div className="w-56 shrink-0 border-r border-slate-200 bg-white p-3 flex flex-col">
-        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider px-2 py-1">
+      <div className="flex w-56 shrink-0 flex-col border-l border-slate-200 pl-3">
+        <h2 className="px-2 py-1 text-xs font-bold uppercase tracking-wider text-slate-500">
           Grupy
         </h2>
         <div className="flex-1 overflow-y-auto min-h-0 space-y-0.5">
           <button
             type="button"
             onClick={() => setSelectedGroupId(UNGROUPED_ID)}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
+            className={`w-full rounded-lg px-3 py-1.5 text-left text-sm transition ${
               selectedGroupId === UNGROUPED_ID
                 ? "bg-slate-200 font-medium text-slate-800"
                 : "text-slate-600 hover:bg-slate-100"
@@ -492,7 +579,7 @@ export function LabelTemplatesList() {
               key={g.id}
               type="button"
               onClick={() => setSelectedGroupId(g.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm truncate ${
+              className={`w-full truncate rounded-lg px-3 py-1.5 text-left text-sm transition ${
                 selectedGroupId === g.id
                   ? "bg-slate-200 font-medium text-slate-800"
                   : "text-slate-600 hover:bg-slate-100"
@@ -502,7 +589,7 @@ export function LabelTemplatesList() {
             </button>
           ))}
         </div>
-        <div className="pt-2 border-t border-slate-100 mt-2">
+        <div className="border-t border-slate-100 pt-2">
           <div className="flex gap-1">
             <input
               type="text"
@@ -524,23 +611,49 @@ export function LabelTemplatesList() {
           <p className="text-[10px] text-slate-400 mt-1 px-0.5">Nowa grupa</p>
         </div>
       </div>
+      </div>
 
       {/* Right: Templates */}
-      <div className="flex-1 min-w-0 flex flex-col p-4">
-        <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-bold text-slate-800">
-            {TYPE_LABELS[selectedType] || selectedType}
+            {LABEL_PRINT_MODULE_TYPE_LABELS[selectedType as keyof typeof LABEL_PRINT_MODULE_TYPE_LABELS] || selectedType}
           </h1>
-          <button
-            type="button"
-            onClick={handleNew}
-            className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold hover:bg-cyan-700"
-          >
-            + Nowy szablon
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={selectedIds.size === 0 || exportBusy}
+              onClick={() => void handleExportSelected()}
+              className="rounded-lg border border-transparent bg-transparent px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+            >
+              {exportBusy ? "Eksport…" : `Eksport JSON (${selectedIds.size})`}
+            </button>
+            <button
+              type="button"
+              onClick={selectAllOnPage}
+              disabled={paginated.length === 0}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Zaznacz stronę
+            </button>
+            <Link
+              to="/settings/import?kind=label_templates"
+              className="rounded-lg border border-transparent bg-transparent px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+            >
+              Import szablonów
+            </Link>
+            <button
+              type="button"
+              onClick={handleNew}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-700 hover:shadow-md"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+              Nowy szablon
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="flex flex-wrap items-center gap-3">
           <input
             type="search"
             value={searchQuery}
@@ -586,8 +699,8 @@ export function LabelTemplatesList() {
         {loading ? (
           <p className="text-slate-500 py-8">Ładowanie…</p>
         ) : (
-          <>
-            <div className="text-sm text-slate-500 mb-2">
+          <div className="flex flex-col gap-4">
+            <div className="text-sm text-slate-500">
               {filteredAndSorted.length} szablonów
               {filteredAndSorted.length > PAGE_SIZE && (
                 <span> (strona {page} z {totalPages})</span>
@@ -605,13 +718,13 @@ export function LabelTemplatesList() {
                 {paginated.map((t) => templateCard(t))}
               </div>
             ) : (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden overflow-y-auto">
+              <div className="overflow-hidden overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/50">
                 {paginated.map((t) => templateRow(t))}
               </div>
             )}
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-4">
+              <div className="flex items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -633,48 +746,54 @@ export function LabelTemplatesList() {
                 </button>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
 
-    {previewState && (
+    {previewModalTemplate && (
       <div
-        className="fixed z-[100] rounded-xl border border-slate-200 bg-white shadow-lg"
-        style={{
-          left: previewState.left,
-          top: previewState.top,
-          width: previewState.width,
-          maxWidth: previewState.width,
-          padding: 12,
-          boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
-          borderRadius: 12,
-        }}
-        onMouseEnter={handlePreviewPanelMouseEnter}
-        onMouseLeave={handlePreviewPanelMouseLeave}
+        className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/35 p-4"
+        onClick={() => setPreviewModalTemplate(null)}
       >
         <div
-          style={{
-            width: "100%",
-            height: 140,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            overflow: "hidden",
-          }}
+          className="w-full max-w-3xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+          onClick={(e) => e.stopPropagation()}
         >
-          <TemplatePreview
-            templateId={previewState.template.id}
-            template={(() => {
-              try {
-                return JSON.parse(previewState.template.template_json) as Record<string, unknown>;
-              } catch {
-                return {};
-              }
-            })()}
-            containerWidthPx={Math.max(1, previewState.width - 24)}
-            containerHeightPx={140}
-          />
+          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">{previewModalTemplate.name}</h3>
+              <p className="text-xs text-slate-500">
+                {formatMm(previewModalTemplate.widthMm)} × {formatMm(previewModalTemplate.heightMm)} mm
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPreviewModalTemplate(null)}
+              className="rounded-md px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+            >
+              Zamknij
+            </button>
+          </div>
+          <div
+            className="flex items-center justify-center p-3"
+            style={{
+              backgroundImage:
+                "linear-gradient(45deg, rgba(148,163,184,0.08) 25%, transparent 25%), linear-gradient(-45deg, rgba(148,163,184,0.08) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(148,163,184,0.08) 75%), linear-gradient(-45deg, transparent 75%, rgba(148,163,184,0.08) 75%)",
+              backgroundSize: "12px 12px",
+              backgroundPosition: "0 0, 0 6px, 6px -6px, -6px 0px",
+              backgroundColor: "#f8fafc",
+            }}
+          >
+            <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+              <TemplatePreview
+                templateId={previewModalTemplate.id}
+                template={parseTemplateJson(previewModalTemplate.template_json)}
+                containerWidthPx={getModalPreviewSize(previewModalTemplate.widthMm, previewModalTemplate.heightMm).width}
+                containerHeightPx={getModalPreviewSize(previewModalTemplate.widthMm, previewModalTemplate.heightMm).height}
+              />
+            </div>
+          </div>
         </div>
       </div>
     )}

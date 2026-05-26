@@ -1,5 +1,7 @@
 """Schemas for PickTask (enterprise pick task). Backward-compatible shape for UI."""
 
+from datetime import date
+
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
@@ -12,6 +14,8 @@ class PickRead(BaseModel):
     product_id: int
     location_id: int
     quantity: float
+    batch_number: str = ""
+    expiry_date: Optional[date] = None
     cart_id: Optional[int] = None
     status: str  # waiting | picking | picked
     inventory_unit_id: Optional[int] = None  # legacy; not used in enterprise model

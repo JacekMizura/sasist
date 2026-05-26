@@ -9,18 +9,45 @@ from ..models.tenant import Tenant
 from ..models.tenant_warehouse import TenantWarehouse
 from ..models.product import Product
 from ..models.location import Location
+from ..models.inventory import Inventory
 from .warehouse_service import WarehouseService
 from .graph_location_service import assign_locations_to_graph_nodes
 from ..models.label_template import SavedLabelTemplate
-from ..storage_types import normalize_storage_type, is_pickable
+from ..storage_types import is_pickable, layout_bin_storage_type, normalize_storage_type
 from .barcode_generation import location_barcode_unique
+from .esp_scan_codes import assign_bin_scan_code
+from .label_pdf_generation_log import log_label_pdf_stage
 from .label_render_service import render_label_template
+from .location_label_filters import apply_label_filters
 
 logger = logging.getLogger(__name__)
 RACK_IDENTITY_SAVE_ENABLED = True
 BIN_IDENTITY_SAVE_ENABLED = True
 # SQLite bind limit (~999); batch IN (...) for Location.location_uuid lookups.
 _LOCATION_UUID_IN_BATCH = 500
+
+
+def _validate_unique_rack_names_in_payload(rack_payloads: list) -> None:
+    """Reject duplicate rack names in one layout save (case-insensitive, trimmed)."""
+    if not rack_payloads:
+        return
+    seen: set[str] = set()
+    for r in rack_payloads:
+        if not isinstance(r, dict):
+            continue
+        raw = r.get("name")
+        if raw is None:
+            continue
+        n = str(raw).strip()
+        if not n:
+            continue
+        key = n.casefold()
+        if key in seen:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regał o nazwie '{n}' już istnieje",
+            )
+        seen.add(key)
 
 
 def _parse_assigned_locations_cleanup(raw) -> list:
@@ -111,8 +138,51 @@ def _int_or_none(value) -> int | None:
 
 
 def _bin_label(aisle_letter: str, rack_index: int, level: int, segment: int) -> str:
-    """Canonical location code without leading zeros, e.g. A1-1-3."""
-    return f"{aisle_letter}{rack_index}-{level + 1}-{segment + 1}"
+    """Visible location code: {rack}-{column}-{level}, e.g. A2-A-1."""
+    rack = f"{aisle_letter}{rack_index}"
+    seg = max(0, int(segment))
+    col = ""
+    while True:
+        col = chr(65 + (seg % 26)) + col
+        seg = (seg // 26) - 1
+        if seg < 0:
+            break
+    return f"{rack}-{col}-{int(level) + 1}"
+
+
+def _validate_internal_structure_widths(internal_structure_raw, rack_width_cm: float) -> None:
+    if not isinstance(internal_structure_raw, dict):
+        return
+    levels = internal_structure_raw.get("levels")
+    if not isinstance(levels, list):
+        return
+    for idx, lev in enumerate(levels):
+        if not isinstance(lev, dict):
+            continue
+        locs = lev.get("locations")
+        if not isinstance(locs, list):
+            continue
+        total = 0.0
+        has_any = False
+        for loc in locs:
+            if not isinstance(loc, dict):
+                continue
+            w = loc.get("width_cm")
+            if w is None:
+                continue
+            try:
+                wf = float(w)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"Invalid slot width on level {idx + 1}")
+            if wf < 0:
+                raise HTTPException(status_code=400, detail=f"Invalid negative slot width on level {idx + 1}")
+            total += wf
+            has_any = True
+        if has_any and total > float(rack_width_cm) + 1e-6:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sum of slot widths exceeds rack width on level {idx + 1} ({total:.2f} > {float(rack_width_cm):.2f})",
+            )
 
 
 def _bin_volume_dm3(length_cm: float, width_cm: float, height_cm: float, levels: int, bins_per_level: int) -> float:
@@ -192,6 +262,14 @@ def _bin_center_and_dimensions_cm(rack, level_index: int, segment_index: int, in
         round(center_x, 2), round(center_y, 2), round(z_cm, 2),
         round(width_cm, 2), round(depth_cm, 2), round(level_height_cm, 2),
     )
+
+
+def _bin_dimensions_cm(rack, level_index: int, segment_index: int, internal_structure: dict) -> tuple[float, float, float]:
+    """Return (width_cm, depth_cm, height_cm) for a bin slot."""
+    _, _, _, width_cm, depth_cm, height_cm = _bin_center_and_dimensions_cm(
+        rack, level_index, segment_index, internal_structure
+    )
+    return width_cm, depth_cm, height_cm
 
 
 class WarehouseLayoutService:
@@ -302,6 +380,7 @@ class WarehouseLayoutService:
         rack.length_cm = r_data.get("length_cm", 100)
         rack.width_cm = r_data.get("width_cm", 80)
         rack.height_cm = r_data.get("height_cm", 200)
+        _validate_internal_structure_widths(internal_structure_raw, float(rack.width_cm or 0))
         rack.aisle_letter = r_data.get("aisle_letter", "A")
         rack.rack_index = r_data.get("rack_index", idx + 1)
         rack.internal_structure = json.dumps(internal_structure_raw) if internal_structure_raw is not None else None
@@ -335,7 +414,7 @@ class WarehouseLayoutService:
                 seg = int(bin_data.get("segment_index", 0))
                 bin_vol = float(bin_data.get("volume_dm3", vol_per_bin))
                 bin_load = float(bin_data.get("current_load_dm3", bin_data.get("used_volume_dm3", 0)))
-                storage_type = normalize_storage_type(bin_data.get("storage_type"))
+                storage_type = layout_bin_storage_type(bin_data.get("storage_type"))
                 b = Bin(
                     id=bin_data.get("id") if isinstance(bin_data.get("id"), int) else None,
                     rack_id=rack.id,
@@ -362,13 +441,14 @@ class WarehouseLayoutService:
                         segment_index=seg,
                         volume_dm3=round(vol_per_bin, 2),
                         current_load_dm3=0,
-                        storage_type=normalize_storage_type(None),
+                        storage_type="primary",
                     )
                     self.db.add(b)
                     bin_rows.append((b, lev, seg))
         self.db.flush()
         for b, lev, seg in bin_rows:
             b.barcode = location_barcode_unique(rack.id, lev, seg)
+            assign_bin_scan_code(b)
             self.db.refresh(b)
         return bin_rows
 
@@ -425,7 +505,7 @@ class WarehouseLayoutService:
         label = bin_data.get("label") or _bin_label(rack.aisle_letter, rack.rack_index, lev, seg)
         bin_vol = float(bin_data.get("volume_dm3", vol_per_bin))
         bin_load = float(bin_data.get("current_load_dm3", bin_data.get("used_volume_dm3", 0)))
-        storage_type = normalize_storage_type(bin_data.get("storage_type"))
+        storage_type = layout_bin_storage_type(bin_data.get("storage_type"))
 
         bin_row.rack_id = rack.id
         bin_row.is_active = True
@@ -648,7 +728,33 @@ class WarehouseLayoutService:
             for bin_row in existing_bins
             if (loc_uuid := _normalize_uuid(getattr(bin_row, "location_uuid", None))) is not None
         }
+        # Positional identity fallback to keep UUID stable across payloads that omit/rebuild bin UUIDs.
+        existing_bins_by_rack_position: dict[tuple[int, int, int], Bin] = {}
+        for bin_row in existing_bins:
+            if bin_row.rack_id is None:
+                continue
+            key = (int(bin_row.rack_id), int(bin_row.level_index), int(bin_row.segment_index))
+            prev = existing_bins_by_rack_position.get(key)
+            # Prefer active row for the same physical position.
+            if prev is None or (not getattr(prev, "is_active", True) and getattr(bin_row, "is_active", True)):
+                existing_bins_by_rack_position[key] = bin_row
         payload_racks = data.get("racks", [])
+        incoming_payload_uuids: set[str] = set()
+        for r in payload_racks:
+            if isinstance(r, dict):
+                u = _normalize_uuid(r.get("uuid"))
+                if u:
+                    incoming_payload_uuids.add(u)
+        # Deactivate removed racks before inserts/updates so we never have two active rows with the
+        # same (layout_id, name); also allows reusing a name after replacement (unique index is active-only).
+        for rack in existing_racks:
+            ru = _normalize_uuid(getattr(rack, "uuid", None))
+            if ru is None or ru in incoming_payload_uuids:
+                continue
+            rack.is_active = False
+            self.db.add(rack)
+        self.db.flush()
+
         payload_uuids: set[str] = set()
         payload_bin_uuids: set[str] = set()
 
@@ -717,11 +823,31 @@ class WarehouseLayoutService:
                         bin_data.get("label"),
                     )
                     try:
+                        lev = int(bin_data.get("level_index", 0))
+                        seg = int(bin_data.get("segment_index", 0))
+                        position_key = (int(rack.id), lev, seg)
                         incoming_loc_uuid = _normalize_uuid(bin_data.get("location_uuid"))
                         if incoming_loc_uuid is not None and incoming_loc_uuid in payload_bin_uuids:
                             raise ValueError(f"Duplicate bin location_uuid in payload: {incoming_loc_uuid}")
 
-                        bin_row = existing_bins_by_location_uuid.get(incoming_loc_uuid) if incoming_loc_uuid is not None else None
+                        positional_row = existing_bins_by_rack_position.get(position_key)
+                        if positional_row is not None:
+                            stable_uuid = _normalize_uuid(getattr(positional_row, "location_uuid", None))
+                            if stable_uuid and incoming_loc_uuid and stable_uuid != incoming_loc_uuid:
+                                logger.warning(
+                                    "Bin UUID changed in payload for same position; preserving existing UUID. "
+                                    "rack_uuid=%s rack_id=%s level_index=%s segment_index=%s incoming=%s existing=%s",
+                                    rack_uuid,
+                                    rack.id,
+                                    lev,
+                                    seg,
+                                    incoming_loc_uuid,
+                                    stable_uuid,
+                                )
+                            # Enforce positional stability: same rack/level/segment keeps same Bin row/UUID.
+                            bin_row = positional_row
+                        else:
+                            bin_row = existing_bins_by_location_uuid.get(incoming_loc_uuid) if incoming_loc_uuid is not None else None
                         if bin_row is None:
                             bin_row = Bin(
                                 rack_id=rack.id,
@@ -735,8 +861,17 @@ class WarehouseLayoutService:
                             raise ValueError("Bin label missing before flush")
                         self.db.add(bin_row)
                         self.db.flush()
-                        existing_bins_by_location_uuid[_normalize_uuid(bin_row.location_uuid)] = bin_row
-                        payload_bin_uuids.add(_normalize_uuid(bin_row.location_uuid))
+                        if not (getattr(bin_row, "barcode", None) or "").strip():
+                            bin_row.barcode = location_barcode_unique(
+                                bin_row.rack_id, int(bin_row.level_index), int(bin_row.segment_index)
+                            )
+                        assign_bin_scan_code(bin_row)
+                        final_uuid = _normalize_uuid(bin_row.location_uuid)
+                        if final_uuid is None:
+                            raise ValueError("Bin location_uuid missing after save for positional identity path")
+                        existing_bins_by_location_uuid[final_uuid] = bin_row
+                        existing_bins_by_rack_position[position_key] = bin_row
+                        payload_bin_uuids.add(final_uuid)
                         synced_bin_rows.append((bin_row, bin_row.level_index, bin_row.segment_index))
                     except Exception:
                         logger.exception(
@@ -753,20 +888,44 @@ class WarehouseLayoutService:
                 logger.exception("Rack save failed (identity path). Full rack payload: %s", r_data)
                 raise
 
-        for rack in existing_racks:
-            rack_uuid = _normalize_uuid(getattr(rack, "uuid", None))
-            if rack_uuid is None or rack_uuid in payload_uuids:
-                continue
-            rack.is_active = False
-            self.db.add(rack)
-
         if BIN_IDENTITY_SAVE_ENABLED:
+            removed_bin_rows: list[tuple[Bin, str]] = []
             for bin_row in existing_bins:
                 loc_uuid = _normalize_uuid(getattr(bin_row, "location_uuid", None))
                 if loc_uuid is None or loc_uuid in payload_bin_uuids:
                     continue
+                removed_bin_rows.append((bin_row, loc_uuid))
+
+            inventory_ref_uuids: set[str] = set()
+            if removed_bin_rows:
+                removed_uuids = [u for _b, u in removed_bin_rows]
+                inventory_ref_rows = (
+                    self.db.query(Inventory.location_uuid)
+                    .filter(
+                        Inventory.warehouse_id == warehouse_id,
+                        Inventory.location_uuid.in_(removed_uuids),
+                    )
+                    .distinct()
+                    .all()
+                )
+                inventory_ref_uuids = {
+                    uu
+                    for uu in (_normalize_uuid(getattr(r, "location_uuid", None)) for r in inventory_ref_rows)
+                    if uu is not None
+                }
+
+            for bin_row, loc_uuid in removed_bin_rows:
                 bin_row.is_active = False
                 self.db.add(bin_row)
+                if loc_uuid in inventory_ref_uuids:
+                    logger.warning(
+                        "Removed bin has inventory references; preserving Location active state. "
+                        "location_uuid=%s bin_id=%s rack_id=%s",
+                        loc_uuid,
+                        getattr(bin_row, "id", None),
+                        getattr(bin_row, "rack_id", None),
+                    )
+                    continue
                 self.db.query(Location).execution_options(include_inactive=True).filter(
                     Location.warehouse_id == warehouse_id,
                     Location.location_uuid == loc_uuid,
@@ -974,32 +1133,39 @@ class WarehouseLayoutService:
         for r in (layout.racks or []):
             if not bool(getattr(r, "is_active", True)):
                 continue
-            bins_out = [
-                {
-                    "id": b.id,
-                    "location_uuid": getattr(b, "location_uuid", None),
-                    "label": b.label,
-                    "barcode_data": getattr(b, "barcode", None) or b.label,
-                    "level_index": b.level_index,
-                    "segment_index": b.segment_index,
-                    "volume_dm3": round(b.volume_dm3, 2),
-                    "current_load_dm3": round(b.current_load_dm3, 2),
-                    "storage_type": normalize_storage_type(getattr(b, "storage_type", None)),
-                }
-                for b in sorted(
-                    [bin_row for bin_row in (r.bins or []) if bool(getattr(bin_row, "is_active", True))],
-                    key=lambda x: (x.level_index, x.segment_index),
-                )
-            ]
-            active_bins = [bin_row for bin_row in (r.bins or []) if bool(getattr(bin_row, "is_active", True))]
-            total_vol = sum(b.volume_dm3 for b in active_bins)
-            used_vol = sum(b.current_load_dm3 for b in active_bins)
             internal_structure = None
             if r.internal_structure:
                 try:
                     internal_structure = json.loads(r.internal_structure)
                 except (json.JSONDecodeError, TypeError):
-                    pass
+                    internal_structure = None
+            bins_out = []
+            for b in sorted(
+                [bin_row for bin_row in (r.bins or []) if bool(getattr(bin_row, "is_active", True))],
+                key=lambda x: (x.level_index, x.segment_index),
+            ):
+                width_cm, depth_cm, height_cm = _bin_dimensions_cm(
+                    r, b.level_index, b.segment_index, internal_structure
+                )
+                bins_out.append(
+                    {
+                        "id": b.id,
+                        "location_uuid": getattr(b, "location_uuid", None),
+                        "label": b.label,
+                        "barcode_data": getattr(b, "barcode", None) or b.label,
+                        "level_index": b.level_index,
+                        "segment_index": b.segment_index,
+                        "volume_dm3": round(b.volume_dm3, 2),
+                        "current_load_dm3": round(b.current_load_dm3, 2),
+                        "width_cm": width_cm,
+                        "depth_cm": depth_cm,
+                        "height_cm": height_cm,
+                        "storage_type": normalize_storage_type(getattr(b, "storage_type", None)),
+                    }
+                )
+            active_bins = [bin_row for bin_row in (r.bins or []) if bool(getattr(bin_row, "is_active", True))]
+            total_vol = sum(b.volume_dm3 for b in active_bins)
+            used_vol = sum(b.current_load_dm3 for b in active_bins)
             racks_out.append({
                 "id": r.id,
                 "uuid": getattr(r, "uuid", None),
@@ -1080,7 +1246,7 @@ class WarehouseLayoutService:
             for bin_data in rack.get("bins") or []:
                 lev = int(bin_data.get("level_index", 0))
                 seg = int(bin_data.get("segment_index", 0))
-                location_name = bin_data.get("label") or _bin_label(aisle, r_idx, lev, seg)
+                location_name = _bin_label(aisle, r_idx, lev, seg)
                 if location_name in seen:
                     continue
                 seen.add(location_name)
@@ -1120,14 +1286,26 @@ class WarehouseLayoutService:
                 })
         return records
 
-    def get_location_labels_pdf(self, tenant_id: int, warehouse_id: int, template_id: int | None = None) -> bytes:
+    def get_location_labels_pdf(
+        self,
+        tenant_id: int,
+        warehouse_id: int,
+        template_id: int | None = None,
+        exclude_floors: list[str] | None = None,
+    ) -> bytes:
         """Generate location labels PDF via template system. Uses template_id if provided, else default location template."""
-        records = self.get_location_label_records(tenant_id, warehouse_id)
+        raw_records = self.get_location_label_records(tenant_id, warehouse_id)
+        records = apply_label_filters(raw_records, exclude_floors)
         if not records:
-            logger.error("Location labels: no location records for tenant_id=%s warehouse_id=%s", tenant_id, warehouse_id)
+            if not raw_records:
+                logger.error("Location labels: no location records for tenant_id=%s warehouse_id=%s", tenant_id, warehouse_id)
+                raise HTTPException(
+                    status_code=400,
+                    detail="No locations in layout. Load a warehouse layout with racks and bins first.",
+                )
             raise HTTPException(
                 status_code=400,
-                detail="No locations in layout. Load a warehouse layout with racks and bins first.",
+                detail="All locations were excluded by exclude_floors. Remove some floor exclusions.",
             )
         if template_id is None:
             tenant = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
@@ -1149,6 +1327,12 @@ class WarehouseLayoutService:
                         detail="No location label template found. Create and save a template with type 'Location' in the label designer.",
                     )
                 template_id = row.id
+        log_label_pdf_stage(
+            source="warehouse_layout_service.get_location_labels_pdf",
+            template_id=int(template_id) if template_id is not None else None,
+            template_json_present=None,
+            detail=f"warehouse_id={warehouse_id} tenant_id={tenant_id} record_count={len(records)} -> render_label_template",
+        )
         try:
             return render_label_template(self.db, template_id, records, tenant_id)
         except ValueError as e:
@@ -1293,6 +1477,8 @@ class WarehouseLayoutService:
             warehouse_id = layout.warehouse_id
             rack_payloads = data.get("racks", [])
             skip_rack_updates = self._has_incomplete_rack_payload(rack_payloads)
+            if not skip_rack_updates:
+                _validate_unique_rack_names_in_payload(rack_payloads)
             if skip_rack_updates:
                 logger.warning("Skipping all rack persistence for warehouse_id=%s due to incomplete rack payload", warehouse_id)
             elif RACK_IDENTITY_SAVE_ENABLED:
@@ -1318,6 +1504,9 @@ class WarehouseLayoutService:
                 logger.exception("Graph rebuild after layout save failed (warehouse_id=%s)", warehouse_id)
             assign_locations_to_graph_nodes(self.db, warehouse_id)
             return self.get_layout(tenant_id, warehouse_id)
+        except HTTPException:
+            self.db.rollback()
+            raise
         except Exception:
             logger.exception(
                 "save_layout failed (tenant_id=%s, warehouse_id=%s). Payload summary: racks=%s aisles=%s visual_elements=%s row_containers=%s. Full payload: %s",

@@ -53,12 +53,14 @@ export function VisualLayer({
           if (ve.type !== "cart") return null;
           const w = cellToPx(ve.width, cellPx) - 2;
           const h = cellToPx(ve.height, cellPx) - 2;
-          const scale = Math.min(w, h) / 22;
+          const iconSize = 22;
           const content = (
             <>
               <rect x={cellToPx(ve.x, cellPx) + 1} y={cellToPx(ve.y, cellPx) + 1} width={w} height={h} fill={fill} stroke={strokeColor} strokeWidth={isSelected ? 2 : 0.5} rx={2} />
-              <g transform={`translate(${cx},${cy}) scale(${scale}) translate(-12,-12)`} style={{ transformOrigin: "12px 12px" }}>
-                <path fill="none" stroke="#1e293b" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" d="M2 10h2l1-4h6l1 4h2M2 10v6a1 1 0 001 1h14a1 1 0 001-1v-6M6 17a1 1 0 11-2 0 1 1 0 012 0zM18 17a1 1 0 11-2 0 1 1 0 012 0z" />
+              <g transform={`translate(${cx - iconSize / 2},${cy - iconSize / 2})`}>
+                <svg width={iconSize} height={iconSize} viewBox="0 0 24 24">
+                  <path fill="none" stroke="#1e293b" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" d="M2 10h2l1-4h6l1 4h2M2 10v6a1 1 0 001 1h14a1 1 0 001-1v-6M6 17a1 1 0 11-2 0 1 1 0 012 0zM18 17a1 1 0 11-2 0 1 1 0 012 0z" />
+                </svg>
               </g>
             </>
           );

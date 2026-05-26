@@ -43,7 +43,7 @@ export default function SystemDbSize() {
   return (
     <div className="p-6">
       <h2 className="text-lg font-semibold text-slate-800 mb-4">Rozmiar bazy danych</h2>
-      <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
+      <div className="grid w-full gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-medium uppercase text-slate-400">Rozmiar bazy</p>
           <p className="mt-1 text-2xl font-bold text-slate-800">

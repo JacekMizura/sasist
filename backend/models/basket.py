@@ -27,4 +27,4 @@ class Basket(Base):
     # FK do Cart
     cart_id = Column(Integer, ForeignKey("carts.id"))
 
-    cart = relationship("Cart", back_populates="baskets")
+    cart = relationship("Cart", back_populates="legacy_baskets")

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { layoutService } from "../../services/layoutService";
-
 const DEFAULT_TENANT_ID = 1;
 
 /** First segment before the dash. "A3-2-1" → "A3" */
@@ -45,10 +45,11 @@ type Props = {
 };
 
 export function ProductInWarehouseModal({ product, onClose }: Props) {
+  const { warehouse: activeWarehouse, warehouses, showWarehouseSelector } = useWarehouse();
+  const selectedWarehouseId = activeWarehouse?.id ?? null;
+
   const [layout, setLayout] = useState<Layout | null>(null);
   const [layoutLoading, setLayoutLoading] = useState(false);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
-  const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
 
   const locationsWithWarehouse = useMemo(
     () => (product?.locations ?? []).filter((loc) => loc.warehouse_id != null) as (ProductLocation & { warehouse_id: number })[],
@@ -58,24 +59,6 @@ export function ProductInWarehouseModal({ product, onClose }: Props) {
     () => Array.from(new Set(locationsWithWarehouse.map((loc) => loc.warehouse_id))),
     [locationsWithWarehouse]
   );
-
-  useEffect(() => {
-    if (warehouseIds.length > 0 && selectedWarehouseId == null) {
-      setSelectedWarehouseId(warehouseIds[0]);
-    }
-  }, [warehouseIds, selectedWarehouseId]);
-
-  useEffect(() => {
-    if (product != null && warehouseIds.length === 0 && warehouses.length > 0 && selectedWarehouseId == null) {
-      setSelectedWarehouseId(warehouses[0].id);
-    }
-  }, [product, warehouseIds.length, warehouses, selectedWarehouseId]);
-
-  useEffect(() => {
-    import("../../api/axios").then(({ default: api }) => {
-      api.get<{ id: number; name: string }[]>("/warehouses/").then((r) => setWarehouses(Array.isArray(r.data) ? r.data : [])).catch(() => {});
-    });
-  }, []);
 
   useEffect(() => {
     if (selectedWarehouseId == null) {
@@ -130,11 +113,10 @@ export function ProductInWarehouseModal({ product, onClose }: Props) {
 
   const hasLocations = product.locations && product.locations.length > 0;
   const hasWarehouseInfo = warehouseIds.length > 0;
-  const warehouseOptions = warehouseIds.length > 0 ? warehouseIds : warehouses.map((w) => w.id);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="mx-4 flex max-h-[90vh] w-full min-w-0 flex-col rounded-xl bg-white shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-800">Show product in warehouse</h3>
           <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-700 p-1">×</button>
@@ -142,29 +124,16 @@ export function ProductInWarehouseModal({ product, onClose }: Props) {
         <div className="p-6 overflow-auto flex-1">
           {!hasLocations ? (
             <p className="text-slate-500">Brak danych o lokalizacjach dla tego produktu.</p>
-          ) : !hasWarehouseInfo && warehouses.length === 0 ? (
-            <p className="text-slate-500">Ładowanie listy magazynów…</p>
           ) : null}
 
           {hasLocations && (
             <>
-              <div className="mb-4 flex items-center gap-3">
-                <span className="text-sm font-medium text-slate-700">Magazyn:</span>
-                <select
-                  value={selectedWarehouseId ?? ""}
-                  onChange={(e) => setSelectedWarehouseId(e.target.value ? Number(e.target.value) : null)}
-                  className="rounded border border-slate-300 px-3 py-1.5 text-sm"
-                >
-                  {warehouseOptions.map((wid) => {
-                    const wh = warehouses.find((w) => w.id === wid);
-                    return (
-                      <option key={wid} value={wid}>
-                        {wh?.name ?? `Magazyn ${wid}`}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
+              {showWarehouseSelector ? (
+                <p className="mb-4 text-sm text-slate-600">
+                  Magazyn: <span className="font-semibold text-slate-800">{activeWarehouse?.name ?? "—"}</span>
+                  <span className="text-slate-500"> — wybór w pasku u góry aplikacji</span>
+                </p>
+              ) : null}
 
               {layoutLoading && <p className="text-slate-500 text-sm">Ładowanie layoutu…</p>}
               {!layoutLoading && layout && layout.racks.length > 0 && (

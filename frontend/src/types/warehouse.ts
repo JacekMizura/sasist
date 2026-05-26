@@ -4,11 +4,19 @@
 
 export const GRID_UNIT_CM = 10;
 
-export type StorageType = "primary" | "reserve" | "store" | "buffer" | "damaged";
+/** Bin / slot storage class (layout + inventory). `pick` = sklepowa / PICK; legacy API may send `store`. */
+export type StorageType = "primary" | "pick" | "buffer" | "reserve" | "damaged";
+
+/** After normalization: missing or invalid bin type (never coerced to primary). */
+export type StorageTypeUnknown = "unknown";
+
+export type NormalizedStorageType = StorageType | StorageTypeUnknown;
 export type RackType = "warehouse" | "store";
 
 export type BinState = {
   id?: number;
+  /** Soft-delete flag from backend; undefined means active for legacy payloads. */
+  is_active?: boolean;
   label: string;
   level_index: number;
   segment_index: number;
@@ -27,8 +35,8 @@ export type BinState = {
   locationUUID?: string;
   /** Barcode string for label printing */
   barcode_data?: string;
-  /** Storage type for the slot. Unknown values should be normalized to primary. */
-  storage_type?: StorageType;
+  /** Storage type for the slot; missing/invalid → `unknown` in UI (neutral), not primary. */
+  storage_type?: NormalizedStorageType;
 };
 
 /** One assigned warehouse location for a product: position UUID and quantity at that spot. */
@@ -38,7 +46,7 @@ export type AssignedLocation = {
   /** Human-readable address (e.g. A1-4-1). Optional, set when saving from location picker. */
   locationAddress?: string;
   /** Storage type for the assigned position. Optional, set when saving from picker. */
-  storageType?: StorageType;
+  storageType?: NormalizedStorageType;
 };
 
 /** Product in warehouse inventory (for Magazyn view); location_id matches bin.label or bin.location_id */
@@ -47,6 +55,7 @@ export type WarehouseProduct = {
   name: string;
   sku: string;
   ean: string;
+  /** System/expected quantity. Physical truth comes from inventory rows (location_uuid + quantity). */
   quantity: number;
   /** Unit volume in dm³ (total in bin = quantity * volume_dm3) */
   volume_dm3: number;
@@ -75,6 +84,8 @@ export type WarehouseProduct = {
   max_stack_weight?: number | null;
   /** Stacking: stackable (default) | no_stack. When no_stack, countZ = 1. */
   stack_behavior?: "stackable" | "no_stack";
+  /** Purchase price per unit (PLN); used for warehouse value in reports (Σ qty × price at locations). */
+  purchase_price?: number;
 };
 
 export interface InternalLocation {
@@ -121,8 +132,8 @@ export type RackPosition = {
   max_depth_cm?: number;
   max_width_cm?: number;
   max_height_cm?: number;
-  /** Storage type for the position. Unknown values should be normalized to primary. */
-  storage_type?: StorageType;
+  /** Storage type for the position. */
+  storage_type?: NormalizedStorageType;
 };
 
 /** One level of a rack, containing multiple positions. */
@@ -251,8 +262,14 @@ export type RowContainer = {
   rowPrefix?: string;
   /** Horizontal: slots stack left-to-right (x increases). Vertical: slots stack top-to-bottom (y increases). */
   orientation?: "horizontal" | "vertical";
-  /** Rack numbering and bin column letters: LTR = first slot → 1 / A…; RTL = reversed. Default LTR. */
+  /** Rack index numbering along the row (e.g. A1 from left vs right). Default LTR. */
+  rack_direction?: "LTR" | "RTL";
+  /** Bin / location column numbering within the rack. Default LTR. */
+  bin_direction?: "LTR" | "RTL";
+  /** @deprecated Use `rack_direction` and `bin_direction`. When present and new fields are absent, both resolve from this. */
   direction?: "LTR" | "RTL";
+  /** Preset id (e.g. pallet) or custom template id when the row was created from a catalog template. */
+  templateId?: string;
   slots: EmptyRowSlot[];
 };
 
@@ -348,7 +365,7 @@ export type CustomRackTemplate = {
   /** Bin naming: numeric (1,2,3) or alpha (A,B,C). */
   binNamingType?: "numeric" | "alpha";
   /** Per-cell storage type map keyed by "level_index-segment_index". */
-  bin_type_map?: Record<string, StorageType>;
+  bin_type_map?: Record<string, NormalizedStorageType>;
   /** Legacy reserve-only storage for backward compatibility when reading old templates. */
   reserve_bin_keys?: string[];
 

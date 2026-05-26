@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { log } from "../utils/logger";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
@@ -17,7 +18,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
     api
       .get("/tenants/1/warehouses")
       .then((res) => setWarehouses(res.data))
-      .catch(() => console.log("Błąd pobierania magazynów"));
+      .catch(() => log("Błąd pobierania magazynów"));
   }, []);
 
   const handleChange = (id: number) => {
@@ -39,9 +40,6 @@ export default function MainLayout({ children }: { children: ReactNode }) {
           <nav className="flex flex-col gap-4 text-sm">
             <Link to="/dashboard" className="hover:text-blue-600">
               Dashboard
-            </Link>
-            <Link to="/import" className="hover:text-blue-600">
-              Import
             </Link>
             <Link to="/products" className="hover:text-blue-600">
               Produkty
@@ -76,8 +74,8 @@ export default function MainLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto p-10">
+      {/* CONTENT — spacing: PageContainer / page routes */}
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-slate-100">
         {children}
       </div>
     </div>

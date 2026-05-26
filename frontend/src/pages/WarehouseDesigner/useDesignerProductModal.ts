@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import api from "../../api/axios";
+import { alertFailedRequest } from "../../utils/apiError";
 import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
 import type { EditProductModalProps } from "../../components/warehouse/EditProductModal";
 import { TENANT_ID, safeQuantity, safeVolumeDm3 } from "./DesignerRackPlacement";
@@ -127,12 +128,16 @@ export function useDesignerProductModal(params: UseDesignerProductModalParams) {
               symbol: next.sku ?? "",
               assigned_locations: next.assignedLocations ?? [],
               tenant_id: TENANT_ID,
-            }, { params: { tenant_id: TENANT_ID } }).catch(() => {});
+            }, { params: { tenant_id: TENANT_ID } }).catch((err: unknown) => {
+              alertFailedRequest("useDesignerProductModal", err, "Failed to update product");
+            });
           }
         } else {
           setProducts((prev) => [...prev, { ...next, id: `p${Date.now()}` }]);
         }
-        setEditingProductId(null);
+        setTimeout(() => {
+          setEditingProductId(null);
+        }, 0);
       },
       onClose: () => setEditingProductId(null),
     };

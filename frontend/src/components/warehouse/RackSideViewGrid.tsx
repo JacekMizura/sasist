@@ -1,6 +1,14 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import type { RackState, BinState, WarehouseProduct, LayoutState } from "../../types/warehouse";
-import { getLevelConfig, binUsedVolumeDm3, binVolumeDm3, getBinDisplayLabel, type PackingLayoutResult } from "./warehouseUtils";
+import {
+  getLevelConfig,
+  binUsedVolumeDm3,
+  binVolumeDm3,
+  getDisplayLocationLabel,
+  isBinDirectionRtl,
+  segmentIndexForVisualSlot,
+  type PackingLayoutResult,
+} from "./warehouseUtils";
 import { getStorageTypeStyle, getStorageTypeLabel, normalizeStorageType } from "../../utils/storageTypes";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
@@ -89,7 +97,7 @@ export function RackSideViewGrid({
   hoveredLocationUUID?: string | null;
   /** Bin/slot address badges on beams (A1, B2, …); same toggle as map „Pokaż etykiety”. */
   showLabels?: boolean;
-  /** When set, beam/bin labels respect row `direction` (RTL mirrors columns). */
+  /** When set, beam/bin labels use `getDisplayLocationLabel` (`rack_direction` + `bin_direction`). */
   layout?: LayoutState | null;
 }) {
   const hoveredUuidNorm = (hoveredLocationUUID ?? "").trim();
@@ -113,6 +121,9 @@ export function RackSideViewGrid({
 
   const levelConfig = useMemo(() => getLevelConfig(rack), [rack]);
   const L = levelConfig.length;
+
+  /** Visual order of slots (left→right): RTL mirrors segment_index without changing data. */
+  const binDirectionRtl = useMemo(() => isBinDirectionRtl(layout, rack), [layout, rack]);
 
   const margin = 8;
   const padding = 8;
@@ -197,7 +208,7 @@ export function RackSideViewGrid({
                 const b = getBinAt(rack, lev, seg);
                 if (!b) return `L${lev + 1}-${seg + 1}`;
                 const raw = b.label ?? b.location_id ?? `L${lev + 1}-${seg + 1}`;
-                return layout ? getBinDisplayLabel(rack, b, layout) : raw;
+                return layout ? getDisplayLocationLabel(rack, b, layout) : raw;
               });
               const weightText = hasLevelMaxLoad
                 ? `${Math.round(loadKg)} / ${maxKg} kg${exceeded ? " ⚠" : ""}`
@@ -222,13 +233,15 @@ export function RackSideViewGrid({
                   />
                   {showLabels && (
                     <g aria-label="Beam labels">
-                      {addresses.map((addr, seg) => {
+                      {Array.from({ length: locs }, (_, vis) => {
+                        const seg = segmentIndexForVisualSlot(vis, locs, binDirectionRtl);
+                        const addr = addresses[seg] ?? "";
                         const displayAddr = String(addr).length > 12 ? String(addr).slice(0, 10) + "…" : String(addr);
-                        const slotCenterX = ox + cellWLev * (seg + 0.5);
+                        const slotCenterX = ox + cellWLev * (vis + 0.5);
                         const rectX = slotCenterX - labelW / 2;
                         const rectY = beamCenterY - labelH / 2;
                         return (
-                          <g key={seg} filter="url(#rack-beam-badge-shadow)">
+                          <g key={`beam-${lev}-${seg}`} filter="url(#rack-beam-badge-shadow)">
                             <rect
                               x={rectX}
                               y={rectY}
@@ -335,7 +348,8 @@ export function RackSideViewGrid({
               const startOff = (contentH - totalBlock) / 2;
               const barPad = 10;
 
-              return Array.from({ length: locs }, (_, bin) => {
+              return Array.from({ length: locs }, (_, vis) => {
+                const bin = segmentIndexForVisualSlot(vis, locs, binDirectionRtl);
                 const binState = getBinAt(rack, lev, bin);
                 const vol = binState ? binVolumeDm3(binState, rack) : 0;
                 const used = binState ? binUsedVolumeDm3(binState) : 0;
@@ -347,7 +361,7 @@ export function RackSideViewGrid({
                 const isSelected = selectedLocation?.level_index === lev && selectedLocation?.segment_index === bin;
                 const typeHighlightActive = highlightedStorageType != null;
                 const isSameTypeHighlighted = highlightedStorageType === storageType;
-                const x = ox + bin * cellWLev + pad;
+                const x = ox + vis * cellWLev + pad;
                 const y = binRowY + pad;
                 const w = cellWLev - pad * 2;
                 const h = contentH;
@@ -369,10 +383,14 @@ export function RackSideViewGrid({
                 const binLabel =
                   binState != null
                     ? layout
-                      ? getBinDisplayLabel(rack, binState, layout)
+                      ? getDisplayLocationLabel(rack, binState, layout)
                       : (binState.label ?? binState.location_id ?? `L${lev + 1}-${bin + 1}`)
                     : `L${lev + 1}-${bin + 1}`;
-                const binUuidNorm = (binState?.locationUUID ?? "").trim();
+                const binUuidNorm = (
+                  (binState as { locationUUID?: string; location_uuid?: string } | undefined)?.locationUUID ??
+                  (binState as { location_uuid?: string } | undefined)?.location_uuid ??
+                  ""
+                ).trim();
                 const isSidebarLocationHover =
                   hoveredUuidNorm.length > 0 && binUuidNorm.length > 0 && binUuidNorm === hoveredUuidNorm;
                 const usedDm3 = used;

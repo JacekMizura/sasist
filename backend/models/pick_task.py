@@ -5,7 +5,9 @@ Single pick task: order line + location + quantity. status: waiting | picking | 
 Optional cart_id for assignment to a cart.
 """
 
-from sqlalchemy import Column, Integer, Float, ForeignKey, String
+from datetime import date
+
+from sqlalchemy import Column, Date, Integer, Float, ForeignKey, String
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -39,6 +41,8 @@ class PickTask(Base, BaseModelMixin):
         index=True,
     )
     quantity = Column(Float, nullable=False)
+    batch_number = Column(String(128), nullable=False, default="")
+    expiry_date = Column(Date, nullable=False, default=date(9999, 12, 31))
     cart_id = Column(
         Integer,
         ForeignKey("carts.id", ondelete="SET NULL"),

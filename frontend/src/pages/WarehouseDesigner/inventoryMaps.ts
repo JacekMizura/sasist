@@ -1,4 +1,5 @@
 import type { LayoutState } from "../../types/warehouse";
+import { activeBinsForRack } from "../../components/warehouse/warehouseUtils";
 
 export type InventoryRow = {
   id: number;
@@ -40,7 +41,7 @@ export function buildInventoryMaps(inventoryRows: InventoryRow[], layout: Layout
   const locationUuidToRackKey = new Map<string, string>();
   for (const r of layout.racks) {
     const rk = rackKey(r);
-    for (const b of r.bins ?? []) {
+    for (const b of activeBinsForRack(r)) {
       const bu = normalizeInventoryLocationUuid(
         (b as { location_uuid?: string; locationUUID?: string }).location_uuid ?? (b as { locationUUID?: string }).locationUUID
       );

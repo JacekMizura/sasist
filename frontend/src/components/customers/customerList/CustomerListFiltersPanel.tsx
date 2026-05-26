@@ -1,0 +1,211 @@
+import { useEffect, useState, type MutableRefObject } from "react";
+
+import { COUNTRY_OPTIONS } from "../../../constants/countryCodes";
+import {
+  FilterDateRange,
+  FilterField,
+  FilterGrid,
+  FilterPanel,
+  FilterPanelBodyWithActions,
+  FilterToolbar,
+  FilterVisibilityModal,
+  ListFilterEmbeddedShell,
+  filterInputClass,
+  filterSelectClass,
+  useFilterFieldOrder,
+  type FilterFieldCatalogItem,
+} from "../../filters";
+import { listSellasistFilterGridClass4 } from "../../listPage/listSellasistTokens";
+import type { AppliedCustomerListFilters } from "./customerListFilterTypes";
+
+/** Bumped for unified `date_range` field id. */
+const CUSTOMER_LIST_FILTER_STORAGE_KEY = "customers.list.v2";
+
+const CUSTOMER_LIST_FILTER_CATALOG: FilterFieldCatalogItem[] = [
+  { id: "search", label: "Szukaj" },
+  { id: "country", label: "Kraj" },
+  { id: "has_orders", label: "Ma zamówienia" },
+  { id: "has_email", label: "Ma e-mail" },
+  { id: "has_phone", label: "Ma telefon" },
+  { id: "date_range", label: "Data utworzenia" },
+];
+
+const CUSTOMER_LIST_FILTER_IDS = CUSTOMER_LIST_FILTER_CATALOG.map((c) => c.id);
+
+export type CustomerListFiltersPanelProps = {
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  draft: AppliedCustomerListFilters;
+  onChangeDraft: (patch: Partial<AppliedCustomerListFilters>) => void;
+  onApply: () => void;
+  onClear: () => void;
+  /** Jak lista zamówień: pasek filtrów tylko w treści, przełącznik w nagłówku modułu. */
+  filterLayout?: "toolbar" | "embedded";
+  openFilterFieldsRef?: MutableRefObject<(() => void) | null>;
+};
+
+export function CustomerListFiltersPanel({
+  expanded,
+  onToggleExpanded,
+  draft,
+  onChangeDraft,
+  onApply,
+  onClear,
+  filterLayout = "toolbar",
+  openFilterFieldsRef,
+}: CustomerListFiltersPanelProps) {
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const { order: visibleFieldOrder, setOrderFromModal } = useFilterFieldOrder(
+    CUSTOMER_LIST_FILTER_STORAGE_KEY,
+    CUSTOMER_LIST_FILTER_IDS,
+  );
+
+  const embedded = filterLayout === "embedded";
+  if (embedded) void onToggleExpanded;
+
+  useEffect(() => {
+    if (!openFilterFieldsRef) return;
+    openFilterFieldsRef.current = () => setVisibilityOpen(true);
+    return () => {
+      openFilterFieldsRef.current = null;
+    };
+  }, [openFilterFieldsRef]);
+
+  const renderField = (fieldId: string) => {
+    switch (fieldId) {
+      case "search":
+        return (
+          <FilterField key={fieldId} label="Szukaj">
+            <input
+              className={filterInputClass}
+              value={draft.search}
+              onChange={(e) => onChangeDraft({ search: e.target.value })}
+              placeholder="Imię, e-mail, telefon, firma, NIP…"
+            />
+          </FilterField>
+        );
+      case "country":
+        return (
+          <FilterField key={fieldId} label="Kraj">
+            <select
+              className={filterSelectClass}
+              value={draft.countryCode}
+              onChange={(e) => onChangeDraft({ countryCode: e.target.value })}
+            >
+              <option value="">Wszystkie</option>
+              {COUNTRY_OPTIONS.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.flag} {c.name}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+        );
+      case "has_orders":
+        return (
+          <FilterField key={fieldId} label="Ma zamówienia">
+            <select
+              className={filterSelectClass}
+              value={draft.hasOrders}
+              onChange={(e) =>
+                onChangeDraft({ hasOrders: e.target.value as AppliedCustomerListFilters["hasOrders"] })
+              }
+            >
+              <option value="">Dowolnie</option>
+              <option value="yes">Tak</option>
+              <option value="no">Nie</option>
+            </select>
+          </FilterField>
+        );
+      case "has_email":
+        return (
+          <FilterField key={fieldId} label="Ma e-mail">
+            <select
+              className={filterSelectClass}
+              value={draft.hasEmail}
+              onChange={(e) =>
+                onChangeDraft({ hasEmail: e.target.value as AppliedCustomerListFilters["hasEmail"] })
+              }
+            >
+              <option value="">Dowolnie</option>
+              <option value="yes">Tak</option>
+              <option value="no">Nie</option>
+            </select>
+          </FilterField>
+        );
+      case "has_phone":
+        return (
+          <FilterField key={fieldId} label="Ma telefon">
+            <select
+              className={filterSelectClass}
+              value={draft.hasPhone}
+              onChange={(e) =>
+                onChangeDraft({ hasPhone: e.target.value as AppliedCustomerListFilters["hasPhone"] })
+              }
+            >
+              <option value="">Dowolnie</option>
+              <option value="yes">Tak</option>
+              <option value="no">Nie</option>
+            </select>
+          </FilterField>
+        );
+      case "date_range":
+        return (
+          <FilterDateRange
+            key={fieldId}
+            label="Data utworzenia"
+            from={draft.dateFrom}
+            to={draft.dateTo}
+            onFromChange={(v) => onChangeDraft({ dateFrom: v })}
+            onToChange={(v) => onChangeDraft({ dateTo: v })}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const orderedNodes = visibleFieldOrder.map((id) => renderField(id)).filter(Boolean);
+
+  const filterBody = (
+    <FilterPanelBodyWithActions
+      onClear={onClear}
+      onApply={onApply}
+      clearLabel="Wyczyść filtry"
+      applyLabel="Filtruj"
+      footerMobileOnly={!embedded}
+    >
+      <FilterGrid columnsClassName={embedded ? listSellasistFilterGridClass4 : undefined}>{orderedNodes}</FilterGrid>
+    </FilterPanelBodyWithActions>
+  );
+
+  return (
+    <>
+      {embedded ? (
+        <ListFilterEmbeddedShell expanded={expanded}>{filterBody}</ListFilterEmbeddedShell>
+      ) : (
+        <FilterPanel>
+          <FilterToolbar
+            expanded={expanded}
+            onToggleExpanded={onToggleExpanded}
+            onClear={onClear}
+            onApply={onApply}
+            applyLabel="Filtruj"
+            clearLabel="Wyczyść filtry"
+            showFieldPicker
+            onOpenFieldPicker={() => setVisibilityOpen(true)}
+          />
+          {expanded ? filterBody : null}
+        </FilterPanel>
+      )}
+      <FilterVisibilityModal
+        open={visibilityOpen}
+        onClose={() => setVisibilityOpen(false)}
+        title="Widoczne pola — klienci"
+        selectedOrder={visibleFieldOrder}
+        catalog={CUSTOMER_LIST_FILTER_CATALOG}
+        onSave={setOrderFromModal}
+      />
+    </>
+  );
+}

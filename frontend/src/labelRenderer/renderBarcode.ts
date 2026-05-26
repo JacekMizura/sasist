@@ -21,8 +21,22 @@ export async function renderBarcode(item: LayoutItem): Promise<string> {
 
   if (format === "qr" || format === "datamatrix") {
     const QRCode = (await import("qrcode")).default;
-    const dataUrl = await QRCode.toDataURL(value || "SAMPLE", { width: 200, margin: 0 });
-    return `<image href="${dataUrl}" x="0" y="0" width="${widthMm}" height="${heightMm}" preserveAspectRatio="xMidYMid meet"/>`;
+    const qrSvg = await QRCode.toString(value || "SAMPLE", {
+      type: "svg",
+      margin: Math.max(0, Math.round(item.qrMargin ?? 0)),
+      errorCorrectionLevel: item.qrErrorCorrection ?? "M",
+      color: {
+        dark: item.qrDarkColor ?? "#000000",
+        light: item.qrTransparentBg ? "#0000" : item.qrLightColor ?? "#ffffff",
+      },
+    });
+    const inner = qrSvg
+      .replace(/^<svg[^>]*>/i, "")
+      .replace(/<\/svg>\s*$/i, "");
+    const vbMatch = qrSvg.match(/viewBox="([^"]+)"/i);
+    const viewBox = vbMatch?.[1] ?? "0 0 29 29";
+    const preserve = item.qrKeepAspect === false ? "none" : "xMidYMid meet";
+    return `<svg x="0" y="0" width="${widthMm}" height="${heightMm}" viewBox="${viewBox}" preserveAspectRatio="${preserve}">${inner}</svg>`;
   }
 
   if (typeof document === "undefined") return "";
@@ -39,7 +53,7 @@ export async function renderBarcode(item: LayoutItem): Promise<string> {
 
   try {
     JsBarcode(svg, value || "SAMPLE", {
-      format: "CODE128",
+      format: format === "ean13" ? "EAN13" : "CODE128",
       height: Math.max(MIN_BARCODE_HEIGHT_PX, heightMm * PX_PER_MM),
       margin: 0,
       displayValue: false,

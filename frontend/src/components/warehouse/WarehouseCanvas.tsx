@@ -3,8 +3,16 @@ import { MapPin, Package } from "lucide-react";
 import type { LayoutState, RackState, WallElement } from "../../types/warehouse";
 import type { CatalogItem, VisualElementType } from "../../types/warehouse";
 import { GRID_UNIT_CM } from "../../types/warehouse";
-import { cmToCells, getCatalogItemSpec, binVolumeDm3 } from "./warehouseUtils";
+import { layoutCmToCellsX, layoutCmToCellsY, layoutCellsToMetersX, layoutCellsToMetersY } from "../../utils/warehouseGridMetrics";
+import {
+  getCatalogItemSpec,
+  resolveRowContainerBinDirection,
+  resolveRowContainerRackDirection,
+  rowDrawSegmentExtents,
+  rowDrawRackPositionsAlongCursor,
+} from "./warehouseUtils";
 import { RowPreviewOverlay } from "./RowPreviewOverlay";
+import { WAREHOUSE_CANVAS_CELL_PX } from "./renderUtils";
 import { LayoutModeBadge, LayoutMode, LAYOUT_MODE_CURSORS } from "../warehouse-layout";
 import { colors, radius } from "../../layout/designTokens";
 import { RackLayer } from "./WarehouseCanvas/RackLayer";
@@ -17,20 +25,62 @@ import { RouteStopLayer } from "./WarehouseCanvas/RouteStopLayer";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 
-const CELLS_PER_METER = 10;
-const GRID_STRONG_METERS = 5;
+/** Major / strong grid lines in cell counts (grid space only; not meters). */
+const GRID_MAJOR_CELLS = 10;
+const GRID_STRONG_CELLS = 50;
 
-const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 3;
-/** Zoom range for fitToContent only; avoids unnatural 200%+ browser-scale feel. */
-const FIT_MIN_ZOOM = 0.7;
-const FIT_MAX_ZOOM = 1.4;
+/** Ctrl/Cmd + wheel zoom (Figma-like); aligned with `useDesignerCanvas` persistence clamp. */
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 2;
 
 const VIEWPORT_TRANSITION_MS = 200;
 
+/** Row-draw preview: rack starts from mousedown toward cursor (±step); grid-filtered; length from first to last rack. */
+function computeRowDrawGhostPreview(
+  layout: LayoutState,
+  rowDrawStart: { x: number; y: number },
+  rowDrawEnd: { x: number; y: number },
+  rowToolTemplate: CatalogItem | null,
+  defaultRowSlotW: number,
+  defaultRowSlotH: number,
+  rowGapCm: number
+): { positions: { x: number; y: number }[]; rackCount: number; lengthMeters: number } {
+  const gridCols = layout.grid_cols;
+  const gridRows = layout.grid_rows;
+  const { isHorizontal } = rowDrawSegmentExtents(rowDrawStart, rowDrawEnd);
+  const spec = rowToolTemplate ? getCatalogItemSpec(rowToolTemplate) : null;
+  const spanX = spec ? layoutCmToCellsX(layout, spec.width_cm) : defaultRowSlotW;
+  const spanY = spec ? layoutCmToCellsY(layout, spec.depth_cm) : defaultRowSlotH;
+  const gapCells = isHorizontal ? layoutCmToCellsX(layout, rowGapCm) : layoutCmToCellsY(layout, rowGapCm);
+  const orientedW = isHorizontal ? spanX : spanY;
+  const orientedH = isHorizontal ? spanY : spanX;
+  const stepAlong = isHorizontal ? orientedW + gapCells : orientedH + gapCells;
+  const rackWidthCells = isHorizontal ? orientedW : orientedH;
+
+  if (isHorizontal) {
+    const lineY = rowDrawStart.y;
+    let along = rowDrawRackPositionsAlongCursor(rowDrawStart.x, rowDrawEnd.x, stepAlong);
+    along = along.filter((a) => a >= 0 && a + orientedW <= gridCols);
+    const count = along.length;
+    const positions = along.map((x) => ({ x, y: lineY }));
+    const totalCells =
+      count > 0 ? Math.max(...along) - Math.min(...along) + orientedW : 0;
+    return { positions, rackCount: count, lengthMeters: layoutCellsToMetersX(layout, totalCells) };
+  }
+
+  const lineX = rowDrawStart.x;
+  let along = rowDrawRackPositionsAlongCursor(rowDrawStart.y, rowDrawEnd.y, stepAlong);
+  along = along.filter((a) => a >= 0 && a + orientedH <= gridRows);
+  const count = along.length;
+  const positions = along.map((y) => ({ x: lineX, y }));
+  const totalCells =
+    count > 0 ? Math.max(...along) - Math.min(...along) + orientedH : 0;
+  return { positions, rackCount: count, lengthMeters: layoutCellsToMetersY(layout, totalCells) };
+}
+
 export type WarehouseCanvasProps = {
-  /** edit = full designer interactions; read = view-only (no drag/resize/create; click/hover still allowed). */
-  mode?: "edit" | "read";
+  /** edit = full designer interactions; read = view-only; export = clean map for PDF (racks, labels, occupancy only). */
+  mode?: "edit" | "read" | "export";
   layout: LayoutState;
   selectedWarehouseId: number | null;
   loading: boolean;
@@ -80,6 +130,8 @@ export type WarehouseCanvasProps = {
   height: number;
   svgRef: RefObject<SVGSVGElement | null>;
   canvasContainerRef: RefObject<HTMLDivElement | null>;
+  /** When set, points at the map-only wrapper (no toolbar) for PDF raster capture. */
+  mapExportCaptureRef?: RefObject<HTMLDivElement | null>;
   onMouseMove: (e: React.MouseEvent<SVGSVGElement>) => void;
   onMouseDown: (e: React.MouseEvent<SVGSVGElement>) => void;
   onMouseUp: () => void;
@@ -219,6 +271,8 @@ export type WarehouseCanvasProps = {
   rackQuantities?: Map<string, number>;
   /** Magazyn: highlight specific bins (location UUIDs) on the map. */
   highlightedBinUUIDs?: Set<string>;
+  /** Magazyn: primary bin when multiple are highlighted (e.g. product list → map). */
+  focusedBinUUID?: string | null;
   /** Magazyn: single bin highlight from sidebar location row hover (does not affect selection). */
   hoveredLocationUUID?: string | null;
   getRackDisplayId?: (r: RackState) => string;
@@ -269,11 +323,12 @@ function WarehouseCanvasInner({
   minEmptySlotDepthCells,
   snapPosition,
   rectsOverlap,
-  cellPx,
-  width,
-  height,
+  cellPx: _cellPxProp,
+  width: _widthProp,
+  height: _heightProp,
   svgRef,
   canvasContainerRef,
+  mapExportCaptureRef,
   onMouseMove,
   onMouseDown,
   onMouseUp,
@@ -367,6 +422,7 @@ function WarehouseCanvasInner({
   showRoute = true,
   rackQuantities,
   highlightedBinUUIDs,
+  focusedBinUUID = null,
   hoveredLocationUUID = null,
   getRackDisplayId,
   highlightedStopIndex = null,
@@ -377,7 +433,10 @@ function WarehouseCanvasInner({
   /** When false, START/PACK markers are hidden (step-by-step uses rack badges only). */
   showRouteEndpointMarkers = true,
 }: WarehouseCanvasProps) {
+  void _cellPxProp;
+  const isExportMode = mode === "export";
   const isReadMode = mode === "read";
+  const isEditMode = mode === "edit";
   /** True when the event target is inside an interactive map layer (rack, zone overlay, wall, …). */
   const readModeClickTargetIsInteractive = useCallback((target: EventTarget | null) => {
     const el = target as Element | null;
@@ -416,32 +475,13 @@ function WarehouseCanvasInner({
     return () => document.removeEventListener("click", onDocClick);
   }, [contextMenu]);
 
-  useEffect(() => {
-    if (!showRoute && !pathPoints && !pathSegments) return;
-    console.log("[WarehouseCanvas] route visibility", {
-      showRoute,
-      pathPointsCount: pathPoints?.length ?? 0,
-      pathSegmentsCount: pathSegments?.length ?? 0,
-      routeStopsCount: routeStops?.length ?? 0,
-      willRenderPathLayer: Boolean(
-        showRoute &&
-          specialLocations.pick_start &&
-          ((pathSegments && pathSegments.length > 0) ||
-            (pathPoints && pathPoints.length >= 2) ||
-            (routeGraphPolyline && routeGraphPolyline.length >= 2) ||
-            (routeStops && routeStops.length >= 2))
-      ),
-      willRenderRouteStopLayer: Boolean(showRoute && routeStops && routeStops.length > 0 && specialLocations.pick_start),
-    });
-  }, [showRoute, pathPoints, pathSegments, routeStops, routeGraphPolyline, specialLocations.pick_start, getRackDisplayId]);
-
   const handleSpecialPointerDown = useCallback(
     (e: React.PointerEvent, key: SpecialKey, id: number) => {
       e.stopPropagation();
-      if (isReadMode) return;
+      if (!isEditMode) return;
       if (onUpdateSpecialLocation) setDraggingSpecial({ key, id });
     },
-    [isReadMode, onUpdateSpecialLocation]
+    [isEditMode, onUpdateSpecialLocation]
   );
 
   const handleSpecialContextMenu = useCallback(
@@ -455,27 +495,27 @@ function WarehouseCanvasInner({
 
   const handleCanvasMouseMove = useCallback(
     (e: React.MouseEvent<HTMLElement>) => {
-      if (isReadMode) return;
+      if (!isEditMode) return;
       if (draggingSpecial && getCellFromEvent(e)) {
         setDragPreviewCell(getCellFromEvent(e)!);
         return;
       }
       onMouseMove(e as unknown as React.MouseEvent<SVGSVGElement>);
     },
-    [isReadMode, draggingSpecial, getCellFromEvent, onMouseMove]
+    [isEditMode, draggingSpecial, getCellFromEvent, onMouseMove]
   );
 
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent<HTMLElement>) => {
-      if (isReadMode) return;
+      if (!isEditMode) return;
       if (draggingSpecial) return;
       onMouseDown(e as unknown as React.MouseEvent<SVGSVGElement>);
     },
-    [isReadMode, draggingSpecial, onMouseDown]
+    [isEditMode, draggingSpecial, onMouseDown]
   );
 
   const handleCanvasMouseUp = useCallback(() => {
-    if (isReadMode) return;
+    if (!isEditMode) return;
     if (draggingSpecial && onUpdateSpecialLocation) {
       const cell = dragPreviewCell ?? (specialLocations[draggingSpecial.key] ? { x: Math.round((specialLocations[draggingSpecial.key]!.x / GRID_UNIT_CM)), y: Math.round((specialLocations[draggingSpecial.key]!.y / GRID_UNIT_CM)) } : null);
       if (cell) onUpdateSpecialLocation(draggingSpecial.id, cell);
@@ -484,176 +524,112 @@ function WarehouseCanvasInner({
       return;
     }
     onMouseUp();
-  }, [isReadMode, draggingSpecial, dragPreviewCell, specialLocations, onUpdateSpecialLocation, onMouseUp]);
+  }, [isEditMode, draggingSpecial, dragPreviewCell, specialLocations, onUpdateSpecialLocation, onMouseUp]);
 
   const handleCanvasMouseLeave = useCallback(() => {
-    if (isReadMode) return;
+    if (!isEditMode) return;
     if (draggingSpecial) return;
     onMouseLeave();
-  }, [isReadMode, draggingSpecial, onMouseLeave]);
+  }, [isEditMode, draggingSpecial, onMouseLeave]);
 
   const visualIdSet = new Set(selectedVisualIds);
   const isVisualSelected = (id: string) => selectedVisualId === id || visualIdSet.has(id);
-  const rowGhostPositions = (() => {
-    if (!rowDrawStart || !rowDrawEnd) return [];
-    const pw = rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).width_cm) : defaultRowSlotW;
-    const ph = rowToolTemplate ? cmToCells(getCatalogItemSpec(rowToolTemplate).depth_cm) : defaultRowSlotH;
-    const gapCells = cmToCells(rowGapCm);
-    const isHorizontal = Math.abs(rowDrawEnd.x - rowDrawStart.x) >= Math.abs(rowDrawEnd.y - rowDrawStart.y);
-    const orientedW = isHorizontal ? pw : ph;
-    const orientedH = isHorizontal ? ph : pw;
-    const stepX = orientedW + gapCells;
-    const stepY = orientedH + gapCells;
-    if (isHorizontal) {
-      const x0 = Math.min(rowDrawStart.x, rowDrawEnd.x);
-      const x1 = Math.max(rowDrawStart.x, rowDrawEnd.x);
-      const span = x1 - x0;
-      const count = stepX > 0 ? Math.max(1, Math.floor(span / stepX)) : 1;
-      return Array.from({ length: count }, (_, i) => ({ x: x0 + i * stepX, y: rowDrawStart.y }));
-    }
-    const y0 = Math.min(rowDrawStart.y, rowDrawEnd.y);
-    const y1 = Math.max(rowDrawStart.y, rowDrawEnd.y);
-    const span = y1 - y0;
-    console.assert(stepY >= orientedH, "[row-ghost] vertical stepY is smaller than ghostH", {
-      stepY,
-      ghostH: orientedH,
-      gapCells,
-      pw,
-      ph,
-    });
-    const count = stepY > 0 ? Math.max(1, Math.floor(span / stepY)) : 1;
-    return Array.from({ length: count }, (_, i) => ({ x: rowDrawStart.x, y: y0 + i * stepY }));
-  })();
+  const rowDrawGhostPreview =
+    rowDrawStart && rowDrawEnd
+      ? computeRowDrawGhostPreview(
+          layout,
+          rowDrawStart,
+          rowDrawEnd,
+          rowToolTemplate,
+          defaultRowSlotW,
+          defaultRowSlotH,
+          rowGapCm
+        )
+      : { positions: [] as { x: number; y: number }[], rackCount: 0, lengthMeters: 0 };
+  const rowGhostPositions = rowDrawGhostPreview.positions;
   const rowGhostSpec = rowToolTemplate ? getCatalogItemSpec(rowToolTemplate) : null;
-  const rowGhostPw = rowGhostSpec ? cmToCells(rowGhostSpec.width_cm) : defaultRowSlotW;
-  const rowGhostPh = rowGhostSpec ? cmToCells(rowGhostSpec.depth_cm) : defaultRowSlotH;
-  const rowPreviewCount = rowGhostPositions.length;
-  const rowPreviewLengthM =
-    rowPreviewCount > 0 && rowDrawStart && rowDrawEnd
-      ? (() => {
-          const isHorizontal = Math.abs(rowDrawEnd.x - rowDrawStart.x) >= Math.abs(rowDrawEnd.y - rowDrawStart.y);
-          const rackWidthCells = isHorizontal ? rowGhostPw : rowGhostPh;
-          return rowPreviewCount * (rackWidthCells / CELLS_PER_METER);
-        })()
-      : 0;
+  const rowGhostPw = rowGhostSpec ? layoutCmToCellsX(layout, rowGhostSpec.width_cm) : defaultRowSlotW;
+  const rowGhostPh = rowGhostSpec ? layoutCmToCellsY(layout, rowGhostSpec.depth_cm) : defaultRowSlotH;
+  const rowPreviewCount = rowDrawGhostPreview.rackCount;
+  const rowPreviewLengthMeters = rowDrawGhostPreview.lengthMeters;
   const showRowPreview =
+    !isExportMode &&
     layoutMode === LayoutMode.DRAW_ROW &&
     rowDrawStart != null &&
     rowDrawEnd != null &&
     rowPreviewCursor != null;
   const [hoveredRackId, setHoveredRackId] = React.useState<number | string | null>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
-  const [viewportSize, setViewportSize] = React.useState<{ w: number; h: number } | null>(null);
   const [enableTransition, setEnableTransition] = React.useState(false);
 
+  /** Fixed cell size; scrollable viewport; inner layer uses CSS scale(zoom). */
+  const gridCols = layout.grid_cols;
+  const gridRows = layout.grid_rows;
+  const cellPx = WAREHOUSE_CANVAS_CELL_PX;
+  const width = gridCols * cellPx;
+  const height = gridRows * cellPx;
+  const scaledCanvasW = width * zoom;
+  const scaledCanvasH = height * zoom;
+
+  const viewResetKeyRef = React.useRef<string | null>(null);
+  /** Warehouse or layout document identity change: pan 0, scroll reset (zoom stays — persisted in designer). */
   React.useLayoutEffect(() => {
+    if (selectedWarehouseId == null) return;
+    const key = `${selectedWarehouseId}:${layout.layout_id ?? "null"}`;
+    if (viewResetKeyRef.current === key) return;
+    viewResetKeyRef.current = key;
+    setPan(() => ({ x: 0, y: 0 }));
     const el = viewportRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setViewportSize({ w: el.clientWidth, h: el.clientHeight });
-    });
-    ro.observe(el);
-    setViewportSize({ w: el.clientWidth, h: el.clientHeight });
-    return () => ro.disconnect();
-  }, []);
+    if (el) {
+      el.scrollLeft = 0;
+      el.scrollTop = 0;
+    }
+  }, [selectedWarehouseId, layout.layout_id, setPan]);
 
-  /** Fit full grid in viewport; user `zoom` multiplies on top (wheel / toolbar). */
-  const baseFitScale =
-    viewportSize != null &&
-    viewportSize.w > 0 &&
-    viewportSize.h > 0 &&
-    width > 0 &&
-    height > 0
-      ? Math.min(viewportSize.w / width, viewportSize.h / height)
-      : 1;
-  const displayScale = baseFitScale * zoom;
-  const scaledLayoutW = width * displayScale;
-  const scaledLayoutH = height * displayScale;
-
-  React.useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const cw = viewportSize?.w ?? 0;
-    const ch = viewportSize?.h ?? 0;
-    const base =
-      cw > 0 && ch > 0 && width > 0 && height > 0 ? Math.min(cw / width, ch / height) : 0;
-    console.log("[WarehouseCanvas][dimensions]", {
-      containerCssPx: { w: cw, h: ch },
-      gridLogicalPx: { w: width, h: height },
-      baseFitScale: base > 0 ? base : null,
-      userZoom: zoom,
-      displayScale: base > 0 ? base * zoom : null,
-      scrollWrapperCssPx:
-        base > 0 ? { w: width * base * zoom, h: height * base * zoom } : null,
-    });
-  }, [viewportSize, width, height, zoom]);
-
-  /** Ctrl/⌘ + wheel → zoom only (non-passive so preventDefault works). Plain wheel uses native scroll on the viewport. */
+  /** Ctrl/Cmd + wheel: zoom. Plain wheel: native scroll on viewport. */
   React.useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
-      setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z + (e.deltaY > 0 ? -0.1 : 0.1))));
+      setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z - e.deltaY * 0.001)));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [setZoom, loading, selectedWarehouseId]);
+  }, [setZoom]);
 
-  const fitToContent = React.useCallback(() => {
-    const racks = layout.racks ?? [];
-    if (racks.length === 0) return;
-    const el = viewportRef.current;
-    if (!el) return;
-    const canvasWidth = el.clientWidth;
-    const canvasHeight = el.clientHeight;
-    if (canvasWidth <= 0 || canvasHeight <= 0 || width <= 0 || height <= 0) return;
-
-    const baseFit = Math.min(canvasWidth / width, canvasHeight / height);
-
-    const minX = Math.min(...racks.map((r) => r.x));
-    const minY = Math.min(...racks.map((r) => r.y));
-    const maxX = Math.max(...racks.map((r) => r.x + r.width));
-    const maxY = Math.max(...racks.map((r) => r.y + r.height));
-
-    const layoutWidth = (maxX - minX) * cellPx;
-    const layoutHeight = (maxY - minY) * cellPx;
-    const paddedWidth = layoutWidth * 1.3;
-    const paddedHeight = layoutHeight * 1.3;
-
-    const zoomX = paddedWidth > 0 ? canvasWidth / (paddedWidth * baseFit) : 1;
-    const zoomY = paddedHeight > 0 ? canvasHeight / (paddedHeight * baseFit) : 1;
-    let newZoom = Math.min(zoomX, zoomY);
-    newZoom = Math.max(FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, newZoom));
-
-    const minXpx = minX * cellPx;
-    const minYpx = minY * cellPx;
-    const display = baseFit * newZoom;
-    const offsetX = -minXpx * display;
-    const offsetY = -minYpx * display;
-
+  /** Reset zoom to 100%, pan, scroll top-left. */
+  const fitViewport = React.useCallback(() => {
     setEnableTransition(true);
-    setZoom(() => newZoom);
-    setPan(() => ({ x: offsetX, y: offsetY }));
+    setZoom(() => 1);
+    setPan(() => ({ x: 0, y: 0 }));
+    const el = viewportRef.current;
+    if (el) {
+      el.scrollLeft = 0;
+      el.scrollTop = 0;
+    }
     setTimeout(() => setEnableTransition(false), VIEWPORT_TRANSITION_MS);
-  }, [layout.racks, cellPx, width, height, setZoom, setPan]);
+  }, [setZoom, setPan]);
 
-  const gridOpacity = React.useMemo(() => {
-    const z = displayScale;
-    const minor = z > 1.5 ? 0.02 * 0.8 : 0.02;
-    const major = z < 0.5 ? Math.min(1, 0.05 * 1.1) : 0.05;
-    const strong = 0.08;
-    return {
-      minor: `rgba(60,90,110,${minor})`,
-      major: `rgba(60,90,110,${major})`,
-      strong: `rgba(60,90,110,${strong})`,
-    };
-  }, [displayScale]);
+  const gridOpacity = React.useMemo(
+    () => ({
+      minor: "rgba(60,90,110,0.011)",
+      major: "rgba(60,90,110,0.028)",
+      strong: "rgba(60,90,110,0.045)",
+    }),
+    []
+  );
+
+  const effectiveShowGrid = isExportMode ? false : showGrid;
+  const effectiveShowLabels = isExportMode ? true : showLabels;
+  const noopHoverRack = React.useCallback(() => {}, []);
+  const exportEmptySelection = React.useMemo(() => [] as Array<number | string>, []);
 
   return (
     <main
       ref={canvasContainerRef}
-      className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden pl-4 pt-4"
+      className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-stretch justify-start overflow-hidden pl-3.5 pt-3.5"
       style={{ backgroundColor: colors.background, ...(isLiveView ? { overscrollBehavior: "contain" as const } : {}) }}
     >
       {selectedWarehouseId == null ? (
@@ -681,94 +657,146 @@ function WarehouseCanvasInner({
               </button>
             </div>
           )}
+          {isEditMode && (
           <div
-            className="flex min-w-0 shrink-0 items-center gap-3 overflow-x-auto px-3"
-            style={{
-              background: "#ffffff",
-              borderBottom: "1px solid #e5e7eb",
-              paddingTop: "8px",
-              paddingBottom: "8px",
-            }}
+            className="flex min-h-0 min-w-0 shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-slate-200/55 bg-gradient-to-b from-slate-50/98 to-white/95 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[4px]"
           >
-            <div className="flex items-center gap-1.5">
-              <button type="button" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.25))} className="px-2 py-1 rounded bg-[#f3f4f6] text-sm font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }}>+</button>
-              <span className="text-xs font-mono w-10 min-w-0" style={{ color: colors.textSecondary }}>{Math.round(zoom * 100)}%</span>
-              <button type="button" onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.25))} className="px-2 py-1 rounded bg-[#f3f4f6] text-sm font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }}>−</button>
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-200/60 bg-slate-100/50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm active:scale-95"
+                style={{ color: colors.textSecondary }}
+                title="Powiększ"
+              >
+                +
+              </button>
+              <span className="min-w-[2.75rem] text-center font-mono text-[11px] tabular-nums text-slate-500">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm active:scale-95"
+                style={{ color: colors.textSecondary }}
+                title="Pomniejsz"
+              >
+                −
+              </button>
               {!isLiveView && (
-                <button type="button" onClick={fitToContent} className="px-2 py-1 rounded bg-[#f3f4f6] text-xs font-medium hover:bg-[#e5e7eb]" style={{ color: colors.textSecondary }} title="Dopasuj widok do zawartości">Dopasuj</button>
+                <button
+                  type="button"
+                  onClick={fitViewport}
+                  className="h-8 rounded-md px-2.5 text-[11px] font-medium text-slate-600 transition-all duration-150 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                  style={{ color: colors.textSecondary }}
+                  title="Zoom 100%, przewijanie lewy górny róg, pan wyzerowany"
+                >
+                  Reset
+                </button>
               )}
             </div>
-            <span className="text-[#e5e7eb]" aria-hidden>|</span>
+            <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 sm:block" aria-hidden />
             {!isLiveView && (
               <div
-                className="flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-slate-50/90 px-1.5 py-0.5"
+                className="flex items-center gap-1 rounded-lg border border-slate-200/55 bg-slate-100/40 p-0.5"
                 role="group"
                 aria-label="Narzędzia rysowania i lokalizacji"
               >
-                <button type="button" onClick={() => { const next = !rowToolActive; if (next) setRowToolTemplate?.(null); setRowToolActive((a) => !a); }} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${rowToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Narysuj rząd pustych slotów (bez szablonu). Później przeciągnij szablon do slotu.">Rysuj Rząd</button>
+                <button type="button" onClick={() => { const next = !rowToolActive; if (next) setRowToolTemplate?.(null); setRowToolActive((a) => !a); }} className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${rowToolActive ? "bg-white text-sky-900 shadow-sm ring-1 ring-sky-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Narysuj rząd pustych slotów (bez szablonu). Później przeciągnij szablon do slotu.">Rysuj Rząd</button>
                 {setLayoutMode && (
                   <>
-                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_START ? "bg-[#dcfce7] text-[#166534]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Punkt startowy kompletacji">Punkt startowy</button>
-                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_PACK)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layoutMode === LayoutMode.ADD_PACK ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Stacja pakowania">Stacja pakowania</button>
+                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_START)} className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${layoutMode === LayoutMode.ADD_START ? "bg-white text-emerald-900 shadow-sm ring-1 ring-emerald-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Punkt startowy kompletacji">Start</button>
+                    <button type="button" onClick={() => setLayoutMode(LayoutMode.ADD_PACK)} className={`h-8 rounded-md px-2.5 text-[11px] font-medium transition-all duration-150 ${layoutMode === LayoutMode.ADD_PACK ? "bg-white text-sky-900 shadow-sm ring-1 ring-sky-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Stacja pakowania">Pakowanie</button>
                   </>
                 )}
               </div>
             )}
             {!isLiveView && (
               <>
-                <span className="text-[#e5e7eb]" aria-hidden>|</span>
-                <div className="flex items-center gap-2 shrink-0" role="group" aria-label="Elementy pomocnicze">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500 whitespace-nowrap">Elementy pomocnicze</span>
-                  <div className="flex items-center gap-1.5 rounded-lg border border-slate-200/70 bg-slate-50/70 px-1.5 py-0.5">
+                <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 sm:block" aria-hidden />
+                <div className="flex shrink-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2" role="group" aria-label="Elementy pomocnicze">
+                  <span className="whitespace-nowrap pl-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Pomocnicze</span>
+                  <div className="flex items-center rounded-lg border border-slate-200/55 bg-slate-100/40 p-0.5">
                     <button
                       type="button"
                       onClick={() => setAisleToolActive((a) => !a)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${aisleToolActive ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`}
+                      className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${aisleToolActive ? "bg-white text-teal-900 shadow-sm ring-1 ring-teal-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}
                       title="Strefa to element wizualny – nie wpływa na routing ani logistykę"
                     >
-                      Rysuj strefę
+                      Strefa
                     </button>
                   </div>
                 </div>
               </>
             )}
-            <span className="text-[#e5e7eb]" aria-hidden>|</span>
-            <div className="flex items-center gap-1.5">
-              <button type="button" onClick={() => setShowGrid((g) => !g)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${showGrid ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Widoczna siatka">Widoczna siatka</button>
-              <button type="button" onClick={() => setShowLabels((v) => !v)} className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${showLabels ? "bg-[#e6f0ff] text-[#1d4ed8]" : "bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]"}`} title="Nazwy regałów i etykiety elementów">Pokaż etykiety</button>
+            <span className="hidden h-6 w-px shrink-0 bg-slate-200/80 md:block" aria-hidden />
+            <div className="flex items-center rounded-lg border border-slate-200/55 bg-slate-100/40 p-0.5" role="group" aria-label="Widok siatki i etykiet">
+              <button type="button" onClick={() => setShowGrid((g) => !g)} className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${showGrid ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/90" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Widoczna siatka">Siatka</button>
+              <span className="w-px self-stretch bg-slate-200/70" aria-hidden />
+              <button type="button" onClick={() => setShowLabels((v) => !v)} className={`h-8 rounded-md px-3 text-[11px] font-semibold transition-all duration-150 ${showLabels ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/90" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`} title="Nazwy regałów i etykiety elementów">Etykiety</button>
             </div>
             {rowToolActive && rowGhostPositions.length > 0 && (
-              <span className="text-xs font-mono" style={{ color: colors.textSecondary }}>→ {rowGhostPositions.length} {rowToolTemplate ? "regałów" : "slotów"}</span>
+              <span className="text-[10px] font-mono text-slate-500">
+                → {rowGhostPositions.length} {rowToolTemplate ? "regałów" : "slotów"} · {rowPreviewLengthMeters.toFixed(1)} m
+              </span>
             )}
             {selectedRowContainerId && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <label className="flex items-center gap-1 text-[10px] font-medium text-slate-600">
-                  Kierunek liczenia
-                  <select
-                    className="max-w-[148px] rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-800"
-                    aria-label="Kierunek liczenia regałów w rzędzie"
-                    value={
-                      (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId)?.direction ?? "LTR"
-                    }
-                    onChange={(e) => {
-                      const v = e.target.value as "LTR" | "RTL";
-                      setLayout((prev) => ({
-                        ...prev,
-                        row_containers: (prev.row_containers ?? []).map((rc) =>
-                          rc.id === selectedRowContainerId ? { ...rc, direction: v } : rc
-                        ),
-                      }));
-                    }}
-                  >
-                    <option value="LTR">Lewo → prawo</option>
-                    <option value="RTL">Prawo → lewo</option>
-                  </select>
-                </label>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
+                {(["rack", "bin"] as const).map((kind) => {
+                  const rcSel = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
+                  const current =
+                    kind === "rack"
+                      ? rcSel
+                        ? resolveRowContainerRackDirection(rcSel)
+                        : "LTR"
+                      : rcSel
+                        ? resolveRowContainerBinDirection(rcSel)
+                        : "LTR";
+                  const shortLabel = kind === "rack" ? "Regały" : "Lokalizacje";
+                  const aria =
+                    kind === "rack"
+                      ? "Kierunek numeracji regałów w rzędzie"
+                      : "Kierunek numeracji lokalizacji w rzędzie";
+                  const name = kind === "rack" ? "canvas-rack-direction" : "canvas-bin-direction";
+                  return (
+                    <fieldset key={kind} className="m-0 flex flex-wrap items-center gap-1.5 border-0 p-0">
+                      <legend className="sr-only">{aria}</legend>
+                      <span className="whitespace-nowrap text-[9px] font-semibold uppercase tracking-wide text-slate-400">{shortLabel}</span>
+                      <div
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-200/60 bg-slate-50/80 px-2 py-1"
+                        role="radiogroup"
+                        aria-label={aria}
+                      >
+                        {(["LTR", "RTL"] as const).map((dir) => (
+                          <label key={dir} className="flex cursor-pointer items-center gap-1 text-[10px] text-slate-700">
+                            <input
+                              type="radio"
+                              name={name}
+                              className="h-3 w-3 border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                              checked={current === dir}
+                              onChange={() => {
+                                setLayout((prev) => ({
+                                  ...prev,
+                                  row_containers: (prev.row_containers ?? []).map((rc) => {
+                                    if (rc.id !== selectedRowContainerId) return rc;
+                                    if (kind === "rack") return { ...rc, rack_direction: dir };
+                                    return { ...rc, bin_direction: dir };
+                                  }),
+                                }));
+                              }}
+                            />
+                            <span>{dir === "LTR" ? "Lewo → prawo" : "Prawo → lewo"}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  );
+                })}
                 {onStartRowDrag && (
                   <button
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); onStartRowDrag(e); }}
-                    className="px-2.5 py-1 rounded text-xs font-medium bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb] flex items-center gap-1 cursor-grab active:cursor-grabbing"
+                    className="flex h-8 cursor-grab items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md active:cursor-grabbing"
                     title="Przeciągnij rząd (przesuń cały rząd)"
                   >
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
@@ -776,25 +804,25 @@ function WarehouseCanvasInner({
                   </button>
                 )}
                 {rowToolTemplate && fillSelectedRowWithTemplate && (
-                  <button type="button" onClick={() => fillSelectedRowWithTemplate(rowToolTemplate)} className="px-2.5 py-1 rounded text-xs font-medium bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb] flex items-center gap-1" title="Wypełnij wszystkie puste sloty w zaznaczonym rzędzie wybranym szablonem">
+                  <button type="button" onClick={() => fillSelectedRowWithTemplate(rowToolTemplate)} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md" title="Wypełnij wszystkie puste sloty w zaznaczonym rzędzie wybranym szablonem">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                     Wypełnij rząd
                   </button>
                 )}
                 {deleteSelectedRow && (
-                  <button type="button" onClick={deleteSelectedRow} className="px-2.5 py-1 rounded text-xs font-medium bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb] flex items-center gap-1" title="Usuń zaznaczony rząd (puste sloty i regały w tym rzędzie)">
+                  <button type="button" onClick={deleteSelectedRow} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md" title="Usuń zaznaczony rząd (puste sloty i regały w tym rzędzie)">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     Usuń rząd
                   </button>
                 )}
                 {trimSelectedRowEnd && (
-                  <button type="button" onClick={trimSelectedRowEnd} className="px-2.5 py-1 rounded text-xs font-medium bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb] flex items-center gap-1" title="Usuń puste sloty na końcu rzędu">
+                  <button type="button" onClick={trimSelectedRowEnd} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md" title="Usuń puste sloty na końcu rzędu">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h6" /></svg>
                     Skróć rząd
                   </button>
                 )}
                 {rotateSelectedRow && (
-                  <button type="button" onClick={rotateSelectedRow} className="px-2.5 py-1 rounded text-xs font-medium bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb] flex items-center gap-1" title="Obróć rząd (poziomo ↔ pionowo)">
+                  <button type="button" onClick={rotateSelectedRow} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200/70 bg-white px-2.5 text-[11px] font-medium text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:shadow-md" title="Obróć rząd (poziomo ↔ pionowo)">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     Obróć rząd
                   </button>
@@ -802,34 +830,41 @@ function WarehouseCanvasInner({
               </div>
             )}
             {!isLiveView && setAisleWidthCm != null && (
-              <span className="flex items-center gap-1.5">
-                <label className="text-[10px]" style={{ color: colors.textSecondary }}>Siła przyciągania (cm):</label>
-                <input type="number" min={50} step={10} value={aisleWidthCm ?? 250} onChange={(e) => setAisleWidthCm(Number(e.target.value) || 250)} className="w-16 rounded-md border border-slate-200/80 bg-white px-1.5 py-0.5 text-xs" style={{ color: colors.textPrimary }} title="Odległość magnetycznego przyciągania przy przeciąganiu z katalogu" />
+              <span className="ml-auto flex items-center gap-1.5">
+                <label className="whitespace-nowrap text-[9px] font-medium uppercase tracking-wide text-slate-400">Magnes (cm)</label>
+                <input type="number" min={50} step={10} value={aisleWidthCm ?? 250} onChange={(e) => setAisleWidthCm(Number(e.target.value) || 250)} className="h-8 w-16 rounded-lg border border-slate-200/70 bg-white px-2 text-[11px] text-slate-800 shadow-sm transition-colors duration-150 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20" style={{ color: colors.textPrimary }} title="Odległość magnetycznego przyciągania przy przeciąganiu z katalogu" />
               </span>
             )}
           </div>
+          )}
           <div
             ref={viewportRef}
-            className="relative m-0 min-h-0 min-w-0 max-w-full flex-1 basis-0 overflow-auto p-0"
+            className="warehouse-map-viewport relative m-0 h-full min-h-0 w-full min-w-0 max-w-full flex-1 basis-0 overflow-auto p-0"
             style={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e5e7eb",
+              background: isExportMode ? "#ffffff" : "linear-gradient(165deg, #f8fafc 0%, #eef2f7 55%, #e8edf3 100%)",
+              border: isExportMode ? "1px solid #e5e7eb" : "1px solid rgba(148, 163, 184, 0.38)",
               borderRadius: "12px",
+              boxShadow: isExportMode ? undefined : "inset 0 1px 0 rgba(255,255,255,0.65), 0 1px 2px rgba(15, 23, 42, 0.04)",
               overscrollBehavior: "contain",
-              cursor: draggingFromCatalog ? "copy" : draggingRowId ? "grabbing" : rowToolActive || aisleToolActive ? "crosshair" : rowToolTemplate ? "cell" : "default",
+              cursor: isExportMode
+                ? "default"
+                : draggingFromCatalog
+                  ? "copy"
+                  : draggingRowId
+                    ? "grabbing"
+                    : rowToolActive || aisleToolActive
+                      ? "crosshair"
+                      : rowToolTemplate
+                        ? "cell"
+                        : "default",
             }}
             tabIndex={0}
             role="application"
             aria-label="Kanwa magazynu"
-            title="Ctrl lub ⌘ + kółko myszy: zoom • kółko: przewijanie"
-            onWheel={(e) => {
-              if (import.meta.env.DEV && !e.ctrlKey && !e.metaKey) {
-                console.log("wheel");
-              }
-            }}
+            title="Kółko: przewijanie • Ctrl lub ⌘ + kółko: zoom"
             onDragOver={(e) => {
               e.preventDefault();
-              if (isReadMode) return;
+              if (!isEditMode) return;
               if (draggingVisualType) {
                 const cell = getCellFromEvent(e);
                 if (cell) setVisualGhostPosition(cell);
@@ -846,14 +881,14 @@ function WarehouseCanvasInner({
                 ? getCatalogDropCell(cell, draggingFromCatalog)
                 : (() => {
                     const spec = getCatalogItemSpec(draggingFromCatalog);
-                    const pw = cmToCells(spec.width_cm);
-                    const ph = cmToCells(spec.depth_cm);
+                    const pw = layoutCmToCellsX(layout, spec.width_cm);
+                    const ph = layoutCmToCellsY(layout, spec.depth_cm);
                     return snapPosition(cell, pw, ph, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm);
                   })();
               setCatalogGhostPosition(pos);
             }}
             onDragLeave={() => {
-              if (isReadMode) return;
+              if (!isEditMode) return;
               setCatalogGhostPosition(null);
               setVisualGhostPosition(null);
               setCatalogHoveredSlotFromCell?.(null);
@@ -861,7 +896,7 @@ function WarehouseCanvasInner({
             }}
             onDrop={(e) => {
               e.preventDefault();
-              if (isReadMode) return;
+              if (!isEditMode) return;
               const cell = getCellFromEvent(e);
               if (cell && draggingVisualType) {
                 addVisualElement(cell, draggingVisualType);
@@ -888,34 +923,37 @@ function WarehouseCanvasInner({
               }
             }}
           >
-            {!isReadMode && !isLiveView && layoutModeLabel != null && layoutModeColor != null && (
-              <LayoutModeBadge modeLabel={layoutModeLabel} modeColor={layoutModeColor} />
+            {isEditMode && !isLiveView && layoutModeLabel != null && layoutModeColor != null && (
+              <LayoutModeBadge modeLabel={layoutModeLabel} modeColor={layoutModeColor} layoutMode={layoutMode} />
             )}
             <RowPreviewOverlay
               visible={showRowPreview}
               x={rowPreviewCursor?.x ?? 0}
               y={rowPreviewCursor?.y ?? 0}
               rackCount={rowPreviewCount}
-              totalLength={rowPreviewLengthM}
+              rowLengthMeters={rowPreviewLengthMeters}
               useFixedPosition
             />
             <div
-              className="min-h-0 min-w-0 shrink-0"
+              ref={mapExportCaptureRef}
+              className="warehouse-map-canvas-wrap flex shrink-0"
               style={{
-                width: scaledLayoutW,
-                height: scaledLayoutH,
+                width: scaledCanvasW,
+                height: scaledCanvasH,
+                minWidth: scaledCanvasW,
+                minHeight: scaledCanvasH,
                 position: "relative",
+                boxSizing: "border-box",
+                backgroundColor: isExportMode ? "#ffffff" : undefined,
               }}
             >
               <div
-                className="relative min-h-0 min-w-0"
+                className="warehouse-map-canvas relative min-h-0 min-w-0"
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
                   width,
                   height,
-                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${displayScale})`,
+                  overflow: "visible",
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                   transformOrigin: "0 0",
                   transition: enableTransition ? `transform ${VIEWPORT_TRANSITION_MS}ms ease-in-out` : "none",
                   cursor: isPanning
@@ -938,7 +976,7 @@ function WarehouseCanvasInner({
                 onMouseLeave={handleCanvasMouseLeave}
                 onClick={isReadMode && onReadModeCanvasBackgroundClick ? handleReadModeCanvasBackgroundClick : undefined}
               >
-                {showGrid && (
+                {effectiveShowGrid && (
                   <>
                     <div
                       className="absolute left-0 top-0 pointer-events-none"
@@ -956,7 +994,7 @@ function WarehouseCanvasInner({
                       style={{
                         width,
                         height,
-                        backgroundSize: `${cellPx * CELLS_PER_METER}px ${cellPx * CELLS_PER_METER}px`,
+                        backgroundSize: `${cellPx * GRID_MAJOR_CELLS}px ${cellPx * GRID_MAJOR_CELLS}px`,
                         backgroundImage: `linear-gradient(to right, ${gridOpacity.major} 1.5px, transparent 1.5px),
                           linear-gradient(to bottom, ${gridOpacity.major} 1.5px, transparent 1.5px)`,
                       }}
@@ -967,7 +1005,7 @@ function WarehouseCanvasInner({
                       style={{
                         width,
                         height,
-                        backgroundSize: `${cellPx * CELLS_PER_METER * GRID_STRONG_METERS}px ${cellPx * CELLS_PER_METER * GRID_STRONG_METERS}px`,
+                        backgroundSize: `${cellPx * GRID_STRONG_CELLS}px ${cellPx * GRID_STRONG_CELLS}px`,
                         backgroundImage: `linear-gradient(to right, ${gridOpacity.strong} 2px, transparent 2px),
                           linear-gradient(to bottom, ${gridOpacity.strong} 2px, transparent 2px)`,
                       }}
@@ -976,6 +1014,7 @@ function WarehouseCanvasInner({
                   </>
                 )}
                 <svg
+                  id="warehouse-canvas"
                   ref={svgRef}
                   width={width}
                   height={height}
@@ -993,11 +1032,11 @@ function WarehouseCanvasInner({
                     width={width}
                     height={height}
                     fill="none"
-                    stroke="#666"
-                    strokeWidth={2}
+                    stroke={isExportMode ? "#e2e8f0" : "rgba(71, 85, 105, 0.35)"}
+                    strokeWidth={isExportMode ? 1 : 1.5}
                     pointerEvents="none"
                   />
-                  {wallElements.length > 0 && (
+                  {!isExportMode && wallElements.length > 0 && (
                     <WallElementsLayer
                       wallElements={wallElements}
                       gridCols={layout.grid_cols}
@@ -1012,7 +1051,7 @@ function WarehouseCanvasInner({
                       onPointerDown={onStartWallElementDrag ? (e, el) => { e.preventDefault(); onStartWallElementDrag(el); } : undefined}
                     />
                   )}
-                  {!isReadMode && dragSlotHighlights && (
+                  {isEditMode && dragSlotHighlights && (
                     <SelectionOverlay
                       part="dragSlots"
                       dragSlotHighlights={dragSlotHighlights}
@@ -1020,7 +1059,7 @@ function WarehouseCanvasInner({
                     />
                   )}
                   {/* Temporary snap guidelines: show dragged rack's snapped x/y lines. */}
-                  {draggingRackId != null && rackDragPreviewPosition != null && (
+                  {isEditMode && draggingRackId != null && rackDragPreviewPosition != null && (
                     <g pointerEvents="none" opacity={0.85}>
                       <line
                         x1={rackDragPreviewPosition.x * cellPx}
@@ -1042,6 +1081,7 @@ function WarehouseCanvasInner({
                       />
                     </g>
                   )}
+                  {!isExportMode && (
                   <RowLayer
                     part="emptySlots"
                     layout={layout}
@@ -1054,7 +1094,8 @@ function WarehouseCanvasInner({
                     setCatalogHoveredSlot={setCatalogHoveredSlot}
                     stampRackIntoSlot={stampRackIntoSlot}
                   />
-                  {layout.aisles.map((a, i) => {
+                  )}
+                  {!isExportMode && layout.aisles.map((a, i) => {
                     const isSelected = selectedAisleIndex === i;
                     return (
                       <rect
@@ -1075,7 +1116,8 @@ function WarehouseCanvasInner({
                     );
                   })}
                   {/* Route path under rack tiles (no line through rack bodies) */}
-                  {showRoute &&
+                  {!isExportMode &&
+                    showRoute &&
                     specialLocations.pick_start &&
                     ((pathSegments && pathSegments.length > 0) ||
                       (pathPoints && pathPoints.length >= 2) ||
@@ -1106,30 +1148,37 @@ function WarehouseCanvasInner({
                   <RackLayer
                     racks={layout.racks}
                     layout={layout}
+                    zoom={zoom}
                     cellPx={cellPx}
-                    draggingRackId={draggingRackId}
-                    selectedRackIds={selectedRackIds}
-                    rackDragPreviewPositions={rackDragPreviewPositions}
-                    rackDragPreviewPosition={rackDragPreviewPosition}
-                    collisionRackId={collisionRackId}
-                    collisionRackIds={collisionRackIds}
-                    outsideRackIds={outsideRackIds}
-                    showLabels={showLabels}
-                    hoveredRackId={hoveredRackId}
-                    setHoveredRackId={setHoveredRackId}
-                    highlightedRackIds={highlightedRackIds}
-                    rackQuantities={rackQuantities}
-                    highlightedBinUUIDs={highlightedBinUUIDs}
-                    hoveredLocationUUID={hoveredLocationUUID}
+                    draggingRackId={isExportMode ? null : draggingRackId}
+                    selectedRackIds={isExportMode ? exportEmptySelection : selectedRackIds}
+                    rackDragPreviewPositions={isExportMode ? null : rackDragPreviewPositions}
+                    rackDragPreviewPosition={isExportMode ? null : rackDragPreviewPosition}
+                    collisionRackId={isExportMode ? null : collisionRackId}
+                    collisionRackIds={isExportMode ? null : collisionRackIds}
+                    outsideRackIds={isExportMode ? undefined : outsideRackIds}
+                    showLabels={effectiveShowLabels}
+                    hoveredRackId={isExportMode ? null : hoveredRackId}
+                    setHoveredRackId={isExportMode ? noopHoverRack : setHoveredRackId}
+                    highlightedRackIds={isExportMode ? undefined : highlightedRackIds}
+                    rackQuantities={isExportMode ? undefined : rackQuantities}
+                    highlightedBinUUIDs={isExportMode ? undefined : highlightedBinUUIDs}
+                    focusedBinUUID={isExportMode ? null : focusedBinUUID}
+                    hoveredLocationUUID={isExportMode ? null : hoveredLocationUUID}
                     onRackClick={onRackClick}
                     onRackClickPassthrough={onRackClickPassthrough}
                     onRackDoubleClick={onRackDoubleClick}
-                    routeStepBadges={routeStepBadges}
-                    routeStops={routeStops ?? null}
-                    isRoutePlanningMode={isRoutePlanningMode}
+                    routeStepBadges={isExportMode ? undefined : routeStepBadges}
+                    routeStops={isExportMode ? null : routeStops ?? null}
+                    isRoutePlanningMode={isExportMode ? false : isRoutePlanningMode}
+                    neutralRackStyle={isExportMode}
                   />
                   {/* START / PACK only — visit order on rack badges */}
-                  {showRoute && routeStops && routeStops.length > 0 && specialLocations.pick_start && (
+                  {!isExportMode &&
+                    showRoute &&
+                    routeStops &&
+                    routeStops.length > 0 &&
+                    specialLocations.pick_start && (
                     <RouteStopLayer
                       routeStops={routeStops}
                       racks={layout.racks}
@@ -1147,7 +1196,7 @@ function WarehouseCanvasInner({
                     />
                   )}
                   {/* Special warehouse nodes (above shelves) — draggable, right-click to delete */}
-                  {specialLocations.pick_start && (() => {
+                  {!isExportMode && specialLocations.pick_start && (() => {
                     const isDragging = draggingSpecial?.key === "pick_start";
                     const px = isDragging && dragPreviewCell
                       ? dragPreviewCell.x * cellPx + cellPx / 2
@@ -1176,7 +1225,7 @@ function WarehouseCanvasInner({
                       </g>
                     );
                   })()}
-                  {specialLocations.packing && (() => {
+                  {!isExportMode && specialLocations.packing && (() => {
                     const isDragging = draggingSpecial?.key === "packing";
                     const px = isDragging && dragPreviewCell
                       ? dragPreviewCell.x * cellPx + cellPx / 2
@@ -1205,7 +1254,7 @@ function WarehouseCanvasInner({
                       </g>
                     );
                   })()}
-                  {specialLocations.dock && (() => {
+                  {!isExportMode && specialLocations.dock && (() => {
                     const isDragging = draggingSpecial?.key === "dock";
                     const px = isDragging && dragPreviewCell
                       ? dragPreviewCell.x * cellPx + cellPx / 2
@@ -1232,16 +1281,18 @@ function WarehouseCanvasInner({
                       </g>
                     );
                   })()}
+                  {!isExportMode && (
                   <VisualLayer
                     visualElements={layout.visual_elements ?? []}
                     cellPx={cellPx}
-                    showLabels={showLabels}
+                    showLabels={effectiveShowLabels}
                     isVisualSelected={isVisualSelected}
                     draggingVisualType={draggingVisualType}
                     visualGhostPosition={visualGhostPosition}
                     getDefaultVisualSize={getDefaultVisualSize}
                   />
-                  {placementMode && ghostPosition && (
+                  )}
+                  {isEditMode && placementMode && ghostPosition && (
                     <rect
                       x={ghostPosition.x * cellPx + 2}
                       y={ghostPosition.y * cellPx + 2}
@@ -1255,7 +1306,7 @@ function WarehouseCanvasInner({
                       pointerEvents="none"
                     />
                   )}
-                  {copyPlacementMode && ghostPosition && copiedRack && (
+                  {isEditMode && copyPlacementMode && ghostPosition && copiedRack && (
                     <rect
                       x={ghostPosition.x * cellPx + 2}
                       y={ghostPosition.y * cellPx + 2}
@@ -1269,11 +1320,11 @@ function WarehouseCanvasInner({
                       pointerEvents="none"
                     />
                   )}
-                  {rowToolActive && rowGhostPositions.length > 0 && (
+                  {isEditMode && rowToolActive && rowGhostPositions.length > 0 && (
                     <g pointerEvents="none">
                       {(() => {
                         const isHorizontal = rowDrawStart && rowDrawEnd
-                          ? Math.abs(rowDrawEnd.x - rowDrawStart.x) >= Math.abs(rowDrawEnd.y - rowDrawStart.y)
+                          ? rowDrawSegmentExtents(rowDrawStart, rowDrawEnd).isHorizontal
                           : true;
                         const orientedW = isHorizontal ? rowGhostPw : rowGhostPh;
                         const orientedH = isHorizontal ? rowGhostPh : rowGhostPw;
@@ -1303,11 +1354,11 @@ function WarehouseCanvasInner({
                       })()}
                     </g>
                   )}
-                  {draggingFromCatalog && catalogGhostPosition &&
+                  {isEditMode && draggingFromCatalog && catalogGhostPosition &&
                     (() => {
                       const spec = getCatalogItemSpec(draggingFromCatalog);
-                      const pw = cmToCells(spec.width_cm);
-                      const ph = cmToCells(spec.depth_cm);
+                      const pw = layoutCmToCellsX(layout, spec.width_cm);
+                      const ph = layoutCmToCellsY(layout, spec.depth_cm);
                       const overlap = layout.racks.some((r) =>
                         rectsOverlap({ x: catalogGhostPosition.x, y: catalogGhostPosition.y, width: pw, height: ph }, r)
                       );
@@ -1339,7 +1390,7 @@ function WarehouseCanvasInner({
                         </g>
                       );
                     })()}
-                  {!isReadMode && marqueeStart && marqueeEnd && (
+                  {isEditMode && marqueeStart && marqueeEnd && (
                     <SelectionOverlay
                       part="marquee"
                       marqueeStart={marqueeStart}
@@ -1347,6 +1398,7 @@ function WarehouseCanvasInner({
                       cellPx={cellPx}
                     />
                   )}
+                  {isEditMode && (
                   <RowLayer
                     part="rowDragGhost"
                     layout={layout}
@@ -1354,8 +1406,10 @@ function WarehouseCanvasInner({
                     draggingRowId={draggingRowId ?? null}
                     rowDragPreviewStart={rowDragPreviewStart ?? null}
                   />
+                  )}
                 </svg>
                 {/* HTML drop zones over empty slots. When rowToolActive, do not capture so SVG receives draw events. */}
+                {isEditMode && (
                 <div className="absolute left-0 top-0 pointer-events-none" style={{ width, height, zIndex: 10 }}>
                   {(layout.row_containers ?? []).flatMap((rc) =>
                     rc.slots.map((slot, i) => {
@@ -1419,7 +1473,8 @@ function WarehouseCanvasInner({
                     })
                   )}
                 </div>
-                {!isReadMode && (
+                )}
+                {isEditMode && (
                   <SelectionOverlay
                     part="toolbar"
                     selectedRack={selectedRack}
@@ -1430,13 +1485,12 @@ function WarehouseCanvasInner({
                     setLayout={setLayout}
                     setSelectedRackId={setSelectedRackId}
                     setSelectedRackIds={setSelectedRackIds}
-                    selectedRackIds={selectedRackIds}
                     onCopyRack={onCopyRack}
                   />
                 )}
               </div>
             </div>
-            {cursorCm != null && (placementMode || copyPlacementMode || draggingRackId != null) && (
+            {!isExportMode && cursorCm != null && (placementMode || copyPlacementMode || draggingRackId != null) && (
               <p className="text-xs text-cyan-200/80 mt-1 font-mono absolute bottom-0 left-0">
                 {cursorCm.x} cm × {cursorCm.y} cm
               </p>

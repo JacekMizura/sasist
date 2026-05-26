@@ -118,7 +118,7 @@ export default function WarehouseGraphMap() {
   const { scaleX, scaleY } = useScale(nodes, locations);
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <h1 className="text-xl font-semibold text-slate-800">Mapa magazynu</h1>
       <p className="mt-2 text-slate-600 mb-4">
         Wizualizacja grafu (węzły, krawędzie) i lokalizacji. Później: trasy kompletacji, heatmapa, slotting.

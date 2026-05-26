@@ -3,7 +3,7 @@ SCHEMAS: CART
 Dynamiczne koszyki dla MULTI.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 from typing import List, Optional
 
@@ -49,8 +49,17 @@ class CartMultiCreate(BaseModel):
     warehouse_id: int
     group_id: Optional[int] = None
     image_url: Optional[str] = None
+    code: Optional[str] = Field(default=None, max_length=64, description="Opcjonalny unikalny kod (np. CART-0001); wygenerowany gdy brak")
 
     baskets: List[BasketCreate]
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def strip_code(cls, v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
 
     capacity_mode: Optional[CapacityMode] = CapacityMode.volume
     max_orders: Optional[int] = None
@@ -67,8 +76,17 @@ class CartBulkCreate(BaseModel):
     warehouse_id: int
     group_id: Optional[int] = None
     image_url: Optional[str] = None
+    code: Optional[str] = Field(default=None, max_length=64, description="Opcjonalny unikalny kod (np. CART-0001); wygenerowany gdy brak")
 
     length: float = Field(gt=0)
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def strip_code_bulk(cls, v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
     width: float = Field(gt=0)
     height: float = Field(gt=0)
 
@@ -83,6 +101,7 @@ class CartBulkCreate(BaseModel):
 
 class CartUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = Field(default=None, max_length=64)
     warehouse_id: Optional[int] = None
     group_id: Optional[int] = None
     image_url: Optional[str] = None
@@ -94,6 +113,14 @@ class CartUpdate(BaseModel):
     capacity_mode: Optional[str] = None
     max_orders: Optional[int] = None
     max_volume_dm3: Optional[float] = None
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def strip_code_update(cls, v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
 
 
 # ================================

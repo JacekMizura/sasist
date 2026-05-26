@@ -1,15 +1,12 @@
 import { jsPDF } from "jspdf";
 import type { PrinterProfile } from "../../types/printerProfiles";
-import { applyCalibration } from "./applyCalibration";
+import { jsPdfOrientationForLabelShape, labelPageSizePt } from "./labelPdfPageSetup";
 import { drawSvgVector } from "./svgToPdfVector";
 
 /** When true, use vector SVG→PDF; when false, use raster (SVG→PNG→PDF). */
 const VECTOR_PDF_ENABLED = true;
 
 const PDF_PX_PER_MM = 6;
-
-/** 1 mm = 2.83465 pt. Use for page size so jsPDF format is in points. */
-const POINTS_PER_MM = 2.83465;
 
 async function svgToPngDataUrl(svgString: string, widthMm: number, heightMm: number): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -54,41 +51,48 @@ async function drawSvgRaster(
 
 export type ExportLabelsPdfTemplate = { elements?: Array<{ type?: string }> };
 
+/** One page per SVG; page size = widthMm×heightMm (pt). `_printerProfile` reserved for API compatibility (not applied). */
 export async function exportLabelsPdf(
   svgs: string[],
   widthMm: number,
   heightMm: number,
   filename: string,
-  printerProfile?: PrinterProfile | null,
+  _printerProfile?: PrinterProfile | null,
   template?: ExportLabelsPdfTemplate | null
 ): Promise<void> {
   if (!svgs.length) return;
 
-  const wPt = widthMm * POINTS_PER_MM;
-  const hPt = heightMm * POINTS_PER_MM;
-  const orientation = widthMm > heightMm ? "l" : "p";
+  const { widthPt: wPt, heightPt: hPt } = labelPageSizePt(widthMm, heightMm);
+  const orientation = jsPdfOrientationForLabelShape(widthMm, heightMm);
   const pdf = new jsPDF({ orientation, unit: "pt", format: [wPt, hPt] });
 
   const hasRepeater = template?.elements?.some((el) => el.type === "repeater") ?? false;
 
   if (process.env.NODE_ENV === "development") {
-    console.debug("[exportLabelsPdf] pageSize pt:", pdf.internal.pageSize.getWidth(), "×", pdf.internal.pageSize.getHeight());
+    console.info("[label-pdf] exportLabelsPdf", {
+      source: "exportLabelsPdf",
+      width_mm: widthMm,
+      height_mm: heightMm,
+      format_pt_w: wPt,
+      format_pt_h: hPt,
+      jsPdf_pageSize_pt: `${pdf.internal.pageSize.getWidth()}×${pdf.internal.pageSize.getHeight()}`,
+    });
   }
 
   for (let i = 0; i < svgs.length; i++) {
     if (i > 0) pdf.addPage([wPt, hPt], orientation);
-    const calibratedSvg = applyCalibration(svgs[i], printerProfile);
+    const svgStr = svgs[i];
 
     if (hasRepeater) {
-      await drawSvgRaster(pdf, calibratedSvg, wPt, hPt, widthMm, heightMm);
+      await drawSvgRaster(pdf, svgStr, wPt, hPt, widthMm, heightMm);
     } else if (VECTOR_PDF_ENABLED) {
       try {
-        await drawSvgVector(pdf, calibratedSvg, 0, 0, wPt, hPt);
+        await drawSvgVector(pdf, svgStr, 0, 0, wPt, hPt);
       } catch {
-        await drawSvgRaster(pdf, calibratedSvg, wPt, hPt, widthMm, heightMm);
+        await drawSvgRaster(pdf, svgStr, wPt, hPt, widthMm, heightMm);
       }
     } else {
-      await drawSvgRaster(pdf, calibratedSvg, wPt, hPt, widthMm, heightMm);
+      await drawSvgRaster(pdf, svgStr, wPt, hPt, widthMm, heightMm);
     }
   }
 

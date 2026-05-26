@@ -76,6 +76,18 @@ class WarehouseService:
             .all()
         )
 
+    def update_warehouse(self, warehouse_id: int, name: str) -> Warehouse:
+        wh = self.db.query(Warehouse).filter(Warehouse.id == int(warehouse_id)).first()
+        if not wh:
+            raise ValueError("Magazyn nie istnieje")
+        nm = (name or "").strip()
+        if not nm:
+            raise ValueError("Nazwa magazynu jest wymagana")
+        wh.name = nm
+        self.db.commit()
+        self.db.refresh(wh)
+        return wh
+
     def get_all_warehouses(self):
         """Return all warehouses (for Setup / admin)."""
         return self.db.query(Warehouse).all()

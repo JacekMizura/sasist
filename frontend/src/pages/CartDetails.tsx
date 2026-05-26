@@ -94,8 +94,11 @@ export default function CartDetails() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-2xl font-semibold">{cart.name}</div>
-          {cart.barcode && (
-            <div className="mt-1 text-sm text-slate-500">Kod kreskowy: {cart.barcode}</div>
+          {(cart.code || cart.barcode) && (
+            <div className="mt-1 text-sm text-slate-600">
+              <span className="font-medium text-slate-500">Kod</span>{" "}
+              <span className="font-mono">{String(cart.code ?? cart.barcode)}</span>
+            </div>
           )}
           <div className="mt-3 flex gap-8 text-sm text-gray-600">
             <div>Wszystkie: {cart.total_baskets ?? cart.baskets?.length}</div>
@@ -177,7 +180,6 @@ export default function CartDetails() {
                 onClick={() => setEditing(b)}
               >
                 <div>R{b.row} C{b.column}</div>
-                {b.barcode && <div className="font-mono text-[10px] truncate" title={b.barcode}>{b.barcode}</div>}
                 <div>{b.length}×{b.width}×{b.height}</div>
                 <button
                   className="text-red-600 text-[10px]"

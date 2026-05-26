@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from starlette import status
@@ -12,6 +12,8 @@ from ..schemas.cart import (
     CartGroupCreate,
     CartGroupUpdate,
 )
+from ..schemas.wms_packing import WmsPackingCartOrdersOut
+from ..services.wms_packing_service import get_packing_cart_orders_by_scan_code
 
 router = APIRouter(
     prefix="/carts",
@@ -25,6 +27,48 @@ router = APIRouter(
 def get_carts(tenant_id: int, cart_type: str | None = None, db: Session = Depends(get_db)):
     service = CartService(db)
     return service.get_all(tenant_id, cart_type)
+
+
+@router.get("/by-code/{code}")
+def get_cart_by_code(
+    code: str,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    """Wózek po kodzie skanowanym (``code`` lub legacy ``barcode``) w obrębie tenant + magazyn."""
+    service = CartService(db)
+    return service.get_details_by_code(tenant_id, warehouse_id, code)
+
+
+@router.get("/by-code/{code}/orders", response_model=WmsPackingCartOrdersOut)
+def get_cart_packing_orders_by_code(
+    code: str,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    status: int = Query(..., ge=1, description="order_ui_status_id — status kolejki pakowania"),
+    mode: str = Query(
+        ...,
+        description="bulk | baskets — jak na ekranie pakowania (no_cart nieobsługiwane)",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Zamówienia z kolejki pakowania dla wózka po kodzie skanu (odpowiednik intencji ``GET /carts/{code}/orders``;
+    ścieżka ``by-code/{code}`` unika kolizji z ``/{cart_id}/labels``).
+    """
+    try:
+        return get_packing_cart_orders_by_scan_code(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            cart_code=code,
+            status_id=status,
+            mode=mode,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
 
 # ==========================================================
 # CREATE GROUP: Tworzy nową grupę wózków
@@ -160,6 +204,7 @@ def _cart_to_response_item(cart):
     return {
         "id": cart.id,
         "name": cart.name,
+        "code": getattr(cart, "code", None) or getattr(cart, "barcode", None),
         "barcode": getattr(cart, "barcode", None),
         "type": clean_type,
         "status": clean_status,

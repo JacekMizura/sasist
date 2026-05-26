@@ -2,6 +2,7 @@
  * SVG renderer: turns LayoutItem[] into a complete SVG string.
  * Used by editor preview and PDF so layout is identical.
  * All coordinates in mm, top-left origin.
+ * Text: local placement and vertical alignment are in renderText.ts (dominant-baseline + y).
  */
 import type { LayoutItem } from "../utils/labelLayoutEngine";
 import type { LabelRenderer, LabelRendererOptions } from "./renderer";
@@ -51,16 +52,15 @@ async function renderElement(item: LayoutItem): Promise<string> {
     case "arrow":
       fragment = renderArrow(item);
       break;
-    case "image":
-      fragment = `<image
-      href="${escapeAttr(item.src ?? "")}"
-      x="0"
-      y="0"
-      width="${item.width_mm}"
-      height="${item.height_mm}"
-      preserveAspectRatio="none"
-  />`;
+    case "image": {
+      const href = (item.src ?? "").trim();
+      if (!href) {
+        fragment = "";
+        break;
+      }
+      fragment = `<image href="${escapeAttr(href)}" x="0" y="0" width="${item.width_mm}" height="${item.height_mm}" preserveAspectRatio="xMidYMid meet"/>`;
       break;
+    }
     case "icon":
       fragment = renderIcon(item);
       break;
@@ -98,6 +98,6 @@ export const svgRenderer: LabelRenderer = {
     const { widthMm, heightMm } = options;
     const fragments = await Promise.all(items.map(renderElement));
     const body = fragments.join("");
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}" height="${heightMm}" viewBox="0 0 ${widthMm} ${heightMm}" preserveAspectRatio="xMidYMid meet">${body}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${widthMm} ${heightMm}" preserveAspectRatio="none">${body}</svg>`;
   },
 };

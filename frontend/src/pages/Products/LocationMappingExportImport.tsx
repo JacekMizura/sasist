@@ -7,10 +7,16 @@
 import { useState, useCallback } from "react";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
-import type { AssignedLocation, StorageType } from "../../types/warehouse";
-import { positionFitsDimensions } from "../../components/warehouse/warehouseUtils";
-import type { SelectablePosition } from "../../components/warehouse/warehouseUtils";
-import { getPositionsFromLayoutRacks } from "../../components/warehouse/warehouseUtils";
+import type { AssignedLocation, LayoutState, StorageType } from "../../types/warehouse";
+import {
+  activeBinsForRack,
+  getDisplayLocationLabel,
+  getPositionsFromLayoutRacks,
+  positionFitsDimensions,
+  rawLayoutRackToRackState,
+  type RawLayoutRack,
+  type SelectablePosition,
+} from "../../components/warehouse/warehouseUtils";
 
 const TENANT_ID = 1;
 
@@ -39,14 +45,16 @@ type BinInfo = {
   locationUUID: string;
 };
 
-/** Collect all bins from layout API response. */
-function collectBinsFromLayout(racks: Array<{ bins?: Array<{ label?: string; location_id?: string; location_uuid?: string; locationUUID?: string }> }>): BinInfo[] {
+/** Collect all bins with display labels consistent with designer (row direction). */
+function collectBinsFromLayout(racks: RawLayoutRack[], layout: LayoutState): BinInfo[] {
+  const racksNorm = (racks ?? []).map((r) => rawLayoutRackToRackState(r));
+  const merged: LayoutState = { ...layout, racks: racksNorm };
   const out: BinInfo[] = [];
-  for (const r of racks ?? []) {
-    for (const b of r.bins ?? []) {
-      const uuid = (b as { location_uuid?: string }).location_uuid ?? (b as { locationUUID?: string }).locationUUID ?? "";
-      const name = (b as { label?: string }).label ?? (b as { location_id?: string }).location_id ?? uuid;
-      if (uuid || name) out.push({ locationName: String(name).trim(), locationUUID: String(uuid).trim() });
+  for (const rack of racksNorm) {
+    for (const bin of activeBinsForRack(rack)) {
+      const uuid = (bin.locationUUID ?? "").trim();
+      const name = getDisplayLocationLabel(rack, bin, merged);
+      if (uuid || name) out.push({ locationName: name, locationUUID: uuid });
     }
   }
   return out;
@@ -110,7 +118,22 @@ export function LocationMappingExportImport({ onExportComplete, onImportComplete
       ]);
       const layoutData = layoutRes.data?.layout ?? layoutRes.data;
       const racks = layoutData?.racks ?? [];
-      const bins = collectBinsFromLayout(racks);
+      const layoutState: LayoutState = {
+        layout_id: layoutData?.layout_id ?? null,
+        warehouse_id: layoutData?.warehouse_id ?? null,
+        warehouse_name: layoutData?.warehouse_name ?? "",
+        name: layoutData?.name ?? "",
+        grid_cols: layoutData?.grid_cols ?? 0,
+        grid_rows: layoutData?.grid_rows ?? 0,
+        building_width_m: layoutData?.building_width_m,
+        building_depth_m: layoutData?.building_depth_m,
+        building_height_m: layoutData?.building_height_m,
+        racks: [],
+        aisles: [],
+        visual_elements: [],
+        row_containers: layoutData?.row_containers ?? [],
+      };
+      const bins = collectBinsFromLayout(racks as RawLayoutRack[], layoutState);
       const rawProducts = productsRes.data?.items ?? (Array.isArray(productsRes.data) ? productsRes.data : []);
       const productList: ProductForExport[] = rawProducts.map((p: Record<string, unknown>) => ({
         id: Number(p.id),
@@ -290,7 +313,22 @@ function LocationMappingImportModal({
       ]);
       const layoutData = layoutRes.data?.layout ?? layoutRes.data;
       const rawRacks = layoutData?.racks ?? [];
-      const positions = getPositionsFromLayoutRacks(rawRacks);
+      const layoutState: LayoutState = {
+        layout_id: layoutData?.layout_id ?? null,
+        warehouse_id: layoutData?.warehouse_id ?? null,
+        warehouse_name: layoutData?.warehouse_name ?? "",
+        name: layoutData?.name ?? "",
+        grid_cols: layoutData?.grid_cols ?? 0,
+        grid_rows: layoutData?.grid_rows ?? 0,
+        building_width_m: layoutData?.building_width_m,
+        building_depth_m: layoutData?.building_depth_m,
+        building_height_m: layoutData?.building_height_m,
+        racks: [],
+        aisles: [],
+        visual_elements: [],
+        row_containers: layoutData?.row_containers ?? [],
+      };
+      const positions = getPositionsFromLayoutRacks(rawRacks as RawLayoutRack[], layoutState);
       const raw = productsRes.data?.items ?? (Array.isArray(productsRes.data) ? productsRes.data : []);
       const allProducts: (ProductForExport & { length?: number; width?: number; height?: number; volume?: number; weight?: number })[] = raw.map((p: Record<string, unknown>) => ({
         id: Number(p.id),
@@ -425,8 +463,7 @@ function LocationMappingImportModal({
           {step === "select" && (
             <div>
               <p className="text-sm text-slate-600 mb-3">
-                Wybierz plik CSV z kolumnami: Location_Name, Location_UUID, Current_Product_SKU, Current_Product_Name, Quantity.
-                Produkty dopasowywane po SKU lub EAN. Lokalizacje po UUID lub nazwie.
+                Wybierz plik CSV
               </p>
               <input
                 type="file"

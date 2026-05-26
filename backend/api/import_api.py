@@ -5,6 +5,11 @@ Obsługuje:
 - preview CSV
 - import produktów
 - import zamówień
+- import zestawów
+- import kartonów
+- import producentów
+- import dostawców
+- import klientów
 - historia importów (GET /import/logs)
 """
 
@@ -36,12 +41,104 @@ def preview_csv(
 ):
     try:
         service = ImportService(db)
-        return service.preview_csv(file)
+        result = service.preview_csv(file)
+        if isinstance(result, dict) and result.get("error"):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": result.get("error", "validation"),
+                    "message": result.get("message", ""),
+                },
+            )
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("preview_csv failed: %s", e)
         raise HTTPException(status_code=500, detail={"error": "Preview failed", "message": str(e)})
 
+# ==========================================================
+# IMPORT KARTONÓW
+# ==========================================================
 
+@router.post("/cartons/")
+def import_cartons(
+    tenant_id: int,
+    file: UploadFile = File(...),
+    column_map: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        parsed_map = json.loads(column_map)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail={"error": "Invalid column_map JSON", "message": str(e)})
+
+    try:
+        service = ImportService(db)
+        return service.import_cartons(
+            file=file,
+            column_map=parsed_map,
+            tenant_id=tenant_id
+        )
+    except Exception as e:
+        logger.exception("import_cartons failed: %s", e)
+        raise HTTPException(status_code=500, detail={"error": "Cartons import failed", "message": str(e)})
+
+
+# ==========================================================
+# IMPORT PRODUCENTÓW
+# ==========================================================
+
+@router.post("/manufacturers/")
+def import_manufacturers(
+    tenant_id: int,
+    file: UploadFile = File(...),
+    column_map: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        parsed_map = json.loads(column_map)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail={"error": "Invalid column_map JSON", "message": str(e)})
+
+    try:
+        service = ImportService(db)
+        return service.import_manufacturers(
+            file=file,
+            column_map=parsed_map,
+            tenant_id=tenant_id
+        )
+    except Exception as e:
+        logger.exception("import_manufacturers failed: %s", e)
+        raise HTTPException(status_code=500, detail={"error": "Manufacturers import failed", "message": str(e)})
+
+
+# ==========================================================
+# IMPORT DOSTAWCÓW
+# ==========================================================
+
+@router.post("/suppliers/")
+def import_suppliers(
+    tenant_id: int,
+    file: UploadFile = File(...),
+    column_map: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        parsed_map = json.loads(column_map)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail={"error": "Invalid column_map JSON", "message": str(e)})
+
+    try:
+        service = ImportService(db)
+        return service.import_suppliers(
+            file=file,
+            column_map=parsed_map,
+            tenant_id=tenant_id
+        )
+    except Exception as e:
+        logger.exception("import_suppliers failed: %s", e)
+        raise HTTPException(status_code=500, detail={"error": "Suppliers import failed", "message": str(e)})
 # ==========================================================
 # IMPORT PRODUKTÓW
 # ==========================================================
@@ -73,6 +170,25 @@ def import_products(
 # IMPORT ZAMÓWIEŃ
 # ==========================================================
 
+@router.post("/sets/")
+def import_sets(
+    tenant_id: int,
+    file: UploadFile = File(...),
+    column_map: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        parsed_map = json.loads(column_map)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail={"error": "Invalid column_map JSON", "message": str(e)})
+    try:
+        service = ImportService(db)
+        return service.import_sets(file=file, column_map=parsed_map, tenant_id=tenant_id)
+    except Exception as e:
+        logger.exception("import_sets failed: %s", e)
+        raise HTTPException(status_code=500, detail={"error": "Sets import failed", "message": str(e)})
+
+
 @router.post("/orders/")
 def import_orders(
     tenant_id: int,
@@ -99,21 +215,47 @@ def import_orders(
 
 
 # ==========================================================
+# IMPORT KLIENTÓW
+# ==========================================================
+
+@router.post("/customers/")
+def import_customers(
+    tenant_id: int,
+    file: UploadFile = File(...),
+    column_map: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        parsed_map = json.loads(column_map)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail={"error": "Invalid column_map JSON", "message": str(e)})
+    try:
+        service = ImportService(db)
+        return service.import_customers(file=file, column_map=parsed_map, tenant_id=tenant_id)
+    except Exception as e:
+        logger.exception("import_customers failed: %s", e)
+        raise HTTPException(status_code=500, detail={"error": "Customers import failed", "message": str(e)})
+
+
+# ==========================================================
 # IMPORT LOGS (HISTORY)
 # ==========================================================
 
 @router.get("/logs")
 def get_import_logs(
     limit: int = Query(100, ge=1, le=500),
+    log_type: str | None = Query(
+        None,
+        alias="type",
+        description="Filtr: products | orders | sets | manufacturers | suppliers | cartons | customers",
+    ),
     db: Session = Depends(get_db),
 ):
     """Return latest import logs for display in UI (Historia importów)."""
-    rows = (
-        db.query(ImportLog)
-        .order_by(desc(ImportLog.created_at))
-        .limit(limit)
-        .all()
-    )
+    q = db.query(ImportLog)
+    if log_type:
+        q = q.filter(ImportLog.type == log_type)
+    rows = q.order_by(desc(ImportLog.created_at)).limit(limit).all()
     return [
         {
             "id": r.id,

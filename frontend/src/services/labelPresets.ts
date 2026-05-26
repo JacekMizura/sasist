@@ -3,7 +3,7 @@
  * Compatible with SavedLabelTemplate.template_json / LabelTemplate.
  */
 
-import type { LabelTemplate, TemplateElement } from "../types/labelSystem";
+import type { GroupElement, LabelTemplate, TemplateElement } from "../types/labelSystem";
 
 function genId(prefix: string, i: number): string {
   return `${prefix}-${Date.now()}-${i}`;
@@ -21,15 +21,52 @@ export const PRESET_TYPES = [
 
 export type PresetType = (typeof PRESET_TYPES)[number];
 
+/** Nazwy widoczne w UI (PL) — też domyślna nazwa szablonu po wygenerowaniu. */
 export const PRESET_LABELS: Record<PresetType, string> = {
-  LOCATION_BASIC: "Location (basic)",
-  LOCATION_BARCODE_LARGE: "Location (barcode large)",
-  RACK_SEGMENT_STRIP: "Rack segment strip",
-  PALLET_LABEL: "Pallet label",
+  LOCATION_BASIC: "Lokalizacja (podstawowa)",
+  LOCATION_BARCODE_LARGE: "Lokalizacja (duży kod kreskowy)",
+  RACK_SEGMENT_STRIP: "Pasek segmentu regału",
+  PALLET_LABEL: "Etykieta palety",
   AISLE_LABEL: "Etykieta oznaczenia rzędu",
-  FLOOR_LOCATION: "Floor location",
-  RACK_BEAM_MULTISECTION: "Rack beam (multi-section)",
+  FLOOR_LOCATION: "Lokalizacja podłogowa",
+  RACK_BEAM_MULTISECTION: "Belka regału (wielosekcyjna)",
 };
+
+/** Krótki opis zastosowania (karty, modal szybkiego startu). */
+export const PRESET_USAGE_HINTS: Record<PresetType, string> = {
+  LOCATION_BASIC: "Nazwa lokalizacji i kod kreskowy — typowy format na regał.",
+  LOCATION_BARCODE_LARGE: "Większy kod i czytelna nazwa — skan z większej odległości.",
+  RACK_SEGMENT_STRIP: "Pas wielu segmentów w jednym szablonie — druk taśmy regałowej.",
+  PALLET_LABEL: "Oznaczenie palety w magazynie wysokiego składowania.",
+  AISLE_LABEL: "Pionowa etykieta alei / rzędu regałów.",
+  FLOOR_LOCATION: "Duża etykieta lokalizacji podłogowej lub strefy.",
+  RACK_BEAM_MULTISECTION: "Wiele małych pól na jednej belce — segmentacja belki.",
+};
+
+export type PresetCardMeta = {
+  widthMm: number;
+  heightMm: number;
+  /** Krótka etykieta typu kodu (PL). */
+  barcodeLabel: string;
+  /** Drukarka / technologia (skrót informacyjny). */
+  formatLabel: string;
+};
+
+export const PRESET_CARD_META: Record<PresetType, PresetCardMeta> = {
+  LOCATION_BASIC: { widthMm: 50, heightMm: 30, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
+  LOCATION_BARCODE_LARGE: { widthMm: 100, heightMm: 50, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
+  RACK_SEGMENT_STRIP: { widthMm: 400, heightMm: 50, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
+  PALLET_LABEL: { widthMm: 100, heightMm: 80, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
+  AISLE_LABEL: { widthMm: 80, heightMm: 120, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
+  FLOOR_LOCATION: { widthMm: 150, heightMm: 80, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
+  RACK_BEAM_MULTISECTION: { widthMm: 300, heightMm: 40, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
+};
+
+/** Jedna linia metadanych: np. „Zebra • 100×50 mm • Kod 128”. */
+export function formatPresetSpecLine(type: PresetType): string {
+  const m = PRESET_CARD_META[type];
+  return `${m.formatLabel} • ${m.widthMm}×${m.heightMm} mm • ${m.barcodeLabel}`;
+}
 
 /**
  * Generate a full LabelTemplate for the given preset type.
@@ -130,36 +167,46 @@ export function generatePreset(type: PresetType): LabelTemplate {
             template: {
               elements: [
                 {
-                  id: genId("seg", 0),
-                  type: "rect",
+                  id: genId("grp", 0),
+                  type: "group",
                   x: 0,
                   y: 0,
                   width: 50,
                   height: 50,
-                  strokeWidth: 1,
-                },
-                {
-                  id: genId("seg", 1),
-                  type: "dynamicText",
-                  x: 5,
-                  y: 5,
-                  width: 40,
-                  height: 12,
-                  binding: "loc_name",
-                  fontSize: 16,
-                  align: "center",
-                },
-                {
-                  id: genId("seg", 2),
-                  type: "barcode",
-                  x: 5,
-                  y: 20,
-                  width: 40,
-                  height: 20,
-                  format: "Code128",
-                  dataBinding: "barcode_data",
-                  showValue: false,
-                },
+                  elements: [
+                    {
+                      id: genId("seg", 0),
+                      type: "rect",
+                      x: 0,
+                      y: 0,
+                      width: 50,
+                      height: 50,
+                      strokeWidth: 1,
+                    },
+                    {
+                      id: genId("seg", 1),
+                      type: "dynamicText",
+                      x: 5,
+                      y: 5,
+                      width: 40,
+                      height: 12,
+                      binding: "loc_name",
+                      fontSize: 16,
+                      align: "center",
+                    },
+                    {
+                      id: genId("seg", 2),
+                      type: "barcode",
+                      x: 5,
+                      y: 20,
+                      width: 40,
+                      height: 20,
+                      format: "Code128",
+                      dataBinding: "barcode_data",
+                      showValue: false,
+                    },
+                  ],
+                } satisfies GroupElement,
               ],
             },
           },
@@ -180,7 +227,7 @@ export function generatePreset(type: PresetType): LabelTemplate {
             y: 5,
             width: 90,
             height: 8,
-            text: "PALLET",
+            text: "PALETA",
             fontSize: 10,
             bold: true,
             align: "center",
@@ -226,7 +273,7 @@ export function generatePreset(type: PresetType): LabelTemplate {
             width: 76,
             height: 116,
             strokeWidth: 2,
-            backgroundColor: "#1e293b",
+            fill: "#1e293b",
           },
           {
             id: genId("el", 1),
@@ -270,7 +317,7 @@ export function generatePreset(type: PresetType): LabelTemplate {
             width: 150,
             height: 80,
             strokeWidth: 3,
-            backgroundColor: "#fef3c7",
+            fill: "#fef3c7",
           },
           {
             id: genId("el", 1),
@@ -319,36 +366,46 @@ export function generatePreset(type: PresetType): LabelTemplate {
             template: {
               elements: [
                 {
-                  id: genId("bm", 0),
-                  type: "rect",
+                  id: genId("grp", 0),
+                  type: "group",
                   x: 0,
                   y: 0,
                   width: 30,
                   height: 40,
-                  strokeWidth: 0.5,
-                },
-                {
-                  id: genId("bm", 1),
-                  type: "dynamicText",
-                  x: 2,
-                  y: 2,
-                  width: 26,
-                  height: 10,
-                  binding: "loc_name",
-                  fontSize: 8,
-                  align: "center",
-                },
-                {
-                  id: genId("bm", 2),
-                  type: "barcode",
-                  x: 2,
-                  y: 14,
-                  width: 26,
-                  height: 22,
-                  format: "Code128",
-                  dataBinding: "barcode_data",
-                  showValue: false,
-                },
+                  elements: [
+                    {
+                      id: genId("bm", 0),
+                      type: "rect",
+                      x: 0,
+                      y: 0,
+                      width: 30,
+                      height: 40,
+                      strokeWidth: 0.5,
+                    },
+                    {
+                      id: genId("bm", 1),
+                      type: "dynamicText",
+                      x: 2,
+                      y: 2,
+                      width: 26,
+                      height: 10,
+                      binding: "loc_name",
+                      fontSize: 8,
+                      align: "center",
+                    },
+                    {
+                      id: genId("bm", 2),
+                      type: "barcode",
+                      x: 2,
+                      y: 14,
+                      width: 26,
+                      height: 22,
+                      format: "Code128",
+                      dataBinding: "barcode_data",
+                      showValue: false,
+                    },
+                  ],
+                } satisfies GroupElement,
               ],
             },
           },

@@ -1,7 +1,7 @@
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.location import Location
 from ..services.warehouse_layout_service import WarehouseLayoutService
+from ..services.warehouse_occupancy_service import get_occupancy_metrics
 from ..schemas.warehouse_layout import WarehouseLayoutPayload
+from ..schemas.structure_report_pdf import StructureReportPdfRequest
+from ..services.structure_report_pdf_service import generate_structure_report_pdf_bytes
 
 router = APIRouter(prefix="/warehouse", tags=["Warehouse Layout"])
 
@@ -70,6 +73,47 @@ def get_layout(
     }
 
 
+@router.post("/structure-report-pdf")
+def structure_report_pdf(
+    tenant_id: int,
+    warehouse_id: int,
+    body: StructureReportPdfRequest,
+):
+    """
+    Raport struktury magazynu (HTML → PDF przez Puppeteer).
+    Ciało żądania: ten sam obiekt co `buildWarehouseStructurePdfPayload` na froncie.
+    """
+    try:
+        pdf_bytes = generate_structure_report_pdf_bytes(body.model_dump())
+        return _pdf_response(pdf_bytes, f"raport-struktury-magazynu-{warehouse_id}.pdf")
+    except Exception as e:
+        logger.exception("Structure report PDF generation failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/occupancy-metrics")
+def warehouse_occupancy_metrics(
+    tenant_id: int,
+    warehouse_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Wolumen zajęty: tylko inventory w slotach aktywnego layoutu (UUID binów), produkty bez ``deleted_at``.
+    Liczniki typów = sloty layoutu (nie wiersze ``locations``). Pole ``layout_capacity_volume_dm3`` — suma ``Bin.volume_dm3``.
+    """
+    return get_occupancy_metrics(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
+@router.post("/occupancy-metrics/rebuild")
+def warehouse_occupancy_metrics_rebuild(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    """To samo co GET — brak osobnej tabeli cache; endpoint pod integracje / „wymuś odświeżenie”."""
+    return get_occupancy_metrics(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,12 +122,18 @@ def get_location_labels(
     tenant_id: int,
     warehouse_id: int,
     template_id: int | None = None,
+    exclude_floors: list[str] | None = Query(None, description="Exclude locations on these floors (repeat param)"),
     db: Session = Depends(get_db),
 ):
     """Generate location labels PDF using the label template system. Use default location template if template_id not provided."""
     try:
         service = WarehouseLayoutService(db)
-        pdf_bytes = service.get_location_labels_pdf(tenant_id, warehouse_id, template_id=template_id)
+        pdf_bytes = service.get_location_labels_pdf(
+            tenant_id,
+            warehouse_id,
+            template_id=template_id,
+            exclude_floors=exclude_floors,
+        )
         return _pdf_response(pdf_bytes, f"location-labels-warehouse-{warehouse_id}.pdf")
     except Exception as e:
         logger.exception("Location labels PDF generation failed")

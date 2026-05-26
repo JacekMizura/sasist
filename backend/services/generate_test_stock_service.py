@@ -1,5 +1,5 @@
 """
-Dev utility: generate test warehouse stock (Stock table).
+Dev utility: generate test warehouse stock (Inventory table).
 
 Randomly assigns tenant products to warehouse storage locations with random quantities.
 Excludes special locations (PICK_START, PACKING, DOCK, and names like IMPORT, BUFFER).
@@ -9,7 +9,7 @@ Respects location capacity (max_volume, max_weight, max_units) if defined.
 import random
 from sqlalchemy.orm import Session
 
-from ..models.stock import Stock
+from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
 
@@ -92,13 +92,13 @@ def generate_test_stock(
     replace_existing: bool = False,
 ) -> dict:
     """
-    Generate test stock: randomly assign tenant products to warehouse storage locations.
+    Generate test inventory: randomly assign tenant products to warehouse storage locations.
     Returns { products_assigned, locations_used, total_stock_rows_created }.
     """
     if replace_existing:
-        db.query(Stock).filter(
-            Stock.tenant_id == tenant_id,
-            Stock.warehouse_id == warehouse_id,
+        db.query(Inventory).filter(
+            Inventory.tenant_id == tenant_id,
+            Inventory.warehouse_id == warehouse_id,
         ).delete(synchronize_session=False)
         db.flush()
 
@@ -126,10 +126,10 @@ def generate_test_stock(
     existing_keys = set()
     if not replace_existing:
         existing = (
-            db.query(Stock.tenant_id, Stock.product_id, Stock.warehouse_id, Stock.location_id)
+            db.query(Inventory.tenant_id, Inventory.product_id, Inventory.warehouse_id, Inventory.location_id)
             .filter(
-                Stock.tenant_id == tenant_id,
-                Stock.warehouse_id == warehouse_id,
+                Inventory.tenant_id == tenant_id,
+                Inventory.warehouse_id == warehouse_id,
             )
             .all()
         )
@@ -164,11 +164,12 @@ def generate_test_stock(
             ):
                 continue
             db.add(
-                Stock(
+                Inventory(
                     tenant_id=tenant_id,
                     product_id=product.id,
                     warehouse_id=warehouse_id,
                     location_id=loc_id,
+                    location_uuid=getattr(loc, "location_uuid", None),
                     quantity=qty,
                 )
             )

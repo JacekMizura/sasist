@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { log } from "../../utils/logger";
 import api from "../../api/axios";
 import type { RackState, BinState } from "../../types/warehouse";
 import type { LabelTemplate, TemplateElement, RepeaterElement } from "../../types/labelSystem";
@@ -125,8 +126,8 @@ export function RackLabelDownloadModal({ rack, locations, onClose }: Props) {
 
       const chunks = chunk(effectiveLocations, capacity);
 
-      console.log("effectiveLocations", effectiveLocations);
-      console.log("chunks", chunks);
+      log("effectiveLocations", effectiveLocations);
+      log("chunks", chunks);
 
       const rackName = rack.name ?? `${(rack as { rowPrefix?: string }).rowPrefix ?? "A"}${(rack as { indexInRow?: number }).indexInRow ?? rack.rack_index ?? 1}`;
       const svgs: string[] = [];
@@ -170,8 +171,8 @@ export function RackLabelDownloadModal({ rack, locations, onClose }: Props) {
           level: firstLevel,
           position: firstPosition,
         };
-        console.log("datasetItems", datasetItems);
-        console.log("record", record);
+        log("datasetItems", datasetItems);
+        log("record", record);
         const svg = await renderLabel(template, record);
         svgs.push(svg);
       }

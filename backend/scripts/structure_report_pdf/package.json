@@ -1,0 +1,8 @@
+{
+  "name": "warehouse-structure-report-pdf",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "puppeteer": "^23.11.1"
+  }
+}

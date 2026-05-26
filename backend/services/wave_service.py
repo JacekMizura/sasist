@@ -2,7 +2,7 @@
 Wave Service
 
 - create_wave: take up to wave_size orders (FIFO or location_clustering); create wave, PickWave;
-  create StockReservations and PickTasks from order items (allocate from Stock), link via PickWaveTask.
+  create StockReservations and PickTasks from order items (allocate from Inventory), link via PickWaveTask.
 - list_waves, get_wave: list/get waves with metrics (locations_count, estimated_distance, estimated_picking_time).
 """
 
@@ -17,12 +17,13 @@ from ..models.order import Order
 from ..models.order_item import OrderItem
 from ..models.pick_wave import PickWave, PickWaveTask
 from ..models.pick_task import PickTask
-from ..models.stock import Stock
+from ..models.inventory import Inventory
 from ..models.stock_reservation import StockReservation
 from ..models.product import Product
 from ..models.location import Location
 from ..models.warehouse import Bin
 from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority, is_pickable
+from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 
 logger = logging.getLogger(__name__)
 
@@ -122,35 +123,52 @@ def _effective_pick_sequence(pick_sequence: int | None) -> int:
     return pick_sequence if pick_sequence is not None else EFFECTIVE_SEQ_UNSEQUENCED
 
 
-def select_stock_by_pick_sequence(
+def _reserved_qty_at_lot(
+    db: Session,
+    tenant_id: int,
+    product_id: int,
+    location_id: int,
+    batch_number: str,
+    expiry_date,
+) -> float:
+    r = (
+        db.query(func.coalesce(func.sum(StockReservation.quantity), 0))
+        .filter(
+            StockReservation.tenant_id == tenant_id,
+            StockReservation.product_id == product_id,
+            StockReservation.location_id == location_id,
+            StockReservation.batch_number == batch_number,
+            StockReservation.expiry_date == expiry_date,
+            StockReservation.status == "reserved",
+        )
+        .scalar()
+    )
+    return float(r or 0)
+
+
+def allocate_inventory_slices_fefo_pick_path(
     db: Session,
     tenant_id: int,
     product_id: int,
     warehouse_id: int,
     need: float,
     current_pick_sequence: int,
-) -> tuple[Stock | None, int]:
+) -> tuple[list[tuple[Inventory, float]], int]:
     """
-    Choose a Stock row for picking by warehouse pick path order.
-
-    Algorithm:
-    1. Get all Stock rows for (tenant, product, warehouse) with quantity >= need and enough available.
-    2. Select location with smallest pick_sequence >= current_pick_sequence.
-    3. If none exists, wrap around and select location with smallest pick_sequence.
-
-    Returns (chosen_stock_row, next_pick_sequence). next_pick_sequence is the chosen location's
-    pick_sequence (for advancing the virtual picker), or current_pick_sequence if chosen location
-    has no pick_sequence set.
+    Allocate `need` across inventory rows: FEFO (expiry_date asc), then pick path order.
+    May return multiple (row, qty) slices from different lots/locations.
     """
+    if need <= 0:
+        return ([], current_pick_sequence)
     stock_rows = (
-        db.query(Stock, Location.pick_sequence, Bin.storage_type)
-        .join(Location, Stock.location_id == Location.id)
+        db.query(Inventory, Location.pick_sequence, Bin.storage_type)
+        .join(Location, Inventory.location_id == Location.id)
         .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
         .filter(
-            Stock.tenant_id == tenant_id,
-            Stock.product_id == product_id,
-            Stock.warehouse_id == warehouse_id,
-            Stock.quantity >= need,
+            Inventory.tenant_id == tenant_id,
+            Inventory.product_id == product_id,
+            Inventory.warehouse_id == warehouse_id,
+            Inventory.quantity > 0,
             or_(
                 Bin.id.is_(None),
                 Bin.storage_type.is_(None),
@@ -159,42 +177,44 @@ def select_stock_by_pick_sequence(
         )
         .all()
     )
-    candidates: list[tuple[Stock, int | None, str | None]] = []
+    candidates: list[tuple[Inventory, int | None, str | None]] = []
     for row, pick_sequence, storage_type in stock_rows:
-        reserved = (
-            db.query(func.coalesce(func.sum(StockReservation.quantity), 0))
-            .filter(
-                StockReservation.tenant_id == row.tenant_id,
-                StockReservation.product_id == row.product_id,
-                StockReservation.location_id == row.location_id,
-                StockReservation.status == "reserved",
-            )
-            .scalar()
-        ) or 0
-        if float(row.quantity) - float(reserved) >= need:
-            candidates.append((row, pick_sequence, storage_type))
+        bn = getattr(row, "batch_number", "") or ""
+        ed = getattr(row, "expiry_date", None) or NO_EXPIRY_SENTINEL
+        reserved = _reserved_qty_at_lot(db, tenant_id, product_id, row.location_id, bn, ed)
+        if float(row.quantity) - reserved <= 0:
+            continue
+        candidates.append((row, pick_sequence, storage_type))
     if not candidates:
-        return (None, current_pick_sequence)
-    # Reserve is only for replenishment, never direct picking.
-    # Future feature may allow override per warehouse.
+        return ([], current_pick_sequence)
     best_priority = min(get_storage_priority(item[2]) or EFFECTIVE_SEQ_UNSEQUENCED for item in candidates)
-    candidates = [item for item in candidates if (get_storage_priority(item[2]) or EFFECTIVE_SEQ_UNSEQUENCED) == best_priority]
+    candidates = [c for c in candidates if (get_storage_priority(c[2]) or EFFECTIVE_SEQ_UNSEQUENCED) == best_priority]
     candidates.sort(
         key=lambda item: (
+            getattr(item[0], "expiry_date", None) or NO_EXPIRY_SENTINEL,
             _effective_pick_sequence(item[1]),
             item[0].location_id,
+            item[0].id,
         )
     )
-    # First try: smallest sequence >= current_pick_sequence within the best pickable storage type.
+    remaining = float(need)
+    slices: list[tuple[Inventory, float]] = []
+    next_seq_out = current_pick_sequence
     for row, pick_sequence, _storage_type in candidates:
-        seq = _effective_pick_sequence(pick_sequence)
-        if seq >= current_pick_sequence:
-            next_seq = pick_sequence if pick_sequence is not None else current_pick_sequence
-            return (row, next_seq)
-    # Wrap: take first (smallest sequence)
-    chosen, pick_sequence, _storage_type = candidates[0]
-    next_seq = pick_sequence if pick_sequence is not None else current_pick_sequence
-    return (chosen, next_seq)
+        if remaining <= 1e-9:
+            break
+        bn = getattr(row, "batch_number", "") or ""
+        ed = getattr(row, "expiry_date", None) or NO_EXPIRY_SENTINEL
+        reserved = _reserved_qty_at_lot(db, tenant_id, product_id, row.location_id, bn, ed)
+        avail = float(row.quantity) - reserved
+        if avail <= 0:
+            continue
+        take = min(remaining, avail)
+        slices.append((row, take))
+        remaining -= take
+        if pick_sequence is not None:
+            next_seq_out = pick_sequence
+    return (slices, next_seq_out)
 
 
 def _get_order_locations_sets(
@@ -377,11 +397,14 @@ def create_wave(
     for order in orders_ready:
         order.wave_id = wave.id
 
-    # Create stock reservations and pick tasks from order items (allocate from Stock)
+    # Create stock reservations and pick tasks from order items (allocate from Inventory)
     order_ids = [o.id for o in orders_ready]
     order_items = (
         db.query(OrderItem)
-        .filter(OrderItem.order_id.in_(order_ids))
+        .filter(
+            OrderItem.order_id.in_(order_ids),
+            OrderItem.is_bundle_parent.is_(False),
+        )
         .all()
     )
     # Virtual picker position along the warehouse pick path (pick_sequence). Advances as we assign picks.
@@ -390,37 +413,44 @@ def create_wave(
         need = float(oi.quantity)
         if need <= 0:
             continue
-        chosen, next_sequence = select_stock_by_pick_sequence(
+        slices, next_sequence = allocate_inventory_slices_fefo_pick_path(
             db, tenant_id, oi.product_id, warehouse_id, need, current_pick_sequence
         )
-        if not chosen:
+        if not slices or sum(s[1] for s in slices) + 1e-9 < need:
             logger.warning(
                 "No stock for order_item order_id=%s product_id=%s qty=%s",
                 oi.order_id, oi.product_id, need,
             )
             continue
         current_pick_sequence = next_sequence
-        res = StockReservation(
-            tenant_id=tenant_id,
-            order_id=oi.order_id,
-            product_id=oi.product_id,
-            location_id=chosen.location_id,
-            quantity=need,
-            status="reserved",
-        )
-        db.add(res)
-        db.flush()
-        task = PickTask(
-            tenant_id=tenant_id,
-            order_id=oi.order_id,
-            product_id=oi.product_id,
-            location_id=chosen.location_id,
-            quantity=need,
-            status="waiting",
-        )
-        db.add(task)
-        db.flush()
-        db.add(PickWaveTask(wave_id=pick_wave.id, pick_task_id=task.id))
+        for chosen, slice_qty in slices:
+            bn = getattr(chosen, "batch_number", "") or ""
+            ed = getattr(chosen, "expiry_date", None) or NO_EXPIRY_SENTINEL
+            res = StockReservation(
+                tenant_id=tenant_id,
+                order_id=oi.order_id,
+                product_id=oi.product_id,
+                location_id=chosen.location_id,
+                quantity=float(slice_qty),
+                status="reserved",
+                batch_number=bn,
+                expiry_date=ed,
+            )
+            db.add(res)
+            db.flush()
+            task = PickTask(
+                tenant_id=tenant_id,
+                order_id=oi.order_id,
+                product_id=oi.product_id,
+                location_id=chosen.location_id,
+                quantity=float(slice_qty),
+                status="waiting",
+                batch_number=bn,
+                expiry_date=ed,
+            )
+            db.add(task)
+            db.flush()
+            db.add(PickWaveTask(wave_id=pick_wave.id, pick_task_id=task.id))
 
     db.commit()
     db.refresh(wave)

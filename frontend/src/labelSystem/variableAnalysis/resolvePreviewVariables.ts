@@ -3,7 +3,7 @@ import type { TemplateVariableAnalysis, VariableUsage } from "./analyzeTemplateV
 export interface VariablePreview {
   name: string;
   dataset?: string;
-  type: "text" | "barcode";
+  type: "text" | "barcode" | "image";
   resolvedValue: string;
   resolved: boolean;
 }

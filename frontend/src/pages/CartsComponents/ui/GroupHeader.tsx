@@ -18,23 +18,22 @@ export default function GroupHeader({
   rightActions,
 }: GroupHeaderProps) {
   return (
-    <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 flex items-center justify-between">
-      <button onClick={onToggle} className="flex items-center gap-4 flex-1 text-left">
-        <div className={`transition-transform ${collapsed ? "" : "rotate-90"}`}>
-          <ChevronIcon className="w-5 h-5 text-slate-400" />
+    <div className="flex w-full items-center justify-between gap-2 border-b border-slate-200 py-3">
+      <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-3 text-left sm:gap-4">
+        <div className={`shrink-0 transition-transform ${collapsed ? "" : "rotate-90"}`}>
+          <ChevronIcon className="h-5 w-5 text-slate-400" />
         </div>
-        <div>
-          <div className="text-[11px] font-black text-slate-700 uppercase tracking-[0.25em] italic">
-            {title} <span className="ml-2 text-slate-300 font-black">({count})</span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="text-sm font-semibold text-slate-900">
+            {title}{" "}
+            <span className="font-medium text-slate-400">({count})</span>
           </div>
           {summaryText ? (
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-              {summaryText}
-            </div>
+            <div className="text-xs text-slate-600">{summaryText}</div>
           ) : null}
         </div>
       </button>
-      <div className="flex items-center gap-3">{rightActions}</div>
+      <div className="ml-2 flex shrink-0 flex-wrap items-center justify-end gap-2">{rightActions}</div>
     </div>
   );
 }

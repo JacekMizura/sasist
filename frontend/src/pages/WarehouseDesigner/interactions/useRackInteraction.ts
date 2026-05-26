@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import type { EmptyRowSlot, LayoutState, RackState, RowContainer } from "../../../types/warehouse";
-import { isCellInsideRack } from "../utils/designerMouseUtils";
+import { rackMatchesSlotRackId } from "../../../components/warehouse/warehouseUtils";
+import { pickRackAtCell } from "../utils/designerMouseUtils";
 
 export interface RackInteractionHelpers {
   findSnapToRowPosition: (racks: RackState[], x: number, y: number, w: number, h: number, excludeId?: number | string) => { x: number; y: number } | null;
@@ -75,9 +76,19 @@ export function useRackInteraction(params: UseRackInteractionParams) {
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, cell: { x: number; y: number }) => {
-      const hit = layout.racks.find((r) => isCellInsideRack(cell, r));
+      const hit = pickRackAtCell(layout.racks, cell);
       if (!hit) return false;
       const rid = hit.id ?? hit.rack_index;
+      if (import.meta.env.DEV && mainView === "layout") {
+        const label = (hit.name ?? "").trim() || String(hit.rack_index ?? "");
+        console.debug("[designer-rack-click]", {
+          cell,
+          hitRackId: rid,
+          hitUuid: hit.uuid,
+          hitLabel: label,
+          selectedRackIdWillBe: rid,
+        });
+      }
       if (routeMode) {
         addRackToRoute?.(rid);
         return true;
@@ -93,16 +104,11 @@ export function useRackInteraction(params: UseRackInteractionParams) {
         setRackDragPreviewPosition({ x: hit.x, y: hit.y });
         /* Magazyn live map only: mousedown selects rack + side context; cancel rack drag (map is not for moving racks). */
         if (magazynMapInteractions) {
-          if (import.meta.env.DEV) {
-            console.log("RACK CLICK", { selectedRackId: rid, mainView, magazynMapInteractions: true });
-          }
           setSelectedRackIdForSideView(rid);
           setSelectedLocationForProducts(null);
           setProductSearchQuery("");
           setShowAllProductsInSidebar(false);
           setDraggingRackId(null);
-        } else if (import.meta.env.DEV) {
-          console.log("RACK CLICK", { selectedRackId: rid, mainView, magazynMapInteractions: false });
         }
       }
       return true;
@@ -184,19 +190,22 @@ export function useRackInteraction(params: UseRackInteractionParams) {
 
   const handleMouseUp = useCallback(() => {
     if (draggingRackId == null) return;
-    const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === draggingRackId);
+    const rack = layout.racks.find((r) => rackMatchesSlotRackId(r, draggingRackId));
     const finalPos = rackDragPreviewPosition ?? (rack ? { x: rack.x, y: rack.y } : { x: 0, y: 0 });
     if (selectedRackIds.length > 1 && rack) {
       const groupIds = new Set(selectedRackIds);
       const groupIdStrings = new Set<string>();
       for (const id of selectedRackIds) {
         groupIdStrings.add(String(id));
-        const r = layout.racks.find((ra) => String(ra.id ?? ra.rack_index) === String(id));
-        if (r) groupIdStrings.add(String(r.rack_index));
+        const r = layout.racks.find((ra) => rackMatchesSlotRackId(ra, id));
+        if (r) {
+          groupIdStrings.add(String(r.rack_index));
+          if (r.uuid) groupIdStrings.add(String(r.uuid));
+        }
       }
       const positions = new Map<number | string, { x: number; y: number }>();
       for (const id of selectedRackIds) {
-        const r = layout.racks.find((ra) => (ra.id ?? ra.rack_index) === id);
+        const r = layout.racks.find((ra) => rackMatchesSlotRackId(ra, id));
         if (!r) continue;
         positions.set(id, {
           x: finalPos.x + (r.x - rack.x),
@@ -216,9 +225,12 @@ export function useRackInteraction(params: UseRackInteractionParams) {
             return { ...rc, slots: computeRowSlotPositions(rc.slots, startX, startY, rc.orientation ?? "horizontal") };
           });
           const updatedRacks = prev.racks.map((r) => {
-            const pos = positions.get(r.id ?? r.rack_index);
+            let pos = positions.get(r.id ?? r.rack_index);
+            if (pos == null && r.uuid) pos = positions.get(r.uuid);
             if (pos) return { ...r, x: pos.x, y: pos.y };
-            const slotForRack = newSlotsByRow.flatMap((rc) => rc.slots).find((s: { rackId?: number | string }) => s.rackId != null && String(s.rackId) === String(r.id ?? r.rack_index));
+            const slotForRack = newSlotsByRow
+              .flatMap((rc) => rc.slots)
+              .find((s: { rackId?: number | string }) => s.rackId != null && rackMatchesSlotRackId(r, s.rackId));
             if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
             return r;
           });
@@ -262,8 +274,10 @@ export function useRackInteraction(params: UseRackInteractionParams) {
             );
             const newSlots = computeRowSlotPositions(cleared, startX, startY, row.orientation ?? "horizontal");
             const updatedRacks = prev.racks.map((r) => {
-              if ((r.id ?? r.rack_index) === draggingRackId) return { ...r, x: finalPos.x, y: finalPos.y };
-              const slotForRack = newSlots.find((s: { rackId?: number | string }) => s.rackId != null && String(s.rackId) === String(r.id ?? r.rack_index));
+              if (rackMatchesSlotRackId(r, draggingRackId)) return { ...r, x: finalPos.x, y: finalPos.y };
+              const slotForRack = newSlots.find(
+                (s: { rackId?: number | string }) => s.rackId != null && rackMatchesSlotRackId(r, s.rackId)
+              );
               if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
               return r;
             });
@@ -276,7 +290,12 @@ export function useRackInteraction(params: UseRackInteractionParams) {
         }
       } else {
         setLayout((prev) => {
-          const withPosition = { ...prev, racks: prev.racks.map((r) => (r.id ?? r.rack_index) === draggingRackId ? { ...r, x: finalPos.x, y: finalPos.y } : r) };
+          const withPosition = {
+            ...prev,
+            racks: prev.racks.map((r) =>
+              rackMatchesSlotRackId(r, draggingRackId) ? { ...r, x: finalPos.x, y: finalPos.y } : r
+            ),
+          };
           return { ...withPosition, racks: reindexGeometricRow(withPosition.racks, draggingRackId) } as LayoutState;
         });
       }

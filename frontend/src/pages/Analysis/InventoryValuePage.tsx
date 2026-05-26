@@ -33,10 +33,10 @@ export default function InventoryValuePage() {
     return () => { cancelled = true; };
   }, []);
 
-  if (loading) return <div className="p-6"><p className="text-slate-500">Ładowanie…</p></div>;
+  if (loading) return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
   if (error) {
     return (
-      <div className="p-6">
+      <div className="min-w-0">
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
           <p className="text-sm mt-1">{error}</p>
@@ -48,7 +48,7 @@ export default function InventoryValuePage() {
   const nameById = Object.fromEntries(warehouses.map((w) => [w.id, w.name ?? `Magazyn ${w.id}`]));
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <h2 className="text-lg font-semibold text-slate-800 mb-4">Wartość magazynowa</h2>
       <p className="text-slate-600 mb-6">Wartość zapasów (tenant {DEFAULT_TENANT_ID}) – suma quantity × purchase_price.</p>
       <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm mb-6 max-w-md">

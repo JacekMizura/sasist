@@ -7,6 +7,7 @@ import {
   checkMissingDataset,
   checkInvalidRepeater,
   checkBarcodeEmpty,
+  checkSiblingRepeaterDatasetConflicts,
 } from "./validationRules";
 
 function walk(
@@ -18,6 +19,7 @@ function walk(
   warnings: ValidationIssue[],
   info: ValidationIssue[]
 ): void {
+  checkSiblingRepeaterDatasetConflicts(elements, pathPrefix, warnings);
   for (const el of elements) {
     const path = pathPrefix ? `${pathPrefix}.${el.id}` : el.id;
     const ctx = { elementId: el.id, path };

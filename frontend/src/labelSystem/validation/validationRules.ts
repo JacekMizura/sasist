@@ -1,4 +1,10 @@
-import type { LabelElement, RepeaterElement, DynamicTextElement, BarcodeElement } from "../../types/labelSystem";
+import type {
+  LabelElement,
+  RepeaterElement,
+  DynamicTextElement,
+  BarcodeElement,
+  TemplateElement,
+} from "../../types/labelSystem";
 import type { ValidationIssue } from "./validationTypes";
 
 export type ValidationScope = { type: "root" } | { type: "dataset"; dataset: string };
@@ -137,6 +143,38 @@ export function checkInvalidRepeater(
     });
   }
   return issues;
+}
+
+/**
+ * Warn when several sibling repeaters bind the same dataset without filters — each would render the full list.
+ */
+export function checkSiblingRepeaterDatasetConflicts(
+  elements: TemplateElement[],
+  pathPrefix: string,
+  warnings: ValidationIssue[]
+): void {
+  const repeaters = elements.filter((e): e is RepeaterElement => e.type === "repeater");
+  const byDataset = new Map<string, RepeaterElement[]>();
+  for (const r of repeaters) {
+    const key = (r.dataset ?? "").trim();
+    if (!key) continue;
+    const list = byDataset.get(key) ?? [];
+    list.push(r);
+    byDataset.set(key, list);
+  }
+  for (const [dataset, list] of byDataset) {
+    if (list.length < 2) continue;
+    const noFilter = list.filter((r) => !(typeof r.filter === "string" && r.filter.trim()));
+    if (noFilter.length < 2) continue;
+    warnings.push({
+      code: "REPEATER_DUPLICATE_DATASET",
+      severity: "warning",
+      message: `Powtarzacz: dataset "${dataset}" jest używany przez ${list.length} elementy bez rozróżniających filtrów — każdy narysuje całą listę (duplikacja). Zostaw jeden powtarzacz (np. kolory przez visibleIf / {repeater_slot}) albo ustaw filtr (np. {dataset_index} == 0).`,
+      elementId: list[0]?.id,
+      path: pathPrefix || undefined,
+      details: { dataset, repeaterIds: list.map((r) => r.id) },
+    });
+  }
 }
 
 export function checkBarcodeEmpty(

@@ -1,5 +1,5 @@
-import React from "react";
 import type { LayoutState, RackState } from "../../../types/warehouse";
+import { rackMatchesSlotRackId } from "../warehouseUtils";
 import type { CatalogItem } from "../../../types/warehouse";
 import { cellToPx } from "../renderUtils";
 import { radius } from "../../../layout/designTokens";
@@ -69,7 +69,7 @@ export function RowLayer(props: RowLayerProps) {
               ))}
               {ghostSlots.map((slot, i) => {
                 if (slot.rackId == null) return null;
-                const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === slot.rackId);
+                const rack = layout.racks.find((r) => rackMatchesSlotRackId(r, slot.rackId));
                 if (!rack) return null;
                 const rx = cellToPx(slot.x, cellPx) + 1;
                 const ry = cellToPx(slot.y, cellPx) + 1;

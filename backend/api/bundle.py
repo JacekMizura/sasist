@@ -1,0 +1,347 @@
+"""CRUD for virtual product bundles (no inventory)."""
+
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, joinedload
+
+from ..database import get_db
+from ..models.bundle import Bundle, BundleItem
+from ..models.inventory import Inventory
+from ..models.product import Product
+from ..schemas.bundle import (
+    BundleBulkDeleteBody,
+    BundleCreateBody,
+    BundleExpandLine,
+    BundleExpandResponse,
+    BundleItemRead,
+    BundleRead,
+    BundleUpdateBody,
+)
+from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
+from ..services.delete_service import delete_bundle_transaction, delete_bundles_bulk_transaction
+
+router = APIRouter(prefix="/bundles", tags=["Bundles"])
+
+
+def _inventory_qty_by_product_ids(db: Session, tenant_id: int, product_ids: List[int]) -> Dict[int, int]:
+    """Single aggregated query: SUM(inventory.quantity) per product (same semantics as product list)."""
+    if not product_ids:
+        return {}
+    rows = (
+        db.query(Inventory.product_id, func.sum(Inventory.quantity).label("qty"))
+        .filter(Inventory.tenant_id == tenant_id, Inventory.product_id.in_(product_ids))
+        .group_by(Inventory.product_id)
+        .all()
+    )
+    out: Dict[int, int] = {}
+    for r in rows:
+        q = r.qty
+        out[int(r.product_id)] = int(round(float(q))) if q is not None else 0
+    return out
+
+
+def _compute_calculated_stock(items: List[BundleItem], stock_map: Dict[int, int]) -> Optional[int]:
+    """min(floor(stock / required_qty)) over components; None if no items."""
+    if not items:
+        return None
+    parts: List[int] = []
+    for it in sorted(items, key=lambda x: (x.sort_order or 0, x.id or 0)):
+        pid = int(it.product_id)
+        req = max(1, int(it.quantity or 1))
+        st = int(stock_map.get(pid, 0))
+        parts.append(st // req)
+    return min(parts) if parts else None
+
+
+def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
+    items_out: List[BundleItemRead] = []
+    raw_items = list(b.items or [])
+    for it in sorted(raw_items, key=lambda x: (x.sort_order, x.id)):
+        p = it.product
+        pid = int(it.product_id)
+        pst = int(stock_map.get(pid, 0))
+        meta_raw = getattr(it, "metadata_json", None)
+        meta_s = str(meta_raw).strip() if meta_raw is not None and str(meta_raw).strip() else None
+        items_out.append(
+            BundleItemRead(
+                id=it.id,
+                product_id=pid,
+                quantity=int(it.quantity),
+                sort_order=int(it.sort_order or 0),
+                product_name=p.name if p else None,
+                product_sku=(p.sku or p.symbol) if p else None,
+                product_stock=pst,
+                metadata_json=meta_s,
+            )
+        )
+    calc = _compute_calculated_stock(raw_items, stock_map)
+    img = (getattr(b, "image_url", None) or "").strip() or None
+    return BundleRead(
+        id=b.id,
+        tenant_id=b.tenant_id,
+        name=b.name,
+        sku=b.sku,
+        ean=b.ean,
+        sale_price=float(b.sale_price) if b.sale_price is not None else None,
+        active=bool(b.active),
+        image_url=img,
+        calculated_stock=calc,
+        items=items_out,
+    )
+
+
+def _validate_bundle_items(db: Session, tenant_id: int, items: list) -> None:
+    if not items:
+        return
+    pids = {int(it.product_id) for it in items}
+    rows = (
+        db.query(Product.id, Product.tenant_id)
+        .filter(Product.id.in_(pids))
+        .all()
+    )
+    by_id = {int(r.id): int(r.tenant_id) for r in rows}
+    missing = [pid for pid in pids if pid not in by_id]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Unknown product_id: {missing}")
+    wrong = [pid for pid in pids if by_id.get(pid) != int(tenant_id)]
+    if wrong:
+        raise HTTPException(status_code=400, detail=f"Products not in tenant: {wrong}")
+
+
+def _normalize_active_filter(v: str) -> str:
+    s = (v or "active").strip().lower()
+    if s in ("all", "active", "inactive"):
+        return s
+    return "active"
+
+
+@router.get("/", response_model=List[BundleRead])
+def list_bundles(
+    tenant_id: int = Query(..., ge=1),
+    search: Optional[str] = Query(None, description="Match name, sku, or ean (partial); ignored if name or ean_sku set"),
+    name: Optional[str] = Query(None, description="Filter by name (partial); AND with ean_sku when both set"),
+    ean_sku: Optional[str] = Query(None, description="Filter by SKU or EAN (partial); AND with name when both set"),
+    active_filter: str = Query(
+        "active",
+        description="active | inactive | all",
+    ),
+    price_min: Optional[float] = Query(None, ge=0),
+    price_max: Optional[float] = Query(None, ge=0),
+    stock_min: Optional[int] = Query(None, ge=0),
+    stock_max: Optional[int] = Query(None, ge=0),
+    db: Session = Depends(get_db),
+):
+    af = _normalize_active_filter(active_filter)
+    q = db.query(Bundle).filter(Bundle.tenant_id == tenant_id, Bundle.deleted_at.is_(None))
+    if af == "active":
+        q = q.filter(Bundle.active.is_(True))
+    elif af == "inactive":
+        q = q.filter(Bundle.active.is_(False))
+
+    has_split = (name and name.strip()) or (ean_sku and ean_sku.strip())
+    if has_split:
+        if name and name.strip():
+            q = q.filter(Bundle.name.ilike(f"%{name.strip()}%"))
+        if ean_sku and ean_sku.strip():
+            t = f"%{ean_sku.strip()}%"
+            q = q.filter(or_(Bundle.sku.ilike(t), Bundle.ean.ilike(t)))
+    elif search and search.strip():
+        term = f"%{search.strip()}%"
+        q = q.filter(or_(Bundle.name.ilike(term), Bundle.sku.ilike(term), Bundle.ean.ilike(term)))
+
+    if price_min is not None:
+        q = q.filter(Bundle.sale_price.isnot(None), Bundle.sale_price >= float(price_min))
+    if price_max is not None:
+        q = q.filter(Bundle.sale_price.isnot(None), Bundle.sale_price <= float(price_max))
+
+    rows = q.options(joinedload(Bundle.items).joinedload(BundleItem.product)).order_by(Bundle.name).all()
+
+    all_pids: List[int] = []
+    for b in rows:
+        for it in b.items or []:
+            all_pids.append(int(it.product_id))
+    stock_map = _inventory_qty_by_product_ids(db, tenant_id, list(set(all_pids)))
+
+    out: List[BundleRead] = []
+    for b in rows:
+        br = _serialize_bundle(b, stock_map)
+        cs = br.calculated_stock
+        eff = 0 if cs is None else int(cs)
+        if stock_min is not None and eff < int(stock_min):
+            continue
+        if stock_max is not None and eff > int(stock_max):
+            continue
+        out.append(br)
+    return out
+
+
+@router.post("/bulk-delete", response_model=EntityBulkDeleteResult)
+def bundles_bulk_delete(body: BundleBulkDeleteBody, db: Session = Depends(get_db)):
+    result = delete_bundles_bulk_transaction(db, int(body.tenant_id), body.ids)
+    if result.get("errors"):
+        db.rollback()
+    else:
+        db.commit()
+    return entity_bulk_delete_result_from_service_dict(result)
+
+
+@router.get("/{bundle_id}/expand", response_model=BundleExpandResponse)
+def expand_bundle(
+    bundle_id: int,
+    tenant_id: int = Query(..., ge=1),
+    quantity: int = Query(1, ge=1, le=999999),
+    db: Session = Depends(get_db),
+):
+    b = (
+        db.query(Bundle)
+        .options(joinedload(Bundle.items).joinedload(BundleItem.product))
+        .filter(Bundle.id == bundle_id, Bundle.tenant_id == tenant_id)
+        .first()
+    )
+    if not b:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    if getattr(b, "deleted_at", None) is not None:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    if not b.active:
+        raise HTTPException(status_code=400, detail="Bundle is inactive")
+    items = sorted(b.items or [], key=lambda x: (x.sort_order, x.id))
+    if not items:
+        raise HTTPException(status_code=400, detail="Bundle has no components")
+    lines: List[BundleExpandLine] = []
+    for bi in items:
+        p = bi.product
+        if not p:
+            raise HTTPException(status_code=400, detail=f"Component product {bi.product_id} missing")
+        lines.append(
+            BundleExpandLine(
+                product_id=p.id,
+                product_name=p.name,
+                sku=p.sku or p.symbol,
+                quantity=int(bi.quantity) * int(quantity),
+            )
+        )
+    return BundleExpandResponse(
+        bundle_id=b.id,
+        bundle_name=b.name,
+        quantity=quantity,
+        lines=lines,
+    )
+
+
+@router.get("/{bundle_id}", response_model=BundleRead)
+def get_bundle(
+    bundle_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    b = (
+        db.query(Bundle)
+        .options(joinedload(Bundle.items).joinedload(BundleItem.product))
+        .filter(Bundle.id == bundle_id, Bundle.tenant_id == tenant_id)
+        .first()
+    )
+    if not b:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    if getattr(b, "deleted_at", None) is not None:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    pids = [int(it.product_id) for it in (b.items or [])]
+    stock_map = _inventory_qty_by_product_ids(db, tenant_id, pids)
+    return _serialize_bundle(b, stock_map)
+
+
+@router.post("/", response_model=BundleRead, status_code=201)
+def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
+    if not body.items:
+        raise HTTPException(status_code=400, detail="Bundle must have at least one component")
+    _validate_bundle_items(db, body.tenant_id, body.items)
+    img = (body.image_url or "").strip() or None if body.image_url is not None else None
+    b = Bundle(
+        tenant_id=body.tenant_id,
+        name=body.name.strip(),
+        sku=(body.sku or "").strip() or None,
+        ean=(body.ean or "").strip() or None,
+        sale_price=body.sale_price,
+        active=bool(body.active),
+        image_url=img,
+    )
+    db.add(b)
+    db.flush()
+    for it in body.items:
+        db.add(
+            BundleItem(
+                bundle_id=b.id,
+                product_id=int(it.product_id),
+                quantity=int(it.quantity),
+                sort_order=int(it.sort_order),
+            )
+        )
+    db.commit()
+    b = (
+        db.query(Bundle)
+        .options(joinedload(Bundle.items).joinedload(BundleItem.product))
+        .filter(Bundle.id == b.id)
+        .first()
+    )
+    pids = [int(x.product_id) for x in (b.items or [])]
+    stock_map = _inventory_qty_by_product_ids(db, body.tenant_id, pids)
+    return _serialize_bundle(b, stock_map)
+
+
+@router.put("/{bundle_id}", response_model=BundleRead)
+def update_bundle(
+    bundle_id: int,
+    body: BundleUpdateBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    b = db.query(Bundle).filter(Bundle.id == bundle_id, Bundle.tenant_id == tenant_id).first()
+    if not b:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    if getattr(b, "deleted_at", None) is not None:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    if not body.items:
+        raise HTTPException(status_code=400, detail="Bundle must have at least one component")
+    _validate_bundle_items(db, tenant_id, body.items)
+    b.name = body.name.strip()
+    b.sku = (body.sku or "").strip() or None
+    b.ean = (body.ean or "").strip() or None
+    b.sale_price = body.sale_price
+    b.active = bool(body.active)
+    if body.image_url is not None:
+        b.image_url = (body.image_url or "").strip() or None
+    db.query(BundleItem).filter(BundleItem.bundle_id == b.id).delete(synchronize_session=False)
+    for it in body.items:
+        db.add(
+            BundleItem(
+                bundle_id=b.id,
+                product_id=int(it.product_id),
+                quantity=int(it.quantity),
+                sort_order=int(it.sort_order),
+            )
+        )
+    db.commit()
+    b = (
+        db.query(Bundle)
+        .options(joinedload(Bundle.items).joinedload(BundleItem.product))
+        .filter(Bundle.id == bundle_id)
+        .first()
+    )
+    pids = [int(x.product_id) for x in (b.items or [])]
+    stock_map = _inventory_qty_by_product_ids(db, tenant_id, pids)
+    return _serialize_bundle(b, stock_map)
+
+
+@router.delete("/{bundle_id}", response_model=EntityBulkDeleteResult)
+def delete_bundle(
+    bundle_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    result = delete_bundle_transaction(db, tenant_id, bundle_id)
+    if result.get("errors"):
+        db.rollback()
+    else:
+        db.commit()
+    return entity_bulk_delete_result_from_service_dict(result)

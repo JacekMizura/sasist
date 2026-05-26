@@ -1,53 +1,39 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import PageLayout from "../../components/layout/PageLayout";
+import { TabsContainer } from "../../components/layout/TabsContainer";
+import { TabsNav } from "../../components/layout/TabsNav";
 import {
   ANALYTICS_TOP_TABS,
   getSubNavForPath,
   type SubNavItem,
 } from "../../modules/analytics/analyticsTabs";
 
+const ANALYTICS_TABS_NAV_ITEMS = ANALYTICS_TOP_TABS.map((tab) => ({
+  path: tab.path,
+  label: tab.label,
+  end: tab.id === "dashboard",
+  activePaths: tab.activePaths,
+}));
+
 function AnalyticsTabBar() {
-  const { pathname } = useLocation();
   return (
-    <nav
-      className="flex gap-4 border-b border-slate-200 mb-0"
-      role="tablist"
-    >
-      {ANALYTICS_TOP_TABS.map((tab) => {
-        const isActive = tab.activePaths.some((p) => pathname === p);
-        return (
-          <NavLink
-            key={tab.id}
-            to={tab.path}
-            end={tab.id === "dashboard"}
-            className={({ isActive: linkActive }) =>
-              `px-6 py-3 text-[11px] font-black uppercase tracking-widest transition-colors border-b-2 -mb-px ${
-                isActive || linkActive
-                  ? "text-blue-600 border-blue-600"
-                  : "text-slate-400 border-transparent hover:text-slate-600"
-              }`
-            }
-            role="tab"
-          >
-            {tab.label}
-          </NavLink>
-        );
-      })}
-    </nav>
+    <TabsContainer className="w-full max-w-full [-webkit-overflow-scrolling:touch]">
+      <TabsNav items={ANALYTICS_TABS_NAV_ITEMS} className="min-w-0 w-full overflow-x-auto" aria-label="Analiza — zakładki" />
+    </TabsContainer>
   );
 }
 
 function SubNav({ items }: { items: SubNavItem[] }) {
   const { pathname } = useLocation();
   return (
-    <nav className="flex flex-col gap-0.5 w-56 shrink-0">
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5">
       {items.map((item) => {
         const isActive = pathname === item.path;
         return (
           <NavLink
             key={item.path}
             to={item.path}
-            className={`block py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+            className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               isActive ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
@@ -60,8 +46,7 @@ function SubNav({ items }: { items: SubNavItem[] }) {
 }
 
 /**
- * Analytics module layout: one sidebar entry "Analiza", top tabs (Dashboard, Analityka, Symulacje, Optymalizacja, Mapy),
- * and per-tab sub-navigation. Same pattern as Wózki (Carts).
+ * Analytics module: top tabs + optional sub-nav + outlet.
  */
 export default function AnalyticsLayout() {
   const { pathname } = useLocation();
@@ -69,17 +54,15 @@ export default function AnalyticsLayout() {
   const isDashboard = pathname === "/analytics" || pathname === "/analytics/dashboard";
 
   return (
-    <PageLayout
-      title="Analiza"
-      actions={<AnalyticsTabBar />}
-    >
-      <div className="min-h-[600px] w-full relative flex gap-6">
-        {!isDashboard && subNav && (
+    <PageLayout fullBleed>
+      <AnalyticsTabBar />
+      <div className="relative flex min-h-[600px] w-full min-w-0 gap-6">
+        {!isDashboard && subNav != null ? (
           <aside className="shrink-0">
             <SubNav items={subNav} />
           </aside>
-        )}
-        <div className="flex-1 min-w-0">
+        ) : null}
+        <div className="flex min-h-[600px] min-w-0 flex-1 flex-col">
           <Outlet />
         </div>
       </div>

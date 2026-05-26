@@ -1,21 +1,18 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { log } from "../../utils/logger";
 import type { LayoutState } from "../../types/warehouse";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { clampGridToBuilding } from "../../components/warehouse/warehouseUtils";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { EditBuildingModal } from "./EditBuildingModal";
 
 export interface DesignerToolbarProps {
   mainView: "magazyn" | "layout";
-  setMainView: (v: "magazyn" | "layout") => void;
-  setEditingProductId: (v: React.SetStateAction<string | null>) => void;
-  warehouses: { id: number; name: string }[];
-  selectedWarehouseId: number | null;
-  setSelectedWarehouseId: (v: number | null) => void;
-  warehouseName: string;
   lastSavedAt: number | null;
   saveLayout: () => void;
   saving: boolean;
+  /** When set, save is disabled (e.g. duplicate rack names). Shown as button title. */
+  saveLayoutBlockedReason?: string | null;
   layout: LayoutState;
   setLayout: React.Dispatch<React.SetStateAction<LayoutState>>;
   /** Warehouse usage % (rack area / building area). When building not set, undefined. */
@@ -29,15 +26,10 @@ export interface DesignerToolbarProps {
 
 export function DesignerToolbar({
   mainView,
-  setMainView,
-  setEditingProductId,
-  warehouses,
-  selectedWarehouseId,
-  setSelectedWarehouseId,
-  warehouseName,
   lastSavedAt,
   saveLayout,
   saving,
+  saveLayoutBlockedReason,
   layout,
   setLayout,
   warehouseUsagePct,
@@ -46,7 +38,7 @@ export function DesignerToolbar({
   isRouteActive,
   onToggleRoutePlanning,
 }: DesignerToolbarProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { selectedWarehouseId } = useWarehouse();
   const [showEditBuildingLocal, setShowEditBuildingLocal] = useState(false);
   const showEditBuilding = setShowEditBuildingProp != null ? (showEditBuildingProp ?? false) : showEditBuildingLocal;
   const setShowEditBuilding = setShowEditBuildingProp ?? setShowEditBuildingLocal;
@@ -57,48 +49,25 @@ export function DesignerToolbar({
 
   return (
     <>
-      <nav className="flex rounded-xl bg-slate-100 p-0.5 border border-slate-100 shadow-sm" aria-label="Tryby">
-        <button
-          type="button"
-          onClick={() => { setMainView("magazyn"); setEditingProductId(null); const next = new URLSearchParams(searchParams); next.delete("view"); setSearchParams(next); }}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${mainView === "magazyn" ? "bg-cyan-600 text-white" : "text-slate-600 hover:bg-slate-200"}`}
-        >
-          {UI_STRINGS.warehouse.designerSubTabs.magazyn}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setMainView("layout"); const next = new URLSearchParams(searchParams); next.set("view", "layout"); setSearchParams(next); }}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${mainView === "layout" ? "bg-cyan-600 text-white" : "text-slate-600 hover:bg-slate-200"}`}
-        >
-          {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
-        </button>
-      </nav>
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
         {warehouseUsagePct != null && hasBuilding && (
-          <div className="flex items-center gap-2" title="Zajętość powierzchni (regały / budynek)">
-            <span className="text-sm text-slate-600">Zajętość</span>
-            <div className="w-32 h-2 bg-slate-200 rounded overflow-hidden">
+          <div
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200/70 bg-slate-50/95 px-2.5 py-1 shadow-sm shadow-slate-900/[0.03]"
+            title="Zajętość powierzchni (regały / budynek)"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Zajętość</span>
+            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200/90">
               <div
-                className="h-2 bg-emerald-500 rounded"
+                className="h-1.5 rounded-full bg-emerald-500 transition-[width] duration-300 ease-out"
                 style={{ width: `${Math.min(100, Math.max(0, Number(warehouseUsagePct)))}%` }}
               />
             </div>
-            <span className="text-sm text-slate-600 min-w-[2rem]">
+            <span className="min-w-[2.25rem] text-right text-[11px] font-semibold tabular-nums text-slate-700">
               {Number(warehouseUsagePct).toFixed(0)}%
             </span>
           </div>
         )}
-        <select
-          value={selectedWarehouseId ?? ""}
-          onChange={(e) => setSelectedWarehouseId(e.target.value ? Number(e.target.value) : null)}
-          className="rounded-lg border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2 min-w-[200px] focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400"
-        >
-          <option value="">{UI_STRINGS.warehouse.selector.selectWarehouse}</option>
-          {warehouses.map((wh) => (
-            <option key={wh.id} value={wh.id}>{wh.name}</option>
-          ))}
-        </select>
-        <span className={`text-xs font-mono px-2 py-1 rounded ${lastSavedAt != null ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
+        <span className={`inline-flex items-center rounded-md border border-slate-200/60 px-2 py-0.5 font-mono text-[10px] font-medium transition-colors duration-150 ${lastSavedAt != null ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
           {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
         </span>
         {mainView === "layout" && (
@@ -106,10 +75,10 @@ export function DesignerToolbar({
             type="button"
             onClick={onToggleRoutePlanning}
             aria-pressed={isRouteActive}
-            className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors border-2 ${
+            className={`h-8 rounded-lg border px-3 text-[11px] font-semibold transition-all duration-150 ${
               isRouteActive
-                ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                : "bg-white text-blue-700 border-blue-600 hover:bg-blue-50"
+                ? "border-blue-600 bg-blue-600 text-white shadow-md shadow-blue-900/20"
+                : "border-slate-200/80 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
             }`}
           >
             {isRouteActive ? "Zakończ trasę" : "Planuj trasę"}
@@ -118,9 +87,24 @@ export function DesignerToolbar({
         {mainView === "layout" && (
           <button
             type="button"
-            onClick={saveLayout}
+            onClick={() => {
+              if (selectedWarehouseId == null) {
+                console.warn("No warehouse selected");
+                return;
+              }
+              saveLayout();
+            }}
+            title={
+              saveLayoutBlockedReason
+                ? "Zapis zablokowany: zduplikowana nazwa regału (wyświetlimy komunikat po kliknięciu)."
+                : undefined
+            }
             disabled={saving || selectedWarehouseId == null}
-            className="px-3 py-2 rounded-lg bg-cyan-600 text-white text-xs font-semibold hover:bg-cyan-500 disabled:opacity-50 transition-colors"
+            className={`h-8 rounded-lg px-3.5 text-[11px] font-semibold text-white shadow-sm transition-all duration-150 ${
+              saveLayoutBlockedReason
+                ? "bg-amber-600 hover:bg-amber-500 ring-1 ring-amber-400/80"
+                : "bg-cyan-600 shadow-cyan-900/15 hover:bg-cyan-500 hover:shadow-md"
+            } disabled:opacity-50 disabled:shadow-none`}
           >
             {saving ? UI_STRINGS.warehouse.rackSidebar.saving : UI_STRINGS.warehouse.rackSidebar.saveLayout}
           </button>
@@ -130,7 +114,7 @@ export function DesignerToolbar({
         <EditBuildingModal
           onClose={() => setShowEditBuilding(false)}
           onSave={(building_width_m, building_depth_m, building_height_m) => {
-            console.log("Saving building", {
+            log("Saving building", {
               width: building_width_m,
               depth: building_depth_m,
               height: building_height_m,

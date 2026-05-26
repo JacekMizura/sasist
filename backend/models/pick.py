@@ -13,7 +13,9 @@ Analytics (Hot locations, Walking simulation, Slotting validation) use the picks
 table instead of order_items → inventory → location.
 """
 
-from sqlalchemy import Column, Integer, Float, ForeignKey, String, DateTime
+from datetime import date
+
+from sqlalchemy import Column, Date, Integer, Float, ForeignKey, String, DateTime
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -59,7 +61,15 @@ class Pick(Base, BaseModelMixin):
         nullable=False,
         index=True,
     )
+    cart_id = Column(
+        Integer,
+        ForeignKey("carts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     quantity = Column(Float, nullable=False)
+    batch_number = Column(String(128), nullable=False, default="")
+    expiry_date = Column(Date, nullable=False, default=date(9999, 12, 31))
     picked_at = Column(DateTime, nullable=True)  # when the pick was performed
     picker_id = Column(Integer, nullable=True, index=True)  # optional user/worker id
 
@@ -78,6 +88,7 @@ class Pick(Base, BaseModelMixin):
     order_item = relationship("OrderItem", back_populates="picks")
     product = relationship("Product", back_populates="picks")
     location = relationship("Location", back_populates="picks")
+    cart = relationship("Cart", back_populates="wms_picks", foreign_keys=[cart_id])
     inventory_unit = relationship("InventoryUnit", back_populates="picks")
     pick_wave_items = relationship(
         "PickWaveItem",

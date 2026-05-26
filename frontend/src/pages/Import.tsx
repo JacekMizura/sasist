@@ -78,7 +78,7 @@ export default function Import() {
 
   return (
     <div className="p-8">
-      <div className="max-w-5xl mx-auto bg-white p-6 rounded-xl shadow">
+      <div className="w-full bg-white p-6 rounded-xl shadow">
 
         <h1 className="text-2xl font-semibold mb-6">
           Import danych

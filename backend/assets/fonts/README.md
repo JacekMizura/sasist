@@ -7,6 +7,9 @@ Required files:
 - **DejaVuSans.ttf**
 - **DejaVuSans-Bold.ttf** (optional; if missing, bold text uses DejaVuSans)
 
-Download from: https://dejavu-fonts.github.io/ (Releases → ttf zip, then copy from the `ttf/` folder).
+The repository includes **DejaVuSans.ttf** and **DejaVuSans-Bold.ttf** (from the `dejavu-fonts-ttf` npm package via jsDelivr) so PDF labels work out of the box.
 
-If these files are missing, the app will fall back to Helvetica and Polish characters may appear wrong or be dropped in labels.
+To refresh or replace them manually: https://dejavu-fonts.github.io/ (Releases → ttf zip, copy from `ttf/`), or  
+`https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf` (and `-Bold.ttf`).
+
+If these files are missing, the app falls back to Helvetica and Polish characters may not render correctly in PDFs.

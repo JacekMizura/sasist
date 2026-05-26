@@ -1,10 +1,13 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .enums import CartType, CartStatus
 
 class Cart(Base):
     __tablename__ = "carts"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "warehouse_id", "code", name="uq_cart_tenant_wh_code"),
+    )
 
     id = Column(Integer, primary_key=True)
 
@@ -17,15 +20,20 @@ class Cart(Base):
     # NOWE: Relacja do grupy
     group_id = Column(Integer, ForeignKey("cart_groups.id", ondelete="SET NULL"), nullable=True)
 
-    tenant = relationship("Tenant")
-    warehouse = relationship("Warehouse")
+    tenant = relationship("Tenant", back_populates="carts")
+    warehouse = relationship("Warehouse", back_populates="carts")
     group = relationship("CartGroup", back_populates="carts")
 
     # ==========================================================
     # DANE PODSTAWOWE WÓZKA
     # ==========================================================
     name = Column(String, nullable=False)
-    barcode = Column(String(64), unique=True, nullable=True, index=True)  # e.g. CART-0001 (Code128)
+    #: Skanowany identyfikator wózka (np. CART-0001); unikat w obrębie tenant+magazyn.
+    code = Column(String(64), nullable=False, index=True)
+    #: Zgodne z ``code`` (etykiety / skan); unikat w obrębie tenant+magazyn jak ``code``.
+    barcode = Column(String(64), nullable=True, index=True)
+    #: Wewnętrzny kod skanowania (ESP:shpcart:id lub ESP:brck:id); unikat globalnie — indeks w schema_upgrade.
+    scan_code = Column(String(80), nullable=True, index=True)
     type = Column(Enum(CartType), nullable=False)
     image_url = Column(String, nullable=True)
 
@@ -51,6 +59,12 @@ class Cart(Base):
         cascade="all, delete"
     )
 
+    legacy_baskets = relationship(
+        "Basket",
+        back_populates="cart",
+        cascade="all, delete-orphan",
+    )
+
     # Zamówienia przypisane do wózka BULK (dla MULTI używane są basket.order_id)
     assigned_orders = relationship(
         "Order",
@@ -62,6 +76,12 @@ class Cart(Base):
         "PickTask",
         back_populates="cart",
         cascade="all, delete-orphan",
+    )
+
+    wms_picks = relationship(
+        "Pick",
+        back_populates="cart",
+        foreign_keys="Pick.cart_id",
     )
 
     # ==========================================================

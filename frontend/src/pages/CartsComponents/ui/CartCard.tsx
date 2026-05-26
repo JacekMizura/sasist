@@ -1,9 +1,9 @@
+import { Package } from "lucide-react";
 import ProgressBar from "./ProgressBar";
-import StatusPill from "./StatusPill";
 import ImagePreviewModal from "./ImagePreviewModal";
 import SimulationResultModal from "./SimulationResultModal";
 import OrderProductPreviewModal from "./OrderProductPreviewModal";
-import { CubeIcon, PencilIcon, TrashIcon, MagicWandIcon, ScaleIcon, PackageIcon, ClearIcon, PrinterIcon } from "./Icons";
+import { CubeIcon, PencilIcon, TrashIcon, MagicWandIcon, ScaleIcon, ClearIcon, PrinterIcon } from "./Icons";
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "../../../locales";
 import api from "../../../api/axios";
@@ -12,6 +12,8 @@ import { calculateCartStats } from "../cartStats";
 type BasketDetail = {
   id: number;
   name: string | null;
+  /** Kod operacyjny koszyka (API), np. CART-0001-B01 */
+  barcode?: string | null;
   row: number;
   column: number;
   length?: number;
@@ -19,9 +21,19 @@ type BasketDetail = {
   height?: number;
   order_id: number | null;
   order_number: string | null;
+  order_customer_name?: string | null;
   used_volume_dm3: number;
   total_weight_kg?: number;
 };
+
+/** Kod koszyka do nagłówka modala: `basket.code` z API lub nazwa slotu. */
+function basketSlotCode(b: BasketDetail): string {
+  const bc = (b.barcode ?? "").trim();
+  if (bc) return bc;
+  const n = b.name && String(b.name).trim();
+  if (n) return n;
+  return `S-${b.row}-${b.column}`;
+}
 
 /** Karta wózka: miniatura zdjęcia, nazwa, status, pojemność, sekcje/wymiary, pasek zapełnienia, Edytuj/Usuń, opcjonalnie Symuluj przypisanie (tylko multi). */
 
@@ -37,6 +49,8 @@ type AssignedOrderRef = { order_id: number; total_volume_dm3: number };
 type CartCardProps = {
   id: number;
   name: string;
+  /** Kod wózka (operacyjny / skan). */
+  code?: string | null;
   status: string;
   used_volume?: number;
   total_volume_dm3?: number;
@@ -62,6 +76,10 @@ type CartCardProps = {
   capacity_mode?: string;
   max_orders?: number | null;
   max_volume_dm3?: number;
+  /** Aktywne zbieranie WMS (picks z przypisanym wózkiem) */
+  wms_picking_order_count?: number;
+  wms_picking_product_count?: number;
+  wms_picking_quantity?: number;
   onSimulateSuccess?: () => void;
   onClearSuccess?: () => void;
   // Actions
@@ -75,6 +93,7 @@ export default function CartCard(props: CartCardProps) {
   const {
     id,
     name,
+    code: cartCodeProp,
     status,
     used_volume,
     total_volume_dm3,
@@ -95,6 +114,9 @@ export default function CartCard(props: CartCardProps) {
     capacity_mode: capacity_mode_prop,
     max_orders: max_orders_prop,
     max_volume_dm3: max_volume_dm3_prop,
+    wms_picking_order_count = 0,
+    wms_picking_product_count = 0,
+    wms_picking_quantity = 0,
     onSimulateSuccess,
     onClearSuccess,
     onEdit,
@@ -111,11 +133,16 @@ export default function CartCard(props: CartCardProps) {
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [showContent, setShowContent] = useState(false);
   const [baskets, setBaskets] = useState<BasketDetail[]>([]);
+  const cartCodeDisplay = (cartCodeProp ?? "").trim();
   const [contentLoading, setContentLoading] = useState(false);
   const [clearingCart, setClearingCart] = useState(false);
   const [clearingBasketId, setClearingBasketId] = useState<number | null>(null);
-  const [orderPreviewOrderId, setOrderPreviewOrderId] = useState<number | null>(null);
+  const [orderPreview, setOrderPreview] = useState<{
+    orderId: number;
+    basketCode?: string | null;
+  } | null>(null);
   const [basketToConfirmClear, setBasketToConfirmClear] = useState<BasketDetail | null>(null);
+  const [confirmWholeCartClearOpen, setConfirmWholeCartClearOpen] = useState(false);
   const [detailData, setDetailData] = useState<{
     baskets?: BasketDetail[];
     total_orders?: number;
@@ -218,6 +245,11 @@ export default function CartCard(props: CartCardProps) {
     onSimulateSuccess?.();
   };
 
+  const wmsPickOrders = Number(wms_picking_order_count) || 0;
+  const wmsPickProducts = Number(wms_picking_product_count) || 0;
+  const wmsPickQty = Number(wms_picking_quantity) || 0;
+  const wmsPickingActive = wmsPickOrders > 0 || wmsPickProducts > 0 || wmsPickQty > 0;
+
   const orderNumbersList = Array.isArray(order_numbers) ? order_numbers : [];
   const orderLabel =
     cardStats.total_orders === 0
@@ -226,13 +258,25 @@ export default function CartCard(props: CartCardProps) {
         ? `#${orderNumbersList.slice(0, 3).join(", #")}`
         : `${cardStats.total_orders} szt.`;
 
-  const handleClearCart = async () => {
+  const assignedOrderCount = assigned_orders?.length ?? 0;
+  const canClearCart =
+    usedVol > 0 ||
+    orderNumbersList.length > 0 ||
+    cardStats.total_orders > 0 ||
+    assignedOrderCount > 0 ||
+    wmsPickingActive;
+
+  const handleClearCartConfirm = async () => {
     setClearingCart(true);
     try {
       await api.post(`/carts/${id}/clear/`);
+      setConfirmWholeCartClearOpen(false);
       onClearSuccess?.();
       setShowContent(false);
       setBaskets([]);
+      setDetailData(null);
+    } catch (e) {
+      console.error("clear_cart failed:", e);
     } finally {
       setClearingCart(false);
     }
@@ -279,12 +323,16 @@ export default function CartCard(props: CartCardProps) {
     const displayPct = hasOrders && cap > 0 && occupancyPct === 0 ? 1 : occupancyPct;
     const displayUsed = hasOrders && usedDm3 === 0 && cap > 0 ? 0.05 : usedDm3;
     const orderLabel = hasOrders ? (b.order_number ? `#${b.order_number}` : `#${b.order_id}`) : null;
+    const isReady = hasOrders && occupancyPct >= 95;
+    const basketTone = !hasOrders
+      ? "bg-slate-50 border-slate-300 border-dashed"
+      : isReady
+        ? "bg-emerald-50 border-emerald-300"
+        : "bg-blue-50 border-blue-300";
     return (
       <div
         key={b.id}
-        className={`rounded-lg border p-2 flex flex-col gap-1 relative min-h-[4rem] ${
-          hasOrders ? "bg-[#ECFDF5] border-slate-200/80" : "bg-[#EEF4FF] border-[#BFDBFE]"
-        }`}
+        className={`rounded-lg border p-2 flex flex-col gap-1 relative min-h-[4rem] ${basketTone}`}
         title={hasOrders ? t.cart_basket_occupied : t.cart_basket_empty}
       >
         {hasOrders && (
@@ -307,8 +355,13 @@ export default function CartCard(props: CartCardProps) {
           <>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setOrderPreviewOrderId(b.order_id!); }}
-              className="text-[11px] font-medium text-emerald-700 hover:underline text-left truncate"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (b.order_id != null) {
+                  setOrderPreview({ orderId: b.order_id, basketCode: basketSlotCode(b) });
+                }
+              }}
+              className="inline-flex w-fit px-2 py-0.5 rounded-md border border-violet-200 bg-violet-50 text-[11px] font-semibold text-violet-700"
             >
               {orderLabel}
             </button>
@@ -317,19 +370,31 @@ export default function CartCard(props: CartCardProps) {
                 <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden min-w-0">
                   <div
                     className={`h-full rounded-full transition-all ${
-                      displayPct > 100 ? "bg-red-500" : displayPct >= 81 ? "bg-red-500" : displayPct >= 51 ? "bg-amber-500" : "bg-emerald-500"
+                      displayPct > 100 ? "bg-red-500" : isReady ? "bg-emerald-500" : "bg-blue-500"
                     }`}
                     style={{ width: `${Math.min(100, displayPct)}%` }}
                   />
                 </div>
                 <span className="text-[9px] font-bold text-slate-500 shrink-0">
-                  {displayPct.toFixed(0)}%{cap > 0 ? ` • ${displayUsed.toFixed(1)} / ${cap.toFixed(1)} dm³` : ""}
+                  {displayPct.toFixed(0)}%
                 </span>
               </div>
+              {cap > 0 ? (
+                <div className="text-[10px] font-semibold text-slate-600">
+                  {displayUsed.toFixed(1)} / {cap.toFixed(1)} dm³
+                </div>
+              ) : null}
+              {isReady ? (
+                <span className="inline-flex w-fit px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase">
+                  Gotowe
+                </span>
+              ) : null}
             </div>
           </>
         ) : (
-          <div className="text-[11px] text-slate-500 italic">Empty</div>
+          <span className="inline-flex w-fit px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold uppercase">
+            PUSTY
+          </span>
         )}
       </div>
     );
@@ -337,7 +402,7 @@ export default function CartCard(props: CartCardProps) {
 
   return (
     <>
-      <div className={`group bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-5 flex gap-5 relative ${simulating ? "pointer-events-none opacity-70" : ""}`}>
+      <div className={`group relative flex gap-4 py-4 ${simulating ? "pointer-events-none opacity-70" : ""}`}>
         <button
           className="w-16 h-16 rounded-lg bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center text-slate-300 hover:border-blue-600 transition-colors"
           onClick={() => setPreviewOpen(true)}
@@ -347,43 +412,82 @@ export default function CartCard(props: CartCardProps) {
           {hasImage && imageSrc ? (
             <img src={imageSrc} alt={name} className="w-full h-full object-cover" />
           ) : (
-            <span className="text-[10px] font-black uppercase">{t.imageAbbr}</span>
+            <span className="text-xs font-medium text-slate-400">{t.imageAbbr}</span>
           )}
         </button>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="font-black text-slate-800 uppercase truncate">{name}</div>
-              <div className="mt-2 flex items-center gap-3">
-                <StatusPill status={status} />
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <CubeIcon className="w-4 h-4 text-slate-300" />
+              <div className="truncate text-base font-semibold text-slate-900">{name}</div>
+              {cartCodeDisplay ? (
+                <div className="mt-1.5">
+                  <div className="text-xs font-medium text-slate-500">Kod</div>
+                  <div className="font-mono text-sm font-semibold tracking-tight text-slate-700">{cartCodeDisplay}</div>
+                </div>
+              ) : null}
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <CubeIcon className="h-4 w-4 text-slate-300" />
                   {Number(total_volume_dm3 ?? 0).toFixed(1)} dm³
                 </div>
                 {isSectional ? (
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <div className="font-medium">
                     {t.sections}: {total_baskets}
                   </div>
                 ) : (
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <div className="font-medium tabular-nums">
                     {length ?? 0}×{width ?? 0}×{height ?? 0} cm
                   </div>
                 )}
               </div>
+              {String(status).toUpperCase() === "FULL" ? (
+                <div className="mt-2">
+                  <span className="inline-flex px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold">
+                    Gotowe do pakowania
+                  </span>
+                </div>
+              ) : null}
             </div>
 
-            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              {(usedVol > 0 || orderNumbersList.length > 0) && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onEdit(id)}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50/50"
+                aria-label={t.edit}
+                type="button"
+              >
+                Edytuj
+              </button>
+              <button
+                onClick={() => onDelete(id)}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:border-red-300 hover:bg-red-50/40"
+                aria-label={t.delete}
+                type="button"
+              >
+                Usuń
+              </button>
+              {onPrintLabel != null && (
                 <button
-                  onClick={handleClearCart}
+                  onClick={() => onPrintLabel({ id, name })}
+                  className="h-9 rounded-lg bg-white hover:bg-cyan-50 text-slate-600 border border-slate-200 hover:border-cyan-300 transition-colors px-3 text-xs font-bold"
+                  aria-label="Drukuj etykietę"
+                  type="button"
+                  title="Drukuj etykietę"
+                >
+                  Drukuj
+                </button>
+              )}
+              {canClearCart && (
+                <button
+                  onClick={() => setConfirmWholeCartClearOpen(true)}
                   disabled={clearingCart}
-                  className="w-9 h-9 rounded-full bg-slate-50 hover:bg-amber-500 text-slate-500 hover:text-white border border-slate-200 hover:border-amber-500 transition-colors flex items-center justify-center"
+                  className="h-9 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 transition-colors px-3 text-xs font-bold disabled:opacity-50"
                   aria-label={t.clear_cart}
                   title={t.clear_cart}
                   type="button"
                 >
-                  <ClearIcon className="w-4 h-4" />
+                  Wyczyść wózek
                 </button>
               )}
               {canSimulate && (
@@ -397,33 +501,6 @@ export default function CartCard(props: CartCardProps) {
                   <MagicWandIcon className="w-4 h-4" />
                 </button>
               )}
-              {onPrintLabel != null && (
-                <button
-                  onClick={() => onPrintLabel({ id, name })}
-                  className="w-9 h-9 rounded-full bg-slate-50 hover:bg-cyan-600 text-slate-500 hover:text-white border border-slate-200 hover:border-cyan-600 transition-colors flex items-center justify-center"
-                  aria-label="Drukuj etykietę"
-                  type="button"
-                  title="Drukuj etykietę"
-                >
-                  <PrinterIcon className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                onClick={() => onEdit(id)}
-                className="w-9 h-9 rounded-full bg-slate-50 hover:bg-blue-600 text-slate-500 hover:text-white border border-slate-200 hover:border-blue-600 transition-colors flex items-center justify-center"
-                aria-label={t.edit}
-                type="button"
-              >
-                <PencilIcon className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => onDelete(id)}
-                className="w-9 h-9 rounded-full bg-slate-50 hover:bg-red-600 text-slate-500 hover:text-white border border-slate-200 hover:border-red-600 transition-colors flex items-center justify-center"
-                aria-label={t.delete}
-                type="button"
-              >
-                <TrashIcon className="w-4 h-4" />
-              </button>
             </div>
           </div>
 
@@ -445,13 +522,13 @@ export default function CartCard(props: CartCardProps) {
                     )}
                     {mode === "orders" && (
                       <span className="text-xs font-medium text-slate-500">
-                        {cardStats.total_orders} / {maxOrd != null ? maxOrd : "—"} orders
+                        {cardStats.total_orders} / {maxOrd != null ? maxOrd : "—"} zam.
                       </span>
                     )}
                     {mode === "mixed" && (
                       <>
                         <span className="text-xs font-medium text-slate-500">
-                          Orders: {cardStats.total_orders} / {maxOrd != null ? maxOrd : "—"}
+                          Zamówienia: {cardStats.total_orders} / {maxOrd != null ? maxOrd : "—"}
                         </span>
                         <span className="text-xs font-medium text-slate-500">
                           Volume: {usedVol.toFixed(1)} / {maxVol > 0 ? maxVol.toFixed(1) : "0"} dm³
@@ -478,7 +555,7 @@ export default function CartCard(props: CartCardProps) {
                   className="flex items-center gap-1.5"
                   title={orderNumbersList.length > 3 ? orderNumbersList.map((n) => `#${n}`).join(", ") : undefined}
                 >
-                  <PackageIcon className="w-4 h-4 text-slate-400" />
+                  <Package className="w-4 h-4 text-slate-400" />
                   {t.orders_label ?? "Zamówienia"}: {orderLabel}
                 </span>
               )}
@@ -497,10 +574,10 @@ export default function CartCard(props: CartCardProps) {
                     <li key={ref.order_id}>
                       <button
                         type="button"
-                        onClick={() => setOrderPreviewOrderId(ref.order_id)}
+                        onClick={() => setOrderPreview({ orderId: ref.order_id })}
                         className="px-3 py-1.5 rounded-lg bg-violet-50 border border-violet-200 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
                       >
-                        {label}
+                        [{label}]
                       </button>
                     </li>
                   );
@@ -528,9 +605,9 @@ export default function CartCard(props: CartCardProps) {
                         const stats = contentStats ?? cardStats;
                         return (
                           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600 border-b border-slate-200 pb-2">
-                            <span>Orders: {stats.total_orders}</span>
-                            <span>Products: {stats.total_products}</span>
-                            <span>Baskets used: {stats.baskets_used} / {baskets.length}</span>
+                            <span>Zamówienia: {stats.total_orders}</span>
+                            <span>Produkty: {stats.total_products} szt.</span>
+                            <span>Zajęte koszyki: {stats.baskets_used} / {baskets.length}</span>
                           </div>
                         );
                       })()}
@@ -552,15 +629,21 @@ export default function CartCard(props: CartCardProps) {
                           );
                         });
                       })()}
-                      {/* Lista wszystkich zamówień na wózku — same as Standard Carts: click opens Product Preview */}
+                      {/* Lista zamówień — ten sam modal co przy kliknięciu badge w koszyku */}
                       {(() => {
-                        const uniqueOrders = Array.from(
-                          new Map(
-                            baskets
-                              .filter((b) => b.order_id != null)
-                              .map((b) => [b.order_id!, { order_id: b.order_id!, order_number: b.order_number ?? null }])
-                          ).values()
-                        );
+                        const byOrder = new Map<
+                          number,
+                          { order_id: number; order_number: string | null; basket: BasketDetail }
+                        >();
+                        for (const b of baskets) {
+                          if (b.order_id == null || byOrder.has(b.order_id)) continue;
+                          byOrder.set(b.order_id, {
+                            order_id: b.order_id,
+                            order_number: b.order_number ?? null,
+                            basket: b,
+                          });
+                        }
+                        const uniqueOrders = Array.from(byOrder.values());
                         if (uniqueOrders.length === 0) return null;
                         return (
                           <div className="mt-4 pt-4 border-t border-slate-200">
@@ -572,10 +655,15 @@ export default function CartCard(props: CartCardProps) {
                                 <li key={o.order_id}>
                                   <button
                                     type="button"
-                                    onClick={() => setOrderPreviewOrderId(o.order_id)}
+                                    onClick={() =>
+                                      setOrderPreview({
+                                        orderId: o.order_id,
+                                        basketCode: basketSlotCode(o.basket),
+                                      })
+                                    }
                                     className="px-3 py-1.5 rounded-lg bg-violet-50 border border-violet-200 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
                                   >
-                                    {o.order_number ? `#${o.order_number}` : `#${o.order_id}`}
+                                    [{o.order_number ? `#${o.order_number}` : `#${o.order_id}`}]
                                   </button>
                                 </li>
                               ))}
@@ -613,10 +701,43 @@ export default function CartCard(props: CartCardProps) {
       />
 
       <OrderProductPreviewModal
-        open={orderPreviewOrderId != null}
-        orderId={orderPreviewOrderId}
-        onClose={() => setOrderPreviewOrderId(null)}
+        open={orderPreview != null}
+        orderId={orderPreview?.orderId ?? null}
+        basketCode={orderPreview?.basketCode ?? null}
+        onClose={() => setOrderPreview(null)}
       />
+
+      {confirmWholeCartClearOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setConfirmWholeCartClearOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 className="font-bold text-slate-900 mb-2">{t.clear_cart_confirm_title}</h4>
+            <p className="text-sm text-slate-600 mb-4">{t.clear_cart_confirm_body}</p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmWholeCartClearOpen(false)}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearCartConfirm}
+                disabled={clearingCart}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {clearingCart ? "…" : t.confirm_clear_cart_action}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {basketToConfirmClear && (
         <div

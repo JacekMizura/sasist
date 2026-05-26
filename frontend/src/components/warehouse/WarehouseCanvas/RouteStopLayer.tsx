@@ -1,4 +1,5 @@
 import type { RackState } from "../../../types/warehouse";
+import { getRackFootprintPixelBounds } from "../../../utils/rackMapVisual";
 
 export type RouteStop = { rackId: string; position: { x: number; y: number } };
 
@@ -27,10 +28,11 @@ function nearestRackEdgePointPx(
   cellPx: number
 ): { x: number; y: number } {
   const s = toPx(stopCell, cellPx);
-  const x0 = rack.x * cellPx;
-  const y0 = rack.y * cellPx;
-  const x1 = (rack.x + rack.width) * cellPx;
-  const y1 = (rack.y + rack.height) * cellPx;
+  const b = getRackFootprintPixelBounds({ x: rack.x, y: rack.y }, rack, cellPx);
+  const x0 = b.x0;
+  const y0 = b.y0;
+  const x1 = b.x1;
+  const y1 = b.y1;
   const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
   const candidates = [
     { x: clamp(s.x, x0, x1), y: y0 },

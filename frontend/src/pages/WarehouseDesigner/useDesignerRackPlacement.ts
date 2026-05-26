@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { RackState, LayoutState, CatalogItem, EmptyRowSlot, RackType } from "../../types/warehouse";
 import type { RackTemplate } from "../../types/warehouse";
 import {
@@ -11,7 +11,6 @@ import {
   createBinsForRack,
   volumePerBin,
   volumePerBinFromTotal,
-  cmToCells,
   getCatalogItemSpec,
   getLevelConfig,
   getTotalLocations,
@@ -21,9 +20,13 @@ import {
   binsToLevels,
   generateRackUuid,
   ROW_LABEL_ADDRESS_PATTERN,
+  nextUniqueRackName,
+  normalizeRowPrefixLetters,
+  rackMatchesSlotRackId,
 } from "../../components/warehouse/warehouseUtils";
 import type { LevelConfigItem, StorageType } from "../../types/warehouse";
 import type { Dispatch, SetStateAction } from "react";
+import { layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
 
 export interface UseDesignerRackPlacementParams {
   layout: LayoutState;
@@ -51,8 +54,20 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     setCatalogHoveredSlot,
   } = params;
 
-  const ghostW = rackRotation === "horizontal" ? cmToCells(template.depth_cm) : cmToCells(template.width_cm);
-  const ghostH = rackRotation === "horizontal" ? cmToCells(template.width_cm) : cmToCells(template.depth_cm);
+  const ghostW = useMemo(
+    () =>
+      rackRotation === "horizontal"
+        ? layoutCmToCellsY(layout, template.depth_cm)
+        : layoutCmToCellsX(layout, template.width_cm),
+    [layout, rackRotation, template.depth_cm, template.width_cm]
+  );
+  const ghostH = useMemo(
+    () =>
+      rackRotation === "horizontal"
+        ? layoutCmToCellsX(layout, template.width_cm)
+        : layoutCmToCellsY(layout, template.depth_cm),
+    [layout, rackRotation, template.depth_cm, template.width_cm]
+  );
 
   const stampRackAt = useCallback((cell: { x: number; y: number }) => {
     const w = ghostW;
@@ -66,7 +81,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     setLayout((prev) => {
       const rackIndex = prev.racks.length + 1;
       const indexInRow = getNextIndexInRow(prev.racks, prefix);
-      const rackLabel = `${prefix}${indexInRow}`;
+      const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, prev);
       const t = template as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha"; levelConfig?: LevelConfigItem[]; namingStrategy?: "pattern" | "rack-index" | "custom" | "manual"; namingOrientation?: "column-first" | "row-first"; namingPattern?: string; manualLabels?: Record<string, string>; overrides?: Record<string, string>; indexPadding?: number; startIndex?: number; naming_pattern?: string; bin_type_map?: Record<string, StorageType>; templateId?: string };
       const bins = createBinsForRack(
         template.aisle_letter,
@@ -125,7 +140,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         ],
       };
     });
-  }, [template, rackRotation, layout.racks, layout.grid_cols, layout.grid_rows, ghostW, ghostH, aisleWidthCm, rackType, setLayout]);
+  }, [template, rackRotation, layout, ghostW, ghostH, aisleWidthCm, rackType, setLayout]);
 
   const stampRackIntoSlot = useCallback(
     (rowId: string, slotIndex: number, item: CatalogItem) => {
@@ -139,9 +154,9 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       const volPerBin = totalBins > 0
         ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
         : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
-      const reqW = cmToCells(spec.width_cm);
-      const reqD = cmToCells(spec.depth_cm);
       const isVertical = (row.orientation ?? "horizontal") === "vertical";
+      const reqW = isVertical ? layoutCmToCellsY(layout, spec.width_cm) : layoutCmToCellsX(layout, spec.width_cm);
+      const reqD = isVertical ? layoutCmToCellsX(layout, spec.depth_cm) : layoutCmToCellsY(layout, spec.depth_cm);
 
       let consumedEnd = slotIndex;
       let consumedSpan = 0;
@@ -169,7 +184,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       const prefix = (row.rowPrefix || "A").trim() || "A";
       const indexInRow = 1 + row.slots.filter((s) => s.rackId != null).length;
       const rackIndex = layout.racks.length + 1;
-      const rackLabel = `${prefix}${indexInRow}`;
+      const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, layout);
       const bins = createBinsForRack(
         spec.aisle_letter,
         rackIndex,
@@ -199,11 +214,12 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
       const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : rackType;
       const { x: startX, y: startY } = getRowStart(row);
+      const rackUuid = generateRackUuid();
 
       const thickness = isVertical ? slot0.w : slot0.h;
       const filledSlot: EmptyRowSlot = isVertical
-        ? { x: 0, y: startY, w: thickness, h: reqW, rackId: rackIndex }
-        : { x: 0, y: startY, w: reqW, h: thickness, rackId: rackIndex };
+        ? { x: 0, y: startY, w: thickness, h: reqW, rackId: rackUuid }
+        : { x: 0, y: startY, w: reqW, h: thickness, rackId: rackUuid };
       const remainder = Math.max(0, consumedSpan - reqW);
       const remainderSlot: EmptyRowSlot | null = remainder > 0
         ? (isVertical
@@ -227,11 +243,11 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         trimmedRaw = trimmedRaw.slice(0, -1);
       }
       const newSlots = computeRowSlotPositions(trimmedRaw, startX, startY, row.orientation ?? "horizontal");
-      const filledSlotWithPos = newSlots.find((s) => s.rackId === rackIndex);
+      const filledSlotWithPos = newSlots.find((s) => s.rackId === rackUuid);
       const rackWidthCells = isVertical ? reqD : reqW;
       const rackHeightCells = isVertical ? reqW : reqD;
       const newRack: RackState = {
-        uuid: generateRackUuid(),
+        uuid: rackUuid,
         rack_type: resolvedRackType,
         x: filledSlotWithPos?.x ?? slot0.x,
         y: filledSlotWithPos?.y ?? slot0.y,
@@ -261,7 +277,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       };
       setLayout((prev) => {
         const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((s) => s.rackId === (r.id ?? r.rack_index));
+          const slotForRack = newSlots.find((s) => s.rackId != null && rackMatchesSlotRackId(r, s.rackId));
           if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
           return r;
         });
@@ -276,7 +292,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       setCatalogGhostPosition(null);
       setCatalogHoveredSlot(null);
     },
-    [layout.racks, layout.row_containers, rackType, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]
+    [layout, rackType, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]
   );
 
   const stampRackFromCatalogItem = useCallback((cell: { x: number; y: number }, item: CatalogItem, rowPrefix?: string) => {
@@ -294,15 +310,15 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     const volPerBin = totalBins > 0
       ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
       : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
-    const w = cmToCells(spec.width_cm);
-    const h = cmToCells(spec.depth_cm);
+    const w = layoutCmToCellsX(layout, spec.width_cm);
+    const h = layoutCmToCellsY(layout, spec.depth_cm);
     const snap = findSnapToRowPosition(layout.racks, cell.x, cell.y, w, h);
     const x = snap ? Math.max(0, Math.min(layout.grid_cols - w, snap.x)) : Math.max(0, Math.min(layout.grid_cols - w, cell.x));
     const y = snap ? Math.max(0, Math.min(layout.grid_rows - h, snap.y)) : Math.max(0, Math.min(layout.grid_rows - h, cell.y));
-    const prefix = snap ? snap.rowPrefix : (rowPrefix ?? "A").trim() || "A";
+    const prefix = snap ? normalizeRowPrefixLetters(snap.rowPrefix) : normalizeRowPrefixLetters(rowPrefix ?? "A");
     const indexInRow = snap ? snap.indexInRow : getNextIndexInRow(layout.racks, prefix);
     const rackIndex = layout.racks.length + 1;
-    const rackLabel = `${prefix}${indexInRow}`;
+    const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, layout);
     const bins = createBinsForRack(
       spec.aisle_letter,
       rackIndex,
@@ -362,16 +378,16 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     setDraggingFromCatalog(null);
     setCatalogGhostPosition(null);
     setCatalogHoveredSlot(null);
-  }, [layout.racks, layout.row_containers, layout.grid_cols, layout.grid_rows, stampRackIntoSlot, rackType, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]);
+  }, [layout, stampRackIntoSlot, rackType, setLayout, setDraggingFromCatalog, setCatalogGhostPosition, setCatalogHoveredSlot]);
 
   const getCatalogDropCell = useCallback(
     (cell: { x: number; y: number }, item: CatalogItem) => {
       const empty = findEmptySlotAt(layout.row_containers, cell);
       if (empty) {
         const spec = getCatalogItemSpec(item);
-        const reqW = cmToCells(spec.width_cm);
-        const reqD = cmToCells(spec.depth_cm);
         const isVert = (empty.rowContainer.orientation ?? "horizontal") === "vertical";
+        const reqW = isVert ? layoutCmToCellsY(layout, spec.width_cm) : layoutCmToCellsX(layout, spec.width_cm);
+        const reqD = isVert ? layoutCmToCellsX(layout, spec.depth_cm) : layoutCmToCellsY(layout, spec.depth_cm);
         if (isVert) {
           if (empty.slot.w >= reqD && empty.slot.h >= Math.min(reqW, empty.slot.h)) return { x: empty.slot.x, y: empty.slot.y };
         } else {
@@ -379,13 +395,13 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         }
       }
       const spec = getCatalogItemSpec(item);
-      const w = cmToCells(spec.width_cm);
-      const h = cmToCells(spec.depth_cm);
+      const w = layoutCmToCellsX(layout, spec.width_cm);
+      const h = layoutCmToCellsY(layout, spec.depth_cm);
       const snap = findSnapToRowPosition(layout.racks, cell.x, cell.y, w, h);
       if (snap) return { x: Math.max(0, Math.min(layout.grid_cols - w, snap.x)), y: Math.max(0, Math.min(layout.grid_rows - h, snap.y)) };
       return snapPosition(cell, w, h, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm);
     },
-    [layout.row_containers, layout.racks, layout.grid_cols, layout.grid_rows, aisleWidthCm]
+    [layout, aisleWidthCm]
   );
 
   return {

@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useRef, useMemo, type MouseEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/axios";
+import { warn } from "../utils/logger";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
-import { formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid } from "../components/warehouse/warehouseUtils";
+import { activeBinsForRack, formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid, assignUniqueRackNamesToNewRacks, validateAllRackNamesInLayout, getProposedFirstRackLabelForStampFromCatalog, normalizeRowPrefixLetters, generateRackNames, validateGeneratedRackNames, countPlaceRowWithTemplateRacks, countEmptyRowSlotsInDraw, catalogItemTemplateKey, catalogItemFromTemplateKey, rowContainerTemplateIdFromCatalogItem, rackMatchesSlotRackId } from "../components/warehouse/warehouseUtils";
 import {
   aisleHalfWidthCellsFromCm,
   collectPackingCentersCells,
@@ -30,12 +31,17 @@ import { RackLabelDownloadModal } from "../components/labels/RackLabelDownloadMo
 import { MagazynProductsSidebar } from "../components/warehouse/magazyn/MagazynProductsSidebar";
 import { ProductLocatorSidebar } from "../components/warehouse/magazyn/ProductLocatorSidebar";
 import { TopProductsSidebar } from "../components/warehouse/magazyn/TopProductsSidebar";
+import { WarehouseReportsPanel } from "../components/warehouse/magazyn/WarehouseReportsPanel";
+import { DamageReportsPanel, type DamagePrefill } from "../components/warehouse/magazyn/DamageReportsPanel";
 import { UI_STRINGS } from "../constants/uiStrings";
 import PageLayout from "../components/layout/PageLayout";
+import { TabsContainer } from "../components/layout/TabsContainer";
+import { tabsNavItemClassName } from "../components/layout/TabsNav";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { LayoutMode } from "../warehouse-layout";
 import { useLayoutModeShortcuts, useLayoutModeDisplay } from "../warehouse-layout";
 import { normalizeBinTypeMap, normalizeStorageType } from "../utils/storageTypes";
+import { getLayoutMetersPerCell } from "../utils/warehouseGridMetrics";
 import {
   CELLS_PER_METER,
   BASE_PX_PER_CELL,
@@ -58,7 +64,15 @@ import {
   getProductImageUrl,
   snapPosition,
 } from "./WarehouseDesigner/DesignerRackPlacement";
-import { exportPdf, exportCsv, exportLocationsMapCsv, exportJson } from "./WarehouseDesigner/DesignerExport";
+import { exportCsv, exportLocationsMapCsv, exportJson } from "./WarehouseDesigner/DesignerExport";
+import type { WarehouseReportVariant } from "../components/warehouse/reports/shared/types";
+import { buildPdfReportData } from "../pdf/utils/pdfDataBuilder";
+import { downloadProductLocationReportPdf, downloadStructureReportPdf } from "../api/structureReportPdfApi";
+import { generateWarehousePDF } from "../pdf/generateWarehousePDF";
+import { buildWarehouseExecutiveReportData } from "../pdf/utils/executiveReportDataBuilder";
+import { generateWarehouseExecutivePDF } from "../pdf/generateWarehouseExecutivePDF";
+import { generateWarehouseValueReportPDF } from "../pdf/generateWarehouseValueReportPDF";
+import { generateTopVolumeReportPDF } from "../pdf/generateTopVolumeReportPDF";
 import { useDesignerKeyboard } from "./WarehouseDesigner/DesignerKeyboard";
 import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
 import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
@@ -69,13 +83,17 @@ import { useDesignerCanvas } from "./WarehouseDesigner/useDesignerCanvas";
 import { useDesignerProductModal } from "./WarehouseDesigner/useDesignerProductModal";
 import { useDesignerMagazynState } from "./WarehouseDesigner/useDesignerMagazynState";
 import { useDesignerRowState } from "./WarehouseDesigner/useDesignerRowState";
-import { RowPrefixModal } from "../components/warehouse/RowPrefixModal";
-import { getWallFromClientPosition, getPositionCmAlongWall } from "./WarehouseDesigner/utils/designerMouseUtils";
+import { RowPrefixModal, type RowPrefixModalResult, type RowPrefixRowConfig } from "../components/warehouse/RowPrefixModal";
+import { getPositionCmAlongWall, getSvgLayoutSizePx } from "./WarehouseDesigner/utils/designerMouseUtils";
 import { normalizeProductDims } from "../utils/productNormalizer";
+import { validateAndSanitizeLayoutPayload } from "../utils/layoutSavePayload";
 import { buildPathAvoidingRacks, buildPickingRoutePolyline, simplifyPath, type PathStop } from "./WarehouseDesigner/pathVisualizationUtils";
+import { fetchWarehouseOccupancyMetrics, type WarehouseOccupancyMetrics } from "../api/warehouseOccupancyApi";
 import { fetchRoutePath } from "../api/routeApi";
 import { generateWarehouseGraph } from "../api/warehouseGraphApi";
 import { buildInventoryMaps, normalizeInventoryLocationUuid, type InventoryRow, type InventoryMaps } from "./WarehouseDesigner/inventoryMaps";
+import type { DamageCandidate } from "../types/damageReport";
+import { useWarehouse } from "../context/WarehouseContext";
 
 /** Resolve slot UUID from an assigned_locations entry (API JSON may use location_uuid). */
 function assignedLocationEntryUuid(a: {
@@ -87,21 +105,15 @@ function assignedLocationEntryUuid(a: {
   return undefined;
 }
 
-/** Legacy product.location_id (no assigned_locations): label matches a bin on this rack. */
-function legacyProductLocationMatchesRack(p: WarehouseProduct, rack: RackState): boolean {
-  if (p.location_id == null || (p.assignedLocations?.length ?? 0) > 0) return false;
-  const want = String(p.location_id).trim().replace(/\s+/g, " ");
-  for (const b of rack.bins ?? []) {
-    const bl = (b.label ?? b.location_id ?? "").trim().replace(/\s+/g, " ");
-    if (bl && bl === want) return true;
-  }
-  return false;
+/** Bin slot id from layout (API may send `location_uuid` or `locationUUID`). */
+function binLocationUuidFromBin(bin: { locationUUID?: string; location_uuid?: string }): string {
+  const u = bin.locationUUID ?? bin.location_uuid;
+  return typeof u === "string" ? u.trim() : "";
 }
 
 /**
- * Total pieces of product `p` in the layout: per-bin, inventory at bin UUID wins; else assigned_locations for that UUID;
- * else legacy `location_id === bin.label` (same rules as `usedVolumeAtBin` / `quantityFromAssignedForBin`).
- * Volume for dashboards is always qty × product.volume_dm3 — never bin capacity.
+ * Total pieces of product `p` in this layout: one sum per storage location (UUID), never multiplied by rack/bin joins.
+ * Per UUID: Stock (inventory) wins; else assigned_locations quantity.
  */
 function quantityAssignedInLayoutBins(
   p: WarehouseProduct,
@@ -111,34 +123,31 @@ function quantityAssignedInLayoutBins(
   layoutRacks: RackState[]
 ): number {
   let total = 0;
+  const seenUuid = new Set<string>();
   for (const rack of layoutRacks) {
-    for (const bin of rack.bins ?? []) {
-      const binLabel = (bin.label ?? bin.location_id ?? "").trim();
-      const uuid = normalizeInventoryLocationUuid(bin.locationUUID);
-      if (uuid && !validLayoutLocationUUIDs.has(uuid)) continue;
+    for (const bin of activeBinsForRack(rack)) {
+      const uuid = normalizeInventoryLocationUuid(binLocationUuidFromBin(bin));
+      if (uuid) {
+        if (!validLayoutLocationUUIDs.has(uuid)) continue;
+        if (seenUuid.has(uuid)) continue;
+        seenUuid.add(uuid);
 
-      let invQty = 0;
-      if (hasInventoryRows && inventoryMaps && uuid) {
-        for (const inv of inventoryMaps.byLocationUuid.get(uuid) ?? []) {
-          if (String(inv.product_id) !== p.id) continue;
-          invQty += safeQuantity(inv.quantity);
+        let invQty = 0;
+        if (hasInventoryRows && inventoryMaps) {
+          for (const inv of inventoryMaps.byLocationUuid.get(uuid) ?? []) {
+            if (String(inv.product_id) !== p.id) continue;
+            invQty += safeQuantity(inv.quantity);
+          }
         }
-      }
-      if (invQty > 0) {
-        total += invQty;
+        if (invQty > 0) {
+          total += invQty;
+          continue;
+        }
+        if (p.assignedLocations?.length) {
+          const ent = p.assignedLocations.find((x) => assignedLocationEntryUuid(x) === uuid);
+          if (ent) total += safeQuantity(ent.quantity);
+        }
         continue;
-      }
-      let assignedQty = 0;
-      if (uuid && p.assignedLocations?.length) {
-        const ent = p.assignedLocations.find((x) => assignedLocationEntryUuid(x) === uuid);
-        if (ent) assignedQty = safeQuantity(ent.quantity);
-      }
-      if (assignedQty > 0) {
-        total += assignedQty;
-        continue;
-      }
-      if (binLabel && p.location_id === binLabel) {
-        total += safeQuantity(p.quantity);
       }
     }
   }
@@ -160,6 +169,28 @@ type PendingRowCreation =
   | { type: "rowWithTemplate"; start: { x: number; y: number }; end: { x: number; y: number }; item: CatalogItem }
   | { type: "stampRack"; cell: { x: number; y: number }; item: CatalogItem }
   | null;
+
+function resolveRowCatalogItemForRowModal(
+  row: RowPrefixRowConfig,
+  pending: Exclude<PendingRowCreation, null>,
+  rowIndex: 1 | 2,
+  customTemplates: CustomRackTemplate[]
+): CatalogItem | null {
+  if (pending.type !== "emptyRow" && pending.type !== "rowWithTemplate") return null;
+  if (row.templateKey) {
+    return catalogItemFromTemplateKey(row.templateKey, customTemplates);
+  }
+  if (pending.type === "rowWithTemplate" && rowIndex === 1) {
+    return pending.item;
+  }
+  return null;
+}
+
+/** Empty-row mode: only fill when user explicitly enables auto-fill. Row-from-template: default to fill unless unchecked. */
+function effectiveRowAutoFill(row: RowPrefixRowConfig, pending: Exclude<PendingRowCreation, null>): boolean {
+  if (pending.type === "rowWithTemplate") return row.autoFill !== false;
+  return row.autoFill === true;
+}
 
 type PendingVariantSave = {
   rackId: number | string;
@@ -235,8 +266,8 @@ function buildVariantTemplate(
 }
 
 export default function WarehouseDesigner() {
-  const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
+  const { warehouse: activeWarehouse, warehouses, setWarehouse, refreshWarehouses } = useWarehouse();
+  const selectedWarehouseId = activeWarehouse?.id ?? null;
   const [layout, setLayout] = useState<LayoutState>({
     layout_id: null,
     warehouse_id: null,
@@ -251,6 +282,11 @@ export default function WarehouseDesigner() {
     wall_elements: [],
   });
   const getRackDisplayIdWithLayout = useCallback((r: RackState) => getRackDisplayId(r, layout), [layout]);
+  const rackNameDuplicateMessage = useMemo(() => {
+    const { valid, errors } = validateAllRackNamesInLayout(layout);
+    if (valid) return null;
+    return errors.join(" · ");
+  }, [layout]);
   const [selectedRackId, setSelectedRackId] = useState<number | string | null>(null);
   const [pathPoints, setPathPoints] = useState<{ x: number; y: number }[] | null>(null);
   const [pathSegments, setPathSegments] = useState<{ x: number; y: number }[][] | null>(null);
@@ -267,13 +303,10 @@ export default function WarehouseDesigner() {
   const [routeRackIds, setRouteRackIds] = useState<string[]>([]);
   const [isRouteActive, setIsRouteActive] = useState(false);
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
+  /** Server-side Σ(qty × product.volume) from inventory rows; overrides bin-based dashboard when loaded. */
+  const [occupancyMetrics, setOccupancyMetrics] = useState<WarehouseOccupancyMetrics | null>(null);
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:routeStopsGuard] run", {
-      highlightedStopIndex,
-      routeStopsLength: routeRackIds.length,
-      modifiesRack: false,
-    });
     if (highlightedStopIndex != null && (highlightedStopIndex < 0 || highlightedStopIndex >= routeRackIds.length)) {
       setHighlightedStopIndex(null);
     }
@@ -316,7 +349,6 @@ export default function WarehouseDesigner() {
         { x: rx + rw / 2, y: ry - 0.5 },
         { x: rx + rw / 2, y: ry + rh + 0.5 },
       ];
-      console.log("APPROACH CANDIDATES:", candidates);
 
       const isValid = (c: { x: number; y: number }): boolean => {
         if (c.x < 0 || c.x > gridCols || c.y < 0 || c.y > gridRows) return false;
@@ -330,10 +362,9 @@ export default function WarehouseDesigner() {
       };
 
       let validCandidates = candidates.filter(isValid);
-      console.log("VALID APPROACH:", validCandidates);
       if (validCandidates.length === 0) {
         validCandidates = candidates;
-        console.warn("No valid approach point; using nearest candidate (may be inside rack or obstacle).");
+        warn("No valid approach point; using nearest candidate (may be inside rack or obstacle).");
       }
 
       const isInAisle = (c: { x: number; y: number }): boolean =>
@@ -353,7 +384,6 @@ export default function WarehouseDesigner() {
           best = c;
         }
       }
-      console.log("CHOSEN:", best);
       return best;
     },
     [isPointInsideRect]
@@ -361,7 +391,6 @@ export default function WarehouseDesigner() {
 
   const addRackToRoute = useCallback((rackId: number | string) => {
     if (!isRouteActive) return;
-    console.log("ROUTE CLICK", rackId);
     const rid = String(rackId);
     setRouteRackIds((prev) => (prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]));
   }, [isRouteActive]);
@@ -538,13 +567,9 @@ export default function WarehouseDesigner() {
     setCursorCm,
     isPanning,
     setIsPanning,
-  } = useDesignerCanvas();
+  } = useDesignerCanvas(layout.layout_id ?? null);
   const lastCursorCmRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:cursorMemo] run", {
-      hasCursor: cursorCm != null,
-      modifiesRack: false,
-    });
     if (cursorCm != null) lastCursorCmRef.current = cursorCm;
   }, [cursorCm]);
   const getPastePosition = useCallback(() => {
@@ -606,10 +631,6 @@ export default function WarehouseDesigner() {
   useLayoutModeShortcuts(layoutMode, setLayoutMode);
   const layoutModeDisplay = useLayoutModeDisplay(layoutMode);
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:rackTypeSwitchReset] run", {
-      manualRackType,
-      modifiesRack: false,
-    });
     // Rack type switch changes the working template universe, so clear dependent selections.
     setRowToolTemplate(null);
     setSelectedTemplateId(null);
@@ -639,11 +660,32 @@ export default function WarehouseDesigner() {
   const [selectedVisualIds, setSelectedVisualIds] = useState<string[]>([]);
   const deletedForUndoRef = useRef<{ racks?: RackState[]; visuals?: VisualElementState[]; row_containers?: LayoutState["row_containers"] } | null>(null);
   const [draggingWallEnd, setDraggingWallEnd] = useState<{ visualId: string; end: 0 | 1 } | null>(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   /** Single view mode: Magazyn (live) | Projektant Layoutu (kept in sync with `?view=`). */
   const [mainView, setMainView] = useState<"magazyn" | "layout">(() =>
     searchParams.get("view") === "layout" ? "layout" : "magazyn"
   );
+
+  const selectDesignerView = useCallback(
+    (view: "magazyn" | "layout") => {
+      if (view === "magazyn") {
+        setMainView("magazyn");
+        setEditingProductId(null);
+        const next = new URLSearchParams(searchParams);
+        next.delete("view");
+        setSearchParams(next);
+      } else {
+        setMainView("layout");
+        const next = new URLSearchParams(searchParams);
+        next.set("view", "layout");
+        setSearchParams(next);
+      }
+    },
+    [searchParams, setSearchParams],
+  );
+  const [showWarehouseReportsPanel, setShowWarehouseReportsPanel] = useState(false);
+  const [showDamageReportsPanel, setShowDamageReportsPanel] = useState(false);
+  const [damagePrefill, setDamagePrefill] = useState<DamagePrefill | null>(null);
   /** Pointer semantics for the shared mouse hook: layout canvas must never run Magazyn map rack/aisle logic (elevation, etc.). */
   const magazynMapInteractions = mainView === "magazyn" && searchParams.get("view") !== "layout";
   const showGrid = mainView === "magazyn" ? showGridMagazyn : showGridLayout;
@@ -656,6 +698,11 @@ export default function WarehouseDesigner() {
   }, [mainView]);
   const svgRef = useRef<SVGSVGElement>(null);
   const isLiveView = mainView === "magazyn";
+  const layoutOccupancyRefreshKey = useMemo(
+    () =>
+      `${layout.layout_id ?? "na"}:${layout.racks.length}:${layout.racks.reduce((n, r) => n + activeBinsForRack(r).length, 0)}`,
+    [layout.layout_id, layout.racks],
+  );
   useEffect(() => {
     if (mainView !== "magazyn") return;
     const prev = document.body.style.overflow;
@@ -664,6 +711,24 @@ export default function WarehouseDesigner() {
       document.body.style.overflow = prev;
     };
   }, [mainView]);
+  useEffect(() => {
+    if (mainView !== "magazyn" || selectedWarehouseId == null) {
+      setOccupancyMetrics(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchWarehouseOccupancyMetrics(TENANT_ID, selectedWarehouseId);
+        if (!cancelled) setOccupancyMetrics(data);
+      } catch {
+        if (!cancelled) setOccupancyMetrics(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mainView, selectedWarehouseId, layoutOccupancyRefreshKey, inventoryRows.length]);
   /** Magazyn map column (`overflow-y-auto`): block wheel chaining at scroll extremes (non-passive). */
   const magazynMapScrollRef = useRef<HTMLDivElement>(null);
   /** Magazyn rack side view scroll wrapper: same wheel containment. */
@@ -726,35 +791,7 @@ export default function WarehouseDesigner() {
   const [pendingVariantSave, setPendingVariantSave] = useState<PendingVariantSave | null>(null);
   const [variantNameInput, setVariantNameInput] = useState("");
 
-  const countLayoutVariantLocations = useCallback((rack: RackState | undefined | null): number => {
-    if (!rack?.layoutVariant?.levels?.length) return 0;
-    return rack.layoutVariant.levels.reduce((sum, level) => sum + Math.max(0, level.locations ?? 0), 0);
-  }, []);
-
-  const logRackDebugSnapshot = useCallback(
-    (scope: string, rack: RackState | undefined | null) => {
-      if (!rack) {
-        console.log(`[WarehouseDesigner][${scope}] rack: <not-found>`);
-        return;
-      }
-      console.log(`[WarehouseDesigner][${scope}]`, {
-        rackId: String(rack.id ?? rack.rack_index),
-        binsLength: rack.bins?.length ?? 0,
-        layoutVariantLocations: countLayoutVariantLocations(rack),
-        binLocationIds: (rack.bins ?? []).map((b) => b.location_id),
-        levels: rack.levels,
-        internalStructureLevels: rack.internal_structure?.levels?.length ?? 0,
-        layoutVariantLevels: rack.layoutVariant?.levels?.length ?? 0,
-      });
-    },
-    [countLayoutVariantLocations]
-  );
-
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:sideViewSelection] run", {
-      selectedRackIdForSideView,
-      modifiesRack: false,
-    });
     if (selectedRackIdForSideView == null) {
       setShowRackLabelDownload(false);
     }
@@ -762,10 +799,6 @@ export default function WarehouseDesigner() {
 
   /** When "Rysuj Rząd" is turned off, clear all temp row-draw state so no extra slot can leak into rows. */
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:rowToolCleanup] run", {
-      rowToolActive,
-      modifiesRack: false,
-    });
     if (rowToolActive) return;
     setRowDrawStart(null);
     setRowDrawEnd(null);
@@ -803,10 +836,6 @@ export default function WarehouseDesigner() {
   /** Top-level state to avoid ReferenceError; synced from selection. */
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:selectedObjectSync] run", {
-      selectedObjectIdDerived,
-      modifiesRack: false,
-    });
     setSelectedObjectId(selectedObjectIdDerived);
   }, [selectedObjectIdDerived]);
 
@@ -814,6 +843,51 @@ export default function WarehouseDesigner() {
     if (inventoryRows.length === 0) return null;
     return buildInventoryMaps(inventoryRows, layout);
   }, [inventoryRows, layout]);
+
+  const damageCandidates = useMemo<DamageCandidate[]>(() => {
+    if (!inventoryMaps) return [];
+    const productById = new Map<number, WarehouseProduct>();
+    for (const p of products) {
+      const idNum = Number(p.id);
+      if (Number.isFinite(idNum)) productById.set(idNum, p);
+    }
+    const out: DamageCandidate[] = [];
+    for (const rack of layout.racks) {
+      for (const bin of activeBinsForRack(rack)) {
+        if (normalizeStorageType(bin.storage_type) !== "damaged") continue;
+        const locUuid = normalizeInventoryLocationUuid(binLocationUuidFromBin(bin));
+        if (!locUuid) continue;
+        const invRowsAtLoc = inventoryMaps.byLocationUuid.get(locUuid) ?? [];
+        for (const inv of invRowsAtLoc) {
+          const p = productById.get(Number(inv.product_id));
+          if (!p) continue;
+          const available = safeQuantity(inv.available_quantity ?? inv.quantity);
+          if (available <= 0) continue;
+          out.push({
+            productId: Number(inv.product_id),
+            productName: p.name ?? "Nieznany produkt",
+            sku: p.sku ?? undefined,
+            locationUUID: locUuid,
+            locationLabel: bin.label || locUuid,
+            availableQuantity: available,
+            purchasePrice: Number(p.purchase_price ?? 0),
+          });
+        }
+      }
+    }
+    // Deduplicate by product+location and sum available quantity.
+    const merged = new Map<string, DamageCandidate>();
+    for (const c of out) {
+      const k = `${c.productId}|${c.locationUUID}`;
+      const prev = merged.get(k);
+      if (!prev) {
+        merged.set(k, { ...c });
+      } else {
+        prev.availableQuantity += c.availableQuantity;
+      }
+    }
+    return [...merged.values()].sort((a, b) => b.availableQuantity - a.availableQuantity);
+  }, [inventoryMaps, products, layout.racks]);
 
   /** Dev visibility: stock rows missing location_uuid (should be empty in normal operation). */
   useEffect(() => {
@@ -831,7 +905,7 @@ export default function WarehouseDesigner() {
       location_id: r.location_id,
       location_name: r.location_name,
     }));
-    console.warn(
+    warn(
       `[WarehouseDesigner] Inventory rows missing location_uuid: ${missing.length} of ${inventoryRows.length} (showing ${slice.length} row(s)${missing.length > cap ? `, +${missing.length - cap} more` : ""})`,
       details
     );
@@ -859,19 +933,27 @@ export default function WarehouseDesigner() {
   const usedStorageTypesForLegend = useMemo<StorageType[]>(() => {
     const rackForLegend = displayRack ?? selectedRackForMagazyn;
     if (!rackForLegend) return [];
-    const order: StorageType[] = ["primary", "reserve", "store", "buffer", "damaged"];
+    const order: StorageType[] = ["primary", "pick", "buffer", "reserve", "damaged"];
     const used = new Set<StorageType>();
     for (const b of rackForLegend.bins ?? []) {
       used.add(normalizeStorageType(b.storage_type));
     }
     return order.filter((t) => used.has(t));
   }, [displayRack, selectedRackForMagazyn]);
-  const globalLocationStatsForLegend = useMemo(() => {
+  /** Fallback: occupied bins from layout (usedVolumeAtBin) when API metrics unavailable. */
+  const binOccupancyLocationStats = useMemo(() => {
     let primary = 0;
     let reserve = 0;
     let damaged = 0;
+    const seen = new Set<string>();
     for (const rack of layout.racks) {
-      for (const bin of rack.bins ?? []) {
+      const rid = String(rack.id ?? rack.rack_index);
+      for (const bin of activeBinsForRack(rack)) {
+        if (usedVolumeAtBin(bin) <= 0) continue;
+        const uuid = binLocationUuidFromBin(bin);
+        const key = uuid || `${rid}-${bin.level_index}-${bin.segment_index}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         const type = normalizeStorageType(bin.storage_type);
         if (type === "reserve") reserve += 1;
         else if (type === "damaged") damaged += 1;
@@ -884,16 +966,25 @@ export default function WarehouseDesigner() {
       damaged,
       total: primary + reserve + damaged,
     };
-  }, [layout.racks]);
+  }, [layout.racks, usedVolumeAtBin]);
+
+  const globalLocationStatsForLegend = useMemo(() => {
+    if (occupancyMetrics) {
+      const p = occupancyMetrics.primary_location_count;
+      const r = occupancyMetrics.reserve_location_count;
+      const d = occupancyMetrics.damaged_location_count;
+      return { primary: p, reserve: r, damaged: d, total: p + r + d };
+    }
+    return binOccupancyLocationStats;
+  }, [occupancyMetrics, binOccupancyLocationStats]);
 
   /** Map locationUUID → bin (for storage_type and primary/reserve split). Declared before mapRackState and occupancy useMemos. */
   const uuidToBin = useMemo(() => {
     const map = new Map<string, BinState>();
     layout.racks.forEach((rack) => {
-      (rack.bins ?? []).forEach((bin) => {
-        if (bin.locationUUID) {
-          map.set(bin.locationUUID, bin);
-        }
+      activeBinsForRack(rack).forEach((bin) => {
+        const u = normalizeInventoryLocationUuid(binLocationUuidFromBin(bin));
+        if (u) map.set(u, bin);
       });
     });
     return map;
@@ -904,10 +995,9 @@ export default function WarehouseDesigner() {
     const map = new Map<string, string>();
     layout.racks.forEach((rack) => {
       const rackId = String(rack.id ?? rack.rack_index);
-      (rack.bins ?? []).forEach((bin) => {
-        if (bin.locationUUID) {
-          map.set(bin.locationUUID, rackId);
-        }
+      activeBinsForRack(rack).forEach((bin) => {
+        const u = normalizeInventoryLocationUuid(binLocationUuidFromBin(bin));
+        if (u) map.set(u, rackId);
       });
     });
     return map;
@@ -917,8 +1007,8 @@ export default function WarehouseDesigner() {
   const validLayoutLocationUUIDs = useMemo(() => {
     const out = new Set<string>();
     for (const rack of layout.racks) {
-      for (const bin of rack.bins ?? []) {
-        const uuid = (bin.locationUUID ?? "").trim();
+      for (const bin of activeBinsForRack(rack)) {
+        const uuid = normalizeInventoryLocationUuid(binLocationUuidFromBin(bin));
         if (uuid) out.add(uuid);
       }
     }
@@ -1242,22 +1332,6 @@ export default function WarehouseDesigner() {
       }
     }
 
-    if (!(inventoryMaps && inventoryRows.length > 0)) {
-      for (const p of products) {
-        if (p.assignedLocations?.length) continue;
-        if (!legacyProductLocationMatchesRack(p, selectedRackForMap)) continue;
-        if (totals.has(p.id)) continue;
-        const q = safeQuantity(p.quantity);
-        if (q <= 0) continue;
-        totals.set(p.id, {
-          product: p,
-          totalQuantity: q,
-          primaryQuantity: q,
-          reserveQuantity: 0,
-        });
-      }
-    }
-
     const rackProductsForMap = Array.from(totals.values())
       .map((t) => ({
         ...t.product,
@@ -1281,8 +1355,13 @@ export default function WarehouseDesigner() {
       const removedIds = new Set<string>();
       for (const sel of selectedRackIds) {
         removedIds.add(String(sel));
-        const r = layout.racks.find((rk) => String(rk.id ?? rk.rack_index) === String(sel));
-        if (r) removedIds.add(String(r.rack_index));
+        const r = layout.racks.find(
+          (rk) => String(rk.id ?? rk.rack_index) === String(sel) || String(rk.uuid ?? "") === String(sel)
+        );
+        if (r) {
+          removedIds.add(String(r.rack_index));
+          if (r.uuid) removedIds.add(String(r.uuid));
+        }
       }
       setLayout((prev) => ({
         ...prev,
@@ -1320,18 +1399,6 @@ export default function WarehouseDesigner() {
     }
   }, [layout.racks, layout.visual_elements, selectedRackIds, selectedVisualIds]);
 
-  const loadWarehouses = useCallback(async () => {
-    try {
-      const res = await api.get(`/tenants/${TENANT_ID}/warehouses/`);
-      const list = Array.isArray(res.data) ? res.data : [];
-      setWarehouses(list);
-      if (list.length > 0 && selectedWarehouseId === null) setSelectedWarehouseId(list[0].id);
-      else if (list.length === 0) setSelectedWarehouseId(null);
-    } catch {
-      setWarehouses([]);
-    }
-  }, [selectedWarehouseId]);
-
   const loadLayout = useCallback(async (warehouseId: number) => {
     setLoading(true);
     setInventoryRows([]);
@@ -1342,7 +1409,6 @@ export default function WarehouseDesigner() {
       const payload = res.data as { layout?: Record<string, unknown>; special_locations?: SpecialLocationsState } | undefined;
       const d = (payload?.layout ?? payload ?? {}) as Record<string, unknown>;
       setSpecialLocations(payload?.special_locations ?? { pick_start: null, packing: null, dock: null });
-      console.log("Data from backend (rack colors):", (d.racks || []).map((r: Record<string, unknown>, i: number) => ({ index: i, color: r.color })));
       const rawGridCols = (d.grid_cols ?? 24) <= 24 ? (d.grid_cols ?? 24) * CELLS_PER_METER : (d.grid_cols ?? GRID_COLS);
       const rawGridRows = (d.grid_rows ?? 16) <= 16 ? (d.grid_rows ?? 16) * CELLS_PER_METER : (d.grid_rows ?? GRID_ROWS);
       const building_width_m = d.building_width_m != null && Number(d.building_width_m) > 0 ? Number(d.building_width_m) : undefined;
@@ -1468,7 +1534,7 @@ export default function WarehouseDesigner() {
       const racksFromRes = (d.racks || []) as Array<{ bins?: Array<{ locationUUID?: string; location_uuid?: string; label?: string; location_id?: string }> }>;
       const resolveLabel = (locationUUID: string): string | null => {
         for (const r of racksFromRes) {
-          for (const b of r.bins ?? []) {
+          for (const b of activeBinsForRack(r)) {
             const uuid = b.locationUUID ?? b.location_uuid;
             if (uuid === locationUUID) return (b.label ?? b.location_id ?? null) || null;
           }
@@ -1484,7 +1550,8 @@ export default function WarehouseDesigner() {
           const totalQty = assigned.reduce((s: number, a: { quantity?: unknown }) => s + safeQuantity(a.quantity), 0);
           const vol = safeVolumeDm3(p.volume);
           const firstLoc = assigned[0];
-          const location_id = firstLoc ? resolveLabel(firstLoc.locationUUID) : null;
+          const firstLocUuid = firstLoc ? assignedLocationEntryUuid(firstLoc as { locationUUID?: string; location_uuid?: string }) : undefined;
+          const location_id = firstLocUuid ? resolveLabel(firstLocUuid) : null;
           const weightKg = typeof p.weight_kg === "number" ? p.weight_kg : typeof p.weight === "number" ? p.weight : undefined;
           const dims = normalizeProductDims(p);
           return {
@@ -1508,6 +1575,8 @@ export default function WarehouseDesigner() {
             compressed_height_cm: (p as { compressed_height_cm?: number | null }).compressed_height_cm ?? null,
             max_stack_weight: (p as { max_stack_weight?: number | null }).max_stack_weight ?? null,
             stack_behavior: ["stackable", "no_stack"].includes(String((p as { stack_behavior?: string }).stack_behavior)) ? (p as { stack_behavior: "stackable" | "no_stack" }).stack_behavior : "stackable",
+            purchase_price:
+              typeof p.purchase_price === "number" && Number.isFinite(p.purchase_price) ? p.purchase_price : undefined,
           };
         });
         setProducts(list);
@@ -1523,27 +1592,11 @@ export default function WarehouseDesigner() {
   }, []);
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:initialLoadWarehouses] run", { modifiesRack: false });
-    loadWarehouses();
-  }, []);
-
-  useEffect(() => {
-    console.log("[WarehouseDesigner][effect:selectedWarehouseLoadLayout] run", {
-      selectedWarehouseId,
-      modifiesRack: true,
-      fields: ["layout.racks", "rack.bins", "rack.levels", "rack.internal_structure", "rack.layoutVariant"],
-    });
     if (selectedWarehouseId != null) loadLayout(selectedWarehouseId);
     else setSpecialLocations({ pick_start: null, packing: null, dock: null });
   }, [selectedWarehouseId, loadLayout]);
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:liveViewReloadLayout] run", {
-      isLiveView,
-      selectedWarehouseId,
-      modifiesRack: true,
-      fields: ["layout.racks", "rack.bins", "rack.levels", "rack.internal_structure", "rack.layoutVariant"],
-    });
     if (isLiveView && selectedWarehouseId != null) loadLayout(selectedWarehouseId);
   }, [isLiveView, selectedWarehouseId, loadLayout]);
 
@@ -1554,13 +1607,15 @@ export default function WarehouseDesigner() {
       const [layoutRes, prodRes, inventoryRes] = await Promise.all([
         api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId } }),
         api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000 } }),
-        api.get<InventoryRow[]>("/inventory/", { params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId } }),
+        api.get<InventoryRow[]>("/inventory/", {
+          params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId, hide_technical_locations: false },
+        }),
       ]);
       const d = ((layoutRes.data as { layout?: Record<string, unknown> } | undefined)?.layout ?? layoutRes.data) as Record<string, unknown>;
       const racksFromRes = (d?.racks || []) as Array<{ bins?: Array<{ locationUUID?: string; location_uuid?: string; label?: string; location_id?: string }> }>;
       const resolveLabel = (locationUUID: string): string | null => {
         for (const r of racksFromRes) {
-          for (const b of r.bins ?? []) {
+          for (const b of activeBinsForRack(r)) {
             const uuid = b.locationUUID ?? b.location_uuid;
             if (uuid === locationUUID) return (b.label ?? b.location_id ?? null) || null;
           }
@@ -1574,7 +1629,9 @@ export default function WarehouseDesigner() {
         const totalQty = assigned.reduce((s: number, a: { quantity?: unknown }) => s + safeQuantity(a.quantity), 0);
         const vol = safeVolumeDm3(p.volume);
         const firstLoc = assigned[0];
-        const location_id = firstLoc ? resolveLabel(firstLoc.locationUUID) : null;
+        const firstLocUuid = firstLoc ? assignedLocationEntryUuid(firstLoc as { locationUUID?: string; location_uuid?: string }) : undefined;
+        const location_id = firstLocUuid ? resolveLabel(firstLocUuid) : null;
+        const weightKg = typeof p.weight_kg === "number" ? p.weight_kg : typeof p.weight === "number" ? p.weight : undefined;
         const dims = normalizeProductDims(p);
         return {
           id,
@@ -1585,6 +1642,7 @@ export default function WarehouseDesigner() {
           volume_dm3: vol,
           location_id: location_id ?? null,
           assignedLocations: assigned.length > 0 ? assigned : undefined,
+          weight_kg: weightKg,
           image_url: typeof p.image_url === "string" ? p.image_url : undefined,
           // Always set dimensions from normalizer (API: length/width/height or *_cm). Enables 3D slot capacity in Magazyn.
           width_cm: dims.width_cm || undefined,
@@ -1596,6 +1654,8 @@ export default function WarehouseDesigner() {
           compressed_height_cm: (p as { compressed_height_cm?: number | null }).compressed_height_cm ?? null,
           max_stack_weight: (p as { max_stack_weight?: number | null }).max_stack_weight ?? null,
           stack_behavior: ["stackable", "no_stack"].includes(String((p as { stack_behavior?: string }).stack_behavior)) ? (p as { stack_behavior: "stackable" | "no_stack" }).stack_behavior : "stackable",
+          purchase_price:
+            typeof p.purchase_price === "number" && Number.isFinite(p.purchase_price) ? p.purchase_price : undefined,
         };
       });
       setProducts(list);
@@ -1605,6 +1665,20 @@ export default function WarehouseDesigner() {
       setInventoryRows([]);
     }
   }, [selectedWarehouseId]);
+
+  /** After WMS putaway (or similar), refetch layout + products + inventory so Magazyn badges match GET /inventory/. */
+  useEffect(() => {
+    const onInventoryUpdated = (ev: Event) => {
+      const ce = ev as CustomEvent<{ tenantId?: number; warehouseId?: number | null }>;
+      const d = ce.detail;
+      if (!d || d.tenantId !== TENANT_ID) return;
+      if (d.warehouseId == null || selectedWarehouseId == null) return;
+      if (d.warehouseId !== selectedWarehouseId) return;
+      void fetchProductsForMap();
+    };
+    window.addEventListener("wms:inventory-updated", onInventoryUpdated);
+    return () => window.removeEventListener("wms:inventory-updated", onInventoryUpdated);
+  }, [selectedWarehouseId, fetchProductsForMap]);
 
   /** Drop one assigned_locations slot without syncing Inventory (backend skip_inventory_sync). */
   const removeProductAssignmentAtLocation = useCallback(
@@ -1647,7 +1721,7 @@ export default function WarehouseDesigner() {
     if (selectedRackIdForSideView == null) return false;
     const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === String(selectedRackIdForSideView));
     if (!rack) return false;
-    return (rack.bins ?? []).some((b) => (b.locationUUID ?? "").trim() !== "");
+    return activeBinsForRack(rack).some((b) => (b.locationUUID ?? "").trim() !== "");
   }, [layout.racks, selectedRackIdForSideView]);
 
   /** Side-view rack id, else map-selected rack (for clear-rack modal + PATCH scope). */
@@ -1662,7 +1736,7 @@ export default function WarehouseDesigner() {
     if (clearRackTargetKey == null) return { rackLabel: "", assignmentCount: 0 };
     const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === clearRackTargetKey);
     if (!rack) return { rackLabel: "", assignmentCount: 0 };
-    const binUuids = new Set((rack.bins ?? []).map((b) => (b.locationUUID ?? "").trim()).filter(Boolean));
+    const binUuids = new Set(activeBinsForRack(rack).map((b) => (b.locationUUID ?? "").trim()).filter(Boolean));
     let n = 0;
     for (const p of products) {
       if (!p.assignedLocations?.length) continue;
@@ -1680,7 +1754,7 @@ export default function WarehouseDesigner() {
     const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === clearRackTargetKey);
     if (!rack) return;
     const binUuids = new Set(
-      (rack.bins ?? []).map((b) => (b.locationUUID ?? "").trim()).filter(Boolean)
+      activeBinsForRack(rack).map((b) => (b.locationUUID ?? "").trim()).filter(Boolean)
     );
     if (binUuids.size === 0) return;
 
@@ -1764,7 +1838,10 @@ export default function WarehouseDesigner() {
     if (!copiedRack) return;
     setLayout((prev) => ({
       ...prev,
-      racks: [...prev.racks, ...duplicateRacksAtPosition([copiedRack], cell, prev.racks.length + 1)],
+      racks: [
+        ...prev.racks,
+        ...assignUniqueRackNamesToNewRacks(duplicateRacksAtPosition([copiedRack], cell, prev.racks.length + 1), prev),
+      ],
     }));
     setCopyPlacementMode(false);
     setCopiedRack(null);
@@ -1802,16 +1879,10 @@ export default function WarehouseDesigner() {
   );
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:fetchProductsForMap] run", {
-      isLiveView,
-      racksLength: layout.racks.length,
-      modifiesRack: false,
-    });
     if (isLiveView && layout.racks.length > 0) fetchProductsForMap();
   }, [isLiveView, layout.racks.length, fetchProductsForMap]);
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:loadTemplates] run", { modifiesRack: false });
     let cancelled = false;
     (async () => {
       try {
@@ -1834,12 +1905,6 @@ export default function WarehouseDesigner() {
   }, []);
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:normalizeTemplateLinkedRacks] run", {
-      customTemplatesLength: customTemplates.length,
-      racksLength: layout.racks.length,
-      modifiesRack: true,
-      fields: ["rack.bins", "rack.internal_structure", "rack.width_cm", "rack.length_cm", "rack.height_cm"],
-    });
     if (!Array.isArray(customTemplates) || customTemplates.length === 0 || layout.racks.length === 0) return;
     const templateById = new Map(customTemplates.map((t) => [t.id, t]));
     setLayout((prev) => {
@@ -1892,16 +1957,6 @@ export default function WarehouseDesigner() {
           bins: normalizedBins,
         };
       });
-      if (changed) {
-        console.log("[WarehouseDesigner][effect:normalizeTemplateLinkedRacks] applied", {
-          changedRackIds: racks
-            .filter((rack, idx) => rack !== prev.racks[idx])
-            .map((rack) => String(rack.id ?? rack.rack_index)),
-          note: "This effect can overwrite rack.bins/internal_structure dimensions.",
-        });
-      } else {
-        console.log("[WarehouseDesigner][effect:normalizeTemplateLinkedRacks] no-op");
-      }
       return changed ? { ...prev, racks } : prev;
     });
   }, [customTemplates, layout.layout_id, layout.racks.length]);
@@ -1943,20 +1998,36 @@ export default function WarehouseDesigner() {
 
   const createWarehouse = useCallback(async () => {
     try {
-      await api.post(`/tenants/${TENANT_ID}/warehouses/`, { name: newWarehouseName });
-      await loadWarehouses();
+      const res = await api.post<{ id?: number; name?: string }>(`/tenants/${TENANT_ID}/warehouses/`, {
+        name: newWarehouseName,
+      });
+      await refreshWarehouses();
+      const created = res.data;
+      if (created?.id != null) {
+        setWarehouse({ id: created.id, name: (created.name ?? newWarehouseName).trim() || `Magazyn ${created.id}` });
+      }
       setShowCreateWarehouse(false);
     } catch (e) {
       console.error("Create warehouse:", e);
     }
-  }, [newWarehouseName, loadWarehouses]);
+  }, [newWarehouseName, refreshWarehouses, setWarehouse]);
 
   const saveLayout = useCallback(async () => {
     const whId = selectedWarehouseId ?? layout.warehouse_id;
     if (whId == null) return;
+    const { valid: layoutNamesValid, errors: layoutNameErrors } = validateAllRackNamesInLayout(layout);
+    if (!layoutNamesValid) {
+      const msg =
+        layoutNameErrors.length === 1
+          ? `Nie można zapisać układu — ${layoutNameErrors[0]}`
+          : `Nie można zapisać układu — ${layoutNameErrors.join(" · ")}`;
+      setSnackbar({ message: msg });
+      return;
+    }
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
+        ...(layout.layout_id != null ? { layout_id: layout.layout_id } : {}),
         name: layout.name,
         grid_cols: layout.grid_cols,
         grid_rows: layout.grid_rows,
@@ -2019,17 +2090,41 @@ export default function WarehouseDesigner() {
         row_containers: layout.row_containers ?? [],
         wall_elements: layout.wall_elements ?? [],
       };
-      console.log("Saving payload (rack colors):", payload.racks.map((r, i) => ({ index: i, color: r.color })));
-      console.log("Saving building", {
-        width: (payload as { building_width_m?: number }).building_width_m,
-        depth: (payload as { building_depth_m?: number }).building_depth_m,
-        height: (payload as { building_height_m?: number }).building_height_m,
-      });
-      await api.put(`/warehouse/${whId}/layout`, payload, { params: { tenant_id: TENANT_ID } });
+
+      const validated = validateAndSanitizeLayoutPayload(payload);
+      if (!validated.ok) {
+        const msg = `Nie można zapisać — nieprawidłowy układ: ${validated.errors.join(" · ")}`;
+        console.error("[saveLayout] validation failed:", validated.errors);
+        setSnackbar({ message: msg });
+        return;
+      }
+
+      await api.put(`/warehouse/${whId}/layout`, validated.payload, { params: { tenant_id: TENANT_ID } });
       setLastSavedAt(Date.now());
       if (selectedWarehouseId) await loadLayout(selectedWarehouseId);
-    } catch (e) {
-      console.error("Save layout:", e);
+    } catch (err: unknown) {
+      console.error("Save layout:", err);
+      const ax = err as { response?: { status?: number; data?: unknown } };
+      console.error("ERROR RESPONSE:", ax.response?.data);
+      const status = ax.response?.status;
+      const data = ax.response?.data as { detail?: unknown } | undefined;
+      const detailStr =
+        typeof data?.detail === "string"
+          ? data.detail
+          : data?.detail != null
+            ? JSON.stringify(data.detail)
+            : null;
+      if (status === 400) {
+        setSnackbar({ message: detailStr ? `Zapis nie powiódł się: ${detailStr}` : "Zapis nie powiódł się — duplikat nazwy regału" });
+      } else if (status === 422) {
+        setSnackbar({ message: detailStr ? `Walidacja: ${detailStr}` : "Zapis nie powiódł się — błąd walidacji danych." });
+      } else if (status === 500) {
+        setSnackbar({
+          message: detailStr ? `Błąd serwera (500): ${detailStr}` : "Błąd serwera przy zapisie układu (500). Szczegóły w konsoli.",
+        });
+      } else {
+        setSnackbar({ message: detailStr ? `Zapis nie powiódł się: ${detailStr}` : "Zapis nie powiódł się." });
+      }
     } finally {
       setSaving(false);
     }
@@ -2239,6 +2334,7 @@ export default function WarehouseDesigner() {
     setCatalogHoveredSlotFromCell,
     fillSelectedRowWithTemplate,
     placeEmptyRow,
+    placePairedRowPair,
     placeRowWithTemplate,
   } = useDesignerRowOperations({
     layout,
@@ -2280,20 +2376,221 @@ export default function WarehouseDesigner() {
   placeEmptyRowRef.current = openRowPrefixModalForEmptyRow;
   placeRowWithTemplateRef.current = openRowPrefixModalForRowWithTemplate;
 
+  const rowPrefixModalPreviewCount = useMemo(() => {
+    if (!pendingRowCreation) return 0;
+    if (pendingRowCreation.type === "rowWithTemplate") {
+      return countPlaceRowWithTemplateRacks(
+        layout,
+        pendingRowCreation.start,
+        pendingRowCreation.end,
+        pendingRowCreation.item,
+        rowGapCm
+      );
+    }
+    if (pendingRowCreation.type === "emptyRow") {
+      return countEmptyRowSlotsInDraw(
+        layout,
+        pendingRowCreation.start,
+        pendingRowCreation.end,
+        rowGapCm
+      );
+    }
+    return 0;
+  }, [pendingRowCreation, layout, rowGapCm]);
+
+  /** Paired-row template pickers: user templates only (API `/warehouse/templates/` is tenant-scoped). */
+  const rowModalTemplateOptions = useMemo(
+    () =>
+      customTemplates.map((t) => ({
+        key: catalogItemTemplateKey({ type: "custom", template: t }),
+        label: t.name,
+        summary: `${t.levels} poz. × ${t.bins_per_level} lok.`,
+      })),
+    [customTemplates]
+  );
+
+  const getTemplatePreviewRackCount = useCallback(
+    (templateKey: string) => {
+      if (!pendingRowCreation || pendingRowCreation.type === "stampRack") return 0;
+      const item = catalogItemFromTemplateKey(templateKey, customTemplates);
+      if (!item) return 0;
+      return countPlaceRowWithTemplateRacks(
+        layout,
+        pendingRowCreation.start,
+        pendingRowCreation.end,
+        item,
+        rowGapCm
+      );
+    },
+    [pendingRowCreation, layout, customTemplates, rowGapCm]
+  );
+
+  const validateRowPrefixForModal = useCallback(
+    (result: RowPrefixModalResult): string | null => {
+      const pending = pendingRowCreation;
+      if (!pending) return null;
+      const r1 = result.row1;
+
+      if (pending.type === "stampRack") {
+        const normalized = normalizeRowPrefixLetters(r1.rowPrefix);
+        const base = getProposedFirstRackLabelForStampFromCatalog(layout, pending.cell, pending.item, normalized);
+        const v = validateGeneratedRackNames([base], layout);
+        if (!v.valid) {
+          return `Regały już istnieją: ${v.duplicates.join(", ")}`;
+        }
+        return null;
+      }
+
+      if (result.paired && result.row2 && (pending.type === "emptyRow" || pending.type === "rowWithTemplate")) {
+        const r2 = result.row2;
+        const item1 = resolveRowCatalogItemForRowModal(r1, pending, 1, customTemplates);
+        const item2 = resolveRowCatalogItemForRowModal(r2, pending, 2, customTemplates);
+        const fill1 = effectiveRowAutoFill(r1, pending);
+        const fill2 = effectiveRowAutoFill(r2, pending);
+        if (fill1 && !item1) {
+          return "Wybierz szablon dla rzędu 1, aby włączyć automatyczne wypełnienie.";
+        }
+        if (fill2 && !item2) {
+          return "Wybierz szablon dla rzędu 2, aby włączyć automatyczne wypełnienie.";
+        }
+        const names: string[] = [];
+        const p1 = normalizeRowPrefixLetters(r1.rowPrefix);
+        const p2 = normalizeRowPrefixLetters(r2.rowPrefix);
+        if (fill1 && item1) {
+          const cnt1 = countPlaceRowWithTemplateRacks(layout, pending.start, pending.end, item1, rowGapCm);
+          if (cnt1 > 0) names.push(...generateRackNames(p1, cnt1));
+        }
+        if (fill2 && item2) {
+          const cnt2 = countPlaceRowWithTemplateRacks(layout, pending.start, pending.end, item2, rowGapCm);
+          if (cnt2 > 0) names.push(...generateRackNames(p2, cnt2));
+        }
+        if (names.length === 0) return null;
+        const v = validateGeneratedRackNames(names, layout);
+        if (!v.valid) {
+          return `Regały już istnieją: ${v.duplicates.join(", ")}`;
+        }
+        return null;
+      }
+
+      if (pending.type === "emptyRow") {
+        const item1 = resolveRowCatalogItemForRowModal(r1, pending, 1, customTemplates);
+        const wantFill = effectiveRowAutoFill(r1, pending);
+        if (wantFill && !item1) {
+          return "Wybierz szablon, aby włączyć automatyczne wypełnienie.";
+        }
+        if (wantFill && item1) {
+          const cnt = countPlaceRowWithTemplateRacks(layout, pending.start, pending.end, item1, rowGapCm);
+          if (cnt <= 0) return null;
+          const names = generateRackNames(normalizeRowPrefixLetters(r1.rowPrefix), cnt);
+          const v = validateGeneratedRackNames(names, layout);
+          if (!v.valid) {
+            return `Regały już istnieją: ${v.duplicates.join(", ")}`;
+          }
+        }
+        return null;
+      }
+      if (pending.type === "rowWithTemplate") {
+        const item1 = resolveRowCatalogItemForRowModal(r1, pending, 1, customTemplates);
+        if (effectiveRowAutoFill(r1, pending)) {
+          const fillItem = item1 ?? pending.item;
+          if (!fillItem) return null;
+          const cnt = countPlaceRowWithTemplateRacks(layout, pending.start, pending.end, fillItem, rowGapCm);
+          if (cnt <= 0) return null;
+          const names = generateRackNames(normalizeRowPrefixLetters(r1.rowPrefix), cnt);
+          const v = validateGeneratedRackNames(names, layout);
+          if (!v.valid) {
+            return `Regały już istnieją: ${v.duplicates.join(", ")}`;
+          }
+        }
+        return null;
+      }
+      return null;
+    },
+    [layout, pendingRowCreation, customTemplates, rowGapCm]
+  );
+
   const handleRowPrefixConfirm = useCallback(
-    (prefix: string) => {
+    (modalResult: RowPrefixModalResult) => {
       if (!pendingRowCreation) return;
-      if (pendingRowCreation.type === "emptyRow") {
-        placeEmptyRow(pendingRowCreation.start, pendingRowCreation.end, prefix);
-      } else if (pendingRowCreation.type === "rowWithTemplate") {
-        placeRowWithTemplate(pendingRowCreation.start, pendingRowCreation.end, pendingRowCreation.item, prefix);
-      } else if (pendingRowCreation.type === "stampRack") {
-        stampRackFromCatalogItem(pendingRowCreation.cell, pendingRowCreation.item, prefix);
+      const r1 = modalResult.row1;
+      const pending = pendingRowCreation;
+
+      if (
+        modalResult.paired &&
+        modalResult.row2 &&
+        (pending.type === "emptyRow" || pending.type === "rowWithTemplate")
+      ) {
+        const row2 = modalResult.row2;
+        const item1 = resolveRowCatalogItemForRowModal(r1, pending, 1, customTemplates);
+        const item2 = resolveRowCatalogItemForRowModal(row2, pending, 2, customTemplates);
+        placePairedRowPair(pending.start, pending.end, {
+          prefix: normalizeRowPrefixLetters(r1.rowPrefix),
+          rack_direction: r1.rack_direction,
+          bin_direction: r1.bin_direction,
+          item: item1,
+          autoFill: effectiveRowAutoFill(r1, pending),
+        }, {
+          prefix: normalizeRowPrefixLetters(row2.rowPrefix),
+          rack_direction: row2.rack_direction,
+          bin_direction: row2.bin_direction,
+          item: item2,
+          autoFill: effectiveRowAutoFill(row2, pending),
+        });
+      } else {
+        const prefix = normalizeRowPrefixLetters(r1.rowPrefix);
+        if (pending.type === "emptyRow") {
+          const item1 = resolveRowCatalogItemForRowModal(r1, pending, 1, customTemplates);
+          const wantFill = effectiveRowAutoFill(r1, pending);
+          if (wantFill && item1) {
+            placeRowWithTemplate(pending.start, pending.end, item1, prefix, r1.rack_direction, r1.bin_direction);
+          } else if (item1 && !wantFill) {
+            placeEmptyRow(
+              pending.start,
+              pending.end,
+              prefix,
+              r1.rack_direction,
+              r1.bin_direction,
+              rowContainerTemplateIdFromCatalogItem(item1)
+            );
+          } else {
+            placeEmptyRow(pending.start, pending.end, prefix, r1.rack_direction, r1.bin_direction);
+          }
+        } else if (pending.type === "rowWithTemplate") {
+          const item1 = resolveRowCatalogItemForRowModal(r1, pending, 1, customTemplates);
+          if (effectiveRowAutoFill(r1, pending)) {
+            const fillItem = item1 ?? pending.item;
+            if (fillItem) {
+              placeRowWithTemplate(pending.start, pending.end, fillItem, prefix, r1.rack_direction, r1.bin_direction);
+            } else {
+              placeEmptyRow(pending.start, pending.end, prefix, r1.rack_direction, r1.bin_direction);
+            }
+          } else if (item1) {
+            placeEmptyRow(
+              pending.start,
+              pending.end,
+              prefix,
+              r1.rack_direction,
+              r1.bin_direction,
+              rowContainerTemplateIdFromCatalogItem(item1)
+            );
+          } else {
+            placeEmptyRow(pending.start, pending.end, prefix, r1.rack_direction, r1.bin_direction);
+          }
+        } else if (pending.type === "stampRack") {
+          stampRackFromCatalogItem(pending.cell, pending.item, prefix);
+        }
       }
       setPendingRowCreation(null);
       setRowPrefixModalOpen(false);
     },
-    [pendingRowCreation, placeEmptyRow, placeRowWithTemplate, stampRackFromCatalogItem]
+    [
+      pendingRowCreation,
+      placeEmptyRow,
+      placePairedRowPair,
+      placeRowWithTemplate,
+      stampRackFromCatalogItem,
+      customTemplates,
+    ]
   );
 
   const handleCatalogDrop = useCallback(
@@ -2419,15 +2716,6 @@ export default function WarehouseDesigner() {
     []
   );
 
-  const handleExportPdf = useCallback(() => {
-    exportPdf({
-      canvasEl: canvasContainerRef.current,
-      layout,
-      gridUnitCm: GRID_UNIT_CM,
-      pdfFailedMessage: "Failed to export PDF",
-    });
-  }, [layout]);
-
   const handleExportCsv = useCallback(() => {
     exportCsv(layout);
   }, [layout]);
@@ -2493,38 +2781,166 @@ export default function WarehouseDesigner() {
     () =>
       layout.racks.reduce((sum, r) => {
         const rackTotal =
-          r.total_capacity_dm3 ?? (r.bins ?? []).reduce((s, b) => s + binVolumeDm3(b, r), 0);
+          r.total_capacity_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binVolumeDm3(b, r), 0);
         return sum + rackTotal;
       }, 0),
     [layout.racks]
   );
 
   /**
-   * Used volume (dm³) from products only: Σ (layout-scoped qty × product.volume_dm3).
-   * Same quantities as sidebar / Top products (`sortedProductsByVolume`); never bin capacity or max-load fields.
+   * Fallback: distinct bin slot load from usedVolumeAtBin when /warehouse/occupancy-metrics is unavailable.
    */
-  const productsAssignedVolumeDm3 = useMemo(
-    () => sortedProductsByVolume.reduce((s, x) => s + x.volumeAssignedDm3, 0),
-    [sortedProductsByVolume]
-  );
-
-  /** Primary vs reserve split of used volume by bin storage_type (same buckets as LOKALIZACJE counts). */
-  const { primaryUsedDm3, reserveUsedDm3 } = useMemo(() => {
+  const binOccupancyVolumes = useMemo(() => {
+    let total = 0;
     let primary = 0;
     let reserve = 0;
+    let damaged = 0;
+    const seen = new Set<string>();
     for (const r of layout.racks) {
-      for (const b of r.bins ?? []) {
+      const rid = String(r.id ?? r.rack_index);
+      for (const b of activeBinsForRack(r)) {
         const used = usedVolumeAtBin(b);
         if (used <= 0) continue;
-        if (normalizeStorageType(b.storage_type) === "reserve") reserve += used;
+        const uuid = binLocationUuidFromBin(b);
+        const key = uuid || `${rid}-${b.level_index}-${b.segment_index}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        total += used;
+        const t = normalizeStorageType(b.storage_type);
+        if (t === "reserve") reserve += used;
+        else if (t === "damaged") damaged += used;
         else primary += used;
       }
     }
-    return { primaryUsedDm3: primary, reserveUsedDm3: reserve };
+    return {
+      productsAssignedVolumeDm3: total,
+      primaryUsedDm3: primary,
+      reserveUsedDm3: reserve,
+      damagedUsedDm3: damaged,
+    };
   }, [layout.racks, usedVolumeAtBin]);
 
+  const { productsAssignedVolumeDm3, primaryUsedDm3, reserveUsedDm3, damagedUsedDm3 } = useMemo(() => {
+    if (occupancyMetrics) {
+      return {
+        productsAssignedVolumeDm3: occupancyMetrics.total_volume_dm3,
+        primaryUsedDm3: occupancyMetrics.primary_volume_dm3,
+        reserveUsedDm3: occupancyMetrics.reserve_volume_dm3,
+        damagedUsedDm3: occupancyMetrics.damaged_volume_dm3,
+      };
+    }
+    return binOccupancyVolumes;
+  }, [occupancyMetrics, binOccupancyVolumes]);
+
   const totalUsed = productsAssignedVolumeDm3;
-  const utilizationPct = totalCapacity > 0 ? (productsAssignedVolumeDm3 / totalCapacity) * 100 : 0;
+  const capacityDenominatorDm3 = useMemo(() => {
+    const apiCap = occupancyMetrics?.layout_capacity_volume_dm3;
+    if (typeof apiCap === "number" && Number.isFinite(apiCap) && apiCap > 0) return apiCap;
+    return totalCapacity;
+  }, [occupancyMetrics?.layout_capacity_volume_dm3, totalCapacity]);
+  const utilizationPct =
+    capacityDenominatorDm3 > 0 ? Math.min(100, (productsAssignedVolumeDm3 / capacityDenominatorDm3) * 100) : 0;
+
+  const handleExportWarehouseReport = useCallback(
+    async (variant: WarehouseReportVariant) => {
+      try {
+        if (variant === "executive") {
+          const execData = buildWarehouseExecutiveReportData({
+            layout,
+            inventoryRows,
+            products,
+          });
+          await generateWarehouseExecutivePDF(execData);
+          return;
+        }
+        if (variant === "product_locations") {
+          if (selectedWarehouseId == null) {
+            alert("Wybierz magazyn, aby wygenerować raport lokalizacji produktów.");
+            return;
+          }
+          if (layout.layout_id == null) {
+            alert("Brak aktywnego układu magazynu.");
+            return;
+          }
+          await downloadProductLocationReportPdf(selectedWarehouseId, layout.layout_id, TENANT_ID);
+          return;
+        }
+        if (variant === "technical") {
+          if (selectedWarehouseId == null) {
+            alert("Wybierz magazyn, aby wygenerować raport struktury.");
+            return;
+          }
+          if (layout.layout_id == null) {
+            alert("Brak aktywnego układu magazynu.");
+            return;
+          }
+          await downloadStructureReportPdf(selectedWarehouseId, layout.layout_id, TENANT_ID);
+          return;
+        }
+        const data = buildPdfReportData({
+          layout,
+          customTemplates,
+          totalCapacityDm3: totalCapacity,
+          usedVolumeDm3: productsAssignedVolumeDm3,
+          occupancyPercent: utilizationPct,
+          primary: {
+            count: globalLocationStatsForLegend.primary,
+            volumeDm3: primaryUsedDm3,
+          },
+          reserve: {
+            count: globalLocationStatsForLegend.reserve,
+            volumeDm3: reserveUsedDm3,
+          },
+          damaged: {
+            count: globalLocationStatsForLegend.damaged,
+            volumeDm3: damagedUsedDm3,
+          },
+          products,
+          inventoryRows,
+          layoutLocationUuids: validLayoutLocationUUIDs,
+        });
+        await generateWarehousePDF(data);
+      } catch (e) {
+        console.error(e);
+        alert("Nie udało się wygenerować raportu PDF");
+      }
+    },
+    [
+      products,
+      inventoryRows,
+      validLayoutLocationUUIDs,
+      layout,
+      customTemplates,
+      totalCapacity,
+      productsAssignedVolumeDm3,
+      utilizationPct,
+      globalLocationStatsForLegend.primary,
+      globalLocationStatsForLegend.reserve,
+      globalLocationStatsForLegend.damaged,
+      primaryUsedDm3,
+      reserveUsedDm3,
+      damagedUsedDm3,
+      selectedWarehouseId,
+    ]
+  );
+
+  const handleExportWarehouseValueReport = useCallback(async () => {
+    await generateWarehouseValueReportPDF({
+      products,
+      layout,
+      tenant_id: TENANT_ID,
+      warehouse_id: selectedWarehouseId,
+    });
+  }, [products, layout, selectedWarehouseId]);
+
+  const handleExportTopVolumeReport = useCallback(async () => {
+    await generateTopVolumeReportPDF({
+      products,
+      layout,
+      warehouseId: selectedWarehouseId,
+      tenantId: TENANT_ID,
+    });
+  }, [products, layout, selectedWarehouseId]);
 
   /** Per-rack occupancy % for full map coloring (green / yellow / red). */
   const rackOccupancyPct = useMemo(() => {
@@ -2532,12 +2948,12 @@ export default function WarehouseDesigner() {
     for (const r of layout.racks) {
       let used = 0;
       let total = 0;
-      for (const b of r.bins ?? []) {
+      for (const b of activeBinsForRack(r)) {
         used += usedVolumeAtBin(b);
         total += binVolumeDm3(b, r);
       }
       const rid = String(r.id ?? r.rack_index);
-      out[rid] = total > 0 ? (used / total) * 100 : 0;
+      out[rid] = total > 0 ? Math.min(100, (used / total) * 100) : 0;
     }
     return out;
   }, [layout.racks, usedVolumeAtBin]);
@@ -2547,17 +2963,24 @@ export default function WarehouseDesigner() {
   const height = layout.grid_rows * cellPx;
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:dragWallElement] run", {
-      draggingWallElementId,
-      modifiesRack: false,
-    });
     if (!draggingWallElementId || !svgRef.current) return;
     const el = layout.wall_elements?.find((e) => e.id === draggingWallElementId);
     if (!el) return;
     const onMove = (e: PointerEvent) => {
       if (!svgRef.current) return;
-      const rect = svgRef.current.getBoundingClientRect();
-      const pos = getPositionCmAlongWall(e.clientX, e.clientY, el.wall, rect, width, height, layout.grid_cols, layout.grid_rows, GRID_UNIT_CM);
+      const svg = svgRef.current;
+      const { widthPx, heightPx } = getSvgLayoutSizePx(svg, width, height);
+      const pos = getPositionCmAlongWall(
+        e.clientX,
+        e.clientY,
+        el.wall,
+        svg,
+        widthPx,
+        heightPx,
+        layout.grid_cols,
+        layout.grid_rows,
+        GRID_UNIT_CM
+      );
       wallElementDragPosRef.current = pos;
       setDragPreviewPositionCm(pos);
     };
@@ -2612,8 +3035,11 @@ export default function WarehouseDesigner() {
     : (dragCollisionRackId ? (dragCollisionRackId.id ?? dragCollisionRackId.rack_index) : null);
   const collisionRackIds = groupDragInvalid ? selectedRackIds : null;
 
-  const selectedRack = layout.racks.find((r) => (r.id != null && r.id === selectedRackId) || r.rack_index === selectedRackId);
-  const selectedRacks = layout.racks.filter((r) => selectedRackIds.includes(r.id ?? r.rack_index));
+  const selectedRack =
+    selectedRackId == null
+      ? undefined
+      : layout.racks.find((r) => rackMatchesSlotRackId(r, selectedRackId));
+  const selectedRacks = layout.racks.filter((r) => selectedRackIds.some((id) => rackMatchesSlotRackId(r, id)));
   const isMultiSelect = selectedRackIds.length > 1;
 
   const fetchPathToRack = useCallback(async () => {
@@ -2627,13 +3053,10 @@ export default function WarehouseDesigner() {
     setPathError(null);
     const from = { x: specialLocations.pick_start.x, y: specialLocations.pick_start.y };
     const approach = computeApproachPointCells({ fromCm: from, rack: selectedRack, layout });
-    console.log("APPROACH POINT:", approach);
     const to = { x: cellsToCm(approach.x), y: cellsToCm(approach.y) };
     const payload = { warehouseId: String(warehouseId), from, to };
-    console.log("ROUTE PATH REQUEST:", payload);
     try {
       const res = await fetchRoutePath(payload);
-      console.log("ROUTE PATH RESPONSE points count:", res.points?.length ?? 0);
       if (res.points && res.points.length >= 2) {
         const points = res.points.map((p) => ({ x: p.x / GRID_UNIT_CM, y: p.y / GRID_UNIT_CM }));
         setPathPoints(simplifyPath(points));
@@ -2658,13 +3081,6 @@ export default function WarehouseDesigner() {
   }, [specialLocations, selectedRack, selectedWarehouseId, layout, computeApproachPointCells]);
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:autoFetchPathToRack] run", {
-      mainView,
-      routeMode: routeRackIds.length > 0,
-      hasSelectedRack: !!selectedRack,
-      hasPickStart: !!specialLocations.pick_start,
-      modifiesRack: false,
-    });
     if (mainView !== "layout" || routeRackIds.length > 0 || isRouteActive || !selectedRack || !specialLocations.pick_start) return;
     const warehouseId = selectedWarehouseId ?? layout.warehouse_id;
     if (warehouseId == null) return;
@@ -2703,10 +3119,6 @@ export default function WarehouseDesigner() {
   }, [layout.racks, layout.building_width_m, buildingDepthM]);
 
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:outsideRackSnackbar] run", {
-      outsideRackCount: outsideRackIds.length,
-      modifiesRack: false,
-    });
     if (outsideRackIds.length > 0) {
       setSnackbar({
         message:
@@ -2719,14 +3131,6 @@ export default function WarehouseDesigner() {
 
   // v1: visual path / picking route in layout view. Single-rack path from backend API; route mode builds segments via POST /route/path.
   useEffect(() => {
-    console.log("[WarehouseDesigner][effect:pathVisualization] run", {
-      mainView,
-      routeMode: routeRackIds.length > 0,
-      routeRackIdsLength: routeRackIds.length,
-      routeStopsLength: routeStops.length,
-      hasPickStart: !!specialLocations?.pick_start,
-      modifiesRack: false,
-    });
     if (!specialLocations?.pick_start) {
       setPathPoints(null);
       setPathSegments(null);
@@ -2752,13 +3156,6 @@ export default function WarehouseDesigner() {
     const gridRows = layout.grid_rows ?? 16;
 
     if (routeRackIds.length > 0) {
-      console.log("ROUTE BUILD", {
-        routeMode: true,
-        routeRackIdsCount: routeRackIds.length,
-        stopsCount: routeStops.length,
-        stops: routeStops,
-      });
-
       let cancelled = false;
       (async () => {
         setPathLoading(true);
@@ -2788,10 +3185,8 @@ export default function WarehouseDesigner() {
           const toCm = cmFromCells(finalStops[i].position);
 
           const payload = { warehouseId: String(warehouseId), from: fromCm, to: toCm };
-          console.log("ROUTE PATH REQUEST:", payload);
           const res = await fetchRoutePath(payload);
           if (cancelled) return;
-          console.log("ROUTE PATH RESPONSE points count:", res.points?.length ?? 0);
           const segCells = (res.points ?? []).map(cellsFromCm);
           if (segCells.length < 2) {
             setPathError(res.message ?? "Brak ścieżki dla segmentu trasy.");
@@ -2829,7 +3224,6 @@ export default function WarehouseDesigner() {
         }
 
         if (!cancelled) {
-          console.log("ROUTE TOTAL POINTS:", full.length);
           setPathPoints(full.length >= 2 ? simplifyPath(full) : null);
           setPathSegments(segmentsArray.length > 0 ? segmentsArray : null);
           setPathMarkers(null);
@@ -2861,42 +3255,12 @@ export default function WarehouseDesigner() {
       setPathSegments(null);
       setCurrentStopIndex(null);
       setPathMarkers(route.orderedStops.map((s, i) => ({ x: s.x, y: s.y, label: String(i + 1) })));
-      if (typeof console !== "undefined" && console.log) {
-        console.log("[picking-route] stops", { count: route.orderedStops.length, totalLenCells: route.totalLenCells, order: route.orderedStops });
-      }
       return;
     }
 
     // Single target (selected rack): path comes from backend API (fetchPathToRack), do not overwrite here.
     if (routeRackIds.length === 0) return;
   }, [mainView, selectedRack, specialLocations, layout, routeStops, routeRackIds.length, selectedWarehouseId, retryPathKey]);
-
-  useEffect(() => {
-    const mismatches = layout.racks
-      .map((rack) => {
-        const layoutVariantLocations = countLayoutVariantLocations(rack);
-        const binsLength = rack.bins?.length ?? 0;
-        if (layoutVariantLocations <= 0) return null;
-        if (binsLength === layoutVariantLocations) return null;
-        return {
-          rackId: String(rack.id ?? rack.rack_index),
-          binsLength,
-          layoutVariantLocations,
-          binLocationIds: (rack.bins ?? []).map((b) => b.location_id),
-        };
-      })
-      .filter((item): item is { rackId: string; binsLength: number; layoutVariantLocations: number; binLocationIds: (string | undefined)[] } => item != null);
-
-    if (mismatches.length > 0) {
-      console.warn("[WarehouseDesigner][effect:rackLayoutMismatchDetector] mismatch-detected", {
-        mismatches,
-      });
-    } else {
-      console.log("[WarehouseDesigner][effect:rackLayoutMismatchDetector] no mismatches", {
-        racksLength: layout.racks.length,
-      });
-    }
-  }, [layout.racks, countLayoutVariantLocations]);
 
   const applyInternalLayoutSave = useCallback(
     (rackId: number | string, internal_structure: InternalStructure, bins: BinState[] | undefined, variant?: CustomRackTemplate | null) => {
@@ -2918,26 +3282,19 @@ export default function WarehouseDesigner() {
             };
           }),
         };
-        const savedRack = next.racks.find((r) => (r.id ?? r.rack_index) === rackId);
-        logRackDebugSnapshot("STEP 1: applyInternalLayoutSave (after save)", savedRack);
         return next;
       });
       if (variant) setCustomTemplates((prev) => [...prev, variant]);
       setInternalLayoutRackId(null);
     },
-    [logRackDebugSnapshot]
+    []
   );
 
   const onSaveInternalLayout = useCallback(
     (internal_structure: InternalStructure, bins: BinState[] | undefined) => {
       const rackId = internalLayoutRackId;
       if (rackId == null) return;
-      console.log("[WarehouseDesigner][onSaveInternalLayout] triggered", {
-        rackId: String(rackId),
-        incomingBinsLength: bins?.length ?? 0,
-      });
       const currentRack = layout.racks.find((r) => (r.id ?? r.rack_index) === rackId) ?? null;
-      logRackDebugSnapshot("onSaveInternalLayout (before save)", currentRack);
       const baseTemplate = currentRack?.templateId ? customTemplates.find((t) => t.id === currentRack.templateId) ?? null : null;
       if (baseTemplate && structureDiffersFromTemplate(baseTemplate, internal_structure)) {
         setPendingVariantSave({ rackId, baseTemplate, internalStructure: internal_structure, bins });
@@ -2946,7 +3303,7 @@ export default function WarehouseDesigner() {
       }
       applyInternalLayoutSave(rackId, internal_structure, bins, null);
     },
-    [internalLayoutRackId, layout.racks, customTemplates, applyInternalLayoutSave, logRackDebugSnapshot]
+    [internalLayoutRackId, layout.racks, customTemplates, applyInternalLayoutSave]
   );
 
   const { editProductModalProps } = useDesignerProductModal({
@@ -2966,46 +3323,77 @@ export default function WarehouseDesigner() {
   return (
     <PageLayout
       fillHeight
-      title={UI_STRINGS.warehouse.title}
-      actions={
-        <DesignerToolbar
-          mainView={mainView}
-          setMainView={setMainView}
-          setEditingProductId={setEditingProductId}
-          warehouses={warehouses}
-          selectedWarehouseId={selectedWarehouseId}
-          setSelectedWarehouseId={setSelectedWarehouseId}
-          warehouseName={layout.warehouse_name}
-          lastSavedAt={lastSavedAt}
-          saveLayout={saveLayout}
-          saving={saving}
-          layout={layout}
-          setLayout={setLayout}
-          warehouseUsagePct={(() => {
-            const bw = layout.building_width_m;
-            const depth = layout.building_depth_m ?? layout.building_height_m;
-            if (bw == null || depth == null || bw <= 0 || depth <= 0) return null;
-            const buildingAreaM2 = bw * depth;
-            const totalRackCells = layout.racks.reduce((s, r) => s + r.width * r.height, 0);
-            const rackAreaM2 = totalRackCells * 0.01;
-            return buildingAreaM2 > 0 ? (rackAreaM2 / buildingAreaM2) * 100 : null;
-          })()}
-          showEditBuilding={showEditBuilding}
-          setShowEditBuilding={setShowEditBuilding}
-          isRouteActive={isRouteActive}
-          onToggleRoutePlanning={() => {
-            setIsRouteActive((prev) => {
-              const next = !prev;
-              if (next) {
-                setRouteRackIds([]);
-                setRouteStepIndex(0);
-              }
-              return next;
-            });
-          }}
-        />
-      }
+      fullBleed
+      cardClassName="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden !space-y-0"
     >
+      <div className="flex shrink-0 flex-col gap-0">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2.5">
+          <h1 className="m-0 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{UI_STRINGS.warehouse.title}</h1>
+          <DesignerToolbar
+            mainView={mainView}
+            lastSavedAt={lastSavedAt}
+            saveLayout={saveLayout}
+            saving={saving}
+            saveLayoutBlockedReason={rackNameDuplicateMessage}
+            layout={layout}
+            setLayout={setLayout}
+            warehouseUsagePct={(() => {
+              const bw = layout.building_width_m;
+              const depth = layout.building_depth_m ?? layout.building_height_m;
+              if (bw == null || depth == null || bw <= 0 || depth <= 0) return null;
+              const buildingAreaM2 = bw * depth;
+              const totalRackCells = layout.racks.reduce((s, r) => s + r.width * r.height, 0);
+              const rackAreaM2 = totalRackCells * 0.01;
+              return buildingAreaM2 > 0 ? (rackAreaM2 / buildingAreaM2) * 100 : null;
+            })()}
+            showEditBuilding={showEditBuilding}
+            setShowEditBuilding={setShowEditBuilding}
+            isRouteActive={isRouteActive}
+            onToggleRoutePlanning={() => {
+              setIsRouteActive((prev) => {
+                const next = !prev;
+                if (next) {
+                  setRouteRackIds([]);
+                  setRouteStepIndex(0);
+                }
+                return next;
+              });
+            }}
+          />
+        </div>
+        <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">
+          <nav
+            className="flex w-full flex-nowrap gap-6 overflow-x-auto border-b border-slate-200 sm:justify-start"
+            aria-label="Widok projektanta magazynu"
+            role="tablist"
+          >
+            <button
+              type="button"
+              role="tab"
+              id="warehouse-designer-tab-magazyn"
+              aria-selected={mainView === "magazyn"}
+              aria-controls="warehouse-designer-panel"
+              tabIndex={mainView === "magazyn" ? 0 : -1}
+              onClick={() => selectDesignerView("magazyn")}
+              className={`shrink-0 whitespace-nowrap ${tabsNavItemClassName(mainView === "magazyn")}`}
+            >
+              {UI_STRINGS.warehouse.designerSubTabs.magazyn}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="warehouse-designer-tab-layout"
+              aria-selected={mainView === "layout"}
+              aria-controls="warehouse-designer-panel"
+              tabIndex={mainView === "layout" ? 0 : -1}
+              onClick={() => selectDesignerView("layout")}
+              className={`shrink-0 whitespace-nowrap ${tabsNavItemClassName(mainView === "layout")}`}
+            >
+              {UI_STRINGS.warehouse.designerSubTabs.layoutDesigner}
+            </button>
+          </nav>
+        </TabsContainer>
+      </div>
       <WarehouseModals
         showCreateWarehouse={showCreateWarehouse}
         onCloseCreateWarehouse={() => setShowCreateWarehouse(false)}
@@ -3082,15 +3470,39 @@ export default function WarehouseDesigner() {
           setPendingRowCreation(null);
         }}
         onConfirm={handleRowPrefixConfirm}
+        validateBeforeConfirm={validateRowPrefixForModal}
         defaultPrefix="A"
+        showDirection={
+          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
+        }
+        allowPaired={
+          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
+        }
+        previewRackCount={rowPrefixModalPreviewCount}
+        templateOptions={
+          pendingRowCreation?.type === "emptyRow" || pendingRowCreation?.type === "rowWithTemplate"
+            ? rowModalTemplateOptions
+            : undefined
+        }
+        defaultTemplateKey={
+          pendingRowCreation?.type === "rowWithTemplate"
+            ? catalogItemTemplateKey(pendingRowCreation.item)
+            : undefined
+        }
+        defaultAutoFill={pendingRowCreation?.type === "rowWithTemplate"}
+        allowAutoFillWithoutTemplateSelection={pendingRowCreation?.type === "rowWithTemplate"}
+        getTemplatePreviewRackCount={getTemplatePreviewRackCount}
       />
 
       <div
-        className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-row overflow-hidden"
+        id="warehouse-designer-panel"
+        role="tabpanel"
+        aria-labelledby={mainView === "magazyn" ? "warehouse-designer-tab-magazyn" : "warehouse-designer-tab-layout"}
+        className="flex min-h-0 min-w-0 flex-1 basis-0 flex-row gap-3 overflow-hidden"
         style={mainView === "magazyn" ? { overscrollBehavior: "contain" } : undefined}
       >
         {mainView === "magazyn" ? (
-          <div className="flex h-full min-h-0 w-[260px] shrink-0 flex-none flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-y-contain">
+          <div className="flex h-full min-h-0 w-[300px] shrink-0 flex-none flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-y-contain border-r border-slate-200/70 pr-3">
             <MagazynDashboardPanel
               layout={layout}
               customTemplates={customTemplates}
@@ -3105,12 +3517,18 @@ export default function WarehouseDesigner() {
               utilizationPct={utilizationPct}
               primaryUsedDm3={primaryUsedDm3}
               reserveUsedDm3={reserveUsedDm3}
+              damagedUsedDm3={damagedUsedDm3}
               locationStats={{
                 primary: globalLocationStatsForLegend.primary,
                 reserve: globalLocationStatsForLegend.reserve,
                 damaged: globalLocationStatsForLegend.damaged,
               }}
               formatVolume={formatVolume}
+              onOpenReports={() => setShowWarehouseReportsPanel(true)}
+              onOpenDamageReports={() => {
+                setDamagePrefill(null);
+                setShowDamageReportsPanel(true);
+              }}
             />
           </div>
         ) : mainView === "layout" ? (
@@ -3143,7 +3561,6 @@ export default function WarehouseDesigner() {
             setVisualGhostPosition={setVisualGhostPosition}
             totalUsed={totalUsed}
             totalCapacity={totalCapacity}
-            onExportPdf={handleExportPdf}
             onExportCsv={handleExportCsv}
             onExportJson={handleExportJson}
             onExportLocationsMapCsv={handleExportLocationsMapCsv}
@@ -3152,12 +3569,13 @@ export default function WarehouseDesigner() {
             setShowGenerateLayoutModal={setShowGenerateLayoutModal}
             wallElementTool={wallElementTool}
             setWallElementTool={setWallElementTool}
+            selectedRowContainerId={selectedRowContainerId}
           />
         ) : null}
 
         {mainView === "magazyn" ? (
           <>
-            <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col self-stretch overflow-hidden rounded-xl border border-slate-100 bg-white shadow-md">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200/80">
               {layout.racks.length === 0 ? (
                 <div className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col items-center justify-center p-8 text-slate-500">
                   <p className="text-sm">Brak regałów. Przejdź do Projektu Layoutu, aby dodać regały i zobaczyć widok z boku.</p>
@@ -3363,6 +3781,10 @@ export default function WarehouseDesigner() {
                             productsForRackAssignmentCheck={products}
                             selectedProductId={selectedProductId}
                             onToggleProductMapHighlight={toggleProductMapHighlight}
+                            onCreateDamageReportPrefill={(prefill) => {
+                              setDamagePrefill(prefill);
+                              setShowDamageReportsPanel(true);
+                            }}
                           />
                         ) : selectedProductIdOnMap != null && selectedProductQuantityBreakdown != null ? (
                           <ProductLocatorSidebar
@@ -3458,7 +3880,7 @@ export default function WarehouseDesigner() {
                   </div>
                   <WarehouseLegend
                     viewMode={selectedRackIdForSideView == null ? "fullMap" : "rackDetail"}
-                    stats={{ rackCount: layout.racks.length, usedDm3: totalUsed, totalDm3: totalCapacity, primaryUsedDm3, reserveUsedDm3 }}
+                    stats={{ rackCount: layout.racks.length, usedDm3: totalUsed, totalDm3: totalCapacity, primaryUsedDm3, reserveUsedDm3, damagedUsedDm3 }}
                     usedStorageTypes={usedStorageTypesForLegend}
                     globalLocationStats={globalLocationStatsForLegend}
                   />
@@ -3487,6 +3909,10 @@ export default function WarehouseDesigner() {
                 selectedProductId={selectedProductId}
                 onToggleProductMapHighlight={toggleProductMapHighlight}
                 onHoverLocationUUIDChange={setHoveredLocationUUID}
+                onCreateDamageReportPrefill={(prefill) => {
+                  setDamagePrefill(prefill);
+                  setShowDamageReportsPanel(true);
+                }}
               />
             )}
           </>
@@ -3715,6 +4141,25 @@ export default function WarehouseDesigner() {
           />
         )}
 
+      <WarehouseReportsPanel
+        open={mainView === "magazyn" && showWarehouseReportsPanel}
+        onClose={() => setShowWarehouseReportsPanel(false)}
+        onDownload={handleExportWarehouseReport}
+        onDownloadWarehouseValue={handleExportWarehouseValueReport}
+        onDownloadTopVolume={handleExportTopVolumeReport}
+      />
+
+      <DamageReportsPanel
+        open={mainView === "magazyn" && showDamageReportsPanel}
+        onClose={() => {
+          setShowDamageReportsPanel(false);
+          setDamagePrefill(null);
+        }}
+        tenantId={TENANT_ID}
+        warehouseId={selectedWarehouseId}
+        candidates={damageCandidates}
+        prefill={damagePrefill}
+      />
     </PageLayout>
   );
 }

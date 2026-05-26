@@ -249,7 +249,7 @@ export default function SlottingPage() {
   );
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <h1 className="text-xl font-semibold text-slate-800">Slotting</h1>
       <p className="mt-2 text-slate-600 mb-6">
         Analiza rozmieszczenia towaru: velocity, cube, COI, klasy ABC, odległość do pakowania i rekomendowana strefa.

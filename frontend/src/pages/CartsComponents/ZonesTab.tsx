@@ -47,30 +47,24 @@ export default function ZonesTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px] text-slate-400 font-bold uppercase text-sm">
-        Ładowanie stref...
-      </div>
+      <div className="flex min-h-[400px] items-center justify-center text-sm text-slate-500">Ładowanie stref…</div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white p-8 rounded-2xl border border-red-200 text-red-600 font-bold">
-        {error}
-      </div>
+      <div className="rounded-xl border border-red-200 bg-white p-8 text-sm font-medium text-red-700">{error}</div>
     );
   }
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-black uppercase tracking-widest text-slate-700">
-          Strefy gabarytowe
-        </h2>
+        <h2 className="text-lg font-semibold text-slate-900">Strefy gabarytowe</h2>
       </div>
       <ZoneConfigurator zones={zones} onZoneAdded={fetchZones} />
       {zones.length === 0 && (
-        <div className="bg-white p-12 rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400 font-bold uppercase">
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
           Brak stref. Dodaj strefę w formularzu powyżej.
         </div>
       )}

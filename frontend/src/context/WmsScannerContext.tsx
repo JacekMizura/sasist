@@ -1,0 +1,401 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { playScanBeep } from "../utils/playScanBeep";
+import {
+  type DevScanHistoryEntry,
+  loadDevScannerHistory,
+  saveDevScannerHistory,
+  scanKindToHistoryKind,
+} from "../utils/devScannerStorage";
+import { classifyWmsScanCode } from "../utils/wmsScanClassify";
+import { normalizeScanEan } from "../utils/wmsScanNormalize";
+
+export type { DevScanHistoryEntry, DevScannerFavorite } from "../utils/devScannerStorage";
+import { DAMAGE_TENANT_ID } from "../pages/damage/damageShared";
+import { resolveWmsPreviewScanToProductId } from "../pages/wms/wmsResolveProductScan";
+import { WMS_ROUTES } from "../pages/wms/wmsRoutes";
+import { useWarehouse } from "./WarehouseContext";
+
+/** Dev / wedge scanner UI and global listener (also VITE_ENABLE_DEV_SCANNER). */
+export const SHOW_WMS_DEV_SCANNER =
+  import.meta.env.DEV || String(import.meta.env.VITE_ENABLE_DEV_SCANNER ?? "").toLowerCase() === "true";
+
+export const DEV_SCANNER_HISTORY_CAP = 40;
+/** How many history rows the panel shows per category. */
+export const DEV_SCANNER_HISTORY_UI = 12;
+
+export type DevScanHistoryAppendMeta = Partial<
+  Omit<DevScanHistoryEntry, "code" | "scannedAt">
+>;
+export type WmsScannerMode =
+  | "idle"
+  | "receiving"
+  | "receiving-count"
+  | "picking"
+  | "product_preview"
+  | "putaway"
+  | "packing"
+  | "returns"
+  | "operational"
+  | "operational-relocation"
+  | "other";
+
+export type WmsActiveDocument =
+  | { kind: "pz"; pzId: number; tenantId: number; label?: string }
+  | { kind: "picking"; label?: string }
+  | { kind: "putaway"; label?: string }
+  | { kind: "custom"; label: string; meta?: Record<string, unknown> };
+
+export function isWmsProductPreviewPath(pathname: string): boolean {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  return p === "/wms/product-preview" || /^\/wms\/product-preview\/\d+$/.test(p);
+}
+
+export function deriveWmsScannerMode(pathname: string): WmsScannerMode {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  if (/^\/wms\/receiving\/\d+$/.test(p) || /^\/wms\/receiving\/pz\/\d+$/.test(p)) return "receiving-count";
+  if (p === "/wms/receiving") return "receiving";
+  if (isWmsProductPreviewPath(p)) return "product_preview";
+  if (
+    p === "/wms/picking" ||
+    p === "/wms/picking/order-type" ||
+    p === "/wms/picking/cart" ||
+    p === "/wms/picking/locations" ||
+    p === "/wms/picking/products" ||
+    /^\/wms\/picking\/products\/\d+$/.test(p) ||
+    /^\/wms\/picking\/recovery\/\d+$/.test(p)
+  )
+    return "picking";
+  if (
+    p === "/wms/putaway" ||
+    /^\/wms\/putaway\/\d+$/.test(p) ||
+    /^\/wms\/putaway\/\d+\/item\/\d+$/.test(p) ||
+    /^\/wms\/putaway\/\d+\/item\/\d+\/execute$/.test(p)
+  )
+    return "putaway";
+  if (
+    p === "/wms/packing" ||
+    p === "/wms/packing/mode" ||
+    p === "/wms/packing/scan-cart" ||
+    p === "/wms/packing/orders" ||
+    /^\/wms\/packing\/order\/\d+$/.test(p)
+  )
+    return "packing";
+  if (p.startsWith("/wms/returns")) return "returns";
+  if (/^\/wms\/operational-queues\/relocation\/\d+$/.test(p)) return "operational-relocation";
+  if (p.startsWith("/wms/operational-queues")) return "operational";
+  if (p.startsWith("/wms")) return "other";
+  return "idle";
+}
+
+type ScanHandler = (ean: string) => void;
+
+export type WmsScannerContextValue = {
+  /** Dispatches to the scan handler registered by the active WMS page. */
+  handleScan: (raw: string) => void;
+  mode: WmsScannerMode;
+  activeDocument: WmsActiveDocument | null;
+  setActiveDocument: (doc: WmsActiveDocument | null) => void;
+  registerScanHandler: (handler: ScanHandler | null) => void;
+  appendScanToHistory: (ean: string, meta?: DevScanHistoryAppendMeta) => void;
+  showScannerToast: (message: string) => void;
+  /** Czerwony baner błędu (~2,5 s) — np. zły typ skanu na pakowaniu. */
+  showScannerError: (message: string) => void;
+  clearScannerToast: () => void;
+  devEanInput: string;
+  setDevEanInput: (v: string) => void;
+  clearDevScannerInput: () => void;
+  refocusScannerInput: () => void;
+  scannerInputRef: React.RefObject<HTMLInputElement | null>;
+  scannerInputDisabled: boolean;
+  setScannerInputDisabled: (disabled: boolean) => void;
+  scannerInputPlaceholder: string;
+  setScannerInputPlaceholder: (placeholder: string) => void;
+  scannerToast: string | null;
+  scannerError: string | null;
+  devScanHistory: DevScanHistoryEntry[];
+};
+
+const WmsScannerContext = createContext<WmsScannerContextValue | null>(null);
+
+export function WmsScannerProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { warehouse } = useWarehouse();
+  const mode = useMemo(() => deriveWmsScannerMode(location.pathname), [location.pathname]);
+
+  const [activeDocument, setActiveDocumentState] = useState<WmsActiveDocument | null>(null);
+  const [devScanHistory, setDevScanHistory] = useState<DevScanHistoryEntry[]>(() =>
+    loadDevScannerHistory(DEV_SCANNER_HISTORY_CAP),
+  );
+  const [devEanInput, setDevEanInput] = useState("");
+  const [scannerToast, setScannerToast] = useState<string | null>(null);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scannerInputDisabled, setScannerInputDisabled] = useState(false);
+  const [scannerInputPlaceholder, setScannerInputPlaceholder] = useState("Wpisz lub wklej EAN (↑↓ historia)");
+
+  const scanHandlerRef = useRef<ScanHandler | null>(null);
+  const scannerInputRef = useRef<HTMLInputElement | null>(null);
+  const previewScanBusyRef = useRef(false);
+
+  useEffect(() => {
+    if (!SHOW_WMS_DEV_SCANNER) return;
+    saveDevScannerHistory(devScanHistory, DEV_SCANNER_HISTORY_CAP);
+  }, [devScanHistory]);
+
+  useEffect(() => {
+    if (!scannerToast) return;
+    const t = window.setTimeout(() => setScannerToast(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [scannerToast]);
+
+  useEffect(() => {
+    if (!scannerError) return;
+    const t = window.setTimeout(() => setScannerError(null), 2800);
+    return () => window.clearTimeout(t);
+  }, [scannerError]);
+
+  const registerScanHandler = useCallback((handler: ScanHandler | null) => {
+    scanHandlerRef.current = handler;
+  }, []);
+
+  const appendScanToHistory = useCallback((ean: string, meta?: DevScanHistoryAppendMeta) => {
+    const key = normalizeScanEan(ean);
+    if (!key) return;
+    setDevScanHistory((prev) => {
+      const kind = meta?.kind ?? scanKindToHistoryKind(classifyWmsScanCode(key));
+      const entry: DevScanHistoryEntry = {
+        code: key,
+        kind,
+        scannedAt: Date.now(),
+        ...meta,
+      };
+      const withoutDup = prev.filter((e) => e.code !== key);
+      return [entry, ...withoutDup].slice(0, DEV_SCANNER_HISTORY_CAP);
+    });
+  }, []);
+
+  const showScannerToast = useCallback((message: string) => {
+    setScannerError(null);
+    setScannerToast(message);
+  }, []);
+
+  const showScannerError = useCallback((message: string) => {
+    setScannerToast(null);
+    setScannerError(message);
+  }, []);
+
+  const clearScannerToast = useCallback(() => {
+    setScannerToast(null);
+    setScannerError(null);
+  }, []);
+
+  const clearDevScannerInput = useCallback(() => setDevEanInput(""), []);
+
+  const refocusScannerInput = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const el = scannerInputRef.current;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    });
+  }, []);
+
+  const handleScan = useCallback(
+    (raw: string) => {
+      const ean = normalizeScanEan(raw);
+      if (!ean) return;
+
+      if (isWmsProductPreviewPath(location.pathname)) {
+        const kind = classifyWmsScanCode(ean);
+        if (kind === "cart_like" || kind === "location_like") {
+          showScannerToast("W podglądzie produktu zeskanuj kod EAN produktu.");
+          appendScanToHistory(ean);
+          refocusScannerInput();
+          return;
+        }
+        if (previewScanBusyRef.current) return;
+        previewScanBusyRef.current = true;
+        void (async () => {
+          try {
+            const wid = warehouse?.id ?? null;
+            if (wid == null) {
+              showScannerToast("Wybierz magazyn.");
+              return;
+            }
+            const r = await resolveWmsPreviewScanToProductId(DAMAGE_TENANT_ID, ean);
+            if (!r.ok) {
+              if (r.reason === "ambiguous") showScannerToast("Wiele wyników — użyj dokładnego EAN");
+              else showScannerToast("Brak produktu");
+              return;
+            }
+            const m = location.pathname.match(/^\/wms\/product-preview\/(\d+)$/);
+            const currentPid = m ? Number(m[1]) : NaN;
+            if (Number.isFinite(currentPid) && currentPid === r.productId) {
+              showScannerToast("Ten sam produkt");
+              return;
+            }
+            playScanBeep();
+            appendScanToHistory(ean);
+            const replace = /^\/wms\/product-preview\/\d+$/.test(location.pathname);
+            navigate(WMS_ROUTES.productPreview(r.productId), {
+              replace,
+              state: location.state ?? { returnPath: WMS_ROUTES.productPreviewRoot },
+            });
+          } catch {
+            showScannerToast("Błąd wyszukiwania produktu.");
+          } finally {
+            previewScanBusyRef.current = false;
+            refocusScannerInput();
+          }
+        })();
+        return;
+      }
+
+      const fn = scanHandlerRef.current;
+      if (!fn) {
+        showScannerToast("Ta strona nie obsługuje jeszcze skanera.");
+        return;
+      }
+      fn(ean);
+    },
+    [
+      location.pathname,
+      location.state,
+      warehouse?.id,
+      navigate,
+      showScannerToast,
+      appendScanToHistory,
+      refocusScannerInput,
+    ],
+  );
+
+  const handleScanRef = useRef(handleScan);
+  handleScanRef.current = handleScan;
+
+  useEffect(() => {
+    if (!SHOW_WMS_DEV_SCANNER) return;
+
+    let buffer = "";
+    let idleTimer: ReturnType<typeof window.setTimeout> | undefined;
+
+    const clearIdle = () => {
+      if (idleTimer !== undefined) window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => {
+        buffer = "";
+        idleTimer = undefined;
+      }, 2500);
+    };
+
+    const targetIsTextEntry = (target: EventTarget | null): boolean => {
+      const el = target instanceof HTMLElement ? target : null;
+      if (!el) return false;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+        return true;
+      }
+      if (el.isContentEditable) return true;
+      return false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (targetIsTextEntry(e.target)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.repeat) return;
+
+      if (e.key === "Enter") {
+        const b = buffer.trim();
+        buffer = "";
+        if (idleTimer !== undefined) {
+          window.clearTimeout(idleTimer);
+          idleTimer = undefined;
+        }
+        if (b) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          handleScanRef.current(b);
+        }
+        return;
+      }
+
+      if (e.key.length === 1) {
+        buffer += e.key;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        clearIdle();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      if (idleTimer !== undefined) window.clearTimeout(idleTimer);
+    };
+  }, []);
+
+  const value = useMemo<WmsScannerContextValue>(
+    () => ({
+      handleScan,
+      mode,
+      activeDocument,
+      setActiveDocument: setActiveDocumentState,
+      registerScanHandler,
+      appendScanToHistory,
+      showScannerToast,
+      showScannerError,
+      clearScannerToast,
+      devEanInput,
+      setDevEanInput,
+      clearDevScannerInput,
+      refocusScannerInput,
+      scannerInputRef,
+      scannerInputDisabled,
+      setScannerInputDisabled,
+      scannerInputPlaceholder,
+      setScannerInputPlaceholder,
+      scannerToast,
+      scannerError,
+      devScanHistory,
+    }),
+    [
+      handleScan,
+      mode,
+      activeDocument,
+      registerScanHandler,
+      appendScanToHistory,
+      showScannerToast,
+      showScannerError,
+      clearScannerToast,
+      devEanInput,
+      clearDevScannerInput,
+      refocusScannerInput,
+      scannerInputDisabled,
+      scannerInputPlaceholder,
+      scannerToast,
+      scannerError,
+      devScanHistory,
+    ],
+  );
+
+  return <WmsScannerContext.Provider value={value}>{children}</WmsScannerContext.Provider>;
+}
+
+export function useWmsScanner(): WmsScannerContextValue {
+  const ctx = useContext(WmsScannerContext);
+  if (!ctx) {
+    throw new Error("useWmsScanner must be used within WmsScannerProvider");
+  }
+  return ctx;
+}
+
+/** Optional hook for pages that may render outside WMS layout. */
+export function useWmsScannerOptional(): WmsScannerContextValue | null {
+  return useContext(WmsScannerContext);
+}

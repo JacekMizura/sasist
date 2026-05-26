@@ -15,15 +15,392 @@ import {
   getTotalLocations,
   volumePerBin,
   volumePerBinFromTotal,
-  cmToCells,
+  cellsToCm,
   createBinsForRack,
   binsToLevels,
   ROW_LABEL_ADDRESS_PATTERN,
   reindexGeometricRow,
   getNextIndexInRow,
   generateRackUuid,
+  nextUniqueRackName,
+  normalizeRowPrefixLetters,
+  rackMatchesSlotRackId,
+  pairedAisleOffsetCells,
+  rowContainerTemplateIdFromCatalogItem,
+  shiftRowDrawForPairedRow,
+  rowDrawSegmentExtents,
+  rowDrawRackPositionsAlongCursor,
 } from "../../components/warehouse/warehouseUtils";
+import { layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
 import type { Dispatch, SetStateAction } from "react";
+
+/** Horizontal template row: same cursor+step model as preview / empty row / catalog stamp (not span/greedy). */
+function appendHorizontalRowWithTemplateFromCursor(
+  prev: LayoutState,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  item: CatalogItem,
+  rowPrefix: string,
+  rack_direction: "LTR" | "RTL",
+  bin_direction: "LTR" | "RTL",
+  defaultRackType: RackType,
+  idSuffix: string,
+  rowGapCm: number
+): LayoutState | null {
+  const spec = getCatalogItemSpec(item);
+  const cellW = layoutCmToCellsX(prev, spec.width_cm);
+  const cellH = layoutCmToCellsY(prev, spec.depth_cm);
+  const gapCells = Math.max(0, layoutCmToCellsX(prev, rowGapCm));
+  const stepW = cellW + gapCells;
+  let along = rowDrawRackPositionsAlongCursor(start.x, end.x, stepW);
+  along = along.filter((c) => c >= 0 && c + cellW <= prev.grid_cols);
+  if (along.length === 0) return null;
+  const yAnchor = Math.max(0, Math.min(prev.grid_rows - cellH, start.y));
+  for (const cx of along) {
+    const x = Math.max(0, Math.min(prev.grid_cols - cellW, cx));
+    const rect = { x, y: yAnchor, width: cellW, height: cellH };
+    if (prev.racks.some((r) => rectsOverlap(rect, r))) return null;
+    if (prev.row_containers?.some((rc) =>
+      rc.slots.some((s) => rectsOverlap(rect, { x: s.x, y: s.y, width: s.w, height: s.h }))
+    )) return null;
+  }
+  const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}${idSuffix}`;
+  const prefix = normalizeRowPrefixLetters(rowPrefix);
+  const orientation: "horizontal" = "horizontal";
+  const lc = getLevelConfig(spec);
+  const totalBins = getTotalLocations(lc);
+  const volPerBin =
+    totalBins > 0
+      ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
+      : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
+  const templateColor = item.type === "custom" ? item.template.color : spec.color;
+  const rackColor = typeof templateColor === "string" && templateColor.trim() !== "" ? templateColor.trim() : "#3b82f6";
+  const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : defaultRackType;
+  const newSlots: EmptyRowSlot[] = [];
+  const newRacks: RackState[] = [];
+  let nextRackIndex = prev.racks.length + 1;
+  let indexInRow = 1;
+  for (const cx of along) {
+    const x = Math.max(0, Math.min(prev.grid_cols - cellW, cx));
+    const rackUuid = generateRackUuid();
+    newSlots.push({ x, y: yAnchor, w: cellW, h: cellH, rackId: rackUuid });
+    const partialLayout: LayoutState = { ...prev, racks: [...prev.racks, ...newRacks] };
+    const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, partialLayout);
+    const bins = createBinsForRack(
+      spec.aisle_letter,
+      nextRackIndex,
+      spec.levels,
+      spec.bins_per_level,
+      volPerBin,
+      "M1",
+      undefined,
+      spec.width_cm,
+      spec.depth_cm,
+      spec.height_cm,
+      spec.bin_type_map,
+      spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+      rackLabel,
+      spec.sectionStartIndex ?? 1,
+      spec.binNamingType ?? "numeric",
+      lc,
+      spec.namingStrategy,
+      spec.namingOrientation,
+      spec.namingPattern ?? spec.addressPattern,
+      spec.manualLabels,
+      spec.overrides,
+      spec.indexPadding,
+      spec.startIndex
+    );
+    newRacks.push({
+      uuid: rackUuid,
+      rack_type: resolvedRackType,
+      x,
+      y: yAnchor,
+      width: cellW,
+      height: cellH,
+      orientation: "vertical",
+      levels: lc.length,
+      bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
+      levelConfig: lc,
+      length_cm: spec.depth_cm,
+      width_cm: spec.width_cm,
+      height_cm: spec.height_cm,
+      aisle_letter: spec.aisle_letter,
+      rack_index: nextRackIndex,
+      bins,
+      rackLevels: binsToLevels(bins),
+      color: rackColor,
+      name: rackLabel,
+      rowPrefix: prefix,
+      indexInRow,
+      ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
+      ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
+      ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
+      ...(item.type === "custom" ? { templateId: item.template.id } : {}),
+      ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+    } as RackState);
+    nextRackIndex += 1;
+    indexInRow += 1;
+  }
+  const nextRacks = reindexGeometricRow([...prev.racks, ...newRacks], newRacks[0]?.rack_index ?? prev.racks.length + 1);
+  return {
+    ...prev,
+    row_containers: [
+      ...(prev.row_containers ?? []),
+      {
+        id,
+        rowPrefix: prefix,
+        orientation,
+        rack_direction,
+        bin_direction,
+        templateId: rowContainerTemplateIdFromCatalogItem(item),
+        slots: newSlots,
+      },
+    ],
+    racks: nextRacks,
+  };
+}
+
+/** Pure append for one template-filled row; used for single draw and paired (second pass sees first row). */
+function appendRowWithTemplateToLayoutState(
+  prev: LayoutState,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  item: CatalogItem,
+  rowPrefix: string,
+  rack_direction: "LTR" | "RTL",
+  bin_direction: "LTR" | "RTL",
+  defaultRackType: RackType,
+  idSuffix: string,
+  rowGapCm: number
+): LayoutState | null {
+  const { minY, extentY, isHorizontal } = rowDrawSegmentExtents(start, end);
+  if (isHorizontal) {
+    return appendHorizontalRowWithTemplateFromCursor(
+      prev,
+      start,
+      end,
+      item,
+      rowPrefix,
+      rack_direction,
+      bin_direction,
+      defaultRackType,
+      idSuffix,
+      rowGapCm
+    );
+  }
+  const x0 = start.x;
+  const y0 = minY;
+  const extentAlong = Math.max(1, extentY);
+  const clampedX = Math.max(0, Math.min(prev.grid_cols - 1, x0));
+  const clampedY = Math.max(0, Math.min(prev.grid_rows - extentAlong, y0));
+  const w = DEFAULT_ROW_SLOT_H;
+  const h = Math.min(extentAlong, prev.grid_rows - clampedY);
+  const rect = { x: clampedX, y: clampedY, width: w, height: h };
+  const overlapsExisting = prev.racks.some((r) => rectsOverlap(rect, r));
+  const overlapsOther = prev.row_containers?.some((rc) =>
+    rc.slots.some((s) => rectsOverlap(rect, { x: s.x, y: s.y, width: s.w, height: s.h }))
+  );
+  if (overlapsExisting || overlapsOther) return null;
+  const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}${idSuffix}`;
+  const prefix = normalizeRowPrefixLetters(rowPrefix);
+  const orientation: "vertical" = "vertical";
+  const spec = getCatalogItemSpec(item);
+  const lc = getLevelConfig(spec);
+  const totalBins = getTotalLocations(lc);
+  const volPerBin =
+    totalBins > 0
+      ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
+      : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
+  const cellW = layoutCmToCellsX(prev, spec.width_cm);
+  const cellH = layoutCmToCellsY(prev, spec.depth_cm);
+  const templateColor = item.type === "custom" ? item.template.color : spec.color;
+  const rackColor = typeof templateColor === "string" && templateColor.trim() !== "" ? templateColor.trim() : "#3b82f6";
+  const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : defaultRackType;
+  const startX = clampedX;
+  const startY = clampedY;
+  const slotFits = (s: EmptyRowSlot) => s.w >= cellH && s.h >= cellW;
+  const remainderSlot = (s: EmptyRowSlot): EmptyRowSlot =>
+    ({ x: 0, y: startY, w: s.w, h: s.h - cellW });
+  const initialSlots: EmptyRowSlot[] = [{ x: clampedX, y: clampedY, w, h }];
+  const newSlotsRaw: EmptyRowSlot[] = [];
+  const newRacks: RackState[] = [];
+  let nextRackIndex = prev.racks.length + 1;
+  let indexInRow = 1;
+  const toProcess = [...initialSlots];
+  while (toProcess.length > 0) {
+    const s = toProcess.shift()!;
+    if (s.rackId != null) {
+      newSlotsRaw.push(s);
+      continue;
+    }
+    if (!slotFits(s)) {
+      newSlotsRaw.push(s);
+      continue;
+    }
+    const rackUuid = generateRackUuid();
+    newSlotsRaw.push({ x: 0, y: startY, w: cellH, h: cellW, rackId: rackUuid });
+    const partialLayout: LayoutState = { ...prev, racks: [...prev.racks, ...newRacks] };
+    const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, partialLayout);
+    const bins = createBinsForRack(
+      spec.aisle_letter,
+      nextRackIndex,
+      spec.levels,
+      spec.bins_per_level,
+      volPerBin,
+      "M1",
+      undefined,
+      spec.width_cm,
+      spec.depth_cm,
+      spec.height_cm,
+      spec.bin_type_map,
+      spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
+      rackLabel,
+      spec.sectionStartIndex ?? 1,
+      spec.binNamingType ?? "numeric",
+      lc,
+      spec.namingStrategy,
+      spec.namingOrientation,
+      spec.namingPattern ?? spec.addressPattern,
+      spec.manualLabels,
+      spec.overrides,
+      spec.indexPadding,
+      spec.startIndex
+    );
+    newRacks.push({
+      uuid: rackUuid,
+      rack_type: resolvedRackType,
+      x: 0,
+      y: startY,
+      width: cellH,
+      height: cellW,
+      orientation: "vertical",
+      levels: lc.length,
+      bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
+      levelConfig: lc,
+      length_cm: spec.depth_cm,
+      width_cm: spec.width_cm,
+      height_cm: spec.height_cm,
+      aisle_letter: spec.aisle_letter,
+      rack_index: nextRackIndex,
+      bins,
+      rackLevels: binsToLevels(bins),
+      color: rackColor,
+      name: rackLabel,
+      rowPrefix: prefix,
+      indexInRow,
+      ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
+      ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
+      ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
+      rotationDegrees: 90 as const,
+      ...(item.type === "custom" ? { templateId: item.template.id } : {}),
+      ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
+    } as RackState);
+    nextRackIndex += 1;
+    indexInRow += 1;
+    if (s.h > cellW) toProcess.unshift(remainderSlot(s));
+  }
+  const minSlotAlongRow = cellW;
+  while (
+    newSlotsRaw.length > 0 &&
+    newSlotsRaw[newSlotsRaw.length - 1]?.rackId == null &&
+    (newSlotsRaw[newSlotsRaw.length - 1]?.h ?? 0) < minSlotAlongRow
+  ) {
+    newSlotsRaw.pop();
+  }
+  const newSlots = computeRowSlotPositions(newSlotsRaw, startX, startY, orientation);
+  const updatedRacks = prev.racks.map((r) => {
+    const slotForRack = newSlots.find((sl) => sl.rackId != null && rackMatchesSlotRackId(r, sl.rackId));
+    if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
+    return r;
+  });
+  const newRacksWithPos = newRacks.map((rack) => {
+    const slotForRack = newSlots.find((sl) => sl.rackId != null && rackMatchesSlotRackId(rack, sl.rackId));
+    return { ...rack, x: slotForRack?.x ?? 0, y: slotForRack?.y ?? startY };
+  });
+  const nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
+  return {
+    ...prev,
+    row_containers: [
+      ...(prev.row_containers ?? []),
+      {
+        id,
+        rowPrefix: prefix,
+        orientation,
+        rack_direction,
+        bin_direction,
+        templateId: rowContainerTemplateIdFromCatalogItem(item),
+        slots: newSlots,
+      },
+    ],
+    racks: nextRacks,
+  };
+}
+
+function appendEmptyRowToLayoutState(
+  prev: LayoutState,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  rowPrefix: string,
+  rack_direction: "LTR" | "RTL",
+  bin_direction: "LTR" | "RTL",
+  rowGapCm: number,
+  idSuffix: string,
+  templateId?: string
+): LayoutState | null {
+  const { isHorizontal } = rowDrawSegmentExtents(start, end);
+  const gapCells = Math.max(0, isHorizontal ? layoutCmToCellsX(prev, rowGapCm) : layoutCmToCellsY(prev, rowGapCm));
+  const slotW = isHorizontal ? DEFAULT_ROW_SLOT_W : DEFAULT_ROW_SLOT_H;
+  const slotH = isHorizontal ? DEFAULT_ROW_SLOT_H : DEFAULT_ROW_SLOT_W;
+  const step = (isHorizontal ? slotW : slotH) + gapCells;
+  const startX = Math.max(0, Math.min(prev.grid_cols - slotW, start.x));
+  const startY = Math.max(0, Math.min(prev.grid_rows - slotH, start.y));
+  let along = rowDrawRackPositionsAlongCursor(
+    isHorizontal ? start.x : start.y,
+    isHorizontal ? end.x : end.y,
+    step
+  );
+  along = along.filter((c) =>
+    isHorizontal ? c >= 0 && c + slotW <= prev.grid_cols : c >= 0 && c + slotH <= prev.grid_rows
+  );
+  if (along.length <= 0) return null;
+  const slots: EmptyRowSlot[] = along.map((c) => {
+    const x = isHorizontal ? Math.max(0, Math.min(prev.grid_cols - slotW, c)) : startX;
+    const y = isHorizontal ? startY : Math.max(0, Math.min(prev.grid_rows - slotH, c));
+    return { x, y, w: slotW, h: slotH };
+  });
+  const overlapsExisting = slots.some((s) =>
+    prev.racks.some((r) => rectsOverlap({ x: s.x, y: s.y, width: s.w, height: s.h }, r))
+  );
+  const overlapsOther = slots.some((s) =>
+    (prev.row_containers ?? []).some((rc) =>
+      rc.slots.some((o) => rectsOverlap({ x: s.x, y: s.y, width: s.w, height: s.h }, { x: o.x, y: o.y, width: o.w, height: o.h }))
+    )
+  );
+  if (overlapsExisting || overlapsOther) return null;
+  const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}${idSuffix}`;
+  const prefix = normalizeRowPrefixLetters(rowPrefix);
+  const orientation: "horizontal" | "vertical" = isHorizontal ? "horizontal" : "vertical";
+  const newRow: RowContainer = {
+    id,
+    rowPrefix: prefix,
+    orientation,
+    rack_direction,
+    bin_direction,
+    ...(templateId ? { templateId } : {}),
+    slots,
+  };
+  return { ...prev, row_containers: [...(prev.row_containers ?? []), newRow] };
+}
+
+/** One side of a paired draw: fill racks now, or empty slots with optional templateId for later fill. */
+export type PairedRowPlacementSpec = {
+  prefix: string;
+  rack_direction: "LTR" | "RTL";
+  bin_direction: "LTR" | "RTL";
+  item: CatalogItem | null;
+  autoFill: boolean;
+};
 
 export interface UseDesignerRowOperationsParams {
   layout: LayoutState;
@@ -78,11 +455,12 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
     if (!selectedRowContainerId) return;
     const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
     if (!row) return;
-    const rackIdsInRow = new Set(row.slots.map((s) => s.rackId).filter((id): id is number | string => id != null));
     setLayout((prev) => ({
       ...prev,
       row_containers: (prev.row_containers ?? []).filter((rc) => rc.id !== selectedRowContainerId),
-      racks: prev.racks.filter((r) => !rackIdsInRow.has(r.id ?? r.rack_index)),
+      racks: prev.racks.filter(
+        (r) => !row.slots.some((s) => s.rackId != null && rackMatchesSlotRackId(r, s.rackId))
+      ),
     }));
     setSelectedRowContainerId(null);
   }, [selectedRowContainerId, layout.row_containers, setLayout, setSelectedRowContainerId]);
@@ -125,9 +503,10 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const row = (layout.row_containers ?? []).find((rc) => rc.id === rowId);
       if (!row?.slots.length) return false;
       const newSlots = computeRowSlotPositions(row.slots, newStart.x, newStart.y, row.orientation ?? "horizontal");
-      const rackIdsInRow = new Set(row.slots.map((s) => s.rackId).filter((id): id is number | string => id != null));
       const otherRows = (layout.row_containers ?? []).filter((rc) => rc.id !== rowId);
-      const otherRacks = layout.racks.filter((r) => !rackIdsInRow.has(r.id ?? r.rack_index));
+      const otherRacks = layout.racks.filter(
+        (r) => !row.slots.some((s) => s.rackId != null && rackMatchesSlotRackId(r, s.rackId))
+      );
       const gridCols = layout.grid_cols;
       const gridRows = layout.grid_rows;
       for (const s of newSlots) {
@@ -144,7 +523,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       }
       for (const slot of newSlots) {
         if (slot.rackId == null) continue;
-        const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === slot.rackId);
+        const rack = layout.racks.find((r) => rackMatchesSlotRackId(r, slot.rackId));
         if (!rack) continue;
         const rect = { x: slot.x, y: slot.y, width: rack.width, height: rack.height };
         if (rect.x < 0 || rect.y < 0 || rect.x + rect.width > gridCols || rect.y + rect.height > gridRows) return false;
@@ -170,7 +549,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const newSlots = computeRowSlotPositions(row.slots, newStartX, newStartY, row.orientation ?? "horizontal");
       setLayout((prev) => {
         const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((s) => s.rackId != null && String(s.rackId) === String(r.id ?? r.rack_index));
+          const slotForRack = newSlots.find((s) => s.rackId != null && rackMatchesSlotRackId(r, s.rackId));
           if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
           return r;
         });
@@ -217,7 +596,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
     (rowId: string, rackId: number | string, fromSlotIndex: number, toSlotIndex: number) => {
       const row = (layout.row_containers ?? []).find((rc) => rc.id === rowId);
       if (!row || fromSlotIndex < 0 || fromSlotIndex >= row.slots.length || toSlotIndex < 0 || toSlotIndex >= row.slots.length) return;
-      const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === rackId);
+      const rack = layout.racks.find((r) => rackMatchesSlotRackId(r, rackId));
       if (!rack) return;
       const w = rack.width;
       const h = rack.height;
@@ -245,7 +624,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const newSlots = computeRowSlotPositions(newSlotsRaw, startX, startY, row.orientation ?? "horizontal");
       setLayout((prev) => {
         const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((s) => s.rackId != null && String(s.rackId) === String(r.id ?? r.rack_index));
+          const slotForRack = newSlots.find((s) => s.rackId != null && rackMatchesSlotRackId(r, s.rackId));
           if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
           return r;
         });
@@ -284,9 +663,9 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       const volPerBin = totalBins > 0
         ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
         : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
-      const w = cmToCells(spec.width_cm);
-      const h = cmToCells(spec.depth_cm);
-      const prefix = (row.rowPrefix || "A").trim() || "A";
+      const w = layoutCmToCellsX(layout, spec.width_cm);
+      const h = layoutCmToCellsY(layout, spec.depth_cm);
+      const prefix = normalizeRowPrefixLetters(row.rowPrefix || "A");
       const templateColor = item.type === "custom" ? item.template.color : spec.color;
       const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
       const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : defaultRackType;
@@ -312,8 +691,10 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             newSlotsRaw.push(s);
             continue;
           }
-          newSlotsRaw.push({ x: 0, y: startY, w: isVertical ? h : w, h: isVertical ? w : h, rackId: nextRackIndex });
-          const rackLabel = `${prefix}${indexInRow}`;
+          const rackUuid = generateRackUuid();
+          newSlotsRaw.push({ x: 0, y: startY, w: isVertical ? h : w, h: isVertical ? w : h, rackId: rackUuid });
+          const partialLayout: LayoutState = { ...prev, racks: [...prev.racks, ...newRacks] };
+          const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, partialLayout);
           const bins = createBinsForRack(
             spec.aisle_letter,
             nextRackIndex,
@@ -340,7 +721,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
             spec.startIndex
           );
           newRacks.push({
-            uuid: generateRackUuid(),
+            uuid: rackUuid,
             rack_type: resolvedRackType,
             x: 0,
             y: startY,
@@ -373,12 +754,12 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         }
         const newSlots = computeRowSlotPositions(newSlotsRaw, startX, startY, rc.orientation ?? "horizontal");
         const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((sl) => sl.rackId === (r.id ?? r.rack_index));
+          const slotForRack = newSlots.find((sl) => sl.rackId != null && rackMatchesSlotRackId(r, sl.rackId));
           if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
           return r;
         });
         const newRacksWithPos = newRacks.map((rack) => {
-          const slotForRack = newSlots.find((sl) => sl.rackId === rack.rack_index);
+          const slotForRack = newSlots.find((sl) => sl.rackId != null && rackMatchesSlotRackId(rack, sl.rackId));
           return { ...rack, x: slotForRack?.x ?? 0, y: slotForRack?.y ?? startY };
         });
         let nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
@@ -389,7 +770,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         };
       });
     },
-    [selectedRowContainerId, layout.row_containers, defaultRackType, setLayout]
+    [selectedRowContainerId, layout, layout.row_containers, defaultRackType, setLayout]
   );
 
   /** Place a row of racks from cell A to cell B. Template properties (color, reserve bins, dimensions, rowId) are strictly inherited from the selected template. Section numbering is per-template (no global counter). */
@@ -477,26 +858,20 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
 
       const startSection = templateToApply.nextSectionIndex ?? templateToApply.sectionStartIndex;
 
-      const pw = cmToCells(templateToApply.width_cm);
-      const ph = cmToCells(templateToApply.length_cm);
-      const gapCells = cmToCells(rowGapCm);
-      const stepW = pw + gapCells;
-      const stepH = ph + gapCells;
-      const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
-      let count: number;
+      const pw = layoutCmToCellsX(layout, templateToApply.width_cm);
+      const ph = layoutCmToCellsY(layout, templateToApply.length_cm);
+      const gapCellsX = layoutCmToCellsX(layout, rowGapCm);
+      const gapCellsY = layoutCmToCellsY(layout, rowGapCm);
+      const stepW = pw + gapCellsX;
+      const stepH = ph + gapCellsY;
+      const { isHorizontal } = rowDrawSegmentExtents(start, end);
       let positions: { x: number; y: number }[];
       if (isHorizontal) {
-        const x0 = Math.min(start.x, end.x);
-        const x1 = Math.max(start.x, end.x);
-        const span = x1 - x0;
-        count = stepW > 0 ? Math.max(0, Math.floor(span / stepW)) : 0;
-        positions = Array.from({ length: count }, (_, i) => ({ x: x0 + i * stepW, y: start.y }));
+        const along = rowDrawRackPositionsAlongCursor(start.x, end.x, stepW);
+        positions = along.map((x) => ({ x, y: start.y }));
       } else {
-        const y0 = Math.min(start.y, end.y);
-        const y1 = Math.max(start.y, end.y);
-        const span = y1 - y0;
-        count = stepH > 0 ? Math.max(0, Math.floor(span / stepH)) : 0;
-        positions = Array.from({ length: count }, (_, i) => ({ x: start.x, y: y0 + i * stepH }));
+        const along = rowDrawRackPositionsAlongCursor(start.y, end.y, stepH);
+        positions = along.map((y) => ({ x: start.x, y }));
       }
       const lcRow = getLevelConfig(templateToApply);
       const totalBinsRow = getTotalLocations(lcRow);
@@ -515,14 +890,17 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
       }
       if (rackStubs.length > 0) {
         const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
-        const prefix = (row?.rowPrefix || "A").trim() || "A";
+        const prefix = normalizeRowPrefixLetters(row?.rowPrefix || "A");
         setLayout((prev) => {
           const nextRackIndexBase = prev.racks.length + 1;
           const startIndexInRow = getNextIndexInRow(prev.racks, prefix);
-          const newRacks: RackState[] = rackStubs.map((pos, i) => {
+          const newRacks: RackState[] = [];
+          for (let i = 0; i < rackStubs.length; i++) {
+            const pos = rackStubs[i]!;
+            const partialLayout: LayoutState = { ...prev, racks: [...prev.racks, ...newRacks] };
             const rackIndex = nextRackIndexBase + i;
             const indexInRow = startIndexInRow + i;
-            const rackLabel = `${prefix}${indexInRow}`;
+            const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, partialLayout);
             const bins = createBinsForRack(
               templateToApply.aisle_letter,
               rackIndex,
@@ -548,7 +926,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               templateToApply.indexPadding,
               templateToApply.startIndex
             );
-            return {
+            newRacks.push({
               uuid: generateRackUuid(),
               rack_type: resolvedRackType,
               x: pos.x,
@@ -574,8 +952,8 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
               ...(templateToApply.binNamingType != null ? { binNamingType: templateToApply.binNamingType } : {}),
               ...(templateToApply.templateId != null ? { templateId: templateToApply.templateId } : {}),
               ...(templateToApply.level_max_load_kg != null ? { level_max_load_kg: templateToApply.level_max_load_kg } : {}),
-            } as RackState;
-          });
+            } as RackState);
+          }
           return { ...prev, racks: [...prev.racks, ...newRacks] };
         });
         if (templateToApply.templateId != null) {
@@ -596,214 +974,169 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
 
   /** Create an empty row as one container of available space (one big slot). Racks placed later will split it and push slots right. */
   const placeEmptyRow = useCallback(
-    (start: { x: number; y: number }, end: { x: number; y: number }, rowPrefix: string) => {
-      const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
-      const gapCells = Math.max(0, cmToCells(rowGapCm));
-
-      const slotW = isHorizontal ? DEFAULT_ROW_SLOT_W : DEFAULT_ROW_SLOT_H;
-      const slotH = isHorizontal ? DEFAULT_ROW_SLOT_H : DEFAULT_ROW_SLOT_W;
-      const step = (isHorizontal ? slotW : slotH) + gapCells;
-
-      const x0 = Math.min(start.x, end.x);
-      const x1 = Math.max(start.x, end.x);
-      const y0 = Math.min(start.y, end.y);
-      const y1 = Math.max(start.y, end.y);
-
-      const startX = Math.max(0, Math.min(layout.grid_cols - slotW, isHorizontal ? x0 : start.x));
-      const startY = Math.max(0, Math.min(layout.grid_rows - slotH, isHorizontal ? start.y : y0));
-
-      const span = isHorizontal ? (x1 - x0) : (y1 - y0);
-      const desiredCount = step > 0 ? Math.max(1, Math.floor(span / step)) : 1;
-      const maxCount = step > 0
-        ? Math.max(
-            0,
-            Math.floor((isHorizontal ? (layout.grid_cols - slotW - startX) : (layout.grid_rows - slotH - startY)) / step) + 1
-          )
-        : 0;
-      const count = Math.max(0, Math.min(desiredCount, maxCount || desiredCount));
-      if (count <= 0) return;
-
-      const slots: EmptyRowSlot[] = Array.from({ length: count }, (_, i) => {
-        const x = isHorizontal ? startX + i * step : startX;
-        const y = isHorizontal ? startY : startY + i * step;
-        return { x, y, w: slotW, h: slotH };
+    (
+      start: { x: number; y: number },
+      end: { x: number; y: number },
+      rowPrefix: string,
+      rack_direction: "LTR" | "RTL" = "LTR",
+      bin_direction: "LTR" | "RTL" = "LTR",
+      templateId?: string
+    ) => {
+      setLayout((prev) => {
+        const next = appendEmptyRowToLayoutState(
+          prev,
+          start,
+          end,
+          rowPrefix,
+          rack_direction,
+          bin_direction,
+          rowGapCm,
+          "",
+          templateId
+        );
+        return next ?? prev;
       });
-
-      const overlapsExisting = slots.some((s) =>
-        layout.racks.some((r) => rectsOverlap({ x: s.x, y: s.y, width: s.w, height: s.h }, r))
-      );
-      const overlapsOther = slots.some((s) =>
-        (layout.row_containers ?? []).some((rc) =>
-          rc.slots.some((o) => rectsOverlap({ x: s.x, y: s.y, width: s.w, height: s.h }, { x: o.x, y: o.y, width: o.w, height: o.h }))
-        )
-      );
-      if (overlapsExisting || overlapsOther) return;
-
-      const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const prefix = (rowPrefix || "A").trim() || "A";
-      const orientation: "horizontal" | "vertical" = isHorizontal ? "horizontal" : "vertical";
-      const newRow: RowContainer = { id, rowPrefix: prefix, orientation, direction: "LTR", slots };
-      setLayout((prev) => ({ ...prev, row_containers: [...(prev.row_containers ?? []), newRow] }));
       setRowDrawStart(null);
       setRowDrawEnd(null);
     },
-    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, rowGapCm, setLayout, setRowDrawStart, setRowDrawEnd]
+    [rowGapCm, setLayout, setRowDrawStart, setRowDrawEnd]
+  );
+
+  /** Aisle offset for the second row: use template depth when a template is chosen, else default empty strip depth. */
+  function pairedOffsetDepthCm(spec: PairedRowPlacementSpec): number {
+    if (spec.item) return getCatalogItemSpec(spec.item).depth_cm;
+    return cellsToCm(DEFAULT_ROW_SLOT_H);
+  }
+
+  /** Two facing rows in one draw: each side can fill from template, or empty row with optional templateId for later fill. */
+  const placePairedRowPair = useCallback(
+    (
+      start: { x: number; y: number },
+      end: { x: number; y: number },
+      spec1: PairedRowPlacementSpec,
+      spec2: PairedRowPlacementSpec
+    ) => {
+      const { isHorizontal } = rowDrawSegmentExtents(start, end);
+      const offsetCells = pairedAisleOffsetCells(pairedOffsetDepthCm(spec1), rowGapCm, layout, isHorizontal ? "y" : "x");
+      const s2 = shiftRowDrawForPairedRow(start, end, offsetCells, isHorizontal);
+      setLayout((prev) => {
+        const applyOne = (
+          state: LayoutState,
+          s: { x: number; y: number },
+          e: { x: number; y: number },
+          spec: PairedRowPlacementSpec,
+          idSuffix: string
+        ): LayoutState | null => {
+          const p = normalizeRowPrefixLetters(spec.prefix);
+          const { rack_direction: rd, bin_direction: bd } = spec;
+          if (spec.item && spec.autoFill) {
+            return appendRowWithTemplateToLayoutState(state, s, e, spec.item, p, rd, bd, defaultRackType, idSuffix, rowGapCm);
+          }
+          const tid =
+            spec.item && !spec.autoFill ? rowContainerTemplateIdFromCatalogItem(spec.item) : undefined;
+          return appendEmptyRowToLayoutState(state, s, e, p, rd, bd, rowGapCm, idSuffix, tid);
+        };
+        const n1 = applyOne(prev, start, end, spec1, "");
+        if (!n1) return prev;
+        const n2 = applyOne(n1, s2.start, s2.end, spec2, "-p2");
+        return n2 ?? prev;
+      });
+      setRowDrawStart(null);
+      setRowDrawEnd(null);
+    },
+    [rowGapCm, defaultRackType, layout, setLayout, setRowDrawStart, setRowDrawEnd]
+  );
+
+  /** Two facing empty rows in one action (aisle between), no templates. */
+  const placePairedEmptyRows = useCallback(
+    (
+      start: { x: number; y: number },
+      end: { x: number; y: number },
+      row1: { prefix: string; rack_direction: "LTR" | "RTL"; bin_direction: "LTR" | "RTL" },
+      row2: { prefix: string; rack_direction: "LTR" | "RTL"; bin_direction: "LTR" | "RTL" }
+    ) => {
+      placePairedRowPair(start, end, { ...row1, item: null, autoFill: false }, { ...row2, item: null, autoFill: false });
+    },
+    [placePairedRowPair]
   );
 
   /** Create a row with orientation from drag and immediately fill it with the given template (vertical → swapped dims + rotation). */
   const placeRowWithTemplate = useCallback(
-    (start: { x: number; y: number }, end: { x: number; y: number }, item: CatalogItem, rowPrefix: string) => {
-      const ph = DEFAULT_ROW_SLOT_H;
-      const isHorizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
-      let x0: number, y0: number, span: number;
-      if (isHorizontal) {
-        x0 = Math.min(start.x, end.x);
-        const x1 = Math.max(start.x, end.x);
-        y0 = start.y;
-        span = Math.max(1, x1 - x0);
-      } else {
-        x0 = start.x;
-        y0 = Math.min(start.y, end.y);
-        const y1 = Math.max(start.y, end.y);
-        span = Math.max(1, y1 - y0);
-      }
-      const clampedX = Math.max(0, Math.min(layout.grid_cols - 1, x0));
-      const clampedY = Math.max(0, Math.min(layout.grid_rows - (isHorizontal ? ph : span), y0));
-      const w = isHorizontal ? Math.min(span, layout.grid_cols - clampedX) : DEFAULT_ROW_SLOT_H;
-      const h = isHorizontal ? ph : Math.min(span, layout.grid_rows - clampedY);
-      const rect = { x: clampedX, y: clampedY, width: w, height: h };
-      const overlapsExisting = layout.racks.some((r) => rectsOverlap(rect, r));
-      const overlapsOther = layout.row_containers?.some((rc) =>
-        rc.slots.some((s) => rectsOverlap(rect, { x: s.x, y: s.y, width: s.w, height: s.h }))
-      );
-      if (overlapsExisting || overlapsOther) return;
-      const id = `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const prefix = (rowPrefix || "A").trim() || "A";
-      const orientation: "horizontal" | "vertical" = isHorizontal ? "horizontal" : "vertical";
-      const spec = getCatalogItemSpec(item);
-      const lc = getLevelConfig(spec);
-      const totalBins = getTotalLocations(lc);
-      const volPerBin = totalBins > 0
-        ? volumePerBinFromTotal(spec.width_cm, spec.depth_cm, spec.height_cm, totalBins)
-        : volumePerBin(spec.width_cm, spec.depth_cm, spec.height_cm, spec.levels, spec.bins_per_level);
-      const cellW = cmToCells(spec.width_cm);
-      const cellH = cmToCells(spec.depth_cm);
-      const templateColor = item.type === "custom" ? item.template.color : spec.color;
-      const rackColor = (typeof templateColor === "string" && templateColor.trim() !== "") ? templateColor.trim() : "#3b82f6";
-      const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : defaultRackType;
-      const startX = clampedX;
-      const startY = clampedY;
-      const isVertical = orientation === "vertical";
-      const slotFits = (s: EmptyRowSlot) => isVertical ? (s.w >= cellH && s.h >= cellW) : (s.w >= cellW);
-      const remainderSlot = (s: EmptyRowSlot): EmptyRowSlot => isVertical
-        ? { x: 0, y: startY, w: s.w, h: s.h - cellW }
-        : { x: 0, y: startY, w: s.w - cellW, h: s.h };
+    (
+      start: { x: number; y: number },
+      end: { x: number; y: number },
+      item: CatalogItem,
+      rowPrefix: string,
+      rack_direction: "LTR" | "RTL" = "LTR",
+      bin_direction: "LTR" | "RTL" = "LTR"
+    ) => {
       setLayout((prev) => {
-        const initialSlots: EmptyRowSlot[] = [{ x: clampedX, y: clampedY, w, h }];
-        const newSlotsRaw: EmptyRowSlot[] = [];
-        const newRacks: RackState[] = [];
-        let nextRackIndex = prev.racks.length + 1;
-        let indexInRow = 1;
-        const toProcess = [...initialSlots];
-        while (toProcess.length > 0) {
-          const s = toProcess.shift()!;
-          if (s.rackId != null) {
-            newSlotsRaw.push(s);
-            continue;
-          }
-          if (!slotFits(s)) {
-            newSlotsRaw.push(s);
-            continue;
-          }
-          newSlotsRaw.push({ x: 0, y: startY, w: isVertical ? cellH : cellW, h: isVertical ? cellW : cellH, rackId: nextRackIndex });
-          const rackLabel = `${prefix}${indexInRow}`;
-          const bins = createBinsForRack(
-            spec.aisle_letter,
-            nextRackIndex,
-            spec.levels,
-            spec.bins_per_level,
-            volPerBin,
-            "M1",
-            undefined,
-            spec.width_cm,
-            spec.depth_cm,
-            spec.height_cm,
-            spec.bin_type_map,
-            spec.addressPattern ?? ROW_LABEL_ADDRESS_PATTERN,
-            rackLabel,
-            spec.sectionStartIndex ?? 1,
-            spec.binNamingType ?? "numeric",
-            lc,
-            spec.namingStrategy,
-            spec.namingOrientation,
-            spec.namingPattern ?? spec.addressPattern,
-            spec.manualLabels,
-            spec.overrides,
-            spec.indexPadding,
-            spec.startIndex
-          );
-          newRacks.push({
-            uuid: generateRackUuid(),
-            rack_type: resolvedRackType,
-            x: 0,
-            y: startY,
-            width: isVertical ? cellH : cellW,
-            height: isVertical ? cellW : cellH,
-            orientation: "vertical",
-            levels: lc.length,
-            bins_per_level: lc[0]?.locations ?? spec.bins_per_level,
-            levelConfig: lc,
-            length_cm: spec.depth_cm,
-            width_cm: spec.width_cm,
-            height_cm: spec.height_cm,
-            aisle_letter: spec.aisle_letter,
-            rack_index: nextRackIndex,
-            bins,
-            rackLevels: binsToLevels(bins),
-            color: rackColor,
-            name: rackLabel,
-            rowPrefix: prefix,
-            indexInRow,
-            ...(spec.addressPattern != null ? { addressPattern: spec.addressPattern } : {}),
-            ...(spec.sectionStartIndex != null ? { sectionStartIndex: spec.sectionStartIndex } : {}),
-            ...(spec.binNamingType != null ? { binNamingType: spec.binNamingType } : {}),
-            ...(isVertical ? { rotationDegrees: 90 as const } : {}),
-            ...(item.type === "custom" ? { templateId: item.template.id } : {}),
-            ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
-          } as RackState);
-          nextRackIndex += 1;
-          indexInRow += 1;
-          if (isVertical ? (s.h > cellW) : (s.w > cellW)) toProcess.unshift(remainderSlot(s));
-        }
-        const minSlotAlongRow = isVertical ? cellW : cellW;
-        while (
-          newSlotsRaw.length > 0 &&
-          newSlotsRaw[newSlotsRaw.length - 1]?.rackId == null &&
-          (isVertical ? (newSlotsRaw[newSlotsRaw.length - 1]?.h ?? 0) < minSlotAlongRow : (newSlotsRaw[newSlotsRaw.length - 1]?.w ?? 0) < minSlotAlongRow)
-        ) {
-          newSlotsRaw.pop();
-        }
-        const newSlots = computeRowSlotPositions(newSlotsRaw, startX, startY, orientation);
-        const updatedRacks = prev.racks.map((r) => {
-          const slotForRack = newSlots.find((sl) => sl.rackId === (r.id ?? r.rack_index));
-          if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
-          return r;
-        });
-        const newRacksWithPos = newRacks.map((rack) => {
-          const slotForRack = newSlots.find((sl) => sl.rackId === rack.rack_index);
-          return { ...rack, x: slotForRack?.x ?? 0, y: slotForRack?.y ?? startY };
-        });
-        const nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
-        return {
-          ...prev,
-          row_containers: [...(prev.row_containers ?? []), { id, rowPrefix: prefix, orientation, direction: "LTR", slots: newSlots }],
-          racks: nextRacks,
-        };
+        const next = appendRowWithTemplateToLayoutState(
+          prev,
+          start,
+          end,
+          item,
+          rowPrefix,
+          rack_direction,
+          bin_direction,
+          defaultRackType,
+          "",
+          rowGapCm
+        );
+        return next ?? prev;
       });
       setRowDrawStart(null);
       setRowDrawEnd(null);
     },
-    [layout.racks, layout.grid_cols, layout.grid_rows, layout.row_containers, defaultRackType, setLayout, setRowDrawStart, setRowDrawEnd]
+    [defaultRackType, rowGapCm, setLayout, setRowDrawStart, setRowDrawEnd]
+  );
+
+  /** Two facing template-filled rows in one action. */
+  const placePairedRowsWithTemplate = useCallback(
+    (
+      start: { x: number; y: number },
+      end: { x: number; y: number },
+      item1: CatalogItem,
+      row1: { prefix: string; rack_direction: "LTR" | "RTL"; bin_direction: "LTR" | "RTL" },
+      item2: CatalogItem,
+      row2: { prefix: string; rack_direction: "LTR" | "RTL"; bin_direction: "LTR" | "RTL" }
+    ) => {
+      const spec1 = getCatalogItemSpec(item1);
+      const { isHorizontal } = rowDrawSegmentExtents(start, end);
+      const offsetCells = pairedAisleOffsetCells(spec1.depth_cm, rowGapCm, layout);
+      const s2 = shiftRowDrawForPairedRow(start, end, offsetCells, isHorizontal);
+      setLayout((prev) => {
+        const n1 = appendRowWithTemplateToLayoutState(
+          prev,
+          start,
+          end,
+          item1,
+          row1.prefix,
+          row1.rack_direction,
+          row1.bin_direction,
+          defaultRackType,
+          "",
+          rowGapCm
+        );
+        if (!n1) return prev;
+        const n2 = appendRowWithTemplateToLayoutState(
+          n1,
+          s2.start,
+          s2.end,
+          item2,
+          row2.prefix,
+          row2.rack_direction,
+          row2.bin_direction,
+          defaultRackType,
+          "-p2",
+          rowGapCm
+        );
+        return n2 ?? prev;
+      });
+      setRowDrawStart(null);
+      setRowDrawEnd(null);
+    },
+    [rowGapCm, defaultRackType, layout, setLayout, setRowDrawStart, setRowDrawEnd]
   );
 
   return {
@@ -818,6 +1151,9 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
     setCatalogHoveredSlotFromCell,
     fillSelectedRowWithTemplate,
     placeEmptyRow,
+    placePairedRowPair,
+    placePairedEmptyRows,
     placeRowWithTemplate,
+    placePairedRowsWithTemplate,
   };
 }

@@ -46,6 +46,31 @@ def next_order_barcode(db: Session, tenant_id: int) -> str:
     return f"ORD-{n:06d}"
 
 
+def next_internal_order_number(db: Session, tenant_id: int, warehouse_id: int) -> str:
+    """
+    Wewnętrzny numer zamówienia: prosty sekwencyjny integer jako string (1, 2, 3, ...)
+    unikalny per (tenant, warehouse). Nie pochodzi z CSV.
+    """
+    rows = (
+        db.query(Order.number)
+        .filter(
+            Order.tenant_id == tenant_id,
+            Order.warehouse_id == warehouse_id,
+            Order.number != None,  # noqa: E711
+        )
+        .all()
+    )
+    max_n = 0
+    for (num,) in rows:
+        if num is None:
+            continue
+        s = str(num).strip()
+        if not s.isdigit():
+            continue
+        max_n = max(max_n, int(s))
+    return str(max_n + 1)
+
+
 def location_barcode_for_bin(rack: Rack, level_index: int, segment_index: int) -> str:
     """LOC-{rack}-{level}-{bin} e.g. LOC-A01-03-02. Uses aisle_letter + rack_index for readability; globally unique per (rack_id, level, segment)."""
     letter = (getattr(rack, "aisle_letter", None) or "A").strip().upper()[:1]

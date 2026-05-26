@@ -7,21 +7,50 @@ Ten plik:
 - udostępnia get_db() do dependency injection
 
 Tu NIE ma logiki biznesowej.
+
+SQLite plik jest zawsze ``backend/test.db`` (względem tego katalogu), niezależnie
+od katalogu roboczego procesu / sposobu uruchomienia uvicorn.
 """
+
+from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base, Session, with_loader_criteria
 
-DATABASE_URL = "sqlite:///./test.db"  # Na start SQLite
+_BACKEND_DIR = Path(__file__).resolve().parent
+_SQLITE_PATH = _BACKEND_DIR / "test.db"
+# as_posix() — poprawne ścieżki w URI SQLite na Windows
+DATABASE_URL = f"sqlite:///{_SQLITE_PATH.as_posix()}"
 
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False}  # wymagane dla SQLite
 )
 
+
+@event.listens_for(engine, "connect")
+def _sqlite_enable_foreign_keys(dbapi_connection, _connection_record):
+    """SQLite disables FK enforcement unless this PRAGMA is set per connection."""
+    if engine.dialect.name != "sqlite":
+        return
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+
+def create_all_tables() -> None:
+    """
+    Create every table registered on ``Base.metadata`` (idempotent).
+
+    Callers must import all ORM modules first so metadata is complete
+    (see ``main.py``: ``from . import models`` before ``create_all_tables``).
+    """
+    Base.metadata.create_all(bind=engine)
 
 
 @event.listens_for(Session, "do_orm_execute")

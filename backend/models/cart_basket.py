@@ -16,6 +16,8 @@ class CartBasket(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=True)
     barcode = Column(String(64), unique=True, nullable=True, index=True)  # e.g. CART-0001-B01
+    #: Wewnętrzny kod skanowania (ESP:bsh:id); unikat globalnie — indeks w schema_upgrade.
+    scan_code = Column(String(80), nullable=True, index=True)
 
     # =============================
     # RELACJA DO WÓZKA

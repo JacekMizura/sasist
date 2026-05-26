@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { LayoutState, WarehouseProduct } from "../../../types/warehouse";
+import { activeBinsForRack, compareLocationUuidsByLayoutOrder, getDisplayLocationLabel } from "../warehouseUtils";
 import { normalizeInventoryLocationUuid, type InventoryMaps } from "../../../pages/WarehouseDesigner/inventoryMaps";
 
 export interface ProductLocatorSidebarProps {
@@ -26,15 +27,14 @@ export function ProductLocatorSidebar({
   const uuidToBinMeta = useMemo(() => {
     const map = new Map<string, { locationLabel: string; storageType?: string }>();
     for (const rack of layout.racks) {
-      for (const bin of rack.bins ?? []) {
+      for (const bin of activeBinsForRack(rack)) {
         const u = normalizeInventoryLocationUuid(bin.locationUUID);
         if (!u) continue;
-        const label = (bin.label ?? bin.location_id ?? "").trim() || u;
-        map.set(u, { locationLabel: label, storageType: bin.storage_type });
+        map.set(u, { locationLabel: getDisplayLocationLabel(rack, bin, layout), storageType: bin.storage_type });
       }
     }
     return map;
-  }, [layout.racks]);
+  }, [layout]);
 
   type LocationRow = { locationUUID: string; locationLabel: string; quantity: number; isReserve: boolean };
 
@@ -66,36 +66,43 @@ export function ProductLocatorSidebar({
             isReserve: meta?.storageType === "reserve",
           };
         })
-        .sort((a, b) => b.quantity - a.quantity);
+        .sort((a, b) => {
+          const q = b.quantity - a.quantity;
+          if (q !== 0) return q;
+          return compareLocationUuidsByLayoutOrder(layout, a.locationUUID, b.locationUUID);
+        });
     }
 
     const uuidToLabel: Record<string, string> = {};
     for (const rack of layout.racks) {
-      for (const bin of rack.bins ?? []) {
-        if (bin.locationUUID != null && (bin.label != null || bin.location_id != null)) {
-          uuidToLabel[bin.locationUUID] = (bin.label ?? bin.location_id ?? "").trim() || bin.locationUUID;
-        }
+      for (const bin of activeBinsForRack(rack)) {
+        const u = (bin.locationUUID ?? "").trim();
+        if (u) uuidToLabel[u] = getDisplayLocationLabel(rack, bin, layout);
       }
     }
 
     return (product.assignedLocations ?? [])
       .map((a) => ({
         locationUUID: a.locationUUID,
-        locationLabel: a.locationAddress ?? uuidToLabel[a.locationUUID] ?? a.locationUUID,
+        locationLabel: uuidToLabel[a.locationUUID] ?? a.locationAddress ?? a.locationUUID,
         quantity: a.quantity,
         isReserve: a.storageType === "reserve",
       }))
-      .sort((a, b) => b.quantity - a.quantity);
+      .sort((a, b) => {
+        const q = b.quantity - a.quantity;
+        if (q !== 0) return q;
+        return compareLocationUuidsByLayoutOrder(layout, a.locationUUID, b.locationUUID);
+      });
   })();
 
   const imageUrl = getProductImageUrl(product);
 
   return (
-    <aside className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-hidden rounded-r-xl border-l border-slate-700 bg-slate-800">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-600 shrink-0">
-        <h2 className="text-xs font-black uppercase text-slate-300">LOKALIZACJA PRODUKTU</h2>
+    <aside className="flex h-full min-h-0 w-[380px] flex-none flex-col self-stretch overflow-hidden rounded-r-xl border-l border-slate-700 bg-slate-800">
+      <div className="flex items-center justify-between gap-2 px-4 py-3.5 border-b border-slate-600 shrink-0">
+        <h2 className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-300">Lokalizacja produktu</h2>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
         <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-700/80 p-3">
           <div className="relative w-12 h-12 shrink-0 rounded-lg overflow-hidden bg-slate-600 border border-slate-500">
             <div className="absolute inset-0 flex items-center justify-center">
@@ -128,22 +135,31 @@ export function ProductLocatorSidebar({
         </div>
         <div>
           <h3 className="text-xs font-semibold text-slate-400 uppercase mb-2">Wszystkie lokalizacje</h3>
-          <div className="space-y-1 max-h-[280px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[min(60vh,24rem)] overflow-y-auto pr-0.5">
             {locations.length === 0 ? (
-              <p className="text-slate-500 text-xs py-2">Brak przypisanych lokalizacji</p>
+              <p className="text-slate-500 text-sm py-3">Brak przypisanych lokalizacji</p>
             ) : (
               locations.map((loc) => (
                 <button
                   key={loc.locationUUID}
                   type="button"
                   onClick={() => onSelectLocation(loc.locationUUID)}
-                  className={`w-full flex justify-between items-center text-left px-2 py-1.5 rounded text-xs transition hover:bg-slate-600/80 ${loc.isReserve ? "text-amber-300" : "text-slate-300"}`}
+                  className={`group flex w-full flex-col gap-1 rounded-xl border px-3 py-3 text-left shadow-sm transition-all duration-150 hover:shadow-md active:scale-[0.99] ${
+                    loc.isReserve
+                      ? "border-amber-500/35 bg-slate-700/50 hover:border-amber-400/50 hover:bg-slate-600/50"
+                      : "border-slate-600/50 bg-slate-700/40 hover:border-slate-500 hover:bg-slate-600/55"
+                  }`}
                 >
-                  <span className="flex items-center gap-1 truncate min-w-0 mr-2">
-                    {loc.isReserve && "🔒"}
-                    {loc.locationLabel}
+                  <span className="flex items-center gap-2">
+                    <span className="h-8 w-1 shrink-0 rounded-full bg-slate-500/80 transition-colors group-hover:bg-cyan-400/60" aria-hidden />
+                    <span className={`min-w-0 flex-1 truncate text-sm font-semibold leading-snug ${loc.isReserve ? "text-amber-100" : "text-slate-100"}`}>
+                      {loc.isReserve ? <span className="mr-1" aria-hidden>🔒</span> : null}
+                      {loc.locationLabel}
+                    </span>
                   </span>
-                  <span className="font-mono shrink-0">{loc.quantity} szt.</span>
+                  <span className="pl-3 font-mono text-xs tabular-nums text-slate-400">
+                    {loc.quantity} szt. w tej lokalizacji
+                  </span>
                 </button>
               ))
             )}

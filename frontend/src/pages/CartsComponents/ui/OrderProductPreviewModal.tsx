@@ -18,14 +18,42 @@ type OrderItemRead = {
 type OrderRead = {
   id: number;
   number?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   items: OrderItemRead[];
 };
 
 type OrderProductPreviewModalProps = {
   open: boolean;
   orderId: number | null;
+  /** Kod slotu koszyka (np. z API `barcode` lub etykieta S-rząd-kolumna) — wyświetlany jako „Koszyk …”. */
+  basketCode?: string | null;
   onClose: () => void;
 };
+
+function buildOrderPreviewTitle(
+  order: OrderRead | null,
+  orderId: number,
+  basketCode: string | null | undefined,
+): string {
+  const num = (order?.number && String(order.number).trim()) || String(orderId);
+  const parts: string[] = [`Zamówienie #${num}`];
+  const slot = (basketCode ?? "").trim();
+  if (slot) {
+    parts.push(`Koszyk ${slot}`);
+  }
+  const cust = order
+    ? [order.first_name, order.last_name]
+        .map((x) => (x != null ? String(x).trim() : ""))
+        .filter(Boolean)
+        .join(" ")
+        .trim()
+    : "";
+  if (cust) {
+    parts.push(cust);
+  }
+  return parts.join(" • ");
+}
 
 /** First image URL from semicolon-separated list. */
 function firstImageUrl(url: string | null | undefined): string | null {
@@ -37,6 +65,7 @@ function firstImageUrl(url: string | null | undefined): string | null {
 export default function OrderProductPreviewModal({
   open,
   orderId,
+  basketCode = null,
   onClose,
 }: OrderProductPreviewModalProps) {
   const [order, setOrder] = useState<OrderRead | null>(null);
@@ -73,9 +102,9 @@ export default function OrderProductPreviewModal({
         className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h3 className="font-bold text-slate-800">
-            Zamówienie {order?.number ? `#${order.number}` : orderId}
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-200">
+          <h3 className="font-bold text-slate-800 text-sm sm:text-base leading-snug min-w-0">
+            {buildOrderPreviewTitle(order, orderId ?? 0, basketCode)}
           </h3>
           <button
             type="button"
@@ -99,17 +128,17 @@ export default function OrderProductPreviewModal({
                 return (
                   <li
                     key={item.id}
-                    className="flex gap-4 p-3 rounded-lg border border-slate-200 bg-slate-50/50"
+                    className="flex gap-4 items-start p-3 rounded-lg border border-slate-200 bg-slate-50/50"
                   >
-                    <div className="w-16 h-16 rounded-lg bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                    <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white">
                       {imgUrl ? (
                         <img
                           src={imgUrl}
                           alt=""
-                          className="w-full h-full object-contain"
+                          className="max-h-full max-w-full object-contain object-center"
                         />
                       ) : (
-                        <span className="text-[10px] text-slate-300 font-bold">OBR</span>
+                        <span className="text-[10px] font-bold text-slate-300">OBR</span>
                       )}
                     </div>
                     <div className="min-w-0 flex-1">

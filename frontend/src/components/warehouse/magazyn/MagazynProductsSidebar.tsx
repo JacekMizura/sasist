@@ -1,8 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { warn } from "../../../utils/logger";
 import { Link } from "react-router-dom";
-import type { LayoutState, RackState, StorageType, WarehouseProduct } from "../../../types/warehouse";
+import type { LayoutState, NormalizedStorageType, RackState, WarehouseProduct } from "../../../types/warehouse";
 import { ConfirmModal } from "../../ui/ConfirmModal";
-import { getBinDisplayLabel, getRackDisplayId } from "../warehouseUtils";
+import { activeBinsForRack, compareLocationUuidsByLayoutOrder, getDisplayLocationLabel } from "../warehouseUtils";
 import { normalizeInventoryLocationUuid, type InventoryMaps, type InventoryRow } from "../../../pages/WarehouseDesigner/inventoryMaps";
 import { normalizeStorageType } from "../../../utils/storageTypes";
 
@@ -26,17 +27,6 @@ function normDisplayLabel(s: string): string {
   return s.trim().replace(/\s+/g, " ");
 }
 
-/** Legacy product.location_id (no assigned_locations): same bin label as a rack slot. */
-function legacyProductLocationMatchesRack(p: WarehouseProduct, rack: RackState): boolean {
-  if (p.location_id == null || (p.assignedLocations?.length ?? 0) > 0) return false;
-  const want = normDisplayLabel(String(p.location_id));
-  for (const b of rack.bins ?? []) {
-    const bl = normDisplayLabel((b.label ?? b.location_id ?? "").trim());
-    if (bl && bl === want) return true;
-  }
-  return false;
-}
-
 /** Match stock row to a bin by inventory.location_uuid ↔ bin.locationUUID. */
 function invRowMatchesBin(inv: InventoryRow, binUuid: string): boolean {
   const iu = normalizeInventoryLocationUuid(inv.location_uuid);
@@ -54,52 +44,28 @@ function inventoryRowCanonicalLocKey(inv: InventoryRow): string {
   return normalizeInventoryLocationUuid(inv.location_uuid);
 }
 
-/**
- * Parse display labels like "A1-A-1" → rack (letter + number), section, position.
- * Returns null if the string does not match the expected pattern.
- */
-function parseWarehouseDisplayLabel(label: string): {
-  rackLetter: string;
-  rackNum: number;
-  section: string;
-  position: number;
-} | null {
-  const trimmed = label.trim();
-  const parts = trimmed.split("-").map((p) => p.trim()).filter((p) => p.length > 0);
-  if (parts.length !== 3) return null;
-  const rackPart = parts[0];
-  const sectionRaw = parts[1];
-  const posPart = parts[2];
-  const rackMatch = rackPart.match(/^([A-Za-z]+)(\d+)$/);
-  if (!rackMatch) return null;
-  const rackLetter = rackMatch[1].toUpperCase();
-  const rackNum = parseInt(rackMatch[2], 10);
-  if (!Number.isFinite(rackNum)) return null;
-  const position = parseInt(posPart, 10);
-  if (!Number.isFinite(position)) return null;
-  const section = sectionRaw.trim();
-  if (!section) return null;
-  return { rackLetter, rackNum, section: section.toUpperCase(), position };
-}
-
 type LocationRowSortable = {
   locationLabel: string;
-  storageType?: StorageType;
+  locationUUID?: string;
+  storageType?: NormalizedStorageType;
   quantity: number;
 };
 
-/** Sort "other locations" by rack → section → position; unparseable labels keep stable tie-break (reserve, qty, input order). */
-function sortOtherLocationsForDisplay<T extends LocationRowSortable>(rows: T[]): T[] {
+/** Sort by layout walk order (UUID), then label; reserve/qty tie-break. RTL-safe. */
+function sortOtherLocationsForDisplay<T extends LocationRowSortable>(rows: T[], layout: LayoutState): T[] {
   const indexed = rows.map((loc, i) => ({ loc, i }));
   indexed.sort((a, b) => {
-    const ka = parseWarehouseDisplayLabel(a.loc.locationLabel);
-    const kb = parseWarehouseDisplayLabel(b.loc.locationLabel);
-    if (ka && kb) {
-      if (ka.rackLetter !== kb.rackLetter) return ka.rackLetter.localeCompare(kb.rackLetter);
-      if (ka.rackNum !== kb.rackNum) return ka.rackNum - kb.rackNum;
-      if (ka.section !== kb.section) return ka.section.localeCompare(kb.section);
-      if (ka.position !== kb.position) return ka.position - kb.position;
-    }
+    const uA = a.loc.locationUUID?.trim();
+    const uB = b.loc.locationUUID?.trim();
+    if (uA && uB) {
+      const c = compareLocationUuidsByLayoutOrder(layout, uA, uB);
+      if (c !== 0) return c;
+    } else if (uA && !uB) return -1;
+    else if (!uA && uB) return 1;
+    const la = a.loc.locationLabel.trim();
+    const lb = b.loc.locationLabel.trim();
+    const cmp = la.localeCompare(lb, undefined, { numeric: true });
+    if (cmp !== 0) return cmp;
     const aReserve = a.loc.storageType === "reserve" ? 1 : 0;
     const bReserve = b.loc.storageType === "reserve" ? 1 : 0;
     if (aReserve !== bReserve) return aReserve - bReserve;
@@ -198,6 +164,8 @@ export interface MagazynProductsSidebarProps {
   selectedProductId?: string | null;
   /** Toggle bin highlight on map; same id again clears. Ctrl/Cmd+click keeps default navigation to product. */
   onToggleProductMapHighlight?: (productId: string) => void;
+  /** Open damage protocol prefilled with currently shown damaged location/product. */
+  onCreateDamageReportPrefill?: (prefill: { productId: number; locationUUID: string; quantity?: number }) => void;
 }
 
 export function MagazynProductsSidebar({
@@ -224,6 +192,7 @@ export function MagazynProductsSidebar({
   productsForRackAssignmentCheck,
   selectedProductId = null,
   onToggleProductMapHighlight,
+  onCreateDamageReportPrefill,
 }: MagazynProductsSidebarProps) {
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [locationSearchQuery, setLocationSearchQuery] = useState("");
@@ -239,10 +208,10 @@ export function MagazynProductsSidebar({
     locationUUID: string;
     locationLabel: string;
     quantity: number;
-    storageType?: StorageType;
+    storageType?: NormalizedStorageType;
   };
 
-  function getLocationTypeBadge(storageType?: StorageType): { icon: string; label: string; className: string } | null {
+  function getLocationTypeBadge(storageType?: NormalizedStorageType): { icon: string; label: string; className: string } | null {
     const normalized = normalizeStorageType(storageType);
     if (normalized === "reserve") {
       return {
@@ -266,19 +235,34 @@ export function MagazynProductsSidebar({
     const removeKey = `${product.id}|${loc.locationUUID}`;
     const showRemove = Boolean(onRemoveProductAssignment) && productHasAssignmentAt(product, loc.locationUUID);
     const busy = assignmentRemovingKey === removeKey;
+    const su = normalizeInventoryLocationUuid(loc.locationUUID);
+    const suBin = selectedBinUUID ? normalizeInventoryLocationUuid(selectedBinUUID) : "";
+    const isSlotSelected = suBin !== "" && su !== "" && su === suBin;
     return (
       <div
         key={loc.locationUUID}
+        role="presentation"
         onMouseEnter={() => onHoverLocationUUIDChange?.(loc.locationUUID)}
         onMouseLeave={() => onHoverLocationUUIDChange?.(null)}
-        className={`flex items-center justify-between gap-1 text-xs ${typeBadge != null ? "text-amber-300" : "text-slate-300"}`}
+        className={`group flex w-full cursor-default items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs transition-all duration-150 ${
+          isSlotSelected
+            ? "border-cyan-400/70 bg-cyan-950/35 text-slate-50 shadow-[0_0_0_1px_rgba(34,211,238,0.35),0_6px_16px_rgba(15,23,42,0.35)]"
+            : typeBadge != null
+              ? "border-amber-500/25 bg-slate-800/50 text-amber-100 hover:border-amber-400/40 hover:bg-slate-700/70 hover:shadow-md"
+              : "border-slate-600/40 bg-slate-800/35 text-slate-200 hover:border-slate-500/60 hover:bg-slate-700/65 hover:shadow-md"
+        }`}
       >
-        <span className="flex items-center gap-1 truncate min-w-0 mr-2">
-          {typeBadge?.icon}
-          {loc.locationLabel}
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="flex h-8 w-1 shrink-0 rounded-full bg-slate-500/80 transition-colors duration-150 group-hover:bg-cyan-400/70" aria-hidden />
+          <span className="min-w-0 truncate">
+            {typeBadge?.icon ? <span className="mr-1">{typeBadge.icon}</span> : null}
+            <span className="font-medium">{loc.locationLabel}</span>
+          </span>
         </span>
-        <span className="flex items-center gap-1 shrink-0">
-          <span className="font-mono">{loc.quantity} szt.</span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span className="rounded-md bg-slate-900/40 px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-slate-100 ring-1 ring-slate-600/50">
+            {loc.quantity} szt.
+          </span>
           {showRemove && (
             <button
               type="button"
@@ -294,9 +278,9 @@ export function MagazynProductsSidebar({
                   productName: product.name,
                 });
               }}
-              className="p-0.5 rounded text-slate-500 hover:text-red-400 hover:bg-slate-700 disabled:opacity-40"
+              className="rounded-lg p-1.5 text-slate-400 transition-colors duration-150 hover:bg-slate-900/60 hover:text-red-300 disabled:opacity-40"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
@@ -306,30 +290,13 @@ export function MagazynProductsSidebar({
     );
   }
 
-  /** UUID → bin label from layout (display fragment). */
+  /** UUID → full display line (same as location picker / rack props). */
   const uuidToDisplayLabel: Record<string, string> = {};
-  /** UUID → rack display id from layout (e.g. A1); omitted when UUID not on layout. */
-  const uuidToRackLabel: Record<string, string> = {};
   for (const rack of layout.racks) {
-    const rackLabel = getRackDisplayId(rack, layout).trim();
-    for (const bin of rack.bins ?? []) {
+    for (const bin of activeBinsForRack(rack)) {
       const u = (bin.locationUUID ?? "").trim();
-      const raw = getBinDisplayLabel(rack, bin, layout).trim() || (bin.label ?? bin.location_id ?? "").trim();
-      if (u) {
-        uuidToDisplayLabel[u] = raw ? raw.replace(/\s+/g, " ").trim() : u;
-        if (rackLabel) uuidToRackLabel[u] = rackLabel;
-      } else if (import.meta.env.DEV && raw) {
-        console.warn("[MagazynProductsSidebar] layout bin has label but no locationUUID", raw);
-      }
+      if (u) uuidToDisplayLabel[u] = getDisplayLocationLabel(rack, bin, layout).replace(/\s+/g, " ").trim();
     }
-  }
-
-  /** UI: `rackLabel-binLabel`; if rack unknown on layout, show bin label only. */
-  function fullLocationDisplayLabel(locationUuid: string, binLabelOnly: string): string {
-    const rl = uuidToRackLabel[locationUuid]?.trim();
-    const bl = (binLabelOnly ?? "").trim() || locationUuid;
-    if (!rl) return bl;
-    return `${rl}-${bl}`;
   }
 
   const selectedBin = selectedLocationForProducts != null && selectedRackForMagazyn
@@ -342,12 +309,12 @@ export function MagazynProductsSidebar({
   const rackKey = selectedRackForMagazyn ? String(selectedRackForMagazyn.id ?? selectedRackForMagazyn.rack_index) : null;
 
   const uuidToStorageType = useMemo(() => {
-    const map = new Map<string, StorageType>();
+    const map = new Map<string, NormalizedStorageType>();
     for (const rack of layout.racks) {
-      for (const bin of rack.bins ?? []) {
+      for (const bin of activeBinsForRack(rack)) {
         const u = (bin.locationUUID ?? "").trim();
-        if (!u || !bin.storage_type) continue;
-        map.set(u, bin.storage_type);
+        if (!u) continue;
+        map.set(u, normalizeStorageType(bin.storage_type));
       }
     }
     return map;
@@ -386,28 +353,6 @@ export function MagazynProductsSidebar({
                 productIdsInScope.add(String(inv.product_id));
               }
             }
-            for (const p of products) {
-              if (filterToSingleBin) {
-                if (p.assignedLocations?.length && selectedBinUUID) {
-                  if (p.assignedLocations.some((a) => assignedLocationEntryUuid(a) === selectedBinUUID)) {
-                    productIdsInScope.add(p.id);
-                  }
-                } else if (p.location_id === selectedBinLabel) {
-                  productIdsInScope.add(p.id);
-                }
-              } else if (p.assignedLocations?.length) {
-                if (
-                  p.assignedLocations.some((a) => {
-                    const u = assignedLocationEntryUuid(a);
-                    return u != null && selectedRackBinUUIDs.has(u);
-                  })
-                ) {
-                  productIdsInScope.add(p.id);
-                }
-              } else if (selectedRackForMagazyn && legacyProductLocationMatchesRack(p, selectedRackForMagazyn)) {
-                productIdsInScope.add(p.id);
-              }
-            }
             return products.filter((p) => productIdsInScope.has(p.id));
           })()
         : products.filter((p) => {
@@ -415,7 +360,7 @@ export function MagazynProductsSidebar({
               if (p.assignedLocations?.length && selectedBinUUID) {
                 return p.assignedLocations.some((a) => assignedLocationEntryUuid(a) === selectedBinUUID);
               }
-              return p.location_id === selectedBinLabel;
+              return false;
             }
             if (p.assignedLocations?.length) {
               return p.assignedLocations.some((a) => {
@@ -423,7 +368,7 @@ export function MagazynProductsSidebar({
                 return u != null && selectedRackBinUUIDs.has(u);
               });
             }
-            return selectedRackForMagazyn != null && legacyProductLocationMatchesRack(p, selectedRackForMagazyn);
+            return false;
           })
     : [];
 
@@ -444,20 +389,6 @@ export function MagazynProductsSidebar({
           productIdsInScope.add(String(inv.product_id));
         }
       }
-      for (const p of products) {
-        if (p.assignedLocations?.length) {
-          if (
-            p.assignedLocations.some((a) => {
-              const u = assignedLocationEntryUuid(a);
-              return u != null && selectedRackBinUUIDs.has(u);
-            })
-          ) {
-            productIdsInScope.add(p.id);
-          }
-        } else if (legacyProductLocationMatchesRack(p, selectedRackForMagazyn)) {
-          productIdsInScope.add(p.id);
-        }
-      }
       return products.filter((p) => productIdsInScope.has(p.id));
     }
     return products.filter((p) => {
@@ -467,7 +398,7 @@ export function MagazynProductsSidebar({
           return u != null && selectedRackBinUUIDs.has(u);
         });
       }
-      return legacyProductLocationMatchesRack(p, selectedRackForMagazyn);
+      return false;
     });
   }, [
     selectedRackForMagazyn,
@@ -526,8 +457,6 @@ export function MagazynProductsSidebar({
           const u = assignedLocationEntryUuid(a);
           if (u && selectedRackBinUUIDs.has(u)) totalQuantity += safeQuantity(a.quantity);
         }
-      } else if (selectedRackForMagazyn && legacyProductLocationMatchesRack(p, selectedRackForMagazyn)) {
-        totalQuantity += safeQuantity(p.quantity);
       }
     }
     return { uniqueProductsCount, totalQuantity };
@@ -566,35 +495,35 @@ export function MagazynProductsSidebar({
   const selectedLocationBadge = getLocationTypeBadge(selectedBin?.storage_type);
 
   return (
-    <aside className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain rounded-r-xl border-l border-slate-700 bg-slate-800">
-      <div className="shrink-0 border-b border-slate-600 flex flex-col gap-2 px-4 py-3">
+    <aside className="flex h-full min-h-0 w-[380px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain rounded-r-xl border-l border-slate-700/90 bg-slate-800 designer-rail-scroll">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-slate-600/80 px-4 py-3.5">
         {selectedRackForMagazyn && onRequestClearRack && hasAssignedProductsOnRack && (
           <button
             type="button"
             onClick={onRequestClearRack}
             disabled={clearRackBusy}
-            className="w-full px-2 py-1.5 rounded-lg text-xs font-medium border border-red-500/60 text-red-300 bg-slate-900/40 hover:bg-red-950/40 hover:border-red-400 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full rounded-md border border-red-500/50 bg-slate-900/30 px-2 py-1 text-[11px] font-medium text-red-200 hover:border-red-400/70 hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Opróżnij regał
           </button>
         )}
-        <h2 className="text-xs font-black uppercase text-slate-300">PRODUKTY W REGALE</h2>
+        <h2 className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Produkty w regale</h2>
         <input
           type="text"
           value={productSearchQuery}
           onChange={(e) => setProductSearchQuery(e.target.value)}
           placeholder="Szukaj (nazwa, SKU...)"
-          className="w-full rounded-lg border border-slate-600 bg-slate-700/50 text-slate-100 placeholder-slate-500 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+          className="w-full rounded-md border border-slate-600/80 bg-slate-700/40 px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
         />
         {selectedRackForMagazyn && (
-          <p className="text-xs text-slate-400 leading-snug">
+          <p className="text-[11px] leading-snug text-slate-500">
             {rackSummaryStats.uniqueProductsCount === 0 || rackSummaryStats.totalQuantity === 0
               ? "Brak produktów"
               : `${formatProduktCount(rackSummaryStats.uniqueProductsCount)} • ${rackSummaryStats.totalQuantity} szt.`}
           </p>
         )}
       </div>
-      <div className="p-3 flex flex-col gap-2 flex-none">
+      <div className="flex flex-none flex-col gap-2 p-3.5">
         {selectedLocationForProducts != null && selectedRackForMagazyn && (
           <label className="flex items-center gap-2 text-slate-400 text-xs">
             <input
@@ -606,15 +535,15 @@ export function MagazynProductsSidebar({
             Pokaż wszystkie produkty
           </label>
         )}
-        <div className="space-y-3 flex-none min-h-0">
+        <div className="min-h-0 flex-none space-y-2">
           {filterToSingleBin && selectedLocationBadge != null && (
-            <div className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs ${selectedLocationBadge.className}`}>
+            <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${selectedLocationBadge.className}`}>
               <span aria-label={selectedLocationBadge.label}>{selectedLocationBadge.icon}</span>
               <span>{selectedLocationBadge.label}</span>
             </div>
           )}
           {list.length === 0 ? (
-            <div className="text-slate-400 text-sm text-center py-6 space-y-1 px-1" role="status">
+            <div className="space-y-1.5 px-0.5 py-4 text-center text-sm text-slate-400" role="status">
               <p>
                 {productSearchQuery.trim().length > 0
                   ? "Brak produktów"
@@ -656,14 +585,14 @@ export function MagazynProductsSidebar({
                   if (qtyAtSelected > 0 && su) {
                     currentLocation = {
                       locationUUID: su,
-                      locationLabel: fullLocationDisplayLabel(su, selectedBinLabel),
+                      locationLabel: (su && uuidToDisplayLabel[su]) || selectedBinLabel || su,
                       quantity: qtyAtSelected,
                       storageType: uuidToStorageType.get(su),
                     };
                   } else if (assignedQtyAtSelected > 0 && selectedBinUUID) {
                     currentLocation = {
                       locationUUID: selectedBinUUID,
-                      locationLabel: fullLocationDisplayLabel(selectedBinUUID, selectedBinLabel),
+                      locationLabel: (selectedBinUUID && uuidToDisplayLabel[selectedBinUUID]) || selectedBinLabel || selectedBinUUID,
                       quantity: assignedQtyAtSelected,
                       storageType: uuidToStorageType.get(selectedBinUUID),
                     };
@@ -689,9 +618,7 @@ export function MagazynProductsSidebar({
                       const u = assignedLocationEntryUuid(a);
                       if (!u || u === selectedBinUUID) continue;
                       if (!uuidToDisplayLabel[u]) {
-                        if (import.meta.env.DEV) {
-                          console.warn("[MagazynProductsSidebar] assigned_locations UUID not in layout", u);
-                        }
+                        warn("[MagazynProductsSidebar] assigned_locations UUID not in layout", u);
                         continue;
                       }
                       if (qtyByLoc.has(u)) continue;
@@ -709,11 +636,12 @@ export function MagazynProductsSidebar({
                       const binOnly = invDisplayByCanonical.get(ck) ?? uuidToDisplayLabel[ck] ?? ck;
                       return {
                         locationUUID: ck,
-                        locationLabel: fullLocationDisplayLabel(ck, binOnly),
+                        locationLabel: uuidToDisplayLabel[ck] ?? binOnly,
                         quantity: qty,
                         storageType: uuidToStorageType.get(ck),
                       };
-                    })
+                    }),
+                    layout
                   );
                   quantityAtLocation = qtyAtSelected > 0 ? qtyAtSelected : assignedQtyAtSelected;
                 } else {
@@ -759,9 +687,7 @@ export function MagazynProductsSidebar({
                       if (!u) continue;
                       if (selectedBinUUID && u === selectedBinUUID) continue;
                       if (!uuidToDisplayLabel[u]) {
-                        if (import.meta.env.DEV) {
-                          console.warn("[MagazynProductsSidebar] assigned_locations UUID not in layout", u);
-                        }
+                        warn("[MagazynProductsSidebar] assigned_locations UUID not in layout", u);
                         continue;
                       }
                       if (excludeBinUuid && u === excludeBinUuid) continue;
@@ -780,11 +706,12 @@ export function MagazynProductsSidebar({
                       const binOnly = invDisplayByCanonicalRack.get(ck) ?? uuidToDisplayLabel[ck] ?? ck;
                       return {
                         locationUUID: ck,
-                        locationLabel: fullLocationDisplayLabel(ck, binOnly),
+                        locationLabel: uuidToDisplayLabel[ck] ?? binOnly,
                         quantity: qty,
                         storageType: uuidToStorageType.get(ck),
                       };
-                    })
+                    }),
+                    layout
                   );
                 }
               } else {
@@ -796,7 +723,7 @@ export function MagazynProductsSidebar({
                     (uu && uuidToDisplayLabel[uu]) || currentLocationLegacy.locationAddress || uu || "";
                   currentLocation = {
                     locationUUID: currentLocationLegacy.locationUUID,
-                    locationLabel: uu ? fullLocationDisplayLabel(uu, binOnly) : binOnly,
+                    locationLabel: uu ? (uuidToDisplayLabel[uu] ?? binOnly) : binOnly,
                     quantity: safeQuantity(currentLocationLegacy.quantity),
                     storageType: currentLocationLegacy.storageType,
                   };
@@ -814,11 +741,12 @@ export function MagazynProductsSidebar({
                       (u && uuidToDisplayLabel[u]) || loc.locationAddress || u || "";
                     return {
                       locationUUID: loc.locationUUID,
-                      locationLabel: u ? fullLocationDisplayLabel(u, binOnly) : binOnly,
+                      locationLabel: u ? (uuidToDisplayLabel[u] ?? binOnly) : binOnly,
                       quantity: safeQuantity(loc.quantity),
                       storageType: loc.storageType,
                     };
-                  })
+                  }),
+                  layout
                 );
 
                 quantityAtLocation = currentLocationLegacy
@@ -858,21 +786,41 @@ export function MagazynProductsSidebar({
                   }}
                   onMouseEnter={() => onHoverProductIdChange?.(p.id)}
                   onMouseLeave={() => onHoverProductIdChange?.(null)}
-                  className={`block cursor-pointer rounded-xl border p-3 shadow flex flex-col gap-0 transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${
-                    isReserveLocation ? "border-amber-400 bg-slate-700/80 ring-1 ring-amber-400/50 hover:bg-slate-600/90" : "border-slate-600 bg-slate-700/80 hover:bg-slate-600/100"
+                  className={`block cursor-pointer rounded-xl border p-3 shadow-sm transition-all duration-150 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${
+                    isReserveLocation ? "border-amber-400/70 bg-slate-700/70 ring-1 ring-amber-400/40 hover:bg-slate-600/80" : "border-slate-600/80 bg-slate-700/60 hover:border-slate-500 hover:bg-slate-600/70"
                   } ${
-                    selectedProductId === p.id && onToggleProductMapHighlight ? "ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-800" : ""
+                    selectedProductId === p.id && onToggleProductMapHighlight ? "ring-2 ring-cyan-400 ring-offset-1 ring-offset-slate-800" : ""
                   }`}
                 >
                   {currentLocation && (
                     <div
-                      className="mb-2 px-2 py-1 rounded border border-blue-400 bg-blue-900/20 text-blue-300 text-xs font-semibold flex items-center justify-between gap-2"
+                      className="mb-1.5 flex items-center justify-between gap-1.5 rounded border border-blue-500/40 bg-blue-950/30 px-1.5 py-1 text-[10px] font-medium text-blue-200"
                       onMouseEnter={() => onHoverLocationUUIDChange?.(currentLocation.locationUUID)}
                       onMouseLeave={() => onHoverLocationUUIDChange?.(null)}
                     >
                       <span className="min-w-0">
                         Aktualna lokalizacja: {currentLocationLabel} — {safeQuantity(currentLocation.quantity)} szt.
                       </span>
+                      {normalizeStorageType(currentLocation.storageType) === "damaged" && onCreateDamageReportPrefill ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const locationUUID = currentLocation.locationUUID?.trim();
+                            const productIdNum = Number(p.id);
+                            if (!locationUUID || !Number.isFinite(productIdNum)) return;
+                            onCreateDamageReportPrefill({
+                              productId: productIdNum,
+                              locationUUID,
+                              quantity: Math.max(1, Math.floor(safeQuantity(currentLocation.quantity))),
+                            });
+                          }}
+                          className="rounded border border-rose-300 bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-200"
+                        >
+                          Utwórz protokół szkody
+                        </button>
+                      ) : null}
                       {onRemoveProductAssignment &&
                         selectedBinUUID &&
                         productHasAssignmentAt(p, selectedBinUUID) && (
@@ -899,10 +847,10 @@ export function MagazynProductsSidebar({
                         )}
                     </div>
                   )}
-                  <div className="flex items-start gap-3">
-                    <div className="relative w-12 h-12 shrink-0 rounded-lg overflow-hidden bg-slate-600 border border-slate-500">
+                  <div className="flex items-start gap-2">
+                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-slate-500/80 bg-slate-600">
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        <svg className="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                       </div>
                       {imageUrl && (
                         <img
@@ -914,19 +862,19 @@ export function MagazynProductsSidebar({
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-slate-100 break-words line-clamp-2">
+                      <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-slate-50">
                         {highlightQueryInText(p.name ?? "", productSearchQuery, p.id)}
                       </div>
-                      <div className="text-xs text-slate-400 mt-1 truncate">SKU: {p.sku ?? "—"} · EAN: {p.ean ?? "—"}</div>
+                      <div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">SKU {p.sku ?? "—"} · EAN {p.ean ?? "—"}</div>
                       {hasQuantityBreakdown ? (
                         <>
-                          <div className="text-xs text-slate-300 mt-1">Sztuki łącznie: <span className="font-mono font-semibold text-slate-100">{enriched.totalQuantity}</span></div>
-                          <div className="text-xs text-slate-400 mt-0.5">Podst. <span className="font-mono text-slate-300">{enriched.primaryQuantity ?? 0}</span> · Rez. <span className="font-mono text-amber-300">{enriched.reserveQuantity ?? 0}</span></div>
+                          <div className="mt-1 text-[11px] text-slate-400">Łącznie <span className="font-mono font-semibold text-slate-200">{enriched.totalQuantity}</span></div>
+                          <div className="text-[10px] text-slate-500">Podst. <span className="font-mono text-slate-300">{enriched.primaryQuantity ?? 0}</span> · Rez. <span className="font-mono text-amber-300/90">{enriched.reserveQuantity ?? 0}</span></div>
                         </>
                       ) : (
-                        <div className="text-xs text-slate-300 mt-1">Sztuki: <span className="font-mono font-semibold text-slate-100">{quantityAtLocation}</span></div>
+                        <div className="mt-1 text-[11px] text-slate-400">Szt. <span className="font-mono font-semibold text-slate-200">{quantityAtLocation}</span></div>
                       )}
-                      <div className="text-xs text-slate-300 mt-0.5">Objętość: <span className="font-mono font-semibold text-cyan-300">{formatVolume(volumeAtLocation)} dm³</span></div>
+                      <div className="text-[10px] text-slate-500">Obj. <span className="font-mono text-cyan-300/90">{formatVolume(volumeAtLocation)} dm³</span></div>
                       {otherLocations.length > 0 && (
                         <button
                           type="button"
@@ -940,7 +888,7 @@ export function MagazynProductsSidebar({
                               setExpandedProductId(p.id);
                             }
                           }}
-                          className="text-xs text-blue-400 hover:text-blue-300 mt-2"
+                          className="mt-1.5 text-[10px] text-cyan-400/90 hover:text-cyan-300"
                         >
                           Inne lokalizacje
                         </button>
@@ -948,7 +896,7 @@ export function MagazynProductsSidebar({
                     </div>
                   </div>
                   {isExpanded && otherLocations.length > 0 && (
-                    <div className="mt-2 border-t border-slate-600 pt-2">
+                    <div className="mt-1.5 border-t border-slate-600/60 pt-1.5">
                       {locationCount > 20 && (
                         <input
                           type="text"
@@ -961,11 +909,11 @@ export function MagazynProductsSidebar({
                         />
                       )}
                       {locationCount <= 5 ? (
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                           {filteredLocations.map((loc) => renderLocationRow(p, loc))}
                         </div>
                       ) : (
-                        <div className="max-h-[200px] overflow-y-auto space-y-1 pr-1">
+                        <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
                           {filteredLocations.length > 0 ? (
                             filteredLocations.map((loc) => renderLocationRow(p, loc))
                           ) : (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { log } from "../../utils/logger";
 import api from "../../api/axios";
 
 interface CartFormProps {
@@ -54,7 +55,7 @@ export default function CartForm({ groupId, editId, initialType = 'BULK', onClos
         };
         res = await api.post("/carts/multi/", multiData);
       }
-      console.log("[CartForm] POST success", res.status, res.data);
+      log("[CartForm] POST success", res.status, res.data);
       try {
         onSuccess();
       } catch (stateErr) {

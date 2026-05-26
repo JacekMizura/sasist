@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { log } from "../../utils/logger";
 import type { CustomRackTemplate, LevelConfigItem, LayoutState, StorageType, RackType } from "../../types/warehouse";
 import { snapCm, generateLocationLabel, levelHeightsForRack, type RackTemplateLabelOptions } from "./warehouseUtils";
 import { getStorageTypeStyle, normalizeBinTypeMap, normalizeStorageType, TEMPLATE_STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
@@ -61,6 +62,8 @@ export function RackPreview({
   title: titleProp,
   labelOptions,
   onLabelEdit,
+  /** Stronger outline on this cell (e.g. last clicked in designer). */
+  focusedBin,
 }: {
   width_cm: number;
   depth_cm: number;
@@ -83,6 +86,7 @@ export function RackPreview({
   labelOptions?: RackTemplateLabelOptions | null;
   /** When set, cells in names view are clickable to edit label (manual or override). */
   onLabelEdit?: (levelIndex: number, binIndex: number, currentValue: string) => void;
+  focusedBin?: { level: number; bin: number } | null;
 }) {
   const levelRows = (Array.isArray(levelConfig) && levelConfig.length > 0)
     ? levelConfig
@@ -112,6 +116,7 @@ export function RackPreview({
   }
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(500);
+  const [hoverBin, setHoverBin] = useState<{ level: number; bin: number } | null>(null);
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -152,9 +157,9 @@ export function RackPreview({
   const internalShelfYs = Array.from({ length: L - 1 }, (_, i) => levelToY(L - 2 - i));
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 rounded-2xl border border-slate-100 bg-white overflow-hidden ${className}`}>
-      <h4 className="text-sm font-bold text-slate-600 px-2 pb-2 shrink-0">{titleProp ?? "Podgląd regału — na żywo"}</h4>
-      <div ref={containerRef} className="flex-1 min-h-0 min-h-[200px] rounded-xl border border-slate-100 overflow-hidden flex items-stretch">
+    <div className={`flex flex-col flex-1 min-h-0 rounded-2xl border border-slate-200/40 bg-white/90 shadow-sm overflow-hidden ${className}`}>
+      <h4 className="text-sm font-bold text-slate-600 px-2 pb-2 shrink-0">{titleProp ?? "Podgląd regału"}</h4>
+      <div ref={containerRef} className="flex-1 min-h-0 min-h-[200px] rounded-xl border border-slate-200/35 bg-slate-50/20 overflow-hidden flex items-stretch">
         <svg
             viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
             preserveAspectRatio="xMidYMid meet"
@@ -219,7 +224,6 @@ export function RackPreview({
                   const y = levelToY(level);
                   const w = cellWLev - pad * 2;
                   const h = cellInsetH(level);
-                  const style = getStorageTypeStyle(storageType);
                   const tunedTypeStyle = storageType === "reserve"
                     ? { bg: "#fef9c3", border: "#fde68a" } // light yellow
                     : storageType === "damaged"
@@ -230,19 +234,23 @@ export function RackPreview({
                   const volStr = `${Number(cellVol).toFixed(2)} dm³`;
                   const locationWidthCm = locationWidthsCm[bin] ?? 0;
                   const title = `${label}\nSZ:${Math.round(locationWidthCm)} × GŁ:${Math.round(depth_cm)} × WYS:${Math.round(levelHeightCm)}\n${volStr}`;
-                  const textColor = "#0f172a";
-                  const subColor = "#334155";
+                  const textColor = "#020617";
+                  const subColor = "#475569";
+                  const isFocused = focusedBin != null && focusedBin.level === level && focusedBin.bin === bin;
+                  const isHovered = hoverBin != null && hoverBin.level === level && hoverBin.bin === bin;
                   const isCompact = w < 90 || h < 52;
                   const dimsLine = `SZ ${Math.round(locationWidthCm)} · GŁ ${Math.round(depth_cm)} · WYS ${Math.round(levelHeightCm)}`;
                   const labelText = label.length > 14 ? `${label.slice(0, 12)}…` : label;
                   const cx = x + w / 2;
                   const cy = y + h / 2;
-                  const nameFont = w < 120 ? 16 : 20;
-                  const dimsFont = 12;
+                  const nameFont = w < 120 ? 18 : 22;
+                  const dimsFont = 13;
                   const capFont = 11;
                   const lineGap = 4;
-                  const dimsOpacity = 0.7;
-                  const capOpacity = 0.58;
+                  const dimsOpacity = 0.88;
+                  const capOpacity = 0.76;
+                  const cellStroke = isFocused ? "#0284c7" : stroke;
+                  const cellStrokeW = isFocused ? 2.75 : isHovered ? 1.65 : 1;
                   const nameBaselineY = isCompact
                     ? cy + nameFont * 0.35
                     : cy - (dimsFont + capFont + lineGap * 2) / 2 + nameFont * 0.35;
@@ -255,11 +263,36 @@ export function RackPreview({
                         if (onLabelEdit) onLabelEdit(level, bin, label);
                         else onBinClick?.(level, bin);
                       }}
+                      onMouseEnter={() => setHoverBin({ level, bin })}
+                      onMouseLeave={() => setHoverBin((h) => (h?.level === level && h?.bin === bin ? null : h))}
                       style={{ cursor: onLabelEdit || onBinClick ? "pointer" : undefined }}
                     >
-                      <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={1} rx={2} />
+                      <rect
+                        x={x}
+                        y={y}
+                        width={w}
+                        height={h}
+                        fill={fill}
+                        stroke={cellStroke}
+                        strokeWidth={cellStrokeW}
+                        rx={3}
+                        style={{ transition: "stroke 150ms ease, stroke-width 150ms ease" }}
+                      />
+                      {isHovered && !isFocused ? (
+                        <rect
+                          x={x}
+                          y={y}
+                          width={w}
+                          height={h}
+                          fill="#0f172a"
+                          opacity={0.05}
+                          rx={3}
+                          pointerEvents="none"
+                          style={{ transition: "opacity 150ms ease" }}
+                        />
+                      ) : null}
                       <title>{title}</title>
-                      <text x={cx} y={nameBaselineY} textAnchor="middle" fontSize={nameFont} fill={textColor} fontFamily="system-ui, sans-serif" fontWeight="700">
+                      <text x={cx} y={nameBaselineY} textAnchor="middle" fontSize={nameFont} fill={textColor} fontFamily="system-ui, sans-serif" fontWeight="800">
                         {labelText}
                       </text>
                       {!isCompact && (
@@ -280,6 +313,35 @@ export function RackPreview({
         </svg>
       </div>
     </div>
+  );
+}
+
+function DesignerAccordion({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200/55 bg-white/95 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="sticky top-0 z-[1] flex w-full items-center justify-between gap-2 border-b border-slate-200/45 bg-slate-50/95 px-3 py-2.5 text-left backdrop-blur-[6px] transition-colors hover:bg-slate-100/95"
+      >
+        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-slate-600">{title}</span>
+        <span className="text-slate-400 text-xs tabular-nums shrink-0" aria-hidden>
+          {open ? "−" : "+"}
+        </span>
+      </button>
+      {open ? <div className="space-y-3 px-3 py-3 text-[15px]">{children}</div> : null}
+    </section>
   );
 }
 
@@ -312,6 +374,18 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
   const [saveSuccess, setSaveSuccess] = useState(false);
   const isEdit = Boolean(initialTemplate?.id);
 
+  const [accordionOpen, setAccordionOpen] = useState({
+    struktura: true,
+    poziomy: true,
+    nazewnictwo: true,
+    kolory: true,
+    zaawansowane: false,
+  });
+  const [previewFocusedBin, setPreviewFocusedBin] = useState<{ level: number; bin: number } | null>(null);
+
+  const toggleAccordion = (key: keyof typeof accordionOpen) => {
+    setAccordionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
   const [namingStrategy, setNamingStrategy] = useState<NamingStrategyId>("pattern");
   const [namingOrientation, setNamingOrientation] = useState<"column-first" | "row-first">("column-first");
   const [namingPattern, setNamingPattern] = useState(DEFAULT_ADDRESS_PATTERN);
@@ -467,8 +541,8 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     const patternVal = namingPattern.trim() || DEFAULT_ADDRESS_PATTERN;
     const rackHeightCm = snapCm(height_cm);
     // Temporary: confirm rack template height is independent from warehouse building height (do not use building_height_m for template validation).
-    console.log("warehouseHeight", layout?.building_height_m);
-    console.log("rackHeight", rackHeightCm);
+    log("warehouseHeight", layout?.building_height_m);
+    log("rackHeight", rackHeightCm);
     const payload: CustomRackTemplate = {
       id: initialTemplate?.id ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `custom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
       name: trimmed,
@@ -534,6 +608,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
   }), [namingStrategy, namingOrientation, namingPattern, rowId, sectionStartIndex, binNamingType, manualLabels, overrides, allowOverrides, indexPadding, startIndex]);
 
   const handleLabelEdit = (levelIndex: number, binIndex: number, currentValue: string) => {
+    setPreviewFocusedBin({ level: levelIndex, bin: binIndex });
     const key = cellKey(levelIndex, binIndex);
     const newVal = window.prompt("Etykieta lokalizacji", currentValue || "");
     if (newVal === null) return;
@@ -559,319 +634,337 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
     setManualLabels(next);
   };
 
+  const fieldLabel = "block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1";
+  const fieldInput =
+    "w-full rounded-lg border border-slate-200/70 bg-white text-slate-900 text-[15px] px-2.5 py-2 input-focus shadow-sm shadow-slate-900/[0.02] transition-[box-shadow,border-color] duration-150";
+
   const formSection = (
-    <div className="space-y-6 text-[16px]">
-      {/* ——— SECTION 1: STRUCTURE ——— */}
-      <section>
-        <h4 className="text-slate-700 font-bold uppercase mb-3 text-[14px] border-b border-slate-200 pb-1">Struktura</h4>
-        <div className="space-y-4">
+    <div className="space-y-3 text-[15px]">
+      <DesignerAccordion title="STRUKTURA" open={accordionOpen.struktura} onToggle={() => toggleAccordion("struktura")}>
+        <div>
+          <label className={fieldLabel}>Nazwa</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="np. Regał wysokie palety"
+            className={fieldInput}
+          />
+        </div>
+        <div>
+          <label className={fieldLabel}>Typ regału</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setRackType("warehouse")}
+              className={`flex-1 px-3 py-2 text-sm font-semibold rounded-lg border transition-all duration-150 ${
+                rackType === "warehouse" ? "bg-cyan-600 border-cyan-600 text-white shadow-md" : "bg-white/80 border-slate-200/70 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Magazyn
+            </button>
+            <button
+              type="button"
+              onClick={() => setRackType("store")}
+              className={`flex-1 px-3 py-2 text-sm font-semibold rounded-lg border transition-all duration-150 ${
+                rackType === "store" ? "bg-cyan-600 border-cyan-600 text-white shadow-md" : "bg-white/80 border-slate-200/70 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Sklep
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Nazwa</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="np. Regał wysokie palety"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus transition-shadow"
-            />
+            <label className={fieldLabel}>Szer. (cm)</label>
+            <input type="number" min={10} step={10} value={width_cm} onChange={(e) => setWidthCm(Number(e.target.value) || 10)} className={fieldInput} />
           </div>
           <div>
-            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Typ regału</label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setRackType("warehouse")}
-                className={`flex-1 px-3 py-2 text-sm font-semibold rounded-xl border transition-colors ${
-                  rackType === "warehouse" ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                Magazyn
-              </button>
-              <button
-                type="button"
-                onClick={() => setRackType("store")}
-                className={`flex-1 px-3 py-2 text-sm font-semibold rounded-xl border transition-colors ${
-                  rackType === "store" ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                Sklep
-              </button>
-            </div>
+            <label className={fieldLabel}>Gł. (cm)</label>
+            <input type="number" min={10} step={10} value={depth_cm} onChange={(e) => setDepthCm(Number(e.target.value) || 10)} className={fieldInput} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Szer. (cm)</label>
-              <input type="number" min={10} step={10} value={width_cm} onChange={(e) => setWidthCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
-            </div>
-            <div>
-              <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Gł. (cm)</label>
-              <input type="number" min={10} step={10} value={depth_cm} onChange={(e) => setDepthCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
-            </div>
+        </div>
+        <div>
+          <label className={fieldLabel}>Wys. (cm)</label>
+          <input type="number" min={10} step={10} value={height_cm} onChange={(e) => setHeightCm(Number(e.target.value) || 10)} className={fieldInput} />
+        </div>
+        <div>
+          <label className={fieldLabel}>Liczba poziomów</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={levels}
+            onChange={(e) => {
+              const next = Math.max(1, Math.min(20, Number(e.target.value) || 1));
+              setLevels(next);
+              setLocationsPerLevel((prev) => {
+                if (next > prev.length) return [...prev, ...Array.from({ length: next - prev.length }, () => prev[prev.length - 1] ?? 1)];
+                return prev.slice(0, next);
+              });
+            }}
+            className={fieldInput}
+          />
+        </div>
+        <div>
+          <label className={fieldLabel}>Obciążenie na poziom (kg)</label>
+          <input
+            type="number"
+            min={1}
+            step={10}
+            value={levelMaxLoadKg}
+            onChange={(e) => setLevelMaxLoadKg(Math.max(1, Number(e.target.value) || 500))}
+            className={fieldInput}
+            placeholder="500"
+          />
+          <p className="text-slate-500 text-xs mt-1">Maksymalna dopuszczalna waga dla jednego poziomu regału.</p>
+        </div>
+      </DesignerAccordion>
+
+      <DesignerAccordion title="POZIOMY" open={accordionOpen.poziomy} onToggle={() => toggleAccordion("poziomy")}>
+        <div>
+          <label className={`${fieldLabel} normal-case tracking-normal text-slate-600`}>Lokalizacje na poziom</label>
+          <div className="space-y-2">
+            {Array.from({ length: Math.max(1, levels) }, (_, orderIdx) => {
+              const levelNumber = Math.max(1, levels) - orderIdx;
+              const levelIndex = levelNumber - 1;
+              const val = locationsPerLevel[levelIndex] ?? 1;
+              return (
+                <div key={levelNumber} className="flex items-center gap-2">
+                  <span className="text-slate-600 font-medium w-[4.5rem] shrink-0 text-sm">Poziom {levelNumber}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={val}
+                    onChange={(e) =>
+                      setLocationsPerLevel((prev) => {
+                        const next = [...prev];
+                        while (next.length <= levelIndex) next.push(1);
+                        next[levelIndex] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                        return next;
+                      })
+                    }
+                    className={`${fieldInput} flex-1 py-1.5`}
+                  />
+                  <span className="text-slate-400 text-sm shrink-0">lok.</span>
+                </div>
+              );
+            })}
           </div>
+        </div>
+        {levels > 1 && (
           <div>
-            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Wys. (cm)</label>
-            <input type="number" min={10} step={10} value={height_cm} onChange={(e) => setHeightCm(Number(e.target.value) || 10)} className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus" />
-          </div>
-          <div>
-            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Liczba poziomów</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={levels}
-              onChange={(e) => {
-                const next = Math.max(1, Math.min(20, Number(e.target.value) || 1));
-                setLevels(next);
-                setLocationsPerLevel((prev) => {
-                  if (next > prev.length) return [...prev, ...Array.from({ length: next - prev.length }, () => prev[prev.length - 1] ?? 1)];
-                  return prev.slice(0, next);
-                });
-              }}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus"
-            />
-          </div>
-          <div>
-            <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Lokalizacje na poziom</label>
+            <label className={`${fieldLabel} normal-case tracking-normal text-slate-600`}>Traversy między poziomami (cm)</label>
             <div className="space-y-2">
-              {Array.from({ length: Math.max(1, levels) }, (_, orderIdx) => {
-                const levelNumber = Math.max(1, levels) - orderIdx; // top -> bottom
-                const levelIndex = levelNumber - 1;
-                const val = locationsPerLevel[levelIndex] ?? 1;
+              {Array.from({ length: Math.max(0, levels - 1) }, (_, orderIdx) => {
+                const lowerLevelNumber = (levels - 1) - orderIdx;
+                const beamIndex = lowerLevelNumber - 1;
+                const val = beamBetweenLevelsCm[beamIndex] ?? 8;
                 return (
-                  <div key={levelNumber} className="flex items-center gap-2">
-                    <span className="text-slate-600 font-semibold w-20 shrink-0 text-[16px]">Poziom {levelNumber}:</span>
+                  <div key={`beam-${lowerLevelNumber}`} className="flex items-center gap-2 flex-wrap">
+                    <span className="text-slate-600 font-medium shrink-0 text-sm min-w-[5.5rem]">Poziom {lowerLevelNumber}</span>
+                    <span className="text-slate-500 text-xs shrink-0">Trawers nad</span>
                     <input
                       type="number"
                       min={1}
                       max={50}
                       value={val}
-                      onChange={(e) => setLocationsPerLevel((prev) => {
-                        const next = [...prev];
-                        while (next.length <= levelIndex) next.push(1);
-                        next[levelIndex] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
-                        return next;
-                      })}
-                      className="flex-1 rounded-lg border border-slate-200 bg-slate-50 text-[#1E293B] px-2.5 py-1.5 text-[16px] input-focus"
+                      onChange={(e) =>
+                        setBeamBetweenLevelsCm((prev) => {
+                          const next = [...prev];
+                          while (next.length <= beamIndex) next.push(8);
+                          next[beamIndex] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                          return next;
+                        })
+                      }
+                      className={`${fieldInput} flex-1 min-w-[4rem] py-1.5`}
                     />
-                    <span className="text-slate-400 text-[16px]">lok.</span>
+                    <span className="text-slate-400 text-sm shrink-0">cm</span>
                   </div>
                 );
               })}
             </div>
           </div>
-          {levels > 1 && (
-            <div>
-              <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Traversy między poziomami (cm)</label>
-              <div className="space-y-2">
-                {Array.from({ length: Math.max(0, levels - 1) }, (_, orderIdx) => {
-                  // Attach beam to lower level; show top->bottom as: below top, below next, ...
-                  const lowerLevelNumber = (levels - 1) - orderIdx;
-                  const beamIndex = lowerLevelNumber - 1;
-                  const val = beamBetweenLevelsCm[beamIndex] ?? 8;
-                  return (
-                    <div key={`beam-${lowerLevelNumber}`} className="flex items-center gap-2">
-                      <span className="text-slate-600 font-semibold shrink-0 text-[16px] min-w-[170px]">
-                        Poziom {lowerLevelNumber}:
-                      </span>
-                      <span className="text-slate-500 text-[14px] shrink-0">Trawers nad:</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={val}
-                        onChange={(e) =>
-                          setBeamBetweenLevelsCm((prev) => {
-                            const next = [...prev];
-                            while (next.length <= beamIndex) next.push(8);
-                            next[beamIndex] = Math.max(1, Math.min(50, Number(e.target.value) || 1));
-                            return next;
-                          })
-                        }
-                        className="flex-1 rounded-lg border border-slate-200 bg-slate-50 text-[#1E293B] px-2.5 py-1.5 text-[16px] input-focus"
-                      />
-                      <span className="text-slate-400 text-[16px]">cm</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <div>
-            <label className="block text-slate-600 uppercase mb-1.5 font-bold text-[16px]">Obciążenie na poziom (kg)</label>
-            <input
-              type="number"
-              min={1}
-              step={10}
-              value={levelMaxLoadKg}
-              onChange={(e) => setLevelMaxLoadKg(Math.max(1, Number(e.target.value) || 500))}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] text-[16px] px-3 py-2.5 input-focus"
-              placeholder="500"
-            />
-            <p className="text-slate-500 text-[12px] mt-0.5">Maksymalna dopuszczalna waga dla jednego poziomu regału.</p>
-          </div>
-          <div>
-            <label className="block text-slate-500 uppercase mb-1.5 font-semibold text-[16px]">Kolor</label>
-            <div className="flex flex-wrap gap-2 items-center">
-              {DEFAULT_COLORS.map((c) => (
-                <button key={c} type="button" onClick={() => setColor(c)} className={`w-8 h-8 rounded-xl border-2 transition-colors ${color === c ? "border-cyan-500 ring-2 ring-cyan-500/30" : "border-slate-200"}`} style={{ backgroundColor: c }} />
-              ))}
-              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 cursor-pointer rounded-xl border border-slate-200 bg-transparent" />
-            </div>
-          </div>
-          <p className="text-slate-500 text-[14px]">Kliknij komórki w podglądzie, aby oznaczyć lokalizacje rezerwowe.</p>
-          <div className="flex flex-wrap items-center gap-2">
-            {TEMPLATE_STORAGE_TYPE_OPTIONS.map((option) => {
-              const style = getStorageTypeStyle(option.value);
-              return (
-                <span
-                  key={option.value}
-                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[12px]"
-                  style={{ backgroundColor: style.bg, borderColor: style.border, color: style.text }}
-                >
-                  <StorageTypeIcon storageType={option.value} size={12} />
-                  {option.label}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ——— SECTION 2: NAMING STRATEGY ——— */}
-      <section>
-        <h4 className="text-slate-700 font-bold uppercase mb-3 text-[14px] border-b border-slate-200 pb-1">Strategia nazewnictwa</h4>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-slate-600 font-semibold text-[16px] mb-1.5">Sposób nazewnictwa</label>
-            <select
-              value={namingStrategy}
-              onChange={(e) => setNamingStrategy(e.target.value as NamingStrategyId)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 text-[#1E293B] px-3 py-2.5 text-[16px] input-focus"
-            >
-              <option value="pattern">Z wzorca (Rząd/Sekcja/Pozycja/Poziom)</option>
-              <option value="rack-index">Rack + indeks</option>
-              <option value="custom">Własny wzorzec</option>
-              <option value="manual">Ręczne etykiety</option>
-            </select>
-          </div>
-
-          {namingStrategy === "pattern" && (
-            <>
-              <div>
-                <label className="block text-slate-600 font-semibold text-[14px] mb-1">Orientacja</label>
-                <select
-                  value={namingOrientation}
-                  onChange={(e) => setNamingOrientation(e.target.value as "column-first" | "row-first")}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus"
-                >
-                  <option value="column-first">Pierwsza kolumna (A-1 B-1 C-1)</option>
-                  <option value="row-first">Pierwszy rząd (A-1 A-2 A-3)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[14px] text-slate-600">Rząd ({'{Row}'})</label>
-                <input type="text" value={rowId} onChange={(e) => setRowId(e.target.value)} placeholder="np. A" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 text-slate-600 cursor-pointer text-[14px]">
-                  <input type="checkbox" checked={autoSectionNumbering} onChange={(e) => setAutoSectionNumbering(e.target.checked)} className="rounded" />
-                  Automatyczna numeracja sekcji
-                </label>
-              </div>
-              <div>
-                <label className="text-[14px] text-slate-600">Startowa sekcja ({'{Section}'})</label>
-                <input type="number" min={0} value={sectionStartIndex} onChange={(e) => setSectionStartIndex(Number(e.target.value) || 0)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
-              </div>
-              <div>
-                <label className="text-[14px] text-slate-600">Pozycja ({'{Bin}'})</label>
-                <select value={binNamingType} onChange={(e) => setBinNamingType(e.target.value as "numeric" | "alpha")} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5">
-                  <option value="numeric">Liczbowe (1, 2, 3…)</option>
-                  <option value="alpha">Alfabetyczne (A, B, C…)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[14px] text-slate-600">Wzorzec</label>
-                <input type="text" value={namingPattern} onChange={(e) => setNamingPattern(e.target.value)} placeholder="{Row}{Section}-{Bin}-{Level}" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[14px] input-focus mt-0.5" />
-                <p className="text-slate-500 text-[12px] mt-0.5">{'{Row}'} {'{Section}'} {'{Bin}'} {'{Level}'}</p>
-              </div>
-            </>
-          )}
-
-          {(namingStrategy === "rack-index" || namingStrategy === "custom") && (
-            <>
-              <div>
-                <label className="text-[14px] text-slate-600">Wzorzec</label>
-                <input type="text" value={namingPattern} onChange={(e) => setNamingPattern(e.target.value)} placeholder={namingStrategy === "rack-index" ? "{Rack}-{Index:2}" : "PICK-{Rack}-{Index}"} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[14px] input-focus mt-0.5" />
-                <p className="text-slate-500 text-[12px] mt-0.5">{'{Rack}'} {'{Index}'} {'{Index:N}'}</p>
-              </div>
-              <div>
-                <label className="text-[14px] text-slate-600">Rack (np. A1)</label>
-                <input type="text" value={rowId} onChange={(e) => setRowId(e.target.value)} placeholder="A1" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[14px] text-slate-600">Dopełnienie indeksu</label>
-                  <input type="number" min={1} max={5} value={indexPadding} onChange={(e) => setIndexPadding(Math.max(1, Math.min(5, Number(e.target.value) || 2)))} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
-                </div>
-                <div>
-                  <label className="text-[14px] text-slate-600">Start indeksu</label>
-                  <input type="number" min={0} value={startIndex} onChange={(e) => setStartIndex(Number(e.target.value) ?? 1)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] input-focus mt-0.5" />
-                </div>
-              </div>
-            </>
-          )}
-
-          {namingStrategy === "manual" && (
-            <>
-              <p className="text-slate-600 text-[14px]">Kliknij komórki w podglądzie, aby wpisać etykiety. Możesz też wkleić listę (jedna etykieta na linię).</p>
-              <button type="button" onClick={handlePasteList} className="rounded-lg border border-slate-300 bg-slate-100 text-slate-700 px-3 py-2 text-[14px] font-medium hover:bg-slate-200">
-                Wklej listę
-              </button>
-            </>
-          )}
-
-          {namingStrategy !== "manual" && (
-            <label className="flex items-center gap-2 text-slate-600 cursor-pointer text-[14px]">
-              <input type="checkbox" checked={allowOverrides} onChange={(e) => setAllowOverrides(e.target.checked)} className="rounded" />
-              Nadpisz pojedyncze etykiety (kliknij komórkę w podglądzie)
-            </label>
-          )}
-        </div>
-      </section>
-
-      {isEdit && (
-        <label className="flex items-center gap-2 text-slate-600 text-[16px]">
-          <input type="checkbox" checked={updateExistingRacks} onChange={(e) => setUpdateExistingRacks(e.target.checked)} className="rounded" />
-          Zaktualizuj istniejące regały na planie
-        </label>
-      )}
-      <div className="border-t border-slate-200 pt-4 space-y-2">
-        <p className="text-slate-600 text-[16px] font-mono">Wymiary: {width_cm}×{depth_cm}×{height_cm} cm</p>
-        <p className="text-slate-800 font-bold text-[16px] font-mono">Pojemność: {summaryStats.totalBins} lok. = {summaryStats.totalVolumeDm3} dm³</p>
-      </div>
-      <div className="flex gap-3 pt-2">
-        {isEdit && onCancelEdit && (
-          <button type="button" onClick={onCancelEdit} className="flex-1 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 border border-slate-200">
-            Anuluj
-          </button>
         )}
-        <span className="flex-1" />
-      </div>
+      </DesignerAccordion>
+
+      <DesignerAccordion title="NAZEWNICTWO" open={accordionOpen.nazewnictwo} onToggle={() => toggleAccordion("nazewnictwo")}>
+        <div>
+          <label className={`${fieldLabel} normal-case tracking-normal text-slate-600`}>Sposób nazewnictwa</label>
+          <select
+            value={namingStrategy}
+            onChange={(e) => setNamingStrategy(e.target.value as NamingStrategyId)}
+            className={fieldInput}
+          >
+            <option value="pattern">Z wzorca (Rząd/Sekcja/Pozycja/Poziom)</option>
+            <option value="rack-index">Rack + indeks</option>
+            <option value="custom">Własny wzorzec</option>
+            <option value="manual">Ręczne etykiety</option>
+          </select>
+        </div>
+
+        {namingStrategy === "pattern" && (
+          <>
+            <div>
+              <label className={`${fieldLabel} normal-case tracking-normal text-slate-600`}>Orientacja</label>
+              <select
+                value={namingOrientation}
+                onChange={(e) => setNamingOrientation(e.target.value as "column-first" | "row-first")}
+                className={fieldInput}
+              >
+                <option value="column-first">Pierwsza kolumna (A-1 B-1 C-1)</option>
+                <option value="row-first">Pierwszy rząd (A-1 A-2 A-3)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Rząd ({'{Row}'})</label>
+              <input type="text" value={rowId} onChange={(e) => setRowId(e.target.value)} placeholder="np. A" className={`${fieldInput} mt-0.5`} />
+            </div>
+            <div>
+              <label className="flex items-center gap-2 text-slate-600 cursor-pointer text-sm">
+                <input type="checkbox" checked={autoSectionNumbering} onChange={(e) => setAutoSectionNumbering(e.target.checked)} className="rounded" />
+                Automatyczna numeracja sekcji
+              </label>
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Startowa sekcja ({'{Section}'})</label>
+              <input type="number" min={0} value={sectionStartIndex} onChange={(e) => setSectionStartIndex(Number(e.target.value) || 0)} className={`${fieldInput} mt-0.5`} />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Pozycja ({'{Bin}'})</label>
+              <select value={binNamingType} onChange={(e) => setBinNamingType(e.target.value as "numeric" | "alpha")} className={`${fieldInput} mt-0.5`}>
+                <option value="numeric">Liczbowe (1, 2, 3…)</option>
+                <option value="alpha">Alfabetyczne (A, B, C…)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Wzorzec</label>
+              <input type="text" value={namingPattern} onChange={(e) => setNamingPattern(e.target.value)} placeholder="{Row}{Section}-{Bin}-{Level}" className={`${fieldInput} mt-0.5 font-mono text-sm`} />
+              <p className="text-slate-500 text-xs mt-0.5">{'{Row}'} {'{Section}'} {'{Bin}'} {'{Level}'}</p>
+            </div>
+          </>
+        )}
+
+        {(namingStrategy === "rack-index" || namingStrategy === "custom") && (
+          <>
+            <div>
+              <label className="text-sm text-slate-600">Wzorzec</label>
+              <input
+                type="text"
+                value={namingPattern}
+                onChange={(e) => setNamingPattern(e.target.value)}
+                placeholder={namingStrategy === "rack-index" ? "{Rack}-{Index:2}" : "PICK-{Rack}-{Index}"}
+                className={`${fieldInput} mt-0.5 font-mono text-sm`}
+              />
+              <p className="text-slate-500 text-xs mt-0.5">{'{Rack}'} {'{Index}'} {'{Index:N}'}</p>
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Rack (np. A1)</label>
+              <input type="text" value={rowId} onChange={(e) => setRowId(e.target.value)} placeholder="A1" className={`${fieldInput} mt-0.5`} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-sm text-slate-600">Dopełnienie indeksu</label>
+                <input type="number" min={1} max={5} value={indexPadding} onChange={(e) => setIndexPadding(Math.max(1, Math.min(5, Number(e.target.value) || 2)))} className={`${fieldInput} mt-0.5`} />
+              </div>
+              <div>
+                <label className="text-sm text-slate-600">Start indeksu</label>
+                <input type="number" min={0} value={startIndex} onChange={(e) => setStartIndex(Number(e.target.value) ?? 1)} className={`${fieldInput} mt-0.5`} />
+              </div>
+            </div>
+          </>
+        )}
+
+        {namingStrategy === "manual" && (
+          <>
+            <p className="text-slate-600 text-sm">Kliknij komórki w podglądzie, aby wpisać etykiety. Możesz też wkleić listę (jedna etykieta na linię).</p>
+            <button type="button" onClick={handlePasteList} className="rounded-lg border border-slate-200/80 bg-slate-50 text-slate-700 px-3 py-2 text-sm font-medium hover:bg-slate-100 transition-colors duration-150">
+              Wklej listę
+            </button>
+          </>
+        )}
+
+        {namingStrategy !== "manual" && (
+          <label className="flex items-center gap-2 text-slate-600 cursor-pointer text-sm">
+            <input type="checkbox" checked={allowOverrides} onChange={(e) => setAllowOverrides(e.target.checked)} className="rounded" />
+            Nadpisz pojedyncze etykiety (kliknij komórkę w podglądzie)
+          </label>
+        )}
+      </DesignerAccordion>
+
+      <DesignerAccordion title="KOLORY" open={accordionOpen.kolory} onToggle={() => toggleAccordion("kolory")}>
+        <div>
+          <label className={fieldLabel}>Kolor regału (obrys / akcent)</label>
+          <div className="flex flex-wrap gap-2 items-center">
+            {DEFAULT_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                className={`w-8 h-8 rounded-lg border-2 transition-all duration-150 ${color === c ? "border-cyan-500 ring-2 ring-cyan-500/25 scale-105" : "border-slate-200/80"}`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 cursor-pointer rounded-lg border border-slate-200/70 bg-transparent" />
+          </div>
+        </div>
+        <p className="text-slate-500 text-sm leading-snug">Kliknij komórki w podglądzie, aby przełączać typ magazynowy (podstawowa / zapasowa / uszkodzone).</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {TEMPLATE_STORAGE_TYPE_OPTIONS.map((option) => {
+            const style = getStorageTypeStyle(option.value);
+            return (
+              <span
+                key={option.value}
+                className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs shadow-sm"
+                style={{ backgroundColor: style.bg, borderColor: style.border, color: style.text }}
+              >
+                <StorageTypeIcon storageType={option.value} size={12} />
+                {option.label}
+              </span>
+            );
+          })}
+        </div>
+      </DesignerAccordion>
+
+      <DesignerAccordion title="ZAAWANSOWANE" open={accordionOpen.zaawansowane} onToggle={() => toggleAccordion("zaawansowane")}>
+        {isEdit && (
+          <label className="flex items-center gap-2 text-slate-600 text-sm">
+            <input type="checkbox" checked={updateExistingRacks} onChange={(e) => setUpdateExistingRacks(e.target.checked)} className="rounded" />
+            Zaktualizuj istniejące regały na planie
+          </label>
+        )}
+        {!isEdit && <p className="text-slate-500 text-sm">Brak dodatkowych opcji dla nowego szablonu.</p>}
+      </DesignerAccordion>
     </div>
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white rounded-2xl overflow-hidden w-full">
-      <h3 className="text-base font-black uppercase text-slate-700 px-6 py-4 border-b border-slate-100 shrink-0">
+    <div className="flex flex-col h-full min-h-0 bg-white rounded-2xl overflow-hidden w-full border border-slate-200/40 shadow-sm">
+      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-600 px-5 py-3.5 border-b border-slate-200/50 shrink-0 bg-slate-50/40">
         {isEdit ? "Edytuj szablon" : "Twórca szablonu"}
       </h3>
       <div className="flex flex-1 min-h-0 gap-0 overflow-hidden">
-        <div className="template-modal-sidebar w-[40%] min-w-[300px] shrink-0 overflow-y-auto border-r border-slate-100 p-6 bg-slate-50/30">
+        <div className="template-modal-sidebar w-[40%] min-w-[300px] shrink-0 overflow-y-auto border-r border-slate-200/45 px-4 py-4 bg-slate-50/25">
           {formSection}
         </div>
-        <div className="flex-1 min-w-0 flex flex-col p-6 bg-white overflow-hidden min-h-0">
-          <div className="flex items-center gap-2 mb-2 shrink-0">
-            <span className="text-slate-600 text-sm font-semibold">Podgląd (proporcje fizyczne)</span>
+        <div className="flex-1 min-w-0 flex flex-col gap-3 px-4 py-4 bg-white overflow-hidden min-h-0">
+          <div className="shrink-0 rounded-xl border border-slate-200/55 bg-slate-50/40 px-3 py-2.5 text-sm text-slate-700 shadow-sm shadow-slate-900/[0.02]">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span className="font-semibold text-slate-800 tabular-nums">{summaryStats.totalBins} lokalizacji</span>
+              <span className="text-slate-500">·</span>
+              <span className="tabular-nums">~{summaryStats.totalVolumeDm3.toLocaleString()} dm³ (szac.)</span>
+              <span className="text-slate-500">·</span>
+              <span>
+                {width_cm}×{depth_cm}×{height_cm} cm
+              </span>
+              <span className="text-slate-500">·</span>
+              <span>{rackType === "warehouse" ? "Regał magazynowy" : "Regał sklepowy"}</span>
+              <span className="text-slate-500">·</span>
+              <span>
+                {levels} {levels === 1 ? "poziom" : levels >= 2 && levels <= 4 ? "poziomy" : "poziomów"}
+              </span>
+            </div>
           </div>
           <RackPreview
             width_cm={width_cm}
@@ -887,18 +980,22 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             binTypeMap={binTypeMap}
             color={color}
             labelOptions={labelOptionsForPreview}
+            focusedBin={previewFocusedBin}
             onLabelEdit={(namingStrategy === "manual" || allowOverrides) ? handleLabelEdit : undefined}
-            onBinClick={(levelIndex, binIndex) => setBinTypeMap((prev) => {
-              const key = cellKey(levelIndex, binIndex);
-              const current = normalizeStorageType(prev[key]);
-              return { ...prev, [key]: cycleTemplateStorageType(current) };
-            })}
+            onBinClick={(levelIndex, binIndex) => {
+              setPreviewFocusedBin({ level: levelIndex, bin: binIndex });
+              setBinTypeMap((prev) => {
+                const key = cellKey(levelIndex, binIndex);
+                const current = normalizeStorageType(prev[key]);
+                return { ...prev, [key]: cycleTemplateStorageType(current) };
+              });
+            }}
             className="flex-1 min-h-0"
           />
         </div>
       </div>
       {/* Sticky footer: always visible Save button */}
-      <footer className="shrink-0 border-t border-slate-200 bg-slate-50/80 px-6 py-4 flex items-center justify-between gap-4">
+      <footer className="shrink-0 border-t border-slate-200/60 bg-white/95 backdrop-blur-sm px-5 py-3.5 flex items-center justify-between gap-4 shadow-[0_-4px_12px_rgba(15,23,42,0.04)]">
         {saveSuccess ? (
           <span className="text-emerald-600 font-semibold text-sm flex items-center gap-2">
             <span className="inline-block w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
@@ -921,7 +1018,7 @@ export function TemplateCreator({ onSave, initialTemplate, onCancelEdit, onSaveE
             type="button"
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            className="px-6 py-2.5 rounded-xl bg-cyan-600 text-white font-semibold hover:bg-cyan-500 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 min-w-[160px] justify-center"
+            className="px-7 py-3 rounded-xl bg-cyan-600 text-white font-semibold text-[15px] hover:bg-cyan-500 shadow-md shadow-cyan-900/20 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2 min-w-[180px] justify-center transition-all duration-150"
           >
             {saving ? (
               <>

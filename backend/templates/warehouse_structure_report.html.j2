@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>Projekt magazynu</title>
+  <style>
+    @page { size: A4; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color: #111827;
+      font-size: 9pt;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+    }
+    .wrap { max-width: 48rem; margin: 0 auto; padding: 4mm 4mm; }
+    .page-break { page-break-before: always; }
+    .hdr-title { font-size: 15pt; font-weight: 600; margin: 0 0 2mm 0; color: #111827; letter-spacing: -0.02em; }
+    .hdr-wh { font-size: 10pt; font-weight: 600; margin: 0 0 1mm 0; color: #111827; }
+    .hdr-meta { font-size: 8pt; color: #6b7280; margin: 0 0 2mm 0; }
+    .hdr-status { font-size: 8.5pt; font-weight: 600; margin: 0; }
+    .hdr-status.ok { color: #047857; }
+    .hdr-status.warn { color: #b45309; }
+    .hr { border: none; border-top: 1px solid #e5e7eb; margin: 3mm 0 4mm 0; }
+    .kpi-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 3mm; margin-bottom: 4mm; }
+    .kpi-num { font-size: 16pt; font-weight: 600; color: #111827; letter-spacing: -0.02em; }
+    .kpi-lbl { font-size: 7.5pt; color: #6b7280; margin-top: 1mm; }
+    .bar-wrap { height: 14px; border-radius: 9999px; overflow: hidden; background: #f3f4f6; display: flex; border: 1px solid #e5e7eb; margin-bottom: 2mm; }
+    .bar-seg { height: 100%; min-width: 0; }
+    .bar-seg.c1 { background: #0d9488; }
+    .bar-seg.c2 { background: #2dd4bf; }
+    .bar-seg.c3 { background: #f59e0b; }
+    .bar-seg.c4 { background: #6366f1; }
+    .bar-legends { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2mm; font-size: 7pt; color: #6b7280; }
+    .bar-legends span { white-space: nowrap; }
+    .insight-line { margin: 0 0 3mm 0; font-size: 8.5pt; color: #374151; }
+    .mini-row { display: grid; grid-template-columns: 1fr 2fr; gap: 3mm; margin-bottom: 3mm; }
+    .mini-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 2.5mm; }
+    .mini-k { font-size: 7pt; color: #6b7280; margin-top: 1mm; }
+    .mini-v { font-size: 11pt; font-weight: 600; color: #111827; }
+    .struct-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2mm; font-size: 8pt; color: #374151; }
+    .struct-grid b { color: #111827; }
+    .storage-note { margin: 2.5mm 0 0 0; font-size: 8.5pt; color: #374151; }
+    .template-insight { margin: 0 0 3mm 0; font-size: 8.5pt; color: #374151; }
+    .map-page {
+      page-break-before: always;
+      min-height: calc(297mm - 24mm);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 3mm;
+    }
+    .map-title {
+      margin: 0;
+      font-size: 13pt;
+      font-weight: 600;
+      color: #111827;
+      letter-spacing: -0.01em;
+      text-align: center;
+    }
+    .map-stage {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3mm;
+    }
+    .map-svg {
+      width: 100%;
+      height: 88%;
+      display: block;
+    }
+    .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.5mm 4mm; margin-top: 0; font-size: 7pt; color: #6b7280; }
+    .legend-item { display: flex; align-items: center; gap: 1.5mm; }
+    .legend-swatch { width: 2.5mm; height: 2.5mm; border-radius: 1px; border: 0.2mm solid #d1d5db; flex-shrink: 0; }
+    .tpl-block { margin-bottom: 5mm; padding-bottom: 4mm; border-bottom: 1px solid #f3f4f6; }
+    .tpl-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .tpl-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2mm; margin-bottom: 3mm; }
+    .tpl-name { font-size: 10pt; font-weight: 600; color: #111827; margin: 0; }
+    .tpl-dim { font-size: 7pt; color: #9ca3af; margin: 0; }
+    .tpl-kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2mm; margin-bottom: 3mm; }
+    .tpl-kpi-v { font-size: 13pt; font-weight: 600; color: #111827; }
+    .tpl-kpi-l { font-size: 7pt; color: #6b7280; margin-top: 0.5mm; }
+    .tpl-grid-wrap { border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa; padding: 2.5mm; }
+    .tpl-grid-head { display: flex; margin-bottom: 1.5mm; }
+    .tpl-grid-corner { width: 6mm; flex-shrink: 0; }
+    .tpl-grid-cols { display: flex; flex: 1; gap: 1mm; }
+    .tpl-grid-col-h { flex: 1; text-align: center; font-size: 7pt; font-weight: 600; color: #9ca3af; }
+    .tpl-grid-row { display: flex; margin-bottom: 1mm; align-items: stretch; }
+    .tpl-grid-row-lbl { width: 6mm; flex-shrink: 0; text-align: right; padding-right: 1mm; font-size: 7pt; font-weight: 600; color: #9ca3af; }
+    .tpl-grid-cells { display: flex; flex: 1; gap: 1mm; }
+    .tpl-grid-cell { flex: 1; min-height: 6mm; min-width: 0; border: 1px solid #e5e7eb; border-radius: 4px; background: #fff; }
+    .tpl-example { font-family: ui-monospace, Consolas, monospace; font-size: 7pt; color: #1f2937; margin-top: 2.5mm; line-height: 1.4; word-break: break-word; }
+  </style>
+</head>
+<body>
+{% set d = payload['data'] %}
+{% set m = payload['map'] %}
+{% set jq = d['jakoscDanych'] %}
+{% set typ = d['pojemnosc']['wedlugTypuMagazynowania'] %}
+{% set total = d['pojemnosc']['iloscLokalizacji'] %}
+{% set verified = jq['pominieteSkrytkiBezUuid'] == 0 and jq['zduplikowaneUuid'] == 0 and jq['regalyBezSzablonu'] == 0 %}
+{% macro pctn(part) -%}
+{%- if total and total > 0 -%}{{ ((part / total) * 100)|round }}{%- else -%}0{%- endif -%}
+{%- endmacro %}
+{% set p_primary = pctn(typ['PRIMARY']['liczba'])|int %}
+{% set p_reserve = pctn(typ['RESERVE']['liczba'])|int %}
+{% set p_damaged = pctn(typ['DAMAGED']['liczba'])|int %}
+{% set p_shop = pctn(typ['SHOP']['liczba'])|int %}
+{% set ns_dom = namespace(label='podstawowe', pct=p_primary) %}
+{% if p_reserve > ns_dom.pct %}{% set ns_dom.label = 'zapasowe' %}{% set ns_dom.pct = p_reserve %}{% endif %}
+{% if p_damaged > ns_dom.pct %}{% set ns_dom.label = 'uszkodzone' %}{% set ns_dom.pct = p_damaged %}{% endif %}
+{% if p_shop > ns_dom.pct %}{% set ns_dom.label = 'sklepowe' %}{% set ns_dom.pct = p_shop %}{% endif %}
+{% set area = d['budynek']['powierzchnia_m2'] %}
+{% set loc_density = (d['pojemnosc']['iloscLokalizacji'] / area) if area and area > 0 else none %}
+{% set density_desc = 'Magazyn o nieokreślonej gęstości' %}
+{% if loc_density is not none %}
+  {% if loc_density < 0.4 %}{% set density_desc = 'Magazyn niskiej gęstości' %}
+  {% elif loc_density < 0.9 %}{% set density_desc = 'Magazyn średniej gęstości' %}
+  {% else %}{% set density_desc = 'Magazyn wysokiej gęstości' %}
+  {% endif %}
+{% endif %}
+{% set shop_sentence = ('Strefy sklepowe: ' ~ p_shop ~ '%') if typ['SHOP']['liczba'] > 0 else 'Brak stref sklepowych' %}
+{% set total_racks = d['szablony']|sum(attribute='liczbaRegalow') %}
+{% set total_levels = 0 %}
+{% for t in d['szablony'] %}
+  {% set total_levels = total_levels + (t['liczbaRegalow'] * t['liczbaPoziomow']) %}
+{% endfor %}
+{% set templates_count = d['szablony']|length %}
+{% set ns_tpl = namespace(name='', racks=0) %}
+{% for t in d['szablony'] %}
+  {% if t['liczbaRegalow'] > ns_tpl.racks %}
+    {% set ns_tpl.name = t['nazwa'] %}
+    {% set ns_tpl.racks = t['liczbaRegalow'] %}
+  {% endif %}
+{% endfor %}
+{% set top_tpl_pct = ((ns_tpl.racks / total_racks) * 100)|round if total_racks > 0 else 0 %}
+
+  <div class="wrap">
+    <h1 class="hdr-title">Projekt magazynu</h1>
+    <p class="hdr-wh">{{ d['informacjeMagazynu']['nazwa'] }}</p>
+    <p class="hdr-meta">{{ d['informacjeMagazynu']['nazwaLayoutu'] }} · {{ payload['exportDate'] }}</p>
+    <p class="hdr-status {{ 'ok' if verified else 'warn' }}">{% if verified %}● Dane: Zweryfikowane{% else %}● Dane: Do weryfikacji{% endif %}</p>
+    <hr class="hr" />
+
+    <div class="kpi-row">
+      <div>
+        <div class="kpi-num">{{ d['pojemnosc']['iloscLokalizacji']|spaced_int }}</div>
+        <div class="kpi-lbl">Lokalizacje</div>
+      </div>
+      <div>
+        <div class="kpi-num">{{ d['pojemnosc']['lacznaObjetosc_dm3']|spaced_int }}</div>
+        <div class="kpi-lbl">dm³</div>
+      </div>
+      <div>
+        <div class="kpi-num">{% if d['budynek']['powierzchnia_m2'] is not none %}{{ d['budynek']['powierzchnia_m2']|spaced_fixed(2) }}{% else %}—{% endif %}</div>
+        <div class="kpi-lbl">m²</div>
+      </div>
+      <div>
+        <div class="kpi-num">{% if d['budynek']['objetosc_m3'] is not none %}{{ d['budynek']['objetosc_m3']|spaced_fixed(2) }}{% else %}—{% endif %}</div>
+        <div class="kpi-lbl">m³</div>
+      </div>
+    </div>
+
+    <p class="insight-line">
+      {{ density_desc }} • Dominują lokalizacje {{ ns_dom.label }} • {{ shop_sentence }}
+    </p>
+
+    <div class="mini-row">
+      <div class="mini-card">
+        <div class="mini-v">
+          {% if loc_density is not none %}{{ loc_density|spaced_fixed(2) }} lokalizacji / m²{% else %}—{% endif %}
+        </div>
+        <div class="mini-k">Gęstość lokalizacji</div>
+      </div>
+      <div class="mini-card">
+        <div class="struct-grid">
+          <span>Regały: <b>{{ total_racks|spaced_int }}</b></span>
+          <span>Poziomy łącznie: <b>{{ total_levels|spaced_int }}</b></span>
+          <span>Szablony: <b>{{ templates_count|spaced_int }}</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar-wrap">
+      {% if total and total > 0 %}
+      <div class="bar-seg c1" style="width: {{ p_primary }}%;"></div>
+      <div class="bar-seg c2" style="width: {{ p_reserve }}%;"></div>
+      <div class="bar-seg c3" style="width: {{ p_damaged }}%;"></div>
+      <div class="bar-seg c4" style="width: {{ p_shop }}%;"></div>
+      {% endif %}
+    </div>
+    <div class="bar-legends">
+      <span>Podstawowe <strong style="color:#111827">{{ p_primary }}%</strong></span>
+      <span>Zapasowe <strong style="color:#111827">{{ p_reserve }}%</strong></span>
+      <span>Uszkodzone <strong style="color:#111827">{{ p_damaged }}%</strong></span>
+      <span>Sklepowe <strong style="color:#111827">{{ p_shop }}%</strong></span>
+    </div>
+    <p class="storage-note">Dominują lokalizacje {{ ns_dom.label }} ({{ ns_dom.pct }}%).</p>
+  </div>
+
+  <div class="wrap map-page">
+    <h2 class="map-title">Mapa magazynu</h2>
+    <div class="map-stage">
+      <svg class="map-svg" viewBox="0 0 {{ m['gridCols'] }} {{ m['gridRows'] }}" preserveAspectRatio="xMidYMid meet">
+        {% for r in m['racks'] %}
+        <rect x="{{ r['x'] }}" y="{{ r['y'] }}" width="{{ r['width'] }}" height="{{ r['height'] }}"
+              fill="{{ r['fillColor'] }}" stroke="#334155" stroke-width="0.08" />
+        {% endfor %}
+      </svg>
+    </div>
+    {% if m.get('legenda') %}
+    <div class="legend">
+      {% for item in m['legenda'] %}
+      <div class="legend-item">
+        <span class="legend-swatch" style="background-color: {{ item['kolor'] }};"></span>
+        <span style="color:#111827">{{ item['nazwaSzablonu'] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="page-break wrap">
+    {% if ns_tpl.name %}
+    <p class="template-insight">
+      Najczęstszy szablon: <strong style="color:#111827">{{ ns_tpl.name }}</strong> ({{ top_tpl_pct }}% regałów).
+    </p>
+    {% endif %}
+    {% for tpl in d['szablony'] %}
+    {% set ex = tpl['przykladowaAdresacja'] if 'przykladowaAdresacja' in tpl else none %}
+    {% set lv = [tpl['liczbaPoziomow']|int, 1]|max %}
+    {% set ns = namespace(m=0) %}
+    {% if ex and ex['poziomy'] %}
+      {% for row in ex['poziomy'] %}
+        {% if row['etykiety']|length > ns.m %}{% set ns.m = row['etykiety']|length %}{% endif %}
+      {% endfor %}
+    {% endif %}
+    {% set from_avg = (tpl['sredniaLokalizacjiNaRegal'] / lv)|ceil_int %}
+    {% set cols = [[ns.m, from_avg, 1]|max, 12]|min %}
+    {% set letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
+    {% set example_labels = (ex['poziomy']|last)['etykiety'] if ex and ex['poziomy'] and (ex['poziomy']|length > 0) else [] %}
+
+    <div class="tpl-block">
+      <div class="tpl-head">
+        <p class="tpl-name">{{ tpl['nazwa'] }}</p>
+        <p class="tpl-dim">{{ tpl['wymiary_cm']['szerokosc'] }}×{{ tpl['wymiary_cm']['glebokosc'] }}×{{ tpl['wymiary_cm']['wysokosc'] }} cm</p>
+      </div>
+      <div class="tpl-kpis">
+        <div>
+          <div class="tpl-kpi-v">{{ tpl['liczbaRegalow']|spaced_int }}</div>
+          <div class="tpl-kpi-l">Regały</div>
+        </div>
+        <div>
+          <div class="tpl-kpi-v">{{ tpl['liczbaPoziomow']|spaced_int }}</div>
+          <div class="tpl-kpi-l">Poziomy</div>
+        </div>
+        <div>
+          <div class="tpl-kpi-v">{{ "%.1f"|format(tpl['sredniaLokalizacjiNaRegal']) }}</div>
+          <div class="tpl-kpi-l">Lok. / regał</div>
+        </div>
+      </div>
+      <div class="tpl-grid-wrap">
+        <div class="tpl-grid-head">
+          <div class="tpl-grid-corner"></div>
+          <div class="tpl-grid-cols">
+            {% for ci in range(cols) %}
+            <div class="tpl-grid-col-h">{{ letters[ci] }}</div>
+            {% endfor %}
+          </div>
+        </div>
+        {% for ri in range(lv) %}
+        <div class="tpl-grid-row">
+          <div class="tpl-grid-row-lbl">{{ lv - ri }}</div>
+          <div class="tpl-grid-cells">
+            {% for ci in range(cols) %}
+            <div class="tpl-grid-cell"></div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% if example_labels|length > 0 %}
+      <div class="tpl-example">{{ example_labels|join('  ') }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</body>
+</html>

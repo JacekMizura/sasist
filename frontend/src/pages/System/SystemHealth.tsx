@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { getSystemHealth, getDbSize } from "../../api/systemApi";
+import PageLayout from "../../components/layout/PageLayout";
+import { PageHeader } from "../../components/layout/PageHeader";
 
 export default function SystemHealth() {
   const [health, setHealth] = useState<{ status: string; service?: string } | null>(null);
@@ -30,42 +32,44 @@ export default function SystemHealth() {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <PageLayout>
+        <PageHeader title="Zdrowie systemu" />
         <p className="text-slate-500">Ładowanie…</p>
-      </div>
+      </PageLayout>
     );
   }
   if (error) {
     return (
-      <div className="p-6">
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
+      <PageLayout>
+        <PageHeader title="Zdrowie systemu" />
+        <div className="border border-red-200 bg-red-50 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
-          <p className="text-sm mt-1">{error}</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
-      </div>
+      </PageLayout>
     );
   }
 
   return (
-    <div className="p-6">
-      <h2 className="text-lg font-semibold text-slate-800 mb-4">Zdrowie systemu</h2>
-      <div className="grid gap-4 sm:grid-cols-2 max-w-2xl">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <PageLayout>
+      <PageHeader title="Zdrowie systemu" />
+      <div className="grid w-full gap-6 sm:grid-cols-2">
+        <div className="space-y-1">
           <p className="text-xs font-medium uppercase text-slate-400">Backend</p>
-          <p className="mt-1 text-lg font-semibold text-slate-800">
+          <p className="text-lg font-semibold text-slate-800">
             {health?.status === "ok" ? "Działa" : health?.status ?? "—"}
           </p>
           {health?.service && (
-            <p className="text-sm text-slate-500 mt-0.5">{health.service}</p>
+            <p className="text-sm text-slate-500">{health.service}</p>
           )}
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="space-y-1">
           <p className="text-xs font-medium uppercase text-slate-400">Baza danych</p>
-          <p className="mt-1 text-lg font-semibold text-slate-800">
+          <p className="text-lg font-semibold text-slate-800">
             {dbSize != null ? `${dbSize} MB` : "—"}
           </p>
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }

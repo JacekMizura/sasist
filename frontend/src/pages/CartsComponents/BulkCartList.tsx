@@ -19,6 +19,7 @@ type AssignedOrderRef = { order_id: number; total_volume_dm3: number };
 type CartItemType = {
   id: number;
   name: string;
+  code?: string | null;
   status: string;
   used_volume?: number;
   total_volume_dm3?: number;
@@ -36,6 +37,9 @@ type CartItemType = {
   capacity_mode?: string;
   max_orders?: number | null;
   max_volume_dm3?: number;
+  wms_picking_order_count?: number;
+  wms_picking_product_count?: number;
+  wms_picking_quantity?: number;
 };
 
 type GroupType = { id: number; name: string; items: CartItemType[] };
@@ -155,24 +159,24 @@ export default function BulkCartList({ refreshTrigger = 0, onAddNew, onEdit }: B
   }, [groups]);
 
   return (
-    <div className="space-y-8 pb-20 animate-in fade-in duration-300">
-      <div className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-        <div>
-          <h2 className="text-xl font-black text-slate-800 uppercase italic leading-none">{t.bulkCarts}</h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-            {t.singleCompartmentManagement}
-          </p>
+    <div className="animate-in fade-in space-y-4 pb-12 duration-300">
+      <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold text-slate-900">{t.bulkCarts}</h2>
+          <p className="text-sm text-slate-600">{t.singleCompartmentManagement}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
             onClick={() => setShowGroupForm(!showGroupForm)}
-            className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 transition-all"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50"
           >
             {showGroupForm ? t.cancel : `+ ${t.newGroup}`}
           </button>
           <button
+            type="button"
             onClick={onAddNew}
-            className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md shadow-blue-100"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
           >
             + {t.addBulkCart}
           </button>
@@ -182,19 +186,20 @@ export default function BulkCartList({ refreshTrigger = 0, onAddNew, onEdit }: B
       <SummaryDashboard summary={summary} />
 
       {showGroupForm && (
-        <div className="bg-blue-50 p-6 rounded-2xl border-2 border-dashed border-blue-200">
-          <div className="flex gap-4 items-center">
+        <div className="space-y-3 bg-blue-50/80 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               autoFocus
               placeholder={t.groupNamePlaceholder}
-              className="flex-1 bg-white border-none rounded-xl px-6 py-3 text-[12px] font-black uppercase placeholder:text-slate-300 focus:ring-2 focus:ring-blue-600 outline-none"
+              className="min-h-[44px] flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500/40"
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
             />
             <button
+              type="button"
               onClick={handleCreateGroup}
-              className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black text-[11px] uppercase"
+              className="min-h-[44px] shrink-0 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
             >
               {t.create}
             </button>
@@ -203,11 +208,9 @@ export default function BulkCartList({ refreshTrigger = 0, onAddNew, onEdit }: B
       )}
 
       {loading ? (
-        <div className="p-10 text-center font-black text-slate-200 animate-pulse uppercase tracking-widest">
-          {t.loading}
-        </div>
+        <div className="animate-pulse py-8 text-center text-sm text-slate-500">{t.loading}</div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {groups.map((group) => {
             const isCollapsed = Boolean(collapsed[group.id]);
             const count = group.items?.length ?? 0;
@@ -216,8 +219,9 @@ export default function BulkCartList({ refreshTrigger = 0, onAddNew, onEdit }: B
             const rightActions =
               group.id === 999 ? (
                 <button
+                  type="button"
                   onClick={onAddNew}
-                  className="bg-white border border-slate-200 px-4 py-2 rounded-xl hover:border-blue-600 transition-all shadow-sm text-[10px] font-black uppercase tracking-widest text-slate-500"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50"
                 >
                   + {t.addBulkCart}
                 </button>
@@ -226,23 +230,25 @@ export default function BulkCartList({ refreshTrigger = 0, onAddNew, onEdit }: B
                   {editingGroupId === group.id ? (
                     <>
                       <input
-                        className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest outline-none focus:border-blue-600"
+                        className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                         value={editingGroupName}
                         onChange={(e) => setEditingGroupName(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSaveGroupEdit()}
                       />
                       <button
+                        type="button"
                         onClick={handleSaveGroupEdit}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest"
+                        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
                       >
                         {t.save}
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
                           setEditingGroupId(null);
                           setEditingGroupName("");
                         }}
-                        className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                       >
                         {t.cancel}
                       </button>
@@ -250,20 +256,23 @@ export default function BulkCartList({ refreshTrigger = 0, onAddNew, onEdit }: B
                   ) : (
                     <>
                       <button
+                        type="button"
                         onClick={() => handleStartEditGroup(group)}
-                        className="bg-white border border-slate-200 px-4 py-2 rounded-xl hover:border-blue-600 transition-all shadow-sm text-[10px] font-black uppercase tracking-widest text-slate-500"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50"
                       >
                         {t.editGroup}
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleDeleteGroup(group.id)}
-                        className="bg-white border border-slate-200 px-4 py-2 rounded-xl hover:border-red-600 transition-all shadow-sm text-[10px] font-black uppercase tracking-widest text-slate-500"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50/40"
                       >
                         {t.deleteGroup}
                       </button>
                       <button
+                        type="button"
                         onClick={onAddNew}
-                        className="bg-white border border-slate-200 px-4 py-2 rounded-xl hover:border-blue-600 transition-all shadow-sm text-[10px] font-black uppercase tracking-widest text-slate-500"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50"
                       >
                         + {t.addCart}
                       </button>
@@ -284,17 +293,16 @@ export default function BulkCartList({ refreshTrigger = 0, onAddNew, onEdit }: B
                 />
 
                 {!isCollapsed && (
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="flex flex-col divide-y divide-slate-200">
                     {count === 0 ? (
-                      <div className="bg-white rounded-lg border border-slate-200 p-10 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                        {t.noCartsInGroup}
-                      </div>
+                      <div className="py-8 text-center text-sm text-slate-500">{t.noCartsInGroup}</div>
                     ) : (
                       group.items.map((c) => (
                         <CartCard
                           key={c.id}
                           id={c.id}
                           name={c.name}
+                          code={c.code}
                           status={c.status}
                           used_volume={c.used_volume}
                           total_volume_dm3={c.total_volume_dm3}
@@ -307,6 +315,9 @@ export default function BulkCartList({ refreshTrigger = 0, onAddNew, onEdit }: B
                           capacity_mode={c.capacity_mode}
                           max_orders={c.max_orders}
                           max_volume_dm3={c.max_volume_dm3}
+                          wms_picking_order_count={c.wms_picking_order_count}
+                          wms_picking_product_count={c.wms_picking_product_count}
+                          wms_picking_quantity={c.wms_picking_quantity}
                           image_url={c.image_url}
                           updated_at={c.updated_at}
                           length={c.length}

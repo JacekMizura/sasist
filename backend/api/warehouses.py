@@ -21,7 +21,8 @@ from ..models.inventory import Inventory
 from ..models.product import Product
 from ..models.warehouse import Warehouse
 from ..models.location import Location
-from ..schemas.warehouse import WarehouseCreate, WarehouseRead
+from ..schemas.warehouse import WarehouseCreate, WarehouseRead, WarehouseUpdate
+from ..services.location_badge import batch_location_storage_types, wms_location_badge_kind
 from ..services.warehouse_service import WarehouseService
 
 router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
@@ -41,6 +42,18 @@ def get_all_warehouses(db: Session = Depends(get_db)):
 def create_warehouse(data: WarehouseCreateBody, db: Session = Depends(get_db)):
     service = WarehouseService(db)
     return service.create_warehouse_standalone(data.name, owner_tenant_id=data.owner_tenant_id)
+
+
+@router.put("/{warehouse_id}", response_model=WarehouseRead)
+def update_warehouse(warehouse_id: int, data: WarehouseUpdate, db: Session = Depends(get_db)):
+    service = WarehouseService(db)
+    try:
+        return service.update_warehouse(warehouse_id, data.name)
+    except ValueError as e:
+        msg = str(e)
+        if "nie istnieje" in msg:
+            raise HTTPException(status_code=404, detail=msg) from e
+        raise HTTPException(status_code=400, detail=msg) from e
 
 
 def _warehouse_inventory_value(db: Session, warehouse_id: int) -> float:
@@ -86,16 +99,34 @@ def get_warehouse_inventory_value(warehouse_id: int, db: Session = Depends(get_d
 
 @router.get("/{warehouse_id}/locations")
 def get_warehouse_locations(warehouse_id: int, db: Session = Depends(get_db)):
-    """List locations for the warehouse (id, name, x, y). For graph map visualization."""
+    """List locations: WMS `type` (badge kind), `storage_type` (layout bin chrome), optional zone / capacity_type."""
     wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
     if not wh:
         raise HTTPException(status_code=404, detail="Warehouse not found")
     rows = (
-        db.query(Location.id, Location.name, Location.x, Location.y)
+        db.query(Location)
         .filter(Location.warehouse_id == warehouse_id)
+        .order_by(Location.id)
         .all()
     )
-    return [
-        {"id": r.id, "name": r.name or "", "x": r.x, "y": r.y}
-        for r in rows
-    ]
+    st_by_lid = batch_location_storage_types(db, warehouse_id, rows)
+    out = []
+    for loc in rows:
+        code = (loc.name or "").strip() or f"#{loc.id}"
+        lid = int(loc.id)
+        zn = (getattr(loc, "rack_name", None) or "").strip() or None
+        ct = (getattr(loc, "type", None) or "").strip().lower() or None
+        out.append(
+            {
+                "id": loc.id,
+                "name": code,
+                "code": code,
+                "type": wms_location_badge_kind(loc),
+                "storage_type": st_by_lid.get(lid, "unknown"),
+                "zone": zn,
+                "capacity_type": ct,
+                "x": loc.x,
+                "y": loc.y,
+            }
+        )
+    return out

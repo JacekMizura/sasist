@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import api from "../api/axios";
 import { useTranslation } from "../locales";
+import { orderListSystemStatusLabel } from "../utils/orderSystemStatusLabels";
 
 type OrderItemDetail = {
   id: number;
@@ -178,9 +179,9 @@ export default function Orders() {
             className="border rounded px-2 py-1.5 text-sm"
           >
             <option value="">Wszystkie</option>
-            <option value="NEW">NEW</option>
-            <option value="IN_PROGRESS">IN_PROGRESS</option>
-            <option value="DONE">DONE</option>
+            <option value="NEW">Nowe</option>
+            <option value="IN_PROGRESS">W realizacji</option>
+            <option value="DONE">Zakończone</option>
           </select>
         </div>
 
@@ -212,7 +213,7 @@ export default function Orders() {
                     <td className="p-4">{o.id}</td>
                     <td className="p-4">
                       <span className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded">
-                        {o.status ?? "NEW"}
+                        {orderListSystemStatusLabel(o.status ?? "NEW")}
                       </span>
                     </td>
                     <td className="p-4">

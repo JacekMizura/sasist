@@ -19,6 +19,7 @@ import PalletIcon from "../../icons/PalletIcon";
 import CartonIcon from "../../icons/CartonIcon";
 import AisleIcon from "../../icons/AisleIcon";
 import BinLocationIcon from "../../icons/BinLocationIcon";
+import BasketIcon from "../../icons/BasketIcon";
 
 type IconComponent = React.ComponentType<IconProps>;
 
@@ -43,6 +44,7 @@ const iconMap: Record<IconName, IconComponent> = {
   carton: CartonIcon,
   aisle: AisleIcon,
   binLocation: BinLocationIcon,
+  basket: BasketIcon,
 };
 
 export type IconName =
@@ -65,7 +67,8 @@ export type IconName =
   | "pallet"
   | "carton"
   | "aisle"
-  | "binLocation";
+  | "binLocation"
+  | "basket";
 
 export type IconComponentProps = {
   name: IconName;

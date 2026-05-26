@@ -86,7 +86,7 @@ def main() -> int:
     parser.add_argument(
         "--db",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "test.db",
+        default=Path(__file__).resolve().parents[1] / "backend" / "test.db",
         help="Path to SQLite database",
     )
     parser.add_argument(

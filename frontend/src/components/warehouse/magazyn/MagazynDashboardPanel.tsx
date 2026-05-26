@@ -1,4 +1,5 @@
 import type { CustomRackTemplate, LayoutState, RackType } from "../../../types/warehouse";
+import { formatWarehouseLocationTypeLabel } from "../../../utils/warehouseLocationTypeLabels";
 import { buildTemplateUsageData } from "../templateUsage";
 
 export interface MagazynDashboardPanelProps {
@@ -13,12 +14,15 @@ export interface MagazynDashboardPanelProps {
   utilizationPct: number;
   primaryUsedDm3: number;
   reserveUsedDm3: number;
+  damagedUsedDm3: number;
   locationStats: {
     primary: number;
     reserve: number;
     damaged: number;
   };
   formatVolume: (n: number) => string;
+  onOpenReports?: () => void;
+  onOpenDamageReports?: () => void;
 }
 
 export function MagazynDashboardPanel({
@@ -33,8 +37,11 @@ export function MagazynDashboardPanel({
   utilizationPct,
   primaryUsedDm3,
   reserveUsedDm3,
+  damagedUsedDm3,
   locationStats,
   formatVolume,
+  onOpenReports,
+  onOpenDamageReports,
 }: MagazynDashboardPanelProps) {
   const { usedTemplates, usageCountById } = buildTemplateUsageData(layout, customTemplates, true, rackTypeFilter);
 
@@ -44,6 +51,34 @@ export function MagazynDashboardPanel({
       onClick={() => onClearTemplateSelection?.()}
     >
       <h2 className="text-xs font-black uppercase text-slate-500 mb-3">Pulpit magazynu</h2>
+      {onOpenReports && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenReports();
+          }}
+          className="mb-3 flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+        >
+          <svg className="h-4 w-4 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19h16M7 15v-5m5 5V7m5 8V4" />
+          </svg>
+          Raporty
+        </button>
+      )}
+      {onOpenDamageReports && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenDamageReports();
+          }}
+          className="mb-3 flex w-full items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100"
+        >
+          <span aria-hidden>⚠️</span>
+          Szkody
+        </button>
+      )}
       <div className="space-y-3">
         <div className="border-t border-slate-100 pt-2">
           <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Całkowita zajętość</div>
@@ -64,12 +99,16 @@ export function MagazynDashboardPanel({
           </div>
           <div className="mt-2 space-y-1">
             <div className="flex justify-between items-baseline text-xs">
-              <span className="text-slate-500">Podstawowa</span>
+              <span className="text-slate-500">{formatWarehouseLocationTypeLabel("PRIMARY")}</span>
               <span className="font-mono text-slate-700">{formatVolume(primaryUsedDm3)} dm³</span>
             </div>
             <div className="flex justify-between items-baseline text-xs">
-              <span className="text-slate-500">Zapasowa</span>
+              <span className="text-slate-500">{formatWarehouseLocationTypeLabel("RESERVE")}</span>
               <span className="font-mono text-slate-700">{formatVolume(reserveUsedDm3)} dm³</span>
+            </div>
+            <div className="flex justify-between items-baseline text-xs">
+              <span className="text-slate-500">Uszkodzone</span>
+              <span className="font-mono text-slate-700">{formatVolume(damagedUsedDm3)} dm³</span>
             </div>
           </div>
         </div>

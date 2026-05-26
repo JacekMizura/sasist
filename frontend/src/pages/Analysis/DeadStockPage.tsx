@@ -76,10 +76,10 @@ export default function DeadStockPage() {
     return copy;
   }, [items, sortBy]);
 
-  if (loading) return <div className="p-6"><p className="text-slate-500">Ładowanie…</p></div>;
+  if (loading) return <div className="min-w-0"><p className="text-slate-500">Ładowanie…</p></div>;
   if (error) {
     return (
-      <div className="p-6">
+      <div className="min-w-0">
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
           <p className="font-medium">Błąd</p>
           <p className="text-sm mt-1">{error}</p>
@@ -89,7 +89,7 @@ export default function DeadStockPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <h2 className="text-lg font-semibold text-slate-800 mb-2">Zalegający towar (Inventory Aging)</h2>
       <p className="text-slate-600 mb-4">
         Analiza starzenia zapasów: ostatnia sprzedaż, wartość magazynowa, rotacja i kategorie (szybka / wolna / zalegająca).

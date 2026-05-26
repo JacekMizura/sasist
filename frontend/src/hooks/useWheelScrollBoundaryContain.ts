@@ -17,10 +17,17 @@ export function useWheelScrollBoundaryContain(
     const el = ref.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      const ch = el.clientHeight;
+      const sh = el.scrollHeight;
+      // No overflow (or zero-sized flex child): do not intercept — otherwise every wheel gets
+      // preventDefault (atTop && atBottom) and nested sidebars / lists stop scrolling (e.g. row draw mode).
+      if (ch < 1 || sh <= ch + 1) return;
       const isUp = e.deltaY < 0;
       const isDown = e.deltaY > 0;
-      const atTop = el.scrollTop === 0;
-      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight;
+      const st = el.scrollTop;
+      const atTop = st <= 0;
+      const maxScroll = Math.max(0, sh - ch);
+      const atBottom = st >= maxScroll - 1;
       if ((isUp && atTop) || (isDown && atBottom)) {
         e.preventDefault();
       }

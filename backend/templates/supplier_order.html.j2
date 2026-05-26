@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>Zamówienie #{{ order_id }} — dostawca</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color: #111827;
+      font-size: 9pt;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+    }
+    .doc { max-width: 100%; }
+    .title-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 4mm;
+      margin-bottom: 5mm;
+    }
+    .doc-title {
+      font-size: 16pt;
+      font-weight: 700;
+      color: #1e1b4b;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .meta {
+      text-align: right;
+      font-size: 8.5pt;
+      color: #4b5563;
+      line-height: 1.45;
+    }
+    .meta strong { color: #111827; }
+    .status-pill {
+      display: inline-block;
+      margin-top: 1mm;
+      padding: 1mm 2.5mm;
+      border-radius: 999px;
+      font-size: 8pt;
+      font-weight: 600;
+      background: #ede9fe;
+      color: #4c1d95;
+    }
+    h2 {
+      font-size: 9.5pt;
+      font-weight: 700;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin: 5mm 0 2mm 0;
+      padding-bottom: 1mm;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5mm;
+      margin-bottom: 2mm;
+    }
+    .card {
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 3mm;
+      background: #fafafa;
+    }
+    .card .label {
+      font-size: 7pt;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 0.5mm;
+    }
+    .card .value {
+      font-size: 9pt;
+      color: #111827;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+    table.items {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+      margin-top: 2mm;
+    }
+    table.items th {
+      text-align: left;
+      font-weight: 600;
+      color: #374151;
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      padding: 2mm 1.5mm;
+    }
+    table.items th.num, table.items td.num { text-align: right; }
+    table.items td {
+      border: 1px solid #e5e7eb;
+      padding: 2mm 1.5mm;
+      vertical-align: top;
+    }
+    table.items tbody tr:nth-child(even) { background: #fafafa; }
+    .summary {
+      margin-top: 4mm;
+      display: flex;
+      justify-content: flex-end;
+    }
+    .summary table {
+      border-collapse: collapse;
+      font-size: 9pt;
+      min-width: 55mm;
+    }
+    .summary td {
+      padding: 1.5mm 2mm;
+      border: 1px solid #e5e7eb;
+    }
+    .summary td.k { background: #f9fafb; font-weight: 600; color: #374151; }
+    .summary td.v { text-align: right; font-weight: 600; tabular-nums; }
+    .notes {
+      margin-top: 4mm;
+      padding: 3mm;
+      border: 1px dashed #d1d5db;
+      border-radius: 6px;
+      font-size: 8.5pt;
+      color: #374151;
+      white-space: pre-wrap;
+      line-height: 1.45;
+    }
+    .muted { color: #6b7280; font-size: 8pt; margin-top: 6mm; }
+  </style>
+</head>
+<body>
+  <div class="doc">
+    <div class="title-row">
+      <div>
+        <h1 class="doc-title">Zamówienie do dostawcy</h1>
+        <p class="muted" style="margin-top:1mm;">Dokument wygenerowany elektronicznie.</p>
+      </div>
+      <div class="meta">
+        <div><strong>Numer:</strong> #{{ order_id }}</div>
+        <div><strong>Data utworzenia:</strong> {{ created_fmt }}</div>
+        <div><span class="status-pill">{{ status_label }}</span></div>
+      </div>
+    </div>
+
+    <h2>Nabywca</h2>
+    <div class="card" style="max-width: 100%; margin-bottom: 4mm;">
+      <div class="label">Firma / nazwa</div>
+      <div class="value">{{ buyer_company }}</div>
+      <div style="margin-top:2mm;" class="label">Adres</div>
+      <div class="value">{{ buyer_address }}</div>
+      <div style="margin-top:2mm;" class="label">NIP / identyfikator podatkowy</div>
+      <div class="value">{{ buyer_tax }}</div>
+      <div style="margin-top:2mm;" class="label">Kontakt</div>
+      <div class="value">{{ buyer_contact }}</div>
+    </div>
+
+    <h2>Dostawca</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="label">Nazwa</div>
+        <div class="value">{{ supplier_name }}</div>
+        <div style="margin-top:2mm;" class="label">Pełna nazwa firmy</div>
+        <div class="value">{{ supplier_company }}</div>
+      </div>
+      <div class="card">
+        <div class="label">Adres</div>
+        <div class="value">{{ supplier_address }}</div>
+        <div style="margin-top:2mm;" class="label">Kraj</div>
+        <div class="value">{{ supplier_country }}</div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="label">E-mail</div>
+        <div class="value">{{ supplier_email }}</div>
+        <div style="margin-top:2mm;" class="label">Telefon</div>
+        <div class="value">{{ supplier_phone }}</div>
+      </div>
+      <div class="card">
+        <div class="label">NIP / identyfikator podatkowy</div>
+        <div class="value">{{ supplier_tax }}</div>
+      </div>
+    </div>
+
+    <h2>Pozycje</h2>
+    <table class="items">
+      <thead>
+        <tr>
+          <th style="width:6mm;">Lp</th>
+          <th>Nazwa produktu</th>
+          <th style="width:22mm;">EAN</th>
+          <th style="width:20mm;">SKU</th>
+          <th class="num" style="width:14mm;">Ilość</th>
+          <th class="num" style="width:18mm;">Cena netto</th>
+          <th class="num" style="width:12mm;">VAT %</th>
+          <th class="num" style="width:20mm;">Wartość netto</th>
+          <th class="num" style="width:20mm;">Wartość brutto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if items %}
+        {% for row in items %}
+        <tr>
+          <td class="num">{{ row.lp }}</td>
+          <td>{{ row.name }}</td>
+          <td>{{ row.ean }}</td>
+          <td>{{ row.sku }}</td>
+          <td class="num">{{ row.qty_fmt }}</td>
+          <td class="num">{{ row.price_net_fmt }}</td>
+          <td class="num">{{ row.vat_pct }}</td>
+          <td class="num">{{ row.value_net_fmt }}</td>
+          <td class="num">{{ row.value_gross_fmt }}</td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr>
+          <td colspan="9" style="text-align:center;padding:4mm;color:#6b7280;">Brak pozycji na zamówieniu.</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    <div class="summary">
+      <table>
+        <tr><td class="k">Razem netto</td><td class="v">{{ total_net_fmt }} PLN</td></tr>
+        <tr><td class="k">Razem VAT</td><td class="v">{{ total_vat_fmt }} PLN</td></tr>
+        <tr><td class="k">Razem brutto</td><td class="v">{{ total_gross_fmt }} PLN</td></tr>
+      </table>
+    </div>
+
+    <h2>Dostawa</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="label">Oczekiwana data dostawy</div>
+        <div class="value">{{ expected_date_fmt }}</div>
+      </div>
+      <div class="card">
+        <div class="label">Termin realizacji (dni robocze — domyślny u dostawcy)</div>
+        <div class="value">{{ lead_time_days }}</div>
+      </div>
+    </div>
+
+    <h2>Notatki</h2>
+    <div class="notes">{{ notes }}</div>
+  </div>
+</body>
+</html>

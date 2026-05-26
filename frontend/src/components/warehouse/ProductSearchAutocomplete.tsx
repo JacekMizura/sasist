@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import api from "../../api/axios";
+import { useAutocompleteDropdown } from "../../hooks/useAutocompleteDropdown";
+import { AutocompleteDropdownPanel } from "../wms/AutocompleteDropdownPanel";
 
 const TENANT_ID = 1;
 
@@ -51,10 +53,14 @@ export function ProductSearchAutocomplete({
   const [query, setQuery] = useState(value);
   const [options, setOptions] = useState<CatalogProductOption[]>([]);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+
+  const dropdown = useAutocompleteDropdown({
+    query,
+    enabled: !disabled,
+    canMount: options.length > 0,
+  });
 
   useEffect(() => {
     setQuery(value);
@@ -63,7 +69,7 @@ export function ProductSearchAutocomplete({
   const fetchProducts = useCallback((search: string) => {
     if (!search.trim()) {
       setOptions([]);
-      setOpen(false);
+      dropdown.closeList();
       return;
     }
     setLoading(true);
@@ -78,15 +84,16 @@ export function ProductSearchAutocomplete({
         const data = res.data;
         const list = data && typeof data === "object" && "items" in data ? (data as { items: CatalogProductOption[] }).items : Array.isArray(data) ? data : [];
         setOptions(list);
-        setOpen(list.length > 0);
+        if (list.length > 0) dropdown.openList();
+        else dropdown.closeList();
         setHighlightIndex(-1);
       })
       .catch(() => {
         setOptions([]);
-        setOpen(false);
+        dropdown.closeList();
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [dropdown.closeList, dropdown.openList]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -99,20 +106,11 @@ export function ProductSearchAutocomplete({
     };
   }, [query, fetchProducts]);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     setQuery(v);
     onChange(v);
+    dropdown.notifyInputChanged(v);
   };
 
   const handleSelect = (p: CatalogProductOption) => {
@@ -124,13 +122,13 @@ export function ProductSearchAutocomplete({
     setQuery(name);
     onChange(name);
     onSelectProduct({ name, sku, ean, volume_dm3: vol, image_url: image_url || undefined });
-    setOpen(false);
+    dropdown.closeList();
     setOptions([]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!open || options.length === 0) {
-      if (e.key === "Escape") setOpen(false);
+    if (!dropdown.dropdownVisible || options.length === 0) {
+      if (e.key === "Escape") dropdown.handleInputEscape(e);
       return;
     }
     if (e.key === "ArrowDown") {
@@ -143,18 +141,18 @@ export function ProductSearchAutocomplete({
       e.preventDefault();
       handleSelect(options[highlightIndex]);
     } else if (e.key === "Escape") {
-      setOpen(false);
+      dropdown.handleInputEscape(e);
       setHighlightIndex(-1);
     }
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={dropdown.containerRef} className="relative">
       <input
         type="text"
         value={query}
         onChange={handleInputChange}
-        onFocus={() => query.trim() && options.length > 0 && setOpen(true)}
+        onFocus={dropdown.onInputFocus}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         required={required}
@@ -167,11 +165,8 @@ export function ProductSearchAutocomplete({
           Szukam...
         </div>
       )}
-      {open && options.length > 0 && (
-        <ul
-          className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg py-1"
-          role="listbox"
-        >
+      <AutocompleteDropdownPanel mounted={dropdown.canShowDropdown} visible={dropdown.dropdownVisible}>
+        <ul className="w-full max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg" role="listbox">
           {options.map((p, i) => (
             <li
               key={p.id}
@@ -182,7 +177,7 @@ export function ProductSearchAutocomplete({
               }`}
               onMouseEnter={() => setHighlightIndex(i)}
               onMouseDown={(e) => {
-                e.preventDefault();
+                dropdown.preventOptionMouseDown(e);
                 handleSelect(p);
               }}
             >
@@ -193,7 +188,7 @@ export function ProductSearchAutocomplete({
             </li>
           ))}
         </ul>
-      )}
+      </AutocompleteDropdownPanel>
     </div>
   );
 }

@@ -137,7 +137,7 @@ export default function SalesForecast() {
     productId != null ? products.find((p) => p.product_id === productId)?.product_name ?? `Produkt ${productId}` : null;
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <h1 className="text-xl font-semibold text-slate-800">Prognoza sprzedaży</h1>
       <p className="mt-2 text-slate-600 mb-6">
         Prognozowanie popytu: ostatnie 90 dni, sezonowość dni tygodnia, średnia 14-dniowa, prognoza 14 dni.

@@ -81,7 +81,11 @@ def get_order_pick_locations(
     For one order, return list of pick nodes: [{"node_id", "x", "y", "location_id", "product_id", "quantity"}, ...].
     Uses inventory and pick_sequence. Deduplicates by node.
     """
-    items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    items = (
+        db.query(OrderItem)
+        .filter(OrderItem.order_id == order_id, OrderItem.is_bundle_parent.is_(False))
+        .all()
+    )
     if not items:
         return []
     product_ids = list({i.product_id for i in items})

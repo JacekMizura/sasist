@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { log } from "../utils/logger";
 import api from "../api/axios";
 import { useWarehouse } from "../context/WarehouseContext";
+import { orderListSystemStatusLabel } from "../utils/orderSystemStatusLabels";
 
 type OrderItem = {
   id: number;
@@ -31,7 +33,7 @@ export default function Orders() {
     api
       .get(`/orders?tenant_id=1&warehouse_id=${warehouse.id}`)
       .then((res) => setOrders(res.data))
-      .catch(() => console.log("Błąd pobierania zamówień"))
+      .catch(() => log("Błąd pobierania zamówień"))
       .finally(() => setLoading(false));
   }, [warehouse]);
 
@@ -105,7 +107,7 @@ export default function Orders() {
                         o.status
                       )}`}
                     >
-                      {o.status || "—"}
+                      {orderListSystemStatusLabel(o.status)}
                     </span>
                   </td>
 

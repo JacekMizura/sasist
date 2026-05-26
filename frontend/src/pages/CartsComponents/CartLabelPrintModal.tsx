@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
+import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 
 export type CartForLabel = { id: number; name: string };
 
@@ -65,9 +66,8 @@ export function CartLabelPrintModal({ open, cart, onClose }: Props) {
         { cart_id: cart.id, template_id: templateId, quantity },
         { params: { tenant_id: TENANT_ID }, responseType: "blob" }
       );
-      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      openPdfBlobInPrintViewer(blob);
       onClose();
     } catch (err) {
       console.error(err);

@@ -4,25 +4,35 @@ import type { TabItem } from "../TopTabsNavigation";
 import PageLayout from "./PageLayout";
 
 type WmsModuleLayoutProps = {
-  title: string;
   tabs: TabItem[];
+  /** Przekazywane do TopTabsNavigation (np. ``?tenant_id=1``). */
+  tabLinkSearch?: string;
   /** When true, tab is active only when route exactly matches. Default true for nested module routes. */
   exact?: boolean;
+  /** Treść ustawia poziomy gutter przez `PageContainer` (jak lista zamówień). */
+  flushHorizontal?: boolean;
 };
 
 /**
- * Reusable WMS module layout: PageLayout (title + tabs) → ModuleContent (Outlet).
- * Use as wrapper for any module that has top tabs (Analytics, etc.).
+ * Tab-first module shell: renders the tab row **above** the route outlet.
+ * Use only when child routes do not render their own breadcrumbs/title above the tabs;
+ * for settings-style pages prefer {@link SettingsModuleStack} in a layout route so order is:
+ * breadcrumbs → title → tabs → content.
  */
-export default function WmsModuleLayout({ title, tabs, exact = true }: WmsModuleLayoutProps) {
+export default function WmsModuleLayout({
+  tabs,
+  tabLinkSearch,
+  exact = true,
+  flushHorizontal = false,
+}: WmsModuleLayoutProps) {
+  const tabNav = (
+    <TopTabsNavigation tabs={tabs} tabLinkSearch={tabLinkSearch} exact={exact} aria-label="Podsekcje modułu" />
+  );
+
   return (
-    <PageLayout
-      title={title}
-      actions={<TopTabsNavigation tabs={tabs} exact={exact} className="mb-0" />}
-    >
-      <div className="min-h-[600px] w-full relative">
-        <Outlet />
-      </div>
+    <PageLayout fullBleed={flushHorizontal} cardClassName="relative min-h-[600px] w-full">
+      {tabNav}
+      <Outlet />
     </PageLayout>
   );
 }

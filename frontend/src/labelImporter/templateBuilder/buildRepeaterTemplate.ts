@@ -1,4 +1,4 @@
-import type { LabelTemplate, LabelElement, RepeaterElement } from "../../types/labelSystem";
+import type { LabelTemplate, LabelElement, RepeaterElement, GroupElement } from "../../types/labelSystem";
 import { pxToMm } from "../utils/pxToMm";
 import type { Segment } from "../imageAnalysis/computeSegments";
 import { createSlice } from "./createBackgroundSlice";
@@ -58,6 +58,16 @@ export function buildRepeaterTemplate(
     showValue: false,
   } as LabelElement;
 
+  const cellGroup: GroupElement = {
+    id: uuid(),
+    type: "group",
+    x: 0,
+    y: 0,
+    width: itemWidthMm,
+    height: heightMm,
+    elements: [backgroundImage, locationCodeText, locationBarcode],
+  };
+
   const repeater: RepeaterElement = {
     id: uuid(),
     type: "repeater",
@@ -70,7 +80,7 @@ export function buildRepeaterTemplate(
     itemWidth: itemWidthMm,
     itemHeight: heightMm,
     template: {
-      elements: [backgroundImage, locationCodeText, locationBarcode],
+      elements: [cellGroup],
     },
   };
 

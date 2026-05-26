@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,12 +12,20 @@
   }
   body {
     @apply antialiased;
-    line-height: 1.6;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.5;
     letter-spacing: 0.01em;
   }
 }
 
 @layer components {
+  html.wms-execution-mode {
+    overscroll-behavior: none;
+  }
+  html.wms-execution-mode body {
+    touch-action: manipulation;
+  }
+
   .template-modal-sidebar {
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 transparent;
@@ -33,6 +43,26 @@
   .template-modal-sidebar::-webkit-scrollbar-thumb:hover {
     background-color: #94a3b8;
   }
+
+  /** Projektant magazynu — lewy panel katalogu: cienki, dyskretny pasek przewijania */
+  .designer-rail-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184 / 0.45) transparent;
+  }
+  .designer-rail-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .designer-rail-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .designer-rail-scroll::-webkit-scrollbar-thumb {
+    background-color: rgb(148 163 184 / 0.45);
+    border-radius: 3px;
+  }
+  .designer-rail-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(100 116 139 / 0.55);
+  }
+
   .input-focus {
     @apply border-[#E2E8F0] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none;
   }
@@ -43,4 +73,53 @@
   .btn-primary {
     @apply rounded-lg transition-colors duration-200;
   }
+
+  /* WMS / POS-style numeric fields: hide browser number spinners */
+  .no-number-spinner::-webkit-outer-spin-button,
+  .no-number-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .no-number-spinner[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  /* WMS — post-packing automation (right panel step transitions) */
+  @keyframes wms-postpack-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes wms-postpack-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  .wms-postpack-step-enter {
+    animation: wms-postpack-in 420ms ease-out forwards;
+  }
+  .wms-postpack-step-leave {
+    animation: wms-postpack-out 400ms ease-in forwards;
+  }
+}
+
+/* Global modal focus mode (destructive/system dialogs in portal). */
+body[data-modal-open="true"] #root {
+  filter: saturate(0.35) brightness(0.78);
+  transform: scale(0.995);
+  transform-origin: center top;
+  transition: filter 160ms ease, transform 160ms ease;
+  pointer-events: none;
+  user-select: none;
 }

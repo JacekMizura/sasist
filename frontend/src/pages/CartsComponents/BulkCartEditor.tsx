@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { log } from "../../utils/logger";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
+import CartImageUrlField from "./ui/CartImageUrlField";
 
 /** Edytor wózka standardowego (bulk): nazwa, wymiary, grupa, zdjęcie. */
 
@@ -38,6 +40,8 @@ export default function BulkCartEditor({
   const [capacityMode, setCapacityMode] = useState<CapacityMode>("volume");
   const [maxOrders, setMaxOrders] = useState<number | "">("");
   const [maxVolumeDm3, setMaxVolumeDm3] = useState<number | "">("");
+  const [cartCode, setCartCode] = useState("");
+  const [cartScanCode, setCartScanCode] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +71,9 @@ export default function BulkCartEditor({
             width: Number(data.width) || 0,
             height: Number(data.height) || 0,
           });
+          setCartCode(String(data.code ?? data.barcode ?? "").trim());
+          const sc = data.scan_code != null && String(data.scan_code).trim() !== "" ? String(data.scan_code).trim() : null;
+          setCartScanCode(sc);
           setImageUrl(data.image_url ?? "");
 
           const rawGroupId = data.group_id;
@@ -78,6 +85,8 @@ export default function BulkCartEditor({
           setCapacityMode((data.capacity_mode ?? "volume") as CapacityMode);
           setMaxOrders(data.max_orders != null ? data.max_orders : "");
           setMaxVolumeDm3(data.max_volume_dm3 != null ? data.max_volume_dm3 : "");
+        } else {
+          setCartScanCode(null);
         }
       } catch (err) {
         if (!cancelled) console.error("BulkCartEditor init error:", err);
@@ -92,6 +101,11 @@ export default function BulkCartEditor({
 
   const handleSave = async () => {
     if (!warehouse) return;
+    const trimmedCode = cartCode.trim();
+    if (cartId && !trimmedCode) {
+      alert("Podaj kod wózka.");
+      return;
+    }
     setLoading(true);
     try {
       const vol = (Number(formData.length) * Number(formData.width) * Number(formData.height)) / 1000;
@@ -112,6 +126,11 @@ export default function BulkCartEditor({
       if (capacityMode === "volume" || capacityMode === "mixed") {
         payload.max_volume_dm3 = maxVolumeDm3 === "" ? vol : Number(maxVolumeDm3);
       }
+      if (cartId) {
+        payload.code = trimmedCode;
+      } else if (trimmedCode) {
+        payload.code = trimmedCode;
+      }
 
       let res;
       if (cartId) {
@@ -119,30 +138,67 @@ export default function BulkCartEditor({
       } else {
         res = await api.post("/carts/bulk/", payload);
       }
-      console.log("[BulkCartEditor] Save success", res?.status, res?.data);
+      log("[BulkCartEditor] Save success", res?.status, res?.data);
       try {
         onClose();
       } catch (e) {
         console.error("[BulkCartEditor] onClose failed:", e);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("[BulkCartEditor] Błąd zapisu:", err);
-      alert(t.saveErrorBulk);
+      const ax = err as { response?: { status?: number; data?: { detail?: string } } };
+      if (ax.response?.status === 409 || ax.response?.status === 422) {
+        const d = ax.response.data?.detail;
+        alert(typeof d === "string" ? d : t.saveErrorBulk);
+      } else {
+        alert(t.saveErrorBulk);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-xl mx-auto p-10 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100">
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-black text-slate-800 uppercase italic">
+    <div className="w-full min-w-0 space-y-4">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-4">
+        <h2 className="text-xl font-bold uppercase tracking-tight text-slate-900">
           {cartId ? t.editBulkCart : t.newBulkCart}
         </h2>
-        <button onClick={onClose} className="text-slate-300 font-black text-xs uppercase">{t.close}</button>
+        <button type="button" onClick={onClose} className="text-xs font-semibold uppercase text-slate-500 hover:text-slate-800">
+          {t.close}
+        </button>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4">
+          {cartId ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ID</span>
+              <p className="font-mono text-sm font-bold text-slate-600 tabular-nums">{cartId}</p>
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="bulk-cart-editor-code">
+              Kod{cartId ? "" : " (opcjonalnie)"}
+            </label>
+            <input
+              id="bulk-cart-editor-code"
+              className="w-full bg-slate-50 rounded-2xl px-6 py-4 border border-slate-100 font-mono text-sm font-bold text-slate-800 outline-none focus:border-blue-500 transition-all"
+              value={cartCode}
+              onChange={(e) => setCartCode(e.target.value)}
+              placeholder={cartId ? "" : "Puste = wygeneruj CART-0001"}
+              autoComplete="off"
+            />
+          </div>
+          {cartId && cartScanCode ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Kod skanowania WMS
+              </span>
+              <p className="font-mono text-sm font-semibold text-slate-700">{cartScanCode}</p>
+            </div>
+          ) : null}
+        </div>
         <div className="flex flex-col gap-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t.name}</label>
           <input 
@@ -169,9 +225,9 @@ export default function BulkCartEditor({
           ))}
         </div>
 
-        <div className="border-t border-slate-100 pt-6">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">CAPACITY MODE</h3>
-          <div className="flex flex-wrap gap-4 p-1 mb-4">
+        <div className="space-y-3 border-t border-slate-100 pt-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">CAPACITY MODE</h3>
+          <div className="flex flex-wrap gap-4">
             {(["volume", "orders", "mixed"] as const).map((mode) => (
               <label key={mode} className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -186,7 +242,7 @@ export default function BulkCartEditor({
             ))}
           </div>
           {(capacityMode === "volume" || capacityMode === "mixed") && (
-            <div className="mb-4">
+            <div>
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_volume_dm3</label>
               <input
                 type="number"
@@ -214,17 +270,9 @@ export default function BulkCartEditor({
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-            {t.imageUrlLabel}
-          </label>
-          <input
-            type="text"
-            className="w-full bg-slate-50 rounded-2xl px-6 py-4 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 transition-all"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="https://... (optional)"
-          />
+        <div className="flex flex-col gap-2 bg-slate-50/80 p-4">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.photo}</span>
+          <CartImageUrlField value={imageUrl} onChange={setImageUrl} />
         </div>
 
         <div className="flex flex-col gap-2">

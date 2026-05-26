@@ -1,18 +1,27 @@
 """
-Dev utility: distribute stock from Import location into real warehouse storage locations.
+Dev utility: distribute inventory from Import location into real warehouse storage locations.
 
-Finds stock at the "Import" location and moves it to randomly selected storage locations.
+Finds inventory at the "Import" location and moves it to randomly selected storage locations.
 Optionally splits large quantities across multiple locations.
 """
 
 import random
 from sqlalchemy.orm import Session
 
-from ..models.stock import Stock
+from ..models.inventory import Inventory
 from ..models.location import Location
 
 EXCLUDED_LOCATION_TYPES = ("PICK_START", "PACKING", "DOCK")
-EXCLUDED_LOCATION_NAMES = ("IMPORT", "BUFFER", "PACKING")
+EXCLUDED_LOCATION_NAMES = (
+    "IMPORT",
+    "BUFFER",
+    "PACKING",
+    "PRZYJĘCIE",
+    "PRZYJECIE",
+    "BUFOR",
+    "ODBIÓR",
+    "ODBIOR",
+)
 SPLIT_THRESHOLD = 50  # If quantity > this, split into 2-3 locations
 
 
@@ -32,7 +41,7 @@ def distribute_import_stock(
     warehouse_id: int,
 ) -> dict:
     """
-    Find stock at Import location; move each row to random storage location(s).
+    Find inventory at Import location; move each row to random storage location(s).
     If quantity > SPLIT_THRESHOLD, split into 2-3 locations for realistic distribution.
     Returns { rows_processed, locations_used }.
     """
@@ -48,11 +57,11 @@ def distribute_import_stock(
         return {"rows_processed": 0, "locations_used": 0}
 
     stock_rows = (
-        db.query(Stock)
+        db.query(Inventory)
         .filter(
-            Stock.tenant_id == tenant_id,
-            Stock.warehouse_id == warehouse_id,
-            Stock.location_id == import_loc.id,
+            Inventory.tenant_id == tenant_id,
+            Inventory.warehouse_id == warehouse_id,
+            Inventory.location_id == import_loc.id,
         )
         .all()
     )
@@ -72,6 +81,7 @@ def distribute_import_stock(
         return {"rows_processed": 0, "locations_used": 0}
 
     location_ids = [loc.id for loc in storage_locations]
+    location_uuid_by_id = {loc.id: getattr(loc, "location_uuid", None) for loc in storage_locations}
     rows_processed = 0
     locations_used = set()
 
@@ -90,15 +100,17 @@ def distribute_import_stock(
                 parts[0] = round(parts[0] + diff, 2)
             chosen_ids = random.sample(location_ids, n_parts)
             row.location_id = chosen_ids[0]
+            row.location_uuid = location_uuid_by_id.get(chosen_ids[0])
             row.quantity = parts[0]
             locations_used.add(chosen_ids[0])
             for i in range(1, n_parts):
                 db.add(
-                    Stock(
+                    Inventory(
                         tenant_id=row.tenant_id,
                         product_id=row.product_id,
                         warehouse_id=row.warehouse_id,
                         location_id=chosen_ids[i],
+                        location_uuid=location_uuid_by_id.get(chosen_ids[i]),
                         quantity=parts[i],
                     )
                 )
@@ -106,6 +118,7 @@ def distribute_import_stock(
         else:
             loc_id = random.choice(location_ids)
             row.location_id = loc_id
+            row.location_uuid = location_uuid_by_id.get(loc_id)
             locations_used.add(loc_id)
 
         rows_processed += 1

@@ -5,6 +5,7 @@ export const layoutService = {
     return api.get("/warehouse/layout", { params });
   },
 
+  /** Path must have no trailing slash (see `api/axios` — no auto-slash). */
   saveLayout(warehouseId: number, data: Record<string, unknown>, params?: { tenant_id: number }) {
     return api.put(`/warehouse/${warehouseId}/layout`, data, { params });
   },

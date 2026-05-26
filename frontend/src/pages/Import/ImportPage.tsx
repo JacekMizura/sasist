@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { Box, Boxes, Factory, Package, ShoppingCart, Tags, Truck, Users } from "lucide-react";
 import api from "../../api/axios";
 import { useTranslation } from "../../locales";
 import type { Translations } from "../../locales";
@@ -9,10 +10,16 @@ import {
   ORDER_CART_FIELDS,
   ADDRESS_FIELDS,
   PAYMENT_FIELDS,
+  SET_IMPORT_FIELDS,
+  CUSTOMER_IMPORT_FIELDS,
+  CUSTOMER_IMPORT_HEADER_ALIASES,
   normalizeHeader,
   PRODUCT_HEADER_ALIASES,
   ORDER_ORDER_HEADER_ALIASES,
   ORDER_CART_HEADER_ALIASES,
+  SET_IMPORT_HEADER_ALIASES,
+  ADDRESS_HEADER_ALIASES,
+  PAYMENT_HEADER_ALIASES,
 } from "./importMappingConfig";
 
 /** Normalizacja do porównania podobieństwa etykiet z nagłówkami kolumn (małe litery, bez diakrytyków). */
@@ -64,6 +71,33 @@ function autoMap(
 const STORAGE_KEY_PRODUCTS = "import_mapping_products";
 const STORAGE_KEY_ORDER_ORDER = "import_mapping_order_order";
 const STORAGE_KEY_ORDER_CART = "import_mapping_order_cart";
+const STORAGE_KEY_SETS = "import_mapping_sets";
+const STORAGE_KEY_CUSTOMERS = "import_mapping_customers";
+
+const WIZARD_STEPS = [
+  { id: 1, label: "Wybór pliku" },
+  { id: 2, label: "Podgląd danych" },
+  { id: 3, label: "Mapowanie pól" },
+  { id: 4, label: "Walidacja" },
+  { id: 5, label: "Import" },
+  { id: 6, label: "Podsumowanie" },
+] as const;
+
+const IMPORT_KIND_META: Array<{
+  kind: ImportPageProps["settingsKind"] | "label_templates";
+  label: string;
+  href: string;
+  icon: typeof Box;
+}> = [
+  { kind: "orders", label: "Zamówienia", href: "/settings/import?kind=orders", icon: ShoppingCart },
+  { kind: "products", label: "Produkty", href: "/settings/import?kind=products", icon: Package },
+  { kind: "sets", label: "Zestawy", href: "/settings/import?kind=sets", icon: Boxes },
+  { kind: "cartons", label: "Kartony", href: "/settings/import?kind=cartons", icon: Box },
+  { kind: "manufacturers", label: "Producenci", href: "/settings/import?kind=manufacturers", icon: Factory },
+  { kind: "suppliers", label: "Dostawcy", href: "/settings/import?kind=suppliers", icon: Truck },
+  { kind: "customers", label: "Klienci", href: "/settings/import?kind=customers", icon: Users },
+  { kind: "label_templates", label: "Szablony etykiet", href: "/settings/import?kind=label_templates", icon: Tags },
+];
 
 function loadSavedMapping(key: string): Record<string, string> {
   try {
@@ -148,6 +182,8 @@ function ChevronIcon({ open }: { open: boolean }) {
   );
 }
 
+type OrderImportSectionId = "orderOrder" | "orderCart" | "address" | "payment";
+
 type MappingSectionProps = {
   title: string;
   fieldKeys: readonly string[];
@@ -159,6 +195,9 @@ type MappingSectionProps = {
   getLabel: (key: string) => string;
   t: Translations;
   defaultOpen?: boolean;
+  /** Zamówienia: kolumna nie może być użyta w innej sekcji / innym polu (poza bieżącym wyborem). */
+  orderCrossMaps?: Record<OrderImportSectionId, Record<string, string>>;
+  orderSectionId?: OrderImportSectionId;
 };
 
 /** Jedna sekcja mapowania (np. Produkty): nagłówek z pigułką statusu, przycisk „Użyj wszystkich”, lista pól z dropdownem kolumn. */
@@ -173,6 +212,8 @@ function MappingSection({
   getLabel,
   t,
   defaultOpen = false,
+  orderCrossMaps,
+  orderSectionId,
 }: MappingSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   const mappedCount = fieldKeys.filter((k) => mapping[k]).length;
@@ -180,16 +221,16 @@ function MappingSection({
   const someMapped = mappedCount > 0;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition-shadow overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <div
-        className="flex items-center justify-between px-5 py-4 cursor-pointer"
+        className="flex cursor-pointer items-center justify-between px-4 py-3"
         onClick={() => setOpen(!open)}
       >
         <div className="flex items-center gap-3">
           <ChevronIcon open={open} />
-          <span className="font-bold text-slate-800">{title}</span>
+          <span className="text-sm font-bold text-slate-800">{title}</span>
           <span
-            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
               allMapped ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
             }`}
           >
@@ -209,34 +250,46 @@ function MappingSection({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onUseAll(); }}
-            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 text-[11px] font-bold transition-colors"
+            className="rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:bg-cyan-100 hover:text-cyan-700"
           >
             {t.import_useAll}
           </button>
         </div>
       </div>
       {open && (
-        <div className="border-t border-slate-100 px-5 py-4 bg-slate-50/50">
-          <div className="space-y-2 max-h-80 overflow-y-auto">
+        <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <div className="max-h-72 space-y-1.5 overflow-y-auto">
             {fieldKeys.map((key) => {
               const mappedElsewhere = new Set(
                 Object.entries(mapping)
                   .filter(([k]) => k !== key && mapping[k])
                   .map(([, v]) => v)
               );
+              const crossOccupied = new Set<string>();
+              if (orderCrossMaps && orderSectionId) {
+                (Object.keys(orderCrossMaps) as OrderImportSectionId[]).forEach((sid) => {
+                  const m = orderCrossMaps[sid];
+                  for (const [k, v] of Object.entries(m)) {
+                    if (!v) continue;
+                    if (sid === orderSectionId && k === key) continue;
+                    crossOccupied.add(v);
+                  }
+                });
+              }
               const availableColumns = columns.filter(
-                (col) => mapping[key] === col || !mappedElsewhere.has(col)
+                (col) =>
+                  mapping[key] === col || (!mappedElsewhere.has(col) && !crossOccupied.has(col))
               );
               return (
                 <div
                   key={key}
-                  className="flex items-center gap-4 py-2 px-3 rounded-lg bg-white border border-slate-100"
+                  className="flex items-center gap-3 rounded-md border border-slate-100 bg-white px-2.5 py-1.5"
                 >
-                  <span className="w-56 text-sm font-medium text-slate-700 shrink-0">
+                  <span className="w-48 shrink-0 text-sm font-medium text-slate-700">
                     {getLabel(key)}
                   </span>
                   <select
-                    className="flex-1 min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                     value={mapping[key] ?? ""}
                     onChange={(e) => onMappingChange(key, e.target.value)}
                   >
@@ -258,25 +311,35 @@ function MappingSection({
   );
 }
 
-export type ImportPageProps = { defaultType?: "products" | "orders" };
+export type ImportPageProps = {
+  settingsKind:
+  | "products"
+  | "orders"
+  | "sets"
+  | "manufacturers"
+  | "suppliers"
+  | "cartons"
+  | "customers";
+  /** Osadzenie w Ustawienia → Import (bez pełnego nagłówka strony). */
+  embedded?: boolean;
+};
 
-/** Zakładka Import: tło slate-50, karty białe z cieniem; typ importu, plik, podgląd, sekcje mapowania (accordion) i podgląd tabeli. */
-export default function ImportPage({ defaultType = "products" }: ImportPageProps = {}) {
+/** Kreator importu CSV (produkty / zamówienia / zestawy) — używany wyłącznie z Ustawienia → Import. */
+export default function ImportPage({ settingsKind, embedded = false }: ImportPageProps) {
   const t = useTranslation();
-  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [preview, setPreview] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
-  const [type, setType] = useState<"products" | "orders">(defaultType);
 
   const [productsMapping, setProductsMapping] = useState<Record<string, string>>({});
   const [orderOrderMapping, setOrderOrderMapping] = useState<Record<string, string>>({});
   const [orderCartMapping, setOrderCartMapping] = useState<Record<string, string>>({});
   const [addressMapping, setAddressMapping] = useState<Record<string, string>>({});
   const [paymentMapping, setPaymentMapping] = useState<Record<string, string>>({});
-
+  const [setsMapping, setSetsMapping] = useState<Record<string, string>>({});
+  const [customersMapping, setCustomersMapping] = useState<Record<string, string>>({});
 
   const getLabel = useCallback((key: string) => getFieldLabel(t, key), [t]);
 
@@ -294,12 +357,23 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
         const suggestedProducts = suggestFromAliases(cols, PRODUCT_HEADER_ALIASES);
         const suggestedOrderOrder = suggestFromAliases(cols, ORDER_ORDER_HEADER_ALIASES);
         const suggestedOrderCart = suggestFromAliases(cols, ORDER_CART_HEADER_ALIASES);
+        const suggestedSets = suggestFromAliases(cols, SET_IMPORT_HEADER_ALIASES);
+        const suggestedAddress = suggestFromAliases(cols, ADDRESS_HEADER_ALIASES);
+        const suggestedPayment = suggestFromAliases(cols, PAYMENT_HEADER_ALIASES);
         const savedProducts = loadSavedMapping(STORAGE_KEY_PRODUCTS);
         const savedOrderOrder = loadSavedMapping(STORAGE_KEY_ORDER_ORDER);
         const savedOrderCart = loadSavedMapping(STORAGE_KEY_ORDER_CART);
+        const savedSets = loadSavedMapping(STORAGE_KEY_SETS);
+        const suggestedCustomers = suggestFromAliases(cols, CUSTOMER_IMPORT_HEADER_ALIASES);
+        const autoCustomers = autoMap([...CUSTOMER_IMPORT_FIELDS], cols, getLabel);
+        const savedCustomers = loadSavedMapping(STORAGE_KEY_CUSTOMERS);
         setProductsMapping(mergeWithColumns(suggestedProducts, cols, savedProducts));
         setOrderOrderMapping(mergeWithColumns(suggestedOrderOrder, cols, savedOrderOrder));
         setOrderCartMapping(mergeWithColumns(suggestedOrderCart, cols, savedOrderCart));
+        setAddressMapping(mergeWithColumns(suggestedAddress, cols, {}));
+        setPaymentMapping(mergeWithColumns(suggestedPayment, cols, {}));
+        setSetsMapping(mergeWithColumns(suggestedSets, cols, savedSets));
+        setCustomersMapping(mergeWithColumns({ ...suggestedCustomers, ...autoCustomers }, cols, savedCustomers));
       }
     } catch (e) {
       console.error(e);
@@ -315,22 +389,44 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
       const formData = new FormData();
       formData.append("file", file);
       const columnMap =
-        type === "products"
+        settingsKind === "products"
           ? productsMapping
-          : { ...orderOrderMapping, ...orderCartMapping };
+          : settingsKind === "manufacturers"
+            ? productsMapping
+            : settingsKind === "suppliers"
+              ? productsMapping
+              : settingsKind === "cartons"
+                ? productsMapping
+                : settingsKind === "customers"
+                  ? customersMapping
+                  : settingsKind === "sets"
+                    ? setsMapping
+                    : {
+                        ...orderOrderMapping,
+                        ...orderCartMapping,
+                        ...addressMapping,
+                        ...paymentMapping,
+                      };
       formData.append("column_map", JSON.stringify(columnMap));
       const url =
-        type === "products"
+        settingsKind === "products"
           ? "/import/products/?tenant_id=1"
-          : "/import/orders/?tenant_id=1&warehouse_id=1";
+          : settingsKind === "manufacturers"
+            ? "/import/manufacturers/?tenant_id=1"
+            : settingsKind === "suppliers"
+              ? "/import/suppliers/?tenant_id=1"
+              : settingsKind === "cartons"
+                ? "/import/cartons/?tenant_id=1"
+                : settingsKind === "customers"
+                  ? "/import/customers/?tenant_id=1"
+                  : settingsKind === "sets"
+                    ? "/import/sets/?tenant_id=1"
+                    : "/import/orders/?tenant_id=1&warehouse_id=1";
       const res = await api.post(url, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResult(res.data as Record<string, unknown>);
       alert(t.import_done);
-      if (res.status === 200 || res.status === 201) {
-        if (type === "orders") navigate("/orders/list");
-      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -339,7 +435,7 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
   };
 
   const setMapping = useCallback(
-    (section: "products" | "orderOrder" | "orderCart" | "address" | "payment") =>
+    (section: "products" | "orderOrder" | "orderCart" | "address" | "payment" | "sets" | "customers") =>
       (key: string, column: string) => {
         const upd = (prev: Record<string, string>) =>
           column ? { ...prev, [key]: column } : (() => { const n = { ...prev }; delete n[key]; return n; })();
@@ -359,13 +455,19 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
           case "payment":
             setPaymentMapping(upd);
             break;
+          case "sets":
+            setSetsMapping(upd);
+            break;
+          case "customers":
+            setCustomersMapping(upd);
+            break;
         }
       },
     []
   );
 
   const clearSection = useCallback(
-    (section: "products" | "orderOrder" | "orderCart" | "address" | "payment") => {
+    (section: "products" | "orderOrder" | "orderCart" | "address" | "payment" | "sets" | "customers") => {
       switch (section) {
         case "products":
           setProductsMapping({});
@@ -382,6 +484,12 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
         case "payment":
           setPaymentMapping({});
           break;
+        case "sets":
+          setSetsMapping({});
+          break;
+        case "customers":
+          setCustomersMapping({});
+          break;
       }
     },
     []
@@ -393,22 +501,71 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
   }, [columns, getLabel]);
 
   const useAllOrderOrder = useCallback(() => {
-    setOrderOrderMapping(autoMap(ORDER_ORDER_FIELDS, columns, getLabel));
+    const sug = suggestFromAliases(columns, ORDER_ORDER_HEADER_ALIASES);
+    const auto = autoMap(ORDER_ORDER_FIELDS, columns, getLabel);
+    setOrderOrderMapping(mergeWithColumns({ ...sug, ...auto }, columns, {}));
   }, [columns, getLabel]);
 
   const useAllOrderCart = useCallback(() => {
     setOrderCartMapping(autoMap(ORDER_CART_FIELDS, columns, getLabel));
   }, [columns, getLabel]);
 
+  const useAllSets = useCallback(() => {
+    const sug = suggestFromAliases(columns, SET_IMPORT_HEADER_ALIASES);
+    const auto = autoMap([...SET_IMPORT_FIELDS], columns, getLabel);
+    setSetsMapping(mergeWithColumns({ ...sug, ...auto }, columns, {}));
+  }, [columns, getLabel]);
+
   const useAllAddress = useCallback(() => {
-    setAddressMapping(autoMap(ADDRESS_FIELDS, columns, getLabel));
+    const sug = suggestFromAliases(columns, ADDRESS_HEADER_ALIASES);
+    const auto = autoMap(ADDRESS_FIELDS, columns, getLabel);
+    setAddressMapping(mergeWithColumns({ ...sug, ...auto }, columns, {}));
   }, [columns, getLabel]);
 
   const useAllPayment = useCallback(() => {
-    setPaymentMapping(autoMap(PAYMENT_FIELDS, columns, getLabel));
+    const sug = suggestFromAliases(columns, PAYMENT_HEADER_ALIASES);
+    const auto = autoMap(PAYMENT_FIELDS, columns, getLabel);
+    setPaymentMapping(mergeWithColumns({ ...sug, ...auto }, columns, {}));
   }, [columns, getLabel]);
 
-  const isReadyToImport = file !== null && (type === "products" ? Object.keys(productsMapping).length > 0 : Object.keys(orderOrderMapping).length > 0 || Object.keys(orderCartMapping).length > 0);
+  const useAllCustomers = useCallback(() => {
+    const sug = suggestFromAliases(columns, CUSTOMER_IMPORT_HEADER_ALIASES);
+    const auto = autoMap([...CUSTOMER_IMPORT_FIELDS], columns, getLabel);
+    setCustomersMapping(mergeWithColumns({ ...sug, ...auto }, columns, {}));
+  }, [columns, getLabel]);
+
+  const orderCrossMaps = useMemo(
+    () => ({
+      orderOrder: orderOrderMapping,
+      orderCart: orderCartMapping,
+      address: addressMapping,
+      payment: paymentMapping,
+    }),
+    [orderOrderMapping, orderCartMapping, addressMapping, paymentMapping]
+  );
+
+  const isReadyToImport =
+    file !== null &&
+    (settingsKind === "products" ||
+    settingsKind === "manufacturers" ||
+    settingsKind === "suppliers" ||
+    settingsKind === "cartons"
+      ? Object.keys(productsMapping).length > 0
+      : settingsKind === "customers"
+        ? Object.keys(customersMapping).length > 0
+        : settingsKind === "sets"
+          ? Boolean(
+              setsMapping.set_sku &&
+                (setsMapping.child_sku ||
+                  setsMapping.child_id ||
+                  setsMapping.child_ean ||
+                  setsMapping.child_symbol ||
+                  setsMapping.child_catalog_number)
+            )
+          : Object.keys(orderOrderMapping).length > 0 ||
+              Object.keys(orderCartMapping).length > 0 ||
+              Object.keys(addressMapping).length > 0 ||
+              Object.keys(paymentMapping).length > 0);
 
   useEffect(() => {
     if (Object.keys(productsMapping).length > 0) {
@@ -428,85 +585,171 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
     }
   }, [orderCartMapping]);
 
+  useEffect(() => {
+    if (Object.keys(setsMapping).length > 0) {
+      localStorage.setItem(STORAGE_KEY_SETS, JSON.stringify(setsMapping));
+    }
+  }, [setsMapping]);
+
+  useEffect(() => {
+    if (Object.keys(customersMapping).length > 0) {
+      localStorage.setItem(STORAGE_KEY_CUSTOMERS, JSON.stringify(customersMapping));
+    }
+  }, [customersMapping]);
+
+  const displayWizardStep = useMemo(() => {
+    if (result != null) return 6;
+    if (loading && file) return 5;
+    if (isReadyToImport && columns.length > 0) return 4;
+    if (columns.length > 0) return 3;
+    if (file) return 2;
+    return 1;
+  }, [result, loading, file, isReadyToImport, columns.length]);
+
+  const activeWizardStep = useMemo(
+    () => WIZARD_STEPS.find((s) => s.id === displayWizardStep),
+    [displayWizardStep]
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Nagłówek i kroki */}
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
-          <h1 className="text-2xl font-bold text-slate-800 mb-1">{t.import_title}</h1>
-          <p className="text-sm text-slate-500 mb-6">{t.import_subtitle}</p>
+    <div className={embedded ? "w-full min-w-0" : "min-h-screen bg-slate-50 px-4 py-4"}>
+      <div className={embedded ? "w-full" : "mx-auto w-full max-w-[1500px]"}>
+        <div
+          className={
+            embedded
+              ? "overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-1 ring-slate-900/5"
+              : "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+          }
+        >
+          {/* Nagłówek */}
+          {!embedded ? (
+            <div className="border-b border-slate-100 px-4 py-3">
+              <h1 className="text-lg font-bold text-slate-800">{t.import_title}</h1>
+              <p className="mt-0.5 text-sm text-slate-500">{t.import_subtitle}</p>
+            </div>
+          ) : null}
 
-          {/* Typ importu + Historia importów */}
-          <div className="flex flex-wrap items-center gap-3 mb-6">
-            <button
-              type="button"
-              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                type === "products"
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-              onClick={() => setType("products")}
-            >
-              {t.import_products}
-            </button>
-            <button
-              type="button"
-              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                type === "orders"
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-              onClick={() => setType("orders")}
-            >
-              {t.import_orders}
-            </button>
-            <Link
-              to="/import/history"
-              className="px-4 py-2 rounded-lg font-semibold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200"
-            >
-              Historia importów
-            </Link>
+          {/* Typ importu — jedyny selektor typu na stronie */}
+          <div
+            className={`border-b border-slate-100 px-4 py-4 ${
+              embedded ? "bg-gradient-to-b from-slate-50 via-white to-white" : "bg-slate-50/80 px-3 py-2.5"
+            }`}
+          >
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Typ danych</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+              {IMPORT_KIND_META.map((kind) => {
+                const Icon = kind.icon;
+                const isActive = kind.kind === settingsKind;
+                return (
+                  <Link
+                    key={kind.kind}
+                    to={kind.href}
+                    className={`group inline-flex min-h-[3rem] items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-sm transition-all ${
+                      isActive
+                        ? "border-cyan-600 bg-cyan-50/50 text-cyan-950 shadow-md ring-2 ring-cyan-600/15"
+                        : "border-slate-200/90 bg-white text-slate-600 hover:border-cyan-300 hover:bg-slate-50 hover:shadow-sm"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
+                        isActive
+                          ? "border-cyan-200 bg-white text-cyan-700"
+                          : "border-slate-200 bg-slate-50 text-slate-500 group-hover:border-cyan-200 group-hover:text-cyan-700"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" strokeWidth={2.2} aria-hidden />
+                    </span>
+                    <span className={`min-w-0 truncate font-semibold ${isActive ? "text-cyan-950" : ""}`}>{kind.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Plik i przyciski */}
-          <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors text-sm font-medium text-slate-700">
-              <input
-                type="file"
-                accept=".csv"
-                className="sr-only"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-              {t.import_uploadFile}
-            </label>
-            <button
-              type="button"
-              onClick={handlePreview}
-              disabled={!file || loading}
-              className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {t.import_preview}
-            </button>
-            <button
-              type="button"
-              onClick={handleImport}
-              disabled={!isReadyToImport || loading}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold ${
-                isReadyToImport ? "bg-green-600 text-white hover:bg-green-700" : "bg-slate-200 text-slate-500 cursor-not-allowed"
-              } disabled:opacity-50`}
-            >
-              {loading ? t.import_importing : t.import_import}
-            </button>
+          {/* Stepper */}
+          <div className="border-b border-slate-100 bg-slate-50/40 px-4 py-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Przebieg</p>
+            <div className="flex flex-wrap gap-2">
+              {WIZARD_STEPS.map((s) => (
+                <div
+                  key={s.id}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${
+                    displayWizardStep === s.id
+                      ? "border-cyan-600 bg-cyan-600 text-white shadow-sm"
+                      : displayWizardStep > s.id
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 bg-white text-slate-500"
+                  }`}
+                >
+                  <span
+                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${
+                      displayWizardStep === s.id ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {s.id}
+                  </span>
+                  {s.label}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+
+          {/* Aktywny krok: plik i akcje */}
+          <div className="border-b border-slate-100 px-4 py-4">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-800">
+                {activeWizardStep ? `Krok ${activeWizardStep.id}: ${activeWizardStep.label}` : ""}
+              </p>
+              {loading ? <span className="text-xs font-medium text-cyan-700">Przetwarzanie…</span> : null}
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-stretch">
+              <label className="flex min-h-[5.25rem] cursor-pointer flex-col justify-center gap-1 rounded-xl border-2 border-dashed border-cyan-200/90 bg-gradient-to-br from-cyan-50/40 via-white to-slate-50/30 px-4 py-3 shadow-inner transition hover:border-cyan-400 hover:from-cyan-50/70 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="sr-only"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900">{t.import_uploadFile}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-600">
+                    {file ? `Wybrano: ${file.name}` : "CSV UTF-8 — przeciągnij plik lub kliknij, aby wybrać"}
+                  </p>
+                </div>
+                <span className="mt-2 inline-flex shrink-0 self-start rounded-lg border border-cyan-100 bg-white px-3 py-1.5 text-xs font-bold text-cyan-900 shadow-sm sm:mt-0 sm:self-center">
+                  Wybierz plik
+                </span>
+              </label>
+              <div className="flex flex-wrap items-stretch gap-2 lg:flex-col lg:justify-center">
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={!file || loading}
+                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t.import_preview}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImport}
+                  disabled={!isReadyToImport || loading}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold shadow-sm ${
+                    isReadyToImport ? "bg-emerald-600 text-white hover:bg-emerald-700" : "cursor-not-allowed bg-slate-200 text-slate-500"
+                  } disabled:opacity-50`}
+                >
+                  {loading ? t.import_importing : t.import_import}
+                </button>
+              </div>
+            </div>
+          </div>
 
         {/* Mapowanie – dwie osobne sekcje: A = Produkty, B = Zamówienia (nagłówek + pozycje) */}
         {columns.length > 0 && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-800 px-1">{t.import_mapTitle}</h2>
+          <div className="space-y-4 border-b border-slate-100 bg-slate-50/60 px-4 py-4">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.import_mapTitle}</h2>
 
-            {type === "products" && (
-              <div className="space-y-4">
+            {settingsKind === "products" && (
+              <div className="space-y-3">
                 <div className="flex items-center gap-2 px-1">
                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
                     {t.import_section_a ?? "Sekcja A"}
@@ -528,8 +771,29 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
               </div>
             )}
 
-            {type === "orders" && (
-              <div className="space-y-4">
+            {settingsKind === "sets" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Zestawy</span>
+                  <span className="text-sm font-semibold text-slate-600">Mapowanie kolumn zestawów (wiersz = jedna pozycja składowa)</span>
+                </div>
+                <MappingSection
+                  title="Zestawy (SKU zestawu + produkty składowe)"
+                  fieldKeys={SET_IMPORT_FIELDS}
+                  mapping={setsMapping}
+                  columns={columns}
+                  onMappingChange={setMapping("sets")}
+                  onClearSection={() => clearSection("sets")}
+                  onUseAll={useAllSets}
+                  getLabel={getLabel}
+                  t={t}
+                  defaultOpen={true}
+                />
+              </div>
+            )}
+
+            {settingsKind === "orders" && (
+              <div className="space-y-3">
                 <div className="flex items-center gap-2 px-1">
                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
                     {t.import_section_b ?? "Sekcja B"}
@@ -550,6 +814,8 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
                   getLabel={getLabel}
                   t={t}
                   defaultOpen={true}
+                  orderCrossMaps={orderCrossMaps}
+                  orderSectionId="orderOrder"
                 />
                 <MappingSection
                   title={t.import_cart_section}
@@ -562,6 +828,8 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
                   getLabel={getLabel}
                   t={t}
                   defaultOpen={false}
+                  orderCrossMaps={orderCrossMaps}
+                  orderSectionId="orderCart"
                 />
                 <MappingSection
                   title={t.import_address_section}
@@ -574,6 +842,8 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
                   getLabel={getLabel}
                   t={t}
                   defaultOpen={false}
+                  orderCrossMaps={orderCrossMaps}
+                  orderSectionId="address"
                 />
                 <MappingSection
                   title={t.import_payment_section}
@@ -585,6 +855,67 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
                   onUseAll={useAllPayment}
                   getLabel={getLabel}
                   t={t}
+                  orderCrossMaps={orderCrossMaps}
+                  orderSectionId="payment"
+                />
+              </div>
+            )}
+            {settingsKind === "manufacturers" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">
+                    Producenci
+                  </span>
+                  <span className="text-sm font-semibold text-slate-600">
+                  Mapowanie danych producentów
+                  </span>
+                </div>
+
+                <MappingSection
+                  title="Producenci"
+                  fieldKeys={[
+                    "name",
+                    "code",
+                    "full_company_name",
+                    "tax_id",
+                    "email",
+                    "phone",
+                    "website",
+                    "logo",
+                    "description",
+                    "address",
+                  ]}
+                  mapping={productsMapping}
+                  columns={columns}
+                  onMappingChange={setMapping("products")}
+                  onClearSection={() => clearSection("products")}
+                  onUseAll={useAllProducts}
+                  getLabel={getLabel}
+                  t={t}
+                  defaultOpen={true}
+                />
+              </div>
+            )}
+
+            {settingsKind === "customers" && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2 px-1">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Klienci</span>
+                  <span className="text-sm font-semibold text-slate-700">
+                    Mapowanie pól klientów (identyfikacja po ID lub e-mailu)
+                  </span>
+                </div>
+                <MappingSection
+                  title="Dane klienta i adres domyślny"
+                  fieldKeys={[...CUSTOMER_IMPORT_FIELDS]}
+                  mapping={customersMapping}
+                  columns={columns}
+                  onMappingChange={setMapping("customers")}
+                  onClearSection={() => clearSection("customers")}
+                  onUseAll={useAllCustomers}
+                  getLabel={getLabel}
+                  t={t}
+                  defaultOpen={true}
                 />
               </div>
             )}
@@ -593,16 +924,16 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
 
         {/* Podgląd tabeli */}
         {preview.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h3 className="font-bold text-slate-800">{t.import_previewData}</h3>
+          <div className="border-t border-slate-100 bg-white">
+            <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-2">
+              <h3 className="text-sm font-bold text-slate-800">{t.import_previewData}</h3>
             </div>
-            <div className="overflow-x-auto max-h-96">
-              <table className="w-full text-sm">
+            <div className="max-h-80 overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="bg-slate-50">
                     {columns.map((col) => (
-                      <th key={col} className="text-left px-4 py-2 border-b border-slate-200 font-semibold text-slate-700">
+                      <th key={col} className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">
                         {col}
                       </th>
                     ))}
@@ -610,9 +941,9 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
                 </thead>
                 <tbody>
                   {preview.slice(0, 20).map((row, i) => (
-                    <tr key={i} className="border-b border-slate-100 hover:bg-slate-50/50">
+                    <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
                       {columns.map((col) => (
-                        <td key={col} className="px-4 py-2 text-slate-600">
+                        <td key={col} className="px-3 py-1.5 text-slate-600">
                           {String((row as Record<string, unknown>)[col] ?? "")}
                         </td>
                       ))}
@@ -625,10 +956,11 @@ export default function ImportPage({ defaultType = "products" }: ImportPageProps
         )}
 
         {result != null ? (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800 text-sm">
-            <pre className="whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre>
+          <div className="border-t border-emerald-100 bg-emerald-50/70 px-3 py-2.5 text-sm text-emerald-900">
+            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed">{JSON.stringify(result, null, 2)}</pre>
           </div>
         ) : null}
+        </div>
       </div>
     </div>
   );

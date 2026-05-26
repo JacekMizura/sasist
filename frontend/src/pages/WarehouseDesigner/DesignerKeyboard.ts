@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { LayoutState, RackState, VisualElementState } from "../../types/warehouse";
-import { cmToCells, duplicateRacksAtPosition } from "../../components/warehouse/warehouseUtils";
+import { cmToCells, duplicateRacksAtPosition, assignUniqueRackNamesToNewRacks } from "../../components/warehouse/warehouseUtils";
 import { LayoutMode } from "../../warehouse-layout";
 
 export interface UseDesignerKeyboardParams {
@@ -154,7 +154,10 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
             const cell = { x: cmToCells(pos.x), y: cmToCells(pos.y) };
             setLayout((prev) => ({
               ...prev,
-              racks: [...prev.racks, ...duplicateRacksAtPosition(toDup, cell, prev.racks.length + 1)],
+              racks: [
+                ...prev.racks,
+                ...assignUniqueRackNamesToNewRacks(duplicateRacksAtPosition(toDup, cell, prev.racks.length + 1), prev),
+              ],
             }));
             setSnackbar({ message: "Sklonowano regały.", undo: () => setSnackbar(null) });
           }

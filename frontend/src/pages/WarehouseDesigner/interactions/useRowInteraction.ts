@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import type { CatalogItem, LayoutState, RowContainer } from "../../../types/warehouse";
-import { getCellFromClientPosition } from "../utils/designerMouseUtils";
+import { getCellFromWarehouseLayoutSvg } from "../utils/designerMouseUtils";
 
 export interface UseRowInteractionParams {
   layout: LayoutState;
@@ -130,11 +130,10 @@ export function useRowInteraction(params: UseRowInteractionParams) {
     if (rowToolActive && rowDrawStart) {
       let end = rowDrawEndPendingRef.current ?? rowDrawEnd;
       if (end == null && lastMouseRef.current && svgRef.current) {
-        const rect = svgRef.current.getBoundingClientRect();
-        end = getCellFromClientPosition(
+        end = getCellFromWarehouseLayoutSvg(
+          svgRef.current,
           lastMouseRef.current.clientX,
           lastMouseRef.current.clientY,
-          rect,
           layout.grid_cols,
           layout.grid_rows
         );

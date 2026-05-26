@@ -91,9 +91,6 @@ export default function RackConfigurator({ onRackAdded }: RackConfiguratorProps)
       <h3 className="text-sm font-black uppercase tracking-widest text-slate-700 mb-2">
         Konfigurator regału kompletacyjnego
       </h3>
-      <p className="text-xs text-slate-500 mb-4">
-        Regały są przeznaczone wyłącznie dla zamówień <strong>wieloelementowych</strong> (multi-item).
-      </p>
       <form onSubmit={handleAdd} className="space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">

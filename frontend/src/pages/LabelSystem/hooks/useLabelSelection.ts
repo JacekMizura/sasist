@@ -9,7 +9,91 @@ import type {
 import { generateId } from "../utils/id";
 
 /** Overlay entry: element plus its display position (absolute on canvas). Nested elements use parent offset. */
-export type OverlayEntry = { element: TemplateElement; displayX: number; displayY: number };
+export type OverlayEntry = {
+  element: TemplateElement;
+  displayX: number;
+  displayY: number;
+  /** Repeater slot index (0-based); 0 for non-repeated entries. */
+  slotIndex: number;
+};
+
+/** Current canvas selection (element id + repeater slot when template child). */
+export type LabelCanvasSelection = { id: string; slotIndex: number };
+
+export function isTemplateElementDesignerHidden(el: TemplateElement): boolean {
+  return (el as { visible?: boolean }).visible === false;
+}
+
+/** Minimum hit target in px so zero-width/height lines stay clickable. */
+export const MIN_LABEL_OVERLAY_HIT_PX = 6;
+
+/** Bounding box for designer overlays / hit-tests (clamps narrow dimensions for lines). */
+export function getOverlayHitSizePx(el: TemplateElement, PX_PER_MM: number): { w: number; h: number } {
+  const wMm = "width" in el ? (el as { width: number }).width : 0;
+  const hMm = "height" in el ? (el as { height: number }).height : 0;
+  let w = Math.max(0, wMm * PX_PER_MM);
+  let h = Math.max(0, hMm * PX_PER_MM);
+  if (w < MIN_LABEL_OVERLAY_HIT_PX) w = MIN_LABEL_OVERLAY_HIT_PX;
+  if (h < MIN_LABEL_OVERLAY_HIT_PX) h = MIN_LABEL_OVERLAY_HIT_PX;
+  return { w, h };
+}
+
+function templateElementZIndex(el: TemplateElement): number {
+  return (el as { zIndex?: number }).zIndex ?? 0;
+}
+
+export type PickHit = { id: string; slotIndex: number; displayX: number; displayY: number };
+
+/**
+ * Topmost element at canvas-local pixel coords using template zIndex, then flatten order (later = on top for ties).
+ * Alt+click skips the topmost hit (second hit if any) to reach elements below.
+ */
+export function pickTopElementAtCanvasPx(
+  overlayEntries: OverlayEntry[],
+  xPx: number,
+  yPx: number,
+  PX_PER_MM: number,
+  options?: { altKey?: boolean }
+): PickHit | null {
+  type Cand = PickHit & { z: number; index: number };
+  const candidates: Cand[] = [];
+  overlayEntries.forEach((entry, index) => {
+    const el = entry.element;
+    const { w, h } = getOverlayHitSizePx(el, PX_PER_MM);
+    const left = entry.displayX * PX_PER_MM;
+    const top = entry.displayY * PX_PER_MM;
+    if (xPx >= left && xPx <= left + w && yPx >= top && yPx <= top + h) {
+      candidates.push({
+        id: el.id,
+        z: templateElementZIndex(el),
+        index,
+        slotIndex: entry.slotIndex,
+        displayX: entry.displayX,
+        displayY: entry.displayY,
+      });
+    }
+  });
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    if (b.z !== a.z) return b.z - a.z;
+    return b.index - a.index;
+  });
+  const skip = options?.altKey && candidates.length > 1 ? 1 : 0;
+  const chosen = candidates[skip] ?? candidates[0];
+  console.log("[REPEATER CLICK]", {
+    id: chosen.id,
+    slotIndex: chosen.slotIndex,
+    displayX: chosen.displayX,
+    displayY: chosen.displayY,
+    altKey: !!options?.altKey,
+  });
+  return {
+    id: chosen.id,
+    slotIndex: chosen.slotIndex,
+    displayX: chosen.displayX,
+    displayY: chosen.displayY,
+  };
+}
 
 export function findElementById(elements: TemplateElement[], id: string): TemplateElement | null {
   for (const el of elements) {
@@ -80,33 +164,42 @@ export function getElementParentBounds(
   return null;
 }
 
-function appendGroupEntries(group: GroupElement, baseX: number, baseY: number, out: OverlayEntry[]): void {
+function appendGroupEntries(
+  group: GroupElement,
+  baseX: number,
+  baseY: number,
+  out: OverlayEntry[],
+  slotIndex: number
+): void {
+  if (isTemplateElementDesignerHidden(group as TemplateElement)) return;
   const gx = baseX + (group.x ?? 0);
   const gy = baseY + (group.y ?? 0);
-  out.push({ element: group, displayX: gx, displayY: gy });
+  out.push({ element: group, displayX: gx, displayY: gy, slotIndex });
   for (const child of group.elements ?? []) {
+    if (isTemplateElementDesignerHidden(child as TemplateElement)) continue;
     if (child.type === "group") {
-      appendGroupEntries(child as GroupElement, gx, gy, out);
+      appendGroupEntries(child as GroupElement, gx, gy, out, slotIndex);
     } else {
       out.push({
         element: child,
         displayX: gx + ("x" in child ? child.x : 0),
         displayY: gy + ("y" in child ? child.y : 0),
+        slotIndex,
       });
     }
   }
 }
 
-/** Flatten template into overlay entries. Repeater children get one entry per visible slot (same element id). */
-function flattenOverlayEntries(
-  elements: TemplateElement[],
-  labelWidthMm: number,
-  labelHeightMm: number
-): OverlayEntry[] {
+/**
+ * Flatten template into overlay entries.
+ * Repeater slot count matches `record[repeater.dataset].length` (same as SVG / layout preview).
+ */
+function flattenOverlayEntries(elements: TemplateElement[], record: Record<string, unknown>): OverlayEntry[] {
   const out: OverlayEntry[] = [];
   for (const el of elements) {
+    if (isTemplateElementDesignerHidden(el)) continue;
     if (el.type === "group") {
-      appendGroupEntries(el as GroupElement, 0, 0, out);
+      appendGroupEntries(el as GroupElement, 0, 0, out, 0);
     } else if (el.type === "repeater") {
       const rep = el as RepeaterElement;
       const rx = rep.x ?? 0;
@@ -118,28 +211,25 @@ function flattenOverlayEntries(
       const columns = useGrid ? Math.max(1, rep.columns ?? 1) : 1;
       const dir = layout === "vertical" ? "vertical" : "horizontal";
       const useVertical = dir === "vertical";
-      let previewSlotCount: number;
-      let slotXAt: (i: number) => number;
-      let slotYAt: (i: number) => number;
-      if (useGrid) {
-        const numRows = Math.max(1, Math.floor((labelHeightMm - ry) / itemH));
-        previewSlotCount = columns * numRows;
-        slotXAt = (i) => rx + (i % columns) * itemW;
-        slotYAt = (i) => ry + Math.floor(i / columns) * itemH;
-      } else if (useVertical) {
-        previewSlotCount = Math.max(1, Math.floor((labelHeightMm - ry) / itemH));
-        slotXAt = () => rx;
-        slotYAt = (i) => ry + i * itemH;
-      } else {
-        previewSlotCount = Math.max(1, Math.floor((labelWidthMm - rx) / itemW));
-        slotXAt = (i) => rx + i * itemW;
-        slotYAt = () => ry;
-      }
-      out.push({ element: rep, displayX: rx, displayY: ry });
+      const rawDataset = record[rep.dataset];
+      const items = Array.isArray(rawDataset) ? rawDataset : [];
+      const previewSlotCount = items.length;
+      const slotXAt = (i: number) => {
+        if (useGrid) return rx + (i % columns) * itemW;
+        if (useVertical) return rx;
+        return rx + i * itemW;
+      };
+      const slotYAt = (i: number) => {
+        if (useGrid) return ry + Math.floor(i / columns) * itemH;
+        if (useVertical) return ry + i * itemH;
+        return ry;
+      };
+      out.push({ element: rep, displayX: rx, displayY: ry, slotIndex: 0 });
       for (const child of rep.template?.elements ?? []) {
+        if (isTemplateElementDesignerHidden(child as TemplateElement)) continue;
         if (child.type === "group") {
           for (let slotIndex = 0; slotIndex < previewSlotCount; slotIndex++) {
-            appendGroupEntries(child as GroupElement, slotXAt(slotIndex), slotYAt(slotIndex), out);
+            appendGroupEntries(child as GroupElement, slotXAt(slotIndex), slotYAt(slotIndex), out, slotIndex);
           }
         } else {
           const childX = "x" in child ? child.x : 0;
@@ -149,6 +239,7 @@ function flattenOverlayEntries(
               element: child,
               displayX: slotXAt(slotIndex) + childX,
               displayY: slotYAt(slotIndex) + childY,
+              slotIndex,
             });
           }
         }
@@ -156,7 +247,7 @@ function flattenOverlayEntries(
     } else {
       const x = "x" in el ? el.x : 0;
       const y = "y" in el ? el.y : 0;
-      out.push({ element: el, displayX: x, displayY: y });
+      out.push({ element: el, displayX: x, displayY: y, slotIndex: 0 });
     }
   }
   return out;
@@ -164,9 +255,11 @@ function flattenOverlayEntries(
 
 export function useLabelSelection(
   template: LabelTemplate,
-  onTemplateChange: (t: LabelTemplate) => void
+  onTemplateChange: (t: LabelTemplate) => void,
+  previewRecord: Record<string, unknown>
 ) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<LabelCanvasSelection | null>(null);
+  const selectedId = selection?.id ?? null;
 
   const deleteElement = useCallback(
     (id: string) => {
@@ -196,10 +289,14 @@ export function useLabelSelection(
         elements: removeFromElements(template.elements),
         updatedAt: new Date().toISOString(),
       });
-      if (selectedId === id) setSelectedId(null);
+      if (selectedId === id) setSelection(null);
     },
     [template, onTemplateChange, selectedId]
   );
+
+  const setSelectedId = useCallback((id: string | null) => {
+    setSelection(id ? { id, slotIndex: 0 } : null);
+  }, []);
 
   const selected = useMemo(
     () => (template.elements && selectedId ? findElementById(template.elements, selectedId) : null),
@@ -210,18 +307,21 @@ export function useLabelSelection(
     () =>
       flattenOverlayEntries(
         [...template.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)),
-        template.widthMm,
-        template.heightMm
+        previewRecord
       ),
-    [template.elements, template.widthMm, template.heightMm]
+    [template.elements, previewRecord]
   );
 
   const overlayElementsOrdered = useMemo(() => {
-    if (!selectedId) return overlayEntries;
-    const notSelected = overlayEntries.filter((e) => e.element.id !== selectedId);
-    const selectedEntries = overlayEntries.filter((e) => e.element.id === selectedId);
+    if (!selection) return overlayEntries;
+    const notSelected = overlayEntries.filter(
+      (e) => !(e.element.id === selection.id && e.slotIndex === selection.slotIndex)
+    );
+    const selectedEntries = overlayEntries.filter(
+      (e) => e.element.id === selection.id && e.slotIndex === selection.slotIndex
+    );
     return selectedEntries.length ? [...notSelected, ...selectedEntries] : overlayEntries;
-  }, [overlayEntries, selectedId]);
+  }, [overlayEntries, selection]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -262,7 +362,7 @@ export function useLabelSelection(
                 elements: newElements,
                 updatedAt: new Date().toISOString(),
               });
-              setSelectedId(dup.id);
+              setSelection({ id: dup.id, slotIndex: 0 });
               return;
             }
             const dup = { ...el, id: generateId() } as TemplateElement;
@@ -281,27 +381,23 @@ export function useLabelSelection(
               elements: [...template.elements, dup],
               updatedAt: new Date().toISOString(),
             });
-            setSelectedId(dup.id);
+            setSelection({ id: dup.id, slotIndex: 0 });
           }
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, deleteElement, template, onTemplateChange]);
-
-  const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("[data-element-id]") || target.closest("[data-draggable-wrapper]")) return;
-    setSelectedId(null);
-  }, []);
+  }, [selectedId, deleteElement, template, onTemplateChange, setSelection]);
 
   return {
+    selection,
+    setSelection,
     selectedId,
     setSelectedId,
     selected,
+    overlayEntries,
     overlayElementsOrdered,
-    handleCanvasMouseDown,
     deleteElement,
   };
 }

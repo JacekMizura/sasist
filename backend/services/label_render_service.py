@@ -12,20 +12,33 @@ Calibration (offset/scale): Should be applied either in frontend export OR backe
 rendering, not both, to avoid double transformation.
 """
 
+from __future__ import annotations
+
 import io
 import json
 import logging
 from typing import Any
 
-from reportlab.lib import colors as rl_colors
-from reportlab.pdfgen import canvas
-from reportlab.graphics.barcode import code128
-
 from ..pdf_fonts import PDF_FONT, PDF_FONT_BOLD, register_pdf_fonts
+from .label_pdf_generation_log import log_label_pdf_flow, log_label_pdf_stage, print_pdf_canvas_size
+from .pdf_deps import raise_if_no_reportlab
 
-register_pdf_fonts()
+try:
+    from reportlab.pdfgen import canvas
+    from reportlab.graphics.barcode import code128
+
+    _REPORTLAB = True
+except ImportError:
+    canvas = None  # type: ignore[misc, assignment]
+    code128 = None  # type: ignore[misc, assignment]
+    _REPORTLAB = False
 
 logger = logging.getLogger(__name__)
+
+
+def _require_pdf() -> None:
+    raise_if_no_reportlab(_REPORTLAB)
+    register_pdf_fonts()
 
 # mm to PDF points (ReportLab uses points; 1 inch = 25.4 mm = 72 points)
 POINTS_PER_MM = 2.83465
@@ -78,7 +91,7 @@ def _get_text_value(record: dict[str, Any], binding: str) -> str:
 
 
 def _render_barcode_code128(
-    c: canvas.Canvas,
+    c: Any,
     val: str,
     x_pt: float,
     y_pt: float,
@@ -90,14 +103,19 @@ def _render_barcode_code128(
     if not (val or "").strip():
         return
     try:
+        from .label_engine import hex_to_cmyk
+
         bc = code128.Code128((val or "").strip(), displayValue=False)
         bc_width = bc.width if (bc.width and bc.width > 0) else 1.0
         bc_height = bc.height if (bc.height and bc.height > 0) else 1.0
         scale_x = w_pt / bc_width
         scale_y = h_pt / bc_height
+        black = hex_to_cmyk("#000000")
         c.saveState()
         c.translate(x_pt, y_pt)
         c.scale(scale_x, scale_y)
+        c.setFillColor(black)
+        c.setStrokeColor(black)
         bc.drawOn(c, 0, 0)
         c.restoreState()
     except Exception as e:
@@ -105,7 +123,7 @@ def _render_barcode_code128(
 
 
 def _render_barcode_qr(
-    c: canvas.Canvas,
+    c: Any,
     val: str,
     x_pt: float,
     y_pt: float,
@@ -123,28 +141,35 @@ def _render_barcode_qr(
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)
+        from .label_engine import hex_to_cmyk
+
+        black = hex_to_cmyk("#000000")
+        c.saveState()
+        c.setFillColor(black)
+        c.setStrokeColor(black)
         c.drawImage(buf, x_pt, y_pt, width=w_pt, height=h_pt)
+        c.restoreState()
     except Exception as e:
         logger.warning("QR render failed for %r: %s", val[:20], e)
 
 
-def _apply_element_color(c: canvas.Canvas, el: dict, default_fill: str = "#000000") -> None:
+def _apply_element_color(c: Any, el: dict, default_fill: str = "#000000") -> None:
     """Set fill/stroke color from element textColor or backgroundColor (hex)."""
+    from .label_engine import hex_to_cmyk
+
     color = el.get("textColor") or el.get("text_color") or default_fill
     try:
-        if isinstance(color, str) and color.startswith("#"):
-            c.setFillColor(rl_colors.HexColor(color))
-            c.setStrokeColor(rl_colors.HexColor(color))
-        else:
-            c.setFillColor(color)
-            c.setStrokeColor(color)
+        cc = hex_to_cmyk(str(color) if isinstance(color, str) else default_fill)
+        c.setFillColor(cc)
+        c.setStrokeColor(cc)
     except Exception:
-        c.setFillColor(rl_colors.HexColor(default_fill))
-        c.setStrokeColor(rl_colors.HexColor(default_fill))
+        df = hex_to_cmyk(default_fill)
+        c.setFillColor(df)
+        c.setStrokeColor(df)
 
 
 def _render_element(
-    c: canvas.Canvas,
+    c: Any,
     el: dict,
     record: dict[str, Any],
     x0_mm: float,
@@ -243,10 +268,12 @@ def _render_element(
         c.setLineWidth(max(0.5, stroke * POINTS_PER_MM))
         if fill:
             try:
+                from .label_engine import hex_to_cmyk
+
                 if isinstance(fill, str) and fill.startswith("#"):
-                    c.setFillColor(rl_colors.HexColor(fill))
+                    c.setFillColor(hex_to_cmyk(fill))
                 else:
-                    c.setFillColor(fill)
+                    c.setFillColor(hex_to_cmyk("#000000"))
                 c.rect(x_pt, y_pt, w_pt, h_pt, fill=1, stroke=0)
             except Exception:
                 pass
@@ -282,7 +309,7 @@ def _normalize_template(template: dict) -> dict:
 # Legacy renderer. Do not use. Kept only for backward compatibility.
 # Does not support repeaters or groups; current PDF pipeline uses label_engine.render_label_to_canvas_engine.
 def render_label_to_canvas(
-    c: canvas.Canvas,
+    c: Any,
     template: dict,
     record: dict[str, Any],
     x0_mm: float = 0,
@@ -294,6 +321,7 @@ def render_label_to_canvas(
     Draw one label onto the canvas. Each label uses its own coordinate offset so elements
     render inside the label area. Coordinates: element["x"], element["y"] in mm -> PDF points + offset.
     """
+    _require_pdf()
     t = _normalize_template(template)
     label_width_mm = t["widthMm"]
     label_height_mm = t["heightMm"]
@@ -317,17 +345,28 @@ def build_label_pdf(
     records: list[dict[str, Any]],
     one_page_per_label: bool = True,
     calibration: dict | None = None,
+    *,
+    print_mode: bool = False,
 ) -> bytes:
     """
     Build a PDF from a label template and a list of records.
     Template must have widthMm, heightMm, elements. Uses label_engine.render_elements.
     Normalizes records so keys match template bindings (e.g. cart_name, barcode_data, loc_name).
-    calibration: optional dict with offset_x_mm, offset_y_mm, scale (applied only during export).
+    calibration: optional dict (offset/scale); ignored for PDF so each page media box equals the label (no canvas transform).
     """
     t = _normalize_template(template)
     width = t["widthMm"]
     height = t["heightMm"]
+    assert width and height, "label PDF requires width_mm and height_mm"
+    assert float(width) > 0 and float(height) > 0, "label PDF requires positive width_mm and height_mm"
     elements = t["elements"]
+    log_label_pdf_stage(
+        source="label_render_service.build_label_pdf",
+        template_json_present=isinstance(template, dict) and bool(template),
+        width_mm=float(width),
+        height_mm=float(height),
+        detail=f"element_count={len(elements)} records={len(records)}",
+    )
     # Ensure records have keys matching template bindings
     records = [_normalize_record_for_bindings(r, elements) for r in records]
     logger.info("LABEL TEMPLATE: %s", {"widthMm": width, "heightMm": height, "elementCount": len(elements)})
@@ -336,68 +375,141 @@ def build_label_pdf(
         logger.info("RECORD KEYS: %s", list(records[0].keys()))
     layout = {"elements": elements}
     from .label_engine import build_label_pdf_engine
-    return build_label_pdf_engine(layout, width, height, records, calibration=calibration)
+
+    return build_label_pdf_engine(
+        layout, width, height, records, calibration=calibration, print_mode=print_mode
+    )
 
 
 def build_label_pdf_multi(
     template_record_pairs: list[tuple[dict, dict[str, Any]]],
     calibration: dict | None = None,
+    *,
+    print_mode: bool = False,
 ) -> bytes:
     """
     Build one PDF with one page per (template, record) pair. Uses generic label engine.
-    calibration: optional dict with offset_x_mm, offset_y_mm, scale (applied only during export).
+    calibration: optional dict (offset/scale); ignored so each page matches that template’s label size only.
     """
-    from .label_engine import render_label_to_canvas_engine
+    _require_pdf()
+    from reportlab.lib.units import mm
+    from PyPDF2 import PdfReader
+
+    from .label_engine import (
+        LABEL_PDF_BLEED_MM,
+        draw_crop_marks_outside_trim,
+        render_label_to_canvas_engine,
+    )
     if not template_record_pairs:
         return build_label_pdf(
             {"widthMm": 100, "heightMm": 60, "dpi": 96, "elements": []},
             [{}],
             one_page_per_label=True,
             calibration=calibration,
+            print_mode=print_mode,
         )
-    ox_mm = 0.0 if not calibration else float(calibration.get("offset_x_mm") or 0)
-    oy_mm = 0.0 if not calibration else float(calibration.get("offset_y_mm") or 0)
-    scale = 1.0 if not calibration else float(calibration.get("scale") or 1.0)
-    offset_x_pt = ox_mm * POINTS_PER_MM
-    offset_y_pt = oy_mm * POINTS_PER_MM
+    if calibration:
+        ox = float(calibration.get("offset_x_mm") or 0)
+        oy = float(calibration.get("offset_y_mm") or 0)
+        sc = float(calibration.get("scale") or 1.0)
+        if ox != 0.0 or oy != 0.0 or sc != 1.0:
+            logger.debug(
+                "build_label_pdf_multi: ignoring printer calibration so each page matches its label template size",
+            )
+
     buf = io.BytesIO()
     c = None
+    last_logged_mm: tuple[float, float] | None = None
     for i, (template, record) in enumerate(template_record_pairs):
         t = _normalize_template(template)
         w_mm = t["widthMm"]
         h_mm = t["heightMm"]
+        assert w_mm and h_mm, "label PDF requires width_mm and height_mm"
+        assert float(w_mm) > 0 and float(h_mm) > 0, "label PDF requires positive width_mm and height_mm"
+        wh = (float(w_mm), float(h_mm))
+        if last_logged_mm != wh:
+            print("FINAL PDF SIZE:", w_mm, h_mm)
+            last_logged_mm = wh
         elements = t["elements"]
         layout = {"elements": elements}
         record = _normalize_record_for_bindings(record, elements)
-        label_width_pt = w_mm * POINTS_PER_MM
-        label_height_pt = h_mm * POINTS_PER_MM
+
+        template_json = json.dumps(t, default=str, ensure_ascii=False)
+        logger.warning("TEMPLATE_JSON [%s]: %s", i, template_json)
+        logger.warning("WIDTH_MM: %s, HEIGHT_MM: %s", w_mm, h_mm)
+
+        bleed_mm = float(LABEL_PDF_BLEED_MM) if print_mode else 0.0
+        final_w_mm = float(w_mm)
+        final_h_mm = float(h_mm)
+        bleed_pt = bleed_mm * mm
+        width_pt = (final_w_mm + 2.0 * bleed_mm) * mm
+        height_pt = (final_h_mm + 2.0 * bleed_mm) * mm
+        trim_l = bleed_pt
+        trim_b = bleed_pt
+        trim_r = trim_l + final_w_mm * mm
+        trim_t = trim_b + final_h_mm * mm
+        logger.warning("WIDTH_PT: %s, HEIGHT_PT: %s", width_pt, height_pt)
+
         if c is None:
-            c = canvas.Canvas(buf, pagesize=(label_width_pt, label_height_pt))
+            c = canvas.Canvas(buf, pagesize=(width_pt, height_pt))
+            logger.warning("CANVAS_PAGESIZE: %s", getattr(c, "_pagesize", None))
+            print("PDF GENERATOR FILE:", __file__)
+            print("REAL PDF SIZE:", getattr(c, "_pagesize", None))
+            log_label_pdf_stage(
+                source="label_render_service.build_label_pdf_multi",
+                width_mm=float(w_mm),
+                height_mm=float(h_mm),
+                canvas_obj=c,
+                detail=f"first_canvas pair_index={i} pagesize_pt=({width_pt:.4f},{height_pt:.4f})",
+            )
+            print_pdf_canvas_size(c)
+            if print_mode:
+                c.setAuthor("Label System")
+                c.setTitle("Warehouse Labels")
+                c.setSubject("Print-ready labels")
         else:
             c.showPage()
-            c.setPageSize((label_width_pt, label_height_pt))
+            c.setPageSize((width_pt, height_pt))
+        if print_mode:
+            draw_crop_marks_outside_trim(c, trim_l, trim_b, trim_r, trim_t)
         c.saveState()
-        c.translate(offset_x_pt, offset_y_pt)
-        c.scale(scale, scale)
-        render_label_to_canvas_engine(c, layout, record, w_mm, h_mm, 0.0, 0.0)
+        c.translate(bleed_pt, bleed_pt)
+        render_label_to_canvas_engine(
+            c, layout, record, w_mm, h_mm, 0.0, 0.0, bleed_mm=bleed_mm, print_mode=print_mode
+        )
         c.restoreState()
     if c is not None:
         c.save()
-    buf.seek(0)
-    return buf.read()
+    pdf_bytes = buf.getvalue()
+    try:
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        if reader.pages:
+            logger.warning("PDF_MEDIABOX: %s", reader.pages[0].mediabox)
+        else:
+            logger.warning("PDF_MEDIABOX: (no pages)")
+    except Exception as exc:
+        logger.warning("PDF_MEDIABOX: read failed: %s", exc)
+    return pdf_bytes
 
 
 def _normalize_record_for_bindings(record: dict[str, Any], elements: list) -> dict[str, Any]:
     """
     Ensure record has keys that match common template bindings so text/barcode elements resolve.
     Maps alternate key names to expected names (e.g. name -> cart_name, barcode -> barcode_data).
-    Does not overwrite existing keys; only fills in missing ones.
+    Never overwrites a key that already exists on the record (including "" from CSV).
+    Only fills missing canonical + braced pairs; then syncs bare <-> braced without overwriting.
     """
     if not isinstance(record, dict):
         return record
     out = dict(record)
-    # barcode_data: required by barcode elements; fallback from cart_barcode, basket_barcode, loc_barcode, barcode
-    if not out.get("barcode_data") and not out.get("{barcode_data}"):
+
+    def _sync_bare_from_braced(canonical: str, braced: str) -> None:
+        """Copy braced → canonical only; never write ``{...}`` keys (layout engine uses bare names)."""
+        if braced in out and canonical not in out:
+            out[canonical] = out[braced]
+
+    # barcode_data: fallback only when missing keys entirely (CSV / caller values win, even empty string)
+    if "barcode_data" not in out:
         val = (
             out.get("cart_barcode")
             or out.get("basket_barcode")
@@ -407,31 +519,47 @@ def _normalize_record_for_bindings(record: dict[str, Any], elements: list) -> di
         )
         if val:
             out["barcode_data"] = val
-            out["{barcode_data}"] = val
     # Cart bindings
-    if out.get("name") and not out.get("cart_name"):
-        out["cart_name"] = out["name"]
-        out["{cart_name}"] = out["name"]
-    if out.get("barcode") and not out.get("cart_barcode"):
-        out["cart_barcode"] = out["barcode"]
-        out["{cart_barcode}"] = out["barcode"]
-    # Location bindings
-    if out.get("location_name") and not out.get("loc_name"):
-        out["loc_name"] = out["location_name"]
-        out["{loc_name}"] = out["location_name"]
-    if out.get("location_code") and not out.get("loc_name"):
-        out["loc_name"] = out["location_code"]
-        out["{loc_name}"] = out["location_code"]
-    if out.get("location_barcode") and not out.get("loc_barcode"):
-        out["loc_barcode"] = out["location_barcode"]
-        out["{loc_barcode}"] = out["location_barcode"]
-    if out.get("zone_name") and not out.get("zone"):
-        out["zone"] = out["zone_name"]
-        out["{zone}"] = out["zone_name"]
-    # Basket: basket_code -> basket_name if missing
-    if out.get("basket_code") and not out.get("basket_name"):
-        out["basket_name"] = out["basket_code"]
-        out["{basket_name}"] = out["basket_code"]
+    if "cart_name" not in out and out.get("name"):
+        v = out["name"]
+        out["cart_name"] = v
+    if "cart_barcode" not in out and out.get("barcode"):
+        v = out["barcode"]
+        out["cart_barcode"] = v
+    # Location bindings (do not replace CSV loc_name because location_name is present and loc_name is "")
+    if "loc_name" not in out and out.get("location_name"):
+        v = out["location_name"]
+        out["loc_name"] = v
+    if "loc_name" not in out and out.get("location_code"):
+        v = out["location_code"]
+        out["loc_name"] = v
+    if "loc_barcode" not in out and out.get("location_barcode"):
+        v = out["location_barcode"]
+        out["loc_barcode"] = v
+    if "zone" not in out and out.get("zone_name"):
+        v = out["zone_name"]
+        out["zone"] = v
+    if "basket_name" not in out and out.get("basket_code"):
+        v = out["basket_code"]
+        out["basket_name"] = v
+
+    _sync_bare_from_braced("loc_name", "{loc_name}")
+    _sync_bare_from_braced("loc_barcode", "{loc_barcode}")
+    _sync_bare_from_braced("barcode_data", "{barcode_data}")
+    _sync_bare_from_braced("cart_name", "{cart_name}")
+    _sync_bare_from_braced("cart_barcode", "{cart_barcode}")
+    _sync_bare_from_braced("zone", "{zone}")
+    _sync_bare_from_braced("basket_name", "{basket_name}")
+
+    from .location_label_parse import inject_parsed_location_fields
+
+    inject_parsed_location_fields(out)
+
+    out = {
+        k: v
+        for k, v in out.items()
+        if not (isinstance(k, str) and k.startswith("{") and k.endswith("}"))
+    }
     return out
 
 
@@ -533,6 +661,79 @@ def get_product_label_template_id(db: "Session", tenant_id: int, product_id: int
     return int(row[0]) if row else None
 
 
+def sanitize_label_record_keys(record: Any, *, depth: int = 0) -> Any:
+    """
+    Normalize dict keys from template style ``{rack_name}`` to ``rack_name`` (strip ``{`` / ``}``).
+    Recurses into nested dicts and list elements. Braced keys are merged first so bare keys win on collision.
+    """
+    if isinstance(record, dict):
+        items = list(record.items())
+
+        def _sort_key(kv: tuple[Any, Any]) -> tuple[int, str]:
+            k = kv[0]
+            ks = k if isinstance(k, str) else str(k)
+            has_brace = "{" in ks or "}" in ks
+            return (0 if has_brace else 1, ks)
+
+        items.sort(key=_sort_key)
+        clean: dict[str, Any] = {}
+        for k, v in items:
+            ks = k if isinstance(k, str) else str(k)
+            nk = ks.replace("{", "").replace("}", "")
+            if not nk:
+                continue
+            if isinstance(v, list):
+                clean[nk] = [sanitize_label_record_keys(x, depth=depth + 1) for x in v]
+            elif isinstance(v, dict):
+                clean[nk] = sanitize_label_record_keys(v, depth=depth + 1)
+            else:
+                clean[nk] = v
+        if depth == 0:
+            print("SANITIZED RECORD:", clean)
+        return clean
+    if isinstance(record, list):
+        return [sanitize_label_record_keys(x, depth=depth) for x in record]
+    return record
+
+
+def _warn_and_clamp_a4_like_page_mm(template: dict[str, Any]) -> None:
+    """
+    In-place: log if any side > 200 mm; if dimensions look like an ISO A4 sheet in mm, clamp to 100×60 mm for label PDF.
+    Matches frontend ``sanitizeTemplateJsonDimensionsForCsvExport`` heuristics.
+    """
+    w = template.get("widthMm")
+    h = template.get("heightMm")
+    try:
+        w_eff = float(w) if w is not None else float("nan")
+        h_eff = float(h) if h is not None else float("nan")
+    except (TypeError, ValueError):
+        return
+    if not (w_eff > 0 and h_eff > 0):
+        return
+    if w_eff > 200 or h_eff > 200:
+        logger.warning(
+            "render_label_template: Template looks like A4 or oversized sheet (%.2f×%.2f mm)",
+            w_eff,
+            h_eff,
+        )
+        print("Template looks like A4 or oversized sheet:", w_eff, h_eff)
+    looks_like_a4_sheet = (
+        (w_eff >= 199 and h_eff >= 280)
+        or (h_eff >= 199 and w_eff >= 280)
+        or (abs(w_eff - 210) < 5 and abs(h_eff - 297) < 5)
+        or (abs(h_eff - 210) < 5 and abs(w_eff - 297) < 5)
+    )
+    if looks_like_a4_sheet:
+        logger.warning(
+            "render_label_template: clamped page size to 100×60 mm (was %.2f×%.2f mm)",
+            w_eff,
+            h_eff,
+        )
+        print("TEMPLATE SIZE CLAMPED TO: 100 60 (was", w_eff, h_eff, ")")
+        template["widthMm"] = 100.0
+        template["heightMm"] = 60.0
+
+
 def render_label_template(
     db: "Session",
     template_id: int,
@@ -540,11 +741,20 @@ def render_label_template(
     tenant_id: int,
     calibration: dict | None = None,
     template_variables: dict[str, Any] | None = None,
+    override_template_json: str | None = None,
+    *,
+    print_mode: bool = False,
+    group_mode: bool = False,
+    group_by_rack: bool = False,
+    floor_sets: list[list[str]] | None = None,
 ) -> bytes:
     """
-    Single entry point for label PDF generation. Loads template from SavedLabelTemplate.template_json only.
-    Ensures template_json is parsed to dict and normalized (widthMm, heightMm, elements) before rendering.
-    calibration: optional dict with offset_x_mm, offset_y_mm, scale (applied only during export).
+    Single entry point for label PDF generation (template engine + ``build_label_pdf_multi``).
+
+    Template JSON: uses ``override_template_json`` from the request when non-empty, otherwise the row in DB.
+    Raises ``ValueError`` if no usable ``template_json`` (caller should map to HTTP 400).
+
+    calibration: optional printer calibration dict; not applied to PDF output (exact label-sized pages).
     template_variables: optional dict merged into each record before layout (e.g. warehouse_name).
     """
     from ..models.label_template import SavedLabelTemplate
@@ -555,13 +765,42 @@ def render_label_template(
     ).first()
     if not row:
         raise ValueError(f"Template id={template_id} not found for tenant_id={tenant_id}")
-    raw = getattr(row, "template_json", None)
+    raw: str | None = None
+    if override_template_json is not None and str(override_template_json).strip():
+        raw = str(override_template_json).strip()
+    else:
+        raw_db = getattr(row, "template_json", None)
+        raw = str(raw_db).strip() if raw_db is not None and str(raw_db).strip() else None
     if not raw:
-        raise ValueError(f"Template id={template_id} has no template_json")
+        raise ValueError(
+            "Template required for CSV labels: missing template_json. "
+            "Pass template_json in POST /labels/render-pdf or save template_json on the saved template.",
+        )
+    raw_present = bool(raw and str(raw).strip())
     # Always parse to dict (DB stores template_json as string)
     template = template_json_to_dict(raw)
+    _warn_and_clamp_a4_like_page_mm(template)
     width = template.get("widthMm")
     height = template.get("heightMm")
+    print("TEMPLATE SIZE:", width, height)
+    nrec = 1 if isinstance(data, dict) else len(data) if isinstance(data, list) else 0
+    log_label_pdf_flow(
+        "label_render_service",
+        template_id=int(template_id),
+        template_json=str(raw) if raw is not None else None,
+        width_mm=float(width) if width is not None else None,
+        height_mm=float(height) if height is not None else None,
+        detail=f"render_label_template records={nrec}",
+    )
+    log_label_pdf_stage(
+        source="label_render_service.render_label_template",
+        template_id=int(template_id),
+        template_json_present=raw_present,
+        template_name=getattr(row, "name", None),
+        width_mm=float(width) if width is not None else None,
+        height_mm=float(height) if height is not None else None,
+        detail=f"record_count={1 if isinstance(data, dict) else len(data) if isinstance(data, list) else 0}",
+    )
     elements = template.get("elements", [])
     if not elements:
         logger.warning(
@@ -573,12 +812,35 @@ def render_label_template(
     records = [data] if isinstance(data, dict) else data
     if not records:
         raise ValueError("No records to render")
+    records = [sanitize_label_record_keys(r, depth=0) if isinstance(r, dict) else r for r in records]
     if records:
-        logger.info("RECORD KEYS: %s", list(records[0].keys()))
+        logger.info("RECORD KEYS (after sanitize): %s", list(records[0].keys()) if isinstance(records[0], dict) else records[0])
     # Merge template variables into each record (caller-provided globals), then normalize bindings
     vars_dict = template_variables if isinstance(template_variables, dict) else {}
+    if isinstance(vars_dict, dict) and vars_dict:
+        vars_dict = sanitize_label_record_keys(vars_dict, depth=1)
     records = [_normalize_record_for_bindings({**vars_dict, **r}, elements) for r in records]
-    print("RENDER RECORDS:", records)
-    # Pass explicit shape so build_label_pdf always receives widthMm, heightMm, elements
+    if group_mode:
+        from .label_record_grouping import (
+            merge_records_by_floor_sets,
+            merge_records_by_row_multi_slot,
+            normalize_floor_sets_param,
+        )
+
+        fs = normalize_floor_sets_param(floor_sets)
+        if fs:
+            records = merge_records_by_floor_sets(list(records), fs, by_rack=bool(group_by_rack))
+        else:
+            records = merge_records_by_row_multi_slot(list(records), by_rack=bool(group_by_rack))
+    for rec in records:
+        print("FINAL RECORD:", rec)
+    # One (template, record) pair per page — same engine path for CSV and other clients; never barcode_pdf_service.
     template_for_pdf = {"widthMm": width, "heightMm": height, "elements": elements}
-    return build_label_pdf(template_for_pdf, records, one_page_per_label=True, calibration=calibration)
+    pairs: list[tuple[dict, dict[str, Any]]] = [(template_for_pdf, rec) for rec in records]
+    logger.info(
+        "render_label_template: using build_label_pdf_multi pairs=%s widthMm=%s heightMm=%s",
+        len(pairs),
+        width,
+        height,
+    )
+    return build_label_pdf_multi(pairs, calibration=calibration, print_mode=print_mode)

@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import type { RackState, LayoutState } from "./warehouseTypes";
-import { getLevelConfig, getTotalLocations, getRackDisplayId, binsToLevels } from "./warehouseUtils";
+import { getLevelConfig, getTotalLocations, getRackDisplayId, binsToLevels, getDisplayLocationLabel, validateRackName, effectiveRackDisplayName } from "./warehouseUtils";
 import { UI_STRINGS } from "../../constants/uiStrings";
 
 export type RackPropertiesSidebarProps = {
@@ -30,6 +30,11 @@ export type RackPropertiesSidebarProps = {
   finishRoute: () => void;
 };
 
+function racksMatchIdentity(a: RackState, b: RackState): boolean {
+  if (a.uuid != null && b.uuid != null && String(a.uuid) === String(b.uuid)) return true;
+  return String(a.id ?? a.rack_index) === String(b.id ?? b.rack_index);
+}
+
 export function RackPropertiesSidebar({
   layout,
   selectedRack,
@@ -56,6 +61,22 @@ export function RackPropertiesSidebar({
   const asideScrollRef = useRef<HTMLElement>(null);
   const scrollKey = `${selectedRack?.id ?? selectedRack?.rack_index ?? ""}-${routeStepIndex}-${isRouteActive}-${selectedRackIds.join(",")}`;
   useWheelScrollBoundaryContain(asideScrollRef, true, scrollKey);
+
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const rackSelKey = selectedRack ? `${selectedRack.uuid ?? ""}-${selectedRack.id ?? selectedRack.rack_index}` : "";
+  const nameSaved = (selectedRack?.name ?? "").trim();
+  const effectiveRackLabel = selectedRack ? effectiveRackDisplayName(selectedRack, layout) : "";
+  /** When `rack.name` is empty, re-sync draft if auto label (slot / generated) changes; when name is set, only selection or saved name matters. */
+  const rackDraftSyncKey = selectedRack ? `${rackSelKey}|${nameSaved}|${nameSaved ? "" : effectiveRackLabel}` : "";
+  useEffect(() => {
+    if (!selectedRack) {
+      setNameDraft("");
+    } else {
+      setNameDraft(effectiveRackDisplayName(selectedRack, layout));
+    }
+    setNameError(null);
+  }, [rackDraftSyncKey, selectedRack]);
 
   return (
     <aside
@@ -93,7 +114,37 @@ export function RackPropertiesSidebar({
       ) : (
         <>
           {selectedRack ? (
-            <p className="text-[#1E293B] font-semibold">{getRackDisplayId(selectedRack, layout)}</p>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-semibold uppercase text-slate-500">Nazwa regału</label>
+              <input
+                type="text"
+                value={nameDraft}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setNameDraft(v);
+                  if (!selectedRack) return;
+                  const id = { id: selectedRack.id, rack_index: selectedRack.rack_index, uuid: selectedRack.uuid };
+                  const nextName = v.trim() === "" ? undefined : v.trim();
+                  const vr = validateRackName(v, layout, id);
+                  if (vr.valid) {
+                    setNameError(null);
+                  } else {
+                    setNameError(vr.error ?? `Regał o nazwie '${v.trim() || v || "?"}' już istnieje`);
+                  }
+                  setLayout((prev) => ({
+                    ...prev,
+                    racks: prev.racks.map((rack) =>
+                      racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack
+                    ),
+                  }));
+                }}
+                placeholder={getRackDisplayId(selectedRack, layout)}
+                className={`w-full rounded-lg border px-2 py-1.5 text-sm text-slate-800 ${
+                  nameError ? "border-red-400 ring-1 ring-red-200" : "border-slate-200"
+                }`}
+              />
+              {nameError ? <p className="text-[11px] text-red-600">{nameError}</p> : null}
+            </div>
           ) : (
             <p className="text-[#1E293B] font-semibold">Brak wybranego regalu</p>
           )}
@@ -142,11 +193,18 @@ export function RackPropertiesSidebar({
                     <div key={lev.levelIndex} className="text-[10px]">
                       <p className="font-semibold text-slate-600 mb-0.5">Poziom {lev.levelIndex}</p>
                       <div className="pl-2 space-y-0.5">
-                        {lev.positions.map((pos, posIndex) => (
-                          <div key={pos.locationUUID} className="font-mono text-slate-700 truncate" title={pos.locationUUID}>
-                            {pos.locationAddress || pos.locationUUID || `Pozycja ${posIndex + 1}`}
-                          </div>
-                        ))}
+                        {lev.positions.map((pos, posIndex) => {
+                          const bin = selectedRack.bins?.find((b) => (b.locationUUID ?? "").trim() === (pos.locationUUID ?? "").trim());
+                          const line =
+                            bin != null
+                              ? getDisplayLocationLabel(selectedRack, bin, layout)
+                              : pos.locationAddress || pos.locationUUID || `Pozycja ${posIndex + 1}`;
+                          return (
+                            <div key={pos.locationUUID} className="font-mono text-slate-700 truncate" title={pos.locationUUID}>
+                              {line}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}

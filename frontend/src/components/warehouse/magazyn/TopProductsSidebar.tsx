@@ -37,11 +37,11 @@ export function TopProductsSidebar({
 }: TopProductsSidebarProps) {
   return (
     <aside
-      className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-hidden rounded-r-xl border-l border-slate-700 bg-slate-800"
+      className="flex h-full min-h-0 w-[380px] flex-none flex-col self-stretch overflow-hidden rounded-r-xl border-l border-slate-700 bg-slate-800"
       aria-label="Produkty w magazynie"
     >
       <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-        <div className="shrink-0 border-b border-slate-600 flex flex-col gap-2 px-4 py-3">
+        <div className="shrink-0 border-b border-slate-600 flex flex-col gap-2.5 px-4 py-3.5">
           <h2 className="text-xs font-black uppercase text-slate-300">PRODUKTY W MAGAZYNIE</h2>
           <input
             type="text"
@@ -93,7 +93,7 @@ export function TopProductsSidebar({
             </button>
           )}
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-2 flex flex-col gap-3">
         {topProducts.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-6">Brak produktów</p>
         ) : (
@@ -106,7 +106,11 @@ export function TopProductsSidebar({
                 title={`Otwórz produkt: ${product.name}`}
                 onMouseEnter={() => onHoverProductIdChange?.(product.id)}
                 onMouseLeave={() => onHoverProductIdChange?.(null)}
-                className="block rounded-xl border border-slate-600 bg-slate-700/80 p-3 shadow transition hover:bg-slate-600/100 hover:shadow-sm cursor-pointer"
+                className={`block cursor-pointer rounded-xl border p-3.5 shadow-sm transition-all duration-150 ${
+                  selectedProductIdOnMap === product.id
+                    ? "border-cyan-400/50 bg-slate-600/90 ring-2 ring-cyan-400/35 shadow-md"
+                    : "border-slate-600 bg-slate-700/80 hover:border-slate-500 hover:bg-slate-600/90 hover:shadow-md"
+                }`}
               >
                 <div className="flex items-start gap-3">
                   <div className="relative w-12 h-12 shrink-0 rounded-lg overflow-hidden bg-slate-600 border border-slate-500">

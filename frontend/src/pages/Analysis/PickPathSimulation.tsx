@@ -277,7 +277,7 @@ export default function PickPathSimulation() {
   const totalPages = Math.max(1, Math.ceil(totalOrders / ORDERS_PAGE_SIZE));
 
   return (
-    <div className="p-6">
+    <div className="min-w-0">
       <h1 className="text-xl font-semibold text-slate-800">Symulacja trasy</h1>
       <p className="mt-2 text-slate-600 mb-4">
         Symulacja tras kompletacji: wybierz magazyn, wyszukaj i zaznacz zamówienia, uruchom symulację wsadową.

@@ -19,4 +19,5 @@ export { default as PalletIcon } from "./PalletIcon";
 export { default as CartonIcon } from "./CartonIcon";
 export { default as AisleIcon } from "./AisleIcon";
 export { default as BinLocationIcon } from "./BinLocationIcon";
+export { default as BasketIcon } from "./BasketIcon";
 export type { IconProps } from "./WarehouseIcon";

@@ -5,7 +5,8 @@ export type RowPreviewOverlayProps = {
   x: number;
   y: number;
   rackCount: number;
-  totalLength: number;
+  /** Physical length along the row axis (meters), from grid + building dimensions. */
+  rowLengthMeters: number;
   /** When true, use position:fixed (viewport coords); otherwise position:absolute */
   useFixedPosition?: boolean;
 };
@@ -18,13 +19,10 @@ export function RowPreviewOverlay({
   x,
   y,
   rackCount,
-  totalLength,
+  rowLengthMeters,
   useFixedPosition = false,
 }: RowPreviewOverlayProps) {
   if (!visible) return null;
-
-  const formatMeters = (value: number): number => Number(value.toFixed(2));
-  const formattedTotalLength = formatMeters(totalLength);
 
   const pos = useFixedPosition ? { left: x + CURSOR_OFFSET_PX, top: y + CURSOR_OFFSET_PX } : { left: x, top: y };
   const animate = rackCount > 0;
@@ -33,8 +31,8 @@ export function RowPreviewOverlay({
     <>
       <style>{`
         @keyframes row-preview-fade-in {
-          from { opacity: 0; transform: scale(0.98); }
-          to { opacity: 1; transform: scale(1); }
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
       `}</style>
       <div
@@ -57,7 +55,9 @@ export function RowPreviewOverlay({
         <div style={{ fontSize: "10px", fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: colors.textSecondary }}>Liczba regałów</div>
         <div style={{ fontSize: "13px", fontWeight: 600, color: colors.textPrimary, marginTop: "2px" }}>{rackCount}</div>
         <div style={{ fontSize: "10px", fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: colors.textSecondary, marginTop: "6px" }}>Długość rzędu</div>
-        <div style={{ fontSize: "13px", fontWeight: 600, color: colors.textPrimary, marginTop: "2px" }}>{formattedTotalLength} m</div>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: colors.textPrimary, marginTop: "2px" }}>
+          {rowLengthMeters.toFixed(1)} m
+        </div>
       </div>
     </>
   );

@@ -9,6 +9,14 @@ import {
 } from "../../components/warehouse/warehouseUtils";
 import { normalizeInventoryLocationUuid, type InventoryMaps, type InventoryRow } from "./inventoryMaps";
 
+/** API / state may expose `location_uuid` (snake) or `locationUUID` (camel). */
+function binLocationUuid(bin: BinState): string | undefined {
+  const u = (bin as { locationUUID?: string; location_uuid?: string }).locationUUID ?? (bin as { location_uuid?: string }).location_uuid;
+  if (typeof u !== "string") return undefined;
+  const t = u.trim();
+  return t !== "" ? t : undefined;
+}
+
 function assignedLocationEntryUuid(a: {
   locationUUID?: string;
   location_uuid?: string;
@@ -18,18 +26,14 @@ function assignedLocationEntryUuid(a: {
   return undefined;
 }
 
-/** Quantity from assigned_locations or legacy location_id for this bin. */
+/** Quantity from assigned_locations (UUID-only) for this bin. */
 function quantityFromAssignedForBin(
   p: WarehouseProduct,
-  binLabel: string,
   uuid: string | undefined
 ): number {
   if (uuid && p.assignedLocations?.length) {
     const ent = p.assignedLocations.find((x) => assignedLocationEntryUuid(x) === uuid);
     if (ent) return safeQuantity(ent.quantity);
-  }
-  if (binLabel && p.location_id === binLabel) {
-    return safeQuantity(p.quantity);
   }
   return 0;
 }
@@ -215,7 +219,6 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     return map;
   }, [products]);
 
-  const getBinKey = (bin: BinState) => (bin.label ?? bin.location_id ?? "").trim();
   /** Stock rows for a bin (join inventory.location_uuid ↔ bin.locationUUID). */
   const getInventoryRowsForBin = useCallback(
     (locationUuid?: string | null) => {
@@ -237,7 +240,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     if (!selectedRackForMagazyn) return new Set<string>();
     return new Set(
       selectedRackForMagazyn.bins
-        .map((b) => b.locationUUID)
+        .map((b) => binLocationUuid(b))
         .filter((u): u is string => Boolean(u))
     );
   }, [selectedRackForMagazyn]);
@@ -245,8 +248,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
   const usedVolumeAtBin = useCallback(
     (bin: BinState) => {
       let used = 0;
-      const binLabel = getBinKey(bin);
-      const uuid = bin.locationUUID;
+      const uuid = binLocationUuid(bin);
       const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       for (const [pid, q] of stockByPid) {
         const p = productsById.get(pid);
@@ -254,7 +256,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
         used += q * safeVolumeDm3(p.volume_dm3);
       }
       for (const p of products) {
-        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        const aQty = quantityFromAssignedForBin(p, uuid);
         if (aQty <= 0) continue;
         if (stockByPid.has(p.id)) continue;
         used += aQty * safeVolumeDm3(p.volume_dm3);
@@ -277,13 +279,12 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     if (!selectedRackForMagazyn) return {};
     const out: Record<string, number> = {};
     for (const b of selectedRackForMagazyn.bins) {
-      const binLabel = getBinKey(b);
-      const uuid = b.locationUUID;
+      const uuid = binLocationUuid(b);
       const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       let qty = 0;
       for (const q of stockByPid.values()) qty += q;
       for (const p of products) {
-        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        const aQty = quantityFromAssignedForBin(p, uuid);
         if (aQty <= 0) continue;
         if (stockByPid.has(p.id)) continue;
         qty += aQty;
@@ -297,13 +298,12 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     if (!selectedRackForMagazyn) return {};
     const out: Record<string, number> = {};
     for (const b of selectedRackForMagazyn.bins) {
-      const binLabel = getBinKey(b);
-      const uuid = b.locationUUID;
+      const uuid = binLocationUuid(b);
       const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       const seen = new Set<string>();
       for (const pid of stockByPid.keys()) seen.add(pid);
       for (const p of products) {
-        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        const aQty = quantityFromAssignedForBin(p, uuid);
         if (aQty <= 0) continue;
         if (stockByPid.has(p.id)) continue;
         seen.add(p.id);
@@ -319,8 +319,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     const out: Record<string, number> = {};
     for (const b of selectedRackForMagazyn.bins) {
       let load = 0;
-      const binLabel = getBinKey(b);
-      const uuid = b.locationUUID;
+      const uuid = binLocationUuid(b);
       const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       for (const [pid, q] of stockByPid) {
         const p = productsById.get(pid);
@@ -331,7 +330,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
         load += productWeight * q;
       }
       for (const p of products) {
-        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        const aQty = quantityFromAssignedForBin(p, uuid);
         if (aQty <= 0) continue;
         if (stockByPid.has(p.id)) continue;
         const weight = (p as { weight_kg?: number; weight?: number }).weight_kg ?? (p as { weight?: number }).weight ?? 0;
@@ -368,8 +367,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
       const quantity = binItemCounts[key] ?? 0;
       if (quantity <= 0) continue;
 
-      const binLabel = getBinKey(bin);
-      const uuid = bin.locationUUID;
+      const uuid = binLocationUuid(bin);
       const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       let firstProduct: WarehouseProduct | null = null;
       for (const inv of getInventoryRowsForBin(uuid)) {
@@ -379,7 +377,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
       }
       if (!firstProduct) {
         for (const p of products) {
-          const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+          const aQty = quantityFromAssignedForBin(p, uuid);
           if (aQty <= 0) continue;
           if (stockByPid.has(p.id)) continue;
           firstProduct = p;
@@ -426,8 +424,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     > = {};
     for (const bin of rack.bins) {
       const key = `${bin.level_index}-${bin.segment_index}`;
-      const binLabel = getBinKey(bin);
-      const uuid = bin.locationUUID;
+      const uuid = binLocationUuid(bin);
       const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       const qtyByProduct = new Map<string, { product: WarehouseProduct; quantity: number }>();
       for (const inv of getInventoryRowsForBin(uuid)) {
@@ -441,7 +438,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
         else qtyByProduct.set(pid, { product: p, quantity: qty });
       }
       for (const p of products) {
-        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        const aQty = quantityFromAssignedForBin(p, uuid);
         if (aQty <= 0) continue;
         if (stockByPid.has(p.id)) continue;
         qtyByProduct.set(p.id, { product: p, quantity: aQty });
@@ -508,8 +505,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
     > = {};
     for (const bin of rack.bins) {
       const key = `${bin.level_index}-${bin.segment_index}`;
-      const binLabel = getBinKey(bin);
-      const uuid = bin.locationUUID;
+      const uuid = binLocationUuid(bin);
       const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
       const qtyByProduct = new Map<string, { product: WarehouseProduct; quantity: number }>();
       for (const inv of getInventoryRowsForBin(uuid)) {
@@ -523,7 +519,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
         else qtyByProduct.set(pid, { product: p, quantity: qty });
       }
       for (const p of products) {
-        const aQty = quantityFromAssignedForBin(p, binLabel, uuid);
+        const aQty = quantityFromAssignedForBin(p, uuid);
         if (aQty <= 0) continue;
         if (stockByPid.has(p.id)) continue;
         qtyByProduct.set(p.id, { product: p, quantity: aQty });

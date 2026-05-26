@@ -172,11 +172,13 @@ class Bin(Base, BaseModelMixin):
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     label = Column(String, nullable=False)
     barcode = Column(String(64), unique=True, nullable=True, index=True)  # LOC-{rack}-{level}-{bin} e.g. LOC-A01-03-02
+    #: Wewnętrzny kod skanowania lokalizacji (ESP:sh:id); unikat globalnie — indeks w schema_upgrade.
+    scan_code = Column(String(80), nullable=True, index=True)
     level_index = Column(Integer, nullable=False)
     segment_index = Column(Integer, nullable=False)
     volume_dm3 = Column(Float, nullable=False, default=0)
     current_load_dm3 = Column(Float, nullable=False, default=0)
-    storage_type = Column(String(32), nullable=True, default="primary")  # normalized to primary | reserve | store | buffer | damaged
+    storage_type = Column(String(32), nullable=True, default="primary")  # normalized: primary | pick | buffer | reserve | damaged | unknown
 
     rack = relationship("Rack", back_populates="bins")
 

@@ -9,13 +9,15 @@ API: Pick tasks (enterprise model).
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from ..services.inventory_lot_keys import NO_EXPIRY_SENTINEL
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models.pick import Pick
 from ..models.pick_task import PickTask
 from ..models.pick_wave import PickWave, PickWaveTask
-from ..models.stock import Stock
+from ..models.inventory import Inventory
 from ..models.stock_reservation import StockReservation
 from ..models.stock_movement import StockMovement
 from ..schemas.pick import PickRead, PickListRead, PickCompleteBody
@@ -53,22 +55,27 @@ def list_picks(
         .order_by(PickTask.id)
         .all()
     )
-    return [
-        PickListRead(
-            id=t.id,
-            tenant_id=t.tenant_id,
-            order_id=t.order_id,
-            product_id=t.product_id,
-            location_id=t.location_id,
-            quantity=t.quantity,
-            cart_id=t.cart_id,
-            status=t.status,
-            product_name=t.product.name if t.product else None,
-            location_name=t.location.name if t.location else None,
-            order_number=t.order.number if t.order else None,
+    out = []
+    for t in tasks:
+        ed = getattr(t, "expiry_date", None) or NO_EXPIRY_SENTINEL
+        out.append(
+            PickListRead(
+                id=t.id,
+                tenant_id=t.tenant_id,
+                order_id=t.order_id,
+                product_id=t.product_id,
+                location_id=t.location_id,
+                quantity=t.quantity,
+                batch_number=getattr(t, "batch_number", "") or "",
+                expiry_date=None if ed >= NO_EXPIRY_SENTINEL else ed,
+                cart_id=t.cart_id,
+                status=t.status,
+                product_name=t.product.name if t.product else None,
+                location_name=t.location.name if t.location else None,
+                order_number=t.order.number if t.order else None,
+            )
         )
-        for t in tasks
-    ]
+    return out
 
 
 @router.get("/{pick_id}", response_model=PickRead)
@@ -80,7 +87,20 @@ def get_pick(
     task = db.query(PickTask).filter(PickTask.id == pick_id, PickTask.tenant_id == tenant_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Pick not found")
-    return task
+    ed = getattr(task, "expiry_date", None) or NO_EXPIRY_SENTINEL
+    return PickRead(
+        id=task.id,
+        tenant_id=task.tenant_id,
+        order_id=task.order_id,
+        product_id=task.product_id,
+        location_id=task.location_id,
+        quantity=task.quantity,
+        batch_number=getattr(task, "batch_number", "") or "",
+        expiry_date=None if ed >= NO_EXPIRY_SENTINEL else ed,
+        cart_id=task.cart_id,
+        status=task.status,
+        inventory_unit_id=None,
+    )
 
 
 @router.post("/{pick_id}/complete")
@@ -111,13 +131,17 @@ def complete_pick(
     if qty <= 0 or qty > task.quantity:
         raise HTTPException(status_code=400, detail="Invalid quantity")
 
-    # Find reservation (order, product, location, status=reserved)
+    t_bn = getattr(task, "batch_number", "") or ""
+    t_ed = getattr(task, "expiry_date", None) or NO_EXPIRY_SENTINEL
+    # Find reservation (order, product, location, lot, status=reserved)
     reservation = (
         db.query(StockReservation)
         .filter(
             StockReservation.order_id == task.order_id,
             StockReservation.product_id == task.product_id,
             StockReservation.location_id == task.location_id,
+            StockReservation.batch_number == t_bn,
+            StockReservation.expiry_date == t_ed,
             StockReservation.status == "reserved",
             StockReservation.tenant_id == tenant_id,
         )
@@ -126,14 +150,16 @@ def complete_pick(
     if not reservation or float(reservation.quantity) < qty:
         raise HTTPException(status_code=400, detail="Reservation not found or insufficient")
 
-    # Stock row (tenant, product, warehouse from order, location)
+    # Inventory row (tenant, product, warehouse from order, location)
     stock = (
-        db.query(Stock)
+        db.query(Inventory)
         .filter(
-            Stock.tenant_id == tenant_id,
-            Stock.product_id == task.product_id,
-            Stock.warehouse_id == task.order.warehouse_id,
-            Stock.location_id == task.location_id,
+            Inventory.tenant_id == tenant_id,
+            Inventory.product_id == task.product_id,
+            Inventory.warehouse_id == task.order.warehouse_id,
+            Inventory.location_id == task.location_id,
+            Inventory.batch_number == t_bn,
+            Inventory.expiry_date == t_ed,
         )
         .first()
     )
@@ -168,6 +194,8 @@ def complete_pick(
                 product_id=task.product_id,
                 location_id=task.location_id,
                 quantity=qty,
+                batch_number=t_bn,
+                expiry_date=t_ed,
                 picked_at=datetime.utcnow(),
                 picker_id=(body.picker_id if body and body.picker_id is not None else None),
                 status="done",

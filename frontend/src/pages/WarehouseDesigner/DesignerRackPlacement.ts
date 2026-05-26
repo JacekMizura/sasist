@@ -1,8 +1,11 @@
 import type { LayoutState, RowContainer, EmptyRowSlot } from "../../types/warehouse";
-import { cmToCells, cellsToCm } from "../../components/warehouse/warehouseUtils";
+import { WAREHOUSE_CANVAS_CELL_PX } from "../../components/warehouse/renderUtils";
+import { cmToCells, cellsToCm, rackMatchesSlotRackId } from "../../components/warehouse/warehouseUtils";
+import { getBackendPublicOrigin } from "../../config/apiBase";
 
 export const CELLS_PER_METER = 10;
-export const BASE_PX_PER_CELL = 5;
+/** Must match `WAREHOUSE_CANVAS_CELL_PX` in `renderUtils.ts` (designer ↔ canvas). */
+export const BASE_PX_PER_CELL = WAREHOUSE_CANVAS_CELL_PX;
 export const GRID_COLS = 240;
 export const GRID_ROWS = 160;
 export const TENANT_ID = 1;
@@ -79,7 +82,7 @@ export function snapRowPreviewToDistance(
     if (b) obstacles.push({ y0: b.y, y1: b.y + b.h, x0: b.x, x1: b.x + b.w });
   }
   for (const r of racks) {
-    const inRow = rows.some((rc) => rc.slots.some((s) => s.rackId === (r.id ?? r.rack_index)));
+    const inRow = rows.some((rc) => rc.slots.some((s) => s.rackId != null && rackMatchesSlotRackId(r, s.rackId)));
     if (inRow) continue;
     obstacles.push({ y0: r.y, y1: r.y + r.height, x0: r.x, x1: r.x + r.width });
   }
@@ -174,6 +177,15 @@ export function rectsOverlap(
 }
 
 /** Check if a set of rack positions (id -> {x,y}) is valid: in bounds, no overlap with non-group racks or row slots. */
+function rackInGroup(
+  r: { id?: number; rack_index?: number; uuid?: string },
+  ids: Set<number | string>
+): boolean {
+  const legacy = r.id ?? r.rack_index;
+  if (legacy !== undefined && ids.has(legacy)) return true;
+  return r.uuid != null && String(r.uuid) !== "" && ids.has(String(r.uuid));
+}
+
 export function canPlaceGroup(
   layout: LayoutState,
   groupIds: Set<number | string>,
@@ -181,10 +193,10 @@ export function canPlaceGroup(
 ): boolean {
   const gridCols = layout.grid_cols;
   const gridRows = layout.grid_rows;
-  const otherRacks = layout.racks.filter((r) => !groupIds.has(r.id ?? r.rack_index));
+  const otherRacks = layout.racks.filter((r) => !rackInGroup(r, groupIds));
   const rects: { rect: { x: number; y: number; width: number; height: number } }[] = [];
   for (const [id, pos] of positions) {
-    const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === id);
+    const rack = layout.racks.find((r) => rackMatchesSlotRackId(r, id));
     if (!rack) return false;
     const rect = { x: pos.x, y: pos.y, width: rack.width, height: rack.height };
     if (rect.x < 0 || rect.y < 0 || rect.x + rect.width > gridCols || rect.y + rect.height > gridRows) return false;
@@ -208,8 +220,6 @@ export function canPlaceGroup(
   return true;
 }
 
-const API_BASE_FOR_IMAGES = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? undefined;
-
 /** Parse numeric value (volume dm³ or quantity); accepts comma as decimal separator. */
 export function safeVolumeDm3(v: unknown): number {
   if (v == null) return 0;
@@ -229,7 +239,10 @@ export function getProductImageUrl(p: { image_url?: string | null; imageUrl?: st
   if (!raw) return null;
   const first = raw.split(";").map((s) => s.trim()).find(Boolean) ?? null;
   if (!first) return null;
-  if (first.startsWith("/") && API_BASE_FOR_IMAGES) return API_BASE_FOR_IMAGES.replace(/\/$/, "") + first;
+  if (first.startsWith("/")) {
+    const origin = getBackendPublicOrigin();
+    if (origin) return origin + first;
+  }
   return first;
 }
 

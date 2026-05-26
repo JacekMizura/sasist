@@ -1,6 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { log } from "../../../utils/logger";
 import type { LabelTemplate, TemplateElement } from "../../../types/labelSystem";
-import { findElementById, getElementParentBounds } from "./useLabelSelection";
+import {
+  findElementById,
+  getElementParentBounds,
+  type LabelCanvasSelection,
+} from "./useLabelSelection";
 
 const DRAG_DEBUG = false;
 
@@ -10,13 +15,13 @@ function snapToGridPx(px: number, GRID_PX: number): number {
 
 export function useLabelDrag({
   template,
-  setSelectedId,
+  setLabelSelection,
   updateElement,
   PX_PER_MM,
   GRID_PX,
 }: {
   template: LabelTemplate;
-  setSelectedId: (id: string | null) => void;
+  setLabelSelection: (sel: LabelCanvasSelection | null) => void;
   updateElement: (id: string, patch: Partial<TemplateElement>) => void;
   PX_PER_MM: number;
   GRID_PX: number;
@@ -37,10 +42,10 @@ export function useLabelDrag({
   });
 
   const handleElementMouseDown = useCallback(
-    (e: React.MouseEvent, id: string) => {
+    (e: React.MouseEvent, id: string, slotIndex = 0) => {
       e.stopPropagation();
-      if (DRAG_DEBUG) console.log("[LabelDesigner] element mousedown", { id, clientX: e.clientX, clientY: e.clientY });
-      setSelectedId(id);
+      if (DRAG_DEBUG) log("[LabelDesigner] element mousedown", { id, clientX: e.clientX, clientY: e.clientY });
+      setLabelSelection({ id, slotIndex });
       setDragState(null);
       const el = findElementById(template.elements, id);
       if (!el || !("x" in el)) return;
@@ -54,14 +59,14 @@ export function useLabelDrag({
         elY_px,
       });
     },
-    [template.elements, setSelectedId, PX_PER_MM]
+    [template.elements, setLabelSelection, PX_PER_MM]
   );
 
   useEffect(() => {
     if (!dragState) return;
     const state = dragState;
     const onMove = (e: MouseEvent) => {
-      if (DRAG_DEBUG) console.log("[LabelDesigner] drag mousemove", { id: state.id, clientX: e.clientX, clientY: e.clientY });
+      if (DRAG_DEBUG) log("[LabelDesigner] drag mousemove", { id: state.id, clientX: e.clientX, clientY: e.clientY });
       const t = templateRef.current;
       const el = findElementById(t.elements, state.id);
       if (!el || !("width" in el) || !("height" in el)) return;
@@ -84,7 +89,7 @@ export function useLabelDrag({
       });
     };
     const onUp = () => {
-      if (DRAG_DEBUG) console.log("[LabelDesigner] drag mouseup", { id: state.id });
+      if (DRAG_DEBUG) log("[LabelDesigner] drag mouseup", { id: state.id });
       setDragState(null);
     };
     window.addEventListener("mousemove", onMove);

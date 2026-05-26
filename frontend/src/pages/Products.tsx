@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { log } from "../utils/logger";
 import api from "../api/axios";
 import { useTranslation } from "../locales";
 
@@ -88,7 +89,7 @@ export default function Products() {
         setProducts(list);
         setTotalCount(total);
       })
-      .catch(() => console.log("Błąd pobierania produktów"))
+      .catch(() => log("Błąd pobierania produktów"))
       .finally(() => setLoading(false));
   }, [appliedFilters, page, rowsPerPage]);
 

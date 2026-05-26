@@ -49,7 +49,7 @@ function IssueList({
               type="button"
               className={`w-full text-left px-3 py-2 text-[11px] ${text} ${issue.elementId && onSelectElement ? "cursor-pointer hover:bg-black/5" : ""}`}
               onClick={() => issue.elementId && onSelectElement?.(issue.elementId)}
-              title={issue.elementId ? "Click to select element" : undefined}
+              title={issue.elementId ? "Kliknij, aby zaznaczyć element" : undefined}
             >
               <span className="block">{issue.message}</span>
               {issue.elementId && (
@@ -82,37 +82,37 @@ export function TemplateValidationPanel({
         onClick={() => setCollapsed((c) => !c)}
         className="flex items-center justify-between w-full text-left text-xs font-black uppercase tracking-wide text-slate-600 hover:text-slate-800"
       >
-        <span>Validation</span>
+        <span>Walidacja</span>
         <span className="text-slate-400">{collapsed ? "▶" : "▼"}</span>
       </button>
       {!collapsed && (
         <>
           {!hasAny && result.valid && (
-            <p className="text-[11px] text-slate-500 px-1">No issues.</p>
+            <p className="text-[11px] text-slate-500 px-1">Brak uwag — szablon jest poprawny.</p>
           )}
           {!hasAny && !result.valid && (
-            <p className="text-[11px] text-slate-500 px-1">No issues reported.</p>
+            <p className="text-[11px] text-slate-500 px-1">Brak szczegółowych komunikatów.</p>
           )}
           <div className="flex flex-col gap-2">
             <IssueList
               issues={result.errors}
               severity="error"
               icon="❌"
-              label="Errors"
+              label="Błędy"
               onSelectElement={onSelectElement}
             />
             <IssueList
               issues={result.warnings}
               severity="warning"
               icon="⚠"
-              label="Warnings"
+              label="Ostrzeżenia"
               onSelectElement={onSelectElement}
             />
             <IssueList
               issues={result.info}
               severity="info"
               icon="ℹ"
-              label="Info"
+              label="Informacje"
               onSelectElement={onSelectElement}
             />
           </div>

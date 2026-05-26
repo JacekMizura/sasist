@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { log } from "../../utils/logger";
 import type { LayoutState } from "../../types/warehouse";
 import { metersToCells } from "../../components/warehouse/warehouseUtils";
 
@@ -52,7 +53,7 @@ export function EditBuildingModal({ onClose, onSave, layout }: EditBuildingModal
     const d = Number(depthM);
     const h = Math.max(0, Number(heightM));
     if (w <= 0 || d <= 0) return;
-    console.log("Saving building", {
+    log("Saving building", {
       width: w,
       depth: d,
       height: h,

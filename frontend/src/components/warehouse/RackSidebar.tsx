@@ -2,7 +2,18 @@ import { useRef, useState } from "react";
 import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import { Plus, Wand2 } from "lucide-react";
 import type { LayoutState, CustomRackTemplate, CatalogItem, VisualElementType, RackType } from "../../types/warehouse";
-import { formatVolume, getLevelConfig, getTotalLocations, getRackDisplayId, type RackTemplateLabelOptions } from "./warehouseUtils";
+import {
+  formatVolume,
+  getLevelConfig,
+  getTotalLocations,
+  getRackDisplayId,
+  resolveRowContainerBinDirection,
+  resolveRowContainerRackDirection,
+  activeBinsForRack,
+  binVolumeDm3,
+  binUsedVolumeDm3,
+  type RackTemplateLabelOptions,
+} from "./warehouseUtils";
 
 function sameCatalogItem(a: CatalogItem | null, b: CatalogItem): boolean {
   if (!a) return false;
@@ -58,7 +69,6 @@ export type RackSidebarProps = {
   setVisualGhostPosition: (p: { x: number; y: number } | null) => void;
   totalUsed: number;
   totalCapacity: number;
-  onExportPdf?: () => void | Promise<void>;
   onExportCsv?: () => void;
   onExportJson?: () => void;
   /** Export every slot: locationUUID, name, capacity_dm3 (map of locations CSV) */
@@ -73,6 +83,8 @@ export type RackSidebarProps = {
   /** Wall element tool: door or gate on building perimeter. When set, click on wall places element. */
   wallElementTool?: "door" | "gate" | null;
   setWallElementTool?: (v: "door" | "gate" | null) => void;
+  /** When set, show row-level settings (e.g. counting direction) in the left rail. */
+  selectedRowContainerId?: string | null;
 };
 
 export function RackSidebar({
@@ -104,7 +116,6 @@ export function RackSidebar({
   setVisualGhostPosition,
   totalUsed,
   totalCapacity,
-  onExportPdf,
   onExportCsv,
   onExportJson,
   onExportLocationsMapCsv,
@@ -114,6 +125,7 @@ export function RackSidebar({
   setShowGenerateLayoutModal: setShowGenerateLayoutModalProp,
   wallElementTool = null,
   setWallElementTool,
+  selectedRowContainerId = null,
 }: RackSidebarProps) {
   const [activeTab, setActiveTab] = useState<"catalog" | "visuals">("catalog");
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -150,7 +162,8 @@ export function RackSidebar({
     { type: "door", label: UI_STRINGS.warehouse.visuals.door, size: "2×3" },
     { type: "zone", label: UI_STRINGS.warehouse.visuals.zone, size: "8×6" },
   ];
-  const sectionTitleClass = "text-[12px] font-semibold text-[#374151] mb-2";
+  const sectionTitleClass =
+    "text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600";
   const { templatesForSidebar, usageCountById: templateUsageCounts, usedTemplates, availableTemplates } = buildTemplateUsageData(
     layout,
     customTemplates,
@@ -158,30 +171,86 @@ export function RackSidebar({
     manualRackType
   );
 
-  const sidebarScrollRef = useRef<HTMLElement>(null);
-  useWheelScrollBoundaryContain(sidebarScrollRef, true, `${activeTab}-${showOnlyCatalog}`);
+  const templateListScrollRef = useRef<HTMLDivElement>(null);
+  useWheelScrollBoundaryContain(
+    templateListScrollRef,
+    true,
+    `${activeTab}-${showOnlyCatalog}-${catalogCollapsed}-${rowToolActive ? 1 : 0}-${selectedRowContainerId ?? ""}-${rowToolTemplate != null ? 1 : 0}`
+  );
 
   return (
     <aside
-      ref={sidebarScrollRef}
-      className="flex h-full min-h-0 w-[260px] flex-none flex-col self-stretch overflow-y-auto overscroll-y-contain"
-      style={{ background: "#ffffff", borderRight: "1px solid #e5e7eb", padding: "16px", overscrollBehavior: "contain" }}
+      className="flex h-full min-h-0 w-[300px] flex-none flex-col self-stretch overflow-hidden overscroll-y-contain border-r border-slate-200/70 bg-white px-3.5 py-3"
     >
       {!showOnlyCatalog && (
-      <div className="flex rounded-lg bg-[#f3f4f6] p-0.5 mb-4">
-        <button type="button" onClick={() => setActiveTab("catalog")} className={`flex-1 py-1 text-[10px] font-medium rounded-md transition-colors ${activeTab === "catalog" ? "bg-white text-[#1d4ed8] shadow-sm" : "text-[#374151] hover:bg-[#e5e7eb]"}`}>{UI_STRINGS.warehouse.rackSidebar.catalog}</button>
-        <button type="button" onClick={() => setActiveTab("visuals")} className={`flex-1 py-1 text-[10px] font-medium rounded-md transition-colors ${activeTab === "visuals" ? "bg-white text-[#1d4ed8] shadow-sm" : "text-[#374151] hover:bg-[#e5e7eb]"}`}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</button>
+      <div className="mb-2.5 flex shrink-0 rounded-md bg-slate-100/80 p-0.5">
+        <button type="button" onClick={() => setActiveTab("catalog")} className={`flex-1 rounded py-1 text-[10px] font-medium transition-colors ${activeTab === "catalog" ? "bg-white text-sky-800 shadow-sm ring-1 ring-slate-200/60" : "text-slate-600 hover:text-slate-800"}`}>{UI_STRINGS.warehouse.rackSidebar.catalog}</button>
+        <button type="button" onClick={() => setActiveTab("visuals")} className={`flex-1 rounded py-1 text-[10px] font-medium transition-colors ${activeTab === "visuals" ? "bg-white text-sky-800 shadow-sm ring-1 ring-slate-200/60" : "text-slate-600 hover:text-slate-800"}`}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</button>
       </div>
       )}
+      {!showOnlyCatalog && selectedRowContainerId && (
+        <div className="mb-2.5 shrink-0 border-b border-slate-100 pb-2.5">
+          <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Zaznaczony rząd</div>
+          {(["rack", "bin"] as const).map((kind) => {
+            const rcSel = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
+            const current =
+              kind === "rack"
+                ? rcSel
+                  ? resolveRowContainerRackDirection(rcSel)
+                  : "LTR"
+                : rcSel
+                  ? resolveRowContainerBinDirection(rcSel)
+                  : "LTR";
+            const label =
+              kind === "rack" ? "Kierunek numeracji regałów" : "Kierunek numeracji lokalizacji";
+            const name = kind === "rack" ? "rack-sidebar-rack-direction" : "rack-sidebar-bin-direction";
+            return (
+              <fieldset key={kind} className="m-0 border-0 p-0 mb-2 last:mb-0">
+                <legend className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{label}</legend>
+                <div className="flex flex-col gap-1" role="radiogroup" aria-label={label}>
+                  {(["LTR", "RTL"] as const).map((dir) => {
+                    const checked = current === dir;
+                    return (
+                      <label
+                        key={dir}
+                        className={`flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[11px] ${checked ? "bg-slate-50 text-slate-900 ring-1 ring-slate-200/80" : "text-slate-600 hover:bg-slate-50/80"}`}
+                      >
+                        <input
+                          type="radio"
+                          name={name}
+                          className="h-3.5 w-3.5 border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                          checked={checked}
+                          onChange={() => {
+                            setLayout((prev) => ({
+                              ...prev,
+                              row_containers: (prev.row_containers ?? []).map((rc) => {
+                                if (rc.id !== selectedRowContainerId) return rc;
+                                if (kind === "rack") return { ...rc, rack_direction: dir };
+                                return { ...rc, bin_direction: dir };
+                              }),
+                            }));
+                          }}
+                        />
+                        <span>{dir === "LTR" ? "Lewo → prawo" : "Prawo → lewo"}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            );
+          })}
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {(showOnlyCatalog || activeTab === "catalog") && (
         <>
-      {!showOnlyCatalog && (onExportPdf || onExportCsv || onExportJson || onExportLocationsMapCsv) && (
-        <div className="mb-4">
+      {!showOnlyCatalog && (onExportCsv || onExportJson || onExportLocationsMapCsv) && (
+        <div className="mb-2.5">
           <div className="relative">
             <button
               type="button"
               onClick={() => setExportOpen(!exportOpen)}
-              className="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-xs font-semibold flex items-center justify-center gap-2"
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-600/90 bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-500"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
               {UI_STRINGS.warehouse.export.button}
@@ -194,12 +263,6 @@ export function RackSidebar({
                     <button type="button" onClick={() => { onExportLocationsMapCsv(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
                       <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                       {UI_STRINGS.warehouse.rackSidebar.exportLocationsCsv}
-                    </button>
-                  )}
-                  {onExportPdf && (
-                    <button type="button" onClick={() => { onExportPdf(); setExportOpen(false); }} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center gap-2">
-                      <svg className="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                      {UI_STRINGS.warehouse.export.pdf}
                     </button>
                   )}
                   {onExportCsv && (
@@ -222,12 +285,12 @@ export function RackSidebar({
         </div>
       )}
       {onOpenEditBuilding != null && (
-        <div className="rounded-lg p-3 mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb" }}>
-          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Budynek</div>
+        <div className="mb-2.5 border-b border-slate-100 pb-2.5">
+          <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Budynek</div>
           {hasBuilding ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-slate-700">
+                <span className="text-xs font-medium text-slate-700">
                   {displayBuildingWidthM ?? layout.building_width_m} × {displayBuildingDepthM ?? buildingDepthM}
                   {layout.building_height_m != null && layout.building_height_m > 0 ? ` × ${displayBuildingHeightM ?? layout.building_height_m}` : ""} m
                 </span>
@@ -243,7 +306,7 @@ export function RackSidebar({
                   </button>
                 )}
               </div>
-              <div className="mt-1.5 text-[10px] text-slate-600 space-y-0.5">
+              <div className="mt-1 space-y-0.5 text-[10px] text-slate-500">
                 <div>Powierzchnia: {Math.round((layout.building_width_m ?? 0) * (buildingDepthM ?? 0))} m²</div>
                 {layout.building_height_m != null && layout.building_height_m > 0 && (
                   <div>Kubatura: {Math.round((layout.building_width_m ?? 0) * (buildingDepthM ?? 0) * layout.building_height_m)} m³</div>
@@ -257,16 +320,17 @@ export function RackSidebar({
           )}
         </div>
       )}
-      <div className="rounded-lg p-3 overflow-hidden mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
+      <div className="mb-0 flex min-h-0 min-w-0 flex-1 flex-col border-t border-slate-100/90 pt-2.5">
+        <div className="shrink-0">
         {!isReadMode && !showOnlyCatalog && (
-          <div className="mb-3">
-            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Typ regału</div>
-            <div className="flex gap-2">
+          <div className="mb-2">
+            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Typ regału</div>
+            <div className="flex gap-1.5">
               <button
                 type="button"
                 onClick={() => setManualRackType("warehouse")}
-                className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-                  manualRackType === "warehouse" ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                  manualRackType === "warehouse" ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 Magazyn
@@ -274,8 +338,8 @@ export function RackSidebar({
               <button
                 type="button"
                 onClick={() => setManualRackType("store")}
-                className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-                  manualRackType === "store" ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                  manualRackType === "store" ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 Sklep
@@ -283,11 +347,11 @@ export function RackSidebar({
             </div>
           </div>
         )}
-        <div className="flex items-center justify-between gap-2" style={{ marginBottom: "8px" }}>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setCatalogCollapsed(!catalogCollapsed)}
-            className={sectionTitleClass + " hover:text-slate-800 text-left shrink-0"}
+            className={sectionTitleClass + " -mx-0.5 rounded px-0.5 py-0.5 hover:bg-slate-50"}
           >
             {UI_STRINGS.warehouse.rackSidebar.catalog} {catalogCollapsed ? "▶" : "▼"}
           </button>
@@ -295,40 +359,40 @@ export function RackSidebar({
         {!catalogCollapsed && (
           <>
       {!showOnlyCatalog && (
-      <div className="flex flex-col gap-2 mb-3">
-        <button
-          type="button"
-          onClick={() => setShowTemplateModal(true)}
-          className="w-full px-3 py-2 rounded-lg bg-cyan-600 text-white text-xs font-semibold hover:bg-cyan-500 transition-colors flex items-center justify-center gap-2"
-        >
-          <Plus size={14} strokeWidth={2} />
-          {UI_STRINGS.warehouse.rackSidebar.newTemplate}
-        </button>
+      <div className="mb-2 flex flex-col gap-1.5">
         <button
           type="button"
           onClick={() => setShowGenerateLayoutModal(true)}
-          className="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 transition-colors flex items-center justify-center gap-2"
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-700/90 bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-500"
         >
-          <Wand2 size={14} strokeWidth={2} />
+          <Wand2 size={13} strokeWidth={2} />
           Generuj układ
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowTemplateModal(true)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-slate-200/90 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+        >
+          <Plus size={13} strokeWidth={2} />
+          {UI_STRINGS.warehouse.rackSidebar.newTemplate}
         </button>
       </div>
       )}
       {!showOnlyCatalog && rowToolActive && (
-        <div className="mb-2 flex items-center gap-2">
-          <label className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.gapCm}</label>
+        <div className="mb-1.5 flex items-center gap-2">
+          <label className="text-[9px] font-medium uppercase tracking-wide text-slate-400">{UI_STRINGS.warehouse.rackSidebar.gapCm}</label>
           <input
             type="number"
             min={0}
             step={5}
             value={rowGapCm}
             onChange={(e) => setRowGapCm(Number(e.target.value) || 0)}
-            className="w-14 rounded-lg border border-[#E2E8F0] bg-slate-50 text-[#1E293B] px-1 py-0.5 text-xs input-focus"
+            className="w-12 rounded-md border border-slate-200/90 bg-white px-1 py-0.5 text-[11px] text-slate-800 input-focus"
           />
         </div>
       )}
       {!showOnlyCatalog && (
-      <p className="text-[10px] text-slate-500 mb-2">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
+      <p className="mb-1.5 text-[10px] leading-snug text-slate-500">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
       )}
       {!showOnlyCatalog && rowToolTemplate && (
         <p className="text-[10px] text-emerald-700 mb-1 font-medium">Kliknij w pusty slot na planie, aby wypełnić szablonem</p>
@@ -336,15 +400,23 @@ export function RackSidebar({
       {!showOnlyCatalog && rowToolActive && !rowToolTemplate && (
         <p className="text-[10px] text-amber-700 mb-1">{UI_STRINGS.warehouse.rackSidebar.rowToolHint}</p>
       )}
-      <div className="space-y-2 mb-4">
+          </>
+        )}
+        </div>
+        {!catalogCollapsed && (
+      <div
+        ref={templateListScrollRef}
+        className="designer-rail-scroll flex min-h-28 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pr-0.5"
+      >
+      <div className="mb-3 space-y-1.5">
         {templatesForSidebar.length === 0 && (
           <p className="text-[10px] text-slate-500">{UI_STRINGS.warehouse.rackSidebar.noTemplatesHint}</p>
         )}
 
         {usedTemplates.length > 0 && (
-          <div className="mt-1">
-            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Użyte w układzie</div>
-            <div className="space-y-2">
+            <div className="mt-0.5">
+            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Użyte w układzie</div>
+            <div className="space-y-1.5">
               {usedTemplates.map((t) => {
                 const count = templateUsageCounts.get(t.id) ?? 0;
                 const item: CatalogItem = { type: "custom", template: t };
@@ -374,28 +446,41 @@ export function RackSidebar({
                       }
                       setRowToolTemplate(item);
                     } : () => setPreviewTemplateId(t.id)}
-                    className={`rounded-lg border p-3 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:opacity-90 ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
-                    style={showOnlyCatalog ? { borderColor: "#e5e7eb", backgroundColor: "#f9fafb" } : { borderColor: isRowSelected ? "#3b82f6" : "#e5e7eb", backgroundColor: isRowSelected ? "#eff6ff" : "#f9fafb", boxShadow: "none" }}
+                    className={`rounded-lg border px-2 py-1.5 shadow-sm transition-all duration-150 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:shadow-md ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
+                    style={showOnlyCatalog ? { borderColor: "rgb(226 232 240 / 0.95)", backgroundColor: "#fff" } : { borderColor: isRowSelected ? "rgb(14 165 233 / 0.55)" : "rgb(226 232 240 / 0.9)", backgroundColor: isRowSelected ? "rgb(240 249 255)" : "#fff" }}
                   >
-                    <div className={`flex items-center gap-2 ${showOnlyCatalog ? "" : "justify-between gap-1"}`}>
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                        <span className="font-semibold text-[#1E293B] text-sm truncate">{t.name}</span>
-                        {/* Only show "placed" usage count for templates actually present on the layout. */}
-                        <span className="shrink-0 rounded-md bg-cyan-100 text-cyan-800 text-[10px] font-bold px-1.5 py-0.5" title={`Liczba regałów tego typu na mapie: ${count}`}>
-                          ({count})
-                        </span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 flex-1 gap-2">
+                        <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="truncate text-xs font-semibold text-slate-800">{t.name}</span>
+                            <span className="shrink-0 font-mono text-[10px] font-medium tabular-nums text-slate-500" title={`Liczba regałów tego typu na mapie: ${count}`}>
+                              ({count})
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-[10px] leading-snug text-slate-500">
+                            {t.width_cm}×{t.depth_cm} cm, {(() => {
+                              const lc = getLevelConfig(t);
+                              const total = getTotalLocations(lc);
+                              const uniform = lc.length === 0 || lc.every((r) => r.locations === lc[0].locations);
+                              return uniform
+                                ? `${lc.length || t.levels} poz., ${lc[0]?.locations ?? (t.bins_per_level && t.bins_per_level > 0 ? t.bins_per_level : 1)} ${UI_STRINGS.warehouse.rackSidebar.locationsPerLevelShort}`
+                                : `${lc.length} poz., Σ ${total} lok.`;
+                            })()}
+                          </div>
+                        </div>
                       </div>
                       {!showOnlyCatalog && (
-                        <div className="flex items-center gap-0.5 shrink-0" data-no-row-select>
+                        <div className="flex shrink-0 items-center gap-0.5 self-start" data-no-row-select>
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setEditingTemplateId(t.id); }}
-                            className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700"
+                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                             title="Edytuj"
                             aria-label="Edytuj"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           </button>
                           <button
                             type="button"
@@ -410,24 +495,14 @@ export function RackSidebar({
                                 setEditingTemplateId((id: string | null) => (id === t.id ? null : id));
                               }
                             }}
-                            className="p-1 rounded hover:bg-red-100 text-slate-500 hover:text-red-600"
+                            className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600"
                             title="Usuń"
                             aria-label="Usuń"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>
                       )}
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      {t.width_cm}×{t.depth_cm} cm, {(() => {
-                        const lc = getLevelConfig(t);
-                        const total = getTotalLocations(lc);
-                        const uniform = lc.length === 0 || lc.every((r) => r.locations === lc[0].locations);
-                        return uniform
-                          ? `${lc.length || t.levels} poziomy, ${lc[0]?.locations ?? (t.bins_per_level && t.bins_per_level > 0 ? t.bins_per_level : 1)} ${UI_STRINGS.warehouse.rackSidebar.locationsPerLevelShort}`
-                          : `${lc.length} poziomy, Suma: ${total} lok.`;
-                      })()}
                     </div>
                   </div>
                 );
@@ -437,9 +512,9 @@ export function RackSidebar({
         )}
 
         {availableTemplates.length > 0 && (
-          <div className="mt-2">
-            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Dostępne szablony</div>
-            <div className="space-y-2">
+          <div className="mt-2 border-t border-slate-100 pt-2">
+            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Dostępne szablony</div>
+            <div className="space-y-1.5">
               {availableTemplates.map((t) => {
                 const item: CatalogItem = { type: "custom", template: t };
                 const isRowSelected = !showOnlyCatalog && sameCatalogItem(rowToolTemplate, item);
@@ -468,25 +543,36 @@ export function RackSidebar({
                       }
                       setRowToolTemplate(item);
                     } : () => setPreviewTemplateId(t.id)}
-                    className={`rounded-lg border p-3 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:opacity-90 ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
-                    // Available templates are not "placed" — keep them visually neutral (no cyan usage badge).
-                    style={showOnlyCatalog ? { borderColor: "#e5e7eb", backgroundColor: "#f9fafb" } : { borderColor: isRowSelected ? "#3b82f6" : "#e5e7eb", backgroundColor: isRowSelected ? "#eff6ff" : "#f9fafb", boxShadow: "none" }}
+                    className={`rounded-lg border px-2 py-1.5 shadow-sm transition-all duration-150 ${showOnlyCatalog ? "cursor-default" : `cursor-pointer hover:shadow-md ${isRowSelected ? "" : "cursor-grab active:cursor-grabbing"}`}`}
+                    style={showOnlyCatalog ? { borderColor: "rgb(226 232 240 / 0.95)", backgroundColor: "#fff" } : { borderColor: isRowSelected ? "rgb(14 165 233 / 0.55)" : "rgb(226 232 240 / 0.9)", backgroundColor: isRowSelected ? "rgb(240 249 255)" : "#fff" }}
                   >
-                    <div className={`flex items-center gap-2 ${showOnlyCatalog ? "" : "justify-between gap-1"}`}>
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                        <span className="font-semibold text-[#1E293B] text-sm truncate">{t.name}</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 flex-1 gap-2">
+                        <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-semibold text-slate-800">{t.name}</div>
+                          <div className="mt-0.5 text-[10px] leading-snug text-slate-500">
+                            {t.width_cm}×{t.depth_cm} cm, {(() => {
+                              const lc = getLevelConfig(t);
+                              const total = getTotalLocations(lc);
+                              const uniform = lc.length === 0 || lc.every((r) => r.locations === lc[0].locations);
+                              return uniform
+                                ? `${lc.length || t.levels} poz., ${lc[0]?.locations ?? (t.bins_per_level && t.bins_per_level > 0 ? t.bins_per_level : 1)} ${UI_STRINGS.warehouse.rackSidebar.locationsPerLevelShort}`
+                                : `${lc.length} poz., Σ ${total} lok.`;
+                            })()}
+                          </div>
+                        </div>
                       </div>
                       {!showOnlyCatalog && (
-                        <div className="flex items-center gap-0.5 shrink-0" data-no-row-select>
+                        <div className="flex shrink-0 items-center gap-0.5 self-start" data-no-row-select>
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setEditingTemplateId(t.id); }}
-                            className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700"
+                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                             title="Edytuj"
                             aria-label="Edytuj"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           </button>
                           <button
                             type="button"
@@ -501,24 +587,14 @@ export function RackSidebar({
                                 setEditingTemplateId((id: string | null) => (id === t.id ? null : id));
                               }
                             }}
-                            className="p-1 rounded hover:bg-red-100 text-slate-500 hover:text-red-600"
+                            className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600"
                             title="Usuń"
                             aria-label="Usuń"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>
                       )}
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      {t.width_cm}×{t.depth_cm} cm, {(() => {
-                        const lc = getLevelConfig(t);
-                        const total = getTotalLocations(lc);
-                        const uniform = lc.length === 0 || lc.every((r) => r.locations === lc[0].locations);
-                        return uniform
-                          ? `${lc.length || t.levels} poziomy, ${lc[0]?.locations ?? (t.bins_per_level && t.bins_per_level > 0 ? t.bins_per_level : 1)} ${UI_STRINGS.warehouse.rackSidebar.locationsPerLevelShort}`
-                          : `${lc.length} poziomy, Suma: ${total} lok.`;
-                      })()}
                     </div>
                   </div>
                 );
@@ -616,56 +692,56 @@ export function RackSidebar({
             </div>
           );
         })}
-      </>
+      </div>
         )}
       </div>
         </>
       )}
       {!showOnlyCatalog && activeTab === "visuals" && (
-        <div className="space-y-2 rounded-lg p-3 mb-4" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
-          <h2 className={sectionTitleClass}>{UI_STRINGS.warehouse.rackSidebar.visualElements}</h2>
+        <div className="mb-2 space-y-1.5 border-t border-slate-100 pt-2.5">
+          <h2 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{UI_STRINGS.warehouse.rackSidebar.visualElements}</h2>
           {setWallElementTool && (
             <>
-              <p className="text-[10px] text-slate-500 mb-2">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
-              <div className="flex gap-2 mb-2">
+              <p className="text-[10px] leading-snug text-slate-500">Kliknij na krawędź budynku (obwód), aby umieścić.</p>
+              <div className="flex gap-1.5">
                 <button
                   type="button"
                   onClick={() => setWallElementTool(wallElementTool === "door" ? null : "door")}
-                  className={`flex-1 rounded-lg border p-2 text-xs font-semibold ${wallElementTool === "door" ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                  className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium ${wallElementTool === "door" ? "border-sky-500 bg-sky-50 text-sky-900" : "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50"}`}
                 >
                   Drzwi
                 </button>
                 <button
                   type="button"
                   onClick={() => setWallElementTool(wallElementTool === "gate" ? null : "gate")}
-                  className={`flex-1 rounded-lg border p-2 text-xs font-semibold ${wallElementTool === "gate" ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                  className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium ${wallElementTool === "gate" ? "border-sky-500 bg-sky-50 text-sky-900" : "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50"}`}
                 >
                   Brama
                 </button>
               </div>
             </>
           )}
-          <p className="text-[10px] text-slate-500 mb-2">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
+          <p className="text-[10px] leading-snug text-slate-500">{UI_STRINGS.warehouse.rackSidebar.dragOntoPlan}</p>
           {VISUAL_ITEMS.map(({ type, label, size }) => (
             <div
               key={type}
               draggable
               onDragStart={() => setDraggingVisualType(type)}
               onDragEnd={() => { setDraggingVisualType(null); setVisualGhostPosition(null); }}
-              className="cursor-grab active:cursor-grabbing rounded-lg border border-amber-300 bg-amber-50/80 p-2 hover:bg-amber-100/80"
+              className="cursor-grab rounded-md border border-amber-200/80 bg-amber-50/50 px-2 py-1.5 active:cursor-grabbing hover:bg-amber-50"
             >
-              <div className="font-semibold text-[#1E293B] text-sm">{label}</div>
+              <div className="text-xs font-semibold text-slate-800">{label}</div>
               <div className="text-[10px] text-slate-500">{size} kom.</div>
             </div>
           ))}
         </div>
       )}
       {!showOnlyCatalog && activeTab === "catalog" && (
-      <div className="rounded-lg p-3 flex flex-col min-h-0" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", boxShadow: "none" }}>
+      <div className="mt-2 flex min-h-0 flex-col border-t border-slate-100 pt-2.5">
         <button
           type="button"
           onClick={() => setRackListCollapsed(!rackListCollapsed)}
-          className={"w-full flex items-center justify-between text-left rounded py-1 -mx-1 px-1 hover:bg-white/60 " + sectionTitleClass}
+          className={"flex w-full items-center justify-between rounded py-0.5 text-left " + sectionTitleClass}
         >
           <span>{UI_STRINGS.warehouse.rackSidebar.rackList}</span>
           <span className="text-slate-400">{rackListCollapsed ? "▶" : "▼"}</span>
@@ -677,10 +753,10 @@ export function RackSidebar({
         value={rackSearch}
         onChange={(e) => setRackSearch(e.target.value)}
         placeholder={UI_STRINGS.warehouse.rackSidebar.rackSearchPlaceholder}
-        className="w-full mt-2 px-2 py-1.5 rounded-lg border border-[#E2E8F0] bg-white text-[11px] text-[#1E293B] placeholder:text-slate-400"
+        className="mt-1.5 w-full rounded-md border border-slate-200/90 bg-white px-2 py-1 text-[11px] text-slate-800 placeholder:text-slate-400"
         aria-label="Szukaj w liście regałów"
       />
-      <div className="flex-1 overflow-y-auto space-y-1 min-h-0 max-h-40 mt-2">
+      <div className="designer-rail-scroll mt-1.5 max-h-36 min-h-0 flex-1 space-y-1 overflow-y-auto">
         {filteredRacks.length === 0 ? (
           <p className="text-[10px] text-slate-500">{layout.racks.length === 0 ? UI_STRINGS.warehouse.rackSidebar.noRacks : "Brak wyników wyszukiwania"}</p>
         ) : (
@@ -689,7 +765,9 @@ export function RackSidebar({
             const w = r.width_cm ?? 0;
             const len = r.length_cm ?? r.depth_cm ?? 0;
             const h = r.height_cm ?? 0;
-            const cap = r.total_capacity_dm3 ?? r.bins.reduce((s, b) => s + (b.volume_dm3 ?? 0), 0);
+            const cap = r.total_capacity_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binVolumeDm3(b, r), 0);
+            const used = r.used_dm3 ?? activeBinsForRack(r).reduce((s, b) => s + binUsedVolumeDm3(b), 0);
+            const occPct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
             const isSel = selectedRackIds.includes(rid);
             return (
               <button
@@ -703,19 +781,31 @@ export function RackSidebar({
                     setSelectedRackIds([rid]);
                   }
                 }}
-                className={`w-full text-left px-3 py-2 rounded-lg text-[11px] border transition-colors ${
-                  isSel ? "border-cyan-500 bg-cyan-50 text-[#1E293B]" : "border-[#E2E8F0] bg-slate-50 text-slate-700 hover:bg-slate-100"
+                className={`group w-full rounded-xl border px-3 py-2.5 text-left text-[11px] shadow-sm transition-all duration-150 ${
+                  isSel
+                    ? "border-sky-400/90 bg-gradient-to-br from-sky-50 to-sky-100/80 text-slate-900 shadow-md ring-2 ring-sky-300/40"
+                    : "border-slate-200/70 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/90 hover:shadow-md"
                 }`}
               >
-                <div className="flex flex-col items-start">
-                  <div className="font-medium">
-                    {getRackDisplayId(r, layout)}
+                <div className="flex flex-col items-start gap-1">
+                  <div className="flex w-full items-start justify-between gap-2">
+                    <div className="font-semibold text-slate-900">{getRackDisplayId(r, layout)}</div>
+                    <span
+                      className="mt-0.5 h-2 w-2 shrink-0 rounded-full ring-2 ring-white/80 transition-transform duration-150 group-hover:scale-110"
+                      style={{ backgroundColor: r.color && r.color.trim() !== "" ? r.color : "#3b82f6" }}
+                      title="Kolor szablonu"
+                      aria-hidden
+                    />
                   </div>
-                  <div className="text-sm text-slate-600">
-                    {w}×{len}×{h} cm
+                  <div className="font-mono text-[10px] text-slate-500">
+                    {w}×{len}×{h} cm · {cap.toLocaleString()} dm³
                   </div>
-                  <div className="text-sm text-slate-500">
-                    {cap.toLocaleString()} dm³
+                  <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-slate-200/90">
+                    <div
+                      className="h-full rounded-full bg-slate-400 transition-[width] duration-300 ease-out group-hover:bg-slate-500"
+                      style={{ width: `${occPct}%` }}
+                      title={cap > 0 ? `Zajętość: ${occPct.toFixed(0)}%` : undefined}
+                    />
                   </div>
                 </div>
               </button>
@@ -723,8 +813,8 @@ export function RackSidebar({
           })
         )}
       </div>
-      <div className="border-t border-slate-100 pt-2 mt-2 space-y-2">
-        <p className="text-[10px] text-slate-600 leading-relaxed">
+      <div className="mt-1.5 border-t border-slate-100 pt-1.5">
+        <p className="text-[10px] text-slate-500">
           {formatVolume(totalUsed)} / {formatVolume(totalCapacity)} {UI_STRINGS.warehouse.rackSidebar.dm3}
         </p>
       </div>
@@ -732,6 +822,7 @@ export function RackSidebar({
         )}
       </div>
       )}
+      </div>
 
       {showOnlyCatalog && previewTemplateId != null && (() => {
         const template = customTemplates.find((t) => t.id === previewTemplateId) ?? null;
@@ -825,7 +916,7 @@ export function RackSidebar({
 
       {showTemplateCreator && !showOnlyCatalog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-hidden" onClick={() => { setShowTemplateModal(false); setEditingTemplateId(null); }}>
-          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-100 w-[95vw] max-w-[1600px] h-[92vh] max-h-[92vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-100 w-[95vw] h-[92vh] max-h-[92vh]" onClick={(e) => e.stopPropagation()}>
             <TemplateCreator
               layout={layout}
               onSave={async (t) => {

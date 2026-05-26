@@ -20,22 +20,22 @@ function parseSvgToElement(svgString: string): SVGElement | null {
 
 /**
  * Draws an SVG string onto the current page of a jsPDF document as vector graphics.
- * Scale matches widthMm × heightMm. Position (xMm, yMm) is the top-left corner in mm.
+ * Position and size use the jsPDF document unit (same as `new jsPDF({ unit })`).
  *
- * @param pdf - jsPDF instance (unit must be "mm")
+ * @param pdf - jsPDF instance (`unit` typically `"mm"` or `"pt"`)
  * @param svgString - Full SVG document string
- * @param xMm - X position (mm) on the page
- * @param yMm - Y position (mm) on the page
- * @param widthMm - Width of the drawn SVG (mm)
- * @param heightMm - Height of the drawn SVG (mm)
+ * @param x - X of top-left corner in document units
+ * @param y - Y of top-left corner in document units
+ * @param width - Draw width in document units
+ * @param height - Draw height in document units
  */
 export async function drawSvgVector(
   pdf: jsPDF,
   svgString: string,
-  xMm: number,
-  yMm: number,
-  widthMm: number,
-  heightMm: number
+  x: number,
+  y: number,
+  width: number,
+  height: number
 ): Promise<void> {
   const svgElement = parseSvgToElement(svgString);
   if (!svgElement) throw new Error("Invalid SVG: no root svg element");
@@ -44,9 +44,9 @@ export async function drawSvgVector(
   if (typeof api.svg !== "function") throw new Error("svg2pdf.js not loaded: jsPDF.svg is not a function");
 
   await api.svg(svgElement, {
-    x: xMm,
-    y: yMm,
-    width: widthMm,
-    height: heightMm,
+    x,
+    y,
+    width,
+    height,
   });
 }

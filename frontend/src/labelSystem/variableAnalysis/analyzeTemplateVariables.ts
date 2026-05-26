@@ -6,11 +6,12 @@ import type {
   RepeaterElement,
   DynamicTextElement,
   BarcodeElement,
+  ImageElement,
 } from "../../types/labelSystem";
 
 export interface VariableUsage {
   name: string;
-  type: "text" | "barcode";
+  type: "text" | "barcode" | "image";
   elementId: string;
   dataset?: string;
 }
@@ -69,6 +70,21 @@ function walk(
       if (dataBinding) {
         const name = toToken(dataBinding);
         const usage: VariableUsage = { name, type: "barcode", elementId: labelEl.id, dataset };
+        if (dataset) {
+          const list = datasetMap.get(dataset) ?? [];
+          list.push(usage);
+          datasetMap.set(dataset, list);
+        } else {
+          rootVars.push(usage);
+        }
+      }
+      continue;
+    }
+    if (labelEl.type === "image") {
+      const srcBinding = (labelEl as ImageElement).srcBinding;
+      if (srcBinding) {
+        const name = toToken(srcBinding);
+        const usage: VariableUsage = { name, type: "image", elementId: labelEl.id, dataset };
         if (dataset) {
           const list = datasetMap.get(dataset) ?? [];
           list.push(usage);

@@ -1,7 +1,16 @@
 import { useMemo, useState } from "react";
 import type { LayoutState } from "../../types/warehouse";
 import type { RackState, InternalStructure, InternalLevel, BinState, StorageType } from "./warehouseTypes";
-import { snapCm, binVolumeFromDimensions, getRackDisplayId, levelHeightsForRack } from "./warehouseUtils";
+import {
+  snapCm,
+  binVolumeFromDimensions,
+  getDisplayLocationLabelPhysicalOrder,
+  getRackDisplayId,
+  isBinDirectionRtl,
+  levelHeightsForRack,
+  normalizeInternalLevelsToCanonicalSegmentOrder,
+  segmentIndexForVisualSlot,
+} from "./warehouseUtils";
 import { getStorageTypeStyle, normalizeStorageType, STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
@@ -63,6 +72,17 @@ function getColumnLetter(index: number): string {
   return String.fromCharCode(65 + index);
 }
 
+function finitePositiveOrNull(v: unknown): number | null {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+function formatDimBadge(prefix: string, value: number | null): string {
+  if (value == null) return `${prefix} —`;
+  return `${prefix} ${Math.round(value)}`;
+}
+
 function structureSignature(levels: InternalLevel[]): string {
   const levelCounts = levels.map((l) => l.locations.length).join(",");
   return `${levels.length}|${levelCounts}`;
@@ -70,7 +90,28 @@ function structureSignature(levels: InternalLevel[]): string {
 
 export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: InternalLayoutModalProps) {
   const rackWidthCm = rack.width_cm;
-  const initialLevels = useMemo(() => getInitialLevels(rack), [rack]);
+
+  /** Same rack row as in `layout.racks` (uuid, then id/rack_index) so row_container lookup matches slot `rackId`. */
+  const rackFromLayout = useMemo(() => {
+    if (!layout?.racks?.length) return rack;
+    if (rack.uuid != null && String(rack.uuid) !== "") {
+      const byUuid = layout.racks.find((r) => r.uuid != null && String(r.uuid) === String(rack.uuid));
+      if (byUuid) return byUuid;
+    }
+    return (
+      layout.racks.find((r) => String(r.id ?? r.rack_index) === String(rack.id ?? rack.rack_index)) ?? rack
+    );
+  }, [layout, rack]);
+
+  /** Same predicate / mapping as `RackSideViewGrid` (`isBinDirectionRtl` + `segmentIndexForVisualSlot`). */
+  const binDirectionRtl = useMemo(() => isBinDirectionRtl(layout, rackFromLayout), [layout, rackFromLayout]);
+
+  const initialLevelsRaw = useMemo(() => getInitialLevels(rack), [rack]);
+  const initialLevels = useMemo(
+    () => normalizeInternalLevelsToCanonicalSegmentOrder(initialLevelsRaw, rackFromLayout, binDirectionRtl),
+    [initialLevelsRaw, rackFromLayout, binDirectionRtl]
+  );
+
   const [levels, setLevels] = useState<Array<InternalLevel>>(() => initialLevels);
   const [editingDimensionsKey, setEditingDimensionsKey] = useState<string | null>(null);
   const [customNames, setCustomNames] = useState<Record<string, string>>(() => {
@@ -210,8 +251,18 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[95vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      dir="ltr"
+      style={{ direction: "ltr" }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-[95vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col"
+        dir="ltr"
+        style={{ direction: "ltr" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
           <h3 className="font-bold text-slate-800">Układ wewnętrzny – {getRackDisplayId(rack, layout ?? undefined)}</h3>
           <div className="flex items-center gap-2">
@@ -227,8 +278,16 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
             {`Suma wysokości poziomów (${totalHeightCm} cm) przekracza wysokość regału (${rack.height_cm} cm).`}
           </p>
         )}
-        <div className={`flex-1 min-h-0 flex flex-col p-5 ${fitsWithoutVerticalScroll ? "overflow-hidden" : "overflow-y-auto"}`}>
-          <div className={`flex flex-col gap-0 flex-1 min-h-0 ${fitsWithoutVerticalScroll ? "flex" : ""}`}>
+        <div
+          className={`flex-1 min-h-0 flex flex-col p-5 ${fitsWithoutVerticalScroll ? "overflow-hidden" : "overflow-y-auto"}`}
+          dir="ltr"
+          style={{ direction: "ltr" }}
+        >
+          <div
+            className={`flex flex-col gap-0 flex-1 min-h-0 ${fitsWithoutVerticalScroll ? "flex" : ""}`}
+            dir="ltr"
+            style={{ direction: "ltr" }}
+          >
             <button type="button" onClick={addLevel} className="w-full py-2 rounded-lg border-2 border-dashed border-slate-300 text-slate-500 text-sm mb-2 hover:bg-slate-50 shrink-0">
               + Dodaj poziom
             </button>
@@ -247,7 +306,9 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                       ? "bg-red-50/60 border-b-red-400"
                       : `bg-slate-50/50 ${revIdx < levels.length - 1 ? "border-b-orange-500" : "border-b-slate-300"}`
                   }`}
+                  dir="ltr"
                   style={{
+                    direction: "ltr",
                     height: `${levelHeightPercent}%`,
                     minHeight: "60px",
                     transition: "height 0.2s ease",
@@ -258,38 +319,56 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                     <label className="text-[10px] text-slate-500 flex items-center gap-1">Wys. (cm): <input type="number" min={10} step={10} value={lev.height_cm} onChange={(e) => setLevelHeight(levIdx, Number(e.target.value))} className="w-14 rounded border border-slate-200 px-1 py-0.5 text-xs bg-white" /></label>
                     <button type="button" onClick={() => removeLevel(levIdx)} className="text-red-600 text-xs font-semibold hover:underline">Usuń poziom</button>
                   </div>
-                  <div className="flex p-2 items-start min-h-0">
-                    {lev.locations.map((loc, locIdx) => {
-                      const displayLabel = `${getColumnLetter(locIdx)}-${levelNumber}`;
-                      const cellKey = binKey(levIdx, locIdx);
+                  {/* vis = left→right; binIndex = data. direction + unicode-bidi isolate so flex main-start stays left (no RTL flex reversal). */}
+                  <div
+                    className="flex flex-row flex-nowrap justify-start items-start min-h-0 gap-2 p-2"
+                    dir="ltr"
+                    style={{ direction: "ltr", unicodeBidi: "isolate" }}
+                  >
+                    {Array.from({ length: lev.locations.length }, (_, vis) => {
+                      const locs = lev.locations.length;
+                      const binIndex = segmentIndexForVisualSlot(vis, locs, binDirectionRtl);
+                      const loc = lev.locations[binIndex]!;
+                      const binState = rackFromLayout.bins.find((b) => b.level_index === levIdx && b.segment_index === binIndex);
+                      const templateCodeLabel = `${getColumnLetter(binIndex)}-${levelNumber}`;
+                      /** Physical segment order only: `getDisplayLocationLabel` mirrors RTL in `getBinDisplayLabel`, which would show A…D left→right even when tiles are D…A. */
+                      const displayLocationLabel =
+                        layout && binState
+                          ? getDisplayLocationLabelPhysicalOrder(rackFromLayout, binState, layout)
+                          : templateCodeLabel;
+                      const cellKey = binKey(levIdx, binIndex);
                       const customName = customNames[cellKey]?.trim() ?? "";
-                      const showPrimaryName = customName || displayLabel;
-                      const storageType = getBinStorageType(levIdx, locIdx);
+                      const showPrimaryName = customName || displayLocationLabel;
+                      const storageType = getBinStorageType(levIdx, binIndex);
                       const storageStyle = getStorageTypeStyle(storageType);
-                      const widthCm = loc.width_cm;
+                      const slotsInLevel = Math.max(1, lev.locations.length);
+                      const equalWidthFallback =
+                        finitePositiveOrNull(rackWidthCm) != null ? (finitePositiveOrNull(rackWidthCm)! / slotsInLevel) : null;
+                      const widthCm = finitePositiveOrNull(loc.width_cm) ?? equalWidthFallback;
                       const totalWidth = lev.locations.reduce((sum, l) => sum + Math.max(0, Number(l.width_cm ?? 0)), 0);
                       const count = Math.max(1, lev.locations.length);
                       const widthPct = totalWidth > 0 ? (Math.max(0, Number(widthCm ?? 0)) / totalWidth) * 100 : 100 / count;
                       const gapPx = 8;
                       const widthCss = `calc(${widthPct}% - ${(gapPx * (count - 1)) / count}px)`;
-                      const depthCm = loc.depth_cm ?? rack.length_cm;
-                      const heightCm = loc.height_cm ?? lev.height_cm;
-                      const volDm3 = binVolumeFromDimensions(widthCm, depthCm, heightCm);
+                      const depthCm = finitePositiveOrNull(loc.depth_cm) ?? finitePositiveOrNull(rack.length_cm) ?? null;
+                      const heightCm = finitePositiveOrNull(loc.height_cm) ?? finitePositiveOrNull(lev.height_cm) ?? null;
+                      const volDm3 = widthCm != null && depthCm != null && heightCm != null
+                        ? binVolumeFromDimensions(widthCm, depthCm, heightCm)
+                        : 0;
                       const parseDim = (v: string) => {
                         const n = parseFloat(String(v).replace(",", "."));
                         return Number.isNaN(n) ? null : Math.max(10, n);
                       };
                       const handleDimChange = (setter: (a: number, b: number, c: number) => void, val: string) => {
                         const n = parseDim(val);
-                        if (n !== null) setter(levIdx, locIdx, snapCm(n));
+                        if (n !== null) setter(levIdx, binIndex, snapCm(n));
                       };
                       return (
                         <div
-                          key={locIdx}
+                          key={`${levIdx}-${binIndex}`}
                           className="relative flex flex-col rounded-xl border shadow-sm min-w-0 overflow-hidden p-2.5 h-[170px] shrink-0"
                           style={{
                             width: widthCss,
-                            marginRight: locIdx < lev.locations.length - 1 ? `${gapPx}px` : "0px",
                             transition: "width 0.2s ease",
                             boxSizing: "border-box",
                             backgroundColor: storageStyle.bg,
@@ -299,7 +378,7 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                           <>
                               <button
                                 type="button"
-                                onClick={() => removeLocation(levIdx, locIdx)}
+                                onClick={() => removeLocation(levIdx, binIndex)}
                                 className="absolute top-2 right-2 h-5 w-5 rounded border border-red-200 bg-red-100 text-[11px] font-bold text-red-700 hover:bg-red-200 z-10"
                                 title="Usuń lokalizację"
                               >
@@ -339,7 +418,7 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                                       </span>
                                       {customName ? (
                                         <span className="block mt-0.5 text-[10px] text-slate-500 font-mono">
-                                          {displayLabel}
+                                          {displayLocationLabel}
                                         </span>
                                       ) : null}
                                     </button>
@@ -353,21 +432,21 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                                         <input
                                           type="text"
                                           inputMode="decimal"
-                                          value={widthCm}
+                                          value={widthCm ?? ""}
                                           onChange={(e) => handleDimChange(setLocationWidth, e.target.value)}
                                           className="w-[44px] rounded border border-slate-200 px-1 py-0.5 text-[10px] text-right bg-white"
                                           title="Szerokość (cm)"
                                         />
                                       ) : (
                                         <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] text-right text-slate-700 min-w-[44px] justify-end" title="Szerokość (cm), tylko do odczytu w trybie szablonu">
-                                          {widthCm}
+                                          {widthCm != null ? Math.round(widthCm) : "—"}
                                         </span>
                                       )}
                                       <span className="text-[10px] font-bold text-slate-600">GŁ</span>
                                       <input
                                         type="text"
                                         inputMode="decimal"
-                                        value={depthCm}
+                                        value={depthCm ?? ""}
                                         onChange={(e) => handleDimChange(setLocationDepth, e.target.value)}
                                         className="w-[44px] rounded border border-slate-200 px-1 py-0.5 text-[10px] text-right bg-white"
                                         title="Głębokość (cm)"
@@ -376,7 +455,7 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                                       <input
                                         type="text"
                                         inputMode="decimal"
-                                        value={heightCm}
+                                        value={heightCm ?? ""}
                                         onChange={(e) => handleDimChange(setLocationHeight, e.target.value)}
                                         className="w-[44px] rounded border border-slate-200 px-1 py-0.5 text-[10px] text-right bg-white"
                                         title="Wysokość (cm)"
@@ -396,9 +475,9 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                                       className="inline-flex items-center gap-1 text-left"
                                       title="Kliknij, aby edytować wymiary"
                                     >
-                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">SZ {widthCm} cm</span>
-                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">GŁ {Number(depthCm.toFixed(0))}</span>
-                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">WYS {Number(heightCm.toFixed(0))}</span>
+                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{formatDimBadge("SZ", widthCm)}</span>
+                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{formatDimBadge("GŁ", depthCm)}</span>
+                                      <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{formatDimBadge("WYS", heightCm)}</span>
                                     </button>
                                   )}
                                 </div>
@@ -433,7 +512,7 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                                           key={option.value}
                                           type="button"
                                           onClick={() => {
-                                            setBinStorageType(levIdx, locIdx, option.value);
+                                            setBinStorageType(levIdx, binIndex, option.value);
                                           }}
                                           className="h-6 w-6 rounded-md border inline-flex items-center justify-center"
                                           style={{
@@ -454,7 +533,7 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
                                   <p className="text-[12px] text-slate-800 font-semibold whitespace-nowrap">Pojemność: {volDm3.toFixed(0)} dm³</p>
                                   <button
                                     type="button"
-                                    onClick={() => addLocation(levIdx, locIdx)}
+                                    onClick={() => addLocation(levIdx, binIndex)}
                                     className="text-[10px] bg-blue-600 text-white rounded-md px-2 py-1 hover:bg-blue-700 shrink-0 mt-3"
                                   >
                                     + Lokalizacja
