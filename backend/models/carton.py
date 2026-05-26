@@ -41,7 +41,7 @@ class Carton(Base):
     weight_kg = Column(Float, nullable=False, default=0.0)
     #: e.g. corrugated, cardboard — display / filtering
     material_type = Column(String(128), nullable=True)
-    is_active = Column(Boolean, nullable=False, server_default=text("1"), default=True)
+    is_active = Column(Boolean, nullable=False, server_default=text("true"), default=True)
     notes = Column(Text, nullable=True)
 
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -77,7 +77,7 @@ class Carton(Base):
     glass_kg_per_unit = Column(Float, nullable=False, server_default=text("0"), default=0.0)
     metal_kg_per_unit = Column(Float, nullable=False, server_default=text("0"), default=0.0)
     packaging_type = Column(String(64), nullable=True)
-    include_in_bdo = Column(Boolean, nullable=False, server_default=text("0"), default=False)
+    include_in_bdo = Column(Boolean, nullable=False, server_default=text("false"), default=False)
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -318,7 +318,7 @@ def ensure_warehouse_layout_rack_name_unique_index(engine: Engine) -> None:
                 text(
                     "CREATE UNIQUE INDEX IF NOT EXISTS uq_warehouse_layout_racks_layout_name "
                     "ON warehouse_layout_racks(layout_id, name) "
-                    "WHERE name IS NOT NULL AND name != '' AND is_active = 1"
+                    "WHERE name IS NOT NULL AND name != '' AND is_active = true"
                 )
             )
             conn.commit()
@@ -1611,7 +1611,7 @@ def ensure_bundles_tables_and_order_item_bundle_columns(engine: Engine) -> None:
                         sku VARCHAR,
                         ean VARCHAR,
                         sale_price FLOAT,
-                        active BOOLEAN NOT NULL DEFAULT 1
+                        active BOOLEAN NOT NULL DEFAULT true
                     )
                     """
                 )
@@ -1744,7 +1744,7 @@ def ensure_manufacturers_table_and_product_manufacturer_id(engine: Engine) -> No
                         website VARCHAR,
                         email VARCHAR,
                         phone VARCHAR,
-                        active BOOLEAN NOT NULL DEFAULT 1,
+                        active BOOLEAN NOT NULL DEFAULT true,
                         responsible_person_name VARCHAR,
                         responsible_person_email VARCHAR
                     )
@@ -1840,7 +1840,7 @@ def ensure_suppliers_and_inbound_deliveries_tables(engine: Engine) -> None:
                         website VARCHAR,
                         country VARCHAR,
                         address TEXT,
-                        active BOOLEAN NOT NULL DEFAULT 1,
+                        active BOOLEAN NOT NULL DEFAULT true,
                         default_lead_time_days INTEGER,
                         default_currency VARCHAR(8),
                         minimum_order_value NUMERIC(12, 2),
@@ -2098,10 +2098,10 @@ def ensure_supplier_purchasing_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE suppliers ADD COLUMN free_shipping_threshold NUMERIC(12, 2)"))
         added_supplier_flags = False
         if "offers_free_shipping" not in cols:
-            conn.execute(text("ALTER TABLE suppliers ADD COLUMN offers_free_shipping BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("ALTER TABLE suppliers ADD COLUMN offers_free_shipping BOOLEAN NOT NULL DEFAULT true"))
             added_supplier_flags = True
         if "requires_moq" not in cols:
-            conn.execute(text("ALTER TABLE suppliers ADD COLUMN requires_moq BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("ALTER TABLE suppliers ADD COLUMN requires_moq BOOLEAN NOT NULL DEFAULT true"))
             added_supplier_flags = True
         if added_supplier_flags:
             conn.execute(
@@ -2109,14 +2109,14 @@ def ensure_supplier_purchasing_columns(engine: Engine) -> None:
                     """
                     UPDATE suppliers SET
                       offers_free_shipping = CASE
-                        WHEN free_shipping_threshold IS NOT NULL AND CAST(free_shipping_threshold AS REAL) > 0 THEN 1
-                        ELSE 0
+                        WHEN free_shipping_threshold IS NOT NULL AND CAST(free_shipping_threshold AS REAL) > 0 THEN true
+                        ELSE false
                       END,
                       requires_moq = CASE
                         WHEN (minimum_order_qty IS NOT NULL AND CAST(minimum_order_qty AS INTEGER) > 0)
                           OR (minimum_order_value IS NOT NULL AND CAST(minimum_order_value AS REAL) > 0)
-                        THEN 1
-                        ELSE 0
+                        THEN true
+                        ELSE false
                       END
                     """
                 )
@@ -2431,7 +2431,7 @@ def ensure_wms_ad_hoc_receiving_schema(engine: Engine) -> None:
             scols = {row[1] for row in conn.execute(text("PRAGMA table_info(suppliers)")).fetchall()}
             if "is_incomplete" not in scols:
                 conn.execute(
-                    text("ALTER TABLE suppliers ADD COLUMN is_incomplete BOOLEAN NOT NULL DEFAULT 0")
+                    text("ALTER TABLE suppliers ADD COLUMN is_incomplete BOOLEAN NOT NULL DEFAULT false")
                 )
         r2 = conn.execute(
             text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
@@ -2832,11 +2832,11 @@ def ensure_product_track_batch_expiry_columns(engine: Engine) -> None:
             return
         cols = {row[1] for row in conn.execute(text("PRAGMA table_info(products)")).fetchall()}
         if "track_batch" not in cols:
-            conn.execute(text("ALTER TABLE products ADD COLUMN track_batch BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("ALTER TABLE products ADD COLUMN track_batch BOOLEAN NOT NULL DEFAULT false"))
         if "track_expiry" not in cols:
-            conn.execute(text("ALTER TABLE products ADD COLUMN track_expiry BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("ALTER TABLE products ADD COLUMN track_expiry BOOLEAN NOT NULL DEFAULT false"))
         if "track_serial" not in cols:
-            conn.execute(text("ALTER TABLE products ADD COLUMN track_serial BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text("ALTER TABLE products ADD COLUMN track_serial BOOLEAN NOT NULL DEFAULT false"))
         conn.commit()
 
 

@@ -35,4 +35,4 @@ class ReturnUiStatus(Base):
     background_color = Column(String(32), nullable=True)
     text_color = Column(String(32), nullable=True)
     image_url = Column(String(512), nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True, server_default=text("1"))
+    is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))

@@ -24,7 +24,7 @@ class OrderUiStatus(Base):
     name = Column(String(128), nullable=False)
     color = Column(String(32), nullable=False, default="#64748b")
     sort_order = Column(Integer, nullable=False, default=0)
-    is_system = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    is_system = Column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     #: Etykieta głównej grupy (np. „Nowe”) — opcjonalna nadpisana nazwa widoczna w panelu.
     group_name = Column(String(128), nullable=True)
@@ -36,4 +36,4 @@ class OrderUiStatus(Base):
     background_color = Column(String(32), nullable=True)
     text_color = Column(String(32), nullable=True)
     image_url = Column(String(512), nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True, server_default=text("1"))
+    is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))

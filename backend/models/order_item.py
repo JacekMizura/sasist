@@ -110,7 +110,7 @@ class OrderItem(Base):
     source_bundle_id = Column(Integer, ForeignKey("bundles.id", ondelete="SET NULL"), nullable=True, index=True)
     bundle_instance_id = Column(String(36), nullable=True, index=True)
     #: Linia nagłówkowa zestawu (komercja); komponenty mają ustawione ``parent_bundle_order_item_id``.
-    is_bundle_parent = Column(Boolean, nullable=False, server_default=text("0"), default=False)
+    is_bundle_parent = Column(Boolean, nullable=False, server_default=text("false"), default=False)
     #: FK do nagłówka zestawu — komponent z eksplozji (operacyjny).
     parent_bundle_order_item_id = Column(Integer, ForeignKey("order_items.id", ondelete="CASCADE"), nullable=True, index=True)
 

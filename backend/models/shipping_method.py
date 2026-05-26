@@ -28,7 +28,7 @@ class ShippingMethod(Base):
     #: JSON array of lowercase phrases matched with ``normalized_input.includes(alias)`` on import.
     aliases_json = Column(Text, nullable=True)
     logo_url = Column(String(512), nullable=True)
-    is_active = Column(Boolean, nullable=False, server_default=text("1"), default=True)
+    is_active = Column(Boolean, nullable=False, server_default=text("true"), default=True)
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)

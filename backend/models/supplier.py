@@ -37,7 +37,7 @@ class Supplier(Base):
     requires_moq = Column(Boolean, nullable=False, default=True)
     notes = Column(Text, nullable=True)
     #: True when created from WMS with name only — admin completes profile later.
-    is_incomplete = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    is_incomplete = Column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     tenant = relationship("Tenant", back_populates="suppliers", foreign_keys=[tenant_id])
     deliveries = relationship("InboundDelivery", back_populates="supplier", foreign_keys="InboundDelivery.supplier_id")

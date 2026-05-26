@@ -44,7 +44,7 @@ class WarehouseCarrier(Base):
     )
     current_location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(24), nullable=False, default="ACTIVE", index=True)
-    is_mixed = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    is_mixed = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     weight = Column(Float, nullable=True)
     width = Column(Float, nullable=True)
     height = Column(Float, nullable=True)

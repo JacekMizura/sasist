@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, text
 
 from ..database import Base
 
@@ -83,7 +83,7 @@ class BdoSettings(Base):
     reporting_company_name = Column(String(512), nullable=True)
     registration_numbers = Column(Text, nullable=True)
     default_methodology_text = Column(Text, nullable=True)
-    allow_negative_stock = Column(Boolean, nullable=False, server_default="0", default=False)
+    allow_negative_stock = Column(Boolean, nullable=False, server_default=text("false"), default=False)
 
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
