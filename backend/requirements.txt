@@ -20,7 +20,7 @@ PyJWT>=2.8.0
 bcrypt>=4.0.0
 
 fastapi
-uvicorn[standard]
+uvicorn
 sqlalchemy
 psycopg2-binary
 python-multipart
