@@ -1,0 +1,4 @@
+# Force the same start command as Procfile / railway.toml (do not rely on framework auto-detect).
+
+[start]
+cmd = "python run_server.py"

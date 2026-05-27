@@ -1,0 +1,11 @@
+# Railway deploy config — overrides Nixpacks/Railpack auto-detected uvicorn commands.
+# Clear any custom Start Command in the Railway dashboard that hardcodes --port 8080.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python run_server.py"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"

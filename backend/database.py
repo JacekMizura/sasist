@@ -153,10 +153,20 @@ def get_db():
     Tworzy nową sesję DB na request
     i zamyka ją po zakończeniu.
     """
+    import traceback
 
-    db = SessionLocal()
+    try:
+        db = SessionLocal()
+    except Exception:
+        print("[get_db] SessionLocal() failed", flush=True)
+        print(traceback.format_exc(), flush=True)
+        raise
 
     try:
         yield db
+    except Exception:
+        print("[get_db] error during request session use", flush=True)
+        print(traceback.format_exc(), flush=True)
+        raise
     finally:
         db.close()

@@ -7,6 +7,7 @@ if __name__ == "__main__" and __package__ is None:
 
 from pathlib import Path
 import logging
+import sys
 import traceback
 
 from fastapi import FastAPI
@@ -176,8 +177,21 @@ from .db.schema_upgrade import (
     ensure_wms_audit_tables,
     ensure_company_profile_table,
 )
+from .middleware.exception_logging import (
+    catch_unhandled_exceptions_middleware,
+    early_debug_middleware,
+    log_unhandled_exception,
+)
 from .middleware.request_metrics import record_request
 from .services.pdf_deps import PdfGenerationUnavailable
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s %(name)s %(message)s",
+    stream=sys.stderr,
+    force=True,
+)
+logger = logging.getLogger(__name__)
 
 from .api.warehouse import router as warehouse_router
 from .api.warehouses import router as warehouses_router
@@ -294,6 +308,7 @@ def root_health() -> dict[str, bool]:
 # ==================================================
 
 app.middleware("http")(record_request)
+app.middleware("http")(catch_unhandled_exceptions_middleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -310,9 +325,7 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def record_error(request: Request, exc: Exception):
-    print(f"[EXCEPTION] {request.method} {request.url.path}")
-    # exc is explicit here; print_exc() often has no active traceback in async handlers.
-    traceback.print_exception(type(exc), exc, exc.__traceback__, chain=True)
+    log_unhandled_exception(f"{request.method} {request.url.path} (exception_handler)", exc)
 
 
 @app.exception_handler(PdfGenerationUnavailable)
@@ -327,14 +340,28 @@ async def pdf_generation_unavailable_handler(request: Request, exc: PdfGeneratio
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    await record_error(request, exc)
-    response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
-    origin = request.headers.get("origin")
-    if origin:
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
+    print(
+        f"[exception_handler] {request.method} {request.url.path} "
+        f"{type(exc).__name__}: {exc}",
+        flush=True,
+    )
+    try:
+        await record_error(request, exc)
+        response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        origin = request.headers.get("origin")
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
+    except Exception as handler_exc:
+        print("[exception_handler] handler itself failed", flush=True)
+        print(traceback.format_exc(), flush=True)
+        log_unhandled_exception(
+            f"{request.method} {request.url.path} (exception_handler wrapper)",
+            handler_exc,
+        )
+        raise
 
 # ==================================================
 # DB INIT
@@ -736,8 +763,17 @@ except Exception:
 @app.on_event("startup")
 def upgrade_schema():
     """Ensure tables exist, then run schema upgrades so existing SQLite DBs gain new columns."""
+    try:
+        _upgrade_schema()
+    except Exception as exc:
+        log_unhandled_exception("startup upgrade_schema", exc)
+        raise
+
+
+def _upgrade_schema() -> None:
     from . import models as _orm_models  # noqa: F401 — all tables on Base.metadata before create_all
 
+    print("[startup] upgrade_schema: begin", flush=True)
     ensure_sqlite_tables(announce=True)
     ensure_locations_columns(engine)
     ensure_warehouse_layout_identity_columns(engine)
@@ -1073,6 +1109,8 @@ def upgrade_schema():
     except Exception:
         logging.getLogger(__name__).exception("install_replenishment_listeners failed")
 
+    print("[startup] upgrade_schema: done", flush=True)
+
 
 try:
     ensure_document_series_extended_columns(engine)
@@ -1242,9 +1280,49 @@ app.include_router(wms_photo_upload_router)
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
+# Outermost on incoming requests (registered last). Do not add middleware below this line.
+app.middleware("http")(early_debug_middleware)
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, bool]:
+    return {"ok": True}
+
+
+@app.get("/debug-routes")
+def debug_routes() -> list[str]:
+    return [getattr(route, "path", str(route)) for route in app.routes]
+
+
+@app.get("/debug-openapi")
+def debug_openapi():
+    """Try OpenAPI generation and return error + traceback on failure."""
+    try:
+        schema = app.openapi()
+        return {
+            "ok": True,
+            "path_count": len(schema.get("paths", {})),
+            "title": schema.get("info", {}).get("title"),
+        }
+    except Exception as exc:
+        tb = log_unhandled_exception("GET /debug-openapi", exc)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": str(exc), "traceback": tb},
+        )
+
 
 @app.on_event("startup")
 async def _log_backend_startup() -> None:
+    print(f"[startup] routes loaded: {len(app.routes)}", flush=True)
+    try:
+        schema = app.openapi()
+        print(
+            f"[startup] openapi generated: {len(schema.get('paths', {}))} paths",
+            flush=True,
+        )
+    except Exception as exc:
+        log_unhandled_exception("startup app.openapi()", exc)
     print("Backend started OK", flush=True)
 
 

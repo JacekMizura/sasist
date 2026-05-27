@@ -1,6 +1,6 @@
 # Current Context
 
-- **Railway backend port (2026-05-27):** `python -m backend` reads `PORT` (default 8000); `Procfile` → `web: python -m backend`. Remove any Railway custom start command with hardcoded `--port 8080`. Local reload: `UVICORN_RELOAD=1 PORT=8010 python -m backend`.
+- **Railway backend port (2026-05-27):** Single entrypoint `backend/serve.py` via `python run_server.py` (also `python -m backend`). `PORT` env default 8000; logs `[startup] binding uvicorn to 0.0.0.0:{port}`. Repo pins start via `Procfile`, `railway.toml`, `railway.json`, `nixpacks.toml`. Clear Railway dashboard Start Command if it hardcodes `--port 8080`.
 
 - **Migracja SQLite → PostgreSQL (2026-05-27):** `backend/scripts/migrate_sqlite_to_postgres.py` — domyślnie **dry-run** (live tylko z `--yes`). Flagi: `--table`, `--phase` (foundation|catalog|orders|stock|returns|rest), `--continue-on-error`. Po migracji: walidacja liczby wierszy SQLite vs PG + skan orphan FK. Przykład: `python -m backend.scripts.migrate_sqlite_to_postgres --table orders` (podgląd), potem `--table orders --yes` (zapis).
 
