@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
+import { extractApiErrorMessage } from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
@@ -21,8 +22,8 @@ export default function LoginPage() {
     try {
       await login(ident.trim(), password);
       navigate(from, { replace: true });
-    } catch {
-      setErr("Nieprawidłowy login lub hasło.");
+    } catch (e) {
+      setErr(extractApiErrorMessage(e, "Nieprawidłowy login lub hasło."));
     } finally {
       setBusy(false);
     }

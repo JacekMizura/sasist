@@ -22,6 +22,23 @@ function warnIfApiPointsToViteDev(base: string) {
   }
 }
 
+function warnIfApiPointsToFrontendHost(base: string) {
+  if (!base.startsWith("http://") && !base.startsWith("https://")) return;
+  if (typeof window === "undefined") return;
+  try {
+    const apiHost = new URL(base).host;
+    const pageHost = window.location.host;
+    if (apiHost === pageHost) {
+      console.error(
+        "[api] VITE_API_URL must point to the Railway backend (e.g. https://your-app.up.railway.app/api), " +
+          "not the frontend host. POST /api/* on the SPA host returns 405."
+      );
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function normalizeApiBaseFromEnv(value: string): string {
   const base = value.trim().replace(/\/+$/, "");
   if (!base) return "";
@@ -46,6 +63,7 @@ export function getApiBaseUrl(): string {
 
   if (fromEnv) {
     warnIfApiPointsToViteDev(fromEnv);
+    warnIfApiPointsToFrontendHost(fromEnv);
     return fromEnv;
   }
 
@@ -54,6 +72,20 @@ export function getApiBaseUrl(): string {
   }
 
   return "";
+}
+
+/**
+ * Absolute or root-relative URL for a path under the API prefix (e.g. ``auth/login`` → ``/api/auth/login``).
+ * Matches Swagger: POST {base}/auth/login with JSON body.
+ */
+export function buildApiUrl(path: string): string {
+  const base = getApiBaseUrl().replace(/\/+$/, "");
+  const segment = path.replace(/^\/+/, "");
+  if (!base) return `/${segment}`;
+  if (base.startsWith("http://") || base.startsWith("https://")) {
+    return `${base}/${segment}`;
+  }
+  return `${base}/${segment}`;
 }
 
 /**

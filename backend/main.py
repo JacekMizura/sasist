@@ -7,6 +7,7 @@ if __name__ == "__main__" and __package__ is None:
 
 from pathlib import Path
 import logging
+import os
 import sys
 import traceback
 
@@ -178,11 +179,9 @@ from .db.schema_upgrade import (
     ensure_company_profile_table,
 )
 from .middleware.exception_logging import (
-    catch_unhandled_exceptions_middleware,
-    early_debug_middleware,
     log_unhandled_exception,
+    outer_request_logger_middleware,
 )
-from .middleware.request_metrics import record_request
 from .services.pdf_deps import PdfGenerationUnavailable
 
 logging.basicConfig(
@@ -298,17 +297,19 @@ app = FastAPI(title="WMS Backend V2")
 
 
 @app.get("/")
-def root_health() -> dict[str, bool]:
-    """Liveness check. API: ``/api/...``; docs: ``/docs``; OpenAPI: ``/openapi.json``."""
+async def root() -> dict[str, bool]:
+    return {"ok": True}
+
+
+@app.get("/healthz")
+async def healthz() -> dict[str, bool]:
     return {"ok": True}
 
 
 # ==================================================
-# CORS + REQUEST METRICS
+# CORS (health routes above — outer logger bypasses / and /healthz)
 # ==================================================
 
-app.middleware("http")(record_request)
-app.middleware("http")(catch_unhandled_exceptions_middleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -761,13 +762,19 @@ except Exception:
 
 
 @app.on_event("startup")
-def upgrade_schema():
-    """Ensure tables exist, then run schema upgrades so existing SQLite DBs gain new columns."""
-    try:
-        _upgrade_schema()
-    except Exception as exc:
-        log_unhandled_exception("startup upgrade_schema", exc)
-        raise
+async def upgrade_schema() -> None:
+    """Run schema upgrades in a worker thread so the event loop can serve /healthz immediately."""
+    import asyncio
+
+    print("[startup] upgrade_schema: scheduled (background thread)", flush=True)
+
+    async def _run() -> None:
+        try:
+            await asyncio.to_thread(_upgrade_schema)
+        except Exception as exc:
+            log_unhandled_exception("startup upgrade_schema (background)", exc)
+
+    asyncio.create_task(_run())
 
 
 def _upgrade_schema() -> None:
@@ -1280,49 +1287,19 @@ app.include_router(wms_photo_upload_router)
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
-# Outermost on incoming requests (registered last). Do not add middleware below this line.
-app.middleware("http")(early_debug_middleware)
-
-
-@app.get("/healthz")
-def healthz() -> dict[str, bool]:
-    return {"ok": True}
-
-
-@app.get("/debug-routes")
-def debug_routes() -> list[str]:
-    return [getattr(route, "path", str(route)) for route in app.routes]
-
-
-@app.get("/debug-openapi")
-def debug_openapi():
-    """Try OpenAPI generation and return error + traceback on failure."""
-    try:
-        schema = app.openapi()
-        return {
-            "ok": True,
-            "path_count": len(schema.get("paths", {})),
-            "title": schema.get("info", {}).get("title"),
-        }
-    except Exception as exc:
-        tb = log_unhandled_exception("GET /debug-openapi", exc)
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "error": str(exc), "traceback": tb},
-        )
+# Outermost on incoming requests (registered last). Bypasses / and /healthz inside the logger.
+app.middleware("http")(outer_request_logger_middleware)
 
 
 @app.on_event("startup")
 async def _log_backend_startup() -> None:
-    print(f"[startup] routes loaded: {len(app.routes)}", flush=True)
-    try:
-        schema = app.openapi()
-        print(
-            f"[startup] openapi generated: {len(schema.get('paths', {}))} paths",
-            flush=True,
-        )
-    except Exception as exc:
-        log_unhandled_exception("startup app.openapi()", exc)
+    from .serve import UVICORN_HOST
+
+    print(
+        f"[startup] app ready routes={len(app.routes)} "
+        f"bind_host={UVICORN_HOST} PORT env={os.getenv('PORT')!r}",
+        flush=True,
+    )
     print("Backend started OK", flush=True)
 
 
