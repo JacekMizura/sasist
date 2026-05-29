@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { MoreHorizontal, Pencil, Plus, Shield, Users } from "lucide-react";
+import {
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Shield,
+  Users,
+  Search,
+  Settings2,
+} from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -11,15 +19,6 @@ import {
   updateUser,
   type AppUserListItem,
 } from "../../api/authApi";
-import {
-  listSellasistTableBodyCellGrid,
-  listSellasistTableHeaderCellGrid,
-} from "../../components/listPage/listSellasistTokens";
-import {
-  OperationalActionButton,
-  OperationalActionColumn,
-  operationalActionsColumnWidthClass,
-} from "../../components/operational";
 import { isSuperRole } from "../../auth/isSuperRole";
 import { useAuth } from "../../context/AuthContext";
 import { WMS_OPERATIONAL_MODE_LABELS_PL } from "../../constants/wmsOperationalModes";
@@ -34,7 +33,14 @@ function initials(row: AppUserListItem) {
 function fmtDt(iso: string | null | undefined) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString();
+    const d = new Date(iso);
+    return d.toLocaleString("pl-PL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -62,7 +68,8 @@ type ActionsMenuState = { userId: number; top: number; left: number };
 
 export default function AdministratorsPage() {
   const { user, loading: authLoading, hasPermission, sessionReady } = useAuth();
-  const canManageUsers = hasPermission("settings.users") || isSuperRole(user?.role ?? "");
+  const canManageUsers =
+    hasPermission("settings.users") || isSuperRole(user?.role ?? "");
   const navigate = useNavigate();
   const location = useLocation();
   const [rows, setRows] = useState<AppUserListItem[]>([]);
@@ -114,7 +121,11 @@ export default function AdministratorsPage() {
     if (!menu) return;
     const onDoc = (e: MouseEvent) => {
       const el = e.target as HTMLElement;
-      if (el.closest("[data-admin-actions-menu]") || el.closest("[data-admin-actions-trigger]")) return;
+      if (
+        el.closest("[data-admin-actions-menu]") ||
+        el.closest("[data-admin-actions-trigger]")
+      )
+        return;
       setMenu(null);
     };
     document.addEventListener("mousedown", onDoc);
@@ -134,7 +145,9 @@ export default function AdministratorsPage() {
   const onToggleActive = async (row: AppUserListItem) => {
     try {
       await updateUser(row.id, { is_active: !row.is_active });
-      toast.success(row.is_active ? "Użytkownik dezaktywowany" : "Użytkownik aktywowany");
+      toast.success(
+        row.is_active ? "Użytkownik dezaktywowany" : "Użytkownik aktywowany"
+      );
       await load();
     } catch {
       toast.error("Operacja nie powiodła się");
@@ -151,7 +164,9 @@ export default function AdministratorsPage() {
     }
     try {
       await resetUserPassword(row.id, pw);
-      toast.success("Hasło zostało ustawione — użytkownik musi je zmienić przy logowaniu.");
+      toast.success(
+        "Hasło zostało ustawione — użytkownik musi je zmienić przy logowaniu."
+      );
       await load();
     } catch {
       toast.error("Reset hasła nie powiódł się");
@@ -164,7 +179,10 @@ export default function AdministratorsPage() {
       toast.error("Nie można usunąć konta systemowego seed.");
       return;
     }
-    if (!window.confirm(`Usunąć konto ${row.login}? Ta operacja jest nieodwracalna.`)) return;
+    if (
+      !window.confirm(`Usunąć konto ${row.login}? Ta operacja jest nieodwracalna.`)
+    )
+      return;
     try {
       await deleteUser(row.id);
       toast.success("Użytkownik usunięty");
@@ -183,15 +201,13 @@ export default function AdministratorsPage() {
     return (
       <div className="px-1 pb-2 pt-1">
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-700">Brak uprawnienia „Ustawienia → Administratorzy”.</p>
+          <p className="text-sm text-slate-700">
+            Brak uprawnienia „Ustawienia → Administratorzy”.
+          </p>
         </div>
       </div>
     );
   }
-
-  const th = listSellasistTableHeaderCellGrid;
-  const td = listSellasistTableBodyCellGrid;
-  const theadCls = "sticky top-0 z-[20] bg-slate-50 shadow-[0_1px_0_0_rgb(226_232_240)]";
 
   const menuPortal =
     menu && typeof document !== "undefined"
@@ -240,7 +256,9 @@ export default function AdministratorsPage() {
                 if (row) void onToggleActive(row);
               }}
             >
-              {rows.find((x) => x.id === menu.userId)?.is_active ? "Dezaktywuj" : "Aktywuj"}
+              {rows.find((x) => x.id === menu.userId)?.is_active
+                ? "Dezaktywuj"
+                : "Aktywuj"}
             </button>
             <div className="my-1 border-t border-slate-100" role="separator" />
             <button
@@ -256,152 +274,238 @@ export default function AdministratorsPage() {
               Usuń
             </button>
           </div>,
-          document.body,
+          document.body
         )
       : null;
 
   return (
-    <div className="min-w-0 space-y-4">
-      {err ? <p className="text-sm text-red-600">{err}</p> : null}
+    <div className="min-w-0 bg-white rounded-xl border border-slate-200 p-4 md:p-6 shadow-sm space-y-6">
+      {err && <p className="text-sm text-red-600">{err}</p>}
+
+      {/* Górny pasek narzędzi */}
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4 sm:items-center">
+        <div className="relative w-full sm:max-w-md">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
+          </div>
+          <input
+            type="text"
+            placeholder="Wyszukaj..."
+            className="block w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          />
+        </div>
+        <div className="flex w-full sm:w-auto items-center gap-3">
+          <button
+            type="button"
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200"
+          >
+            <Settings2 className="h-4 w-4 text-slate-500" aria-hidden="true" />
+            Filtruj
+          </button>
+          <button
+            type="button"
+            onClick={goToNewUser}
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            Dodaj użytkownika
+          </button>
+        </div>
+      </div>
 
       {loading ? (
         <p className="text-sm text-slate-500">Ładowanie…</p>
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-14 text-center">
           <Users className="h-10 w-10 text-slate-300" strokeWidth={1.5} aria-hidden />
-          <p className="mt-4 text-base font-semibold text-slate-800">Dodaj pierwszego administratora</p>
+          <p className="mt-4 text-base font-semibold text-slate-800">
+            Dodaj pierwszego administratora
+          </p>
           <p className="mt-1 max-w-md text-sm text-slate-600">
             Utwórz pierwsze konto z dostępem do panelu i magazynu — później dodasz kolejnych użytkowników i role.
           </p>
           <button
             type="button"
             onClick={goToNewUser}
-            className="relative z-10 mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+            className="mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
           >
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Dodaj użytkownika
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 [-webkit-overflow-scrolling:touch]">
-          <table className="w-full min-w-[920px] border-collapse">
-            <thead className={theadCls}>
-              <tr>
-                <th className={`${th} text-left`}>Użytkownik</th>
-                <th className={`${th} text-left`}>Rola</th>
-                <th className={`${th} text-left`}>Magazyny</th>
-                <th className={`${th} text-left`}>Aktywny</th>
-                <th className={`${th} text-left`}>Ostatnie logowanie</th>
-                <th className={`${th} text-left`}>Utworzono</th>
-                <th className={`${th} ${operationalActionsColumnWidthClass} text-center align-top`}>Akcje</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className="group cursor-default transition-colors hover:bg-slate-50/90 [&>td]:align-middle"
+        <div className="flex flex-col gap-3">
+          {rows.map((r) => {
+            // Generowanie tagów dla sekcji "Permisje"
+            const allTags = [];
+            if (r.primary_workforce_group) {
+              allTags.push(
+                <span
+                  key="wg"
+                  className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium ring-1 ring-inset"
+                  style={{
+                    backgroundColor: `${r.primary_workforce_group.color}15`,
+                    color: r.primary_workforce_group.color,
+                    borderColor: `${r.primary_workforce_group.color}30`,
+                  }}
+                  title="Grupa operacyjna"
                 >
-                  <td className={td}>
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200 text-xs font-bold text-slate-700 shadow-inner ring-1 ring-slate-200/80"
-                        aria-hidden
-                      >
-                        {initials(r)}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-slate-900">{displayName(r)}</div>
-                        <div className="truncate text-xs text-slate-500">{r.login}</div>
-                        {r.email ? (
-                          <div className="truncate text-xs text-slate-400" title={r.email}>
-                            {r.email}
-                          </div>
-                        ) : null}
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {r.primary_workforce_group ? (
-                            <span
-                              className="inline-flex max-w-full items-center truncate rounded-md px-1.5 py-0.5 text-[10px] font-bold ring-1 ring-inset"
-                              style={{
-                                backgroundColor: `${r.primary_workforce_group.color}22`,
-                                color: "#0f172a",
-                                borderColor: r.primary_workforce_group.color,
-                              }}
-                              title="Grupa operacyjna"
-                            >
-                              {r.primary_workforce_group.name}
-                            </span>
-                          ) : null}
-                          {(r.wms_operational_modes ?? []).map((m) => (
-                            <span
-                              key={m}
-                              className={`inline-flex max-w-[10rem] truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${modeBadgeClass(m)}`}
-                              title="Tryb WMS"
-                            >
-                              {WMS_OPERATIONAL_MODE_LABELS_PL[m] ?? m}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                  {r.primary_workforce_group.name}
+                </span>
+              );
+            }
+            (r.wms_operational_modes ?? []).forEach((m) => {
+              allTags.push(
+                <span
+                  key={m}
+                  className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium ring-1 ring-inset ${modeBadgeClass(
+                    m
+                  )}`}
+                  title="Tryb WMS"
+                >
+                  {WMS_OPERATIONAL_MODE_LABELS_PL[m] ?? m}
+                </span>
+              );
+            });
+
+            const displayTags = allTags.slice(0, 4);
+            const moreTagsCount = allTags.length - 4;
+
+            return (
+              <div
+                key={r.id}
+                className="grid grid-cols-1 items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md md:grid-cols-[minmax(200px,2.5fr)_1fr_1fr_minmax(150px,2fr)_1fr_minmax(180px,1.5fr)_auto]"
+              >
+                {/* 1. Użytkownik */}
+                <div className="flex min-w-0 items-center gap-4">
+                  <span
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-500 text-sm font-bold text-white shadow-sm"
+                    aria-hidden
+                  >
+                    {initials(r)}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-slate-900">
+                      {displayName(r)}
                     </div>
-                  </td>
-                  <td className={`${td} font-mono text-xs text-slate-800`}>{r.role}</td>
-                  <td className={`${td} max-w-[260px]`}>
-                    {(r.warehouse_names?.length ?? 0) > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {r.warehouse_names!.map((name) => (
-                          <span
-                            key={name}
-                            className="inline-flex max-w-full truncate rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 ring-1 ring-slate-200"
-                            title={name}
-                          >
-                            {name}
-                          </span>
-                        ))}
+                    {r.email ? (
+                      <div className="truncate text-sm text-slate-500" title={r.email}>
+                        {r.email}
                       </div>
+                    ) : (
+                      <div className="truncate text-sm text-slate-500">{r.login}</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Rola */}
+                <div className="flex min-w-0 flex-col">
+                  <span className="mb-0.5 text-xs text-slate-500">Rola</span>
+                  <span className="truncate font-medium text-slate-800">
+                    {r.role}
+                  </span>
+                </div>
+
+                {/* 3. Magazyn */}
+                <div className="flex min-w-0 flex-col">
+                  <span className="mb-0.5 text-xs text-slate-500">Magazyn</span>
+                  <div className="flex flex-wrap gap-1">
+                    {(r.warehouse_names?.length ?? 0) > 0 ? (
+                      r.warehouse_names!.map((name) => (
+                        <span
+                          key={name}
+                          className="inline-flex max-w-full truncate rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 ring-1 ring-slate-200"
+                          title={name}
+                        >
+                          {name}
+                        </span>
+                      ))
                     ) : r.warehouse_summary?.trim() ? (
-                      <span className="truncate text-slate-700" title={r.warehouse_summary}>
+                      <span className="truncate font-medium text-slate-800" title={r.warehouse_summary}>
                         {r.warehouse_summary}
                       </span>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="font-medium text-slate-800">—</span>
                     )}
-                  </td>
-                  <td className={td}>
+                  </div>
+                </div>
+
+                {/* 4. Permisje / Tagi */}
+                <div className="flex min-w-0 flex-col">
+                  <span className="mb-1 text-xs text-slate-500">Permisje</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {allTags.length > 0 ? (
+                      <>
+                        {displayTags}
+                        {moreTagsCount > 0 && (
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-200">
+                            +{moreTagsCount} innych
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="font-medium text-slate-800">—</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 5. Status */}
+                <div className="flex items-center">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      r.is_active
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
                     <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        r.is_active ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100" : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        r.is_active ? "bg-emerald-500" : "bg-slate-400"
                       }`}
-                    >
-                      {r.is_active ? "tak" : "nie"}
+                      aria-hidden
+                    ></span>
+                    {r.is_active ? "Aktywny" : "Nieaktywny"}
+                  </span>
+                </div>
+
+                {/* 6. Daty */}
+                <div className="flex min-w-0 flex-col space-y-1 text-xs">
+                  <div className="truncate">
+                    <span className="text-slate-500">Ostatnie logowanie:</span>
+                    <br />
+                    <span className="font-medium text-slate-800">
+                      {fmtDt(r.last_login_at)}
                     </span>
-                  </td>
-                  <td className={`${td} whitespace-nowrap text-xs text-slate-600`}>{fmtDt(r.last_login_at)}</td>
-                  <td className={`${td} whitespace-nowrap text-xs text-slate-600`}>{fmtDt(r.created_at)}</td>
-                  <td className={`${td} ${operationalActionsColumnWidthClass} !px-1 !py-1 text-center !align-top`}>
-                    <OperationalActionColumn
-                      aria-label="Akcje użytkownika"
-                      slots={[
-                        <OperationalActionButton
-                          key="menu"
-                          data-admin-actions-trigger
-                          aria-label="Więcej akcji"
-                          aria-expanded={menu?.userId === r.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (menu?.userId === r.id) setMenu(null);
-                            else openActionsMenu(r, e.currentTarget);
-                          }}
-                        >
-                          <MoreHorizontal className="text-slate-600" strokeWidth={2} aria-hidden />
-                        </OperationalActionButton>,
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                  <div className="truncate">
+                    <span className="text-slate-500">Utworzono:</span>
+                    <br />
+                    <span className="font-medium text-slate-800">
+                      {fmtDt(r.created_at)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 7. Akcje */}
+                <div className="ml-auto flex items-center justify-end pl-2">
+                  <button
+                    type="button"
+                    data-admin-actions-trigger
+                    aria-label="Więcej akcji"
+                    aria-expanded={menu?.userId === r.id}
+                    className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (menu?.userId === r.id) setMenu(null);
+                      else openActionsMenu(r, e.currentTarget);
+                    }}
+                  >
+                    <MoreHorizontal className="h-5 w-5" strokeWidth={2} aria-hidden />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
