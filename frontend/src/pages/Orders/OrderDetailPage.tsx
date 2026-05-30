@@ -38,7 +38,8 @@ import {
   Activity,
   Info,
   Plus,
-  Send
+  Send,
+  ExternalLink
 } from "lucide-react";
 import api from "../../api/axios";
 import {
@@ -339,8 +340,9 @@ function formatExternalIdSnippet(raw: string | null | undefined): string {
   return s.length > 28 ? `${s.slice(0, 14)}…${s.slice(-8)}` : s;
 }
 
+// Ujednolicony przycisk ikon góry ekranu
 const ORDER_DETAIL_HEADER_ICON_BTN =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 disabled:pointer-events-none disabled:opacity-30";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-30";
 
 function uniqJoinedAddressParts(parts: unknown[]): string {
   const seen = new Set<string>();
@@ -535,24 +537,6 @@ function paymentStatusIsPaid(status: string | null | undefined): boolean {
   return /opłac|zapłac|paid|complete|zapłacono|opłacone|tak/.test(s);
 }
 
-function PanelCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">{title}</h3>
-      <div className="space-y-2 text-sm text-slate-800">{children}</div>
-    </section>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className="font-medium text-slate-900">{value}</span>
-    </div>
-  );
-}
-
 function SummaryDashboardCard({
   title,
   children,
@@ -570,20 +554,20 @@ function SummaryDashboardCard({
     <section
       className={
         className ??
-        "rounded-md border border-slate-200 bg-white p-5 shadow-sm"
+        "rounded-md border border-slate-200 bg-white p-5 shadow-sm flex flex-col h-full"
       }
     >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{title}</h3>
         {right}
       </div>
-      <div className={contentClassName ?? ""}>{children}</div>
+      <div className={`flex-1 ${contentClassName ?? ""}`}>{children}</div>
     </section>
   );
 }
 
 const SUMMARY_TOP_CARD_SHELL =
-  "rounded-md border border-slate-200 bg-white p-5 shadow-sm";
+  "rounded-md border border-slate-200 bg-white p-5 shadow-sm flex flex-col h-full";
 
 function SummaryCompactRow({
   label,
@@ -595,8 +579,8 @@ function SummaryCompactRow({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-2 text-sm last:border-b-0">
-      <span className="shrink-0 text-slate-500">{label}</span>
+    <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 text-sm last:border-b-0">
+      <span className="shrink-0 text-slate-500 font-medium">{label}</span>
       <div className="flex min-w-0 items-start justify-end gap-1.5 text-right">
         <div className="min-w-0 font-medium leading-snug text-slate-900">{value}</div>
         {actions}
@@ -652,8 +636,6 @@ const ORDER_DOCS_SECTION_TYPES = new Set([
   "DOKUMENT_SPRZEDAZY",
 ]);
 
-const DOCUMENTS_GRID = "grid grid-cols-[40px_160px_180px_1fr_120px] items-center gap-x-4";
-
 function guessMimeFromFilename(name: string): string | undefined {
   const n = (name || "").toLowerCase();
   if (n.endsWith(".pdf")) return "application/pdf";
@@ -689,7 +671,6 @@ function orderDocumentTypeToLabel(code: string): NonNullable<OrderDocTableRow["t
 }
 
 type OrderDocModalType = (typeof ORDER_DOCUMENT_MODAL_TYPES)[number];
-
 const DEFAULT_DOC_MODAL_TYPE: OrderDocModalType = "FAKTURA";
 
 function OrderDocTableRowActions({
@@ -756,7 +737,7 @@ function OrderDocFilesTableSection({
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+    <div className="bg-white rounded-md border border-slate-200 overflow-hidden shadow-sm">
       <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
         <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{title}</h3>
         <input type="file" ref={uploadInputRef} className="hidden" onChange={(e) => { onUploadFiles?.(e.target.files); e.target.value = ""; }} />
@@ -767,42 +748,41 @@ function OrderDocFilesTableSection({
          <button className="text-slate-500 hover:text-slate-900" onClick={() => onToolbarEmail?.()}><Mail size={16}/></button>
          <button className="text-slate-500 hover:text-slate-900" onClick={() => uploadInputRef.current?.click()}><Upload size={16}/></button>
       </div>
-      <table className="w-full text-left text-sm">
-        <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50">
-          <tr>
-            <th className="px-5 py-3 w-10"></th>
-            <th className="px-5 py-3 w-40">DATA</th>
-            <th className="px-5 py-3 w-48">RODZAJ</th>
-            <th className="px-5 py-3">NAZWA DOKUMENTU</th>
-            <th className="px-5 py-3 text-right"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 text-slate-800">
-          {rows.map((row) => (
-            <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-              <td className="px-5 py-4"><input type="checkbox" className="rounded border-slate-300"/></td>
-              <td className="px-5 py-4 text-slate-500">{row.date}</td>
-              <td className="px-5 py-4">
-                {showTypeColumn && row.typeLabel ? (
-                  <div className="flex items-center">
-                    <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded mr-2 ${orderDocKindToneClass(row.typeLabel.tone)}`}>{row.typeLabel.abbr}</span> 
-                    {row.typeLabel.name}
-                  </div>
-                ) : <span className="text-slate-400">—</span>}
-              </td>
-              <td className="px-5 py-4">
-                <span className="font-medium text-slate-800 break-words">{row.name}</span>
-                <span className={`ml-3 px-2 py-0.5 rounded text-[10px] font-bold ${row.status === "approved" ? "bg-slate-800 text-white" : "bg-slate-100 border border-slate-200 text-slate-500 font-medium"}`}>
-                  {row.status === "approved" ? "Zatwierdzony" : "Niezatwierdzony"}
-                </span>
-              </td>
-              <td className="px-5 py-4 text-right text-slate-400">
-                <OrderDocTableRowActions row={row} onPreview={onPreview} onPrint={onPrint} onDownload={onDownload} onEmail={onEmail} onDelete={onDelete} />
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm whitespace-nowrap">
+          <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50">
+            <tr>
+              <th className="px-5 py-3 w-10"></th>
+              <th className="px-5 py-3 w-40">DATA</th>
+              <th className="px-5 py-3 w-48">RODZAJ</th>
+              <th className="px-5 py-3 w-full">NAZWA DOKUMENTU</th>
+              <th className="px-5 py-3 text-right"></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-slate-100 text-slate-800">
+            {rows.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                <td className="px-5 py-4"><input type="checkbox" className="rounded border-slate-300"/></td>
+                <td className="px-5 py-4 text-slate-500">{row.date}</td>
+                <td className="px-5 py-4">
+                  {showTypeColumn && row.typeLabel ? (
+                    <div className="flex items-center">
+                      <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded mr-2 ${orderDocKindToneClass(row.typeLabel.tone)}`}>{row.typeLabel.abbr}</span> 
+                      {row.typeLabel.name}
+                    </div>
+                  ) : <span className="text-slate-400">—</span>}
+                </td>
+                <td className="px-5 py-4 max-w-[200px]">
+                  <span className="font-medium text-slate-800 truncate block">{row.name}</span>
+                </td>
+                <td className="px-5 py-4 text-right text-slate-400">
+                  <OrderDocTableRowActions row={row} onPreview={onPreview} onPrint={onPrint} onDownload={onDownload} onEmail={onEmail} onDelete={onDelete} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -811,11 +791,11 @@ type WmsSidebarTimeCell = { title: string; value: string; statusChip: string };
 
 function WmsOperationTimesKpiPanel({ cells }: { cells: readonly WmsSidebarTimeCell[] }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+    <div className="bg-white rounded-md border border-slate-200 p-5 shadow-sm">
       <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-5">Czasy operacji (WMS)</h3>
       <div className="grid grid-cols-2 gap-4">
         {cells.map((cell) => (
-          <div key={cell.title} className="rounded-lg border border-slate-100 bg-slate-50/80 p-4 flex flex-col justify-between">
+          <div key={cell.title} className="rounded-lg border border-slate-100 bg-slate-50 p-4 flex flex-col justify-between">
             <p className="text-xs text-slate-500 mb-2">{cell.title}</p>
             <div>
               <p className="text-2xl font-black text-slate-900">{cell.value}</p>
@@ -908,6 +888,7 @@ export default function OrderDetailPage() {
   const [isStatusPanelCollapsed, setIsStatusPanelCollapsed] = useState(false);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
   const [returnsComplaintsOpen, setReturnsComplaintsOpen] = useState(false);
+  const [sidebarSearch, setSidebarSearch] = useState("");
   const returnsComplaintsRef = useRef<HTMLDivElement>(null);
   const [officePin, setOfficePin] = useState(false);
   const [opDraft, setOpDraft] = useState("");
@@ -1779,11 +1760,11 @@ export default function OrderDetailPage() {
     [order, wmsFulfillment],
   );
 
-  const inpSm = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900";
+  const inpSm = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900";
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center gap-2 text-slate-500 bg-white p-6">
+      <div className="flex min-h-[40vh] items-center justify-center gap-2 text-slate-500 bg-white p-6">
         <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
         Ładowanie…
       </div>
@@ -1844,31 +1825,40 @@ export default function OrderDetailPage() {
 
   return (
     <div className="min-h-screen flex font-sans text-slate-800 bg-white">
-      {/* Pasek statusów wg Twojej logiki */}
+      {/* Pasek statusów */}
       <div className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 border-r border-slate-200 bg-slate-50 lg:flex ${isStatusPanelCollapsed ? "w-14" : "w-[260px]"}`}>
-         <OrderStatusSidebar
-            warehouseId={warehouseId}
-            panelSummary={panelSummary}
-            panelSubgroups={panelSubgroups}
-            panelFilter={sidebarFilter}
-            onPanelFilterChange={(f) => navigate("/orders/list", { state: { panelFilter: f } })}
-            chromeVariant="sellasist"
-            collapsed={isStatusPanelCollapsed}
-            parentScrollContainer
-            titleTrailing={
-              <button
-                type="button"
-                onClick={() => setIsStatusPanelCollapsed((v) => !v)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-100"
-              >
-                <ChevronLeft className={`h-4 w-4 transition-transform ${isStatusPanelCollapsed ? "rotate-180" : ""}`} />
-              </button>
-            }
-          />
+         <div className="p-4 flex justify-between items-center text-[10px] font-bold text-slate-400 tracking-wider">
+            STATUS PANELU
+            <button onClick={() => setIsStatusPanelCollapsed((v) => !v)} className="text-slate-400 hover:text-slate-600 bg-white p-1 rounded-md border border-slate-200 shadow-sm transition-colors">
+              <ChevronLeft className={`h-4 w-4 transition-transform ${isStatusPanelCollapsed ? "rotate-180" : ""}`} />
+            </button>
+         </div>
+         
+         {!isStatusPanelCollapsed && (
+           <div className="px-4 pb-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2 text-slate-400" size={16} />
+                <input type="text" placeholder="Szukaj statusu..." value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)} className="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:border-blue-500 bg-white" />
+              </div>
+           </div>
+         )}
+         
+         <div className="flex-1 overflow-y-auto pb-4">
+           <OrderStatusSidebar
+              warehouseId={warehouseId}
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
+              panelFilter={sidebarFilter}
+              onPanelFilterChange={(f) => navigate("/orders/list", { state: { panelFilter: f } })}
+              chromeVariant="sellasist"
+              collapsed={isStatusPanelCollapsed}
+              parentScrollContainer
+            />
+         </div>
       </div>
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden bg-white">
-        <div className="w-full flex-col lg:flex-row lg:items-start p-6 pb-0">
+        <div className="w-full flex-col lg:flex-row lg:items-start p-6 pb-0 max-w-full mx-auto">
             <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
               <Link to="/dashboard" className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800">
                 <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -1880,7 +1870,7 @@ export default function OrderDetailPage() {
             </nav>
 
             <div className="min-w-0 flex-1 space-y-4">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 lg:flex-nowrap lg:gap-x-3 pb-4">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-2 lg:flex-nowrap lg:gap-x-3 pb-4">
                   <div className="flex shrink-0 items-center gap-1">
                     <button type="button" disabled={prevOrderId == null} onClick={() => prevOrderId != null && navigate(`/orders/${prevOrderId}`, { state: location.state })} className={ORDER_DETAIL_HEADER_ICON_BTN}>
                       <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
@@ -1895,9 +1885,9 @@ export default function OrderDetailPage() {
                   <div className="min-w-0 flex-1 lg:min-w-[12rem] flex flex-wrap items-baseline gap-x-3 gap-y-1">
                       <span className="text-sm font-medium text-slate-500 uppercase tracking-wide">Zamówienie</span>
                       <span className="text-2xl font-bold tracking-tight text-slate-900">{order.number ?? order.id}</span>
-                      <span className="text-[11px] text-slate-400">{dateLine}</span>
-                      {formatExternalIdSnippet(order.external_id) && <span className="text-[11px] text-slate-400">ID zew: {formatExternalIdSnippet(order.external_id)}</span>}
-                      {(order.source ?? "").trim() && <span className="hidden text-[11px] text-slate-400 md:inline">{(order.source ?? "").trim()}</span>}
+                      <span className="text-[11px] text-slate-400 font-medium">{dateLine}</span>
+                      {formatExternalIdSnippet(order.external_id) && <span className="text-[11px] text-slate-400 font-medium">ID zew: {formatExternalIdSnippet(order.external_id)}</span>}
+                      {(order.source ?? "").trim() && <span className="hidden text-[11px] text-slate-400 font-medium md:inline">{(order.source ?? "").trim()}</span>}
                   </div>
 
                   <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -1912,18 +1902,18 @@ export default function OrderDetailPage() {
                           <MessageSquareWarning className="h-4 w-4 shrink-0" strokeWidth={2} />
                         </button>
                       </div>
-                      <button type="button" onClick={() => { setActiveTab("comms"); window.setTimeout(() => { document.getElementById("order-comms-note")?.focus(); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_customer_comment ? "border-emerald-300 bg-emerald-50 text-emerald-700" : ""}`}>
+                      <button type="button" onClick={() => { setActiveTab("comms"); window.setTimeout(() => { document.getElementById("order-comms-note")?.focus(); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_customer_comment ? "border-emerald-300 bg-emerald-50 text-emerald-700 relative" : "relative"}`}>
                         <Mail className="h-4 w-4 shrink-0" strokeWidth={2} />
-                        {order?.has_customer_comment && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>}
+                        {order?.has_customer_comment && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
                       </button>
                       <div className="w-px h-6 bg-slate-200 mx-1"></div>
                       <button type="button" onClick={() => window.print()} className={ORDER_DETAIL_HEADER_ICON_BTN}><Printer className="h-4 w-4 shrink-0" strokeWidth={2} /></button>
-                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="inline-flex items-center rounded-md bg-blue-600 px-4 py-1.5 text-sm font-bold text-white transition hover:bg-blue-700">Spakuj</Link>
+                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="ml-2 inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700">Spakuj</Link>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4">
-                  <div className="flex items-center min-w-[200px]">
+                <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 pb-2">
+                  <div className="flex items-center min-w-max shrink-0">
                     {warehouseId != null ? (
                       <OrderDetailPrimaryStatusDropdown variant="compact" currentStatus={order.order_ui_status ?? null} panelSummary={panelSummary} panelSubgroups={panelSubgroups} saving={panelSaving} onSelectStatus={async (subStatusId) => { setPanelSaving(true); try { const updated = await patchOrderUiStatus(order.id, DAMAGE_TENANT_ID, warehouseId, subStatusId); setOrder((prev) => prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev); await loadPanelSummary(); } finally { setPanelSaving(false); } }} />
                     ) : panelOrderStatusBrief ? (
@@ -1951,7 +1941,7 @@ export default function OrderDetailPage() {
                 <div className="border-b border-slate-200 mt-2">
                   <div className="flex gap-6 overflow-x-auto">
                     {DETAIL_TABS.map((t) => (
-                      <button key={t.id} onClick={() => setActiveTab(t.id)} className={`pb-3 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 -mb-px ${ activeTab === t.id ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800" }`}>
+                      <button key={t.id} onClick={() => setActiveTab(t.id)} className={`pb-3 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 -mb-px ${ activeTab === t.id ? "border-orange-500 text-orange-600" : "border-transparent text-slate-500 hover:text-slate-800" }`}>
                         {t.label}
                       </button>
                     ))}
@@ -1977,18 +1967,18 @@ export default function OrderDetailPage() {
                       }
                     >
                       <SummaryCompactRow label="Metoda płatności" value={<select className={inpSm} value={payMethodDraft} onChange={(e) => setPayMethodDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_METHOD_PRESETS, payMethodDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>} />
-                      <div className="flex items-center justify-between border-b border-slate-100 py-2 text-sm">
-                        <span className="text-slate-500">Status płatności</span>
-                        <select className={`rounded-md border px-2 py-1 text-xs font-bold outline-none ${paymentStatusIsPaid(payStatusDraft) ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>
+                      <div className="flex items-center justify-between border-b border-slate-100 py-2.5 text-sm">
+                        <span className="text-slate-500 font-medium">Status płatności</span>
+                        <select className={`rounded-md border px-2.5 py-1 text-xs font-bold outline-none ${paymentStatusIsPaid(payStatusDraft) ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>
                       </div>
-                      <label className="flex flex-col gap-1 border-b border-slate-100 py-2 text-sm text-slate-500 last:border-b-0">
+                      <label className="flex flex-col gap-1.5 border-b border-slate-100 py-2.5 text-sm text-slate-500 last:border-b-0 font-medium">
                         <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> Sposób wysyłki</span>
-                        <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600" value={shipDraft} disabled={warehouseId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
+                        <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600 outline-none focus:border-orange-500" value={shipDraft} disabled={warehouseId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
                       </label>
                       {warehouseId != null && (
-                        <div className="mt-2 flex justify-end gap-2">
-                          <button type="button" className="rounded border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
-                          <button type="button" disabled={shipPaySaving} onClick={() => { setShipPaySaving(true); void patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false)); }} className="rounded bg-slate-900 px-4 py-1 text-xs font-bold text-white">{shipPaySaving ? "..." : "Zapisz"}</button>
+                        <div className="mt-3 flex justify-end gap-2">
+                          <button type="button" className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
+                          <button type="button" disabled={shipPaySaving} onClick={() => { setShipPaySaving(true); void patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false)); }} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50">{shipPaySaving ? "..." : "Zapisz"}</button>
                         </div>
                       )}
                     </SummaryDashboardCard>
@@ -1996,10 +1986,10 @@ export default function OrderDetailPage() {
                     <SummaryDashboardCard
                       className={SUMMARY_TOP_CARD_SHELL}
                       title="Adres dostawy"
-                      right={warehouseId != null && !addressEditing ? <button onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(true); }} className="text-slate-400 hover:text-slate-800"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
+                      right={warehouseId != null && !addressEditing ? <button onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(true); }} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
                     >
                       {addressEditing ? (
-                        <div className="space-y-2 text-sm">
+                        <div className="space-y-2 text-sm font-medium">
                           <label className="flex flex-col text-slate-600">Imię i nazwisko<input className={inpSm} value={addrDraft.name} onChange={(e) => setAddrDraft((d) => ({ ...d, name: e.target.value }))} /></label>
                           <label className="flex flex-col text-slate-600">Ulica<input className={inpSm} value={addrDraft.street} onChange={(e) => setAddrDraft((d) => ({ ...d, street: e.target.value }))} /></label>
                           <div className="grid grid-cols-2 gap-2">
@@ -2007,20 +1997,20 @@ export default function OrderDetailPage() {
                             <label className="flex flex-col text-slate-600">Miasto<input className={inpSm} value={addrDraft.city} onChange={(e) => setAddrDraft((d) => ({ ...d, city: e.target.value }))} /></label>
                           </div>
                           <label className="flex flex-col text-slate-600">Kraj<input className={inpSm} value={addrDraft.country} onChange={(e) => setAddrDraft((d) => ({ ...d, country: e.target.value }))} /></label>
-                          <div className="flex justify-end gap-2 pt-2">
-                            <button className="rounded border border-slate-200 px-3 py-1 text-xs font-bold" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(false); }}>Anuluj</button>
-                            <button disabled={addressSaving || warehouseId == null} className="rounded bg-slate-900 px-4 py-1 text-xs font-bold text-white" onClick={() => { setAddressSaving(true); void patchOrder(order.id, { shipping_name: addrDraft.name.trim() || null, shipping_street: addrDraft.street.trim() || null, shipping_city: addrDraft.city.trim() || null, shipping_postal_code: addrDraft.postal.trim() || null, shipping_country: addrDraft.country.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); }); }}>{addressSaving ? "..." : "Zapisz"}</button>
+                          <div className="flex justify-end gap-2 pt-3">
+                            <button className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(false); }}>Anuluj</button>
+                            <button disabled={addressSaving || warehouseId == null} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50" onClick={() => { setAddressSaving(true); void patchOrder(order.id, { shipping_name: addrDraft.name.trim() || null, shipping_street: addrDraft.street.trim() || null, shipping_city: addrDraft.city.trim() || null, shipping_postal_code: addrDraft.postal.trim() || null, shipping_country: addrDraft.country.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); }); }}>{addressSaving ? "..." : "Zapisz"}</button>
                           </div>
                         </div>
                       ) : (
                         <div className="space-y-1 text-sm text-slate-800">
-                          <p className="font-bold text-base text-slate-900">{summaryShippingName}</p>
+                          <p className="font-bold text-base text-slate-900 pb-1">{summaryShippingName}</p>
                           {shippingExtras?.company && <p className="text-slate-600">{shippingExtras.company}</p>}
                           <p className="text-slate-600 flex items-center pt-1"><Phone size={14} className="mr-2 text-slate-400"/> {shippingExtras?.phone || contact.phone}</p>
-                          <p className="text-slate-600 flex items-center pb-2 border-b border-slate-100"><Mail size={14} className="mr-2 text-slate-400"/> <span className="truncate">{shippingExtras?.email || contact.email}</span></p>
+                          <p className="text-slate-600 flex items-center pb-3 border-b border-slate-100"><Mail size={14} className="mr-2 text-slate-400"/> <span className="truncate">{shippingExtras?.email || contact.email}</span></p>
                           <div className="pt-2">
                             {contact.addressLines.length > 0 && contact.addressLines[0] !== "—" ? contact.addressLines.map((ln, i) => <p key={`ship-${i}`}>{ln}</p>) : <p className="text-slate-500">Brak adresu.</p>}
-                            {shippingExtras?.pickupPoint && <p className="font-bold text-slate-700 mt-2">{shippingExtras.pickupPoint}</p>}
+                            {shippingExtras?.pickupPoint && <p className="font-bold text-slate-700 mt-3">{shippingExtras.pickupPoint}</p>}
                             {shippingExtras?.pickupCode && <p className="text-slate-700">Kod odbioru: {shippingExtras.pickupCode}</p>}
                           </div>
                         </div>
@@ -2030,10 +2020,10 @@ export default function OrderDetailPage() {
                     <SummaryDashboardCard
                       className={SUMMARY_TOP_CARD_SHELL}
                       title={summaryDocEditing ? (docDraft.document_type === "INVOICE" ? "Faktura" : "Paragon") : panelDocumentLabel}
-                      right={warehouseId != null && !summaryDocEditing ? <button onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(true); }} className="text-slate-400 hover:text-slate-800"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
+                      right={warehouseId != null && !summaryDocEditing ? <button onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(true); }} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
                     >
                       {summaryDocEditing ? (
-                        <div className="space-y-2 text-sm">
+                        <div className="space-y-2 text-sm font-medium">
                           <label className="flex flex-col text-slate-600">Rodzaj dokumentu<select className={inpSm} value={docDraft.document_type} onChange={(e) => setDocDraft((d) => ({ ...d, document_type: e.target.value === "INVOICE" ? "INVOICE" : "PARAGON" }))}><option value="PARAGON">Paragon</option><option value="INVOICE">Faktura</option></select></label>
                           <label className="flex flex-col text-slate-600">Numer dokumentu<input className={inpSm} value={docDraft.sales_document_number} onChange={(e) => setDocDraft((d) => ({ ...d, sales_document_number: e.target.value }))} /></label>
                           {docDraft.document_type === "INVOICE" && (
@@ -2043,9 +2033,9 @@ export default function OrderDetailPage() {
                               <label className="flex flex-col text-slate-600">E-mail<input type="email" className={inpSm} value={docDraft.billing_email} onChange={(e) => setDocDraft((d) => ({ ...d, billing_email: e.target.value }))} /></label>
                             </>
                           )}
-                          <div className="flex justify-end gap-2 pt-2">
-                            <button className="rounded border border-slate-200 px-3 py-1 text-xs font-bold" onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(false); }}>Anuluj</button>
-                            <button disabled={docSaving || warehouseId == null} className="rounded bg-slate-900 px-4 py-1 text-xs font-bold text-white" onClick={() => { setDocSaving(true); const isInv = docDraft.document_type === "INVOICE"; void patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim() || null, company_name: isInv ? docDraft.company_name.trim() || null : null, nip: isInv ? docDraft.nip.trim() || null : null, email: isInv ? docDraft.billing_email.trim() || null : null }).then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); }); }}>{docSaving ? "..." : "Zapisz"}</button>
+                          <div className="flex justify-end gap-2 pt-3">
+                            <button className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(false); }}>Anuluj</button>
+                            <button disabled={docSaving || warehouseId == null} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50" onClick={() => { setDocSaving(true); const isInv = docDraft.document_type === "INVOICE"; void patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim() || null, company_name: isInv ? docDraft.company_name.trim() || null : null, nip: isInv ? docDraft.nip.trim() || null : null, email: isInv ? docDraft.billing_email.trim() || null : null }).then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); }); }}>{docSaving ? "..." : "Zapisz"}</button>
                           </div>
                         </div>
                       ) : (
@@ -2066,16 +2056,28 @@ export default function OrderDetailPage() {
                     </SummaryDashboardCard>
                   </div>
 
-                  <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+                  {/* Ważna uwaga dla użytkownika odnośnie rozciągania i tabel */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-sm text-blue-900 shadow-sm">
+                    <p className="font-bold mb-1 flex items-center"><Info size={16} className="mr-2"/> Instrukcja dotycząca wewnętrznych tabel ("Brutto/szt", ikony obok nazwy, "Razem (produkty)")</p>
+                    <p>Ponieważ tabele z produktami pochodzą z niezależnych plików (komponentów <code>OrderWarehouseProductsSection</code> oraz <code>OrderSummaryProductsList</code>), aby zmodyfikować ich wewnętrzny układ, musisz w nich dokonać następujących zmian:</p>
+                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                       <li><strong>Aby poprawić "BRUTTO/SZT":</strong> W plikach komponentów dodaj klasę <code>whitespace-nowrap</code> do odpowiednich tagów <code>&lt;th&gt;</code>.</li>
+                       <li><strong>Aby dodać ikonę linku:</strong> Odszukaj miejsce renderowania nazwy produktu i wstaw obok niej ikonę np. <code>&lt;ExternalLink size={"{14}"} className="ml-2 text-slate-400 inline" /&gt;</code>.</li>
+                       <li><strong>Aby naprawić ucięte "Razem (produkty)":</strong> Upewnij się, że w sekcji sumującej nie masz dodanego <code>overflow-hidden</code> bez odpowiedniego paddingu, ewentualnie dodaj <code>pr-4</code>. Tutaj wymusiłem szeroki kontener na głównej stronie, więc tabela powinna się rozciągnąć.</li>
+                    </ul>
+                  </div>
+
+                  <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
                     <div className="flex flex-wrap items-center justify-between mb-4">
                       <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Zamówione produkty</h3>
                     </div>
-                    <div className="min-w-0 text-sm text-slate-800 [&_th]:whitespace-nowrap">
+                    {/* Wymuszenie whitespace-nowrap z zewnątrz by naprawić Brutto/szt, jeśli to możliwe */}
+                    <div className="min-w-0 text-sm text-slate-800 [&_table]:w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                       <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
                     </div>
                   </section>
 
-                  <SummaryDashboardCard title="Dopasowane opakowania" right={<Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 hover:text-slate-800"><Pencil className="h-4 w-4" strokeWidth={2}/></Link>}>
+                  <SummaryDashboardCard title="Dopasowane opakowania" right={<Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></Link>}>
                     {wmsLoading ? <p className="text-sm text-slate-500">Ładowanie propozycji...</p> : <OrderMatchedPackagingSection card={wmsFulfillment} pairRecommendationColumns />}
                   </SummaryDashboardCard>
 
@@ -2084,7 +2086,7 @@ export default function OrderDetailPage() {
                       <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Notatki operacyjne</h3>
                       <div className="space-y-2 mb-4">
                         {order.operational_notes && order.operational_notes.length > 0 ? order.operational_notes.map((n) => (
-                          <div key={n.id} className="rounded-md bg-yellow-50 border border-yellow-100 p-3 text-sm text-yellow-900">
+                          <div key={n.id} className="rounded-md bg-yellow-50 border border-yellow-100 p-4 text-sm text-yellow-900">
                             <p className="whitespace-pre-wrap">{n.content}</p>
                             <div className="mt-2 flex gap-2 text-[10px] text-yellow-700 opacity-80 uppercase font-bold tracking-wider">
                               <span>{formatDetailDate(n.created_at ?? null)}</span>
@@ -2096,26 +2098,26 @@ export default function OrderDetailPage() {
                         )) : <p className="text-sm text-slate-500">Brak notatek operacyjnych.</p>}
                       </div>
                       <div className="border-t border-slate-100 pt-4 mt-4">
-                        <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} placeholder="Treść notatki..." className="w-full resize-y rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:bg-white outline-none focus:border-blue-400 mb-3" />
+                        <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} placeholder="Treść notatki..." className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-orange-500 outline-none mb-3 transition-colors" />
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex gap-4 text-sm font-medium text-slate-600">
-                            <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4" checked={opVisPick} onChange={(e) => setOpVisPick(e.target.checked)}/> Zbieranie</label>
-                            <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4" checked={opVisPack} onChange={(e) => setOpVisPack(e.target.checked)}/> Pakowanie</label>
+                            <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPick} onChange={(e) => setOpVisPick(e.target.checked)}/> Zbieranie</label>
+                            <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPack} onChange={(e) => setOpVisPack(e.target.checked)}/> Pakowanie</label>
                           </div>
-                          <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50">Zapisz</button>
+                          <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className="rounded-md bg-slate-800 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50">Zapisz</button>
                         </div>
                       </div>
                     </section>
 
                     <SummaryDashboardCard title="Wiadomość do klienta">
                       <div className="flex gap-2 mb-4">
-                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded text-xs font-bold">✓ E-mail</span>
-                        <span className="text-slate-600 border border-slate-200 px-3 py-1 rounded text-xs font-medium cursor-pointer hover:bg-slate-50">SMS</span>
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm">✓ E-mail</span>
+                        <span className="text-slate-600 border border-slate-200 px-4 py-1.5 rounded-md text-sm font-medium cursor-pointer transition-colors hover:bg-slate-50">SMS</span>
                       </div>
-                      <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full resize-y rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:bg-white outline-none focus:border-blue-400 mb-4" />
-                      <div className="flex justify-between">
-                        <button className="text-sm font-medium border border-slate-200 px-4 py-2 rounded text-slate-700 hover:bg-slate-50 shadow-sm flex items-center"><Plus size={16} className="mr-2"/> Dodaj załącznik</button>
-                        <button className="bg-orange-500 text-white px-8 py-2 rounded text-sm font-bold hover:bg-orange-600 shadow-sm flex items-center">Wyślij <Send size={16} className="ml-2"/></button>
+                      <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-orange-500 outline-none mb-4 transition-colors" />
+                      <div className="flex justify-between items-center">
+                        <button className="text-sm font-bold border border-slate-300 px-4 py-2 rounded-md text-slate-700 hover:bg-slate-50 shadow-sm flex items-center transition-colors"><Plus size={16} className="mr-2"/> Dodaj załącznik</button>
+                        <button className="bg-orange-500 text-white px-8 py-2 rounded-md text-sm font-bold shadow-sm hover:bg-orange-600 transition-colors flex items-center">Wyślij <Send size={16} className="ml-2"/></button>
                       </div>
                     </SummaryDashboardCard>
                   </div>
@@ -2160,7 +2162,7 @@ export default function OrderDetailPage() {
                   <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Logi czynności</h3>
-                      <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Szukaj..." className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-slate-50 outline-none w-64"/>
+                      <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Szukaj..." className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-white outline-none w-64 focus:border-orange-500 transition-colors"/>
                     </div>
                     <table className="w-full text-left text-sm border-t border-slate-100">
                       <thead className="text-[10px] uppercase font-bold text-slate-400"><tr><th className="py-2">Czas</th><th className="py-2">Zdarzenie</th><th className="py-2">Komunikat</th></tr></thead>
@@ -2178,7 +2180,7 @@ export default function OrderDetailPage() {
                 </div>
 
                 <aside className="w-full lg:w-[360px] shrink-0 space-y-6">
-                  <SummaryDashboardCard title="Kupujący" right={<button onClick={() => setEditBuyerModalOpen(true)} className="text-slate-400 hover:text-slate-800"><Pencil className="h-4 w-4" strokeWidth={2}/></button>}>
+                  <SummaryDashboardCard title="Kupujący" right={<button onClick={() => setEditBuyerModalOpen(true)} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></button>}>
                     <div className="text-sm space-y-2">
                       <p className="font-bold text-lg text-slate-900">{contact.name}</p>
                       {order.customer && <Link to={`/customers/${order.customer.id}`} className="text-blue-700 font-medium hover:underline">{order.customer.display_name}</Link>}
@@ -2189,7 +2191,7 @@ export default function OrderDetailPage() {
 
                   <SummaryDashboardCard title="Podsumowanie zamówienia">
                     {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) ? (
-                      <div className="bg-[#fff9c4] border border-[#f5e08b] text-yellow-900 p-4 rounded-lg text-sm mb-4"><strong>Uwaga:</strong> {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}</div>
+                      <div className="bg-[#fff9c4] border border-[#f5e08b] text-yellow-900 p-4 rounded-lg text-sm mb-4 shadow-sm"><strong>Uwaga:</strong> {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}</div>
                     ) : null}
                     <div className="space-y-4 text-sm text-slate-600">
                       <div className="flex justify-between items-center"><span>Źródło</span><span className="font-bold text-slate-900">{(order.source ?? "").trim() || "—"}</span></div>
@@ -2208,11 +2210,11 @@ export default function OrderDetailPage() {
                   <SummaryDashboardCard title="Rabat i marża">
                     <div className="flex space-x-2 mb-4">
                       <div className="flex bg-slate-100 rounded-md p-1">
-                        <button className={`px-3 py-1 rounded text-xs font-bold ${orderRabatMode === "pln" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pln")}>PLN</button>
-                        <button className={`px-3 py-1 rounded text-xs font-bold ${orderRabatMode === "pct" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pct")}>%</button>
+                        <button className={`px-4 py-1.5 rounded text-xs font-bold transition-colors ${orderRabatMode === "pln" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pln")}>PLN</button>
+                        <button className={`px-4 py-1.5 rounded text-xs font-bold transition-colors ${orderRabatMode === "pct" ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pct")}>%</button>
                       </div>
-                      <input className={inpSm} value={orderRabatDraft} onChange={e => setOrderRabatDraft(e.target.value)} placeholder="Rabat"/>
-                      <button disabled={orderRabatSaving} onClick={() => void saveOrderDiscount()} className="bg-slate-900 text-white px-4 py-1.5 rounded-md text-sm font-bold ml-1 hover:bg-slate-800">{orderRabatSaving ? "..." : "Zapisz"}</button>
+                      <input className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-orange-500 transition-colors" value={orderRabatDraft} onChange={e => setOrderRabatDraft(e.target.value)} placeholder="Rabat"/>
+                      <button disabled={orderRabatSaving} onClick={() => void saveOrderDiscount()} className="bg-slate-800 text-white px-4 py-1.5 rounded-md text-sm font-bold ml-1 hover:bg-slate-900 transition-colors disabled:opacity-50">{orderRabatSaving ? "..." : "Zapisz"}</button>
                     </div>
                     <div className="space-y-2 text-sm text-slate-600">
                       <div className="flex justify-between"><span>Po rabacie</span><span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span></div>
@@ -2226,22 +2228,22 @@ export default function OrderDetailPage() {
             {activeTab === "products" ? (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
                 <main className="min-w-0 space-y-6">
-                  {wmsErr && <p className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-md text-sm font-medium">{wmsErr}</p>}
+                  {wmsErr && <p className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-md text-sm font-medium shadow-sm">{wmsErr}</p>}
                   {warehouseId != null && <OrderMissingProductsSection tenantId={DAMAGE_TENANT_ID} orderId={order.id} lines={wmsFulfillment?.lines ?? []} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} sectionDomId="wms-braki-sekcja" />}
                   
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex gap-4 items-center">
                       <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">Produkty</h2>
-                      <label className="text-sm text-slate-600 flex items-center font-medium"><input type="checkbox" className="mr-2" checked={showZeroQtyHistoryRows} onChange={e => setShowZeroQtyHistoryRows(e.target.checked)}/> Pokaż usunięte</label>
+                      <label className="text-sm text-slate-600 flex items-center font-medium"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={showZeroQtyHistoryRows} onChange={e => setShowZeroQtyHistoryRows(e.target.checked)}/> Pokaż usunięte</label>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => setAddProductOpen(true)} className="border border-slate-300 rounded px-4 py-2 text-sm font-bold shadow-sm">Dodaj produkt</button>
-                      <button onClick={() => setAddBundleOpen(true)} className="border border-slate-300 rounded px-4 py-2 text-sm font-bold shadow-sm">Dodaj zestaw</button>
-                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="bg-blue-600 text-white rounded px-6 py-2 text-sm font-bold shadow-sm">Spakuj</Link>
+                      <button onClick={() => setAddProductOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj produkt</button>
+                      <button onClick={() => setAddBundleOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj zestaw</button>
+                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="bg-blue-600 text-white rounded-md px-6 py-2 text-sm font-bold shadow-sm hover:bg-blue-700 transition-colors">Spakuj</Link>
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden [&_th]:whitespace-nowrap">
+                  <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden [&_table]:w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                     <OrderWarehouseProductsSection lines={summaryProductsLines} orderItems={order.items} wmsByItemId={wmsByItemId} wmsFulfillment={wmsFulfillment} wmsLoading={wmsLoading} currency={order.currency} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} linesTotalDisplay={linesTotalDisplay} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }} onLineAction={handleOrderLineMenuAction} formatMoney={formatMoney} hideLineTotalHeader panelFulfillmentHistory={panelFulfillmentHistory} formatDetailDate={formatDetailDate} showProductLineHistory={showZeroQtyHistoryRows} />
                   </div>
                   
@@ -2265,20 +2267,20 @@ export default function OrderDetailPage() {
                 <main className="space-y-6">
                   <section className="bg-white rounded-md shadow-sm border border-slate-200 p-6">
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Notatki operacyjne</h3>
-                    <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} placeholder="Wpisz treść..." className="w-full bg-slate-50 border border-slate-200 rounded-md p-3 text-sm focus:bg-white outline-none focus:border-blue-400 mb-4"/>
+                    <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} placeholder="Wpisz treść..." className="w-full bg-white border border-slate-300 rounded-md p-3 text-sm focus:border-orange-500 outline-none mb-4 transition-colors"/>
                     <div className="flex justify-between items-center">
                       <div className="flex gap-4 text-sm font-medium text-slate-600">
-                        <label><input type="checkbox" className="mr-2" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
-                        <label><input type="checkbox" className="mr-2" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
+                        <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
+                        <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
                       </div>
-                      <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className="bg-slate-900 text-white font-bold text-sm px-6 py-2 rounded-md hover:bg-slate-800">Zapisz</button>
+                      <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className="bg-slate-800 text-white font-bold text-sm px-6 py-2 rounded-md hover:bg-slate-900 transition-colors disabled:opacity-50">Zapisz</button>
                     </div>
                   </section>
                   <section className="bg-white rounded-md shadow-sm border border-slate-200 p-6">
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Wiadomość do klienta</h3>
-                    <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full bg-slate-50 border border-slate-200 rounded-md p-3 text-sm focus:bg-white outline-none focus:border-blue-400 mb-4"/>
+                    <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full bg-white border border-slate-300 rounded-md p-3 text-sm focus:border-orange-500 outline-none mb-4 transition-colors"/>
                     <div className="flex justify-end">
-                      <button className="bg-orange-500 text-white font-bold text-sm px-8 py-2 rounded-md hover:bg-orange-600">Wyślij</button>
+                      <button className="bg-orange-500 text-white font-bold text-sm px-8 py-2 rounded-md hover:bg-orange-600 transition-colors shadow-sm">Wyślij</button>
                     </div>
                   </section>
                 </main>
@@ -2305,7 +2307,7 @@ export default function OrderDetailPage() {
             {activeTab === "logs" ? (
               <div className="bg-white rounded-md border border-slate-200 p-6 shadow-sm max-w-[1200px]">
                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-6 border-b border-slate-100 pb-3">Dziennik zdarzeń</h3>
-                 <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Filtruj logi..." className="border border-slate-300 rounded px-3 py-2 text-sm w-64 mb-6" />
+                 <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Filtruj logi..." className="border border-slate-300 rounded-md px-4 py-2 text-sm w-72 mb-6 outline-none focus:border-orange-500 transition-colors" />
                  <table className="w-full text-left text-sm">
                    <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100"><tr><th className="py-2 w-48">Czas</th><th className="py-2 w-48">Zdarzenie</th><th className="py-2">Komunikat</th></tr></thead>
                    <tbody className="divide-y divide-slate-50">
@@ -2330,7 +2332,7 @@ export default function OrderDetailPage() {
           <div className="max-w-md w-full rounded-xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <p className="text-lg font-bold text-slate-900 mb-2">Podgląd</p>
             <p className="text-sm text-slate-600 mb-6 break-all">{orderDocPreviewModal}</p>
-            <div className="flex justify-end"><button className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => setOrderDocPreviewModal(null)}>Zamknij</button></div>
+            <div className="flex justify-end"><button className="rounded-md border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => setOrderDocPreviewModal(null)}>Zamknij</button></div>
           </div>
         </div>
       )}
@@ -2341,12 +2343,12 @@ export default function OrderDetailPage() {
             <p className="text-lg font-bold text-slate-900 mb-1">Typ dokumentu</p>
             <p className="text-sm text-slate-500 mb-6 truncate">{docTypeModalFile.name}</p>
             <label className="block text-sm font-bold text-slate-700 mb-2">Wybierz rodzaj wgrywanego pliku:</label>
-            <select className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 mb-6" value={docTypeModalChoice} disabled={docUploadBusy} onChange={(e) => setDocTypeModalChoice(e.target.value as OrderDocModalType)}>
+            <select className="w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 mb-6" value={docTypeModalChoice} disabled={docUploadBusy} onChange={(e) => setDocTypeModalChoice(e.target.value as OrderDocModalType)}>
               {ORDER_DOCUMENT_MODAL_TYPES.map((t) => <option key={t} value={t}>{orderDocumentTypeToLabel(t).name}</option>)}
             </select>
             <div className="flex justify-end gap-3">
-              <button className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50" disabled={docUploadBusy} onClick={() => setDocTypeModalFile(null)}>Anuluj</button>
-              <button className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50" disabled={docUploadBusy} onClick={handleConfirmDocTypeModal}>{docUploadBusy ? "Wgrywanie…" : "Wgraj plik"}</button>
+              <button className="rounded-md border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled={docUploadBusy} onClick={() => setDocTypeModalFile(null)}>Anuluj</button>
+              <button className="rounded-md bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors" disabled={docUploadBusy} onClick={handleConfirmDocTypeModal}>{docUploadBusy ? "Wgrywanie…" : "Wgraj plik"}</button>
             </div>
           </div>
         </div>
