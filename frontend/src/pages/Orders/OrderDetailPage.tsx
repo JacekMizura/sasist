@@ -37,7 +37,8 @@ import {
   Package,
   Activity,
   Info,
-  Plus
+  Plus,
+  Send
 } from "lucide-react";
 import api from "../../api/axios";
 import {
