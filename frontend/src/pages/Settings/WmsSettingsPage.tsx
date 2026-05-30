@@ -70,14 +70,14 @@ function flattenOrderUiStatusOptions(summary: OrderUiStatusPanelSummary | null):
 }
 
 const selectClass =
-  "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
+  "mt-1.5 w-full max-w-md rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500";
 
 const numberInputClass =
-  "mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
+  "mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm tabular-nums shadow-sm outline-none focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500";
 
-const fieldHintClass = "mt-1.5 text-xs leading-relaxed text-slate-500";
+const fieldHintClass = "mt-1.5 text-xs leading-relaxed text-gray-500";
 
-const configBlockTitleClass = "text-sm font-semibold text-slate-800";
+const configBlockTitleClass = "text-sm font-semibold text-gray-900";
 
 const BULK_ORDER_LIMIT_MAX = 100;
 const BULK_ORDER_LIMIT_DEFAULT_SINGLE = "20";
@@ -97,9 +97,9 @@ function parseBulkOrderLimitInput(
 }
 
 const radioLabelClass =
-  "flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-2 hover:bg-slate-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500/30";
+  "flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent py-2 hover:bg-gray-50/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500/30 -ml-2 px-2 transition-colors";
 
-const radioInputClass = "h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:ring-blue-500";
+const radioInputClass = "h-4 w-4 shrink-0 border-gray-300 text-blue-600 focus:ring-blue-500 bg-white";
 
 const WMS_SETTINGS_TABS = [
   { id: "common", label: "Ustawienia wspólne" },
@@ -118,7 +118,7 @@ const WMS_SETTINGS_TABS = [
 type WmsSettingsTabId = (typeof WMS_SETTINGS_TABS)[number]["id"];
 
 const textInputClassPicking =
-  "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
+  "mt-1.5 w-full max-w-md rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500";
 
 function stableStringifyPicking(v: unknown): string {
   if (v === null || v === undefined) return JSON.stringify(v);
@@ -145,12 +145,14 @@ function SectionCardPicking({
   const anchorRef = useWmsSettingsSectionAnchor(id);
   return (
     <section ref={anchorRef} id={id} data-wms-section="" className={WMS_SETTINGS_SECTION_ANCHOR_CLASS}>
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          {summary ? <p className="mt-0.5 text-xs text-slate-500">{summary}</p> : null}
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm mb-6 overflow-hidden">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <h2 className="text-base font-semibold leading-6 text-gray-900">{title}</h2>
+          {summary ? <p className="mt-1 text-sm text-gray-500">{summary}</p> : null}
         </div>
-        {children}
+        <div className="px-6 py-6 space-y-8">
+          {children}
+        </div>
       </div>
     </section>
   );
@@ -158,23 +160,21 @@ function SectionCardPicking({
 
 function SubsectionPicking({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200/90 bg-slate-50/50 p-4 shadow-sm">
-      <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
-      {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
-      <div className="mt-3">{children}</div>
+    <div className="border-t border-gray-100 pt-6 first:border-t-0 first:pt-0">
+      <h4 className="text-sm font-semibold text-gray-900">{title}</h4>
+      {description ? <p className="mt-1 text-xs text-gray-500">{description}</p> : null}
+      <div className="mt-5">{children}</div>
     </div>
   );
 }
 
 function FieldGridPicking({ children }: { children: ReactNode }) {
-  return <div className="grid gap-4 sm:grid-cols-2">{children}</div>;
+  return <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">{children}</div>;
 }
 
 function HelpPicking({ children }: { children: ReactNode }) {
-  return <p className="mt-1 text-xs leading-relaxed text-slate-500">{children}</p>;
+  return <p className="mt-1 text-xs leading-relaxed text-gray-500">{children}</p>;
 }
-
-const checkboxClassPicking = "mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500";
 
 function BoolRowPicking({
   label,
@@ -190,17 +190,63 @@ function BoolRowPicking({
   title?: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-1 py-1 hover:bg-slate-50/80" title={title}>
-      <input type="checkbox" className={checkboxClassPicking} checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-slate-800">{label}</span>
+    <label className="flex items-start gap-3 cursor-pointer group py-1" title={title}>
+      <div className="relative flex items-center justify-center mt-0.5">
+        <input
+          type="checkbox"
+          className="peer sr-only"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors
+          ${checked
+            ? 'bg-blue-600 border-blue-600 text-white'
+            : 'bg-white border-gray-300 group-hover:border-blue-400'}`}>
+          {checked && (
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+      </div>
+      <span className="min-w-0 flex-1 select-none">
+        <span className="block text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">{label}</span>
         {help ? <HelpPicking>{help}</HelpPicking> : null}
       </span>
     </label>
   );
 }
 
-/** Registers the placeholder `<section>` anchor — must render under `WmsSettingsSectionRegistryProvider`. */
+function CustomCheckbox({ checked, onChange, label, hint, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
+  return (
+    <label className={`flex items-start gap-3 cursor-pointer group ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+      <div className="relative flex items-center justify-center mt-0.5">
+        <input
+          type="checkbox"
+          className="peer sr-only"
+          checked={checked}
+          onChange={(e) => !disabled && onChange(e.target.checked)}
+          disabled={disabled}
+        />
+        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors
+          ${checked
+            ? 'bg-blue-600 border-blue-600 text-white'
+            : 'bg-white border-gray-300 group-hover:border-blue-400'}`}>
+          {checked && (
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+      </div>
+      <span className="min-w-0 flex-1 select-none">
+        <span className="block text-sm font-semibold text-gray-900">{label}</span>
+        {hint && <span className={`${fieldHintClass} block`}>{hint}</span>}
+      </span>
+    </label>
+  );
+}
+
 function WmsSettingsPlaceholderOverviewSection({ label, sectionId }: { label: string; sectionId: string }) {
   const anchorRef = useWmsSettingsSectionAnchor(sectionId);
   return (
@@ -208,13 +254,12 @@ function WmsSettingsPlaceholderOverviewSection({ label, sectionId }: { label: st
       ref={anchorRef}
       id={sectionId}
       data-wms-section=""
-      className={`min-h-[240px] rounded-xl border border-dashed border-slate-200 bg-slate-50/60 ${WMS_SETTINGS_SECTION_ANCHOR_CLASS}`}
+      className={`min-h-[240px] rounded-xl border border-dashed border-gray-300 bg-white ${WMS_SETTINGS_SECTION_ANCHOR_CLASS}`}
       aria-label={`Sekcja: ${label}`}
     />
   );
 }
 
-/** Placeholder body for WMS settings tabs without a full editor yet — same layout shell as real tabs. */
 function WmsSettingsFutureTabShell({ label, tabId }: { label: string; tabId: string }) {
   const placeholderSections = useMemo(() => getWmsSettingsPlaceholderSections(tabId), [tabId]);
   const overviewId = placeholderSections[0].id;
@@ -224,9 +269,9 @@ function WmsSettingsFutureTabShell({ label, tabId }: { label: string; tabId: str
       asideLabel={`Sekcje: ${label}`}
       mainClassName="space-y-5"
     >
-      <header className="border-b border-slate-200 pb-3">
-        <h2 className="text-base font-semibold text-slate-900">{label}</h2>
-        <p className="mt-1 text-xs text-slate-500">Konfiguracja modułu będzie rozwijana w kolejnych wersjach.</p>
+      <header className="border-b border-gray-200 pb-3">
+        <h2 className="text-base font-semibold text-gray-900">{label}</h2>
+        <p className="mt-1 text-xs text-gray-500">Konfiguracja modułu będzie rozwijana w kolejnych wersjach.</p>
       </header>
       <WmsSettingsPlaceholderOverviewSection label={label} sectionId={overviewId} />
     </WmsSettingsLayout>
@@ -429,11 +474,11 @@ const PickingShortageSettingsPanel = forwardRef<
   );
 
   if (warehouseId == null) {
-    return <p className="mt-4 text-sm text-slate-600">Wybierz magazyn w pasku u góry.</p>;
+    return <p className="mt-4 text-sm text-gray-500">Wybierz magazyn w pasku u góry.</p>;
   }
 
   return (
-    <div className="mt-5 space-y-5">
+    <div className="space-y-6">
       {orderUiErr ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">{orderUiErr}</p>
       ) : null}
@@ -450,11 +495,11 @@ const PickingShortageSettingsPanel = forwardRef<
       ) : null}
 
       {loading || orderUiLoading ? (
-        <p className="text-sm font-medium text-slate-500">Wczytywanie…</p>
+        <p className="text-sm font-medium text-gray-500">Wczytywanie…</p>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6">
           <div>
-            <label className="text-sm font-medium text-slate-800">Status po zgłoszeniu braku podczas zbierania</label>
+            <label className="text-sm font-medium text-gray-900">Status po zgłoszeniu braku podczas zbierania</label>
             <select
               className={selectClass}
               value={reportedStatus}
@@ -470,40 +515,30 @@ const PickingShortageSettingsPanel = forwardRef<
             </select>
           </div>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-slate-300"
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <CustomCheckbox
+              label="Pokaż zamówienie w zakładce Braki po zgłoszeniu braku"
+              hint="Zamówienie trafi na listę do decyzji / uzupełnienia braków."
               checked={autoBraki}
-              onChange={(e) => setAutoBraki(e.target.checked)}
+              onChange={setAutoBraki}
               disabled={saving}
             />
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-900">Pokaż zamówienie w zakładce Braki po zgłoszeniu braku</span>
-              <span className={`${fieldHintClass} block`}>Zamówienie trafi na listę do decyzji / uzupełnienia braków.</span>
-            </span>
-          </label>
+          </div>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-slate-300"
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <CustomCheckbox
+              label="Pozwól magazynierowi zbierać pozostałe produkty po zgłoszeniu braku"
+              hint="Po zgłoszeniu braku można dalej zbierać inne pozycje z tego zamówienia."
               checked={allowContinue}
-              onChange={(e) => setAllowContinue(e.target.checked)}
+              onChange={setAllowContinue}
               disabled={saving}
             />
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-900">Pozwól magazynierowi zbierać pozostałe produkty po zgłoszeniu braku</span>
-              <span className={`${fieldHintClass} block`}>
-                Po zgłoszeniu braku można dalej zbierać inne pozycje z tego zamówienia.
-              </span>
-            </span>
-          </label>
+          </div>
 
           <div>
-            <span className="text-sm font-medium text-slate-800">Priorytet po rozwiązaniu problemu</span>
+            <span className="text-sm font-medium text-gray-900">Priorytet po rozwiązaniu problemu</span>
             <p className={fieldHintClass}>Określa jak szybko zamówienie wróci do realizacji.</p>
-            <div className="mt-2 space-y-2">
+            <div className="mt-2 space-y-1">
               {PRIORITY_OPTIONS.map((o) => (
                 <label key={o.value} className={radioLabelClass}>
                   <input
@@ -515,30 +550,24 @@ const PickingShortageSettingsPanel = forwardRef<
                     onChange={() => setPriority(o.value)}
                     disabled={saving}
                   />
-                  <span className="text-sm text-slate-800">{o.label}</span>
+                  <span className="text-sm text-gray-800">{o.label}</span>
                 </label>
               ))}
             </div>
           </div>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-slate-300"
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <CustomCheckbox
+              label="Po rozwiązaniu problemu pokaż zamówienie ponownie w Zbieraniu"
+              hint="Po podmianie produktu lub cofnięciu braku zamówienie wróci na listę zbierania."
               checked={autoReopen}
-              onChange={(e) => setAutoReopen(e.target.checked)}
+              onChange={setAutoReopen}
               disabled={saving}
             />
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-900">Po rozwiązaniu problemu pokaż zamówienie ponownie w Zbieraniu</span>
-              <span className={`${fieldHintClass} block`}>
-                Po podmianie produktu lub cofnięciu braku zamówienie wróci na listę zbierania.
-              </span>
-            </span>
-          </label>
+          </div>
 
           <div>
-            <label className="text-sm font-medium text-slate-800">Status po zebraniu brakujących produktów</label>
+            <label className="text-sm font-medium text-gray-900">Status po zebraniu brakujących produktów</label>
             <p className={fieldHintClass}>Status ustawiany po zebraniu brakujących pozycji.</p>
             <select
               className={selectClass}
@@ -555,7 +584,7 @@ const PickingShortageSettingsPanel = forwardRef<
             </select>
           </div>
 
-          <p className="text-xs text-slate-500">Zapis zmian — przycisk „Zapisz” na dole strony.</p>
+          <p className="text-xs text-gray-500 pt-2 border-t border-gray-100">Zapis zmian — przycisk „Zapisz” na dole strony.</p>
         </div>
       )}
     </div>
@@ -564,14 +593,10 @@ const PickingShortageSettingsPanel = forwardRef<
 
 type PickingCollectionMethod = "orders" | "products";
 type PickingBatchType = "single" | "multi";
-/** Gdzie i jak realizowany jest zbiór — wybór per typ zamówienia w konfiguratorze. */
 type PickingContainers = "cart_no_scan" | "cart_scan" | "baskets" | "mobile_cart";
 type PickingOrderStrategy = "locations" | "oldest_date";
 
-/** Jednostka zbierania w regule — ``pick_unit`` w API. */
 type PickingMode = "by_orders" | "by_products";
-
-/** Kolejność kolejki zamówień przy ``by_orders`` — ``order_sort`` w API. */
 type PickingOrderSort = PickingConfigOrderSortDb;
 
 const PICKING_WHERE_OPTIONS: Array<{ value: PickingContainers; label: string }> = [
@@ -646,7 +671,6 @@ type SavedPickingConfiguration = {
   statusOnShortageId: number | null;
   statusOnShortageName: string | null;
   pickingMode: PickingMode;
-  /** Przy ``by_orders`` — kolejność zamówień; przy ``by_products`` ignorowane przy zapisie. */
   orderSort: PickingOrderSort;
   blocks: Record<PickingOrderTypeKey, PickingBlockState>;
 };
@@ -706,7 +730,6 @@ function blocksShapeForMode(mode: PickingMode): {
     : { collectionMethod: "products", orderStrategy: "locations" };
 }
 
-/** Ustawia spójny ``collectionMethod`` / ``orderStrategy`` i przy multi + produkty usuwa bulk bez separacji. */
 function normalizeBlocksForPickingMode(
   blocks: Record<PickingOrderTypeKey, PickingBlockState>,
   mode: PickingMode,
@@ -864,7 +887,6 @@ function pickingWhereLabel(mode: PickingContainers): string {
   return PICKING_WHERE_OPTIONS.find((o) => o.value === mode)?.label ?? mode;
 }
 
-/** Krótki opis pod ustawieniami kontenera na karcie podsumowania. */
 function pickingFlowSummaryLine(config: SavedPickingConfiguration, orderTypeKey: PickingOrderTypeKey): string {
   const block = config.blocks[orderTypeKey];
   if (config.pickingMode === "by_orders") {
@@ -905,15 +927,15 @@ function PickingWhereYouPickField({
 }) {
   const groupId = `${fieldIdPrefix}-where`;
   return (
-    <div className="rounded-xl border-2 border-slate-200/90 bg-gradient-to-b from-white to-slate-50/90 p-4 shadow-sm sm:p-5">
-      <p id={`${groupId}-legend`} className="text-sm font-semibold tracking-tight text-slate-900">
+    <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+      <p id={`${groupId}-legend`} className="text-sm font-semibold tracking-tight text-gray-900">
         Gdzie zbierasz
       </p>
-      <p className="mt-1 text-xs leading-relaxed text-slate-600">
+      <p className="mt-1 text-xs leading-relaxed text-gray-500">
         Główny wybór procesu — osobno dla zamówień jedno- i wieloelementowych.
       </p>
       <div
-        className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2"
+        className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2"
         role="radiogroup"
         aria-labelledby={`${groupId}-legend`}
       >
@@ -923,8 +945,8 @@ function PickingWhereYouPickField({
             className={[
               "flex cursor-pointer items-start gap-3 rounded-lg border-2 px-3 py-3 transition-colors sm:min-h-[3.25rem]",
               value === opt.value
-                ? "border-blue-500 bg-blue-50/80 ring-1 ring-blue-500/25"
-                : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80",
+                ? "border-blue-500 ring-1 ring-blue-500/20"
+                : "border-gray-200 bg-white hover:border-gray-300",
             ].join(" ")}
           >
             <input
@@ -934,11 +956,11 @@ function PickingWhereYouPickField({
               checked={value === opt.value}
               onChange={() => onPatch({ containers: opt.value })}
             />
-            <span className="text-sm font-medium leading-snug text-slate-800">{opt.label}</span>
+            <span className="text-sm font-medium leading-snug text-gray-900">{opt.label}</span>
           </label>
         ))}
       </div>
-      {footnote ? <p className="mt-3 text-xs leading-relaxed text-slate-600">{footnote}</p> : null}
+      {footnote ? <p className="mt-4 text-xs leading-relaxed text-gray-500 pt-3 border-t border-gray-100">{footnote}</p> : null}
     </div>
   );
 }
@@ -975,7 +997,6 @@ function PickingConfiguratorFields({
       : undefined;
 
   const showBatchSection = !byOrdersMode && !isMobile && !isSingleItem;
-  /** Liczba zamówień w zbiorze wynika z urządzenia / limitów — pole liczbowe ukryte. */
   const isBatchSizeContainerLimited = true;
 
   if (byOrdersMode) {
@@ -987,13 +1008,13 @@ function PickingConfiguratorFields({
           onPatch={onPatch}
           options={containerChoices}
         />
-        <p className="text-xs leading-relaxed text-slate-500">
+        <p className="text-xs leading-relaxed text-gray-500">
           Kolejność zamówień ustawiasz w sekcji „Tryb zbierania” powyżej (niezależnie od jedno- / wieloelementowych).
         </p>
         {isMobile && orderTypeKey === "multi_item" ? (
-          <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-3">
-            <p className="text-xs font-medium text-blue-950">Pick & pack na wózku mobilnym</p>
-            <p className="mt-1 text-xs leading-relaxed text-blue-900/90">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+            <p className="text-xs font-semibold text-blue-900">Pick & pack na wózku mobilnym</p>
+            <p className="mt-1 text-xs leading-relaxed text-blue-800">
               Zbieranie i pakowanie w jednym przejściu — kolejka zamówień wg wybranej kolejności (np. data lub kurier).
             </p>
           </div>
@@ -1017,16 +1038,16 @@ function PickingConfiguratorFields({
       />
 
       {isMobile && orderTypeKey === "multi_item" ? (
-        <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-3">
-          <p className="text-xs font-medium text-blue-950">Pick & pack na wózku mobilnym</p>
-          <p className="mt-1 text-xs leading-relaxed text-blue-900/90">
+        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+          <p className="text-xs font-semibold text-blue-900">Pick & pack na wózku mobilnym</p>
+          <p className="mt-1 text-xs leading-relaxed text-blue-800">
             Zbieranie i pakowanie odbywa się w jednym przejściu — trasa po lokalizacjach, bez osobnej konfiguracji koszyków.
           </p>
         </div>
       ) : null}
 
       {showBatchSection && tBatch ? (
-        <div className="border-t border-slate-100 pt-5">
+        <div className="border-t border-gray-100 pt-5">
           <p className={configBlockTitleClass}>{tBatch}</p>
           <div className="mt-3 flex flex-col gap-1">
             <label className={radioLabelClass}>
@@ -1037,7 +1058,7 @@ function PickingConfiguratorFields({
                 checked={value.batchType === "single"}
                 onChange={() => onPatch({ batchType: "single" })}
               />
-              <span className="text-sm text-slate-800">Pojedyncze zamówienie na przejście</span>
+              <span className="text-sm text-gray-900">Pojedyncze zamówienie na przejście</span>
             </label>
             <label className={radioLabelClass}>
               <input
@@ -1047,11 +1068,11 @@ function PickingConfiguratorFields({
                 checked={value.batchType === "multi"}
                 onChange={() => onPatch({ batchType: "multi" })}
               />
-              <span className="text-sm text-slate-800">Wiele zamówień w jednym zbiorze</span>
+              <span className="text-sm text-gray-900">Wiele zamówień w jednym zbiorze</span>
             </label>
           </div>
           {value.batchType === "multi" && isBatchSizeContainerLimited ? (
-            <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            <p className="mt-3 text-xs leading-relaxed text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">
               {isBaskets
                 ? "Liczba zamówień w zbiorze wynika z koszyków — zwykle jedno zamówienie na koszyk."
                 : "Przy wózku ze skanem slotów lub limitach zbioru bez skanu — liczba zamówień wynika z pojemności i reguł przypisania."}
@@ -1061,18 +1082,18 @@ function PickingConfiguratorFields({
       ) : null}
 
       {!isMobile && tRoute ? (
-        <div className="border-t border-slate-100 pt-5">
+        <div className="border-t border-gray-100 pt-5">
           <p className={configBlockTitleClass}>{tRoute}</p>
-          <p className="mt-3 text-sm leading-relaxed text-slate-700">
+          <p className="mt-3 text-sm leading-relaxed text-gray-600 bg-gray-50 p-4 rounded-lg border border-gray-100">
             {isSingleItem ? (
               <>
-                Pozycje z zamówienia jednoelementowego — <span className="font-medium text-slate-900">nawigacja po kolejności lokalizacji</span>{" "}
+                Pozycje z zamówienia jednoelementowego — <span className="font-semibold text-gray-900">nawigacja po kolejności lokalizacji</span>{" "}
                 na trasie zbiórki.
               </>
             ) : (
               <>
                 W zbiorze wielozamówieniowym kolejność odwiedzanych lokalizacji jest ustalana{' '}
-                <span className="font-medium text-slate-900">po pozycjach na trasie</span>, tak aby skrócić przejście w
+                <span className="font-semibold text-gray-900">po pozycjach na trasie</span>, tak aby skrócić przejście w
                 magazynie.
               </>
             )}
@@ -1093,13 +1114,13 @@ function PickingOrderTypeConfiguratorSection({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
-        <span className="text-sm font-semibold text-slate-900 sm:text-base">
-          <span className="tabular-nums text-slate-500">{letter}.</span> {title}
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-4 py-4 sm:px-5">
+        <span className="text-sm font-semibold text-gray-900 sm:text-base">
+          <span className="tabular-nums text-gray-400 mr-1">{letter}.</span> {title}
         </span>
       </div>
-      <div className="bg-slate-50/30 px-4 py-4 sm:px-5">{children}</div>
+      <div className="px-4 py-5 sm:px-5">{children}</div>
     </div>
   );
 }
@@ -1146,7 +1167,7 @@ function WmsPickingLogisticsBulkLimitsSection({
       <div className={["grid w-full gap-4", cols].join(" ")}>
         {showSingleField ? (
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Maksymalna liczba zamówień (jednoelementowe)</span>
+            <span className="text-sm font-medium text-gray-900">Maksymalna liczba zamówień (jednoelementowe)</span>
             <input
               type="number"
               min={1}
@@ -1167,7 +1188,7 @@ function WmsPickingLogisticsBulkLimitsSection({
         ) : null}
         {showMultiField ? (
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Maksymalna liczba zamówień (wieloelementowe)</span>
+            <span className="text-sm font-medium text-gray-900">Maksymalna liczba zamówień (wieloelementowe)</span>
             <input
               type="number"
               min={1}
@@ -1266,14 +1287,14 @@ function PickingConfiguratorEditor({
       ) : null}
       {orderUiErr ? <p className="text-sm text-red-700">{orderUiErr}</p> : null}
       {!orderUiLoading && warehouseId != null && orderUiErr == null && allStatusOptions.length === 0 ? (
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-gray-600">
           Brak statusów panelu dla tego magazynu. Dodaj je w ustawieniach zamówień (statusy panelu).
         </p>
       ) : null}
 
-      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4 sm:p-5">
+      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
         <label className="block">
-          <span className="text-sm font-medium text-slate-700">Status do zbierania</span>
+          <span className="text-sm font-medium text-gray-900">Status do zbierania</span>
           <span className="ml-1 text-red-600" aria-hidden>
             *
           </span>
@@ -1318,18 +1339,18 @@ function PickingConfiguratorEditor({
         <p className={fieldHintClass}>Każdy status może mieć tylko jedną zapisaną konfigurację.</p>
       </div>
 
-      <div className="rounded-xl border-2 border-blue-200/80 bg-white p-4 shadow-sm sm:p-5">
-        <p className="text-sm font-semibold text-slate-900">Tryb zbierania</p>
-        <p className="mt-1 text-xs text-slate-600">Określa logikę magazynu dla obu typów zamówień (jedno- i wieloelementowych).</p>
-        <div className="mt-4 flex flex-col gap-3" role="radiogroup" aria-label="Tryb zbierania">
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+        <p className="text-sm font-semibold text-gray-900">Tryb zbierania</p>
+        <p className="mt-1 text-xs text-gray-500">Określa logikę magazynu dla obu typów zamówień (jedno- i wieloelementowych).</p>
+        <div className="mt-5 flex flex-col gap-3" role="radiogroup" aria-label="Tryb zbierania">
           {PICKING_MODE_OPTIONS.map((opt) => (
             <label
               key={opt.value}
               className={[
-                "flex cursor-pointer flex-col gap-1 rounded-lg border-2 px-3 py-3 transition-colors",
+                "flex cursor-pointer flex-col gap-1 rounded-lg border-2 px-4 py-3 transition-colors",
                 pickingMode === opt.value
-                  ? "border-blue-500 bg-blue-50/80 ring-1 ring-blue-500/25"
-                  : "border-slate-200 bg-slate-50/80 hover:border-slate-300",
+                  ? "border-blue-500 ring-1 ring-blue-500/20"
+                  : "border-gray-200 bg-white hover:border-gray-300",
               ].join(" ")}
             >
               <span className="flex items-center gap-2">
@@ -1340,27 +1361,27 @@ function PickingConfiguratorEditor({
                   checked={pickingMode === opt.value}
                   onChange={() => onPickingModeChange(opt.value)}
                 />
-                <span className="text-sm font-medium text-slate-900">{opt.label}</span>
+                <span className="text-sm font-medium text-gray-900">{opt.label}</span>
               </span>
-              <span className="pl-7 text-xs leading-relaxed text-slate-600">{opt.hint}</span>
+              <span className="pl-7 text-xs leading-relaxed text-gray-500">{opt.hint}</span>
             </label>
           ))}
         </div>
         {pickingMode === "by_orders" ? (
-          <div className="mt-5 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3 sm:px-4 sm:py-4">
+          <div className="mt-6 rounded-lg border border-gray-200 bg-white px-4 py-4">
             <p className={configBlockTitleClass}>Kolejność zamówień</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-600">
-              Dotyczy trybu <span className="font-medium text-slate-800">po zamówieniach</span> — nie listy produktów.
+            <p className="mt-1 text-xs leading-relaxed text-gray-500">
+              Dotyczy trybu <span className="font-medium text-gray-900">po zamówieniach</span> — nie listy produktów.
             </p>
-            <div className="mt-3 flex flex-col gap-2" role="radiogroup" aria-label="Kolejność zamówień">
+            <div className="mt-4 flex flex-col gap-2" role="radiogroup" aria-label="Kolejność zamówień">
               {PICKING_ORDER_SORT_OPTIONS.map((opt) => (
                 <label
                   key={opt.value}
                   className={[
-                    "flex cursor-pointer flex-col gap-0.5 rounded-lg border px-2.5 py-2 transition-colors",
+                    "flex cursor-pointer flex-col gap-1 rounded-lg border px-3 py-2 transition-colors",
                     orderSort === opt.value
                       ? "border-blue-400 bg-white ring-1 ring-blue-500/20"
-                      : "border-transparent hover:bg-white/80",
+                      : "border-transparent hover:bg-gray-50",
                   ].join(" ")}
                 >
                   <span className="flex items-center gap-2">
@@ -1371,22 +1392,22 @@ function PickingConfiguratorEditor({
                       checked={orderSort === opt.value}
                       onChange={() => onOrderSortChange(opt.value)}
                     />
-                    <span className="text-sm font-medium text-slate-900">{opt.label}</span>
+                    <span className="text-sm font-medium text-gray-900">{opt.label}</span>
                   </span>
-                  <span className="pl-7 text-xs text-slate-600">{opt.hint}</span>
+                  <span className="pl-7 text-xs text-gray-500">{opt.hint}</span>
                 </label>
               ))}
             </div>
           </div>
         ) : (
-          <p className="mt-4 text-xs leading-relaxed text-slate-600">
-            <span className="font-medium text-slate-800">Po produktach:</span> zawsze agregacja po SKU i kolejność po
+          <p className="mt-4 text-xs leading-relaxed text-gray-500 pt-3 border-t border-gray-100">
+            <span className="font-medium text-gray-900">Po produktach:</span> zawsze agregacja po SKU i kolejność po
             lokalizacjach na trasie — bez osobnej kolejki zamówień w tym widoku.
           </p>
         )}
       </div>
 
-      <div className="flex flex-col gap-3 sm:gap-4">
+      <div className="flex flex-col gap-5">
         {PICKING_ORDER_TYPE_SECTIONS.map((def) => (
           <PickingOrderTypeConfiguratorSection key={def.key} letter={def.letter} title={def.label}>
             <PickingConfiguratorFields
@@ -1400,9 +1421,9 @@ function PickingConfiguratorEditor({
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4 sm:p-5">
+      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
         <label className="block">
-          <span className="text-sm font-medium text-slate-700">Status po zebraniu (do pakowania)</span>
+          <span className="text-sm font-medium text-gray-900">Status po zebraniu (do pakowania)</span>
           <span className="ml-1 text-red-600" aria-hidden>
             *
           </span>
@@ -1464,17 +1485,15 @@ function SavedPickingConfigSummaryCard({
     config.blocks.single_item.containers === "cart_no_scan" || config.blocks.multi_item.containers === "cart_no_scan";
   return (
     <div
-      className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5"
+      className="rounded-xl border border-gray-200 bg-white px-5 py-5 shadow-sm transition-colors hover:border-blue-300"
       aria-label={`Zapisana konfiguracja: ${config.statusToPickName}`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <span className="text-base font-semibold text-slate-900">{config.statusToPickName}</span>
-        </div>
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+        <h4 className="text-lg font-semibold text-gray-900">{config.statusToPickName}</h4>
         <div className="flex shrink-0 gap-2">
           <button
             type="button"
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
             disabled={actionsDisabled}
             onClick={() => onEdit(config)}
           >
@@ -1482,7 +1501,7 @@ function SavedPickingConfigSummaryCard({
           </button>
           <button
             type="button"
-            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-red-100 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:border-red-200 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
             disabled={actionsDisabled}
             onClick={() => onDelete(config.id)}
           >
@@ -1491,41 +1510,38 @@ function SavedPickingConfigSummaryCard({
         </div>
       </div>
 
-      <dl className="mt-3 space-y-2 text-sm text-slate-700">
-        <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-          <dt className="shrink-0 font-medium text-slate-500">Tryb zbierania</dt>
-          <dd className="font-medium text-slate-900">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6 text-sm">
+        <div className="flex justify-between md:col-span-2 border-b border-gray-100 pb-3">
+          <span className="text-gray-500 font-medium">Tryb zbierania:</span>
+          <span className="font-semibold text-gray-900">
             {pickingModeLabel(config.pickingMode)}
             {config.pickingMode === "by_orders" ? (
-              <span className="font-normal text-slate-600"> · {pickingOrderSortLabel(config.orderSort)}</span>
+              <span className="font-normal text-gray-600"> · {pickingOrderSortLabel(config.orderSort)}</span>
             ) : null}
-          </dd>
+          </span>
         </div>
-        <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-          <dt className="shrink-0 font-medium text-slate-500">Jednoelementowe</dt>
-          <dd>
-            <span className="font-medium text-slate-900">{pickingWhereLabel(config.blocks.single_item.containers)}</span>
-            <span className="text-slate-600"> · {pickingFlowSummaryLine(config, "single_item")}</span>
-          </dd>
+        <div className="flex flex-col">
+          <span className="text-gray-500 text-xs uppercase tracking-wider font-semibold mb-1">Jednoelementowe</span>
+          <span className="font-medium text-gray-900">{pickingWhereLabel(config.blocks.single_item.containers)}</span>
+          <span className="text-gray-500 text-xs mt-0.5">{pickingFlowSummaryLine(config, "single_item")}</span>
         </div>
-        <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-          <dt className="shrink-0 font-medium text-slate-500">Wieloelementowe</dt>
-          <dd>
-            <span className="font-medium text-slate-900">{pickingWhereLabel(config.blocks.multi_item.containers)}</span>
-            <span className="text-slate-600"> · {pickingFlowSummaryLine(config, "multi_item")}</span>
-          </dd>
+        <div className="flex flex-col">
+          <span className="text-gray-500 text-xs uppercase tracking-wider font-semibold mb-1">Wieloelementowe</span>
+          <span className="font-medium text-gray-900">{pickingWhereLabel(config.blocks.multi_item.containers)}</span>
+          <span className="text-gray-500 text-xs mt-0.5">{pickingFlowSummaryLine(config, "multi_item")}</span>
         </div>
-        <div className="flex flex-col gap-0.5 border-t border-slate-100 pt-2 sm:flex-row sm:gap-2">
-          <dt className="shrink-0 font-medium text-slate-500">Po zebraniu</dt>
-          <dd>{config.statusAfterPickName}</dd>
+        <div className="md:col-span-2 mt-2 pt-4 border-t border-gray-100 flex items-center justify-between">
+          <span className="text-gray-500 font-medium">Po zebraniu:</span>
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200">
+            {config.statusAfterPickName}
+          </span>
         </div>
         {usesBulk ? (
-          <div className="border-t border-slate-100 pt-2 text-xs text-slate-500">
-            <dt className="sr-only">Limity</dt>
-            <dd>Limity zbioru (bez skanu): ustawienia magazynowe w sekcji „Logistyka i organizacja zbiorów”.</dd>
+          <div className="md:col-span-2 mt-1 text-xs text-gray-500">
+            Limity zbioru (bez skanu): ustawienia magazynowe w sekcji „Logistyka i organizacja zbiorów”.
           </div>
         ) : null}
-      </dl>
+      </div>
     </div>
   );
 }
@@ -1572,40 +1588,39 @@ function WmsPickingStatusConfig({
   statusPairConflictDraft: boolean;
 }) {
   return (
-    <div className="space-y-4" aria-label="Konfiguracja trybu zbierania">
+    <div className="space-y-5" aria-label="Konfiguracja trybu zbierania">
         {savedConfigs.length === 0 && !draft && !pickingConfigsLoading ? (
-          <p className="text-sm text-slate-600">Nie masz jeszcze reguł zbierania — dodaj pierwszą regułę poniżej.</p>
+          <p className="text-sm text-gray-600">Nie masz jeszcze reguł zbierania — dodaj pierwszą regułę poniżej.</p>
         ) : null}
 
         {savedConfigs.length > 0 ? (
-          <div className={draft != null ? "mt-2" : ""}>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Zapisane reguły</p>
-            <ul className="flex list-none flex-col gap-3 p-0">
+          <div className={draft != null ? "mt-2 space-y-4" : "space-y-4"}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Zapisane reguły</p>
+            <div className="flex flex-col gap-4">
               {savedConfigs.map((cfg) => (
-                <li key={cfg.id}>
-                  <SavedPickingConfigSummaryCard
-                    config={cfg}
-                    actionsDisabled={pickingPersisting}
-                    onEdit={(c) => {
-                      setSaveFormError(null);
-                      setPickingPersistOk(null);
-                      setEditBackup(c);
-                      setSavedConfigs((prev) => prev.filter((x) => x.id !== c.id));
-                      setDraft(savedConfigurationToDraft(c));
-                    }}
-                    onDelete={(id) => {
-                      void handleDeleteSavedConfig(id);
-                    }}
-                  />
-                </li>
+                <SavedPickingConfigSummaryCard
+                  key={cfg.id}
+                  config={cfg}
+                  actionsDisabled={pickingPersisting}
+                  onEdit={(c) => {
+                    setSaveFormError(null);
+                    setPickingPersistOk(null);
+                    setEditBackup(c);
+                    setSavedConfigs((prev) => prev.filter((x) => x.id !== c.id));
+                    setDraft(savedConfigurationToDraft(c));
+                  }}
+                  onDelete={(id) => {
+                    void handleDeleteSavedConfig(id);
+                  }}
+                />
               ))}
-            </ul>
+            </div>
           </div>
         ) : null}
 
         <button
           type="button"
-          className={`w-full rounded-xl border-2 border-dashed border-slate-300 bg-white py-4 text-base font-semibold text-slate-800 transition-colors hover:border-blue-400 hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-50 ${savedConfigs.length > 0 ? "mt-4" : "mt-2"}`}
+          className={`w-full rounded-xl border-2 border-dashed border-gray-300 bg-white py-4 text-sm font-medium text-gray-600 transition-colors hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 ${savedConfigs.length > 0 ? "mt-6" : "mt-2"}`}
           onClick={() => {
             setSaveFormError(null);
             setPickingPersistOk(null);
@@ -1618,38 +1633,36 @@ function WmsPickingStatusConfig({
         </button>
 
         {draft != null ? (
-          <div className="mt-6 rounded-2xl border-2 border-blue-200 bg-blue-50/30 p-4 shadow-sm sm:p-5">
-            <p className="text-sm font-semibold text-slate-900">{editBackup ? "Edycja konfiguracji" : "Nowa konfiguracja zbierania"}</p>
-            <p className="mt-1 text-xs text-slate-600">
-              Po zapisaniu reguła zostanie wysłana do systemu — użyj paska na dole strony („Zapisz” / „Anuluj”).
+          <div className="mt-8 rounded-2xl border-2 border-blue-100 bg-white p-5 sm:p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">{editBackup ? "Edycja konfiguracji" : "Nowa konfiguracja zbierania"}</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Po wypełnieniu, reguła zostanie wysłana do systemu używając paska na dole strony („Zapisz” / „Anuluj”).
             </p>
-            <div className="mt-4">
-              <PickingConfiguratorEditor
-                fieldIdPrefix={`picking-draft-${draft.id.slice(0, 8)}`}
-                warehouseId={warehouseId}
-                orderUiSummary={orderUiSummary}
-                orderUiLoading={orderUiLoading}
-                orderUiErr={orderUiErr}
-                statusToPick={draft.statusToPick}
-                statusAfterPick={draft.statusAfterPick}
-                onStatusToPickChange={(v) => setDraft((d) => (d ? { ...d, statusToPick: v } : d))}
-                onStatusAfterPickChange={(v) => setDraft((d) => (d ? { ...d, statusAfterPick: v } : d))}
-                onStatusToPickBlur={() => setDraft((d) => (d ? { ...d, statusToPickBlurred: true } : d))}
-                onStatusAfterPickBlur={() => setDraft((d) => (d ? { ...d, statusAfterPickBlurred: true } : d))}
-                statusToPickShowError={draft.statusToPickBlurred}
-                statusAfterPickShowError={draft.statusAfterPickBlurred}
-                statusPairConflict={Boolean(statusPairConflictDraft)}
-                pickingMode={draft.pickingMode}
-                onPickingModeChange={(mode) =>
-                  setDraft((d) => (d ? { ...d, pickingMode: mode, blocks: normalizeBlocksForPickingMode(d.blocks, mode) } : d))
-                }
-                orderSort={draft.orderSort}
-                onOrderSortChange={(sort) => setDraft((d) => (d ? { ...d, orderSort: sort } : d))}
-                blocks={draft.blocks}
-                patchBlock={patchDraftBlock}
-                reservedStatusIds={reservedStatusIds}
-              />
-            </div>
+            <PickingConfiguratorEditor
+              fieldIdPrefix={`picking-draft-${draft.id.slice(0, 8)}`}
+              warehouseId={warehouseId}
+              orderUiSummary={orderUiSummary}
+              orderUiLoading={orderUiLoading}
+              orderUiErr={orderUiErr}
+              statusToPick={draft.statusToPick}
+              statusAfterPick={draft.statusAfterPick}
+              onStatusToPickChange={(v) => setDraft((d) => (d ? { ...d, statusToPick: v } : d))}
+              onStatusAfterPickChange={(v) => setDraft((d) => (d ? { ...d, statusAfterPick: v } : d))}
+              onStatusToPickBlur={() => setDraft((d) => (d ? { ...d, statusToPickBlurred: true } : d))}
+              onStatusAfterPickBlur={() => setDraft((d) => (d ? { ...d, statusAfterPickBlurred: true } : d))}
+              statusToPickShowError={draft.statusToPickBlurred}
+              statusAfterPickShowError={draft.statusAfterPickBlurred}
+              statusPairConflict={Boolean(statusPairConflictDraft)}
+              pickingMode={draft.pickingMode}
+              onPickingModeChange={(mode) =>
+                setDraft((d) => (d ? { ...d, pickingMode: mode, blocks: normalizeBlocksForPickingMode(d.blocks, mode) } : d))
+              }
+              orderSort={draft.orderSort}
+              onOrderSortChange={(sort) => setDraft((d) => (d ? { ...d, orderSort: sort } : d))}
+              blocks={draft.blocks}
+              patchBlock={patchDraftBlock}
+              reservedStatusIds={reservedStatusIds}
+            />
           </div>
         ) : null}
     </div>
@@ -2165,14 +2178,14 @@ function WmsPickingSettingsSections({
       asideLabel="Sekcje ustawień zbierania"
       observeSections={sectionNavObserve}
       observeRevision={pickingConfigsLoading}
-      mainClassName="space-y-5"
+      mainClassName="space-y-6"
     >
-      <header className="border-b border-slate-200 pb-3">
-        <h2 className="text-base font-semibold text-slate-900">Ustawienia zbierania WMS</h2>
-        <p className="mt-1 text-xs text-slate-500">Reguły statusów i preferencje widoku dla procesu zbierania.</p>
+      <header className="border-b border-gray-200 pb-4 mb-2">
+        <h2 className="text-xl font-bold text-gray-900">Ustawienia zbierania WMS</h2>
+        <p className="mt-1 text-sm text-gray-500">Reguły statusów i preferencje widoku dla procesu zbierania.</p>
       </header>
 
-      {pickingConfigsLoading ? <p className="text-sm text-slate-500">Ładowanie konfiguracji z serwera…</p> : null}
+      {pickingConfigsLoading ? <p className="text-sm text-gray-500">Ładowanie konfiguracji z serwera…</p> : null}
       {pickingConfigsLoadErr ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           <span className="font-medium">Ostrzeżenie: </span>
@@ -2190,71 +2203,71 @@ function WmsPickingSettingsSections({
         </p>
       ) : null}
       {saveFormError ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{saveFormError}</p>
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{saveFormError}</p>
       ) : null}
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         <SectionCardPicking
           id="wms-pick-appearance"
           title="1. Wygląd i prezentacja"
           summary="Kolumny na liście zbierania, magazyny, układ i gęstość listy."
         >
-          <div className="space-y-5">
-            <SubsectionPicking title="Kolumny produktu (lista zbierania)" description="Wybór informacji widocznych na liście zbierania.">
-              <FieldGridPicking>
-                <BoolRowPicking label="Zdjęcie produktu" checked={extended.showProductImage} onChange={(v) => patchExtended("showProductImage", v)} />
-                <BoolRowPicking label="EAN" checked={extended.showEAN} onChange={(v) => patchExtended("showEAN", v)} />
-                <BoolRowPicking label="SKU" checked={extended.showSKU} onChange={(v) => patchExtended("showSKU", v)} />
-                <BoolRowPicking label="Numer katalogowy" checked={extended.showCatalogNumber} onChange={(v) => patchExtended("showCatalogNumber", v)} />
-                <BoolRowPicking label="Stan magazynowy" checked={extended.showStock} onChange={(v) => patchExtended("showStock", v)} />
-                <BoolRowPicking label="Lokalizacja" checked={extended.showLocation} onChange={(v) => patchExtended("showLocation", v)} />
-              </FieldGridPicking>
-            </SubsectionPicking>
-            <SubsectionPicking title="Magazyny i strefy" description="Podział pracy i identyfikatory magazynów (placeholder).">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <BoolRowPicking label="Dziel pracę między magazynami" checked={extended.splitWorkBetweenWarehouses} onChange={(v) => patchExtended("splitWorkBetweenWarehouses", v)} />
-                <BoolRowPicking label="Ignoruj poziomy stanów w lokalizacjach" checked={extended.ignoreLocationStockLevels} onChange={(v) => patchExtended("ignoreLocationStockLevels", v)} />
-                <BoolRowPicking label="Zbieranie strefowe" checked={extended.zonePickingEnabled} onChange={(v) => patchExtended("zonePickingEnabled", v)} />
-              </div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium text-slate-700">
-                  Główny magazyn zbierania
-                  <input
-                    className={textInputClassPicking}
-                    value={extended.mainPickingWarehouse}
-                    onChange={(e) => patchExtended("mainPickingWarehouse", e.target.value)}
-                    placeholder="ID lub nazwa"
-                  />
-                </label>
-                <label className="block text-sm font-medium text-slate-700">
-                  Magazyn zapasowy
-                  <input
-                    className={textInputClassPicking}
-                    value={extended.fallbackWarehouse}
-                    onChange={(e) => patchExtended("fallbackWarehouse", e.target.value)}
-                    placeholder="ID lub nazwa"
-                  />
-                </label>
-              </div>
-            </SubsectionPicking>
-            <SubsectionPicking title="Układ listy">
-              <FieldGridPicking>
-                <BoolRowPicking label="Tryb kompaktowy" checked={extended.compactMode} onChange={(v) => patchExtended("compactMode", v)} />
-                <BoolRowPicking label="Plakietka priorytetu" checked={extended.showPriorityBadge} onChange={(v) => patchExtended("showPriorityBadge", v)} />
-                <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
-                  Gęstość listy
-                  <select
-                    className={selectClass}
-                    value={extended.listDensity}
-                    onChange={(e) => patchExtended("listDensity", e.target.value as WmsPickingExtendedUiSettings["listDensity"])}
-                  >
-                    <option value="comfortable">Komfortowa</option>
-                    <option value="compact">Kompaktowa</option>
-                  </select>
-                </label>
-              </FieldGridPicking>
-            </SubsectionPicking>
-          </div>
+          <SubsectionPicking title="Kolumny produktu (lista zbierania)" description="Wybór informacji widocznych na liście zbierania.">
+            <FieldGridPicking>
+              <CustomCheckbox label="Zdjęcie produktu" checked={extended.showProductImage} onChange={(v) => patchExtended("showProductImage", v)} />
+              <CustomCheckbox label="EAN" checked={extended.showEAN} onChange={(v) => patchExtended("showEAN", v)} />
+              <CustomCheckbox label="SKU" checked={extended.showSKU} onChange={(v) => patchExtended("showSKU", v)} />
+              <CustomCheckbox label="Numer katalogowy" checked={extended.showCatalogNumber} onChange={(v) => patchExtended("showCatalogNumber", v)} />
+              <CustomCheckbox label="Stan magazynowy" checked={extended.showStock} onChange={(v) => patchExtended("showStock", v)} />
+              <CustomCheckbox label="Lokalizacja" checked={extended.showLocation} onChange={(v) => patchExtended("showLocation", v)} />
+            </FieldGridPicking>
+          </SubsectionPicking>
+          
+          <SubsectionPicking title="Magazyny i strefy" description="Podział pracy i identyfikatory magazynów (placeholder).">
+            <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
+              <CustomCheckbox label="Dziel pracę między magazynami" checked={extended.splitWorkBetweenWarehouses} onChange={(v) => patchExtended("splitWorkBetweenWarehouses", v)} />
+              <CustomCheckbox label="Ignoruj poziomy stanów w lokalizacjach" checked={extended.ignoreLocationStockLevels} onChange={(v) => patchExtended("ignoreLocationStockLevels", v)} />
+              <CustomCheckbox label="Zbieranie strefowe" checked={extended.zonePickingEnabled} onChange={(v) => patchExtended("zonePickingEnabled", v)} />
+            </div>
+            <div className="mt-6 grid gap-x-6 gap-y-4 md:grid-cols-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Główny magazyn zbierania
+                <input
+                  className={textInputClassPicking}
+                  value={extended.mainPickingWarehouse}
+                  onChange={(e) => patchExtended("mainPickingWarehouse", e.target.value)}
+                  placeholder="ID lub nazwa"
+                />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Magazyn zapasowy
+                <input
+                  className={textInputClassPicking}
+                  value={extended.fallbackWarehouse}
+                  onChange={(e) => patchExtended("fallbackWarehouse", e.target.value)}
+                  placeholder="ID lub nazwa"
+                />
+              </label>
+            </div>
+          </SubsectionPicking>
+          
+          <SubsectionPicking title="Układ listy">
+            <FieldGridPicking>
+              <CustomCheckbox label="Tryb kompaktowy" checked={extended.compactMode} onChange={(v) => patchExtended("compactMode", v)} />
+              <CustomCheckbox label="Plakietka priorytetu" checked={extended.showPriorityBadge} onChange={(v) => patchExtended("showPriorityBadge", v)} />
+              <label className="block text-sm font-medium text-gray-700 md:col-span-2 pt-2">
+                Gęstość listy
+                <select
+                  className={selectClass}
+                  value={extended.listDensity}
+                  onChange={(e) => patchExtended("listDensity", e.target.value as WmsPickingExtendedUiSettings["listDensity"])}
+                >
+                  <option value="comfortable">Komfortowa</option>
+                  <option value="compact">Kompaktowa</option>
+                </select>
+              </label>
+            </FieldGridPicking>
+          </SubsectionPicking>
         </SectionCardPicking>
 
         <SectionCardPicking
@@ -2262,310 +2275,296 @@ function WmsPickingSettingsSections({
           title="2. Workflow / statusy"
           summary="Konfiguracja reguł statusów, braki, limity zbioru i obsługa braków."
         >
-          <div className="space-y-5">
-            <SubsectionPicking title="Konfiguracja trybu zbierania" description="Mapowanie statusów panelu na tryb zbierania — zapis do API.">
-              <WmsPickingStatusConfig
-                warehouseId={warehouseId}
-                savedConfigs={savedConfigs}
-                draft={draft}
-                pickingConfigsLoading={pickingConfigsLoading}
-                pickingPersisting={pickingPersisting}
-                editBackup={editBackup}
-                setSaveFormError={setSaveFormError}
-                setPickingPersistOk={setPickingPersistOk}
-                setEditBackup={setEditBackup}
-                setSavedConfigs={setSavedConfigs}
-                setDraft={setDraft}
-                handleDeleteSavedConfig={(id) => void handleDeleteSavedConfig(id)}
-                handleSaveConfiguration={() => void handleSaveConfiguration()}
-                orderUiSummary={orderUiSummary}
-                orderUiLoading={orderUiLoading}
-                orderUiErr={orderUiErr}
-                patchDraftBlock={patchDraftBlock}
-                reservedStatusIds={reservedStatusIds}
-                statusPairConflictDraft={Boolean(statusPairConflictDraft)}
-              />
-            </SubsectionPicking>
+          <SubsectionPicking title="Konfiguracja trybu zbierania" description="Mapowanie statusów panelu na tryb zbierania — zapis do API.">
+            <WmsPickingStatusConfig
+              warehouseId={warehouseId}
+              savedConfigs={savedConfigs}
+              draft={draft}
+              pickingConfigsLoading={pickingConfigsLoading}
+              pickingPersisting={pickingPersisting}
+              editBackup={editBackup}
+              setSaveFormError={setSaveFormError}
+              setPickingPersistOk={setPickingPersistOk}
+              setEditBackup={setEditBackup}
+              setSavedConfigs={setSavedConfigs}
+              setDraft={setDraft}
+              handleDeleteSavedConfig={(id) => void handleDeleteSavedConfig(id)}
+              handleSaveConfiguration={() => void handleSaveConfiguration()}
+              orderUiSummary={orderUiSummary}
+              orderUiLoading={orderUiLoading}
+              orderUiErr={orderUiErr}
+              patchDraftBlock={patchDraftBlock}
+              reservedStatusIds={reservedStatusIds}
+              statusPairConflictDraft={Boolean(statusPairConflictDraft)}
+            />
+          </SubsectionPicking>
 
-            <SubsectionPicking title="Status przy braku (preferencja lokalna)" description="Docelowo powiązanie z procesem OMS; na razie zapis w przeglądarce.">
-              <label className="block text-sm font-medium text-slate-700">
-                Status zamówienia przy braku
-                <select
-                  className={selectClass}
-                  value={extended.shortageOrderStatusId ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value.trim();
-                    patchExtended("shortageOrderStatusId", v === "" ? null : Number(v));
-                  }}
-                >
-                  <option value="">— brak —</option>
-                  {statusOptionsFlat.map((o) => (
-                    <option key={o.id} value={String(o.id)}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </SubsectionPicking>
-
-            <SubsectionPicking title="Po zakończeniu zbioru (wsadowego)" description="Zachowanie po domknięciu partii — lokalnie.">
-              <div className="flex flex-col gap-2">
-                {(
-                  [
-                    ["assign_new_batch", "Przypisz nowy zbiór"],
-                    ["back_to_list", "Wróć na listę"],
-                    ["stay_here", "Zostań na ekranie"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <label key={value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm">
-                    <input
-                      type="radio"
-                      name="after-batch-picking"
-                      className={radioInputClass}
-                      checked={extended.afterBatchCompleteAction === value}
-                      onChange={() => patchExtended("afterBatchCompleteAction", value)}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </SubsectionPicking>
-
-            <SubsectionPicking title="Reguły procesu">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <BoolRowPicking
-                  label="Oddziel zamówienia sprzedaży bezpośredniej"
-                  checked={extended.separateDirectSalesOrders}
-                  onChange={(v) => patchExtended("separateDirectSalesOrders", v)}
-                />
-                <BoolRowPicking
-                  label="Zezwól na zbieranie w trybie pakowania"
-                  checked={extended.allowPickInsidePackingMode}
-                  onChange={(v) => patchExtended("allowPickInsidePackingMode", v)}
-                />
-              </div>
-            </SubsectionPicking>
-
-            {warehouseUsesBulkLimits ? (
-              <SubsectionPicking
-                title="Limity zbioru (wózek bez skanowania)"
-                description="Wspólne dla magazynu — stosowane tam, gdzie w regule wybrano tryb bez skanu."
+          <SubsectionPicking title="Status przy braku (preferencja lokalna)" description="Docelowo powiązanie z procesem OMS; na razie zapis w przeglądarce.">
+            <label className="block text-sm font-medium text-gray-700">
+              Status zamówienia przy braku
+              <select
+                className={selectClass}
+                value={extended.shortageOrderStatusId ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  patchExtended("shortageOrderStatusId", v === "" ? null : Number(v));
+                }}
               >
-                <WmsPickingLogisticsBulkLimitsSection
-                  visible
-                  showSingleField={showGlobalBulkSingleField}
-                  showMultiField={showGlobalBulkMultiField}
-                  maxSingleItemOrders={globalBulkSingle}
-                  maxMultiItemOrders={globalBulkMulti}
-                  onChangeMaxSingle={(v) => {
-                    setGlobalBulkSingle(v);
-                    setSaveFormError(null);
-                  }}
-                  onChangeMaxMulti={(v) => {
-                    setGlobalBulkMulti(v);
-                    setSaveFormError(null);
-                  }}
-                  onBlurMaxSingle={() => setGlobalBulkSingleBlurred(true)}
-                  onBlurMaxMulti={() => setGlobalBulkMultiBlurred(true)}
-                  errorSingle={globalBulkSingleErr}
-                  errorMulti={globalBulkMultiErr}
-                />
-              </SubsectionPicking>
-            ) : (
-              <p className="text-xs text-slate-500">
-                Limity zbioru dla wózka bez skanowania pojawią się tutaj, gdy w którejś regule wybierzesz ten tryb kontenera.
-              </p>
-            )}
+                <option value="">— brak —</option>
+                {statusOptionsFlat.map((o) => (
+                  <option key={o.id} value={String(o.id)}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </SubsectionPicking>
 
-            <SubsectionPicking title="Obsługa braków (API)" description="Statusy po zgłoszeniu braku, priorytety, dogrywka.">
-              <PickingShortageSettingsPanel
-                ref={shortageRef}
-                tenantId={DAMAGE_TENANT_ID}
-                warehouseId={warehouseId}
-                statusOptionsFlat={statusOptionsFlat}
-                orderUiLoading={orderUiLoading}
-                orderUiErr={orderUiErr}
-                onDirtyChange={setShortagePanelDirty}
+          <SubsectionPicking title="Po zakończeniu zbioru (wsadowego)" description="Zachowanie po domknięciu partii — lokalnie.">
+            <div className="flex flex-col gap-3 mt-2">
+              {(
+                [
+                  ["assign_new_batch", "Przypisz nowy zbiór"],
+                  ["back_to_list", "Wróć na listę"],
+                  ["stay_here", "Zostań na ekranie"],
+                ] as const
+              ).map(([value, label]) => (
+                <label key={value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-medium hover:border-gray-300 transition-colors">
+                  <input
+                    type="radio"
+                    name="after-batch-picking"
+                    className={radioInputClass}
+                    checked={extended.afterBatchCompleteAction === value}
+                    onChange={() => patchExtended("afterBatchCompleteAction", value)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </SubsectionPicking>
+
+          <SubsectionPicking title="Reguły procesu">
+            <FieldGridPicking>
+              <CustomCheckbox
+                label="Oddziel zamówienia sprzedaży bezpośredniej"
+                checked={extended.separateDirectSalesOrders}
+                onChange={(v) => patchExtended("separateDirectSalesOrders", v)}
+              />
+              <CustomCheckbox
+                label="Zezwól na zbieranie w trybie pakowania"
+                checked={extended.allowPickInsidePackingMode}
+                onChange={(v) => patchExtended("allowPickInsidePackingMode", v)}
+              />
+            </FieldGridPicking>
+          </SubsectionPicking>
+
+          {warehouseUsesBulkLimits ? (
+            <SubsectionPicking
+              title="Limity zbioru (wózek bez skanowania)"
+              description="Wspólne dla magazynu — stosowane tam, gdzie w regule wybrano tryb bez skanu."
+            >
+              <WmsPickingLogisticsBulkLimitsSection
+                visible
+                showSingleField={showGlobalBulkSingleField}
+                showMultiField={showGlobalBulkMultiField}
+                maxSingleItemOrders={globalBulkSingle}
+                maxMultiItemOrders={globalBulkMulti}
+                onChangeMaxSingle={(v) => {
+                  setGlobalBulkSingle(v);
+                  setSaveFormError(null);
+                }}
+                onChangeMaxMulti={(v) => {
+                  setGlobalBulkMulti(v);
+                  setSaveFormError(null);
+                }}
+                onBlurMaxSingle={() => setGlobalBulkSingleBlurred(true)}
+                onBlurMaxMulti={() => setGlobalBulkMultiBlurred(true)}
+                errorSingle={globalBulkSingleErr}
+                errorMulti={globalBulkMultiErr}
               />
             </SubsectionPicking>
-          </div>
+          ) : (
+            <p className="text-xs text-gray-500 pt-6 mt-6 border-t border-gray-100">
+              Limity zbioru dla wózka bez skanowania pojawią się tutaj, gdy w którejś regule wybierzesz ten tryb kontenera.
+            </p>
+          )}
+
+          <SubsectionPicking title="Obsługa braków (API)" description="Statusy po zgłoszeniu braku, priorytety, dogrywka.">
+            <PickingShortageSettingsPanel
+              ref={shortageRef}
+              tenantId={DAMAGE_TENANT_ID}
+              warehouseId={warehouseId}
+              statusOptionsFlat={statusOptionsFlat}
+              orderUiLoading={orderUiLoading}
+              orderUiErr={orderUiErr}
+              onDirtyChange={setShortagePanelDirty}
+            />
+          </SubsectionPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-automation" title="3. Automatyzacja" summary="Automatyczne akcje podczas i po zbieraniu.">
-          <SubsectionPicking title="Automatyzacja">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <BoolRowPicking label="Auto: następne zamówienie" checked={extended.autoStartNextOrder} onChange={(v) => patchExtended("autoStartNextOrder", v)} />
-              <BoolRowPicking label="Auto: otwórz skaner" checked={extended.autoOpenScanner} onChange={(v) => patchExtended("autoOpenScanner", v)} />
-              <BoolRowPicking label="Auto: oznaczaj zebrane linie" checked={extended.autoMarkPickedLines} onChange={(v) => patchExtended("autoMarkPickedLines", v)} />
-              <BoolRowPicking label="Auto: przejdź do statusu pakowania" checked={extended.autoMoveToPackingStatus} onChange={(v) => patchExtended("autoMoveToPackingStatus", v)} />
-            </div>
-          </SubsectionPicking>
+          <FieldGridPicking>
+            <CustomCheckbox label="Auto: następne zamówienie" checked={extended.autoStartNextOrder} onChange={(v) => patchExtended("autoStartNextOrder", v)} />
+            <CustomCheckbox label="Auto: otwórz skaner" checked={extended.autoOpenScanner} onChange={(v) => patchExtended("autoOpenScanner", v)} />
+            <CustomCheckbox label="Auto: oznaczaj zebrane linie" checked={extended.autoMarkPickedLines} onChange={(v) => patchExtended("autoMarkPickedLines", v)} />
+            <CustomCheckbox label="Auto: przejdź do statusu pakowania" checked={extended.autoMoveToPackingStatus} onChange={(v) => patchExtended("autoMoveToPackingStatus", v)} />
+          </FieldGridPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-documents" title="4. Dokumenty sprzedaży" summary="Powiązanie z dokumentami sprzedaży.">
           <HelpPicking>
-            Dokumenty sprzedaży konfigurujesz w zakładce <strong className="font-medium text-slate-800">Pakowanie</strong> — w module
+            Dokumenty sprzedaży konfigurujesz w zakładce <strong className="font-semibold text-gray-900">Pakowanie</strong> — w module
             zbierania nie ma osobnych pól dokumentów.
           </HelpPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-labels" title="5. Etykiety / Kurierzy" summary="Plakietki kurierskie, sortowanie, etykiety przesunięć oraz kontenery i trasy.">
-          <div className="space-y-5">
-            <SubsectionPicking title="Kurier i kolejka" description="Widoczność i priorytety powiązane z kurierem.">
-              <FieldGridPicking>
-                <BoolRowPicking label="Plakietka kuriera" checked={extended.showCourierBadge} onChange={(v) => patchExtended("showCourierBadge", v)} />
-                <BoolRowPicking label="Sortuj zamówienia po kurierze" checked={extended.sortOrdersByCourier} onChange={(v) => patchExtended("sortOrdersByCourier", v)} />
-                <BoolRowPicking label="Priorytetyzuj ekspres" checked={extended.prioritizeExpressOrders} onChange={(v) => patchExtended("prioritizeExpressOrders", v)} />
-                <BoolRowPicking label="Auto: druk etykiet przesunięć" checked={extended.autoPrintTransferLabels} onChange={(v) => patchExtended("autoPrintTransferLabels", v)} />
-              </FieldGridPicking>
-            </SubsectionPicking>
-            <SubsectionPicking title="Wózki, koszyki, trasy">
-              <FieldGridPicking>
-                <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
-                  Domyślny typ kontenera
-                  <select
-                    className={selectClass}
-                    value={extended.defaultPickingContainerType}
-                    onChange={(e) =>
-                      patchExtended(
-                        "defaultPickingContainerType",
-                        e.target.value as WmsPickingExtendedUiSettings["defaultPickingContainerType"],
-                      )
-                    }
-                  >
-                    <option value="cart">Wózek</option>
-                    <option value="cart_with_baskets">Wózek z koszykami</option>
-                    <option value="basket">Koszyk</option>
-                  </select>
-                </label>
-              </FieldGridPicking>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <BoolRowPicking label="Auto-sugestia wózka" checked={extended.autoSuggestCart} onChange={(v) => patchExtended("autoSuggestCart", v)} />
-                <BoolRowPicking label="Auto-sugestia trasy" checked={extended.autoSuggestRoute} onChange={(v) => patchExtended("autoSuggestRoute", v)} />
-                <BoolRowPicking label="Wymagaj skanu wózka na start" checked={extended.requireCartScanStart} onChange={(v) => patchExtended("requireCartScanStart", v)} />
-                <BoolRowPicking label="Wymagaj skanu koszyka na start" checked={extended.requireBasketScanStart} onChange={(v) => patchExtended("requireBasketScanStart", v)} />
-              </div>
-            </SubsectionPicking>
-          </div>
+          <SubsectionPicking title="Kurier i kolejka" description="Widoczność i priorytety powiązane z kurierem.">
+            <FieldGridPicking>
+              <CustomCheckbox label="Plakietka kuriera" checked={extended.showCourierBadge} onChange={(v) => patchExtended("showCourierBadge", v)} />
+              <CustomCheckbox label="Sortuj zamówienia po kurierze" checked={extended.sortOrdersByCourier} onChange={(v) => patchExtended("sortOrdersByCourier", v)} />
+              <CustomCheckbox label="Priorytetyzuj ekspres" checked={extended.prioritizeExpressOrders} onChange={(v) => patchExtended("prioritizeExpressOrders", v)} />
+              <CustomCheckbox label="Auto: druk etykiet przesunięć" checked={extended.autoPrintTransferLabels} onChange={(v) => patchExtended("autoPrintTransferLabels", v)} />
+            </FieldGridPicking>
+          </SubsectionPicking>
+          <SubsectionPicking title="Wózki, koszyki, trasy">
+            <FieldGridPicking>
+              <label className="block text-sm font-medium text-gray-700 md:col-span-2 pb-2">
+                Domyślny typ kontenera
+                <select
+                  className={selectClass}
+                  value={extended.defaultPickingContainerType}
+                  onChange={(e) =>
+                    patchExtended(
+                      "defaultPickingContainerType",
+                      e.target.value as WmsPickingExtendedUiSettings["defaultPickingContainerType"],
+                    )
+                  }
+                >
+                  <option value="cart">Wózek</option>
+                  <option value="cart_with_baskets">Wózek z koszykami</option>
+                  <option value="basket">Koszyk</option>
+                </select>
+              </label>
+              <CustomCheckbox label="Auto-sugestia wózka" checked={extended.autoSuggestCart} onChange={(v) => patchExtended("autoSuggestCart", v)} />
+              <CustomCheckbox label="Auto-sugestia trasy" checked={extended.autoSuggestRoute} onChange={(v) => patchExtended("autoSuggestRoute", v)} />
+              <CustomCheckbox label="Wymagaj skanu wózka na start" checked={extended.requireCartScanStart} onChange={(v) => patchExtended("requireCartScanStart", v)} />
+              <CustomCheckbox label="Wymagaj skanu koszyka na start" checked={extended.requireBasketScanStart} onChange={(v) => patchExtended("requireBasketScanStart", v)} />
+            </FieldGridPicking>
+          </SubsectionPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-permissions" title="6. Uprawnienia / Walidacja" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <BoolRowPicking
+          <FieldGridPicking>
+            <CustomCheckbox
               label="Wymagaj skanu produktu (min. raz)"
               checked={extended.requireProductScanAtLeastOnce}
               onChange={(v) => patchExtended("requireProductScanAtLeastOnce", v)}
             />
-            <BoolRowPicking label="Wymagaj skanu lokalizacji" checked={extended.requireLocationScan} onChange={(v) => patchExtended("requireLocationScan", v)} />
-            <BoolRowPicking
-              title="Gdy wiele lokalizacji"
+            <CustomCheckbox label="Wymagaj skanu lokalizacji" checked={extended.requireLocationScan} onChange={(v) => patchExtended("requireLocationScan", v)} />
+            <CustomCheckbox
               label="Wyłącz wymuszenie skanu lokalizacji przy wielu lokalizacjach"
               checked={extended.disableForceLocationScanWhenManyLocations}
               onChange={(v) => patchExtended("disableForceLocationScanWhenManyLocations", v)}
             />
-            <BoolRowPicking
+            <CustomCheckbox
               label="Zezwól na zbieranie z lokalizacji rezerwowej"
               checked={extended.allowReserveLocationPicking}
               onChange={(v) => patchExtended("allowReserveLocationPicking", v)}
             />
-            <BoolRowPicking
+            <CustomCheckbox
               label="Produkty bez etykiet do koszyków"
               checked={extended.allowProductsWithoutLabelsToBaskets}
               onChange={(v) => patchExtended("allowProductsWithoutLabelsToBaskets", v)}
             />
-            <BoolRowPicking
+            <CustomCheckbox
               label="Wyłącz auto-odpinanie zamówień z brakami z wózków"
               checked={extended.disableAutoDetachMissingOrdersFromCarts}
               onChange={(v) => patchExtended("disableAutoDetachMissingOrdersFromCarts", v)}
             />
-          </div>
+          </FieldGridPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-assistant" title="7. Asystent zbierania" summary="Zbiory, kolejka zamówień oraz notatki i ostrzeżenia.">
-          <div className="space-y-5">
-            <SubsectionPicking title="Zbiory / kolejka">
-              <FieldGridPicking>
-                <label className="block text-sm font-medium text-slate-700">
-                  Liczba zamówień w batchu (wielopoz.)
-                  <input
-                    type="number"
-                    min={1}
-                    max={200}
-                    className={numberInputClass}
-                    value={extended.multiItemBatchOrdersCount}
-                    onChange={(e) =>
-                      patchExtended("multiItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
-                    }
-                  />
-                </label>
-                <label className="block text-sm font-medium text-slate-700">
-                  Liczba zamówień w batchu (jednopoz.)
-                  <input
-                    type="number"
-                    min={1}
-                    max={200}
-                    className={numberInputClass}
-                    value={extended.singleItemBatchOrdersCount}
-                    onChange={(e) =>
-                      patchExtended("singleItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
-                    }
-                  />
-                </label>
-                <label className="block text-sm font-medium text-slate-700 sm:col-span-2" title="0 = bez limitu objętości (placeholder)">
-                  Limit objętości jednopoz. (0 = brak)
-                  <input
-                    type="number"
-                    min={0}
-                    max={999999}
-                    className={numberInputClass}
-                    value={extended.singleItemVolumeLimit}
-                    onChange={(e) => patchExtended("singleItemVolumeLimit", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-                  />
-                </label>
-                <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
-                  Tryb zarządzania zbiorem
-                  <select
-                    className={selectClass}
-                    value={extended.batchManagementMode}
-                    onChange={(e) =>
-                      patchExtended("batchManagementMode", e.target.value as WmsPickingExtendedUiSettings["batchManagementMode"])
-                    }
-                  >
-                    <option value="manual">Ręczny</option>
-                    <option value="auto_assign_picker">Auto przypisanie zbierającego</option>
-                    <option value="full_auto">Pełna automatyzacja</option>
-                  </select>
-                </label>
-              </FieldGridPicking>
-              <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
-                <BoolRowPicking label="Sortuj po wieku zamówienia" checked={extended.sortOrdersByAge} onChange={(v) => patchExtended("sortOrdersByAge", v)} />
-              </div>
-            </SubsectionPicking>
-            <SubsectionPicking title="Notatki i ostrzeżenia">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <BoolRowPicking label="Pokaż wszystkie notatki" checked={extended.showAllNotes} onChange={(v) => patchExtended("showAllNotes", v)} />
-                <BoolRowPicking label="Wyskakujące notatki" checked={extended.notesPopup} onChange={(v) => patchExtended("notesPopup", v)} />
-                <BoolRowPicking label="Pokaż ostrzeżenia" checked={extended.showWarnings} onChange={(v) => patchExtended("showWarnings", v)} />
-                <BoolRowPicking label="Podpowiedzi braków" checked={extended.showMissingProductsHints} onChange={(v) => patchExtended("showMissingProductsHints", v)} />
-              </div>
-            </SubsectionPicking>
-          </div>
+          <SubsectionPicking title="Zbiory / kolejka">
+            <FieldGridPicking>
+              <label className="block text-sm font-medium text-gray-700">
+                Liczba zamówień w batchu (wielopoz.)
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  className={numberInputClass}
+                  value={extended.multiItemBatchOrdersCount}
+                  onChange={(e) =>
+                    patchExtended("multiItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
+                  }
+                />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Liczba zamówień w batchu (jednopoz.)
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  className={numberInputClass}
+                  value={extended.singleItemBatchOrdersCount}
+                  onChange={(e) =>
+                    patchExtended("singleItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
+                  }
+                />
+              </label>
+              <label className="block text-sm font-medium text-gray-700 md:col-span-2" title="0 = bez limitu objętości (placeholder)">
+                Limit objętości jednopoz. (0 = brak)
+                <input
+                  type="number"
+                  min={0}
+                  max={999999}
+                  className={numberInputClass}
+                  value={extended.singleItemVolumeLimit}
+                  onChange={(e) => patchExtended("singleItemVolumeLimit", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                />
+              </label>
+              <label className="block text-sm font-medium text-gray-700 md:col-span-2 pb-2">
+                Tryb zarządzania zbiorem
+                <select
+                  className={selectClass}
+                  value={extended.batchManagementMode}
+                  onChange={(e) =>
+                    patchExtended("batchManagementMode", e.target.value as WmsPickingExtendedUiSettings["batchManagementMode"])
+                  }
+                >
+                  <option value="manual">Ręczny</option>
+                  <option value="auto_assign_picker">Auto przypisanie zbierającego</option>
+                  <option value="full_auto">Pełna automatyzacja</option>
+                </select>
+              </label>
+            </FieldGridPicking>
+            <div className="mt-6 grid gap-x-6 gap-y-4 border-t border-gray-100 pt-6 md:grid-cols-2">
+              <CustomCheckbox label="Sortuj po wieku zamówienia" checked={extended.sortOrdersByAge} onChange={(v) => patchExtended("sortOrdersByAge", v)} />
+            </div>
+          </SubsectionPicking>
+          <SubsectionPicking title="Notatki i ostrzeżenia">
+            <FieldGridPicking>
+              <CustomCheckbox label="Pokaż wszystkie notatki" checked={extended.showAllNotes} onChange={(v) => patchExtended("showAllNotes", v)} />
+              <CustomCheckbox label="Wyskakujące notatki" checked={extended.notesPopup} onChange={(v) => patchExtended("notesPopup", v)} />
+              <CustomCheckbox label="Pokaż ostrzeżenia" checked={extended.showWarnings} onChange={(v) => patchExtended("showWarnings", v)} />
+              <CustomCheckbox label="Podpowiedzi braków" checked={extended.showMissingProductsHints} onChange={(v) => patchExtended("showMissingProductsHints", v)} />
+            </FieldGridPicking>
+          </SubsectionPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-advanced" title="8. Zaawansowane" summary="Diagnostyka, legacy i routing.">
-          <SubsectionPicking title="Zaawansowane">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <BoolRowPicking
-                title="Sprawdzenie dostawców"
-                label="Sprawdzanie dostępności u dostawcy"
-                checked={extended.supplierAvailabilityCheck}
-                onChange={(v) => patchExtended("supplierAvailabilityCheck", v)}
-              />
-              <BoolRowPicking label="Tryb legacy" checked={extended.legacyMode} onChange={(v) => patchExtended("legacyMode", v)} />
-              <BoolRowPicking title="Logi diagnostyczne" label="Tryb debug" checked={extended.debugMode} onChange={(v) => patchExtended("debugMode", v)} />
-              <BoolRowPicking title="Algorytm tras" label="Zaawansowany routing" checked={extended.advancedRoutingMode} onChange={(v) => patchExtended("advancedRoutingMode", v)} />
-            </div>
-          </SubsectionPicking>
+          <FieldGridPicking>
+            <CustomCheckbox
+              label="Sprawdzanie dostępności u dostawcy"
+              checked={extended.supplierAvailabilityCheck}
+              onChange={(v) => patchExtended("supplierAvailabilityCheck", v)}
+            />
+            <CustomCheckbox label="Tryb legacy" checked={extended.legacyMode} onChange={(v) => patchExtended("legacyMode", v)} />
+            <CustomCheckbox label="Tryb debug" hint="Logi diagnostyczne" checked={extended.debugMode} onChange={(v) => patchExtended("debugMode", v)} />
+            <CustomCheckbox label="Zaawansowany routing" hint="Algorytm tras" checked={extended.advancedRoutingMode} onChange={(v) => patchExtended("advancedRoutingMode", v)} />
+          </FieldGridPicking>
         </SectionCardPicking>
       </div>
     </WmsSettingsLayout>
@@ -2585,7 +2584,6 @@ export default function WmsSettingsPage() {
   const [pickingDirty, setPickingDirty] = useState(false);
   const [globalSaving, setGlobalSaving] = useState(false);
 
-  /** Global UX dirty flag: derived from packing + picking panel fingerprints (real edits only). */
   const isDirty = packingDirty || pickingDirty;
 
   useEffect(() => {
@@ -2637,12 +2635,12 @@ export default function WmsSettingsPage() {
 
   return (
     <PageLayout omitCard className="min-w-0 overflow-visible">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl bg-white pb-5">
           <PageHeader title="Ustawienia WMS" />
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-6">
             <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">
               <nav
-                className="flex w-full flex-nowrap gap-6 overflow-x-auto border-b border-slate-200 sm:justify-start"
+                className="flex w-full flex-nowrap gap-6 overflow-x-auto border-b border-gray-200 sm:justify-start"
                 aria-label="Sekcje ustawień WMS"
                 role="tablist"
               >
@@ -2660,7 +2658,7 @@ export default function WmsSettingsPage() {
                       onClick={() => {
                         setActiveTab(tab.id);
                       }}
-                      className={`shrink-0 whitespace-nowrap ${tabsNavItemClassName(selected)}`}
+                      className={`shrink-0 whitespace-nowrap pb-3 ${tabsNavItemClassName(selected)} ${selected ? 'border-b-2 border-blue-600 text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-800'}`}
                     >
                       {tab.label}
                     </button>
