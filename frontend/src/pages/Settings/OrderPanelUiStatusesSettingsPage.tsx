@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Edit2, Trash2, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import {
@@ -18,9 +18,6 @@ import {
   stBtnDanger,
   stBtnGhost,
   stBtnPrimary,
-  stCard,
-  stCardBody,
-  stCardHead,
   stFieldLabel,
   stIconBtn,
   stInput,
@@ -43,10 +40,11 @@ const GROUP_LABELS: Record<OrderUiMainGroup, string> = {
   DONE: "Zakończone",
 };
 
+// Zaktualizowane, nowoczesne style dla nagłówków głównych grup
 const MAIN_HEAD: Record<OrderUiMainGroup, string> = {
-  NEW: "bg-emerald-50/90 text-emerald-950 ring-1 ring-emerald-200/60",
-  IN_PROGRESS: "bg-sky-50/90 text-sky-950 ring-1 ring-sky-200/60",
-  DONE: "bg-slate-100/90 text-slate-900 ring-1 ring-slate-200/70",
+  NEW: "bg-blue-50/50 text-blue-950 border-b border-blue-100",
+  IN_PROGRESS: "bg-amber-50/50 text-amber-950 border-b border-amber-100",
+  DONE: "bg-emerald-50/50 text-emerald-950 border-b border-emerald-100",
 };
 
 function keyMain(mg: OrderUiMainGroup): string {
@@ -313,6 +311,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
     setNewSubgroupName("");
   }, [newMainGroup]);
 
+  // === EDYCJA STATUSU ===
   const renderEditorBlock = (r: OrderUiStatusWithCount, isSystem: boolean) => {
     const badge = editDraft.badge_color ?? editDraft.color ?? r.badge_color ?? r.color;
     const bg = editDraft.background_color ?? r.background_color ?? r.color;
@@ -322,58 +321,66 @@ export default function OrderPanelUiStatusesSettingsPage() {
     const subVal = (editDraft.subgroup_name ?? "").trim();
     const previewImg = editImageBlobUrl ?? r.image_url ?? null;
     const subLabel = subVal || null;
+
     return (
-      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label className="min-w-0">
-                <span className={stFieldLabel}>Grupa główna</span>
-                <select
-                  disabled={isSystem}
-                  value={mgEdit}
-                  onChange={(e) => {
-                    const nextMg = e.target.value as OrderUiMainGroup;
-                    setEditDraft((d) => {
-                      const sn = (d.subgroup_name ?? "").trim();
-                      const opts = subgroupOptionsFor(nextMg);
-                      const stillOk = !sn || opts.some((x) => x.name === sn);
-                      const nextSub = stillOk && sn ? sn : null;
-                      return { ...d, main_group: nextMg, subgroup_name: nextSub };
-                    });
-                  }}
-                  className={stSelect}
-                >
-                  {GROUP_ORDER.map((og) => (
-                    <option key={og} value={og}>
-                      {GROUP_LABELS[og]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="min-w-0 sm:col-span-1">
-                <span className={stFieldLabel}>Podgrupa</span>
-                <select
-                  value={subVal}
-                  onChange={(e) => {
-                    const v = e.target.value.trim();
-                    setEditDraft((d) => ({ ...d, subgroup_name: v || null }));
-                  }}
-                  className={stSelect}
-                >
-                  <option value="">Bez przypisania</option>
-                  {subOpts.map((sg) => (
-                    <option key={sg.id} value={sg.name}>
-                      {sg.name}
-                    </option>
-                  ))}
-                  {subVal && !subOpts.some((sg) => sg.name === subVal) ? (
-                    <option value={subVal}>{subVal} (spoza słownika)</option>
-                  ) : null}
-                </select>
-                {subOpts.length === 0 ? <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w zakładce „Podgrupy”.</p> : null}
-              </label>
-              <label className="min-w-0 sm:col-span-1">
+      <div className="bg-white m-3 rounded-xl shadow-sm border border-blue-200 overflow-hidden ring-1 ring-blue-500/10">
+        <div className="px-6 py-4 border-b border-slate-100 bg-blue-50/30 flex justify-between items-center">
+          <h3 className="font-semibold text-slate-800 text-sm">Edycja statusu: {r.name}</h3>
+        </div>
+        
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="space-y-4 col-span-2">
+              <div className="grid grid-cols-2 gap-4">
+                <label className="space-y-1.5 min-w-0">
+                  <span className={stFieldLabel}>Grupa główna</span>
+                  <select
+                    disabled={isSystem}
+                    value={mgEdit}
+                    onChange={(e) => {
+                      const nextMg = e.target.value as OrderUiMainGroup;
+                      setEditDraft((d) => {
+                        const sn = (d.subgroup_name ?? "").trim();
+                        const opts = subgroupOptionsFor(nextMg);
+                        const stillOk = !sn || opts.some((x) => x.name === sn);
+                        const nextSub = stillOk && sn ? sn : null;
+                        return { ...d, main_group: nextMg, subgroup_name: nextSub };
+                      });
+                    }}
+                    className={stSelect}
+                  >
+                    {GROUP_ORDER.map((og) => (
+                      <option key={og} value={og}>
+                        {GROUP_LABELS[og]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1.5 min-w-0">
+                  <span className={stFieldLabel}>Podgrupa</span>
+                  <select
+                    value={subVal}
+                    onChange={(e) => {
+                      const v = e.target.value.trim();
+                      setEditDraft((d) => ({ ...d, subgroup_name: v || null }));
+                    }}
+                    className={stSelect}
+                  >
+                    <option value="">Bez przypisania</option>
+                    {subOpts.map((sg) => (
+                      <option key={sg.id} value={sg.name}>
+                        {sg.name}
+                      </option>
+                    ))}
+                    {subVal && !subOpts.some((sg) => sg.name === subVal) ? (
+                      <option value={subVal}>{subVal} (spoza słownika)</option>
+                    ) : null}
+                  </select>
+                  {subOpts.length === 0 ? <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w zakładce „Podgrupy”.</p> : null}
+                </label>
+              </div>
+
+              <label className="space-y-1.5 min-w-0 block">
                 <span className={stFieldLabel}>Nazwa statusu</span>
                 <input
                   value={editDraft.name ?? ""}
@@ -382,10 +389,79 @@ export default function OrderPanelUiStatusesSettingsPage() {
                   placeholder="np. Pilne"
                 />
               </label>
+
+              <div>
+                <span className={stFieldLabel}>Logo</span>
+                <div className="mt-2 flex flex-wrap items-end gap-3">
+                  {previewImg ? (
+                    <div className="flex flex-col items-start gap-1.5 rounded-md border border-slate-200 bg-white p-2">
+                      <img src={previewImg} alt="" className="h-12 w-12 rounded object-contain" />
+                      <div className="flex flex-wrap gap-2">
+                        <label className="cursor-pointer rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                          Zamień
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="sr-only"
+                            onChange={(e) => void onUploadImage(r.id, e.target.files?.[0] ?? null)}
+                          />
+                        </label>
+                        <button type="button" className={stBtnDanger} onClick={() => void onClearStatusImage(r.id)}>
+                          Usuń
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="inline-flex cursor-pointer flex-col gap-1">
+                      <span className="text-[10px] font-medium text-slate-500">Wgraj plik</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="max-w-[14rem] text-xs text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-slate-200 file:px-2 file:py-1 file:text-xs file:font-medium"
+                        onChange={(e) => void onUploadImage(r.id, e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
             </div>
-            <div>
-              <span className={stFieldLabel}>Kolory</span>
-              <div className="mt-1 flex flex-wrap items-end gap-4">
+
+            <div className="space-y-4">
+              <label className="space-y-1.5 block">
+                <span className={stFieldLabel}>Kolejność</span>
+                <input
+                  type="number"
+                  disabled={isSystem}
+                  className={stInput}
+                  value={editDraft.sort_status ?? editDraft.sort_order ?? 0}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({
+                      ...d,
+                      sort_status: Number(e.target.value),
+                      sort_order: Number(e.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                  checked={editDraft.is_active !== false}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, is_active: e.target.checked }))}
+                />
+                <span className="text-sm font-medium text-slate-700 cursor-pointer">Aktywny (widoczny)</span>
+              </div>
+            </div>
+          </div>
+
+          <hr className="border-slate-100 my-6" />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <span className={stFieldLabel}>Konfiguracja Kolorów</span>
+              <div className="flex flex-wrap gap-4 mt-2">
                 <label className="inline-flex flex-col gap-1">
                   <span className="text-[10px] font-medium text-slate-500">Pasek</span>
                   <CompactLabelColorPicker
@@ -412,67 +488,8 @@ export default function OrderPanelUiStatusesSettingsPage() {
                 </label>
               </div>
             </div>
-            <div>
-              <span className={stFieldLabel}>Logo</span>
-              <div className="mt-1 flex flex-wrap items-end gap-3">
-                {previewImg ? (
-                  <div className="flex flex-col items-start gap-1.5 rounded-md border border-slate-200 bg-white p-2">
-                    <img src={previewImg} alt="" className="h-12 w-12 rounded object-contain" />
-                    <div className="flex flex-wrap gap-2">
-                      <label className="cursor-pointer rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
-                        Zamień
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          className="sr-only"
-                          onChange={(e) => void onUploadImage(r.id, e.target.files?.[0] ?? null)}
-                        />
-                      </label>
-                      <button type="button" className={stBtnDanger} onClick={() => void onClearStatusImage(r.id)}>
-                        Usuń
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <label className="inline-flex cursor-pointer flex-col gap-1">
-                    <span className="text-[10px] font-medium text-slate-500">Wgraj plik</span>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      className="max-w-[14rem] text-xs text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-slate-200 file:px-2 file:py-1 file:text-xs file:font-medium"
-                      onChange={(e) => void onUploadImage(r.id, e.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
-            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="rounded border-slate-300"
-                checked={editDraft.is_active !== false}
-                onChange={(e) => setEditDraft((d) => ({ ...d, is_active: e.target.checked }))}
-              />
-              Aktywny
-            </label>
-            <label className="block max-w-[10rem]">
-              <span className={stFieldLabel}>Kolejność</span>
-              <input
-                type="number"
-                disabled={isSystem}
-                className={stInput}
-                value={editDraft.sort_status ?? editDraft.sort_order ?? 0}
-                onChange={(e) =>
-                  setEditDraft((d) => ({
-                    ...d,
-                    sort_status: Number(e.target.value),
-                    sort_order: Number(e.target.value),
-                  }))
-                }
-              />
-            </label>
+
             <PanelStatusMiniPreview
-              className="pt-1"
               name={(editDraft.name ?? r.name).trim() || "—"}
               count={r.count}
               badgeHex={badge}
@@ -483,19 +500,21 @@ export default function OrderPanelUiStatusesSettingsPage() {
               subgroupLabel={subLabel}
             />
           </div>
-          <div className="flex flex-row gap-2 lg:flex-col lg:pt-6">
-            <button type="button" className={stBtnGhost} onClick={cancelEdit}>
-              Anuluj
-            </button>
-            <button type="button" className={stBtnPrimary} onClick={() => void saveEdit(r.id)}>
-              Zapisz
-            </button>
-          </div>
+        </div>
+        
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+          <button type="button" className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors" onClick={cancelEdit}>
+            Anuluj
+          </button>
+          <button type="button" className="px-5 py-2 text-sm font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-900 transition-colors shadow-sm" onClick={() => void saveEdit(r.id)}>
+            Zapisz zmiany
+          </button>
         </div>
       </div>
     );
   };
 
+  // === WERSJA WIDOKU LISTY ===
   const renderPreviewRow = (mg: OrderUiMainGroup, r: OrderUiStatusWithCount, customs: OrderUiStatusWithCount[]) => {
     const isEdit = editingId === r.id;
     const isSystem = Boolean(r.is_system);
@@ -504,14 +523,16 @@ export default function OrderPanelUiStatusesSettingsPage() {
     if (isEdit) return <li key={r.id}>{renderEditorBlock(r, isSystem)}</li>;
 
     return (
-      <li key={r.id} className={`border-b border-slate-100 last:border-0 ${r.is_active === false ? "opacity-55" : ""}`}>
-        <div className="flex items-stretch gap-0 py-1.5 pl-1 pr-2 sm:py-2">
-          <OrderUiStatusConfigRowPresent status={r} count={r.count} className="ml-1" />
-          <div className="ml-1 flex shrink-0 items-center gap-0.5">
+      <li key={r.id} className={`group border-b border-slate-50 hover:bg-slate-50 transition-colors last:border-0 ${r.is_active === false ? "opacity-55" : ""}`}>
+        <div className="flex items-center justify-between py-2 pl-6 sm:pl-8 pr-4">
+          <div className="flex-1 min-w-0">
+            <OrderUiStatusConfigRowPresent status={r} count={r.count} className="ml-1" />
+          </div>
+          <div className="ml-4 flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               type="button"
               disabled={!canReorder || idxInCustom <= 0}
-              className={stIconBtn}
+              className={`${stIconBtn} disabled:opacity-30`}
               title="Wyżej"
               onClick={() => void moveSubstatus(mg, r, "up")}
             >
@@ -520,23 +541,23 @@ export default function OrderPanelUiStatusesSettingsPage() {
             <button
               type="button"
               disabled={!canReorder || idxInCustom < 0 || idxInCustom >= customs.length - 1}
-              className={stIconBtn}
+              className={`${stIconBtn} disabled:opacity-30`}
               title="Niżej"
               onClick={() => void moveSubstatus(mg, r, "down")}
             >
               <ChevronDown className="h-4 w-4" />
             </button>
-            <button type="button" className={`${stIconBtn} px-2 text-xs font-medium`} onClick={() => startEdit(r)}>
-              Edytuj
+            <button type="button" className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="Edytuj" onClick={() => startEdit(r)}>
+              <Edit2 className="h-4 w-4" />
             </button>
             <button
               type="button"
               disabled={isSystem}
-              className={`${stBtnDanger} h-8 px-2 text-xs`}
-              title={isSystem ? "Status systemowy" : undefined}
+              className={`p-1.5 rounded ${isSystem ? 'text-slate-300' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
+              title={isSystem ? "Status systemowy" : "Usuń"}
               onClick={() => void onDelete(r.id)}
             >
-              Usuń
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -596,96 +617,114 @@ export default function OrderPanelUiStatusesSettingsPage() {
         </div>
       ) : null}
 
+      {/* === KREATOR STATUSU === */}
       {tab === "statuses" ? (
-        <div className="space-y-6 border-t border-slate-100 pt-6">
-          <div className="max-w-4xl">
-          <div className={stCard}>
-            <div className={stCardHead}>
-              <h2 className="text-sm font-semibold text-slate-800">Nowy status</h2>
+        <div className="space-y-8 pt-4">
+          
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-5xl">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <h2 className="font-semibold text-slate-800">Kreator Statusu</h2>
+              <span className="text-xs font-medium px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Tryb dodawania</span>
             </div>
-            <div className={`${stCardBody} space-y-3`}>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <label className="min-w-0">
-                  <span className={stFieldLabel}>Grupa główna</span>
-                  <select value={newMainGroup} onChange={(e) => setNewMainGroup(e.target.value as OrderUiMainGroup)} className={stSelect}>
-                    {GROUP_ORDER.map((g) => (
-                      <option key={g} value={g}>
-                        {GROUP_LABELS[g]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="min-w-0">
-                  <span className={stFieldLabel}>Podgrupa</span>
-                  <select
-                    value={newSubgroupName}
-                    onChange={(e) => setNewSubgroupName(e.target.value)}
-                    className={stSelect}
-                  >
-                    <option value="">Bez przypisania</option>
-                    {subgroupOptionsFor(newMainGroup).map((sg) => (
-                      <option key={sg.id} value={sg.name}>
-                        {sg.name}
-                      </option>
-                    ))}
-                  </select>
-                  {subgroupOptionsFor(newMainGroup).length === 0 ? (
-                    <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w zakładce „Podgrupy”.</p>
-                  ) : null}
-                </label>
-                <label className="min-w-0">
-                  <span className={stFieldLabel}>Nazwa statusu</span>
-                  <input value={newName} onChange={(e) => setNewName(e.target.value)} className={stInput} placeholder="np. Spakowane" />
-                </label>
-              </div>
-              <div>
-                <span className={stFieldLabel}>Kolory</span>
-                <div className="mt-1 flex flex-wrap items-end gap-4">
-                  <label className="inline-flex flex-col gap-1">
-                    <span className="text-[10px] font-medium text-slate-500">Pasek</span>
-                    <CompactLabelColorPicker label="Kolor paska statusu" value={newBadge} onChange={setNewBadge} />
-                  </label>
-                  <label className="inline-flex flex-col gap-1">
-                    <span className="text-[10px] font-medium text-slate-500">Tło</span>
-                    <CompactLabelColorPicker label="Kolor tła statusu" value={newBg} onChange={setNewBg} />
-                  </label>
-                  <label className="inline-flex flex-col gap-1">
-                    <span className="text-[10px] font-medium text-slate-500">Tekst</span>
-                    <CompactLabelColorPicker label="Kolor tekstu statusu" value={newText} onChange={setNewText} />
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="space-y-4 col-span-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="space-y-1.5 min-w-0">
+                      <span className={stFieldLabel}>Grupa główna</span>
+                      <select value={newMainGroup} onChange={(e) => setNewMainGroup(e.target.value as OrderUiMainGroup)} className={stSelect}>
+                        {GROUP_ORDER.map((g) => (
+                          <option key={g} value={g}>
+                            {GROUP_LABELS[g]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="space-y-1.5 min-w-0">
+                      <span className={stFieldLabel}>Podgrupa</span>
+                      <select
+                        value={newSubgroupName}
+                        onChange={(e) => setNewSubgroupName(e.target.value)}
+                        className={stSelect}
+                      >
+                        <option value="">Bez przypisania</option>
+                        {subgroupOptionsFor(newMainGroup).map((sg) => (
+                          <option key={sg.id} value={sg.name}>
+                            {sg.name}
+                          </option>
+                        ))}
+                      </select>
+                      {subgroupOptionsFor(newMainGroup).length === 0 ? (
+                        <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w zakładce „Podgrupy”.</p>
+                      ) : null}
+                    </label>
+                  </div>
+
+                  <label className="space-y-1.5 min-w-0 block">
+                    <span className={stFieldLabel}>Nazwa statusu</span>
+                    <input value={newName} onChange={(e) => setNewName(e.target.value)} className={stInput} placeholder="np. Spakowane" />
                   </label>
                 </div>
-              </div>
-              <PanelStatusMiniPreview
-                name={newName.trim() || "—"}
-                badgeHex={newBadge}
-                backgroundHex={newBg}
-                textHex={newText}
-                mainGroupLabel={GROUP_LABELS[newMainGroup]}
-                subgroupLabel={newSubgroupName.trim() || null}
-              />
-              <div className="flex flex-wrap items-center gap-4">
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" className="rounded border-slate-300" checked={newActive} onChange={(e) => setNewActive(e.target.checked)} />
-                  Aktywny
-                </label>
-                <label className="max-w-[10rem]">
-                  <span className={stFieldLabel}>Kolejność</span>
-                  <input type="number" className={stInput} value={newSort} onChange={(e) => setNewSort(Number(e.target.value))} />
-                </label>
-                <div className="ml-auto flex gap-2">
-                  <button type="button" className={stBtnPrimary} disabled={creating || !newName.trim()} onClick={() => void onCreate()}>
-                    Dodaj
-                  </button>
-                </div>
+
+                <div className="space-y-4">
+                  <label className="space-y-1.5 block">
+                    <span className={stFieldLabel}>Kolejność</span>
+                    <input type="number" className={stInput} value={newSort} onChange={(e) => setNewSort(Number(e.target.value))} />
+                  </label>
+                  <div className="flex items-center gap-2 pt-2">
+                    <input type="checkbox" className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" checked={newActive} onChange={(e) => setNewActive(e.target.checked)} />
+                    <span className="text-sm font-medium text-slate-700 cursor-pointer">Aktywny (widoczny)</span>
+                  </div>
                 </div>
               </div>
-          </div>
+
+              <hr className="border-slate-100 my-6" />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <span className={stFieldLabel}>Konfiguracja Kolorów</span>
+                  <div className="flex flex-wrap gap-4 mt-2">
+                    <label className="inline-flex flex-col gap-1">
+                      <span className="text-[10px] font-medium text-slate-500">Pasek</span>
+                      <CompactLabelColorPicker label="Kolor paska statusu" value={newBadge} onChange={setNewBadge} />
+                    </label>
+                    <label className="inline-flex flex-col gap-1">
+                      <span className="text-[10px] font-medium text-slate-500">Tło</span>
+                      <CompactLabelColorPicker label="Kolor tła statusu" value={newBg} onChange={setNewBg} />
+                    </label>
+                    <label className="inline-flex flex-col gap-1">
+                      <span className="text-[10px] font-medium text-slate-500">Tekst</span>
+                      <CompactLabelColorPicker label="Kolor tekstu statusu" value={newText} onChange={setNewText} />
+                    </label>
+                  </div>
+                </div>
+
+                <PanelStatusMiniPreview
+                  name={newName.trim() || "—"}
+                  badgeHex={newBadge}
+                  backgroundHex={newBg}
+                  textHex={newText}
+                  mainGroupLabel={GROUP_LABELS[newMainGroup]}
+                  subgroupLabel={newSubgroupName.trim() || null}
+                />
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button type="button" className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-900 transition-colors shadow-sm disabled:opacity-50" disabled={creating || !newName.trim()} onClick={() => void onCreate()}>
+                <Plus size={16} />
+                Dodaj status
+              </button>
+            </div>
           </div>
 
-          <div className={stCard}>
-            <div className={stCardHead}>
-              <h2 className="text-sm font-semibold text-slate-800">Lista statusów</h2>
+          {/* === LISTA STATUSÓW === */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-5xl">
+            <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center">
+              <h2 className="font-semibold text-slate-800">Zarządzaj strukturą statusów</h2>
             </div>
+            
             {loading ? (
               <p className="p-4 text-sm text-slate-500">Ładowanie…</p>
             ) : totalSubs === 0 ? (
@@ -702,43 +741,48 @@ export default function OrderPanelUiStatusesSettingsPage() {
                     <div key={mg} className="bg-white">
                       <button
                         type="button"
-                        className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold ${MAIN_HEAD[mg]}`}
+                        className={`flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold transition-colors ${MAIN_HEAD[mg]}`}
                         onClick={() => toggle(mk)}
                       >
                         {isOpen(mk) ? <ChevronDown className="h-4 w-4 shrink-0 opacity-70" /> : <ChevronRight className="h-4 w-4 shrink-0 opacity-70" />}
                         <span className="min-w-0 truncate">{GROUP_LABELS[mg]}</span>
-                        <span className="ml-auto text-xs font-normal opacity-80 tabular-nums">{subs.length}</span>
+                        <span className="ml-auto bg-white/50 px-2 py-0.5 rounded-full text-xs font-bold tabular-nums">{subs.length}</span>
                       </button>
+                      
                       {isOpen(mk) ? (
-                        <div className="border-t border-slate-100 px-2 pb-2 pt-1 sm:px-3">
+                        <div className="pb-2">
                           {ungrouped.length ? (
-                            <ul className="mb-3 ml-1 list-none border-l-2 border-transparent pl-1 sm:ml-2 sm:pl-2">
+                            <ul className="list-none border-l-2 border-transparent">
                               {ungrouped.map((row) => renderPreviewRow(mg, row, customs))}
                             </ul>
                           ) : null}
+                          
                           {subgroupBuckets.map((buck) => {
                             const sk = keySub(mg, encodeURIComponent(buck.subgroupKey));
                             return (
-                              <div key={sk} className="mb-3 last:mb-0">
+                              <div key={sk} className="mb-2 last:mb-0">
                                 <button
                                   type="button"
-                                  className="mt-1 flex w-full items-center gap-2 rounded-lg border border-slate-300/90 bg-gradient-to-b from-slate-50 to-slate-200/85 px-3 py-2 text-left shadow-sm ring-1 ring-slate-200/70 transition hover:from-white hover:to-slate-100 hover:shadow-md"
+                                  className="flex w-full items-center gap-2 px-4 py-2 opacity-80 hover:opacity-100 transition-opacity"
                                   onClick={() => toggle(sk)}
                                 >
                                   {isOpen(sk) ? (
-                                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
+                                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
                                   ) : (
-                                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
+                                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
                                   )}
-                                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-normal text-slate-900">
-                                    {subgroupSectionTitle(buck.subgroupKey)}
+                                  <div className="h-px bg-slate-200 flex-1"></div>
+                                  <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                    {subgroupSectionTitle(buck.subgroupKey).replace(/[-]/g, '')}
                                   </span>
-                                  <span className="shrink-0 rounded-full border border-slate-400/25 bg-slate-800/[0.07] px-2 py-0.5 text-xs font-bold tabular-nums text-slate-900">
+                                  <div className="h-px bg-slate-200 flex-1"></div>
+                                  <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-slate-500">
                                     {buck.rows.reduce((a, r) => a + r.count, 0)}
                                   </span>
                                 </button>
+                                
                                 {isOpen(sk) ? (
-                                  <ul className="ml-3 mt-1.5 list-none border-l-2 border-slate-200/90 pl-2.5 sm:ml-4 sm:pl-3">
+                                  <ul className="list-none">
                                     {buck.rows.map((row) => renderPreviewRow(mg, row, customs))}
                                   </ul>
                                 ) : null}
