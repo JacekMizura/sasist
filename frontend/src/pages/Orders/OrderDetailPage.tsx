@@ -2057,15 +2057,7 @@ export default function OrderDetailPage() {
                   </div>
 
                   {/* Ważna uwaga dla użytkownika odnośnie rozciągania i tabel */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-sm text-blue-900 shadow-sm">
-                    <p className="font-bold mb-1 flex items-center"><Info size={16} className="mr-2"/> Instrukcja dotycząca wewnętrznych tabel ("Brutto/szt", ikony obok nazwy, "Razem (produkty)")</p>
-                    <p>Ponieważ tabele z produktami pochodzą z niezależnych plików (komponentów <code>OrderWarehouseProductsSection</code> oraz <code>OrderSummaryProductsList</code>), aby zmodyfikować ich wewnętrzny układ, musisz w nich dokonać następujących zmian:</p>
-                    <ul className="list-disc pl-5 mt-2 space-y-1">
-                       <li><strong>Aby poprawić "BRUTTO/SZT":</strong> W plikach komponentów dodaj klasę <code>whitespace-nowrap</code> do odpowiednich tagów <code>&lt;th&gt;</code>.</li>
-                       <li><strong>Aby dodać ikonę linku:</strong> Odszukaj miejsce renderowania nazwy produktu i wstaw obok niej ikonę np. <code>&lt;ExternalLink size={"{14}"} className="ml-2 text-slate-400 inline" /&gt;</code>.</li>
-                       <li><strong>Aby naprawić ucięte "Razem (produkty)":</strong> Upewnij się, że w sekcji sumującej nie masz dodanego <code>overflow-hidden</code> bez odpowiedniego paddingu, ewentualnie dodaj <code>pr-4</code>. Tutaj wymusiłem szeroki kontener na głównej stronie, więc tabela powinna się rozciągnąć.</li>
-                    </ul>
-                  </div>
+                  
 
                   <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
                     <div className="flex flex-wrap items-center justify-between mb-4">
