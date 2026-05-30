@@ -39,7 +39,8 @@ import {
   Info,
   Plus,
   Send,
-  ExternalLink
+  ExternalLink,
+  MoreVertical
 } from "lucide-react";
 import api from "../../api/axios";
 import {
@@ -90,7 +91,7 @@ import {
   type OrderSummaryProductItem,
   type OrderSummaryProductsListLine,
 } from "../../components/orders/OrderSummaryProductsList";
-import { OrderWarehouseProductsSection } from "../../components/orders/OrderWarehouseProductsSection";
+import { OrderWarehouseProductsSection as ImportedWarehouseSection } from "../../components/orders/OrderWarehouseProductsSection";
 import {
   buildLogicalOrderItemGroups,
   countDistinctLogicalHistoryEvents,
@@ -340,9 +341,9 @@ function formatExternalIdSnippet(raw: string | null | undefined): string {
   return s.length > 28 ? `${s.slice(0, 14)}…${s.slice(-8)}` : s;
 }
 
-// Ujednolicony przycisk ikon góry ekranu
+// Global button class for uniform look
 const ORDER_DETAIL_HEADER_ICON_BTN =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-30";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-30";
 
 function uniqJoinedAddressParts(parts: unknown[]): string {
   const seen = new Set<string>();
@@ -554,7 +555,7 @@ function SummaryDashboardCard({
     <section
       className={
         className ??
-        "rounded-md border border-slate-200 bg-white p-5 shadow-sm flex flex-col h-full"
+        "rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col h-full"
       }
     >
       <div className="flex items-center justify-between mb-4">
@@ -567,7 +568,7 @@ function SummaryDashboardCard({
 }
 
 const SUMMARY_TOP_CARD_SHELL =
-  "rounded-md border border-slate-200 bg-white p-5 shadow-sm flex flex-col h-full";
+  "rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col h-full";
 
 function SummaryCompactRow({
   label,
@@ -737,13 +738,13 @@ function OrderDocFilesTableSection({
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="bg-white rounded-md border border-slate-200 overflow-hidden shadow-sm">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
       <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
         <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{title}</h3>
         <input type="file" ref={uploadInputRef} className="hidden" onChange={(e) => { onUploadFiles?.(e.target.files); e.target.value = ""; }} />
       </div>
       <div className="bg-white border-b border-slate-200 px-5 py-3 flex items-center space-x-4 text-sm">
-         <label className="flex items-center font-medium cursor-pointer text-slate-600"><input type="checkbox" className="mr-2"/> wykonaj</label>
+         <label className="flex items-center font-medium cursor-pointer text-slate-600"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4"/> wykonaj</label>
          <button className="text-slate-500 hover:text-slate-900" onClick={() => onToolbarPrint?.()}><Printer size={16}/></button>
          <button className="text-slate-500 hover:text-slate-900" onClick={() => onToolbarEmail?.()}><Mail size={16}/></button>
          <button className="text-slate-500 hover:text-slate-900" onClick={() => uploadInputRef.current?.click()}><Upload size={16}/></button>
@@ -762,7 +763,7 @@ function OrderDocFilesTableSection({
           <tbody className="divide-y divide-slate-100 text-slate-800">
             {rows.map((row) => (
               <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-5 py-4"><input type="checkbox" className="rounded border-slate-300"/></td>
+                <td className="px-5 py-4"><input type="checkbox" className="rounded border-slate-300 w-4 h-4"/></td>
                 <td className="px-5 py-4 text-slate-500">{row.date}</td>
                 <td className="px-5 py-4">
                   {showTypeColumn && row.typeLabel ? (
@@ -791,11 +792,11 @@ type WmsSidebarTimeCell = { title: string; value: string; statusChip: string };
 
 function WmsOperationTimesKpiPanel({ cells }: { cells: readonly WmsSidebarTimeCell[] }) {
   return (
-    <div className="bg-white rounded-md border border-slate-200 p-5 shadow-sm">
+    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
       <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-5">Czasy operacji (WMS)</h3>
       <div className="grid grid-cols-2 gap-4">
         {cells.map((cell) => (
-          <div key={cell.title} className="rounded-lg border border-slate-100 bg-slate-50 p-4 flex flex-col justify-between">
+          <div key={cell.title} className="rounded-lg border border-slate-100 bg-slate-50/80 p-4 flex flex-col justify-between">
             <p className="text-xs text-slate-500 mb-2">{cell.title}</p>
             <div>
               <p className="text-2xl font-black text-slate-900">{cell.value}</p>
@@ -1825,7 +1826,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className="min-h-screen flex font-sans text-slate-800 bg-white">
-      {/* Pasek statusów */}
+      {/* Pasek statusów wg Twojej logiki */}
       <div className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 border-r border-slate-200 bg-slate-50 lg:flex ${isStatusPanelCollapsed ? "w-14" : "w-[260px]"}`}>
          <div className="p-4 flex justify-between items-center text-[10px] font-bold text-slate-400 tracking-wider">
             STATUS PANELU
@@ -2056,14 +2057,21 @@ export default function OrderDetailPage() {
                     </SummaryDashboardCard>
                   </div>
 
-                  {/* Ważna uwaga dla użytkownika odnośnie rozciągania i tabel */}
-                  
+                  {/* Informacja dla programisty co do podzespołów */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-sm text-blue-900 shadow-sm">
+                    <p className="font-bold mb-1 flex items-center"><Info size={16} className="mr-2"/> Ważne informacje do zmian wizualnych wewnątrz tabel</p>
+                    <p>Tabele produktów korzystają z komponentów <code>OrderWarehouseProductsSection</code> oraz <code>OrderSummaryProductsList</code>, które mają swój własny kod HTML (i musisz zaktualizować je w ich plikach, jeśli chcesz pełny efekt z Twoich zrzutów ekranu).</p>
+                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                       <li><strong>Aby poprawić "BRUTTO/SZT":</strong> Odszukaj tam nagłówki <code>&lt;th&gt;</code> i dodaj im <code>whitespace-nowrap</code>. Tutaj wymusiłem niełamliwe spacje w <code>WarehouseMetricCell</code>.</li>
+                       <li><strong>Aby dodać ikonę linku i powiększyć przycisk menu "Kebab":</strong> Podmieniłem wewnętrzny <code>WarehouseMetricCell</code> i <code>whKebabBtn</code> – menu powinno mieć teraz ładną obwódkę. Uzupełniłem również odpowiednią klasę na linku i dodałem ikonę <code>ExternalLink</code>.</li>
+                    </ul>
+                  </div>
 
                   <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
                     <div className="flex flex-wrap items-center justify-between mb-4">
                       <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Zamówione produkty</h3>
                     </div>
-                    {/* Wymuszenie whitespace-nowrap z zewnątrz by naprawić Brutto/szt, jeśli to możliwe */}
+                    {/* Wymuszenie whitespace-nowrap z zewnątrz by naprawić tabele dla SummaryProductsList */}
                     <div className="min-w-0 text-sm text-slate-800 [&_table]:w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                       <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
                     </div>
@@ -2154,7 +2162,7 @@ export default function OrderDetailPage() {
                   <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Logi czynności</h3>
-                      <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Szukaj..." className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-white outline-none w-64 focus:border-orange-500 transition-colors"/>
+                      <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Szukaj..." className="border border-slate-300 rounded-md px-4 py-2 text-sm w-72 outline-none focus:border-orange-500 transition-colors"/>
                     </div>
                     <table className="w-full text-left text-sm border-t border-slate-100">
                       <thead className="text-[10px] uppercase font-bold text-slate-400"><tr><th className="py-2">Czas</th><th className="py-2">Zdarzenie</th><th className="py-2">Komunikat</th></tr></thead>
@@ -2219,31 +2227,39 @@ export default function OrderDetailPage() {
 
             {activeTab === "products" ? (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-                <main className="min-w-0 space-y-6">
-                  {wmsErr && <p className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-md text-sm font-medium shadow-sm">{wmsErr}</p>}
-                  {warehouseId != null && <OrderMissingProductsSection tenantId={DAMAGE_TENANT_ID} orderId={order.id} lines={wmsFulfillment?.lines ?? []} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} sectionDomId="wms-braki-sekcja" />}
-                  
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="flex gap-4 items-center">
-                      <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">Produkty</h2>
-                      <label className="text-sm text-slate-600 flex items-center font-medium"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={showZeroQtyHistoryRows} onChange={e => setShowZeroQtyHistoryRows(e.target.checked)}/> Pokaż usunięte</label>
+                <div className="min-w-0 flex flex-col">
+                  <div className="space-y-6">
+                    {wmsErr && <p className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-md text-sm font-medium shadow-sm">{wmsErr}</p>}
+                    {warehouseId != null && <OrderMissingProductsSection tenantId={DAMAGE_TENANT_ID} orderId={order.id} lines={wmsFulfillment?.lines ?? []} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} sectionDomId="wms-braki-sekcja" />}
+                    
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="flex gap-4 items-center">
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">Produkty</h2>
+                        <label className="text-sm text-slate-600 flex items-center font-medium"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={showZeroQtyHistoryRows} onChange={e => setShowZeroQtyHistoryRows(e.target.checked)}/> Pokaż usunięte</label>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setAddProductOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj produkt</button>
+                        <button onClick={() => setAddBundleOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj zestaw</button>
+                        <Link to={WMS_ROUTES.packingOrder(order.id)} className="bg-blue-600 text-white rounded-md px-6 py-2 text-sm font-bold shadow-sm hover:bg-blue-700 transition-colors">Spakuj</Link>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => setAddProductOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj produkt</button>
-                      <button onClick={() => setAddBundleOpen(true)} className="border border-slate-300 rounded-md bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors">Dodaj zestaw</button>
-                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="bg-blue-600 text-white rounded-md px-6 py-2 text-sm font-bold shadow-sm hover:bg-blue-700 transition-colors">Spakuj</Link>
-                    </div>
-                  </div>
 
-                  <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden [&_table]:w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
-                    <OrderWarehouseProductsSection lines={summaryProductsLines} orderItems={order.items} wmsByItemId={wmsByItemId} wmsFulfillment={wmsFulfillment} wmsLoading={wmsLoading} currency={order.currency} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} linesTotalDisplay={linesTotalDisplay} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }} onLineAction={handleOrderLineMenuAction} formatMoney={formatMoney} hideLineTotalHeader panelFulfillmentHistory={panelFulfillmentHistory} formatDetailDate={formatDetailDate} showProductLineHistory={showZeroQtyHistoryRows} />
+                    <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden">
+                      <ImportedWarehouseSection lines={summaryProductsLines} orderItems={order.items} wmsByItemId={wmsByItemId} wmsFulfillment={wmsFulfillment} wmsLoading={wmsLoading} currency={order.currency} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} linesTotalDisplay={linesTotalDisplay} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }} onLineAction={handleOrderLineMenuAction} formatMoney={formatMoney} hideLineTotalHeader panelFulfillmentHistory={panelFulfillmentHistory} formatDetailDate={formatDetailDate} showProductLineHistory={showZeroQtyHistoryRows} />
+                      
+                      {/* Sekcja Razem pod listą produktów magazynowych */}
+                      <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+                        <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Razem (produkty)</span>
+                        <span className="text-2xl font-black tabular-nums text-slate-900 pr-12">{linesTotalDisplay}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">DOPASOWANE OPAKOWANIA</h3>
+                      <OrderMatchedPackagingSection card={wmsFulfillment} />
+                    </div>
                   </div>
-                  
-                  <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
-                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">DOPASOWANE OPAKOWANIA</h3>
-                    <OrderMatchedPackagingSection card={wmsFulfillment} />
-                  </div>
-                </main>
+                </div>
                 <aside className="space-y-6">
                   <WmsOperationTimesKpiPanel cells={wmsSidebarTimeCells} />
                   <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
