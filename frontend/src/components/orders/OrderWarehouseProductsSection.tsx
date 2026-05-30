@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Package } from "lucide-react";
+import { Package, ExternalLink } from "lucide-react";
 
 import { OrderLineKebabMenu } from "./OrderLineKebabMenu";
 import type {
@@ -139,8 +139,8 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
   );
 }
 
-const WH_METRIC_L = "text-[10px] font-bold uppercase tracking-wide text-slate-500 text-left lg:text-right";
-const WH_METRIC_V = "mt-1 text-sm font-semibold tabular-nums text-slate-900 text-left lg:text-right";
+const WH_METRIC_L = "text-[10px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap text-left lg:text-right";
+const WH_METRIC_V = "mt-1 text-sm font-semibold tabular-nums text-slate-900 whitespace-nowrap text-left lg:text-right";
 
 function WarehouseMetricCell({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -422,9 +422,9 @@ export function OrderWarehouseProductsSection({
                             <Link
                               to={`/products/${pid}/edit`}
                               state={{ tenantId: productEditTenantId }}
-                              className="text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300"
+                              className="text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300 flex items-center"
                             >
-                              {row.name}
+                              {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
                             </Link>
                           ) : (
                             <span className="text-[15px] font-semibold leading-snug text-slate-900">{row.name}</span>
@@ -471,8 +471,8 @@ export function OrderWarehouseProductsSection({
               <div
                 className={
                   hideLineTotalHeader
-                    ? "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_2.75rem_4.5rem_4.5rem_2.75rem_4rem_2.25rem]"
-                    : "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_2.75rem_4.5rem_4.5rem_2.75rem_4rem_5.25rem_2.25rem]"
+                    ? "mt-3 hidden items-start gap-x-3 lg:grid lg:grid-cols-[minmax(0,1fr)_3.5rem_5rem_5rem_4rem_5.5rem_2.5rem]"
+                    : "mt-3 hidden items-start gap-x-3 lg:grid lg:grid-cols-[minmax(0,1fr)_3.5rem_5rem_5rem_4rem_6.5rem_5.5rem_2.5rem]"
                 }
               >
                 <div className="min-w-0 pr-1">
@@ -490,9 +490,9 @@ export function OrderWarehouseProductsSection({
                           <Link
                             to={`/products/${pid}/edit`}
                             state={{ tenantId: productEditTenantId }}
-                            className="text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300"
+                            className="text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300 flex items-center"
                           >
-                            {row.name}
+                            {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
                           </Link>
                         ) : (
                           <span className="text-[15px] font-semibold leading-snug text-slate-900">{row.name}</span>
@@ -627,8 +627,8 @@ export function OrderWarehouseProductsSection({
         const isArchive = !resolvedRemoved && !resolvedReduced && (qtyN <= 0 || ols === "REPLACED");
         const qtyDisplay = resolvedRemoved ? fmtOmsQty(0) : row.quantityDisplay;
         const productTitleClass = resolvedRemoved
-          ? "text-[15px] font-semibold leading-snug text-rose-900/80 line-through decoration-rose-300/80"
-          : "text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300";
+          ? "text-[15px] font-semibold leading-snug text-rose-900/80 line-through decoration-rose-300/80 flex items-center"
+          : "text-[15px] font-semibold leading-snug text-slate-900 underline decoration-transparent underline-offset-2 hover:decoration-slate-300 flex items-center";
         const productTitleClassPlain = resolvedRemoved
           ? "text-[15px] font-semibold leading-snug text-rose-900/80 line-through decoration-rose-300/80"
           : "text-[15px] font-semibold leading-snug text-slate-900";
@@ -684,7 +684,7 @@ export function OrderWarehouseProductsSection({
                             state={{ tenantId: productEditTenantId }}
                             className={productTitleClass}
                           >
-                            {row.name}
+                            {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
                           </Link>
                         ) : (
                           <span className={productTitleClassPlain}>{row.name}</span>
@@ -755,8 +755,8 @@ export function OrderWarehouseProductsSection({
             <div
               className={
                 hideLineTotalHeader
-                  ? "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_2.75rem_4rem_4rem_2.5rem_3.5rem_4.25rem_2.25rem]"
-                  : "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_2.75rem_4rem_4rem_2.5rem_3.5rem_4.5rem_4.25rem_2.25rem]"
+                  ? "mt-3 hidden items-start gap-x-3 lg:grid lg:grid-cols-[minmax(0,1fr)_3.5rem_5rem_5rem_4rem_5.5rem_2.5rem]"
+                  : "mt-3 hidden items-start gap-x-3 lg:grid lg:grid-cols-[minmax(0,1fr)_3.5rem_5rem_5rem_4rem_6.5rem_5.5rem_2.5rem]"
               }
             >
               <div className="min-w-0 pr-1">
@@ -774,7 +774,7 @@ export function OrderWarehouseProductsSection({
                     <div className="flex flex-wrap items-center gap-2">
                       {canProductLink ? (
                         <Link to={`/products/${pid}/edit`} state={{ tenantId: productEditTenantId }} className={productTitleClass}>
-                          {row.name}
+                          {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
                         </Link>
                       ) : (
                         <span className={productTitleClassPlain}>{row.name}</span>
@@ -927,9 +927,9 @@ export function OrderWarehouseProductsSection({
         );
       })}
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-4 text-sm">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-4 text-sm px-2">
         <span className="font-semibold text-slate-600">Razem (produkty)</span>
-        <span className="text-base font-extrabold tabular-nums text-slate-900">{linesTotalDisplay}</span>
+        <span className="text-xl font-extrabold tabular-nums text-slate-900">{linesTotalDisplay}</span>
       </div>
     </div>
   );
