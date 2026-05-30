@@ -926,11 +926,6 @@ export function OrderWarehouseProductsSection({
           </article>
         );
       })}
-
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-4 text-sm px-2">
-        <span className="font-semibold text-slate-600">Razem (produkty)</span>
-        <span className="text-xl font-extrabold tabular-nums text-slate-900">{linesTotalDisplay}</span>
-      </div>
     </div>
   );
 }
