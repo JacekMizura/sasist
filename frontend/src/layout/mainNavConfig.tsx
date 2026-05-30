@@ -284,6 +284,12 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
             Icon: Building2,
             permissionsAny: ["settings.users", "settings.company"],
           },
+          {
+            path: "/settings/administrators",
+            label: UI_STRINGS.navigation.administratorsNav,
+            Icon: UserCog,
+            permissionsAny: ["settings.users"],
+          },
         ],
       },
       {
