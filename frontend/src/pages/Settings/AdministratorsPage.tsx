@@ -302,14 +302,6 @@ export default function AdministratorsPage() {
             <Settings2 className="h-4 w-4 text-slate-500" aria-hidden="true" />
             Filtruj
           </button>
-          <button
-            type="button"
-            onClick={goToNewUser}
-            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            Dodaj użytkownika
-          </button>
         </div>
       </div>
 
