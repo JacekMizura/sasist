@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ChevronDown,
@@ -30,6 +30,14 @@ import {
   Truck,
   Upload,
   Video,
+  Check,
+  MapPin,
+  Bot,
+  ShoppingCart,
+  Package,
+  Activity,
+  Info,
+  Plus
 } from "lucide-react";
 import api from "../../api/axios";
 import {
@@ -103,7 +111,6 @@ type OrderItemRow = {
   unit_price?: number | null;
   unit_price_net?: number | null;
   unit_price_gross?: number | null;
-  /** VAT linii (%) z API — tylko prezentacja. */
   vat_percent?: number | null;
   unit?: string | null;
   list_price?: number | null;
@@ -117,7 +124,6 @@ type OrderItemRow = {
   oms_replacement_original_quantity?: number | null;
   oms_replacement_transferred_quantity?: number | null;
   oms_waiting_for_stock?: boolean;
-  /** REPLACED — linia zarchiwizowana po zamianie; nie pokazujemy w głównej tabeli produktów. */
   oms_line_status?: string | null;
   replaced_from_order_item_id?: number | null;
   replaced_from_product_name?: string | null;
@@ -145,16 +151,13 @@ type OrderDetail = {
   tenant_id?: number;
   number?: string | null;
   status?: string | null;
-  /** Wewnętrzny kod skanowania WMS (ESP:O:id). */
   scan_code?: string | null;
   value?: number | null;
   discount_type?: "percent" | "amount" | null;
   discount_value?: number | null;
   discount_amount?: number | null;
   total_products_value?: number | null;
-  /** Przychód netto z linii dostawy (gdy brak w API — 0). */
   shipping_revenue_net?: number | null;
-  /** Towar netto po rabacie + przychód netto z dostawy. */
   total_revenue_net?: number | null;
   total_purchase_cost?: number | null;
   gross_profit?: number | null;
@@ -178,7 +181,6 @@ type OrderDetail = {
     text_color?: string;
     image_url?: string | null;
   }) | null;
-  /** Wizualna flaga (flame): gray | blue | green | yellow | orange | red */
   priority_color?: string | null;
   order_date?: string | null;
   created_at?: string | null;
@@ -252,7 +254,6 @@ function formatDetailDate(iso: string | null | undefined): string {
   }
 }
 
-/** Format jak w tabeli dokumentów: DD.MM.RR, GG:MM */
 function formatDocsShortDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
@@ -270,7 +271,6 @@ function parseDecimalDraft(value: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Skrót identyfikatora zewnętrznego / skan (jak w nagłówku Sellasist). */
 function formatOrderExternalIdSnippet(order: Pick<OrderDetail, "scan_code" | "id">): string {
   const raw = (order.scan_code ?? "").trim();
   const ext = raw || `OMS:${order.id}`;
@@ -328,7 +328,6 @@ function grossFromNetUnit(net: number, vatPct: number | null | undefined): numbe
   return Math.round(net * (1 + v / 100) * 10000) / 10000;
 }
 
-/** Klucz localStorage — lista zamówień może użyć tego samego wzorca (`order_office_pin:{id}`). */
 function orderOfficePinStorageKey(orderId: number): string {
   return `order_office_pin:${orderId}`;
 }
@@ -340,7 +339,7 @@ function formatExternalIdSnippet(raw: string | null | undefined): string {
 }
 
 const ORDER_DETAIL_HEADER_ICON_BTN =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200/95 bg-white text-slate-600 shadow-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 disabled:pointer-events-none disabled:opacity-30";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 disabled:pointer-events-none disabled:opacity-30";
 
 function uniqJoinedAddressParts(parts: unknown[]): string {
   const seen = new Set<string>();
@@ -535,89 +534,15 @@ function paymentStatusIsPaid(status: string | null | undefined): boolean {
   return /opłac|zapłac|paid|complete|zapłacono|opłacone|tak/.test(s);
 }
 
-function PanelCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-slate-200/80 bg-white p-3 shadow-none sm:p-3.5">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
-      <div className="mt-2.5 space-y-2 text-sm text-slate-800">{children}</div>
-    </section>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className="font-medium text-slate-900">{value}</span>
-    </div>
-  );
-}
-
-function SummaryDashboardCard({
-  title,
-  children,
-  right,
-  className,
-  contentClassName,
-}: {
-  title: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-  /** Nadpisanie shell (np. większy padding w pierwszym rzędzie podsumowania). */
-  className?: string;
-  contentClassName?: string;
-}) {
-  return (
-    <section
-      className={
-        className ??
-        "rounded-lg border border-slate-200/90 bg-white p-2.5 shadow-[0_1px_1px_rgba(15,23,42,0.04)] sm:p-3"
-      }
-    >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
-        {right}
-      </div>
-      <div className={contentClassName ?? "mt-1.5"}>{children}</div>
-    </section>
-  );
-}
-
-const SUMMARY_TOP_CARD_SHELL =
-  "rounded-lg border border-slate-200/90 bg-white p-2 shadow-[0_1px_1px_rgba(15,23,42,0.04)] sm:p-2.5";
-
-function SummaryCompactRow({
-  label,
-  value,
-  actions,
-}: {
-  label: string;
-  value: React.ReactNode;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-0.5 text-sm last:border-b-0">
-      <span className="shrink-0 pt-0.5 text-[11px] text-slate-500">{label}</span>
-      <div className="flex min-w-0 items-start justify-end gap-1.5 text-right">
-        <div className="min-w-0 font-medium leading-snug text-slate-900">{value}</div>
-        {actions}
-      </div>
-    </div>
-  );
-}
-
 type OrderDocTableKindTone = "fa" | "pa" | "rz" | "lp" | "na";
 
-/** Wiersz dokumentu w tabelach zakładki „Dokumenty i pliki” (frontend + opcjonalny mock). */
 type OrderDocTableRow = {
   id: string;
   name: string;
-  /** Rodzaj rekordu (np. sprzedaż, plik, list przewozowy). */
   type: string;
   status: "approved" | "pending";
   date: string;
   fileUrl?: string;
-  /** MIME z przeglądarki po uploadzie (podgląd). */
   mimeType?: string;
   typeLabel?: { abbr: string; name: string; tone: OrderDocTableKindTone };
 };
@@ -656,7 +581,6 @@ const ORDER_DOCS_SECTION_TYPES = new Set([
   "DOKUMENT_SPRZEDAZY",
 ]);
 
-/** Jedna siatka: nagłówek + wiersze we wszystkich sekcjach zakładki Dokumenty i pliki. */
 const DOCUMENTS_GRID = "grid grid-cols-[40px_160px_180px_1fr_120px] items-center gap-x-4";
 
 function guessMimeFromFilename(name: string): string | undefined {
@@ -713,51 +637,21 @@ function OrderDocTableRowActions({
   onDelete: (row: OrderDocTableRow) => void;
 }) {
   return (
-    <div className="flex w-full items-center justify-end gap-1.5">
-      <button
-        type="button"
-        className="rounded p-1 text-gray-600 hover:bg-gray-100"
-        title="Podgląd"
-        aria-label="Podgląd"
-        onClick={() => onPreview(row)}
-      >
-        <Eye className="h-4 w-4" strokeWidth={2} aria-hidden />
+    <div className="flex w-full items-center justify-end gap-2">
+      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100" onClick={() => onPreview(row)}>
+        <Eye className="h-4 w-4" strokeWidth={2} />
       </button>
-      <button
-        type="button"
-        className="rounded p-1 text-gray-600 hover:bg-gray-100"
-        title="Drukuj"
-        aria-label="Drukuj"
-        onClick={() => onPrint(row)}
-      >
-        <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
+      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100" onClick={() => onPrint(row)}>
+        <Printer className="h-4 w-4" strokeWidth={2} />
       </button>
-      <button
-        type="button"
-        className="rounded p-1 text-gray-600 hover:bg-gray-100"
-        title="Pobierz"
-        aria-label="Pobierz"
-        onClick={() => onDownload(row)}
-      >
-        <Download className="h-4 w-4" strokeWidth={2} aria-hidden />
+      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100" onClick={() => onDownload(row)}>
+        <Download className="h-4 w-4" strokeWidth={2} />
       </button>
-      <button
-        type="button"
-        className="rounded p-1 text-gray-600 hover:bg-gray-100"
-        title="E-mail"
-        aria-label="E-mail"
-        onClick={() => onEmail(row)}
-      >
-        <Mail className="h-4 w-4" strokeWidth={2} aria-hidden />
+      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100" onClick={() => onEmail(row)}>
+        <Mail className="h-4 w-4" strokeWidth={2} />
       </button>
-      <button
-        type="button"
-        className="rounded p-1 text-gray-600 hover:bg-gray-100"
-        title="Usuń"
-        aria-label="Usuń"
-        onClick={() => onDelete(row)}
-      >
-        <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+      <button type="button" className="rounded p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50" onClick={() => onDelete(row)}>
+        <Trash2 className="h-4 w-4" strokeWidth={2} />
       </button>
     </div>
   );
@@ -791,125 +685,54 @@ function OrderDocFilesTableSection({
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <section className="space-y-2 rounded-lg border border-slate-200/90 bg-white p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <h3 className="text-xs font-semibold text-slate-900">{title}</h3>
-      <input
-        type="file"
-        ref={uploadInputRef}
-        className="hidden"
-        onChange={(e) => {
-          onUploadFiles?.(e.target.files);
-          e.target.value = "";
-        }}
-      />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-slate-900" aria-label="Zaznacz wszystkie" />
-        <span className="text-sm text-slate-700">wykonaj</span>
-        <button
-          type="button"
-          className="rounded p-1 text-gray-600 hover:bg-gray-100"
-          title="Drukuj"
-          aria-label="Drukuj"
-          onClick={() => onToolbarPrint?.()}
-        >
-          <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className="rounded p-1 text-gray-600 hover:bg-gray-100"
-          title="Dodaj plik"
-          aria-label="Dodaj plik z dysku"
-          onClick={() => uploadInputRef.current?.click()}
-        >
-          <Upload className="h-4 w-4" strokeWidth={2} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className="rounded p-1 text-gray-600 hover:bg-gray-100"
-          title="E-mail"
-          aria-label="E-mail"
-          onClick={() => onToolbarEmail?.()}
-        >
-          <Mail className="h-4 w-4" strokeWidth={2} aria-hidden />
-        </button>
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{title}</h3>
+        <input type="file" ref={uploadInputRef} className="hidden" onChange={(e) => { onUploadFiles?.(e.target.files); e.target.value = ""; }} />
       </div>
-      <div className="overflow-x-auto">
-        <div className="min-w-[56rem] text-sm">
-          <div
-            className={`${DOCUMENTS_GRID} border-y border-gray-200 bg-gray-50 py-2 text-xs font-medium uppercase tracking-wide text-gray-500`}
-            role="row"
-          >
-            <div className="flex justify-center" role="columnheader">
-              <span className="sr-only">Wybór</span>
-            </div>
-            <div role="columnheader">Data</div>
-            <div role="columnheader">Rodzaj</div>
-            <div className="min-w-0" role="columnheader">
-              Nazwa dokumentu
-            </div>
-            <div className="text-right" role="columnheader">
-              <span className="sr-only">Akcje</span>
-            </div>
-          </div>
+      <div className="bg-white border-b border-slate-200 px-5 py-3 flex items-center space-x-4 text-sm">
+         <label className="flex items-center font-medium cursor-pointer text-slate-600"><input type="checkbox" className="mr-2"/> wykonaj</label>
+         <button className="text-slate-500 hover:text-slate-900" onClick={() => onToolbarPrint?.()}><Printer size={16}/></button>
+         <button className="text-slate-500 hover:text-slate-900" onClick={() => onToolbarEmail?.()}><Mail size={16}/></button>
+         <button className="text-slate-500 hover:text-slate-900" onClick={() => uploadInputRef.current?.click()}><Upload size={16}/></button>
+      </div>
+      <table className="w-full text-left text-sm">
+        <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50">
+          <tr>
+            <th className="px-5 py-3 w-10"></th>
+            <th className="px-5 py-3 w-40">DATA</th>
+            <th className="px-5 py-3 w-48">RODZAJ</th>
+            <th className="px-5 py-3">NAZWA DOKUMENTU</th>
+            <th className="px-5 py-3 text-right"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 text-slate-800">
           {rows.map((row) => (
-            <div
-              key={row.id}
-              className={`${DOCUMENTS_GRID} border-b border-slate-100 py-1.5 last:border-b-0`}
-              role="row"
-            >
-              <div className="flex justify-center" role="cell">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-slate-900"
-                  aria-label="Wybierz wiersz"
-                />
-              </div>
-              <div className="whitespace-nowrap text-slate-500" role="cell">
-                {row.date}
-              </div>
-              <div className="min-w-0" role="cell">
+            <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+              <td className="px-5 py-4"><input type="checkbox" className="rounded border-slate-300"/></td>
+              <td className="px-5 py-4 text-slate-500">{row.date}</td>
+              <td className="px-5 py-4">
                 {showTypeColumn && row.typeLabel ? (
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={`inline-flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded px-0.5 text-[9px] font-bold text-white ${orderDocKindToneClass(row.typeLabel.tone)}`}
-                    >
-                      {row.typeLabel.abbr}
-                    </span>
-                    <span className="truncate text-slate-800">{row.typeLabel.name}</span>
+                  <div className="flex items-center">
+                    <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded mr-2 ${orderDocKindToneClass(row.typeLabel.tone)}`}>{row.typeLabel.abbr}</span> 
+                    {row.typeLabel.name}
                   </div>
-                ) : (
-                  <span className="text-slate-400">—</span>
-                )}
-              </div>
-              <div className="min-w-0 text-slate-900" role="cell">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="min-w-0 font-medium break-words">{row.name}</span>
-                  <span
-                    className={
-                      row.status === "approved"
-                        ? "shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-white"
-                        : "shrink-0 rounded-full border border-gray-300 px-2 py-0.5 text-xs text-gray-600"
-                    }
-                  >
-                    {row.status === "approved" ? "Zatwierdzony" : "Niezatwierdzony"}
-                  </span>
-                </div>
-              </div>
-              <div className="min-w-0 justify-self-end" role="cell">
-                <OrderDocTableRowActions
-                  row={row}
-                  onPreview={onPreview}
-                  onPrint={onPrint}
-                  onDownload={onDownload}
-                  onEmail={onEmail}
-                  onDelete={onDelete}
-                />
-              </div>
-            </div>
+                ) : <span className="text-slate-400">—</span>}
+              </td>
+              <td className="px-5 py-4">
+                <span className="font-medium text-slate-800 break-words">{row.name}</span>
+                <span className={`ml-3 px-2 py-0.5 rounded text-[10px] font-bold ${row.status === "approved" ? "bg-slate-800 text-white" : "bg-slate-100 border border-slate-200 text-slate-500 font-medium"}`}>
+                  {row.status === "approved" ? "Zatwierdzony" : "Niezatwierdzony"}
+                </span>
+              </td>
+              <td className="px-5 py-4 text-right text-slate-400">
+                <OrderDocTableRowActions row={row} onPreview={onPreview} onPrint={onPrint} onDownload={onDownload} onEmail={onEmail} onDelete={onDelete} />
+              </td>
+            </tr>
           ))}
-        </div>
-      </div>
-    </section>
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -917,17 +740,16 @@ type WmsSidebarTimeCell = { title: string; value: string; statusChip: string };
 
 function WmsOperationTimesKpiPanel({ cells }: { cells: readonly WmsSidebarTimeCell[] }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Czasy operacji (WMS)</h3>
-      <div className="mt-5 grid grid-cols-2 gap-4">
+    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+      <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-5">Czasy operacji (WMS)</h3>
+      <div className="grid grid-cols-2 gap-4">
         {cells.map((cell) => (
-          <div
-            key={cell.title}
-            className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/90 p-5 shadow-sm"
-          >
-            <p className="text-xs font-medium text-slate-500">{cell.title}</p>
-            <p className="mt-3 text-3xl font-bold tabular-nums leading-none tracking-tight text-slate-900">{cell.value}</p>
-            <p className="mt-3 text-xs font-semibold text-slate-600">{cell.statusChip}</p>
+          <div key={cell.title} className="rounded-lg border border-slate-100 bg-slate-50/80 p-4 flex flex-col justify-between">
+            <p className="text-xs text-slate-500 mb-2">{cell.title}</p>
+            <div>
+              <p className="text-2xl font-black text-slate-900">{cell.value}</p>
+              <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">{cell.statusChip}</p>
+            </div>
           </div>
         ))}
       </div>
@@ -1886,13 +1708,11 @@ export default function OrderDetailPage() {
     [order, wmsFulfillment],
   );
 
-  const inpSm = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900";
-  const expandAnim = (on: boolean) =>
-    `overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out ${on ? "max-h-[720px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"}`;
+  const inpSm = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900";
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center gap-2 text-slate-500">
+      <div className="flex min-h-[40vh] items-center gap-2 text-slate-500 p-8">
         <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
         Ładowanie…
       </div>
@@ -1900,12 +1720,12 @@ export default function OrderDetailPage() {
   }
   if (err || !order) {
     return (
-      <>
+      <div className="p-8">
         <p className="text-sm text-red-600">{err || "Błąd"}</p>
         <Link to="/orders/list" className="mt-4 inline-block text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline">
           ← Lista zamówień
         </Link>
-      </>
+      </div>
     );
   }
 
@@ -1952,2232 +1772,770 @@ export default function OrderDetailPage() {
         : (order.panel_document_type ?? "").trim() || "—";
 
   return (
-    <>
-        <nav className="mb-2.5 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800"
-            aria-label="Panel"
-          >
-            <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          </Link>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-          <Link to="/orders/list" className="font-medium text-slate-500 transition hover:text-slate-800">
-            Zamówienia
-          </Link>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-          <span className="font-medium text-slate-600">#{order.number ?? order.id}</span>
-        </nav>
-
-          <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
-            {warehouseId != null ? (
-              <>
-                <button
-                  type="button"
-                  className="flex shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 lg:hidden"
-                  onClick={() => setStatusDrawerOpen(true)}
-                >
-                  Statusy panelu
-                </button>
-                <div
-                  className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 lg:sticky lg:top-3 lg:z-30 lg:flex lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:border-r lg:border-slate-200/90 lg:bg-slate-50/95 lg:pb-2 lg:pl-0 lg:pr-2.5 lg:pt-1 lg:shadow-[4px_0_24px_-12px_rgba(15,23,42,0.12)] ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[260px]"}`}
-                >
-                  <OrderStatusSidebar
-                    warehouseId={warehouseId}
-                    panelSummary={panelSummary}
-                    panelSubgroups={panelSubgroups}
-                    panelFilter={sidebarFilter}
-                    onPanelFilterChange={(f) => navigate("/orders/list", { state: { panelFilter: f } })}
-                    chromeVariant="sellasist"
-                    collapsed={isStatusPanelCollapsed}
-                    parentScrollContainer
-                    titleTrailing={
-                      <button
-                        type="button"
-                        onClick={() => setIsStatusPanelCollapsed((v) => !v)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-100"
-                        aria-label={isStatusPanelCollapsed ? "Rozwiń panel statusów" : "Zwiń panel statusów"}
-                      >
-                        <ChevronLeft className={`h-4 w-4 transition-transform ${isStatusPanelCollapsed ? "rotate-180" : ""}`} />
-                      </button>
-                    }
-                  />
-                </div>
-                {statusDrawerOpen ? (
-                  <div className="fixed inset-0 z-[420] flex lg:hidden">
-                    <button
-                      type="button"
-                      className="absolute inset-0 bg-slate-900/45"
-                      aria-label="Zamknij panel statusów"
-                      onClick={() => setStatusDrawerOpen(false)}
-                    />
-                    <div className="relative w-[min(20rem,92vw)] overflow-y-auto border-r border-slate-200 bg-white p-2">
-                      <OrderStatusSidebar
-                        warehouseId={warehouseId}
-                        panelSummary={panelSummary}
-                        panelSubgroups={panelSubgroups}
-                        panelFilter={sidebarFilter}
-                        onPanelFilterChange={(f) => {
-                          navigate("/orders/list", { state: { panelFilter: f } });
-                          setStatusDrawerOpen(false);
-                        }}
-                        chromeVariant="sellasist"
-                      />
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-
-            <div className="flex w-full min-w-0 flex-1 flex-col gap-2">
-              <div className="min-w-0 space-y-2 border-b border-slate-100 pb-2 pt-0.5">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 lg:flex-nowrap lg:gap-x-3">
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={prevOrderId == null}
-                      onClick={() => {
-                        if (prevOrderId == null) return;
-                        navigate(`/orders/${prevOrderId}`, { state: location.state });
-                      }}
-                      className={`${ORDER_DETAIL_HEADER_ICON_BTN}`}
-                      title="Poprzednie zamówienie"
-                      aria-label="Poprzednie zamówienie"
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={nextOrderId == null}
-                      onClick={() => {
-                        if (nextOrderId == null) return;
-                        navigate(`/orders/${nextOrderId}`, { state: location.state });
-                      }}
-                      className={`${ORDER_DETAIL_HEADER_ICON_BTN}`}
-                      title="Następne zamówienie"
-                      aria-label="Następne zamówienie"
-                    >
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
-                    </button>
-                    <div className="mx-0.5 hidden h-6 w-px shrink-0 bg-slate-200 sm:block" aria-hidden />
-                    <span
-                      className="hidden h-7 min-w-[1.75rem] items-center justify-center rounded border border-slate-200 bg-white px-1.5 text-[10px] font-bold tabular-nums text-slate-500 sm:inline-flex"
-                      title={ORDERS_PANEL_GROUP_LABELS[order.order_ui_status?.main_group ?? "NEW"]}
-                    >
-                      {ORDERS_PANEL_GROUP_LABELS[order.order_ui_status?.main_group ?? "NEW"].charAt(0)}
-                    </span>
-                    <OrderPriorityFlamePicker
-                      orderId={order.id}
-                      priorityColor={order.priority_color ?? null}
-                      compactTrigger
-                      onUpdated={(next) =>
-                        setOrder((prev) => (prev ? { ...prev, priority_color: next } : prev))
-                      }
-                    />
-                  </div>
-
-                  <div className="min-w-0 flex-1 lg:min-w-[12rem]">
-                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <span className="text-sm font-medium text-slate-600">Zamówienie</span>
-                      <button
-                        type="button"
-                        className="text-2xl font-semibold tracking-tight text-slate-900 underline decoration-dotted decoration-slate-400 underline-offset-2 hover:bg-slate-50"
-                        title="Kopiuj numer"
-                        onClick={() =>
-                          void navigator.clipboard.writeText(String(order.number ?? order.id)).catch(() => {})
-                        }
-                      >
-                        {order.number ?? order.id}
-                      </button>
-                      <span className="text-[11px] leading-none text-slate-400 tabular-nums">{dateLine}</span>
-                      {order.customer ? (
-                        <Link
-                          to={`/customers/${order.customer.id}`}
-                          className="max-w-[min(12rem,28vw)] truncate text-[11px] font-medium text-slate-500 hover:text-slate-800 hover:underline"
-                        >
-                          {order.customer.display_name}
-                        </Link>
-                      ) : null}
-                      {formatExternalIdSnippet(order.external_id) ? (
-                        <button
-                          type="button"
-                          className="text-[11px] text-slate-400 underline decoration-dotted decoration-slate-300 underline-offset-2 hover:text-slate-600"
-                          title="Kopiuj ID zewnętrzne"
-                          onClick={() =>
-                            void navigator.clipboard
-                              .writeText((order.external_id ?? "").trim())
-                              .catch(() => {})
-                          }
-                        >
-                          ID zew: {formatExternalIdSnippet(order.external_id)}
-                        </button>
-                      ) : null}
-                      {(order.source ?? "").trim() ? (
-                        <span className="hidden text-[11px] text-slate-400 md:inline">
-                          {(order.source ?? "").trim()}
-                        </span>
-                      ) : null}
-                    </div>
-                    {order.order_origin === "COMPLAINT" ? (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <span className="inline-flex items-center rounded border border-amber-200/90 bg-amber-50/90 px-2 py-0.5 text-[11px] font-medium text-amber-950">
-                          {order.complaint_order_type === "REPLACEMENT"
-                            ? "Zamówienie z reklamacji (Nowy produkt)"
-                            : order.complaint_order_type === "EXCHANGE"
-                              ? "Zamówienie z reklamacji (Wymiana)"
-                              : "Zamówienie z reklamacji"}
-                        </span>
-                        {order.complaint_id != null ? (
-                          <Link
-                            to={`/complaints/${order.complaint_id}`}
-                            className="text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:underline"
-                          >
-                            Reklamacja #{order.complaint_id}
-                          </Link>
-                        ) : null}
-                        {order.original_order_id != null ? (
-                          <Link
-                            to={`/orders/${order.original_order_id}`}
-                            className="text-[11px] font-medium text-slate-500 hover:text-slate-800 hover:underline"
-                          >
-                            Źródło #{order.original_order_id}
-                          </Link>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="ml-auto flex max-w-full shrink-0 flex-nowrap items-center gap-0.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:max-w-none">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!order?.id) return;
-                          setOfficePin((p) => {
-                            const next = !p;
-                            try {
-                              if (next) window.localStorage.setItem(orderOfficePinStorageKey(order.id), "1");
-                              else window.localStorage.removeItem(orderOfficePinStorageKey(order.id));
-                            } catch {
-                              /* ignore */
-                            }
-                            return next;
-                          });
-                        }}
-                        className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${
-                          officePin
-                            ? "border-amber-400/90 bg-amber-50 text-amber-600 shadow-sm"
-                            : "text-slate-400 hover:border-amber-200 hover:text-amber-600"
-                        }`}
-                        title={officePin ? "Oznaczono dla biura — kliknij, aby usunąć" : "Oznacz dla biura"}
-                        aria-label={officePin ? "Usuń oznaczenie dla biura" : "Oznacz zamówienie dla biura"}
-                        aria-pressed={officePin}
-                      >
-                        <Bookmark className={`h-4 w-4 shrink-0 ${officePin ? "fill-current" : ""}`} strokeWidth={2} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${
-                          order?.has_internal_note
-                            ? "border-red-300/90 bg-red-50 text-red-700 shadow-sm"
-                            : "text-slate-400 hover:border-red-200 hover:text-red-700"
-                        }`}
-                        title="Notatki operacyjne magazynu"
-                        aria-label="Notatki operacyjne magazynu"
-                        onClick={() => {
-                          setActiveTab("summary");
-                          window.setTimeout(() => {
-                            document.getElementById("order-summary-operational-notes")?.scrollIntoView({
-                              behavior: "smooth",
-                              block: "nearest",
-                            });
-                          }, 0);
-                        }}
-                      >
-                        <Pin className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                      </button>
-                      {warehouseId != null ? (
-                        <div className="relative" ref={returnsComplaintsRef}>
-                          <button
-                            type="button"
-                            title="Zwroty i reklamacje"
-                            aria-label="Zwroty i reklamacje"
-                            aria-expanded={returnsComplaintsOpen}
-                            aria-haspopup="menu"
-                            onClick={() => setReturnsComplaintsOpen((v) => !v)}
-                            className={ORDER_DETAIL_HEADER_ICON_BTN}
-                          >
-                            <MessageSquareWarning className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                          </button>
-                          {returnsComplaintsOpen ? (
-                            <div
-                              role="menu"
-                              className="absolute right-0 z-[85] mt-1 min-w-[14rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-slate-200/60"
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full px-3 py-2 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
-                                onClick={() => {
-                                  setComplaintPrefillItemIds(undefined);
-                                  setComplaintWizardOpen(true);
-                                  setReturnsComplaintsOpen(false);
-                                }}
-                              >
-                                Utwórz reklamację
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full px-3 py-2 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
-                                onClick={() => {
-                                  navigate(WMS_ROUTES.returns, {
-                                    state: { preselectOrderId: order.id, openReturnCreateForm: true },
-                                  });
-                                  setReturnsComplaintsOpen(false);
-                                }}
-                              >
-                                Utwórz zwrot
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      <button
-                        type="button"
-                        className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${
-                          order?.has_customer_comment
-                            ? "border-emerald-300/90 bg-emerald-50 text-emerald-700 shadow-sm"
-                            : ""
-                        }`}
-                        title="Wyślij wiadomość"
-                        aria-label="Wyślij wiadomość"
-                        onClick={() => {
-                          setActiveTab("comms");
-                          window.setTimeout(() => {
-                            document.getElementById("order-comms-note")?.focus();
-                          }, 0);
-                        }}
-                      >
-                        <Mail className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className={ORDER_DETAIL_HEADER_ICON_BTN}
-                        title="Korespondencja"
-                        aria-label="Korespondencja"
-                        onClick={() => setActiveTab("comms")}
-                      >
-                        <Inbox className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className={ORDER_DETAIL_HEADER_ICON_BTN}
-                        title="Dokumenty i pliki"
-                        aria-label="Dokumenty i pliki"
-                        onClick={() => setActiveTab("docs")}
-                      >
-                        <Files className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className={`${ORDER_DETAIL_HEADER_ICON_BTN} cursor-not-allowed opacity-40`}
-                        title="Dodaj produkty z innego zamówienia (wkrótce)"
-                        aria-label="Dodaj produkty z innego zamówienia"
-                        disabled
-                      >
-                        <Link2 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className={ORDER_DETAIL_HEADER_ICON_BTN}
-                        title="Kopiuj nagłówek zamówienia"
-                        aria-label="Kopiuj nagłówek zamówienia"
-                        onClick={() => {
-                          const text = `Zamówienie ${order.number ?? order.id}\n${dateLine}`;
-                          void navigator.clipboard.writeText(text).catch(() => {});
-                        }}
-                      >
-                        <Copy className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className={ORDER_DETAIL_HEADER_ICON_BTN}
-                        title="Drukuj"
-                        aria-label="Drukuj"
-                        onClick={() => window.print()}
-                      >
-                        <Printer className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                      </button>
-                      <Link
-                        to={WMS_ROUTES.packingOrder(order.id)}
-                        className="inline-flex shrink-0 items-center rounded-md border border-blue-700 bg-blue-700 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:border-blue-800 hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/35"
-                        title="Spakuj (WMS)"
-                      >
-                        Spakuj
-                      </Link>
-                      <Link
-                        to="/settings/orders/ui-statuses"
-                        className={ORDER_DETAIL_HEADER_ICON_BTN}
-                        title="Ustawienia statusów panelu"
-                        aria-label="Ustawienia statusów panelu"
-                      >
-                        <Settings className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="flex w-full flex-wrap items-start gap-2 border-t border-slate-100/90 pt-2 lg:flex-nowrap lg:items-center">
-                    <div className="min-w-0 flex-1 basis-full sm:max-w-xl lg:max-w-md">
-                      {warehouseId != null ? (
-                        <OrderDetailPrimaryStatusDropdown
-                          variant="compact"
-                          currentStatus={order.order_ui_status ?? null}
-                          panelSummary={panelSummary}
-                          panelSubgroups={panelSubgroups}
-                          saving={panelSaving}
-                          onSelectStatus={async (subStatusId) => {
-                            setPanelSaving(true);
-                            try {
-                              const updated = await patchOrderUiStatus(order.id, DAMAGE_TENANT_ID, warehouseId, subStatusId);
-                              setOrder((prev) =>
-                                prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev,
-                              );
-                              await loadPanelSummary();
-                            } finally {
-                              setPanelSaving(false);
-                            }
-                          }}
-                        />
-                      ) : panelOrderStatusBrief ? (
-                        <OrderUiStatusConfigRowPresent status={panelOrderStatusBrief} variant="compact" />
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 lg:justify-end">
-                      <span className="inline-flex h-6 shrink-0 items-center rounded-full border border-slate-200/90 bg-slate-50/90 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                        WMS
-                      </span>
-                      {wmsDualWorkflow ? (
-                        <>
-                          {(() => {
-                            const { total, pickedSum, packed } = wmsDualWorkflow;
-                            const fmt = (n: number) =>
-                              Math.abs(n - Math.round(n)) < 1e-5 ? String(Math.round(n)) : String(n);
-                            const pickFull = total > 1e-9 && pickedSum + 1e-6 >= total;
-                            const packFull = total > 1e-9 && packed + 1e-6 >= total;
-                            const pickCls = pickFull
-                              ? "inline-flex h-6 shrink-0 items-center rounded-full border border-emerald-200/80 bg-emerald-50/90 px-2 text-[10px] font-medium text-emerald-900"
-                              : pickedSum > 1e-6
-                                ? "inline-flex h-6 shrink-0 items-center rounded-full border border-sky-200/80 bg-sky-50/90 px-2 text-[10px] font-medium text-sky-900"
-                                : "inline-flex h-6 shrink-0 items-center rounded-full border border-slate-200/90 bg-white px-2 text-[10px] font-medium text-slate-600";
-                            const packCls = packFull
-                              ? "inline-flex h-6 shrink-0 items-center rounded-full border border-teal-200/80 bg-teal-50/90 px-2 text-[10px] font-medium text-teal-900"
-                              : packed > 1e-6
-                                ? "inline-flex h-6 shrink-0 items-center rounded-full border border-violet-200/80 bg-violet-50/90 px-2 text-[10px] font-medium text-violet-900"
-                                : "inline-flex h-6 shrink-0 items-center rounded-full border border-slate-200/90 bg-white px-2 text-[10px] font-medium text-slate-600";
-                            return (
-                              <>
-                                <span className={pickCls}>Zbieranie {fmt(pickedSum)}/{fmt(total)}</span>
-                                <span className={packCls}>Pakowanie {fmt(packed)}/{fmt(total)}</span>
-                              </>
-                            );
-                          })()}
-                          {wmsDualWorkflow.vehicle ? (
-                            <span className="inline-flex h-6 shrink-0 items-center rounded-full border border-slate-200 bg-slate-50 px-2 text-[10px] font-medium text-slate-600">
-                              {wmsDualWorkflow.vehicle}
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="text-[10px] font-medium text-slate-400">Brak postępu</span>
-                      )}
-                      {showWmsOperationalHeaderBadge ? (
-                        <OrderWmsOperationalBadge
-                          workflowPhase={wmsWorkflowPhaseForBadge}
-                          packedAtIso={order.wms_packed_at}
-                          packedByLabel={order.wms_packed_by_label}
-                          className="!h-6 !rounded-full !border-slate-200/90 !px-2 !py-0 !text-[10px]"
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-              </div>
-
-              <div className="sticky top-0 z-10 w-full min-h-[2rem] border-b border-slate-200 bg-white/95 pb-0 pt-1 backdrop-blur-sm">
-                <div
-                  className="flex min-w-0 gap-4 overflow-x-auto md:gap-6"
-                  role="tablist"
-                  aria-label="Sekcje zamówienia"
-                >
-                  {DETAIL_TABS.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTab === t.id}
-                      onClick={() => setActiveTab(t.id)}
-                      className={`shrink-0 pb-2 text-xs font-medium transition-colors -mb-px border-b-2 md:text-sm ${
-                        activeTab === t.id
-                          ? "border-orange-500 text-slate-900"
-                          : "border-transparent text-slate-500 hover:text-slate-700"
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="min-w-0 flex-1 space-y-3">
-          {activeTab === "summary" ? (
-            <div className="min-w-0">
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-            <div className="min-w-0 space-y-3">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <SummaryDashboardCard
-                className={SUMMARY_TOP_CARD_SHELL}
-                contentClassName="mt-3"
-                title="Dostawa i płatność"
-                right={
-                  <span className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      title="Odśwież dane"
-                      aria-label="Odśwież dane"
-                      onClick={() => {
-                        void reloadOrderById(order.id);
-                        void loadWmsFulfillment();
-                      }}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    </button>
-                    <Link
-                      to={WMS_ROUTES.packingOrder(order.id)}
-                      className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      title="Operacje przesyłki (WMS)"
-                      aria-label="Operacje przesyłki"
-                    >
-                      <Truck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    </Link>
-                  </span>
-                }
-              >
-                <SummaryCompactRow
-                  label="Metoda płatności"
-                  value={
-                    <select
-                      className="mt-0.5 w-full max-w-[14rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900"
-                      value={payMethodDraft}
-                      onChange={(e) => setPayMethodDraft(e.target.value)}
-                    >
-                      <option value="">—</option>
-                      {Array.from(
-                        new Set([...PAYMENT_METHOD_PRESETS, payMethodDraft].filter((x) => (x || "").trim().length > 0)),
-                      ).map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  }
-                />
-                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 py-1.5 text-[11px] last:border-b-0">
-                  <span className="shrink-0 pt-0.5 text-slate-500">Status płatności</span>
-                  <select
-                    className="max-w-[14rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900"
-                    value={payStatusDraft}
-                    onChange={(e) => setPayStatusDraft(e.target.value)}
-                  >
-                    <option value="">—</option>
-                    {Array.from(
-                      new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter((x) => (x || "").trim().length > 0)),
-                    ).map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <label className="flex flex-col gap-0.5 border-b border-slate-100 py-1.5 text-[11px] text-slate-500 last:border-b-0">
-                  <span className="flex min-w-0 items-center gap-2">
-                    {order.shipping_method_logo_url ? (
-                      <img
-                        src={order.shipping_method_logo_url}
-                        alt=""
-                        className="h-8 w-8 shrink-0 object-contain"
-                        loading="lazy"
-                      />
-                    ) : null}
-                    <span className="flex min-w-0 items-center gap-1">
-                      <Truck className="h-3 w-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-                      Sposób wysyłki
-                    </span>
-                  </span>
-                  <select
-                    className="mt-0.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900"
-                    value={shipDraft}
-                    disabled={warehouseId == null}
-                    onChange={(e) => setShipDraft(e.target.value)}
-                  >
-                    <option value="">— brak —</option>
-                    {(() => {
-                      const oid = order.shipping_method_id?.trim();
-                      if (!oid || shippingMethods.some((m) => m.id === oid)) return null;
-                      return (
-                        <option value={oid}>
-                          {order.shipping_method ?? "Metoda"} (powiązanie)
-                        </option>
-                      );
-                    })()}
-                    {shippingMethods.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                        {!m.is_active ? " (nieaktywna)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {warehouseId != null ? (
-                  <div className="mt-2 flex flex-wrap justify-end gap-1.5">
-                    <button
-                      type="button"
-                      className="rounded-md border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-800 hover:bg-slate-50"
-                      onClick={() => {
-                        setShipDraft(order.shipping_method_id?.trim() ?? "");
-                        setPayMethodDraft((order.panel_payment_method ?? "").trim());
-                        setPayStatusDraft((order.panel_payment_status ?? "").trim());
-                      }}
-                    >
-                      Anuluj
-                    </button>
-                    <button
-                      type="button"
-                      disabled={shipPaySaving}
-                      onClick={() => {
-                        setShipPaySaving(true);
-                        void patchOrder(order.id, {
-                          shipping_method_id: shipDraft.trim() || null,
-                          payment_method: payMethodDraft.trim() || null,
-                          payment_status: payStatusDraft.trim() || null,
-                        })
-                          .then(() => reloadOrderById(order.id))
-                          .finally(() => setShipPaySaving(false));
-                      }}
-                      className="rounded-md border border-slate-800 bg-slate-900 px-2.5 py-0.5 text-[10px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                    >
-                      {shipPaySaving ? "…" : "Zapisz"}
-                    </button>
-                  </div>
-                ) : null}
-              </SummaryDashboardCard>
-
-              <SummaryDashboardCard
-                className={SUMMARY_TOP_CARD_SHELL}
-                contentClassName="mt-3"
-                title="Adres dostawy"
-                right={
-                  warehouseId != null && !addressEditing ? (
-                    <button
-                      type="button"
-                      className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      aria-label="Edytuj adres dostawy"
-                      onClick={() => {
-                        setAddrDraft(shippingFromOrderJson(order.addresses_json));
-                        setAddressEditing(true);
-                      }}
-                    >
-                      <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    </button>
-                  ) : null
-                }
-              >
-                {addressEditing ? (
-                  <div className="space-y-2 text-[11px]">
-                    <label className="flex flex-col gap-0.5 text-slate-600">
-                      Imię i nazwisko / nazwa odbiorcy
-                      <input
-                        className={inpSm}
-                        value={addrDraft.name}
-                        onChange={(e) => setAddrDraft((d) => ({ ...d, name: e.target.value }))}
-                      />
-                    </label>
-                    <label className="flex flex-col gap-0.5 text-slate-600">
-                      Ulica i numer
-                      <input
-                        className={inpSm}
-                        value={addrDraft.street}
-                        onChange={(e) => setAddrDraft((d) => ({ ...d, street: e.target.value }))}
-                      />
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="flex flex-col gap-0.5 text-slate-600">
-                        Kod pocztowy
-                        <input
-                          className={inpSm}
-                          value={addrDraft.postal}
-                          onChange={(e) => setAddrDraft((d) => ({ ...d, postal: e.target.value }))}
-                        />
-                      </label>
-                      <label className="flex flex-col gap-0.5 text-slate-600">
-                        Miasto
-                        <input
-                          className={inpSm}
-                          value={addrDraft.city}
-                          onChange={(e) => setAddrDraft((d) => ({ ...d, city: e.target.value }))}
-                        />
-                      </label>
-                    </div>
-                    <label className="flex flex-col gap-0.5 text-slate-600">
-                      Kraj
-                      <input
-                        className={inpSm}
-                        value={addrDraft.country}
-                        onChange={(e) => setAddrDraft((d) => ({ ...d, country: e.target.value }))}
-                      />
-                    </label>
-                    <div className="flex flex-wrap justify-end gap-1.5 pt-1">
-                      <button
-                        type="button"
-                        className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
-                        disabled={addressSaving}
-                        onClick={() => {
-                          setAddrDraft(shippingFromOrderJson(order.addresses_json));
-                          setAddressEditing(false);
-                        }}
-                      >
-                        Anuluj
-                      </button>
-                      <button
-                        type="button"
-                        disabled={addressSaving || warehouseId == null}
-                        className="rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                        onClick={() => {
-                          setAddressSaving(true);
-                          void patchOrder(order.id, {
-                            shipping_name: addrDraft.name.trim() || null,
-                            shipping_street: addrDraft.street.trim() || null,
-                            shipping_city: addrDraft.city.trim() || null,
-                            shipping_postal_code: addrDraft.postal.trim() || null,
-                            shipping_country: addrDraft.country.trim() || null,
-                          })
-                            .then(() => reloadOrderById(order.id))
-                            .finally(() => {
-                              setAddressSaving(false);
-                              setAddressEditing(false);
-                            });
-                        }}
-                      >
-                        {addressSaving ? "…" : "Zapisz"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1 text-[11px] leading-snug text-slate-800">
-                    <p className="font-semibold text-slate-900">{summaryShippingName}</p>
-                    {shippingExtras?.company ? (
-                      <p className="text-slate-700">
-                        <span className="text-slate-500">Firma: </span>
-                        {shippingExtras.company}
-                      </p>
-                    ) : null}
-                    <p className="tabular-nums text-slate-700">
-                      <span className="text-slate-500">Tel.: </span>
-                      {shippingExtras?.phone || (contact.phone !== "—" ? contact.phone : "—")}
-                    </p>
-                    <p className="break-all text-slate-700">
-                      <span className="text-slate-500">E-mail: </span>
-                      {shippingExtras?.email || (contact.email !== "—" ? contact.email : "—")}
-                    </p>
-                    {contact.addressLines.length > 0 && contact.addressLines[0] !== "—" ? (
-                      contact.addressLines.map((ln, i) => (
-                        <p key={`ship-${i}`} className="text-slate-700">
-                          {ln}
-                        </p>
-                      ))
-                    ) : (
-                      <p className="text-slate-500">Brak adresu w danych zamówienia.</p>
-                    )}
-                    {shippingExtras?.pickupPoint ? (
-                      <p className="text-slate-700">
-                        <span className="text-slate-500">Punkt odbioru: </span>
-                        {shippingExtras.pickupPoint}
-                      </p>
-                    ) : null}
-                    {shippingExtras?.pickupCode ? (
-                      <p className="tabular-nums text-slate-700">
-                        <span className="text-slate-500">Kod odbioru: </span>
-                        {shippingExtras.pickupCode}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </SummaryDashboardCard>
-
-              <SummaryDashboardCard
-                className={SUMMARY_TOP_CARD_SHELL}
-                contentClassName="mt-3"
-                title={
-                  summaryDocEditing
-                    ? docDraft.document_type === "INVOICE"
-                      ? "Faktura"
-                      : "Paragon"
-                    : (order.panel_document_type ?? "").trim().toUpperCase() === "INVOICE"
-                      ? "Faktura"
-                      : (order.panel_document_type ?? "").trim().toUpperCase() === "PARAGON"
-                        ? "Paragon"
-                        : "Dokument sprzedaży"
-                }
-                right={
-                  <span className="flex items-center gap-0.5">
-                    {warehouseId != null && !summaryDocEditing ? (
-                      <button
-                        type="button"
-                        className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                        aria-label="Edytuj dokument"
-                        onClick={() => {
-                          const inv = parseBillingInvoice(order.addresses_json);
-                          const t = (order.panel_document_type ?? "").trim().toUpperCase();
-                          setDocDraft({
-                            document_type: t === "INVOICE" ? "INVOICE" : "PARAGON",
-                            sales_document_number: (order.sales_document_number ?? "").trim(),
-                            company_name: inv.companyName,
-                            nip: inv.nip,
-                            billing_email: inv.email,
-                          });
-                          setSummaryDocEditing(true);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      title="Drukuj"
-                      aria-label="Drukuj"
-                      onClick={() => window.print()}
-                    >
-                      <Printer className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    </button>
-                  </span>
-                }
-              >
-                {summaryDocEditing ? (
-                  <div className="space-y-2 text-[11px]">
-                    <label className="flex flex-col gap-0.5 text-slate-600">
-                      Rodzaj dokumentu
-                      <select
-                        className={inpSm}
-                        value={docDraft.document_type}
-                        onChange={(e) =>
-                          setDocDraft((d) => ({
-                            ...d,
-                            document_type: e.target.value === "INVOICE" ? "INVOICE" : "PARAGON",
-                          }))
-                        }
-                      >
-                        <option value="PARAGON">Paragon</option>
-                        <option value="INVOICE">Faktura</option>
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-0.5 text-slate-600">
-                      Numer dokumentu
-                      <input
-                        className={`${inpSm} font-mono`}
-                        value={docDraft.sales_document_number}
-                        onChange={(e) => setDocDraft((d) => ({ ...d, sales_document_number: e.target.value }))}
-                      />
-                    </label>
-                    {docDraft.document_type === "INVOICE" ? (
-                      <>
-                        <label className="flex flex-col gap-0.5 text-slate-600">
-                          Firma
-                          <input
-                            className={inpSm}
-                            value={docDraft.company_name}
-                            onChange={(e) => setDocDraft((d) => ({ ...d, company_name: e.target.value }))}
-                          />
-                        </label>
-                        <label className="flex flex-col gap-0.5 text-slate-600">
-                          NIP
-                          <input
-                            className={inpSm}
-                            value={docDraft.nip}
-                            onChange={(e) => setDocDraft((d) => ({ ...d, nip: e.target.value }))}
-                          />
-                        </label>
-                        <label className="flex flex-col gap-0.5 text-slate-600">
-                          E-mail do faktury
-                          <input
-                            type="email"
-                            className={inpSm}
-                            value={docDraft.billing_email}
-                            onChange={(e) => setDocDraft((d) => ({ ...d, billing_email: e.target.value }))}
-                          />
-                        </label>
-                        {billingInvoice?.streetLine || billingInvoice?.cityLine ? (
-                          <p className="text-[10px] leading-snug text-slate-500">
-                            Adres rozliczeniowy z importu:{" "}
-                            {[billingInvoice.streetLine, billingInvoice.cityLine].filter(Boolean).join(", ") || "—"}
-                          </p>
-                        ) : null}
-                      </>
-                    ) : (
-                      <p className="text-[11px] text-slate-500">
-                        Paragon — uproszczone dane nabywcy; numer zapiszesz powyżej.
-                      </p>
-                    )}
-                    <div className="flex flex-wrap justify-end gap-1.5 pt-1">
-                      <button
-                        type="button"
-                        className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
-                        disabled={docSaving}
-                        onClick={() => {
-                          const inv = parseBillingInvoice(order.addresses_json);
-                          const t = (order.panel_document_type ?? "").trim().toUpperCase();
-                          setDocDraft({
-                            document_type: t === "INVOICE" ? "INVOICE" : "PARAGON",
-                            sales_document_number: (order.sales_document_number ?? "").trim(),
-                            company_name: inv.companyName,
-                            nip: inv.nip,
-                            billing_email: inv.email,
-                          });
-                          setSummaryDocEditing(false);
-                        }}
-                      >
-                        Anuluj
-                      </button>
-                      <button
-                        type="button"
-                        disabled={docSaving || warehouseId == null}
-                        className="rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                        onClick={() => {
-                          setDocSaving(true);
-                          const isInv = docDraft.document_type === "INVOICE";
-                          void patchOrder(order.id, {
-                            document_type: docDraft.document_type,
-                            sales_document_number: docDraft.sales_document_number.trim() || null,
-                            company_name: isInv ? docDraft.company_name.trim() || null : null,
-                            nip: isInv ? docDraft.nip.trim() || null : null,
-                            email: isInv ? docDraft.billing_email.trim() || null : null,
-                          })
-                            .then(() => reloadOrderById(order.id))
-                            .finally(() => {
-                              setDocSaving(false);
-                              setSummaryDocEditing(false);
-                            });
-                        }}
-                      >
-                        {docSaving ? "…" : "Zapisz"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <SummaryCompactRow label="Rodzaj" value={panelDocumentLabel} />
-                    <SummaryCompactRow
-                      label="Numer"
-                      value={
-                        <span className="font-mono text-[11px] text-slate-700">
-                          {(order.sales_document_number ?? "").trim() || "—"}
-                        </span>
-                      }
-                    />
-                    {(order.panel_document_type ?? "").trim().toUpperCase() === "INVOICE" &&
-                    billingInvoice &&
-                    (billingInvoice.companyName || billingInvoice.nip || billingInvoice.email) ? (
-                      <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-[11px] text-slate-700">
-                        {billingInvoice.companyName ? <p className="font-medium text-slate-900">{billingInvoice.companyName}</p> : null}
-                        {billingInvoice.nip ? <p className="tabular-nums">NIP {billingInvoice.nip}</p> : null}
-                        {billingInvoice.email ? <p className="break-all text-slate-700">{billingInvoice.email}</p> : null}
-                        {billingInvoice.streetLine ? <p>{billingInvoice.streetLine}</p> : null}
-                        {billingInvoice.cityLine ? <p>{billingInvoice.cityLine}</p> : null}
-                      </div>
-                    ) : null}
-                    {(order.panel_document_type ?? "").trim().toUpperCase() === "PARAGON" ? (
-                      <p className="mt-2 text-[11px] text-slate-500">Dane uproszczone (paragon).</p>
-                    ) : null}
-                  </>
-                )}
-              </SummaryDashboardCard>
-            </div>
-
-            <section className="rounded-lg border border-slate-200/90 bg-white p-2.5 shadow-[0_1px_1px_rgba(15,23,42,0.04)] sm:p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  Zamówione produkty — podgląd
-                </h3>
-                <span className="text-[10px] text-slate-400"></span>
-              </div>
-              <div className="mt-2 min-w-0 text-sm text-slate-800">
-                <OrderSummaryProductsList
-                  compact
-                  lines={summaryProductsLines}
-                  productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
-                  onLineAction={handleOrderLineMenuAction}
-                />
-              </div>
-            </section>
-
-              <SummaryDashboardCard
-                title="Dopasowane opakowania"
-                right={
-                  <Link
-                    to={WMS_ROUTES.packingOrder(order.id)}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                  >
-                    <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    Edytuj
-                  </Link>
-                }
-              >
-                {wmsLoading ? (
-                  <p className="text-xs text-slate-500">Ładowanie propozycji pakowania…</p>
-                ) : (
-                  <OrderMatchedPackagingSection card={wmsFulfillment} pairRecommendationColumns />
-                )}
-              </SummaryDashboardCard>
-
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <div className="min-w-0">
-                  <section
-                    id="order-summary-operational-notes"
-                    className="rounded-lg border border-slate-200/90 bg-white p-2.5 shadow-[0_1px_1px_rgba(15,23,42,0.04)] sm:p-3"
-                  >
-                    <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Notatki operacyjne</h3>
-                    <div className="mt-2 space-y-1.5">
-                      {order.operational_notes && order.operational_notes.length > 0 ? (
-                        order.operational_notes.map((n) => (
-                          <div
-                            key={n.id}
-                            className="rounded-lg border border-slate-100 bg-slate-50/90 px-2.5 py-2 text-sm text-slate-800"
-                          >
-                            <p className="whitespace-pre-wrap leading-snug">{n.content}</p>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
-                              <span>{formatDetailDate(n.created_at ?? null)}</span>
-                              <span>·</span>
-                              <span className="font-medium text-slate-600">
-                                {n.author_user_id != null ? `ID ${n.author_user_id}` : "—"}
-                              </span>
-                              {n.show_in_picking ? (
-                                <span className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 font-semibold text-slate-700">
-                                  WMS Zbieranie
-                                </span>
-                              ) : null}
-                              {n.show_in_packing ? (
-                                <span className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 font-semibold text-slate-700">
-                                  WMS Pakowanie
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-500">Brak notatek operacyjnych.</p>
-                      )}
-                    </div>
-                    <div className="mt-3 border-t border-slate-100 pt-3">
-                      <label className="flex flex-col gap-1 text-[11px] font-medium text-slate-600">
-                        Wstaw z szablonu
-                        <select className={inpSm} defaultValue="">
-                          <option value="">—</option>
-                        </select>
-                      </label>
-                      <textarea
-                        value={opDraft}
-                        onChange={(e) => setOpDraft(e.target.value)}
-                        rows={3}
-                        placeholder="Treść notatki dla magazynu…"
-                        className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-                      />
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-800">
-                          <label className="inline-flex cursor-pointer items-center gap-1.5">
-                            <input
-                              type="checkbox"
-                              className="rounded border-slate-300"
-                              checked={opVisPick}
-                              onChange={(e) => setOpVisPick(e.target.checked)}
-                            />
-                            WMS zbieranie
-                          </label>
-                          <label className="inline-flex cursor-pointer items-center gap-1.5">
-                            <input
-                              type="checkbox"
-                              className="rounded border-slate-300"
-                              checked={opVisPack}
-                              onChange={(e) => setOpVisPack(e.target.checked)}
-                            />
-                            WMS pakowanie
-                          </label>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={opSaving || !opDraft.trim()}
-                          onClick={() => void saveOperationalNote()}
-                          className="rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {opSaving ? "…" : "Zapisz notatkę"}
-                        </button>
-                      </div>
-                    </div>
-                  </section>
-                </div>
-                <div className="min-w-0">
-                  <SummaryDashboardCard title="Wiadomość do klienta">
-                    <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 shadow-sm ring-1 ring-slate-200">
-                        E-mail
-                      </span>
-                      <button type="button" className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-white">
-                        SMS
-                      </button>
-                    </div>
-                    <label className="mt-2 flex flex-col gap-1 text-[11px] font-medium text-slate-600">
-                      Wstaw z szablonu
-                      <select className={inpSm} defaultValue="">
-                        <option value="">—</option>
-                      </select>
-                    </label>
-                    <textarea
-                      value={noteDraft}
-                      onChange={(e) => setNoteDraft(e.target.value)}
-                      rows={4}
-                      placeholder="Wpisz treść wiadomości…"
-                      className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-                    />
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        Dodaj załącznik
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-md bg-orange-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-orange-600"
-                      >
-                        Wyślij
-                      </button>
-                    </div>
-                  </SummaryDashboardCard>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <div className="min-w-0">
-                  <SummaryDashboardCard title="Wideo WMS">
-                    <div className="overflow-x-auto rounded-lg border border-slate-100">
-                      <table className="w-full min-w-[420px] border-collapse text-left text-[11px]">
-                        <thead className="sticky top-0 z-[1] bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                          <tr>
-                            <th className="border-b border-slate-100 px-2 py-1.5">Data</th>
-                            <th className="border-b border-slate-100 px-2 py-1.5">Typ</th>
-                            <th className="border-b border-slate-100 px-2 py-1.5">Autor</th>
-                            <th className="border-b border-slate-100 px-2 py-1.5">Wygasa</th>
-                            <th className="border-b border-slate-100 px-2 py-1.5 text-right">Akcje</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td colSpan={5} className="px-2 py-4 text-center text-slate-500">
-                              Brak nagrań przypisanych do zamówienia.
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </SummaryDashboardCard>
-                </div>
-                <div className="min-w-0">
-                  <SummaryDashboardCard title="WMS — operatorzy">
-                    <div className="flex flex-col gap-4">
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                        <div className="min-w-0 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5">
-                          <span className="inline-flex rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                            W zbieraniu
-                          </span>
-                          <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-800">
-                            <div>
-                              <p className="font-semibold text-slate-900">
-                                {(timelinePickEvt?.user_label ?? timelinePickEvt?.title ?? "").trim() || "—"}
-                              </p>
-                              <p className="text-[10px] text-slate-500">
-                                {timelinePickEvt?.at ? formatDetailDate(timelinePickEvt.at) : "—"}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {contact.phone !== "—" ? (
-                                <a
-                                  href={`tel:${contact.phone.replace(/\s+/g, "")}`}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
-                                  aria-label="Telefon"
-                                >
-                                  <Phone className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                                </a>
-                              ) : null}
-                              <span className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-400">
-                                <MessageSquare className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="min-w-0 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5">
-                          <span className="inline-flex rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                            W pakowaniu
-                          </span>
-                          <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-800">
-                            <div>
-                              <p className="font-semibold text-slate-900">
-                                {(timelinePackEvt?.user_label ?? timelinePackEvt?.title ?? "").trim() || "—"}
-                              </p>
-                              <p className="text-[10px] text-slate-500">
-                                {timelinePackEvt?.at ? formatDetailDate(timelinePackEvt.at) : "—"}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {contact.phone !== "—" ? (
-                                <a
-                                  href={`tel:${contact.phone.replace(/\s+/g, "")}`}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
-                                  aria-label="Telefon"
-                                >
-                                  <Phone className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                                </a>
-                              ) : null}
-                              <span className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 bg-white text-slate-400">
-                                <MessageSquare className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-slate-600">
-                        Koszyk / wózek:{" "}
-                        <span className="font-mono font-semibold text-slate-900">
-                          {(wmsFulfillment?.basket_code ?? wmsFulfillment?.wms_vehicle_label ?? "").trim() || "—"}
-                        </span>
-                      </p>
-                    </div>
-                  </SummaryDashboardCard>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <div className="min-w-0">
-                  <SummaryDashboardCard title="Safe Order">
-                    <div className="flex gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2">
-                      <Shield className="h-9 w-9 shrink-0 text-blue-600" strokeWidth={1.5} aria-hidden />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">Brak sygnałów ryzyka</p>
-                        <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
-                          To zamówienie nie ma aktywnych oznaczeń fraud w podglądzie operatorskim.
-                        </p>
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            className="rounded-md border border-dashed border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-                          >
-                            + Moje oznaczenia
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-md border border-dashed border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-                          >
-                            + Społeczność
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </SummaryDashboardCard>
-                </div>
-                <div className="min-w-0">
-                  <SummaryDashboardCard title="Dodatkowe pola">
-                    <OrderAdditionalFieldsSection
-                      orderId={order.id}
-                      documents={order.order_documents ?? []}
-                      onOrderRefresh={() => void reloadOrderById(order.id)}
-                    />
-                  </SummaryDashboardCard>
-                </div>
-              </div>
-
-          <section className="rounded-lg border border-slate-200/90 bg-white p-2.5 shadow-[0_1px_1px_rgba(15,23,42,0.04)] sm:p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Logi czynności</h3>
-              <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
-                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" strokeWidth={2} aria-hidden />
-                <input
-                  type="search"
-                  value={summaryLogSearch}
-                  onChange={(e) => setSummaryLogSearch(e.target.value)}
-                  placeholder="Znajdź"
-                  className="w-full rounded-md border border-slate-200 bg-white py-1.5 pl-7 pr-2 text-[11px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
-                />
-              </div>
-            </div>
-            <div className="mt-2 overflow-x-auto rounded-lg border border-slate-100">
-              <table className="w-full min-w-[560px] border-collapse text-left text-[11px]">
-                <thead className="sticky top-0 z-[1] bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500 shadow-[0_1px_0_rgba(226,232,240,0.9)]">
-                  <tr>
-                    <th className="border-b border-slate-100 px-2 py-1.5">Czas</th>
-                    <th className="border-b border-slate-100 px-2 py-1.5">Zdarzenie</th>
-                    <th className="border-b border-slate-100 px-2 py-1.5">Komunikat</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summaryPanelLogs.map((row) => (
-                    <tr
-                      key={String(row.id)}
-                      className={
-                        row.severity === "error"
-                          ? "bg-red-50/90 text-red-900"
-                          : row.severity === "warn"
-                            ? "bg-amber-50/80 text-amber-950"
-                            : "bg-white text-slate-800"
-                      }
-                    >
-                      <td className="border-b border-slate-50 px-2 py-1 align-top font-mono text-[10px] text-slate-500">
-                        {row.at}
-                      </td>
-                      <td className="border-b border-slate-50 px-2 py-1 align-top text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                        {row.kind}
-                      </td>
-                      <td className="border-b border-slate-50 px-2 py-1 align-top">{row.msg}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-            </div>
-            <aside className="flex w-full max-w-full shrink-0 flex-col gap-4 lg:sticky lg:top-3 lg:z-0 lg:w-[360px] lg:min-w-[360px] lg:max-w-[360px] lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overflow-x-hidden lg:self-start">
-              <SummaryDashboardCard
-                className={SUMMARY_TOP_CARD_SHELL}
-                contentClassName="mt-3"
-                title="Kupujący"
-                right={
-                  <button
-                    type="button"
-                    className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                    aria-label="Edytuj kupującego"
-                    onClick={() => setEditBuyerModalOpen(true)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                  </button>
-                }
-              >
-                <div className="space-y-1.5 text-[11px] leading-snug text-slate-800">
-                  <p className="font-semibold text-slate-900">{contact.name}</p>
-                  {order.customer ? (
-                    <Link
-                      to={`/customers/${order.customer.id}`}
-                      className="inline-flex font-medium text-blue-700 hover:underline"
-                    >
-                      {order.customer.display_name}
-                    </Link>
-                  ) : null}
-                  <p className="tabular-nums text-slate-700">{contact.phone}</p>
-                  <p className="break-all text-slate-700">{contact.email}</p>
-                </div>
-              </SummaryDashboardCard>
-
-              <SummaryDashboardCard title="Podsumowanie zamówienia">
-                <div className="rounded-lg border border-amber-200/80 bg-amber-50/95 px-2.5 py-2 text-[13px] leading-snug text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
-                  {(wmsFulfillment?.customer_comment ?? "").trim() ||
-                  (order.latest_customer_comment_preview ?? "").trim() ? (
-                    (wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()
-                  ) : (
-                    <span className="text-amber-800/80">Brak uwag od klienta przy zamówieniu.</span>
-                  )}
-                </div>
-                <div className="mt-2 space-y-0">
-                  <SummaryCompactRow
-                    label="Źródło"
-                    value={(order.source ?? "").trim() || "—"}
-                  />
-                  <SummaryCompactRow
-                    label="ID zewnętrzne"
-                    value={
-                      (order.external_id ?? "").trim()
-                        ? (order.external_id ?? "").trim().length > 28
-                          ? `${(order.external_id ?? "").trim().slice(0, 14)}…${(order.external_id ?? "").trim().slice(-8)}`
-                          : (order.external_id ?? "").trim()
-                        : "—"
-                    }
-                  />
-                  <SummaryCompactRow label="Wartość produktów" value={linesTotalDisplay} />
-                  <SummaryCompactRow
-                    label="Koszt dostawy"
-                    value={
-                      <span className="inline-flex flex-wrap items-center gap-1.5">
-                        {order.panel_shipping_cost != null && Number.isFinite(Number(order.panel_shipping_cost))
-                          ? formatMoney(Number(order.panel_shipping_cost), order.currency)
-                          : (order.panel_shipping_cost_display ?? "").trim() || "—"}
-                        {/(allegro)/i.test((order.source ?? "").trim()) ? (
-                          <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
-                            SMART
-                          </span>
-                        ) : null}
-                      </span>
-                    }
-                  />
-                  <SummaryCompactRow
-                    label="Razem"
-                    value={
-                      <span className="inline-flex flex-wrap items-center gap-2">
-                        <span>{formatMoney(order.value, order.currency)}</span>
-                        {paymentStatusIsPaid(order.panel_payment_status) ? (
-                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900">
-                            Opłacone
-                          </span>
-                        ) : null}
-                      </span>
-                    }
-                  />
-                  <SummaryCompactRow label="Realizacja" value={summaryEstimatedDelivery} />
-                </div>
-              </SummaryDashboardCard>
-
-              <SummaryDashboardCard title="Rabat i marża">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOrderRabatMode("pct")}
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      orderRabatMode === "pct" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"
-                    }`}
-                  >
-                    %
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOrderRabatMode("pln")}
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      orderRabatMode === "pln" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"
-                    }`}
-                  >
-                    {(order.currency ?? "PLN").trim() || "PLN"}
-                  </button>
-                  <input
-                    className="min-w-[6rem] flex-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-900"
-                    inputMode="decimal"
-                    value={orderRabatDraft}
-                    onChange={(e) => setOrderRabatDraft(e.target.value)}
-                    placeholder="Rabat"
-                  />
-                  <button
-                    type="button"
-                    disabled={orderRabatSaving}
-                    onClick={() => void saveOrderDiscount()}
-                    className="rounded-md bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                  >
-                    {orderRabatSaving ? "…" : "Zapisz"}
-                  </button>
-                </div>
-                <div className="mt-2 grid gap-1 text-[11px] text-slate-800">
-                  <div className="flex justify-between gap-2 border-b border-slate-50 py-0.5">
-                    <span className="text-slate-500">Po rabacie</span>
-                    <span className="font-medium tabular-nums">{formatMoney(productsAfterDiscount, order.currency)}</span>
-                  </div>
-                  <div className="flex justify-between gap-2 border-b border-slate-50 py-0.5">
-                    <span className="text-slate-500">Marża %</span>
-                    <span className={`font-semibold tabular-nums ${marginTone}`}>
-                      {order.margin != null && Number.isFinite(Number(order.margin))
-                        ? `${Number(order.margin).toFixed(2)}%`
-                        : "—"}
-                    </span>
-                  </div>
-                </div>
-              </SummaryDashboardCard>
-            </aside>
-            </div>
-            </div>
-          ) : null}
-
-          {order ? (
-            <EditBuyerModal
-              open={editBuyerModalOpen}
-              onClose={() => setEditBuyerModalOpen(false)}
-              orderId={order.id}
-              initialFirstName={(order.first_name ?? "").trim()}
-              initialLastName={(order.last_name ?? "").trim()}
-              initialPhone={contact.phone === "—" ? "" : contact.phone}
-              initialEmail={contact.email === "—" ? "" : contact.email}
-              canSave={warehouseId != null}
-              onSaved={() => void reloadOrderById(order.id)}
-            />
-          ) : null}
-
-          {activeTab === "docs" ? (
-          <div className="w-full min-w-0 space-y-3">
-          {docUploadErr ? (
-            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">{docUploadErr}</p>
-          ) : null}
-          {docUploadBusy ? <p className="text-xs text-slate-500">Trwa wgrywanie dokumentu…</p> : null}
-          <OrderDocFilesTableSection
-            title={`Dokumenty (${docsTabDocumentsRows.length})`}
-            rows={docsTabDocumentsRows}
-            showTypeColumn
-            onUploadFiles={(files) => handleOrderDocUpload("docs", files)}
-            onToolbarPrint={() => console.log("[toolbar print] dokumenty")}
-            onToolbarEmail={() => console.log("[email toolbar] dokumenty")}
-            onPreview={handleOrderDocPreview}
-            onPrint={handleOrderDocPrint}
-            onDownload={handleOrderDocDownload}
-            onEmail={handleOrderDocEmail}
-            onDelete={(row) => handleOrderDocDelete("docs", row)}
-          />
-          <OrderDocFilesTableSection
-            title={`Pliki (${docsTabFilesRows.length})`}
-            rows={docsTabFilesRows}
-            showTypeColumn
-            onUploadFiles={(files) => handleOrderDocUpload("files", files)}
-            onToolbarPrint={() => console.log("[toolbar print] pliki")}
-            onToolbarEmail={() => console.log("[email toolbar] pliki")}
-            onPreview={handleOrderDocPreview}
-            onPrint={handleOrderDocPrint}
-            onDownload={handleOrderDocDownload}
-            onEmail={handleOrderDocEmail}
-            onDelete={(row) => handleOrderDocDelete("files", row)}
-          />
-          <OrderDocFilesTableSection
-            title={`Listy przewozowe (${docsTabWaybillsRows.length})`}
-            rows={docsTabWaybillsRows}
-            showTypeColumn
-            onUploadFiles={(files) => handleOrderDocUpload("waybills", files)}
-            onToolbarPrint={() => console.log("[toolbar print] listy przewozowe")}
-            onToolbarEmail={() => console.log("[email toolbar] listy przewozowe")}
-            onPreview={handleOrderDocPreview}
-            onPrint={handleOrderDocPrint}
-            onDownload={handleOrderDocDownload}
-            onEmail={handleOrderDocEmail}
-            onDelete={(row) => handleOrderDocDelete("waybills", row)}
-          />
-
+    <div className="min-h-screen flex font-sans text-slate-800 bg-white">
+      {isSidebarOpen && (
+        <div className="w-[300px] shrink-0 bg-[#f8f9fa] border-r border-slate-200 flex flex-col h-screen overflow-y-auto transition-all duration-300">
+          <div className="p-5 flex justify-between items-center text-sm font-bold text-slate-500 tracking-wider">
+            STATUS PANELU
+            <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-slate-600 bg-white p-1 rounded border border-slate-200 shadow-sm"><ChevronLeft size={16} /></button>
           </div>
-          ) : null}
-
-          {activeTab === "products" ? (
-          <div className="grid w-full min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-        <main className="min-w-0">
-        <section className="border-0 border-b border-slate-200/80 bg-transparent p-0 pb-1 sm:pb-2">
-          {wmsErr ? (
-            <p className="mb-3 border-l-4 border-amber-400 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">{wmsErr}</p>
-          ) : null}
-          {warehouseId != null ? (
-            <OrderMissingProductsSection
-              tenantId={DAMAGE_TENANT_ID}
-              orderId={order.id}
-              lines={wmsFulfillment?.lines ?? []}
-              itemWaitingById={itemWaitingById}
-              onRefreshOrder={() => void reloadOrderById(order.id)}
-              onRefreshWms={() => void loadWmsFulfillment()}
-              sectionDomId="wms-braki-sekcja"
-            />
-          ) : null}
-          <div className="mt-2 min-w-0 space-y-2 lg:mt-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
-                  <h2 className="text-sm font-extrabold uppercase tracking-wide text-slate-700">Zamówione produkty</h2>
-                  {historyChangeCount > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => setReplacementHistoryOpen((v) => !v)}
-                      className="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                    >
-                      Historia zmian ({historyChangeCount})
-                      <span className="ml-1 text-slate-500">{replacementHistoryOpen ? "▲" : "▼"}</span>
-                    </button>
-                  ) : null}
-                  {missingProductBadgeCount > 0 ? (
-                    <span className="inline-flex rounded-full border border-red-300 bg-red-50 px-2.5 py-0.5 text-[11px] font-bold text-red-950">
-                      Braki ({missingProductBadgeCount})
-                    </span>
-                  ) : null}
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      checked={showZeroQtyHistoryRows}
-                      onChange={(e) => setShowZeroQtyHistoryRows(e.target.checked)}
-                    />
-                    Pokaż historię zmian
-                  </label>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAddProductOpen(true)}
-                    className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
-                  >
-                    Dodaj produkt
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAddBundleOpen(true)}
-                    className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
-                  >
-                    Dodaj zestaw
-                  </button>
-                  <Link
-                    to={WMS_ROUTES.packingOrder(order.id)}
-                    className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-blue-100"
-                  >
-                    Spakuj
-                  </Link>
-                </div>
-              </div>
-
-              {replacementHistoryOpen && historyChangeCount > 0 ? (
-                <div className="mt-4 space-y-4">
-                  {replacementPairs.length > 0 ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50/95 px-4 py-3 text-sm text-slate-900 shadow-sm">
-                      <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-600">Zamiany w zamówieniu</p>
-                      <ol className="mt-2 list-decimal space-y-1.5 pl-5 marker:font-semibold marker:text-slate-500">
-                        {replacementPairs.map((p) => (
-                          <li key={p.sourceOrderItemId} className="pl-1">
-                            <span className="font-medium text-slate-800">{p.fromLabel}</span>
-                            <span className="mx-1.5 font-semibold text-slate-400">→</span>
-                            <span className="font-medium text-slate-900">{p.toLabel}</span>
-                            {p.qtyDisplay !== "—" ? (
-                              <span className="text-slate-600"> ({p.qtyDisplay})</span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  ) : null}
-                  {panelFulfillmentHistory.length > 0 ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm text-slate-800 shadow-sm">
-                      <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-600">
-                        Usunięcia i rozwiązania braków
-                      </p>
-                      <ul className="mt-2 space-y-3">
-                        {panelFulfillmentHistory.map((entry, idx) => {
-                          const nm = (entry.product_name ?? "").trim();
-                          const q = entry.quantity_ordered;
-                          const up = entry.unit_price;
-                          const lt = entry.line_total;
-                          const hasSnap = Boolean(nm) && q != null && Number.isFinite(Number(q));
-                          const kind = (entry.kind ?? "").trim();
-                          const statusLabel =
-                            kind === "order_line_removed"
-                              ? "USUNIĘTO Z ZAMÓWIENIA"
-                              : kind === "shortage_reduced"
-                                ? "ZMNIEJSZONO ZAMÓWIENIE (BRAK)"
-                                : null;
-                          const qtyN = q != null && Number.isFinite(Number(q)) ? Number(q) : 0;
-                          const multiline =
-                            hasSnap && up != null && Number.isFinite(Number(up))
-                              ? `${qtyN} szt. × ${formatMoney(up, order.currency)} = ${formatMoney(lt ?? undefined, order.currency)}`
-                              : hasSnap
-                                ? `${qtyN} szt. · ${formatMoney(lt ?? undefined, order.currency)}`
-                                : null;
-                          return (
-                            <li
-                              key={`${entry.at}-${idx}`}
-                              className="border-t border-slate-200/70 pt-2.5 text-slate-600 first:border-t-0 first:pt-0"
-                            >
-                              <p className="text-[11px] font-medium text-slate-500">{formatDetailDate(entry.at)}</p>
-                              {hasSnap ? (
-                                <div className="mt-1.5 opacity-[0.92]">
-                                  <p className="font-semibold leading-snug text-slate-700 line-through decoration-slate-300">{nm}</p>
-                                  {statusLabel ? (
-                                    <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-rose-800">{statusLabel}</p>
-                                  ) : null}
-                                  {multiline ? (
-                                    <p className="mt-1 text-sm font-semibold tabular-nums text-slate-800">{multiline}</p>
-                                  ) : null}
-                                  {!multiline && hasSnap ? (
-                                    <p className="mt-1 text-sm font-semibold tabular-nums text-slate-800">{qtyN} szt.</p>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                              {entry.lines?.length ? (
-                                <div className={`space-y-0.5 whitespace-pre-line text-xs text-slate-600 ${hasSnap ? "mt-1.5" : "mt-0.5"}`}>
-                                  {entry.lines.map((ln, i) => (
-                                    <p key={i}>{ln}</p>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="mt-6 min-w-0">
-                <OrderWarehouseProductsSection
-                  lines={summaryProductsLines}
-                  orderItems={order.items}
-                  wmsByItemId={wmsByItemId}
-                  wmsFulfillment={wmsFulfillment}
-                  wmsLoading={wmsLoading}
-                  currency={order.currency}
-                  productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
-                  orderId={order.id}
-                  linesTotalDisplay={linesTotalDisplay}
-                  itemWaitingById={itemWaitingById}
-                  onRefreshOrder={() => void reloadOrderById(order.id)}
-                  onRefreshWms={() => void loadWmsFulfillment()}
-                  onReplaceProduct={(oid) => {
-                    setTableReplaceItemId(oid);
-                    setTableReplaceOpen(true);
-                  }}
-                  onLineAction={handleOrderLineMenuAction}
-                  formatMoney={formatMoney}
-                  hideLineTotalHeader
-                  panelFulfillmentHistory={panelFulfillmentHistory}
-                  formatDetailDate={formatDetailDate}
-                  showProductLineHistory={showZeroQtyHistoryRows}
-                />
-              </div>
-
-              <OrderMatchedPackagingSection card={wmsFulfillment} />
-          </div>
-
-          {tableReplaceOpen && tableReplaceItemId != null && tableReplaceContext ? (
-            <OrderReplaceProductModal
-              open
-              onClose={() => {
-                setTableReplaceOpen(false);
-                setTableReplaceItemId(null);
-              }}
-              orderId={order.id}
-              tenantId={DAMAGE_TENANT_ID}
-              orderItemId={tableReplaceItemId}
-              sourceProductId={tableReplaceContext.sourceProductId}
-              sourceProductName={tableReplaceContext.sourceProductName}
-              missingQuantity={tableReplaceContext.missingQuantity}
+          <div className="px-5 pb-5">
+            <OrderStatusSidebar
               warehouseId={warehouseId}
-              onReplaced={() => {
-                void (async () => {
-                  await reloadOrderById(order.id);
-                  await loadWmsFulfillment();
-                  dispatchWmsShortagesUpdated();
-                  setTableReplaceOpen(false);
-                  setTableReplaceItemId(null);
-                })();
-              }}
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
+              panelFilter={sidebarFilter}
+              onPanelFilterChange={(f) => navigate("/orders/list", { state: { panelFilter: f } })}
+              chromeVariant="sellasist"
+              collapsed={false}
+              parentScrollContainer={false}
             />
-          ) : null}
-        </section>
-        </main>
-          <aside
-            className="flex w-full max-w-full shrink-0 flex-col gap-4 border-t border-slate-200 pt-3 lg:sticky lg:top-3 lg:z-0 lg:w-[360px] lg:min-w-[360px] lg:max-w-[360px] lg:max-h-[calc(100dvh-5.5rem)] lg:overflow-y-auto lg:overflow-x-hidden lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0"
-            aria-label="Produkty i magazyn — czasy WMS i historia"
-          >
-            <WmsOperationTimesKpiPanel cells={wmsSidebarTimeCells} />
-            <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
-              <OrderHistoryTimeline compact events={orderHistoryTimelineEvents} formatDate={formatDetailDate} />
-            </div>
-          </aside>
-
           </div>
-          ) : null}
+        </div>
+      )}
 
-          <OrderEditProductModal
-            open={editProductItem != null}
-            onClose={() => {
-              setEditProductItem(null);
-              setEditProductModalFocus("main");
-            }}
-            orderId={order.id}
-            item={editProductItem}
-            focusSection={editProductModalFocus}
-            currency={(order.currency ?? "PLN").trim() || "PLN"}
-            onSaved={() => {
-              void (async () => {
-                await reloadOrderById(order.id);
-                await loadWmsFulfillment();
-              })();
-            }}
-          />
-          {summaryLineRemoveItemId != null ? (
-            <ConfirmModal
-              title="Usunąć pozycję?"
-              message={
-                <>
-                  Czy na pewno usunąć pozycję „
-                  <span className="font-medium text-slate-100">
-                    {(order.items.find((i) => i.id === summaryLineRemoveItemId)?.product?.name ?? "").trim() || "produkt"}
-                  </span>
-                  ” z zamówienia?
-                </>
-              }
-              confirmLabel="Usuń"
-              pending={summaryLineRemovePending}
-              onCancel={() => {
-                if (!summaryLineRemovePending) setSummaryLineRemoveItemId(null);
-              }}
-              onConfirm={async () => {
-                const id = summaryLineRemoveItemId;
-                if (id == null) return;
-                setSummaryLineRemovePending(true);
-                try {
-                  await deleteOrderItemLine(order.id, id);
-                  await reloadOrderById(order.id);
-                  await loadWmsFulfillment();
-                  dispatchWmsShortagesUpdated();
-                  setSummaryLineRemoveItemId(null);
-                } catch {
-                  window.alert("Nie udało się usunąć pozycji.");
-                } finally {
-                  setSummaryLineRemovePending(false);
-                }
-              }}
-            />
-          ) : null}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        
+        <div className="bg-white px-8 py-3 flex justify-between items-center border-b border-slate-200 shrink-0 text-sm">
+          <div className="flex items-center text-slate-500 space-x-3 font-medium">
+            {!isSidebarOpen && <button onClick={() => setIsSidebarOpen(true)} className="mr-2 text-slate-400 hover:text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-200 shadow-sm"><ChevronRight size={16} /></button>}
+            <Link to="/dashboard" className="cursor-pointer hover:text-slate-800"><Home size={16}/></Link>
+            <span>›</span>
+            <Link to="/orders/list" className="cursor-pointer hover:text-slate-800">Zamówienia</Link>
+            <span>›</span>
+            <span className="text-slate-900 font-bold">#{order.number ?? order.id}</span>
+          </div>
+          <div className="flex items-center space-x-3 font-semibold text-xs">
+            <span className="bg-white text-slate-700 px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">WMS</span>
+            {wmsDualWorkflow ? (
+               <>
+                 <span className={`px-2 flex items-center ${wmsDualWorkflow.pickedSum >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "text-emerald-700" : "text-blue-600"}`}>
+                   <ShoppingCart size={14} className="mr-1"/> Zbieranie {wmsDualWorkflow.pickedSum}/{wmsDualWorkflow.total}
+                 </span>
+                 <span className={`px-2 flex items-center ${wmsDualWorkflow.packed >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "text-emerald-700" : "text-slate-500"}`}>
+                   <Package size={14} className="mr-1"/> Pakowanie {wmsDualWorkflow.packed}/{wmsDualWorkflow.total}
+                 </span>
+               </>
+            ) : <span className="text-slate-500">Brak postępu WMS</span>}
+            
+            {showWmsOperationalHeaderBadge && (
+               <OrderWmsOperationalBadge
+                 workflowPhase={wmsWorkflowPhaseForBadge}
+                 packedAtIso={order.wms_packed_at}
+                 packedByLabel={order.wms_packed_by_label}
+                 className="!h-7 !rounded-md !px-3 !py-1 !text-xs !shadow-sm"
+               />
+            )}
+          </div>
+        </div>
 
-          {activeTab === "comms" ? (
-          <div className="grid w-full min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-4">
-            <main className="min-w-0 space-y-4">
-              <section
-                id="order-operational-notes"
-                className="space-y-2 rounded-lg border border-slate-200/90 bg-slate-50/40 p-3"
-              >
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  Notatki operacyjne (magazyn)
-                </h3>
-                <textarea
-                  value={opDraft}
-                  onChange={(e) => setOpDraft(e.target.value)}
-                  rows={3}
-                  placeholder="Np. delikatny towar, gratis, priorytet składowania…"
-                  className="w-full resize-y rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+        <div className="bg-white px-8 py-5 flex justify-between items-center border-b border-slate-200 shrink-0">
+          <div className="flex items-center space-x-4">
+            <div className="flex space-x-1">
+              <button 
+                onClick={() => prevOrderId != null && navigate(`/orders/${prevOrderId}`, { state: location.state })}
+                disabled={prevOrderId == null}
+                className={ORDER_DETAIL_HEADER_ICON_BTN}
+              ><ChevronLeft size={18} /></button>
+              <button 
+                onClick={() => nextOrderId != null && navigate(`/orders/${nextOrderId}`, { state: location.state })}
+                disabled={nextOrderId == null}
+                className={ORDER_DETAIL_HEADER_ICON_BTN}
+              ><ChevronRight size={18} /></button>
+              <OrderPriorityFlamePicker
+                orderId={order.id}
+                priorityColor={order.priority_color ?? null}
+                compactTrigger
+                onUpdated={(next) => setOrder((prev) => (prev ? { ...prev, priority_color: next } : prev))}
+              />
+            </div>
+            
+            <div className="ml-4 flex items-baseline space-x-4">
+              <span className="text-2xl font-black text-slate-900 tracking-tight" onDoubleClick={() => navigator.clipboard.writeText(String(order.number ?? order.id)).catch(() => {})}>Zamówienie {order.number ?? order.id}</span>
+              <span className="text-slate-400 text-xs font-medium">{dateLine}</span>
+              {order.external_id ? (
+                <span className="text-slate-400 text-xs cursor-pointer hover:text-slate-600" onClick={() => navigator.clipboard.writeText((order.external_id ?? "").trim()).catch(() => {})}>
+                  ID zew: {formatExternalIdSnippet(order.external_id)}
+                </span>
+              ) : null}
+              {order.source ? <span className="text-slate-400 text-xs">{(order.source ?? "").trim()}</span> : null}
+            </div>
+            
+            <div className="ml-6 flex items-center bg-white rounded border border-slate-300 shadow-sm px-3 py-1.5 text-xs font-bold text-slate-700">
+               <OrderDetailPrimaryStatusDropdown
+                  variant="compact"
+                  currentStatus={order.order_ui_status ?? null}
+                  panelSummary={panelSummary}
+                  panelSubgroups={panelSubgroups}
+                  saving={panelSaving}
+                  onSelectStatus={async (subStatusId) => {
+                    setPanelSaving(true);
+                    try {
+                      if(warehouseId){
+                        const updated = await patchOrderUiStatus(order.id, DAMAGE_TENANT_ID, warehouseId, subStatusId);
+                        setOrder((prev) => prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev);
+                        await loadPanelSummary();
+                      }
+                    } finally {
+                      setPanelSaving(false);
+                    }
+                  }}
                 />
-                <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-800">
-                  <label className="inline-flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300"
-                      checked={opVisPick}
-                      onChange={(e) => setOpVisPick(e.target.checked)}
-                    />
-                    Zbieranie
-                  </label>
-                  <label className="inline-flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300"
-                      checked={opVisPack}
-                      onChange={(e) => setOpVisPack(e.target.checked)}
-                    />
-                    Pakowanie
-                  </label>
-                  <label className="inline-flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300"
-                      checked={opVisRet}
-                      onChange={(e) => setOpVisRet(e.target.checked)}
-                    />
-                    Zwroty
-                  </label>
-                  <label className="inline-flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300"
-                      checked={opVisComp}
-                      onChange={(e) => setOpVisComp(e.target.checked)}
-                    />
-                    Reklamacje
-                  </label>
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    disabled={opSaving || !opDraft.trim() || !order}
-                    onClick={() => void saveOperationalNote()}
-                    className="rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {opSaving ? "Zapisywanie…" : "Zapisz notatkę operacyjną"}
-                  </button>
-                </div>
-                {order?.operational_notes && order.operational_notes.length > 0 ? (
-                  <ul className="space-y-2 border-t border-slate-200/80 pt-3 text-sm text-slate-800">
-                    {order.operational_notes.map((n) => (
-                      <li key={n.id} className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
-                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                          {[
-                            n.show_in_picking ? "Zbieranie" : null,
-                            n.show_in_packing ? "Pakowanie" : null,
-                            n.show_in_returns ? "Zwroty" : null,
-                            n.show_in_complaints ? "Reklamacje" : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ") || "Ogólne"}
-                        </div>
-                        <p className="mt-1 whitespace-pre-wrap leading-snug">{n.content}</p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </section>
+            </div>
+          </div>
 
-              <section className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-                <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Nowa wiadomość</h3>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-600 shadow-sm ring-1 ring-slate-200"
-                    >
-                      <span className="text-blue-600">✓</span> E-mail
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-white"
-                    >
-                      SMS
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-white"
-                    >
-                      SMS SA CALL
-                    </button>
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 sm:flex-initial sm:justify-end">
-                    <span className="text-xs text-slate-500">Szablon wiadomości</span>
-                    <select
-                      className="max-w-[14rem] shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-slate-400"
-                      defaultValue="__template__"
-                    >
-                      <option value="__template__">Szablon wiadomości</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="relative">
-                  <textarea
-                    id="order-comms-note"
-                    value={noteDraft}
-                    onChange={(e) => setNoteDraft(e.target.value)}
-                    rows={4}
-                    placeholder="Wpisz"
-                    className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 pb-9 pt-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-                  />
-                  <div className="pointer-events-none absolute bottom-2 right-2">
-                    <button
-                      type="button"
-                      className="pointer-events-auto rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50"
-                    >
-                      🪄 Sugestia AI
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
-                  >
-                    Dodaj załącznik
-                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-                  >
-                    Wyślij
-                  </button>
-                </div>
-              </section>
-
-              <section className="space-y-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
-                      Historia korespondencji
-                    </h3>
-                    {order ? (
-                      <p className="mt-1 text-[11px] leading-snug text-slate-400">
-                        (Utw. {formatDetailDate(order.created_at)} | Ost. wiad.{" "}
-                        {formatDetailDate(order.order_date ?? order.created_at)} | Ost. odp.{" "}
-                        {formatDetailDate(order.created_at)})
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="relative w-full shrink-0 sm:w-52">
-                    <Search
-                      className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
-                    <input
-                      type="search"
-                      placeholder="Szukaj"
-                      className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    <span className="font-medium text-slate-700">{dateLine}</span>
-                    <span className="mx-1.5 text-slate-400">·</span>
-                    <span>System — utworzenie zamówienia w systemie</span>
-                  </div>
-                  {wmsFulfillment?.customer_comment ? (
-                    <div className="overflow-hidden rounded-lg border border-slate-200 border-l-4 border-l-blue-500 bg-white">
-                      <div className="flex flex-wrap items-baseline gap-2 border-b border-slate-100 px-3 py-2">
-                        <span className="text-xs font-medium text-slate-400">Import</span>
-                        <span className="text-sm font-semibold text-slate-900">{contact.name}</span>
-                        <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
-                          Najnowsza wiadomość
-                        </span>
-                      </div>
-                      <p className="px-3 py-2.5 text-sm leading-relaxed text-slate-800">{wmsFulfillment.customer_comment}</p>
-                    </div>
-                  ) : null}
-                  {wmsFulfillment?.staff_notes ? (
-                    <div className="overflow-hidden rounded-lg border border-emerald-200 border-l-4 border-l-emerald-600 bg-emerald-50/80">
-                      <div className="border-b border-emerald-200/80 px-3 py-2">
-                        <span className="text-xs font-medium text-slate-400">Magazyn</span>
-                      </div>
-                      <p className="px-3 py-2.5 text-sm leading-relaxed text-emerald-950">{wmsFulfillment.staff_notes}</p>
-                    </div>
-                  ) : (
-                    <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                      Brak wpisów z WMS — notatki magazynowe pojawią się po zapisie w terminalu.
-                    </div>
-                  )}
-                </div>
-              </section>
-            </main>
-            <aside
-              className="flex min-w-0 flex-col gap-2 border-t border-slate-200 pt-3 lg:sticky lg:top-3 lg:max-h-[calc(100dvh-5.5rem)] lg:w-full lg:max-w-none lg:overflow-y-auto lg:overflow-x-hidden lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0"
-              aria-label="Komunikacja — klient i kontekst"
+          <div className="flex items-center space-x-2 text-slate-500">
+            <button 
+               onClick={() => {
+                 setOfficePin((p) => {
+                   const next = !p;
+                   if (next) window.localStorage.setItem(orderOfficePinStorageKey(order.id), "1");
+                   else window.localStorage.removeItem(orderOfficePinStorageKey(order.id));
+                   return next;
+                 });
+               }}
+               className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${officePin ? "!border-amber-400 !bg-amber-50 !text-amber-600" : ""}`}
             >
-              <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Notatka AI</h3>
-                <p className="mt-1 text-[11px] leading-snug text-slate-600">
-                  Krótki kontekst dla operatora (placeholder — podłączenie modelu później).
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Klient</h3>
-                  <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600">
-                    Brak ryzyka
-                  </span>
-                </div>
-                <div className="mt-2 space-y-1.5 text-xs text-slate-800">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <User className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-                    <span className="min-w-0 font-semibold text-slate-900">{contact.name}</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                    <span className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-medium uppercase text-slate-500">
-                      all
-                    </span>
-                    <span className="font-mono text-slate-700">
-                      {contact.email !== "—" && contact.email.trim()
-                        ? contact.email.split("@")[0] || "—"
-                        : order?.customer?.display_name?.trim().replace(/\s+/g, "").toLowerCase() || "—"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="tabular-nums">{contact.phone}</span>
-                    {contact.phone !== "—" ? (
-                      <a
-                        href={`tel:${contact.phone.replace(/\s+/g, "")}`}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                        aria-label="Zadzwoń"
-                      >
-                        <Phone className="h-3 w-3" strokeWidth={2} aria-hidden />
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </aside>
+               <Bookmark size={18} className={officePin ? "fill-current" : ""}/>
+            </button>
+            <button 
+              onClick={() => { setActiveTab("summary"); setTimeout(() => document.getElementById("order-summary-operational-notes")?.scrollIntoView({ behavior: "smooth" }), 0); }}
+              className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order.has_internal_note ? "!border-red-300 !bg-red-50 !text-red-700" : ""}`}
+            ><Pin size={18} /></button>
+            <button 
+              onClick={() => { setActiveTab("comms"); setTimeout(() => document.getElementById("order-comms-note")?.focus(), 0); }}
+              className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order.has_customer_comment ? "!border-emerald-300 !bg-emerald-50 !text-emerald-700" : ""}`}
+            >
+              <Mail size={18} />
+              {order.has_customer_comment && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>}
+            </button>
+            <button className={ORDER_DETAIL_HEADER_ICON_BTN} onClick={() => setActiveTab("comms")}><Inbox size={18} /></button>
+            <button className={ORDER_DETAIL_HEADER_ICON_BTN} onClick={() => setActiveTab("docs")}><Files size={18} /></button>
+            <div className="w-px h-6 bg-slate-300 mx-2"></div>
+            <button className={ORDER_DETAIL_HEADER_ICON_BTN} onClick={() => { reloadOrderById(order.id); loadWmsFulfillment(); }}><RefreshCw size={18} /></button>
+            <button className={ORDER_DETAIL_HEADER_ICON_BTN} onClick={() => window.print()}><Printer size={18} /></button>
+            <button className={ORDER_DETAIL_HEADER_ICON_BTN}><MoreVertical size={18} /></button>
+            <Link to={WMS_ROUTES.packingOrder(order.id)} className="ml-4 bg-blue-600 text-white px-6 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm transition-all text-center">
+              Spakuj
+            </Link>
           </div>
-          ) : null}
+        </div>
 
-          {activeTab === "logs" ? (
-          <div className="min-w-0 space-y-2">
-            <section className="rounded-lg border border-slate-200/80 bg-white p-2.5 shadow-none sm:p-3">
-              <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Zdarzenia systemowe</h3>
-              <ul className="mt-2 space-y-1 text-sm text-slate-800">
-                <li className="flex flex-wrap gap-x-3 gap-y-1 border-b border-slate-100 py-1.5">
-                  <span className="font-mono text-xs text-slate-500">{formatDetailDate(order.created_at)}</span>
-                  <span>Utworzono zamówienie <strong>Numer {order.id}</strong></span>
-                </li>
-                <li className="flex flex-wrap gap-x-3 gap-y-1 border-b border-slate-100 py-1.5">
-                  <span className="text-xs text-slate-500">Źródło</span>
-                  <span>{(order.source ?? "—").trim() || "—"}</span>
-                </li>
-                <li className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2">
-                  <span className="text-xs text-slate-500">Status panelu</span>
-                  <div className="min-w-0 max-w-md">
-                    <OrderUiStatusConfigRowPresent status={order.order_ui_status ?? null} variant="compact" />
-                  </div>
-                </li>
-              </ul>
-            </section>
-            <section className="rounded-lg border border-slate-200/80 bg-white p-2.5 shadow-none sm:p-3">
-              <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Dziennik panelu</h3>
-              {(order.order_activity_logs ?? []).length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">Brak wpisów.</p>
-              ) : (
-                <ul className="mt-2 space-y-1 text-sm text-slate-800">
-                  {(order.order_activity_logs ?? []).map((log) => (
-                    <li
-                      key={log.id}
-                      className="flex flex-col gap-1 border-b border-slate-100 py-1.5 last:border-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3"
-                    >
-                      <span className="shrink-0 font-mono text-xs text-slate-500">
-                        {formatDetailDate(log.created_at ?? null)}
-                      </span>
-                      <span className="inline-flex w-fit rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                        {log.event_type}
-                      </span>
-                      <span className="min-w-0 text-slate-800">{log.message}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
-          ) : null}
-
-            </div>
-            </div>
-          </div>
-
-      {orderDocPreviewModal != null ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="order-doc-preview-title"
-          onClick={() => setOrderDocPreviewModal(null)}
-        >
-          <div
-            className="max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p id="order-doc-preview-title" className="text-sm font-semibold text-slate-900">
-              Podgląd
-            </p>
-            <p className="mt-2 text-sm text-slate-700">{orderDocPreviewModal}</p>
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                onClick={() => setOrderDocPreviewModal(null)}
+        <div className="bg-white px-8 pt-4 shrink-0 border-b border-slate-200 z-10 shadow-sm">
+          <nav className="flex space-x-8">
+            {DETAIL_TABS.map((t) => (
+              <button 
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`pb-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${
+                  activeTab === t.id 
+                    ? 'border-blue-600 text-blue-600' 
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
               >
-                Zamknij
+                {t.label}
               </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="flex-1 overflow-auto p-8 bg-white">
+          {activeTab === 'summary' && (
+             <div className="flex flex-col xl:flex-row gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
+               <div className="flex-1 space-y-6">
+                 
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200">
+                    <div className="flex-1 p-6 relative group">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">DOSTAWA I PŁATNOŚĆ</h3>
+                        <RefreshCw size={18} className="text-slate-400 cursor-pointer hover:text-slate-800 transition-colors" onClick={() => { reloadOrderById(order.id); loadWmsFulfillment(); }}/>
+                      </div>
+                      <div className="space-y-4 text-base text-slate-800">
+                         <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                            <span className="text-slate-500">Metoda płatności</span>
+                            <select className="border border-slate-200 rounded px-2 py-1 text-sm bg-white outline-none" value={payMethodDraft} onChange={(e) => setPayMethodDraft(e.target.value)}>
+                              <option value="">—</option>
+                              {Array.from(new Set([...PAYMENT_METHOD_PRESETS, payMethodDraft].filter(Boolean))).map((m) => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                         </div>
+                         <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                            <span className="text-slate-500">Status płatności</span>
+                            <select className={`border border-slate-200 rounded px-2 py-1 text-sm outline-none font-bold ${paymentStatusIsPaid(payStatusDraft) ? "bg-green-50 text-green-700" : "bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}>
+                              <option value="">—</option>
+                              {Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                         </div>
+                         <div className="flex flex-col gap-1 pb-2 pt-1">
+                            <span className="text-slate-500 flex items-center"><Truck size={16} className="mr-2"/> Sposób wysyłki</span>
+                            <select className="border border-slate-200 rounded px-2 py-1.5 text-sm bg-white outline-none font-bold text-orange-600" value={shipDraft} disabled={warehouseId == null} onChange={(e) => setShipDraft(e.target.value)}>
+                              <option value="">— brak —</option>
+                              {order.shipping_method_id && !shippingMethods.some(m => m.id === order.shipping_method_id.trim()) && (
+                                <option value={order.shipping_method_id.trim()}>{order.shipping_method} (powiązanie)</option>
+                              )}
+                              {shippingMethods.map(m => <option key={m.id} value={m.id}>{m.name} {!m.is_active ? "(nieaktywna)" : ""}</option>)}
+                            </select>
+                         </div>
+                         {warehouseId != null && (shipDraft !== order.shipping_method_id?.trim() || payMethodDraft !== (order.panel_payment_method ?? "").trim() || payStatusDraft !== (order.panel_payment_status ?? "").trim()) && (
+                           <div className="flex justify-end gap-2 mt-2">
+                             <button className="px-3 py-1 text-xs border border-slate-200 rounded font-bold" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
+                             <button className="px-3 py-1 text-xs bg-slate-900 text-white rounded font-bold" disabled={shipPaySaving} onClick={() => {
+                                setShipPaySaving(true);
+                                patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null })
+                                .then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false));
+                             }}>{shipPaySaving ? "..." : "Zapisz"}</button>
+                           </div>
+                         )}
+                      </div>
+                    </div>
+
+                    <div className="flex-1 p-6 relative group">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">ADRES DOSTAWY</h3>
+                        {warehouseId != null && !addressEditing && <Edit2 size={18} className="text-slate-400 cursor-pointer hover:text-slate-800 transition-colors opacity-0 group-hover:opacity-100" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(true); }}/>}
+                      </div>
+                      {addressEditing ? (
+                         <div className="space-y-3 text-sm">
+                            <label className="block text-slate-600">Imię i nazwisko<input className={inpSm} value={addrDraft.name} onChange={e => setAddrDraft(d => ({...d, name: e.target.value}))}/></label>
+                            <label className="block text-slate-600">Ulica<input className={inpSm} value={addrDraft.street} onChange={e => setAddrDraft(d => ({...d, street: e.target.value}))}/></label>
+                            <div className="flex gap-2">
+                               <label className="block text-slate-600 flex-1">Kod<input className={inpSm} value={addrDraft.postal} onChange={e => setAddrDraft(d => ({...d, postal: e.target.value}))}/></label>
+                               <label className="block text-slate-600 flex-[2]">Miasto<input className={inpSm} value={addrDraft.city} onChange={e => setAddrDraft(d => ({...d, city: e.target.value}))}/></label>
+                            </div>
+                            <label className="block text-slate-600">Kraj<input className={inpSm} value={addrDraft.country} onChange={e => setAddrDraft(d => ({...d, country: e.target.value}))}/></label>
+                            <div className="flex justify-end gap-2 mt-2">
+                               <button className="px-3 py-1.5 text-xs border border-slate-200 rounded font-bold" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(false); }}>Anuluj</button>
+                               <button className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded font-bold" disabled={addressSaving} onClick={() => {
+                                  setAddressSaving(true);
+                                  patchOrder(order.id, { shipping_name: addrDraft.name.trim()||null, shipping_street: addrDraft.street.trim()||null, shipping_city: addrDraft.city.trim()||null, shipping_postal_code: addrDraft.postal.trim()||null, shipping_country: addrDraft.country.trim()||null })
+                                  .then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); });
+                               }}>{addressSaving ? "..." : "Zapisz"}</button>
+                            </div>
+                         </div>
+                      ) : (
+                         <div className="text-base leading-relaxed text-slate-800 space-y-1">
+                            <p className="font-bold text-lg mb-2">{summaryShippingName}</p>
+                            {shippingExtras?.company && <p className="text-slate-600"><span className="text-slate-400">Firma:</span> {shippingExtras.company}</p>}
+                            <p className="text-slate-600 flex items-center">
+                              <span className="w-16 inline-block text-slate-400">Tel:</span> 
+                              <a href={`tel:${(shippingExtras?.phone || contact.phone).replace(/\s+/g, "")}`} className="text-blue-600 hover:underline font-medium">{shippingExtras?.phone || contact.phone}</a>
+                            </p>
+                            <p className="text-slate-600 flex items-center mb-3">
+                              <span className="w-16 inline-block text-slate-400">E-mail:</span> 
+                              <span className="text-blue-600 hover:underline font-medium truncate break-all block">{shippingExtras?.email || contact.email}</span>
+                            </p>
+                            <div className="pt-3 border-t border-slate-100">
+                              {contact.addressLines.length > 0 && contact.addressLines[0] !== "—" ? contact.addressLines.map((ln, i) => <p key={i}>{ln}</p>) : <p className="text-slate-500">Brak adresu.</p>}
+                              {shippingExtras?.pickupPoint && <p className="mt-2 font-bold text-slate-700">{shippingExtras.pickupPoint}</p>}
+                              {shippingExtras?.pickupCode && <p className="text-slate-700">Kod odbioru: {shippingExtras.pickupCode}</p>}
+                            </div>
+                         </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 p-6 relative group bg-slate-50/30 rounded-r-xl">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">DOKUMENT SPRZEDAŻY</h3>
+                        {warehouseId != null && !summaryDocEditing && <Edit2 size={18} className="text-slate-400 cursor-pointer hover:text-slate-800 transition-colors opacity-0 group-hover:opacity-100" onClick={() => {
+                           const inv = parseBillingInvoice(order.addresses_json);
+                           const t = (order.panel_document_type ?? "").trim().toUpperCase();
+                           setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email });
+                           setSummaryDocEditing(true);
+                        }}/>}
+                      </div>
+                      {summaryDocEditing ? (
+                         <div className="space-y-3 text-sm">
+                            <label className="block text-slate-600">Rodzaj<select className={inpSm} value={docDraft.document_type} onChange={e => setDocDraft(d => ({...d, document_type: e.target.value as "INVOICE"|"PARAGON"}))}><option value="PARAGON">Paragon</option><option value="INVOICE">Faktura</option></select></label>
+                            <label className="block text-slate-600">Numer<input className={`${inpSm} font-mono`} value={docDraft.sales_document_number} onChange={e => setDocDraft(d => ({...d, sales_document_number: e.target.value}))}/></label>
+                            {docDraft.document_type === "INVOICE" && (
+                               <>
+                                 <label className="block text-slate-600">Firma<input className={inpSm} value={docDraft.company_name} onChange={e => setDocDraft(d => ({...d, company_name: e.target.value}))}/></label>
+                                 <label className="block text-slate-600">NIP<input className={inpSm} value={docDraft.nip} onChange={e => setDocDraft(d => ({...d, nip: e.target.value}))}/></label>
+                                 <label className="block text-slate-600">E-mail<input className={inpSm} type="email" value={docDraft.billing_email} onChange={e => setDocDraft(d => ({...d, billing_email: e.target.value}))}/></label>
+                               </>
+                            )}
+                            <div className="flex justify-end gap-2 mt-2">
+                               <button className="px-3 py-1.5 text-xs border border-slate-200 rounded font-bold" onClick={() => setSummaryDocEditing(false)}>Anuluj</button>
+                               <button className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded font-bold" disabled={docSaving} onClick={() => {
+                                  setDocSaving(true);
+                                  const isInv = docDraft.document_type === "INVOICE";
+                                  patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim()||null, company_name: isInv ? docDraft.company_name.trim()||null : null, nip: isInv ? docDraft.nip.trim()||null : null, email: isInv ? docDraft.billing_email.trim()||null : null })
+                                  .then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); });
+                               }}>{docSaving ? "..." : "Zapisz"}</button>
+                            </div>
+                         </div>
+                      ) : (
+                         <div className="text-base space-y-4">
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                              <span className="text-slate-500">Rodzaj</span>
+                              <span className="font-bold text-slate-900 bg-white border border-slate-200 px-3 py-1 rounded shadow-sm">{panelDocumentLabel}</span>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="text-slate-500">Numer</span>
+                              <span className="font-bold text-blue-600 hover:underline cursor-pointer">{(order.sales_document_number ?? "").trim() || "—"}</span>
+                            </div>
+                            {panelDocumentLabel === "Faktura" && billingInvoice && (
+                               <div className="mt-4 border-t border-slate-200 pt-4 space-y-1 text-sm text-slate-600">
+                                 {billingInvoice.companyName && <p className="font-bold text-slate-900 text-base mb-2">{billingInvoice.companyName}</p>}
+                                 {billingInvoice.nip && <p>NIP: {billingInvoice.nip}</p>}
+                                 {billingInvoice.email && <p className="truncate block break-all">{billingInvoice.email}</p>}
+                                 {billingInvoice.streetLine && <p className="mt-2">{billingInvoice.streetLine}</p>}
+                                 {billingInvoice.cityLine && <p>{billingInvoice.cityLine}</p>}
+                               </div>
+                            )}
+                         </div>
+                      )}
+                    </div>
+                 </div>
+
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                   <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">ZAMÓWIONE PRODUKTY — PODGLĄD</h3>
+                   </div>
+                   <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
+                 </div>
+
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                   <div className="flex justify-between items-center mb-5">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center"><Package size={20} className="mr-3"/> DOPASOWANE OPAKOWANIE</h3>
+                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="flex items-center text-slate-700 text-sm font-bold border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors"><Edit2 size={16} className="mr-2"/> Edytuj</Link>
+                   </div>
+                   {wmsLoading ? <p className="text-sm text-slate-500">Ładowanie...</p> : <OrderMatchedPackagingSection card={wmsFulfillment} pairRecommendationColumns />}
+                 </div>
+
+                 <div className="flex flex-col xl:flex-row gap-6">
+                    <section id="order-summary-operational-notes" className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                       <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">NOTATKI OPERACYJNE (MAGAZYN)</h3>
+                       <div className="space-y-3 mb-4">
+                         {order.operational_notes?.length ? order.operational_notes.map((n) => (
+                           <div key={n.id} className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg text-sm text-yellow-900">
+                             <p className="whitespace-pre-wrap">{n.content}</p>
+                             <p className="text-xs text-yellow-700 mt-2 opacity-80">{formatDetailDate(n.created_at)} · ID {n.author_user_id || "—"} · {[n.show_in_picking && "Zbieranie", n.show_in_packing && "Pakowanie", n.show_in_returns && "Zwroty", n.show_in_complaints && "Reklamacje"].filter(Boolean).join(", ")}</p>
+                           </div>
+                         )) : <p className="text-sm text-slate-500">Brak notatek operacyjnych.</p>}
+                       </div>
+                       <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} className="w-full border border-slate-300 rounded-lg p-3 text-sm text-slate-800 resize-none focus:outline-none focus:border-blue-400 mb-4" placeholder="Treść notatki dla magazynu..."></textarea>
+                       <div className="flex justify-between items-end">
+                         <div className="flex space-x-4 text-sm text-slate-600 font-medium">
+                           <label className="flex items-center cursor-pointer"><input type="checkbox" className="mr-2" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
+                           <label className="flex items-center cursor-pointer"><input type="checkbox" className="mr-2" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
+                         </div>
+                         <button className="bg-slate-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-800 shadow-sm transition-colors" disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()}>Zapisz notatkę</button>
+                       </div>
+                    </section>
+                    
+                    <section className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                       <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">WIADOMOŚĆ DO KLIENTA</h3>
+                       <div className="flex space-x-2 mb-4">
+                         <button className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm">✓ E-mail</button>
+                         <button className="bg-white text-slate-600 border border-slate-200 px-4 py-1.5 rounded-md text-sm font-medium hover:bg-slate-50">SMS</button>
+                       </div>
+                       <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} className="w-full border border-slate-300 rounded-lg p-3 text-sm text-slate-800 resize-none focus:outline-none focus:border-blue-400 mb-4" placeholder="Wpisz treść wiadomości..."></textarea>
+                       <div className="flex justify-between items-center">
+                         <button className="bg-white border border-slate-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 shadow-sm flex items-center"><Plus size={18} className="mr-2"/> Dodaj załącznik</button>
+                         <button className="bg-orange-500 text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-orange-600 shadow-sm flex items-center">Wyślij <Send size={16} className="ml-2"/></button>
+                       </div>
+                    </section>
+                 </div>
+               </div>
+
+               <div className="w-full xl:w-[400px] shrink-0 space-y-6">
+                 
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative">
+                   <div className="flex justify-between items-center mb-5">
+                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">KUPUJĄCY</h3>
+                     <Edit2 size={18} className="text-slate-400 cursor-pointer hover:text-slate-800" onClick={() => setEditBuyerModalOpen(true)}/>
+                   </div>
+                   <div className="text-base text-slate-800 space-y-3">
+                     <p className="font-bold text-xl text-slate-900 mb-1">{contact.name}</p>
+                     {order.customer && <Link to={`/customers/${order.customer.id}`} className="block text-sm font-medium text-blue-700 hover:underline">{order.customer.display_name}</Link>}
+                     <p className="flex items-center text-slate-600 pt-2"><span className="w-8 font-medium">Tel:</span> <a href={`tel:${contact.phone.replace(/\s+/g, "")}`} className="hover:underline">{contact.phone}</a></p>
+                     <p className="flex items-center text-slate-600"><span className="w-8 font-medium">Mail:</span> <span className="break-all">{contact.email}</span></p>
+                   </div>
+                 </div>
+
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                   <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">PODSUMOWANIE ZAMÓWIENIA</h3>
+                   
+                   {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) && (
+                     <div className="bg-[#fff9c4] border border-[#f5e08b] text-yellow-900 p-4 rounded-lg text-base leading-relaxed mb-6 shadow-sm">
+                       <strong>Uwaga klienta:</strong> {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}
+                     </div>
+                   )}
+
+                   <div className="space-y-4 text-base text-slate-600">
+                     <div className="flex justify-between items-center">
+                       <span>Źródło</span>
+                       <span className="font-bold text-slate-900">{(order.source ?? "").trim() || "—"}</span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                       <span>ID zew.</span>
+                       <span className="font-medium text-slate-800 break-all text-right ml-4">{(order.external_id ?? "").trim() || "—"}</span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                       <span>Wartość produktów</span>
+                       <span className="font-medium text-slate-800">{linesTotalDisplay}</span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                       <span>Koszt dostawy</span>
+                       <span className="font-medium text-slate-800 flex items-center">
+                          {order.panel_shipping_cost != null ? formatMoney(Number(order.panel_shipping_cost), order.currency) : (order.panel_shipping_cost_display ?? "—")}
+                          {/(allegro)/i.test((order.source ?? "").trim()) && <span className="text-orange-600 text-xs font-bold border border-orange-200 bg-orange-50 px-2 py-0.5 rounded ml-2">SMART</span>}
+                       </span>
+                     </div>
+                     
+                     <div className="border-t border-slate-200 pt-4 mt-4">
+                       <div className="flex justify-between items-end mb-2">
+                         <span className="text-slate-700 font-medium pb-1">Razem do zapłaty</span>
+                         <div className="text-right">
+                            <span className="font-black text-3xl text-slate-900">{formatMoney(order.value, order.currency)}</span>
+                         </div>
+                       </div>
+                       {paymentStatusIsPaid(order.panel_payment_status) && (
+                         <div className="flex justify-end">
+                            <span className="text-sm text-emerald-700 font-bold bg-emerald-100 px-3 py-1 rounded-md">Opłacone</span>
+                         </div>
+                       )}
+                     </div>
+                     <div className="flex justify-between items-center border-t border-slate-100 pt-3 mt-3">
+                       <span>Realizacja</span>
+                       <span className="font-medium text-slate-800">{summaryEstimatedDelivery}</span>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                   <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">RABAT I MARŻA</h3>
+                   <div className="flex space-x-2 mb-5">
+                     <div className="flex bg-slate-100 rounded-lg p-1 w-max">
+                        <button className={`px-4 py-1.5 rounded-md text-sm font-bold ${orderRabatMode === "pln" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pln")}>PLN</button>
+                        <button className={`px-4 py-1.5 rounded-md text-sm font-bold ${orderRabatMode === "pct" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pct")}>%</button>
+                     </div>
+                     <input type="text" value={orderRabatDraft} onChange={e => setOrderRabatDraft(e.target.value)} placeholder="Rabat" className="border border-slate-200 rounded-lg px-3 py-2 text-base w-full focus:outline-none focus:border-blue-400"/>
+                     <button className="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-bold" disabled={orderRabatSaving} onClick={() => void saveOrderDiscount()}>{orderRabatSaving ? "..." : "Zapisz"}</button>
+                   </div>
+                   <div className="space-y-2 text-base text-slate-600">
+                     <div className="flex justify-between"><span>Po rabacie</span><span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span></div>
+                     <div className="flex justify-between"><span>Marża %</span><span className={`font-bold ${marginTone}`}>{order.margin != null && Number.isFinite(Number(order.margin)) ? `${Number(order.margin).toFixed(2)}%` : "—"}</span></div>
+                   </div>
+                 </div>
+
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center">
+                    <Shield className="w-12 h-12 mx-auto text-blue-500 mb-3" strokeWidth={1.5} />
+                    <h4 className="font-bold text-lg text-slate-900">Safe Order</h4>
+                    <p className="text-sm text-slate-500 mt-1">To zamówienie nie ma aktywnych oznaczeń ryzyka.</p>
+                 </div>
+
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">DODATKOWE POLA</h3>
+                    <OrderAdditionalFieldsSection orderId={order.id} documents={order.order_documents ?? []} onOrderRefresh={() => void reloadOrderById(order.id)} />
+                 </div>
+
+               </div>
+             </div>
+          )}
+
+          {activeTab === 'products' && (
+             <div className="flex flex-col xl:flex-row gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
+                <div className="flex-1 space-y-6">
+                   {wmsErr && <p className="mb-3 border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950 rounded-md font-medium">{wmsErr}</p>}
+                   
+                   {warehouseId != null && (
+                     <OrderMissingProductsSection
+                       tenantId={DAMAGE_TENANT_ID}
+                       orderId={order.id}
+                       lines={wmsFulfillment?.lines ?? []}
+                       itemWaitingById={itemWaitingById}
+                       onRefreshOrder={() => void reloadOrderById(order.id)}
+                       onRefreshWms={() => void loadWmsFulfillment()}
+                       sectionDomId="wms-braki-sekcja"
+                     />
+                   )}
+
+                   <div className="flex flex-wrap items-center justify-between gap-4 py-2">
+                     <div className="flex items-center gap-4">
+                        {historyChangeCount > 0 && (
+                          <button onClick={() => setReplacementHistoryOpen(v => !v)} className="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition-colors">
+                            Historia zmian ({historyChangeCount}) {replacementHistoryOpen ? "▲" : "▼"}
+                          </button>
+                        )}
+                        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600">
+                          <input type="checkbox" className="rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={showZeroQtyHistoryRows} onChange={e => setShowZeroQtyHistoryRows(e.target.checked)}/>
+                          Pokaż wszystkie (w tym wyzerowane)
+                        </label>
+                     </div>
+                     <div className="flex gap-3">
+                        <button onClick={() => setAddProductOpen(true)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50">Dodaj produkt</button>
+                        <button onClick={() => setAddBundleOpen(true)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50">Dodaj zestaw</button>
+                        <Link to={WMS_ROUTES.packingOrder(order.id)} className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700">Spakuj</Link>
+                     </div>
+                   </div>
+
+                   {replacementHistoryOpen && historyChangeCount > 0 && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 mb-6">
+                        {replacementPairs.length > 0 && (
+                          <div className="mb-6">
+                            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Zamiany w zamówieniu</p>
+                            <ol className="list-decimal pl-5 space-y-2 text-sm text-slate-800 font-medium marker:text-slate-400">
+                              {replacementPairs.map(p => (
+                                <li key={p.sourceOrderItemId}><span className="text-slate-600">{p.fromLabel}</span> <span className="mx-2 text-slate-400">→</span> <span className="text-slate-900">{p.toLabel}</span> {p.qtyDisplay !== "—" && <span className="text-slate-500 ml-1">({p.qtyDisplay})</span>}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
+                        {panelFulfillmentHistory.length > 0 && (
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Historia WMS i usunięcia</p>
+                            <ul className="space-y-4 text-sm">
+                               {panelFulfillmentHistory.map((entry, idx) => (
+                                 <li key={`${entry.at}-${idx}`} className="border-l-2 border-slate-300 pl-4 py-1">
+                                   <p className="text-xs text-slate-500 font-bold mb-1">{formatDetailDate(entry.at)}</p>
+                                   <p className="font-semibold text-slate-800 line-through decoration-slate-400">{entry.product_name}</p>
+                                   {entry.kind === "order_line_removed" && <p className="text-xs font-bold text-red-600 mt-1 uppercase">Usunięto</p>}
+                                 </li>
+                               ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                   )}
+
+                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                     <OrderWarehouseProductsSection
+                       lines={summaryProductsLines}
+                       orderItems={order.items}
+                       wmsByItemId={wmsByItemId}
+                       wmsFulfillment={wmsFulfillment}
+                       wmsLoading={wmsLoading}
+                       currency={order.currency}
+                       productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
+                       orderId={order.id}
+                       linesTotalDisplay={linesTotalDisplay}
+                       itemWaitingById={itemWaitingById}
+                       onRefreshOrder={() => void reloadOrderById(order.id)}
+                       onRefreshWms={() => void loadWmsFulfillment()}
+                       onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }}
+                       onLineAction={handleOrderLineMenuAction}
+                       formatMoney={formatMoney}
+                       hideLineTotalHeader
+                       panelFulfillmentHistory={panelFulfillmentHistory}
+                       formatDetailDate={formatDetailDate}
+                       showProductLineHistory={showZeroQtyHistoryRows}
+                     />
+                   </div>
+                   
+                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center"><Package size={20} className="mr-3"/> DOPASOWANE OPAKOWANIE</h3>
+                      {wmsLoading ? <p className="text-sm text-slate-500">Ładowanie...</p> : <OrderMatchedPackagingSection card={wmsFulfillment} />}
+                   </div>
+                </div>
+
+                <div className="w-full xl:w-[400px] shrink-0 space-y-6">
+                   <WmsOperationTimesKpiPanel cells={wmsSidebarTimeCells} />
+                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Oś czasu - Zdarzenia WMS</h3>
+                     <OrderHistoryTimeline compact events={orderHistoryTimelineEvents} formatDate={formatDetailDate} />
+                   </div>
+                </div>
+             </div>
+          )}
+
+          {activeTab === 'comms' && (
+             <div className="flex flex-col xl:flex-row gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
+               <div className="flex-1 space-y-8">
+                 
+                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">NOTATKI OPERACYJNE (MAGAZYN)</h3>
+                    <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} className="w-full border border-slate-300 rounded-lg p-4 text-sm text-slate-800 resize-none focus:outline-none focus:border-blue-400 mb-5 bg-slate-50" placeholder="Np. delikatny towar, gratis, priorytet składowania..."></textarea>
+                    <div className="flex justify-between items-end">
+                      <div className="flex space-x-6 text-sm text-slate-700 font-medium">
+                        <label className="flex items-center cursor-pointer"><input type="checkbox" className="mr-2 w-4 h-4 rounded border-slate-300" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
+                        <label className="flex items-center cursor-pointer"><input type="checkbox" className="mr-2 w-4 h-4 rounded border-slate-300" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
+                      </div>
+                      <button className="bg-slate-800 text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors" disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()}>Zapisz notatkę</button>
+                    </div>
+                    {order.operational_notes?.length > 0 && (
+                       <div className="mt-6 border-t border-slate-200 pt-6 space-y-3">
+                          {order.operational_notes.map((n) => (
+                             <div key={n.id} className="bg-slate-50 border border-slate-100 p-4 rounded-lg text-sm text-slate-800">
+                               <div className="flex items-center justify-between mb-2">
+                                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{[n.show_in_picking && "Zbieranie", n.show_in_packing && "Pakowanie", n.show_in_returns && "Zwroty", n.show_in_complaints && "Reklamacje"].filter(Boolean).join(" · ") || "Ogólne"}</span>
+                                 <span className="text-xs text-slate-400 font-medium">{formatDetailDate(n.created_at)}</span>
+                               </div>
+                               <p className="whitespace-pre-wrap">{n.content}</p>
+                             </div>
+                          ))}
+                       </div>
+                    )}
+                 </section>
+
+                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">NOWA WIADOMOŚĆ</h3>
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-5">
+                      <div className="flex space-x-2">
+                        <button className="bg-blue-50 text-blue-700 border border-blue-200 px-5 py-2 rounded-lg text-sm font-bold shadow-sm">✓ E-mail</button>
+                        <button className="bg-white text-slate-600 border border-slate-200 px-5 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">SMS</button>
+                      </div>
+                      <select className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white outline-none min-w-[200px]">
+                        <option>Szablon wiadomości</option>
+                      </select>
+                    </div>
+                    <div className="relative mb-5">
+                      <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={6} className="w-full border border-slate-300 rounded-lg p-4 pb-12 text-sm text-slate-800 resize-none focus:outline-none focus:border-blue-400 bg-slate-50" placeholder="Wpisz treść..."></textarea>
+                      <button className="absolute bottom-3 right-3 bg-white border border-slate-200 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 flex items-center"><Bot size={14} className="mr-1.5 text-blue-600"/> Sugestie AI</button>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <button className="bg-white border border-slate-300 text-slate-700 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 shadow-sm flex items-center"><Plus size={18} className="mr-2"/> Dodaj załącznik</button>
+                      <button className="bg-orange-500 text-white px-10 py-2.5 rounded-lg text-sm font-bold hover:bg-orange-600 shadow-sm flex items-center">Wyślij <Send size={16} className="ml-2"/></button>
+                    </div>
+                 </section>
+
+                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">HISTORIA KORESPONDENCJI</h3>
+                      <div className="relative">
+                         <Search size={18} className="absolute left-3 top-2.5 text-slate-400"/>
+                         <input type="text" placeholder="Szukaj" className="border border-slate-300 rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-blue-400 bg-slate-50 w-[300px]"/>
+                      </div>
+                    </div>
+                    <div className="flex gap-6 text-sm text-slate-500 mb-6 pb-4 border-b border-slate-100">
+                      <p><strong>Utworzono:</strong> {formatDetailDate(order.created_at)}</p>
+                      <p><strong>Ost. wiadomość:</strong> {formatDetailDate(order.order_date ?? order.created_at)}</p>
+                    </div>
+                    <div className="space-y-6">
+                       <div className="flex text-sm">
+                         <div className="w-40 shrink-0 font-bold text-slate-500">{dateLine}</div>
+                         <div className="font-semibold text-slate-800">System — Utworzenie zamówienia w systemie</div>
+                       </div>
+                       {wmsFulfillment?.customer_comment && (
+                         <div className="flex text-sm bg-blue-50 border border-blue-100 p-4 rounded-lg">
+                           <div className="w-36 shrink-0 font-bold text-slate-500">Klient (Import)</div>
+                           <div className="font-medium text-slate-800">{wmsFulfillment.customer_comment}</div>
+                         </div>
+                       )}
+                       {wmsFulfillment?.staff_notes && (
+                         <div className="flex text-sm bg-emerald-50 border border-emerald-100 p-4 rounded-lg">
+                           <div className="w-36 shrink-0 font-bold text-slate-500">Magazyn</div>
+                           <div className="font-medium text-slate-800">{wmsFulfillment.staff_notes}</div>
+                         </div>
+                       )}
+                    </div>
+                 </section>
+
+               </div>
+
+               <div className="w-full xl:w-[400px] shrink-0 space-y-6">
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center"><Bot size={18} className="mr-2 text-blue-600"/> NOTATKA AI</h3>
+                    <p className="text-sm text-slate-600 italic bg-slate-50 p-4 rounded-lg border border-slate-100">Krótki kontekst podsumowujący korespondencję (wkrótce).</p>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">DANE KLIENTA</h3>
+                    <div className="text-base text-slate-800 space-y-4">
+                      <p className="font-bold text-xl flex items-center"><User size={24} className="mr-3 text-slate-400"/> {contact.name}</p>
+                      <p className="flex items-center text-slate-600 pl-9"><span className="bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded mr-3">MAIL</span> <a href={`mailto:${contact.email}`} className="hover:underline truncate">{contact.email}</a></p>
+                      <p className="flex items-center text-slate-600 pl-9 font-medium"><span className="bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded mr-3">TEL</span> {contact.phone}</p>
+                    </div>
+                  </div>
+               </div>
+             </div>
+          )}
+
+          {activeTab === 'docs' && (
+             <div className="flex flex-col gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
+               {docUploadErr && <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-red-900 font-medium text-sm">{docUploadErr}</div>}
+               <OrderDocFilesTableSection title={`Dokumenty (${docsTabDocumentsRows.length})`} rows={docsTabDocumentsRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("docs", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("docs", row)} />
+               <OrderDocFilesTableSection title={`Pliki z załączników (${docsTabFilesRows.length})`} rows={docsTabFilesRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("files", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("files", row)} />
+               <OrderDocFilesTableSection title={`Listy przewozowe (${docsTabWaybillsRows.length})`} rows={docsTabWaybillsRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("waybills", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("waybills", row)} />
+             </div>
+          )}
+
+          {activeTab === 'logs' && (
+             <div className="flex flex-col gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+                   <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Dziennik zdarzeń i systemowy</h3>
+                     <div className="relative w-[300px]">
+                       <Search size={18} className="absolute left-3 top-2.5 text-slate-400"/>
+                       <input type="text" placeholder="Filtruj logi..." value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} className="w-full border border-slate-300 rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-blue-400 bg-slate-50"/>
+                     </div>
+                   </div>
+                   
+                   {summaryPanelLogs.length === 0 ? (
+                     <p className="text-slate-500 text-center py-8">Brak wpisów.</p>
+                   ) : (
+                     <table className="w-full text-left text-sm">
+                       <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-200">
+                         <tr>
+                           <th className="py-3 px-4 w-48">Czas</th>
+                           <th className="py-3 px-4 w-48">Moduł / Zdarzenie</th>
+                           <th className="py-3 px-4">Komunikat systemowy</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-slate-100">
+                         {summaryPanelLogs.map((row) => (
+                           <tr key={String(row.id)} className={`hover:bg-slate-50 transition-colors ${row.severity === 'error' ? 'bg-red-50 text-red-900' : row.severity === 'warn' ? 'bg-amber-50 text-amber-900' : 'text-slate-800'}`}>
+                             <td className="py-3 px-4 text-slate-500 font-mono text-xs">{row.at}</td>
+                             <td className="py-3 px-4"><span className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${row.severity === 'error' ? 'bg-red-200 text-red-900' : row.severity === 'warn' ? 'bg-amber-200 text-amber-900' : 'bg-slate-200 text-slate-700'}`}>{row.kind}</span></td>
+                             <td className="py-3 px-4 font-medium">{row.msg}</td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   )}
+                </div>
+             </div>
+          )}
+        </div>
+      </div>
+
+      {/* MODALS AND OVERLAYS PRESERVED DIRECTLY FROM ORIGINAL */}
+      {orderDocPreviewModal != null && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setOrderDocPreviewModal(null)}>
+          <div className="max-w-md w-full rounded-xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-lg font-bold text-slate-900 mb-2">Podgląd</p>
+            <p className="text-sm text-slate-600 mb-6 break-all">{orderDocPreviewModal}</p>
+            <div className="flex justify-end"><button className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => setOrderDocPreviewModal(null)}>Zamknij</button></div>
+          </div>
+        </div>
+      )}
+
+      {docTypeModalFile && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => !docUploadBusy && setDocTypeModalFile(null)}>
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-lg font-bold text-slate-900 mb-1">Typ dokumentu</p>
+            <p className="text-sm text-slate-500 mb-6 truncate">{docTypeModalFile.name}</p>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Wybierz rodzaj wgrywanego pliku:</label>
+            <select className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 mb-6" value={docTypeModalChoice} disabled={docUploadBusy} onChange={(e) => setDocTypeModalChoice(e.target.value as OrderDocModalType)}>
+              {ORDER_DOCUMENT_MODAL_TYPES.map((t) => <option key={t} value={t}>{orderDocumentTypeToLabel(t).name}</option>)}
+            </select>
+            <div className="flex justify-end gap-3">
+              <button className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50" disabled={docUploadBusy} onClick={() => setDocTypeModalFile(null)}>Anuluj</button>
+              <button className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50" disabled={docUploadBusy} onClick={handleConfirmDocTypeModal}>{docUploadBusy ? "Wgrywanie…" : "Wgraj plik"}</button>
             </div>
           </div>
         </div>
-      ) : null}
+      )}
 
-      {docTypeModalFile ? (
-        <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="order-doc-type-modal-title"
-          onClick={() => !docUploadBusy && setDocTypeModalFile(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p id="order-doc-type-modal-title" className="text-sm font-semibold text-slate-900">
-              Typ dokumentu
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {docTypeModalFile.name} — wybierz rodzaj przed wgraniem.
-            </p>
-            <label className="mt-4 flex flex-col gap-1 text-xs text-slate-600">
-              Rodzaj
-              <select
-                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900"
-                value={docTypeModalChoice}
-                disabled={docUploadBusy}
-                onChange={(e) => setDocTypeModalChoice(e.target.value as OrderDocModalType)}
-              >
-                {ORDER_DOCUMENT_MODAL_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {orderDocumentTypeToLabel(t).name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                disabled={docUploadBusy}
-                onClick={() => setDocTypeModalFile(null)}
-              >
-                Anuluj
-              </button>
-              <button
-                type="button"
-                className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                disabled={docUploadBusy}
-                onClick={handleConfirmDocTypeModal}
-              >
-                {docUploadBusy ? "Wgrywanie…" : "Wgraj"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <OrderAddProductModal open={addProductOpen} onClose={() => setAddProductOpen(false)} tenantId={DAMAGE_TENANT_ID} orderId={order.id} currency={(order.currency ?? "PLN").trim() || "PLN"} onAdded={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); dispatchWmsShortagesUpdated(); }}/>
+      <OrderAddBundleModal open={addBundleOpen} onClose={() => setAddBundleOpen(false)} tenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} currency={(order.currency ?? "PLN").trim() || "PLN"} onAdded={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); dispatchWmsShortagesUpdated(); }}/>
+      
+      {tableReplaceOpen && tableReplaceItemId != null && tableReplaceContext && (
+        <OrderReplaceProductModal open onClose={() => { setTableReplaceOpen(false); setTableReplaceItemId(null); }} orderId={order.id} tenantId={DAMAGE_TENANT_ID} orderItemId={tableReplaceItemId} sourceProductId={tableReplaceContext.sourceProductId} sourceProductName={tableReplaceContext.sourceProductName} missingQuantity={tableReplaceContext.missingQuantity} warehouseId={warehouseId} onReplaced={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); dispatchWmsShortagesUpdated(); setTableReplaceOpen(false); setTableReplaceItemId(null); }} />
+      )}
 
-      <OrderAddProductModal
-        open={addProductOpen}
-        onClose={() => setAddProductOpen(false)}
-        tenantId={DAMAGE_TENANT_ID}
-        orderId={order.id}
-        currency={(order.currency ?? "PLN").trim() || "PLN"}
-        onAdded={() => {
-          void (async () => {
-            await reloadOrderById(order.id);
-            await loadWmsFulfillment();
-            dispatchWmsShortagesUpdated();
-          })();
-        }}
-      />
+      <OrderEditProductModal open={editProductItem != null} onClose={() => { setEditProductItem(null); setEditProductModalFocus("main"); }} orderId={order.id} item={editProductItem} focusSection={editProductModalFocus} currency={(order.currency ?? "PLN").trim() || "PLN"} onSaved={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); }} />
 
-      <OrderAddBundleModal
-        open={addBundleOpen}
-        onClose={() => setAddBundleOpen(false)}
-        tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
-        orderId={order.id}
-        currency={(order.currency ?? "PLN").trim() || "PLN"}
-        onAdded={() => {
-          void (async () => {
-            await reloadOrderById(order.id);
-            await loadWmsFulfillment();
-            dispatchWmsShortagesUpdated();
-          })();
-        }}
-      />
+      {summaryLineRemoveItemId != null && (
+        <ConfirmModal title="Usunąć pozycję?" message={<>Czy na pewno usunąć pozycję z zamówienia?</>} confirmLabel="Usuń" pending={summaryLineRemovePending} onCancel={() => { if (!summaryLineRemovePending) setSummaryLineRemoveItemId(null); }} onConfirm={async () => { const id = summaryLineRemoveItemId; if (id == null) return; setSummaryLineRemovePending(true); try { await deleteOrderItemLine(order.id, id); await reloadOrderById(order.id); await loadWmsFulfillment(); dispatchWmsShortagesUpdated(); setSummaryLineRemoveItemId(null); } catch { window.alert("Błąd usunięcia."); } finally { setSummaryLineRemovePending(false); } }} />
+      )}
 
-      {warehouseId != null ? (
-        <NewComplaintWizard
-          open={complaintWizardOpen}
-          onClose={() => {
-            setComplaintWizardOpen(false);
-            setComplaintPrefillItemIds(undefined);
-          }}
-          warehouseId={warehouseId}
-          initialOrderId={order?.id ?? null}
-          initialOrderItemIds={complaintPrefillItemIds}
-          onCreated={(cid) => navigate(`/orders/complaints/${cid}`)}
-        />
-      ) : null}
-    </>
+      {warehouseId != null && (
+        <NewComplaintWizard open={complaintWizardOpen} onClose={() => { setComplaintWizardOpen(false); setComplaintPrefillItemIds(undefined); }} warehouseId={warehouseId} initialOrderId={order?.id ?? null} initialOrderItemIds={complaintPrefillItemIds} onCreated={(cid) => navigate(`/orders/complaints/${cid}`)} />
+      )}
+
+      {order && (
+        <EditBuyerModal open={editBuyerModalOpen} onClose={() => setEditBuyerModalOpen(false)} orderId={order.id} initialFirstName={(order.first_name ?? "").trim()} initialLastName={(order.last_name ?? "").trim()} initialPhone={contact.phone === "—" ? "" : contact.phone} initialEmail={contact.email === "—" ? "" : contact.email} canSave={warehouseId != null} onSaved={() => void reloadOrderById(order.id)} />
+      )}
+    </div>
   );
 }
