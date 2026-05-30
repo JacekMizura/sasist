@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ChevronDown,
@@ -532,6 +532,76 @@ function paymentStatusIsPaid(status: string | null | undefined): boolean {
   if (!s) return false;
   if (/nieopłac|nieoplac|unpaid|częściowo|partial|nie\s*zapłac/.test(s)) return false;
   return /opłac|zapłac|paid|complete|zapłacono|opłacone|tak/.test(s);
+}
+
+function PanelCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">{title}</h3>
+      <div className="space-y-2 text-sm text-slate-800">{children}</div>
+    </section>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="font-medium text-slate-900">{value}</span>
+    </div>
+  );
+}
+
+function SummaryDashboardCard({
+  title,
+  children,
+  right,
+  className,
+  contentClassName,
+}: {
+  title: string;
+  children: React.ReactNode;
+  right?: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
+}) {
+  return (
+    <section
+      className={
+        className ??
+        "rounded-md border border-slate-200 bg-white p-5 shadow-sm"
+      }
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{title}</h3>
+        {right}
+      </div>
+      <div className={contentClassName ?? ""}>{children}</div>
+    </section>
+  );
+}
+
+const SUMMARY_TOP_CARD_SHELL =
+  "rounded-md border border-slate-200 bg-white p-5 shadow-sm";
+
+function SummaryCompactRow({
+  label,
+  value,
+  actions,
+}: {
+  label: string;
+  value: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-2 text-sm last:border-b-0">
+      <span className="shrink-0 text-slate-500">{label}</span>
+      <div className="flex min-w-0 items-start justify-end gap-1.5 text-right">
+        <div className="min-w-0 font-medium leading-snug text-slate-900">{value}</div>
+        {actions}
+      </div>
+    </div>
+  );
 }
 
 type OrderDocTableKindTone = "fa" | "pa" | "rz" | "lp" | "na";
@@ -1712,7 +1782,7 @@ export default function OrderDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center gap-2 text-slate-500 p-8">
+      <div className="flex min-h-[40vh] items-center gap-2 text-slate-500 bg-white p-6">
         <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
         Ładowanie…
       </div>
@@ -1720,7 +1790,7 @@ export default function OrderDetailPage() {
   }
   if (err || !order) {
     return (
-      <div className="p-8">
+      <div className="bg-white p-6 h-screen">
         <p className="text-sm text-red-600">{err || "Błąd"}</p>
         <Link to="/orders/list" className="mt-4 inline-block text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline">
           ← Lista zamówień
@@ -1773,722 +1843,487 @@ export default function OrderDetailPage() {
 
   return (
     <div className="min-h-screen flex font-sans text-slate-800 bg-white">
-      {isSidebarOpen && (
-        <div className="w-[300px] shrink-0 bg-[#f8f9fa] border-r border-slate-200 flex flex-col h-screen overflow-y-auto transition-all duration-300">
-          <div className="p-5 flex justify-between items-center text-sm font-bold text-slate-500 tracking-wider">
-            STATUS PANELU
-            <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-slate-600 bg-white p-1 rounded border border-slate-200 shadow-sm"><ChevronLeft size={16} /></button>
-          </div>
-          <div className="px-5 pb-5">
-            <OrderStatusSidebar
-              warehouseId={warehouseId}
-              panelSummary={panelSummary}
-              panelSubgroups={panelSubgroups}
-              panelFilter={sidebarFilter}
-              onPanelFilterChange={(f) => navigate("/orders/list", { state: { panelFilter: f } })}
-              chromeVariant="sellasist"
-              collapsed={false}
-              parentScrollContainer={false}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        
-        <div className="bg-white px-8 py-3 flex justify-between items-center border-b border-slate-200 shrink-0 text-sm">
-          <div className="flex items-center text-slate-500 space-x-3 font-medium">
-            {!isSidebarOpen && <button onClick={() => setIsSidebarOpen(true)} className="mr-2 text-slate-400 hover:text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-200 shadow-sm"><ChevronRight size={16} /></button>}
-            <Link to="/dashboard" className="cursor-pointer hover:text-slate-800"><Home size={16}/></Link>
-            <span>›</span>
-            <Link to="/orders/list" className="cursor-pointer hover:text-slate-800">Zamówienia</Link>
-            <span>›</span>
-            <span className="text-slate-900 font-bold">#{order.number ?? order.id}</span>
-          </div>
-          <div className="flex items-center space-x-3 font-semibold text-xs">
-            <span className="bg-white text-slate-700 px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">WMS</span>
-            {wmsDualWorkflow ? (
-               <>
-                 <span className={`px-2 flex items-center ${wmsDualWorkflow.pickedSum >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "text-emerald-700" : "text-blue-600"}`}>
-                   <ShoppingCart size={14} className="mr-1"/> Zbieranie {wmsDualWorkflow.pickedSum}/{wmsDualWorkflow.total}
-                 </span>
-                 <span className={`px-2 flex items-center ${wmsDualWorkflow.packed >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "text-emerald-700" : "text-slate-500"}`}>
-                   <Package size={14} className="mr-1"/> Pakowanie {wmsDualWorkflow.packed}/{wmsDualWorkflow.total}
-                 </span>
-               </>
-            ) : <span className="text-slate-500">Brak postępu WMS</span>}
-            
-            {showWmsOperationalHeaderBadge && (
-               <OrderWmsOperationalBadge
-                 workflowPhase={wmsWorkflowPhaseForBadge}
-                 packedAtIso={order.wms_packed_at}
-                 packedByLabel={order.wms_packed_by_label}
-                 className="!h-7 !rounded-md !px-3 !py-1 !text-xs !shadow-sm"
-               />
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white px-8 py-5 flex justify-between items-center border-b border-slate-200 shrink-0">
-          <div className="flex items-center space-x-4">
-            <div className="flex space-x-1">
-              <button 
-                onClick={() => prevOrderId != null && navigate(`/orders/${prevOrderId}`, { state: location.state })}
-                disabled={prevOrderId == null}
-                className={ORDER_DETAIL_HEADER_ICON_BTN}
-              ><ChevronLeft size={18} /></button>
-              <button 
-                onClick={() => nextOrderId != null && navigate(`/orders/${nextOrderId}`, { state: location.state })}
-                disabled={nextOrderId == null}
-                className={ORDER_DETAIL_HEADER_ICON_BTN}
-              ><ChevronRight size={18} /></button>
-              <OrderPriorityFlamePicker
-                orderId={order.id}
-                priorityColor={order.priority_color ?? null}
-                compactTrigger
-                onUpdated={(next) => setOrder((prev) => (prev ? { ...prev, priority_color: next } : prev))}
-              />
-            </div>
-            
-            <div className="ml-4 flex items-baseline space-x-4">
-              <span className="text-2xl font-black text-slate-900 tracking-tight" onDoubleClick={() => navigator.clipboard.writeText(String(order.number ?? order.id)).catch(() => {})}>Zamówienie {order.number ?? order.id}</span>
-              <span className="text-slate-400 text-xs font-medium">{dateLine}</span>
-              {order.external_id ? (
-                <span className="text-slate-400 text-xs cursor-pointer hover:text-slate-600" onClick={() => navigator.clipboard.writeText((order.external_id ?? "").trim()).catch(() => {})}>
-                  ID zew: {formatExternalIdSnippet(order.external_id)}
-                </span>
-              ) : null}
-              {order.source ? <span className="text-slate-400 text-xs">{(order.source ?? "").trim()}</span> : null}
-            </div>
-            
-            <div className="ml-6 flex items-center bg-white rounded border border-slate-300 shadow-sm px-3 py-1.5 text-xs font-bold text-slate-700">
-               <OrderDetailPrimaryStatusDropdown
-                  variant="compact"
-                  currentStatus={order.order_ui_status ?? null}
-                  panelSummary={panelSummary}
-                  panelSubgroups={panelSubgroups}
-                  saving={panelSaving}
-                  onSelectStatus={async (subStatusId) => {
-                    setPanelSaving(true);
-                    try {
-                      if(warehouseId){
-                        const updated = await patchOrderUiStatus(order.id, DAMAGE_TENANT_ID, warehouseId, subStatusId);
-                        setOrder((prev) => prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev);
-                        await loadPanelSummary();
-                      }
-                    } finally {
-                      setPanelSaving(false);
-                    }
-                  }}
-                />
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2 text-slate-500">
-            <button 
-               onClick={() => {
-                 setOfficePin((p) => {
-                   const next = !p;
-                   if (next) window.localStorage.setItem(orderOfficePinStorageKey(order.id), "1");
-                   else window.localStorage.removeItem(orderOfficePinStorageKey(order.id));
-                   return next;
-                 });
-               }}
-               className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${officePin ? "!border-amber-400 !bg-amber-50 !text-amber-600" : ""}`}
-            >
-               <Bookmark size={18} className={officePin ? "fill-current" : ""}/>
-            </button>
-            <button 
-              onClick={() => { setActiveTab("summary"); setTimeout(() => document.getElementById("order-summary-operational-notes")?.scrollIntoView({ behavior: "smooth" }), 0); }}
-              className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order.has_internal_note ? "!border-red-300 !bg-red-50 !text-red-700" : ""}`}
-            ><Pin size={18} /></button>
-            <button 
-              onClick={() => { setActiveTab("comms"); setTimeout(() => document.getElementById("order-comms-note")?.focus(), 0); }}
-              className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order.has_customer_comment ? "!border-emerald-300 !bg-emerald-50 !text-emerald-700" : ""}`}
-            >
-              <Mail size={18} />
-              {order.has_customer_comment && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>}
-            </button>
-            <button className={ORDER_DETAIL_HEADER_ICON_BTN} onClick={() => setActiveTab("comms")}><Inbox size={18} /></button>
-            <button className={ORDER_DETAIL_HEADER_ICON_BTN} onClick={() => setActiveTab("docs")}><Files size={18} /></button>
-            <div className="w-px h-6 bg-slate-300 mx-2"></div>
-            <button className={ORDER_DETAIL_HEADER_ICON_BTN} onClick={() => { reloadOrderById(order.id); loadWmsFulfillment(); }}><RefreshCw size={18} /></button>
-            <button className={ORDER_DETAIL_HEADER_ICON_BTN} onClick={() => window.print()}><Printer size={18} /></button>
-            <button className={ORDER_DETAIL_HEADER_ICON_BTN}><MoreVertical size={18} /></button>
-            <Link to={WMS_ROUTES.packingOrder(order.id)} className="ml-4 bg-blue-600 text-white px-6 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm transition-all text-center">
-              Spakuj
-            </Link>
-          </div>
-        </div>
-
-        <div className="bg-white px-8 pt-4 shrink-0 border-b border-slate-200 z-10 shadow-sm">
-          <nav className="flex space-x-8">
-            {DETAIL_TABS.map((t) => (
-              <button 
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`pb-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${
-                  activeTab === t.id 
-                    ? 'border-blue-600 text-blue-600' 
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
+      {/* Pasek statusów wg Twojej logiki */}
+      <div className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 border-r border-slate-200 bg-slate-50 lg:flex ${isStatusPanelCollapsed ? "w-14" : "w-[260px]"}`}>
+         <OrderStatusSidebar
+            warehouseId={warehouseId}
+            panelSummary={panelSummary}
+            panelSubgroups={panelSubgroups}
+            panelFilter={sidebarFilter}
+            onPanelFilterChange={(f) => navigate("/orders/list", { state: { panelFilter: f } })}
+            chromeVariant="sellasist"
+            collapsed={isStatusPanelCollapsed}
+            parentScrollContainer
+            titleTrailing={
+              <button
+                type="button"
+                onClick={() => setIsStatusPanelCollapsed((v) => !v)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-100"
               >
-                {t.label}
+                <ChevronLeft className={`h-4 w-4 transition-transform ${isStatusPanelCollapsed ? "rotate-180" : ""}`} />
               </button>
-            ))}
-          </nav>
+            }
+          />
+      </div>
+
+      <div className="flex-1 flex flex-col h-screen overflow-hidden bg-white">
+        <div className="w-full flex-col lg:flex-row lg:items-start p-6 pb-0 max-w-[1600px] mx-auto">
+            <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
+              <Link to="/dashboard" className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800">
+                <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              </Link>
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
+              <Link to="/orders/list" className="font-medium text-slate-500 transition hover:text-slate-800">Zamówienia</Link>
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
+              <span className="font-medium text-slate-900">#{order.number ?? order.id}</span>
+            </nav>
+
+            <div className="min-w-0 flex-1 space-y-4">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 lg:flex-nowrap lg:gap-x-3 pb-4">
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button type="button" disabled={prevOrderId == null} onClick={() => prevOrderId != null && navigate(`/orders/${prevOrderId}`, { state: location.state })} className={ORDER_DETAIL_HEADER_ICON_BTN}>
+                      <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
+                    </button>
+                    <button type="button" disabled={nextOrderId == null} onClick={() => nextOrderId != null && navigate(`/orders/${nextOrderId}`, { state: location.state })} className={ORDER_DETAIL_HEADER_ICON_BTN}>
+                      <ChevronRight className="h-4 w-4 shrink-0" strokeWidth={2} />
+                    </button>
+                    <div className="mx-0.5 hidden h-6 w-px shrink-0 bg-slate-200 sm:block" />
+                    <OrderPriorityFlamePicker orderId={order.id} priorityColor={order.priority_color ?? null} compactTrigger onUpdated={(next) => setOrder((prev) => (prev ? { ...prev, priority_color: next } : prev))} />
+                  </div>
+
+                  <div className="min-w-0 flex-1 lg:min-w-[12rem] flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="text-sm font-medium text-slate-500 uppercase tracking-wide">Zamówienie</span>
+                      <span className="text-2xl font-bold tracking-tight text-slate-900">{order.number ?? order.id}</span>
+                      <span className="text-[11px] text-slate-400">{dateLine}</span>
+                      {formatExternalIdSnippet(order.external_id) && <span className="text-[11px] text-slate-400">ID zew: {formatExternalIdSnippet(order.external_id)}</span>}
+                      {(order.source ?? "").trim() && <span className="hidden text-[11px] text-slate-400 md:inline">{(order.source ?? "").trim()}</span>}
+                  </div>
+
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                      <button type="button" onClick={() => { if (!order?.id) return; setOfficePin((p) => { const next = !p; try { if (next) window.localStorage.setItem(orderOfficePinStorageKey(order.id), "1"); else window.localStorage.removeItem(orderOfficePinStorageKey(order.id)); } catch {} return next; }); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${officePin ? "border-amber-400 bg-amber-50 text-amber-600" : ""}`}>
+                        <Bookmark className={`h-4 w-4 shrink-0 ${officePin ? "fill-current" : ""}`} strokeWidth={2} />
+                      </button>
+                      <button type="button" onClick={() => { setActiveTab("summary"); window.setTimeout(() => { document.getElementById("order-summary-operational-notes")?.scrollIntoView({ behavior: "smooth" }); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_internal_note ? "border-red-300 bg-red-50 text-red-700" : ""}`}>
+                        <Pin className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      </button>
+                      <div className="relative" ref={returnsComplaintsRef}>
+                        <button type="button" onClick={() => setReturnsComplaintsOpen((v) => !v)} className={ORDER_DETAIL_HEADER_ICON_BTN}>
+                          <MessageSquareWarning className="h-4 w-4 shrink-0" strokeWidth={2} />
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => { setActiveTab("comms"); window.setTimeout(() => { document.getElementById("order-comms-note")?.focus(); }, 0); }} className={`${ORDER_DETAIL_HEADER_ICON_BTN} ${order?.has_customer_comment ? "border-emerald-300 bg-emerald-50 text-emerald-700" : ""}`}>
+                        <Mail className="h-4 w-4 shrink-0" strokeWidth={2} />
+                        {order?.has_customer_comment && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>}
+                      </button>
+                      <div className="w-px h-6 bg-slate-200 mx-1"></div>
+                      <button type="button" onClick={() => window.print()} className={ORDER_DETAIL_HEADER_ICON_BTN}><Printer className="h-4 w-4 shrink-0" strokeWidth={2} /></button>
+                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="inline-flex items-center rounded-md bg-blue-600 px-4 py-1.5 text-sm font-bold text-white transition hover:bg-blue-700">Spakuj</Link>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4">
+                  <div className="flex items-center min-w-[200px]">
+                    {warehouseId != null ? (
+                      <OrderDetailPrimaryStatusDropdown variant="compact" currentStatus={order.order_ui_status ?? null} panelSummary={panelSummary} panelSubgroups={panelSubgroups} saving={panelSaving} onSelectStatus={async (subStatusId) => { setPanelSaving(true); try { const updated = await patchOrderUiStatus(order.id, DAMAGE_TENANT_ID, warehouseId, subStatusId); setOrder((prev) => prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev); await loadPanelSummary(); } finally { setPanelSaving(false); } }} />
+                    ) : panelOrderStatusBrief ? (
+                      <OrderUiStatusConfigRowPresent status={panelOrderStatusBrief} variant="compact" />
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">WMS</span>
+                    {wmsDualWorkflow ? (
+                      <div className="flex gap-2">
+                        <span className={`inline-flex items-center rounded border px-2.5 py-1 text-[10px] font-bold ${wmsDualWorkflow.pickedSum >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}>
+                          Zbieranie {wmsDualWorkflow.pickedSum}/{wmsDualWorkflow.total}
+                        </span>
+                        <span className={`inline-flex items-center rounded border px-2.5 py-1 text-[10px] font-bold ${wmsDualWorkflow.packed >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-600"}`}>
+                          Pakowanie {wmsDualWorkflow.packed}/{wmsDualWorkflow.total}
+                        </span>
+                      </div>
+                    ) : <span className="text-xs text-slate-400">Brak postępu</span>}
+                  </div>
+                </div>
+
+                <div className="border-b border-slate-200 mt-2">
+                  <div className="flex gap-6 overflow-x-auto">
+                    {DETAIL_TABS.map((t) => (
+                      <button key={t.id} onClick={() => setActiveTab(t.id)} className={`pb-3 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 -mb-px ${ activeTab === t.id ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800" }`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+            </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-8 bg-white">
-          {activeTab === 'summary' && (
-             <div className="flex flex-col xl:flex-row gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
-               <div className="flex-1 space-y-6">
-                 
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200">
-                    <div className="flex-1 p-6 relative group">
-                      <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">DOSTAWA I PŁATNOŚĆ</h3>
-                        <RefreshCw size={18} className="text-slate-400 cursor-pointer hover:text-slate-800 transition-colors" onClick={() => { reloadOrderById(order.id); loadWmsFulfillment(); }}/>
+        <div className="flex-1 overflow-auto bg-white p-6">
+          <div className="max-w-[1600px] mx-auto">
+            {activeTab === "summary" ? (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+                <div className="min-w-0 space-y-6">
+                  {/* Trzy główne kafelki obok siebie */}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <SummaryDashboardCard
+                      className={SUMMARY_TOP_CARD_SHELL}
+                      title="Dostawa i płatność"
+                      right={
+                        <span className="flex items-center gap-2">
+                          <button type="button" className="text-slate-400 hover:text-slate-800" onClick={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); }}><RefreshCw className="h-4 w-4" strokeWidth={2}/></button>
+                        </span>
+                      }
+                    >
+                      <SummaryCompactRow label="Metoda płatności" value={<select className={inpSm} value={payMethodDraft} onChange={(e) => setPayMethodDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_METHOD_PRESETS, payMethodDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>} />
+                      <div className="flex items-center justify-between border-b border-slate-100 py-2 text-sm">
+                        <span className="text-slate-500">Status płatności</span>
+                        <select className={`rounded-md border px-2 py-1 text-xs font-bold outline-none ${paymentStatusIsPaid(payStatusDraft) ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>
                       </div>
-                      <div className="space-y-4 text-base text-slate-800">
-                         <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <span className="text-slate-500">Metoda płatności</span>
-                            <select className="border border-slate-200 rounded px-2 py-1 text-sm bg-white outline-none" value={payMethodDraft} onChange={(e) => setPayMethodDraft(e.target.value)}>
-                              <option value="">—</option>
-                              {Array.from(new Set([...PAYMENT_METHOD_PRESETS, payMethodDraft].filter(Boolean))).map((m) => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                         </div>
-                         <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <span className="text-slate-500">Status płatności</span>
-                            <select className={`border border-slate-200 rounded px-2 py-1 text-sm outline-none font-bold ${paymentStatusIsPaid(payStatusDraft) ? "bg-green-50 text-green-700" : "bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}>
-                              <option value="">—</option>
-                              {Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                         </div>
-                         <div className="flex flex-col gap-1 pb-2 pt-1">
-                            <span className="text-slate-500 flex items-center"><Truck size={16} className="mr-2"/> Sposób wysyłki</span>
-                            <select className="border border-slate-200 rounded px-2 py-1.5 text-sm bg-white outline-none font-bold text-orange-600" value={shipDraft} disabled={warehouseId == null} onChange={(e) => setShipDraft(e.target.value)}>
-                              <option value="">— brak —</option>
-                              {order.shipping_method_id && !shippingMethods.some(m => m.id === order.shipping_method_id.trim()) && (
-                                <option value={order.shipping_method_id.trim()}>{order.shipping_method} (powiązanie)</option>
-                              )}
-                              {shippingMethods.map(m => <option key={m.id} value={m.id}>{m.name} {!m.is_active ? "(nieaktywna)" : ""}</option>)}
-                            </select>
-                         </div>
-                         {warehouseId != null && (shipDraft !== order.shipping_method_id?.trim() || payMethodDraft !== (order.panel_payment_method ?? "").trim() || payStatusDraft !== (order.panel_payment_status ?? "").trim()) && (
-                           <div className="flex justify-end gap-2 mt-2">
-                             <button className="px-3 py-1 text-xs border border-slate-200 rounded font-bold" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
-                             <button className="px-3 py-1 text-xs bg-slate-900 text-white rounded font-bold" disabled={shipPaySaving} onClick={() => {
-                                setShipPaySaving(true);
-                                patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null })
-                                .then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false));
-                             }}>{shipPaySaving ? "..." : "Zapisz"}</button>
-                           </div>
-                         )}
-                      </div>
-                    </div>
+                      <label className="flex flex-col gap-1 border-b border-slate-100 py-2 text-sm text-slate-500 last:border-b-0">
+                        <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> Sposób wysyłki</span>
+                        <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600" value={shipDraft} disabled={warehouseId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
+                      </label>
+                      {warehouseId != null && (
+                        <div className="mt-2 flex justify-end gap-2">
+                          <button type="button" className="rounded border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
+                          <button type="button" disabled={shipPaySaving} onClick={() => { setShipPaySaving(true); void patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false)); }} className="rounded bg-slate-900 px-4 py-1 text-xs font-bold text-white">{shipPaySaving ? "..." : "Zapisz"}</button>
+                        </div>
+                      )}
+                    </SummaryDashboardCard>
 
-                    <div className="flex-1 p-6 relative group">
-                      <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">ADRES DOSTAWY</h3>
-                        {warehouseId != null && !addressEditing && <Edit2 size={18} className="text-slate-400 cursor-pointer hover:text-slate-800 transition-colors opacity-0 group-hover:opacity-100" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(true); }}/>}
-                      </div>
+                    <SummaryDashboardCard
+                      className={SUMMARY_TOP_CARD_SHELL}
+                      title="Adres dostawy"
+                      right={warehouseId != null && !addressEditing ? <button onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(true); }} className="text-slate-400 hover:text-slate-800"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
+                    >
                       {addressEditing ? (
-                         <div className="space-y-3 text-sm">
-                            <label className="block text-slate-600">Imię i nazwisko<input className={inpSm} value={addrDraft.name} onChange={e => setAddrDraft(d => ({...d, name: e.target.value}))}/></label>
-                            <label className="block text-slate-600">Ulica<input className={inpSm} value={addrDraft.street} onChange={e => setAddrDraft(d => ({...d, street: e.target.value}))}/></label>
-                            <div className="flex gap-2">
-                               <label className="block text-slate-600 flex-1">Kod<input className={inpSm} value={addrDraft.postal} onChange={e => setAddrDraft(d => ({...d, postal: e.target.value}))}/></label>
-                               <label className="block text-slate-600 flex-[2]">Miasto<input className={inpSm} value={addrDraft.city} onChange={e => setAddrDraft(d => ({...d, city: e.target.value}))}/></label>
-                            </div>
-                            <label className="block text-slate-600">Kraj<input className={inpSm} value={addrDraft.country} onChange={e => setAddrDraft(d => ({...d, country: e.target.value}))}/></label>
-                            <div className="flex justify-end gap-2 mt-2">
-                               <button className="px-3 py-1.5 text-xs border border-slate-200 rounded font-bold" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(false); }}>Anuluj</button>
-                               <button className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded font-bold" disabled={addressSaving} onClick={() => {
-                                  setAddressSaving(true);
-                                  patchOrder(order.id, { shipping_name: addrDraft.name.trim()||null, shipping_street: addrDraft.street.trim()||null, shipping_city: addrDraft.city.trim()||null, shipping_postal_code: addrDraft.postal.trim()||null, shipping_country: addrDraft.country.trim()||null })
-                                  .then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); });
-                               }}>{addressSaving ? "..." : "Zapisz"}</button>
-                            </div>
-                         </div>
+                        <div className="space-y-2 text-sm">
+                          <label className="flex flex-col text-slate-600">Imię i nazwisko<input className={inpSm} value={addrDraft.name} onChange={(e) => setAddrDraft((d) => ({ ...d, name: e.target.value }))} /></label>
+                          <label className="flex flex-col text-slate-600">Ulica<input className={inpSm} value={addrDraft.street} onChange={(e) => setAddrDraft((d) => ({ ...d, street: e.target.value }))} /></label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="flex flex-col text-slate-600">Kod<input className={inpSm} value={addrDraft.postal} onChange={(e) => setAddrDraft((d) => ({ ...d, postal: e.target.value }))} /></label>
+                            <label className="flex flex-col text-slate-600">Miasto<input className={inpSm} value={addrDraft.city} onChange={(e) => setAddrDraft((d) => ({ ...d, city: e.target.value }))} /></label>
+                          </div>
+                          <label className="flex flex-col text-slate-600">Kraj<input className={inpSm} value={addrDraft.country} onChange={(e) => setAddrDraft((d) => ({ ...d, country: e.target.value }))} /></label>
+                          <div className="flex justify-end gap-2 pt-2">
+                            <button className="rounded border border-slate-200 px-3 py-1 text-xs font-bold" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(false); }}>Anuluj</button>
+                            <button disabled={addressSaving || warehouseId == null} className="rounded bg-slate-900 px-4 py-1 text-xs font-bold text-white" onClick={() => { setAddressSaving(true); void patchOrder(order.id, { shipping_name: addrDraft.name.trim() || null, shipping_street: addrDraft.street.trim() || null, shipping_city: addrDraft.city.trim() || null, shipping_postal_code: addrDraft.postal.trim() || null, shipping_country: addrDraft.country.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); }); }}>{addressSaving ? "..." : "Zapisz"}</button>
+                          </div>
+                        </div>
                       ) : (
-                         <div className="text-base leading-relaxed text-slate-800 space-y-1">
-                            <p className="font-bold text-lg mb-2">{summaryShippingName}</p>
-                            {shippingExtras?.company && <p className="text-slate-600"><span className="text-slate-400">Firma:</span> {shippingExtras.company}</p>}
-                            <p className="text-slate-600 flex items-center">
-                              <span className="w-16 inline-block text-slate-400">Tel:</span> 
-                              <a href={`tel:${(shippingExtras?.phone || contact.phone).replace(/\s+/g, "")}`} className="text-blue-600 hover:underline font-medium">{shippingExtras?.phone || contact.phone}</a>
-                            </p>
-                            <p className="text-slate-600 flex items-center mb-3">
-                              <span className="w-16 inline-block text-slate-400">E-mail:</span> 
-                              <span className="text-blue-600 hover:underline font-medium truncate break-all block">{shippingExtras?.email || contact.email}</span>
-                            </p>
-                            <div className="pt-3 border-t border-slate-100">
-                              {contact.addressLines.length > 0 && contact.addressLines[0] !== "—" ? contact.addressLines.map((ln, i) => <p key={i}>{ln}</p>) : <p className="text-slate-500">Brak adresu.</p>}
-                              {shippingExtras?.pickupPoint && <p className="mt-2 font-bold text-slate-700">{shippingExtras.pickupPoint}</p>}
-                              {shippingExtras?.pickupCode && <p className="text-slate-700">Kod odbioru: {shippingExtras.pickupCode}</p>}
-                            </div>
-                         </div>
+                        <div className="space-y-1 text-sm text-slate-800">
+                          <p className="font-bold text-base text-slate-900">{summaryShippingName}</p>
+                          {shippingExtras?.company && <p className="text-slate-600">{shippingExtras.company}</p>}
+                          <p className="text-slate-600 flex items-center pt-1"><Phone size={14} className="mr-2 text-slate-400"/> {shippingExtras?.phone || contact.phone}</p>
+                          <p className="text-slate-600 flex items-center pb-2 border-b border-slate-100"><Mail size={14} className="mr-2 text-slate-400"/> <span className="truncate">{shippingExtras?.email || contact.email}</span></p>
+                          <div className="pt-2">
+                            {contact.addressLines.length > 0 && contact.addressLines[0] !== "—" ? contact.addressLines.map((ln, i) => <p key={`ship-${i}`}>{ln}</p>) : <p className="text-slate-500">Brak adresu.</p>}
+                            {shippingExtras?.pickupPoint && <p className="font-bold text-slate-700 mt-2">{shippingExtras.pickupPoint}</p>}
+                            {shippingExtras?.pickupCode && <p className="text-slate-700">Kod odbioru: {shippingExtras.pickupCode}</p>}
+                          </div>
+                        </div>
                       )}
-                    </div>
+                    </SummaryDashboardCard>
 
-                    <div className="flex-1 p-6 relative group bg-slate-50/30 rounded-r-xl">
-                      <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">DOKUMENT SPRZEDAŻY</h3>
-                        {warehouseId != null && !summaryDocEditing && <Edit2 size={18} className="text-slate-400 cursor-pointer hover:text-slate-800 transition-colors opacity-0 group-hover:opacity-100" onClick={() => {
-                           const inv = parseBillingInvoice(order.addresses_json);
-                           const t = (order.panel_document_type ?? "").trim().toUpperCase();
-                           setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email });
-                           setSummaryDocEditing(true);
-                        }}/>}
-                      </div>
+                    <SummaryDashboardCard
+                      className={SUMMARY_TOP_CARD_SHELL}
+                      title={summaryDocEditing ? (docDraft.document_type === "INVOICE" ? "Faktura" : "Paragon") : panelDocumentLabel}
+                      right={warehouseId != null && !summaryDocEditing ? <button onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(true); }} className="text-slate-400 hover:text-slate-800"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
+                    >
                       {summaryDocEditing ? (
-                         <div className="space-y-3 text-sm">
-                            <label className="block text-slate-600">Rodzaj<select className={inpSm} value={docDraft.document_type} onChange={e => setDocDraft(d => ({...d, document_type: e.target.value as "INVOICE"|"PARAGON"}))}><option value="PARAGON">Paragon</option><option value="INVOICE">Faktura</option></select></label>
-                            <label className="block text-slate-600">Numer<input className={`${inpSm} font-mono`} value={docDraft.sales_document_number} onChange={e => setDocDraft(d => ({...d, sales_document_number: e.target.value}))}/></label>
-                            {docDraft.document_type === "INVOICE" && (
-                               <>
-                                 <label className="block text-slate-600">Firma<input className={inpSm} value={docDraft.company_name} onChange={e => setDocDraft(d => ({...d, company_name: e.target.value}))}/></label>
-                                 <label className="block text-slate-600">NIP<input className={inpSm} value={docDraft.nip} onChange={e => setDocDraft(d => ({...d, nip: e.target.value}))}/></label>
-                                 <label className="block text-slate-600">E-mail<input className={inpSm} type="email" value={docDraft.billing_email} onChange={e => setDocDraft(d => ({...d, billing_email: e.target.value}))}/></label>
-                               </>
-                            )}
-                            <div className="flex justify-end gap-2 mt-2">
-                               <button className="px-3 py-1.5 text-xs border border-slate-200 rounded font-bold" onClick={() => setSummaryDocEditing(false)}>Anuluj</button>
-                               <button className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded font-bold" disabled={docSaving} onClick={() => {
-                                  setDocSaving(true);
-                                  const isInv = docDraft.document_type === "INVOICE";
-                                  patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim()||null, company_name: isInv ? docDraft.company_name.trim()||null : null, nip: isInv ? docDraft.nip.trim()||null : null, email: isInv ? docDraft.billing_email.trim()||null : null })
-                                  .then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); });
-                               }}>{docSaving ? "..." : "Zapisz"}</button>
-                            </div>
-                         </div>
+                        <div className="space-y-2 text-sm">
+                          <label className="flex flex-col text-slate-600">Rodzaj dokumentu<select className={inpSm} value={docDraft.document_type} onChange={(e) => setDocDraft((d) => ({ ...d, document_type: e.target.value === "INVOICE" ? "INVOICE" : "PARAGON" }))}><option value="PARAGON">Paragon</option><option value="INVOICE">Faktura</option></select></label>
+                          <label className="flex flex-col text-slate-600">Numer dokumentu<input className={inpSm} value={docDraft.sales_document_number} onChange={(e) => setDocDraft((d) => ({ ...d, sales_document_number: e.target.value }))} /></label>
+                          {docDraft.document_type === "INVOICE" && (
+                            <>
+                              <label className="flex flex-col text-slate-600">Firma<input className={inpSm} value={docDraft.company_name} onChange={(e) => setDocDraft((d) => ({ ...d, company_name: e.target.value }))} /></label>
+                              <label className="flex flex-col text-slate-600">NIP<input className={inpSm} value={docDraft.nip} onChange={(e) => setDocDraft((d) => ({ ...d, nip: e.target.value }))} /></label>
+                              <label className="flex flex-col text-slate-600">E-mail<input type="email" className={inpSm} value={docDraft.billing_email} onChange={(e) => setDocDraft((d) => ({ ...d, billing_email: e.target.value }))} /></label>
+                            </>
+                          )}
+                          <div className="flex justify-end gap-2 pt-2">
+                            <button className="rounded border border-slate-200 px-3 py-1 text-xs font-bold" onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(false); }}>Anuluj</button>
+                            <button disabled={docSaving || warehouseId == null} className="rounded bg-slate-900 px-4 py-1 text-xs font-bold text-white" onClick={() => { setDocSaving(true); const isInv = docDraft.document_type === "INVOICE"; void patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim() || null, company_name: isInv ? docDraft.company_name.trim() || null : null, nip: isInv ? docDraft.nip.trim() || null : null, email: isInv ? docDraft.billing_email.trim() || null : null }).then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); }); }}>{docSaving ? "..." : "Zapisz"}</button>
+                          </div>
+                        </div>
                       ) : (
-                         <div className="text-base space-y-4">
-                            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                              <span className="text-slate-500">Rodzaj</span>
-                              <span className="font-bold text-slate-900 bg-white border border-slate-200 px-3 py-1 rounded shadow-sm">{panelDocumentLabel}</span>
+                        <>
+                          <SummaryCompactRow label="Rodzaj" value={panelDocumentLabel} />
+                          <SummaryCompactRow label="Numer" value={<span className="font-mono text-blue-600 hover:underline cursor-pointer">{(order.sales_document_number ?? "").trim() || "—"}</span>} />
+                          {(order.panel_document_type ?? "").trim().toUpperCase() === "INVOICE" && billingInvoice && (billingInvoice.companyName || billingInvoice.nip || billingInvoice.email) && (
+                            <div className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm text-slate-700">
+                              {billingInvoice.companyName && <p className="font-bold text-slate-900">{billingInvoice.companyName}</p>}
+                              {billingInvoice.nip && <p>NIP {billingInvoice.nip}</p>}
+                              {billingInvoice.email && <p className="break-all">{billingInvoice.email}</p>}
+                              {billingInvoice.streetLine && <p>{billingInvoice.streetLine}</p>}
+                              {billingInvoice.cityLine && <p>{billingInvoice.cityLine}</p>}
                             </div>
-                            <div className="flex items-center justify-between pt-1">
-                              <span className="text-slate-500">Numer</span>
-                              <span className="font-bold text-blue-600 hover:underline cursor-pointer">{(order.sales_document_number ?? "").trim() || "—"}</span>
-                            </div>
-                            {panelDocumentLabel === "Faktura" && billingInvoice && (
-                               <div className="mt-4 border-t border-slate-200 pt-4 space-y-1 text-sm text-slate-600">
-                                 {billingInvoice.companyName && <p className="font-bold text-slate-900 text-base mb-2">{billingInvoice.companyName}</p>}
-                                 {billingInvoice.nip && <p>NIP: {billingInvoice.nip}</p>}
-                                 {billingInvoice.email && <p className="truncate block break-all">{billingInvoice.email}</p>}
-                                 {billingInvoice.streetLine && <p className="mt-2">{billingInvoice.streetLine}</p>}
-                                 {billingInvoice.cityLine && <p>{billingInvoice.cityLine}</p>}
-                               </div>
-                            )}
-                         </div>
+                          )}
+                        </>
                       )}
+                    </SummaryDashboardCard>
+                  </div>
+
+                  <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between mb-4">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Zamówione produkty</h3>
                     </div>
-                 </div>
+                    <div className="min-w-0 text-sm text-slate-800">
+                      <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
+                    </div>
+                  </section>
 
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                   <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">ZAMÓWIONE PRODUKTY — PODGLĄD</h3>
-                   </div>
-                   <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
-                 </div>
+                  <SummaryDashboardCard title="Dopasowane opakowania" right={<Link to={WMS_ROUTES.packingOrder(order.id)} className="text-slate-400 hover:text-slate-800"><Pencil className="h-4 w-4" strokeWidth={2}/></Link>}>
+                    {wmsLoading ? <p className="text-sm text-slate-500">Ładowanie propozycji...</p> : <OrderMatchedPackagingSection card={wmsFulfillment} pairRecommendationColumns />}
+                  </SummaryDashboardCard>
 
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                   <div className="flex justify-between items-center mb-5">
-                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center"><Package size={20} className="mr-3"/> DOPASOWANE OPAKOWANIE</h3>
-                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="flex items-center text-slate-700 text-sm font-bold border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors"><Edit2 size={16} className="mr-2"/> Edytuj</Link>
-                   </div>
-                   {wmsLoading ? <p className="text-sm text-slate-500">Ładowanie...</p> : <OrderMatchedPackagingSection card={wmsFulfillment} pairRecommendationColumns />}
-                 </div>
-
-                 <div className="flex flex-col xl:flex-row gap-6">
-                    <section id="order-summary-operational-notes" className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                       <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">NOTATKI OPERACYJNE (MAGAZYN)</h3>
-                       <div className="space-y-3 mb-4">
-                         {order.operational_notes?.length ? order.operational_notes.map((n) => (
-                           <div key={n.id} className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg text-sm text-yellow-900">
-                             <p className="whitespace-pre-wrap">{n.content}</p>
-                             <p className="text-xs text-yellow-700 mt-2 opacity-80">{formatDetailDate(n.created_at)} · ID {n.author_user_id || "—"} · {[n.show_in_picking && "Zbieranie", n.show_in_packing && "Pakowanie", n.show_in_returns && "Zwroty", n.show_in_complaints && "Reklamacje"].filter(Boolean).join(", ")}</p>
-                           </div>
-                         )) : <p className="text-sm text-slate-500">Brak notatek operacyjnych.</p>}
-                       </div>
-                       <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} className="w-full border border-slate-300 rounded-lg p-3 text-sm text-slate-800 resize-none focus:outline-none focus:border-blue-400 mb-4" placeholder="Treść notatki dla magazynu..."></textarea>
-                       <div className="flex justify-between items-end">
-                         <div className="flex space-x-4 text-sm text-slate-600 font-medium">
-                           <label className="flex items-center cursor-pointer"><input type="checkbox" className="mr-2" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
-                           <label className="flex items-center cursor-pointer"><input type="checkbox" className="mr-2" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
-                         </div>
-                         <button className="bg-slate-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-800 shadow-sm transition-colors" disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()}>Zapisz notatkę</button>
-                       </div>
-                    </section>
-                    
-                    <section className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                       <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">WIADOMOŚĆ DO KLIENTA</h3>
-                       <div className="flex space-x-2 mb-4">
-                         <button className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-1.5 rounded-md text-sm font-bold shadow-sm">✓ E-mail</button>
-                         <button className="bg-white text-slate-600 border border-slate-200 px-4 py-1.5 rounded-md text-sm font-medium hover:bg-slate-50">SMS</button>
-                       </div>
-                       <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} className="w-full border border-slate-300 rounded-lg p-3 text-sm text-slate-800 resize-none focus:outline-none focus:border-blue-400 mb-4" placeholder="Wpisz treść wiadomości..."></textarea>
-                       <div className="flex justify-between items-center">
-                         <button className="bg-white border border-slate-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 shadow-sm flex items-center"><Plus size={18} className="mr-2"/> Dodaj załącznik</button>
-                         <button className="bg-orange-500 text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-orange-600 shadow-sm flex items-center">Wyślij <Send size={16} className="ml-2"/></button>
-                       </div>
-                    </section>
-                 </div>
-               </div>
-
-               <div className="w-full xl:w-[400px] shrink-0 space-y-6">
-                 
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative">
-                   <div className="flex justify-between items-center mb-5">
-                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">KUPUJĄCY</h3>
-                     <Edit2 size={18} className="text-slate-400 cursor-pointer hover:text-slate-800" onClick={() => setEditBuyerModalOpen(true)}/>
-                   </div>
-                   <div className="text-base text-slate-800 space-y-3">
-                     <p className="font-bold text-xl text-slate-900 mb-1">{contact.name}</p>
-                     {order.customer && <Link to={`/customers/${order.customer.id}`} className="block text-sm font-medium text-blue-700 hover:underline">{order.customer.display_name}</Link>}
-                     <p className="flex items-center text-slate-600 pt-2"><span className="w-8 font-medium">Tel:</span> <a href={`tel:${contact.phone.replace(/\s+/g, "")}`} className="hover:underline">{contact.phone}</a></p>
-                     <p className="flex items-center text-slate-600"><span className="w-8 font-medium">Mail:</span> <span className="break-all">{contact.email}</span></p>
-                   </div>
-                 </div>
-
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                   <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">PODSUMOWANIE ZAMÓWIENIA</h3>
-                   
-                   {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) && (
-                     <div className="bg-[#fff9c4] border border-[#f5e08b] text-yellow-900 p-4 rounded-lg text-base leading-relaxed mb-6 shadow-sm">
-                       <strong>Uwaga klienta:</strong> {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}
-                     </div>
-                   )}
-
-                   <div className="space-y-4 text-base text-slate-600">
-                     <div className="flex justify-between items-center">
-                       <span>Źródło</span>
-                       <span className="font-bold text-slate-900">{(order.source ?? "").trim() || "—"}</span>
-                     </div>
-                     <div className="flex justify-between items-center">
-                       <span>ID zew.</span>
-                       <span className="font-medium text-slate-800 break-all text-right ml-4">{(order.external_id ?? "").trim() || "—"}</span>
-                     </div>
-                     <div className="flex justify-between items-center">
-                       <span>Wartość produktów</span>
-                       <span className="font-medium text-slate-800">{linesTotalDisplay}</span>
-                     </div>
-                     <div className="flex justify-between items-center">
-                       <span>Koszt dostawy</span>
-                       <span className="font-medium text-slate-800 flex items-center">
-                          {order.panel_shipping_cost != null ? formatMoney(Number(order.panel_shipping_cost), order.currency) : (order.panel_shipping_cost_display ?? "—")}
-                          {/(allegro)/i.test((order.source ?? "").trim()) && <span className="text-orange-600 text-xs font-bold border border-orange-200 bg-orange-50 px-2 py-0.5 rounded ml-2">SMART</span>}
-                       </span>
-                     </div>
-                     
-                     <div className="border-t border-slate-200 pt-4 mt-4">
-                       <div className="flex justify-between items-end mb-2">
-                         <span className="text-slate-700 font-medium pb-1">Razem do zapłaty</span>
-                         <div className="text-right">
-                            <span className="font-black text-3xl text-slate-900">{formatMoney(order.value, order.currency)}</span>
-                         </div>
-                       </div>
-                       {paymentStatusIsPaid(order.panel_payment_status) && (
-                         <div className="flex justify-end">
-                            <span className="text-sm text-emerald-700 font-bold bg-emerald-100 px-3 py-1 rounded-md">Opłacone</span>
-                         </div>
-                       )}
-                     </div>
-                     <div className="flex justify-between items-center border-t border-slate-100 pt-3 mt-3">
-                       <span>Realizacja</span>
-                       <span className="font-medium text-slate-800">{summaryEstimatedDelivery}</span>
-                     </div>
-                   </div>
-                 </div>
-
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                   <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">RABAT I MARŻA</h3>
-                   <div className="flex space-x-2 mb-5">
-                     <div className="flex bg-slate-100 rounded-lg p-1 w-max">
-                        <button className={`px-4 py-1.5 rounded-md text-sm font-bold ${orderRabatMode === "pln" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pln")}>PLN</button>
-                        <button className={`px-4 py-1.5 rounded-md text-sm font-bold ${orderRabatMode === "pct" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pct")}>%</button>
-                     </div>
-                     <input type="text" value={orderRabatDraft} onChange={e => setOrderRabatDraft(e.target.value)} placeholder="Rabat" className="border border-slate-200 rounded-lg px-3 py-2 text-base w-full focus:outline-none focus:border-blue-400"/>
-                     <button className="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-bold" disabled={orderRabatSaving} onClick={() => void saveOrderDiscount()}>{orderRabatSaving ? "..." : "Zapisz"}</button>
-                   </div>
-                   <div className="space-y-2 text-base text-slate-600">
-                     <div className="flex justify-between"><span>Po rabacie</span><span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span></div>
-                     <div className="flex justify-between"><span>Marża %</span><span className={`font-bold ${marginTone}`}>{order.margin != null && Number.isFinite(Number(order.margin)) ? `${Number(order.margin).toFixed(2)}%` : "—"}</span></div>
-                   </div>
-                 </div>
-
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center">
-                    <Shield className="w-12 h-12 mx-auto text-blue-500 mb-3" strokeWidth={1.5} />
-                    <h4 className="font-bold text-lg text-slate-900">Safe Order</h4>
-                    <p className="text-sm text-slate-500 mt-1">To zamówienie nie ma aktywnych oznaczeń ryzyka.</p>
-                 </div>
-
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">DODATKOWE POLA</h3>
-                    <OrderAdditionalFieldsSection orderId={order.id} documents={order.order_documents ?? []} onOrderRefresh={() => void reloadOrderById(order.id)} />
-                 </div>
-
-               </div>
-             </div>
-          )}
-
-          {activeTab === 'products' && (
-             <div className="flex flex-col xl:flex-row gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
-                <div className="flex-1 space-y-6">
-                   {wmsErr && <p className="mb-3 border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950 rounded-md font-medium">{wmsErr}</p>}
-                   
-                   {warehouseId != null && (
-                     <OrderMissingProductsSection
-                       tenantId={DAMAGE_TENANT_ID}
-                       orderId={order.id}
-                       lines={wmsFulfillment?.lines ?? []}
-                       itemWaitingById={itemWaitingById}
-                       onRefreshOrder={() => void reloadOrderById(order.id)}
-                       onRefreshWms={() => void loadWmsFulfillment()}
-                       sectionDomId="wms-braki-sekcja"
-                     />
-                   )}
-
-                   <div className="flex flex-wrap items-center justify-between gap-4 py-2">
-                     <div className="flex items-center gap-4">
-                        {historyChangeCount > 0 && (
-                          <button onClick={() => setReplacementHistoryOpen(v => !v)} className="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition-colors">
-                            Historia zmian ({historyChangeCount}) {replacementHistoryOpen ? "▲" : "▼"}
-                          </button>
-                        )}
-                        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600">
-                          <input type="checkbox" className="rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-500" checked={showZeroQtyHistoryRows} onChange={e => setShowZeroQtyHistoryRows(e.target.checked)}/>
-                          Pokaż wszystkie (w tym wyzerowane)
-                        </label>
-                     </div>
-                     <div className="flex gap-3">
-                        <button onClick={() => setAddProductOpen(true)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50">Dodaj produkt</button>
-                        <button onClick={() => setAddBundleOpen(true)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50">Dodaj zestaw</button>
-                        <Link to={WMS_ROUTES.packingOrder(order.id)} className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700">Spakuj</Link>
-                     </div>
-                   </div>
-
-                   {replacementHistoryOpen && historyChangeCount > 0 && (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 mb-6">
-                        {replacementPairs.length > 0 && (
-                          <div className="mb-6">
-                            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Zamiany w zamówieniu</p>
-                            <ol className="list-decimal pl-5 space-y-2 text-sm text-slate-800 font-medium marker:text-slate-400">
-                              {replacementPairs.map(p => (
-                                <li key={p.sourceOrderItemId}><span className="text-slate-600">{p.fromLabel}</span> <span className="mx-2 text-slate-400">→</span> <span className="text-slate-900">{p.toLabel}</span> {p.qtyDisplay !== "—" && <span className="text-slate-500 ml-1">({p.qtyDisplay})</span>}</li>
-                              ))}
-                            </ol>
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    <section id="order-summary-operational-notes" className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Notatki operacyjne</h3>
+                      <div className="space-y-2 mb-4">
+                        {order.operational_notes && order.operational_notes.length > 0 ? order.operational_notes.map((n) => (
+                          <div key={n.id} className="rounded-md bg-yellow-50 border border-yellow-100 p-3 text-sm text-yellow-900">
+                            <p className="whitespace-pre-wrap">{n.content}</p>
+                            <div className="mt-2 flex gap-2 text-[10px] text-yellow-700 opacity-80 uppercase font-bold tracking-wider">
+                              <span>{formatDetailDate(n.created_at ?? null)}</span>
+                              <span>·</span>
+                              {n.show_in_picking && <span>WMS Zbieranie</span>}
+                              {n.show_in_packing && <span>WMS Pakowanie</span>}
+                            </div>
                           </div>
-                        )}
-                        {panelFulfillmentHistory.length > 0 && (
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Historia WMS i usunięcia</p>
-                            <ul className="space-y-4 text-sm">
-                               {panelFulfillmentHistory.map((entry, idx) => (
-                                 <li key={`${entry.at}-${idx}`} className="border-l-2 border-slate-300 pl-4 py-1">
-                                   <p className="text-xs text-slate-500 font-bold mb-1">{formatDetailDate(entry.at)}</p>
-                                   <p className="font-semibold text-slate-800 line-through decoration-slate-400">{entry.product_name}</p>
-                                   {entry.kind === "order_line_removed" && <p className="text-xs font-bold text-red-600 mt-1 uppercase">Usunięto</p>}
-                                 </li>
-                               ))}
-                            </ul>
-                          </div>
-                        )}
+                        )) : <p className="text-sm text-slate-500">Brak notatek operacyjnych.</p>}
                       </div>
-                   )}
+                      <div className="border-t border-slate-100 pt-4 mt-4">
+                        <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} placeholder="Treść notatki..." className="w-full resize-y rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:bg-white outline-none focus:border-blue-400 mb-3" />
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex gap-4 text-sm font-medium text-slate-600">
+                            <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4" checked={opVisPick} onChange={(e) => setOpVisPick(e.target.checked)}/> Zbieranie</label>
+                            <label className="flex items-center"><input type="checkbox" className="mr-2 rounded border-slate-300 w-4 h-4" checked={opVisPack} onChange={(e) => setOpVisPack(e.target.checked)}/> Pakowanie</label>
+                          </div>
+                          <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50">Zapisz</button>
+                        </div>
+                      </div>
+                    </section>
 
-                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                     <OrderWarehouseProductsSection
-                       lines={summaryProductsLines}
-                       orderItems={order.items}
-                       wmsByItemId={wmsByItemId}
-                       wmsFulfillment={wmsFulfillment}
-                       wmsLoading={wmsLoading}
-                       currency={order.currency}
-                       productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
-                       orderId={order.id}
-                       linesTotalDisplay={linesTotalDisplay}
-                       itemWaitingById={itemWaitingById}
-                       onRefreshOrder={() => void reloadOrderById(order.id)}
-                       onRefreshWms={() => void loadWmsFulfillment()}
-                       onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }}
-                       onLineAction={handleOrderLineMenuAction}
-                       formatMoney={formatMoney}
-                       hideLineTotalHeader
-                       panelFulfillmentHistory={panelFulfillmentHistory}
-                       formatDetailDate={formatDetailDate}
-                       showProductLineHistory={showZeroQtyHistoryRows}
-                     />
-                   </div>
-                   
-                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center"><Package size={20} className="mr-3"/> DOPASOWANE OPAKOWANIE</h3>
-                      {wmsLoading ? <p className="text-sm text-slate-500">Ładowanie...</p> : <OrderMatchedPackagingSection card={wmsFulfillment} />}
-                   </div>
+                    <SummaryDashboardCard title="Wiadomość do klienta">
+                      <div className="flex gap-2 mb-4">
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded text-xs font-bold">✓ E-mail</span>
+                        <span className="text-slate-600 border border-slate-200 px-3 py-1 rounded text-xs font-medium cursor-pointer hover:bg-slate-50">SMS</span>
+                      </div>
+                      <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full resize-y rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:bg-white outline-none focus:border-blue-400 mb-4" />
+                      <div className="flex justify-between">
+                        <button className="text-sm font-medium border border-slate-200 px-4 py-2 rounded text-slate-700 hover:bg-slate-50 shadow-sm flex items-center"><Plus size={16} className="mr-2"/> Dodaj załącznik</button>
+                        <button className="bg-orange-500 text-white px-8 py-2 rounded text-sm font-bold hover:bg-orange-600 shadow-sm flex items-center">Wyślij <Send size={16} className="ml-2"/></button>
+                      </div>
+                    </SummaryDashboardCard>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    <SummaryDashboardCard title="Wideo WMS">
+                      <table className="w-full text-left text-sm border-t border-slate-100 mt-2">
+                        <thead className="text-[10px] font-bold uppercase text-slate-400"><tr><th className="py-2">Data</th><th className="py-2">Typ</th><th className="py-2">Autor</th><th className="py-2">Wygasa</th></tr></thead>
+                        <tbody><tr><td colSpan={4} className="py-4 text-center text-slate-500">Brak nagrań.</td></tr></tbody>
+                      </table>
+                    </SummaryDashboardCard>
+
+                    <SummaryDashboardCard title="WMS — operatorzy">
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 mt-2">
+                        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+                          <span className="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase">W zbieraniu</span>
+                          <p className="font-bold text-slate-900 mt-2">{(timelinePickEvt?.user_label ?? timelinePickEvt?.title ?? "").trim() || "—"}</p>
+                          <p className="text-xs text-slate-500">{timelinePickEvt?.at ? formatDetailDate(timelinePickEvt.at) : "—"}</p>
+                        </div>
+                        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+                          <span className="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase">W pakowaniu</span>
+                          <p className="font-bold text-slate-900 mt-2">{(timelinePackEvt?.user_label ?? timelinePackEvt?.title ?? "").trim() || "—"}</p>
+                          <p className="text-xs text-slate-500">{timelinePackEvt?.at ? formatDetailDate(timelinePackEvt.at) : "—"}</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-slate-600 mt-4">Koszyk / wózek: <span className="font-bold text-slate-900">{(wmsFulfillment?.basket_code ?? wmsFulfillment?.wms_vehicle_label ?? "").trim() || "—"}</span></p>
+                    </SummaryDashboardCard>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    <SummaryDashboardCard title="Safe Order">
+                      <div className="flex items-center gap-4 text-sm text-slate-800">
+                        <Shield size={32} className="text-blue-500"/>
+                        <div><p className="font-bold">Brak sygnałów ryzyka</p><p className="text-slate-500 text-xs">Zamówienie nie ma aktywnych oznaczeń fraud.</p></div>
+                      </div>
+                    </SummaryDashboardCard>
+                    <SummaryDashboardCard title="Dodatkowe pola">
+                      <OrderAdditionalFieldsSection orderId={order.id} documents={order.order_documents ?? []} onOrderRefresh={() => void reloadOrderById(order.id)} />
+                    </SummaryDashboardCard>
+                  </div>
+
+                  <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Logi czynności</h3>
+                      <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Szukaj..." className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-slate-50 outline-none w-64"/>
+                    </div>
+                    <table className="w-full text-left text-sm border-t border-slate-100">
+                      <thead className="text-[10px] uppercase font-bold text-slate-400"><tr><th className="py-2">Czas</th><th className="py-2">Zdarzenie</th><th className="py-2">Komunikat</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {summaryPanelLogs.map((row) => (
+                          <tr key={String(row.id)} className={row.severity === "error" ? "bg-red-50 text-red-900" : row.severity === "warn" ? "bg-amber-50 text-amber-900" : ""}>
+                            <td className="py-2 text-slate-500 font-mono text-xs w-48">{row.at}</td>
+                            <td className="py-2 font-bold text-xs uppercase text-slate-600">{row.kind}</td>
+                            <td className="py-2">{row.msg}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </section>
                 </div>
 
-                <div className="w-full xl:w-[400px] shrink-0 space-y-6">
-                   <WmsOperationTimesKpiPanel cells={wmsSidebarTimeCells} />
-                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Oś czasu - Zdarzenia WMS</h3>
+                <aside className="w-full lg:w-[360px] shrink-0 space-y-6">
+                  <SummaryDashboardCard title="Kupujący" right={<button onClick={() => setEditBuyerModalOpen(true)} className="text-slate-400 hover:text-slate-800"><Pencil className="h-4 w-4" strokeWidth={2}/></button>}>
+                    <div className="text-sm space-y-2">
+                      <p className="font-bold text-lg text-slate-900">{contact.name}</p>
+                      {order.customer && <Link to={`/customers/${order.customer.id}`} className="text-blue-700 font-medium hover:underline">{order.customer.display_name}</Link>}
+                      <p className="text-slate-600 flex items-center pt-2"><Phone size={14} className="mr-2 text-slate-400"/> {contact.phone}</p>
+                      <p className="text-slate-600 flex items-center"><Mail size={14} className="mr-2 text-slate-400"/> <span className="break-all">{contact.email}</span></p>
+                    </div>
+                  </SummaryDashboardCard>
+
+                  <SummaryDashboardCard title="Podsumowanie zamówienia">
+                    {((wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()) ? (
+                      <div className="bg-[#fff9c4] border border-[#f5e08b] text-yellow-900 p-4 rounded-lg text-sm mb-4"><strong>Uwaga:</strong> {(wmsFulfillment?.customer_comment ?? order.latest_customer_comment_preview ?? "").trim()}</div>
+                    ) : null}
+                    <div className="space-y-4 text-sm text-slate-600">
+                      <div className="flex justify-between items-center"><span>Źródło</span><span className="font-bold text-slate-900">{(order.source ?? "").trim() || "—"}</span></div>
+                      <div className="flex justify-between items-center"><span>Wartość produktów</span><span className="font-medium text-slate-800">{linesTotalDisplay}</span></div>
+                      <div className="flex justify-between items-center"><span>Koszt dostawy</span><span className="font-medium text-slate-800 flex items-center">{order.panel_shipping_cost != null ? formatMoney(Number(order.panel_shipping_cost), order.currency) : (order.panel_shipping_cost_display ?? "—")}</span></div>
+                      <div className="border-t border-slate-200 pt-4 mt-4 flex justify-between items-end">
+                        <span className="font-medium text-slate-700">Razem</span>
+                        <div className="text-right">
+                          <span className="font-black text-2xl text-slate-900 block">{formatMoney(order.value, order.currency)}</span>
+                          {paymentStatusIsPaid(order.panel_payment_status) && <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded mt-1 inline-block">Opłacone</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </SummaryDashboardCard>
+
+                  <SummaryDashboardCard title="Rabat i marża">
+                    <div className="flex space-x-2 mb-4">
+                      <div className="flex bg-slate-100 rounded-md p-1">
+                        <button className={`px-3 py-1 rounded text-xs font-bold ${orderRabatMode === "pln" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pln")}>PLN</button>
+                        <button className={`px-3 py-1 rounded text-xs font-bold ${orderRabatMode === "pct" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`} onClick={() => setOrderRabatMode("pct")}>%</button>
+                      </div>
+                      <input className={inpSm} value={orderRabatDraft} onChange={e => setOrderRabatDraft(e.target.value)} placeholder="Rabat"/>
+                      <button disabled={orderRabatSaving} onClick={() => void saveOrderDiscount()} className="bg-slate-900 text-white px-4 py-1.5 rounded-md text-sm font-bold ml-1 hover:bg-slate-800">{orderRabatSaving ? "..." : "Zapisz"}</button>
+                    </div>
+                    <div className="space-y-2 text-sm text-slate-600">
+                      <div className="flex justify-between"><span>Po rabacie</span><span className="font-medium text-slate-900">{formatMoney(productsAfterDiscount, order.currency)}</span></div>
+                      <div className="flex justify-between"><span>Marża %</span><span className={`font-bold ${marginTone}`}>{order.margin != null && Number.isFinite(Number(order.margin)) ? `${Number(order.margin).toFixed(2)}%` : "—"}</span></div>
+                    </div>
+                  </SummaryDashboardCard>
+                </aside>
+              </div>
+            ) : null}
+
+            {activeTab === "products" ? (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+                <main className="min-w-0 space-y-6">
+                  {wmsErr && <p className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-md text-sm font-medium">{wmsErr}</p>}
+                  {warehouseId != null && <OrderMissingProductsSection tenantId={DAMAGE_TENANT_ID} orderId={order.id} lines={wmsFulfillment?.lines ?? []} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} sectionDomId="wms-braki-sekcja" />}
+                  
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex gap-4 items-center">
+                      <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">Produkty</h2>
+                      <label className="text-sm text-slate-600 flex items-center font-medium"><input type="checkbox" className="mr-2" checked={showZeroQtyHistoryRows} onChange={e => setShowZeroQtyHistoryRows(e.target.checked)}/> Pokaż usunięte</label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setAddProductOpen(true)} className="border border-slate-300 rounded px-4 py-2 text-sm font-bold shadow-sm">Dodaj produkt</button>
+                      <button onClick={() => setAddBundleOpen(true)} className="border border-slate-300 rounded px-4 py-2 text-sm font-bold shadow-sm">Dodaj zestaw</button>
+                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="bg-blue-600 text-white rounded px-6 py-2 text-sm font-bold shadow-sm">Spakuj</Link>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden">
+                    <OrderWarehouseProductsSection lines={summaryProductsLines} orderItems={order.items} wmsByItemId={wmsByItemId} wmsFulfillment={wmsFulfillment} wmsLoading={wmsLoading} currency={order.currency} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} linesTotalDisplay={linesTotalDisplay} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }} onLineAction={handleOrderLineMenuAction} formatMoney={formatMoney} hideLineTotalHeader panelFulfillmentHistory={panelFulfillmentHistory} formatDetailDate={formatDetailDate} showProductLineHistory={showZeroQtyHistoryRows} />
+                  </div>
+                  
+                  <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">DOPASOWANE OPAKOWANIA</h3>
+                    <OrderMatchedPackagingSection card={wmsFulfillment} />
+                  </div>
+                </main>
+                <aside className="space-y-6">
+                  <WmsOperationTimesKpiPanel cells={wmsSidebarTimeCells} />
+                  <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
+                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">HISTORIA WMS</h3>
                      <OrderHistoryTimeline compact events={orderHistoryTimelineEvents} formatDate={formatDetailDate} />
-                   </div>
-                </div>
-             </div>
-          )}
+                  </div>
+                </aside>
+              </div>
+            ) : null}
 
-          {activeTab === 'comms' && (
-             <div className="flex flex-col xl:flex-row gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
-               <div className="flex-1 space-y-8">
-                 
-                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">NOTATKI OPERACYJNE (MAGAZYN)</h3>
-                    <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} className="w-full border border-slate-300 rounded-lg p-4 text-sm text-slate-800 resize-none focus:outline-none focus:border-blue-400 mb-5 bg-slate-50" placeholder="Np. delikatny towar, gratis, priorytet składowania..."></textarea>
-                    <div className="flex justify-between items-end">
-                      <div className="flex space-x-6 text-sm text-slate-700 font-medium">
-                        <label className="flex items-center cursor-pointer"><input type="checkbox" className="mr-2 w-4 h-4 rounded border-slate-300" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
-                        <label className="flex items-center cursor-pointer"><input type="checkbox" className="mr-2 w-4 h-4 rounded border-slate-300" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
-                      </div>
-                      <button className="bg-slate-800 text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-900 shadow-sm transition-colors" disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()}>Zapisz notatkę</button>
-                    </div>
-                    {order.operational_notes?.length > 0 && (
-                       <div className="mt-6 border-t border-slate-200 pt-6 space-y-3">
-                          {order.operational_notes.map((n) => (
-                             <div key={n.id} className="bg-slate-50 border border-slate-100 p-4 rounded-lg text-sm text-slate-800">
-                               <div className="flex items-center justify-between mb-2">
-                                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{[n.show_in_picking && "Zbieranie", n.show_in_packing && "Pakowanie", n.show_in_returns && "Zwroty", n.show_in_complaints && "Reklamacje"].filter(Boolean).join(" · ") || "Ogólne"}</span>
-                                 <span className="text-xs text-slate-400 font-medium">{formatDetailDate(n.created_at)}</span>
-                               </div>
-                               <p className="whitespace-pre-wrap">{n.content}</p>
-                             </div>
-                          ))}
-                       </div>
-                    )}
-                 </section>
-
-                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">NOWA WIADOMOŚĆ</h3>
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-5">
-                      <div className="flex space-x-2">
-                        <button className="bg-blue-50 text-blue-700 border border-blue-200 px-5 py-2 rounded-lg text-sm font-bold shadow-sm">✓ E-mail</button>
-                        <button className="bg-white text-slate-600 border border-slate-200 px-5 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">SMS</button>
-                      </div>
-                      <select className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white outline-none min-w-[200px]">
-                        <option>Szablon wiadomości</option>
-                      </select>
-                    </div>
-                    <div className="relative mb-5">
-                      <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={6} className="w-full border border-slate-300 rounded-lg p-4 pb-12 text-sm text-slate-800 resize-none focus:outline-none focus:border-blue-400 bg-slate-50" placeholder="Wpisz treść..."></textarea>
-                      <button className="absolute bottom-3 right-3 bg-white border border-slate-200 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 flex items-center"><Bot size={14} className="mr-1.5 text-blue-600"/> Sugestie AI</button>
-                    </div>
+            {activeTab === "comms" ? (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+                <main className="space-y-6">
+                  <section className="bg-white rounded-md shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Notatki operacyjne</h3>
+                    <textarea value={opDraft} onChange={(e) => setOpDraft(e.target.value)} rows={3} placeholder="Wpisz treść..." className="w-full bg-slate-50 border border-slate-200 rounded-md p-3 text-sm focus:bg-white outline-none focus:border-blue-400 mb-4"/>
                     <div className="flex justify-between items-center">
-                      <button className="bg-white border border-slate-300 text-slate-700 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 shadow-sm flex items-center"><Plus size={18} className="mr-2"/> Dodaj załącznik</button>
-                      <button className="bg-orange-500 text-white px-10 py-2.5 rounded-lg text-sm font-bold hover:bg-orange-600 shadow-sm flex items-center">Wyślij <Send size={16} className="ml-2"/></button>
-                    </div>
-                 </section>
-
-                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">HISTORIA KORESPONDENCJI</h3>
-                      <div className="relative">
-                         <Search size={18} className="absolute left-3 top-2.5 text-slate-400"/>
-                         <input type="text" placeholder="Szukaj" className="border border-slate-300 rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-blue-400 bg-slate-50 w-[300px]"/>
+                      <div className="flex gap-4 text-sm font-medium text-slate-600">
+                        <label><input type="checkbox" className="mr-2" checked={opVisPick} onChange={e => setOpVisPick(e.target.checked)}/> Zbieranie</label>
+                        <label><input type="checkbox" className="mr-2" checked={opVisPack} onChange={e => setOpVisPack(e.target.checked)}/> Pakowanie</label>
                       </div>
+                      <button disabled={opSaving || !opDraft.trim()} onClick={() => void saveOperationalNote()} className="bg-slate-900 text-white font-bold text-sm px-6 py-2 rounded-md hover:bg-slate-800">Zapisz</button>
                     </div>
-                    <div className="flex gap-6 text-sm text-slate-500 mb-6 pb-4 border-b border-slate-100">
-                      <p><strong>Utworzono:</strong> {formatDetailDate(order.created_at)}</p>
-                      <p><strong>Ost. wiadomość:</strong> {formatDetailDate(order.order_date ?? order.created_at)}</p>
+                  </section>
+                  <section className="bg-white rounded-md shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">Wiadomość do klienta</h3>
+                    <textarea id="order-comms-note" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={4} placeholder="Wpisz treść..." className="w-full bg-slate-50 border border-slate-200 rounded-md p-3 text-sm focus:bg-white outline-none focus:border-blue-400 mb-4"/>
+                    <div className="flex justify-end">
+                      <button className="bg-orange-500 text-white font-bold text-sm px-8 py-2 rounded-md hover:bg-orange-600">Wyślij</button>
                     </div>
-                    <div className="space-y-6">
-                       <div className="flex text-sm">
-                         <div className="w-40 shrink-0 font-bold text-slate-500">{dateLine}</div>
-                         <div className="font-semibold text-slate-800">System — Utworzenie zamówienia w systemie</div>
-                       </div>
-                       {wmsFulfillment?.customer_comment && (
-                         <div className="flex text-sm bg-blue-50 border border-blue-100 p-4 rounded-lg">
-                           <div className="w-36 shrink-0 font-bold text-slate-500">Klient (Import)</div>
-                           <div className="font-medium text-slate-800">{wmsFulfillment.customer_comment}</div>
-                         </div>
-                       )}
-                       {wmsFulfillment?.staff_notes && (
-                         <div className="flex text-sm bg-emerald-50 border border-emerald-100 p-4 rounded-lg">
-                           <div className="w-36 shrink-0 font-bold text-slate-500">Magazyn</div>
-                           <div className="font-medium text-slate-800">{wmsFulfillment.staff_notes}</div>
-                         </div>
-                       )}
+                  </section>
+                </main>
+                <aside className="space-y-6">
+                  <SummaryDashboardCard title="Klient">
+                    <div className="text-sm space-y-2">
+                      <p className="font-bold text-lg text-slate-900">{contact.name}</p>
+                      <p className="text-slate-600 flex items-center pt-2"><Phone size={14} className="mr-2 text-slate-400"/> {contact.phone}</p>
+                      <p className="text-slate-600 flex items-center"><Mail size={14} className="mr-2 text-slate-400"/> <span className="break-all">{contact.email}</span></p>
                     </div>
-                 </section>
+                  </SummaryDashboardCard>
+                </aside>
+              </div>
+            ) : null}
 
-               </div>
+            {activeTab === "docs" ? (
+              <div className="space-y-6 max-w-[1200px]">
+                <OrderDocFilesTableSection title={`Dokumenty sprzedaży (${docsTabDocumentsRows.length})`} rows={docsTabDocumentsRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("docs", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("docs", row)} />
+                <OrderDocFilesTableSection title={`Załączniki (${docsTabFilesRows.length})`} rows={docsTabFilesRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("files", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("files", row)} />
+                <OrderDocFilesTableSection title={`Listy przewozowe (${docsTabWaybillsRows.length})`} rows={docsTabWaybillsRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("waybills", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("waybills", row)} />
+              </div>
+            ) : null}
 
-               <div className="w-full xl:w-[400px] shrink-0 space-y-6">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center"><Bot size={18} className="mr-2 text-blue-600"/> NOTATKA AI</h3>
-                    <p className="text-sm text-slate-600 italic bg-slate-50 p-4 rounded-lg border border-slate-100">Krótki kontekst podsumowujący korespondencję (wkrótce).</p>
-                  </div>
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">DANE KLIENTA</h3>
-                    <div className="text-base text-slate-800 space-y-4">
-                      <p className="font-bold text-xl flex items-center"><User size={24} className="mr-3 text-slate-400"/> {contact.name}</p>
-                      <p className="flex items-center text-slate-600 pl-9"><span className="bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded mr-3">MAIL</span> <a href={`mailto:${contact.email}`} className="hover:underline truncate">{contact.email}</a></p>
-                      <p className="flex items-center text-slate-600 pl-9 font-medium"><span className="bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded mr-3">TEL</span> {contact.phone}</p>
-                    </div>
-                  </div>
-               </div>
-             </div>
-          )}
-
-          {activeTab === 'docs' && (
-             <div className="flex flex-col gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
-               {docUploadErr && <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-red-900 font-medium text-sm">{docUploadErr}</div>}
-               <OrderDocFilesTableSection title={`Dokumenty (${docsTabDocumentsRows.length})`} rows={docsTabDocumentsRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("docs", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("docs", row)} />
-               <OrderDocFilesTableSection title={`Pliki z załączników (${docsTabFilesRows.length})`} rows={docsTabFilesRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("files", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("files", row)} />
-               <OrderDocFilesTableSection title={`Listy przewozowe (${docsTabWaybillsRows.length})`} rows={docsTabWaybillsRows} showTypeColumn onUploadFiles={(files) => handleOrderDocUpload("waybills", files)} onPreview={handleOrderDocPreview} onPrint={handleOrderDocPrint} onDownload={handleOrderDocDownload} onEmail={handleOrderDocEmail} onDelete={(row) => handleOrderDocDelete("waybills", row)} />
-             </div>
-          )}
-
-          {activeTab === 'logs' && (
-             <div className="flex flex-col gap-8 max-w-[1600px] mx-auto animate-in fade-in duration-300">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-                   <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Dziennik zdarzeń i systemowy</h3>
-                     <div className="relative w-[300px]">
-                       <Search size={18} className="absolute left-3 top-2.5 text-slate-400"/>
-                       <input type="text" placeholder="Filtruj logi..." value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} className="w-full border border-slate-300 rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-blue-400 bg-slate-50"/>
-                     </div>
-                   </div>
-                   
-                   {summaryPanelLogs.length === 0 ? (
-                     <p className="text-slate-500 text-center py-8">Brak wpisów.</p>
-                   ) : (
-                     <table className="w-full text-left text-sm">
-                       <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-200">
-                         <tr>
-                           <th className="py-3 px-4 w-48">Czas</th>
-                           <th className="py-3 px-4 w-48">Moduł / Zdarzenie</th>
-                           <th className="py-3 px-4">Komunikat systemowy</th>
-                         </tr>
-                       </thead>
-                       <tbody className="divide-y divide-slate-100">
-                         {summaryPanelLogs.map((row) => (
-                           <tr key={String(row.id)} className={`hover:bg-slate-50 transition-colors ${row.severity === 'error' ? 'bg-red-50 text-red-900' : row.severity === 'warn' ? 'bg-amber-50 text-amber-900' : 'text-slate-800'}`}>
-                             <td className="py-3 px-4 text-slate-500 font-mono text-xs">{row.at}</td>
-                             <td className="py-3 px-4"><span className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${row.severity === 'error' ? 'bg-red-200 text-red-900' : row.severity === 'warn' ? 'bg-amber-200 text-amber-900' : 'bg-slate-200 text-slate-700'}`}>{row.kind}</span></td>
-                             <td className="py-3 px-4 font-medium">{row.msg}</td>
-                           </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   )}
-                </div>
-             </div>
-          )}
+            {activeTab === "logs" ? (
+              <div className="bg-white rounded-md border border-slate-200 p-6 shadow-sm max-w-[1200px]">
+                 <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-6 border-b border-slate-100 pb-3">Dziennik zdarzeń</h3>
+                 <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Filtruj logi..." className="border border-slate-300 rounded px-3 py-2 text-sm w-64 mb-6" />
+                 <table className="w-full text-left text-sm">
+                   <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100"><tr><th className="py-2 w-48">Czas</th><th className="py-2 w-48">Zdarzenie</th><th className="py-2">Komunikat</th></tr></thead>
+                   <tbody className="divide-y divide-slate-50">
+                     {summaryPanelLogs.map((row) => (
+                       <tr key={String(row.id)} className={row.severity === "error" ? "bg-red-50 text-red-900" : row.severity === "warn" ? "bg-amber-50 text-amber-900" : ""}>
+                         <td className="py-3 text-slate-500 font-mono text-xs">{row.at}</td>
+                         <td className="py-3 font-bold text-[10px] uppercase">{row.kind}</td>
+                         <td className="py-3">{row.msg}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {/* MODALS AND OVERLAYS PRESERVED DIRECTLY FROM ORIGINAL */}
+      {/* MODALS */}
       {orderDocPreviewModal != null && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setOrderDocPreviewModal(null)}>
           <div className="max-w-md w-full rounded-xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
