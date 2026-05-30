@@ -27,7 +27,6 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { DEFAULT_PANEL_STATUS_HEX, isValidPanelStatusHex } from "../../components/panel/HexColorField";
 import type { OrderUiMainGroup, OrderUiStatusRead, OrderUiStatusUpdatePayload, OrderUiStatusWithCount } from "../../types/orderUiStatus";
 import PageLayout from "../../components/layout/PageLayout";
-import { tabsNavItemClassName } from "../../components/layout/TabsNav";
 import { OrderPanelSubgroupsManager } from "./OrderPanelSubgroupsManager";
 import { partitionStatusesBySubgroupForSettings, subgroupSectionTitle } from "../../utils/panelUiStatusSettingsTree";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -40,7 +39,7 @@ const GROUP_LABELS: Record<OrderUiMainGroup, string> = {
   DONE: "Zakończone",
 };
 
-// Zaktualizowane, nowoczesne style dla nagłówków głównych grup
+// Nowoczesne style dla nagłówków głównych grup
 const MAIN_HEAD: Record<OrderUiMainGroup, string> = {
   NEW: "bg-blue-50/50 text-blue-950 border-b border-blue-100",
   IN_PROGRESS: "bg-amber-50/50 text-amber-950 border-b border-amber-100",
@@ -71,7 +70,6 @@ export default function OrderPanelUiStatusesSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>(defaultExpanded);
-  const [tab, setTab] = useState<"statuses" | "subgroups">("statuses");
 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -376,7 +374,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
                       <option value={subVal}>{subVal} (spoza słownika)</option>
                     ) : null}
                   </select>
-                  {subOpts.length === 0 ? <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w zakładce „Podgrupy”.</p> : null}
+                  {subOpts.length === 0 ? <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w kolumnie obok.</p> : null}
                 </label>
               </div>
 
@@ -458,7 +456,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
 
           <hr className="border-slate-100 my-6" />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <div className="space-y-4">
               <span className={stFieldLabel}>Konfiguracja Kolorów</span>
               <div className="flex flex-wrap gap-4 mt-2">
@@ -576,7 +574,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
   }
 
   return (
-    <PageLayout fullBleed cardClassName="rounded-2xl shadow-sm space-y-0" className="p-3 md:p-4">
+    <PageLayout fullBleed cardClassName="rounded-2xl shadow-sm space-y-0 bg-slate-50/50" className="p-3 md:p-4">
     <div className="w-full space-y-6">
       <div>
         <p className="text-sm text-slate-500">
@@ -590,46 +588,21 @@ export default function OrderPanelUiStatusesSettingsPage() {
 
       {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div> : null}
 
-      <nav className="flex gap-6 border-b border-slate-200" role="tablist" aria-label="Zakładki ustawień statusów zamówień">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "statuses"}
-          className={tabsNavItemClassName(tab === "statuses")}
-          onClick={() => setTab("statuses")}
-        >
-          Statusy
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "subgroups"}
-          className={tabsNavItemClassName(tab === "subgroups")}
-          onClick={() => setTab("subgroups")}
-        >
-          Podgrupy
-        </button>
-      </nav>
-
-      {tab === "subgroups" ? (
-        <div className="border-t border-slate-100 pt-6">
-          <OrderPanelSubgroupsManager warehouseId={warehouseId} onChanged={() => void load()} />
-        </div>
-      ) : null}
-
-      {/* === KREATOR STATUSU === */}
-      {tab === "statuses" ? (
-        <div className="space-y-8 pt-4">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 pt-2">
+        
+        {/* LEWA KOLUMNA (Kreator + Lista Statusów) */}
+        <div className="xl:col-span-3 space-y-6">
           
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-5xl">
+          {/* === KREATOR STATUSU === */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <h2 className="font-semibold text-slate-800">Kreator Statusu</h2>
               <span className="text-xs font-medium px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Tryb dodawania</span>
             </div>
 
             <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div className="space-y-4 col-span-2">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+                <div className="space-y-4 xl:col-span-2">
                   <div className="grid grid-cols-2 gap-4">
                     <label className="space-y-1.5 min-w-0">
                       <span className={stFieldLabel}>Grupa główna</span>
@@ -656,7 +629,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
                         ))}
                       </select>
                       {subgroupOptionsFor(newMainGroup).length === 0 ? (
-                        <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w zakładce „Podgrupy”.</p>
+                        <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w kolumnie obok.</p>
                       ) : null}
                     </label>
                   </div>
@@ -681,7 +654,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
 
               <hr className="border-slate-100 my-6" />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 <div className="space-y-4">
                   <span className={stFieldLabel}>Konfiguracja Kolorów</span>
                   <div className="flex flex-wrap gap-4 mt-2">
@@ -720,7 +693,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
           </div>
 
           {/* === LISTA STATUSÓW === */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-5xl">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center">
               <h2 className="font-semibold text-slate-800">Zarządzaj strukturą statusów</h2>
             </div>
@@ -798,7 +771,23 @@ export default function OrderPanelUiStatusesSettingsPage() {
             )}
           </div>
         </div>
-      ) : null}
+
+        {/* PRAWA KOLUMNA (Zarządzanie Podgrupami) */}
+        <div className="xl:col-span-2">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden sticky top-6">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <h2 className="font-semibold text-slate-800">Podgrupy Statusów</h2>
+              <span className="text-[10px] font-bold px-2 py-1 bg-slate-200 text-slate-600 rounded-md uppercase tracking-wider">Zarządzanie</span>
+            </div>
+            
+            {/* Opcjonalny padding jeśli ten komponent nie ma własnego wewnętrznego marginesu */}
+            <div className="p-4 md:p-6 max-h-[85vh] overflow-y-auto">
+              <OrderPanelSubgroupsManager warehouseId={warehouseId} onChanged={() => void load()} />
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
     </PageLayout>
   );
