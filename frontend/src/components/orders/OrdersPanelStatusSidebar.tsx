@@ -266,12 +266,23 @@ export function OrdersPanelStatusSidebar({
           : "rounded-xl border border-slate-200 bg-white shadow-sm"
       }`}
     >
-      <div className="flex items-center justify-between p-2 mb-1 border-b border-slate-100">
-        <h2 className={`text-xs font-bold uppercase tracking-wide ${sellasist ? "text-slate-600" : "text-slate-500"}`}>
+      <div className="p-2 mb-2 border-b border-slate-100">
+        <div className="flex items-center justify-between">
+          <h2
+            className={`text-xs font-bold uppercase tracking-wide ${
+            sellasist ? "text-slate-600" : "text-slate-500"
+          }`}
+        >
           Status panelu
         </h2>
-        {titleTrailing != null ? <div className="shrink-0">{titleTrailing}</div> : null}
+
+        {titleTrailing != null ? (
+          <div className="shrink-0">
+            {titleTrailing}
+          </div>
+        ) : null}
       </div>
+    </div>
 
       <div className="px-1 space-y-2">
         <button
