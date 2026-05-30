@@ -1868,7 +1868,7 @@ export default function OrderDetailPage() {
       </div>
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden bg-white">
-        <div className="w-full flex-col lg:flex-row lg:items-start p-6 pb-0 max-w-[1600px] mx-auto">
+        <div className="w-full flex-col lg:flex-row lg:items-start p-6 pb-0">
             <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
               <Link to="/dashboard" className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800">
                 <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -1934,17 +1934,17 @@ export default function OrderDetailPage() {
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">WMS</span>
+                    <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-600">WMS</span>
                     {wmsDualWorkflow ? (
                       <div className="flex gap-2">
-                        <span className={`inline-flex items-center rounded border px-2.5 py-1 text-[10px] font-bold ${wmsDualWorkflow.pickedSum >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}>
+                        <span className={`inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-bold ${wmsDualWorkflow.pickedSum >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}>
                           Zbieranie {wmsDualWorkflow.pickedSum}/{wmsDualWorkflow.total}
                         </span>
-                        <span className={`inline-flex items-center rounded border px-2.5 py-1 text-[10px] font-bold ${wmsDualWorkflow.packed >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-600"}`}>
+                        <span className={`inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-bold ${wmsDualWorkflow.packed >= wmsDualWorkflow.total && wmsDualWorkflow.total > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-600"}`}>
                           Pakowanie {wmsDualWorkflow.packed}/{wmsDualWorkflow.total}
                         </span>
                       </div>
-                    ) : <span className="text-xs text-slate-400">Brak postępu</span>}
+                    ) : <span className="text-sm font-medium text-slate-400">Brak postępu</span>}
                   </div>
                 </div>
 
@@ -1961,7 +1961,7 @@ export default function OrderDetailPage() {
         </div>
 
         <div className="flex-1 overflow-auto bg-white p-6">
-          <div className="max-w-[1600px] mx-auto">
+          <div className="w-full">
             {activeTab === "summary" ? (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
                 <div className="min-w-0 space-y-6">
@@ -2070,7 +2070,7 @@ export default function OrderDetailPage() {
                     <div className="flex flex-wrap items-center justify-between mb-4">
                       <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Zamówione produkty</h3>
                     </div>
-                    <div className="min-w-0 text-sm text-slate-800">
+                    <div className="min-w-0 text-sm text-slate-800 [&_th]:whitespace-nowrap">
                       <OrderSummaryProductsList compact lines={summaryProductsLines} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} onLineAction={handleOrderLineMenuAction} />
                     </div>
                   </section>
@@ -2241,7 +2241,7 @@ export default function OrderDetailPage() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden [&_th]:whitespace-nowrap">
                     <OrderWarehouseProductsSection lines={summaryProductsLines} orderItems={order.items} wmsByItemId={wmsByItemId} wmsFulfillment={wmsFulfillment} wmsLoading={wmsLoading} currency={order.currency} productEditTenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} linesTotalDisplay={linesTotalDisplay} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} onReplaceProduct={(oid) => { setTableReplaceItemId(oid); setTableReplaceOpen(true); }} onLineAction={handleOrderLineMenuAction} formatMoney={formatMoney} hideLineTotalHeader panelFulfillmentHistory={panelFulfillmentHistory} formatDetailDate={formatDetailDate} showProductLineHistory={showZeroQtyHistoryRows} />
                   </div>
                   
