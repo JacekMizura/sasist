@@ -110,17 +110,11 @@ export type ProductForm = {
   gpsr_responsible_email?: string | null;
   unit?: string | null;
   stock_quantity?: number;
-  /** @deprecated use product_orientation_type — same value (single unit) */
   orientation_type?: "any" | "upright" | "no_stack";
-  /** @deprecated use product_shape_type */
   shape_type?: "box" | "cylinder";
-  /** @deprecated use product_stack_compressible */
   stack_compressible?: boolean;
-  /** @deprecated use product_compressed_height_cm */
   compressed_height_cm?: number | null;
-  /** @deprecated use product_max_stack_weight */
   max_stack_weight?: number | null;
-  /** @deprecated use product_stack_behavior */
   stack_behavior?: "stackable" | "no_stack";
   product_orientation_type?: "any" | "upright" | "no_stack";
   product_shape_type?: "box" | "cylinder";
@@ -134,16 +128,12 @@ export type ProductForm = {
   carton_compressed_height_cm?: number | null;
   carton_max_stack_weight?: number | null;
   carton_stack_behavior?: "stackable" | "no_stack" | null;
-  /** Pick-face replenishment thresholds (product-level, quantities). */
   min_pick_quantity?: number | null;
   max_pick_quantity?: number | null;
-  /** Reserve (buffer) replenishment floor / cap — ilości do trzymania w zapasie. */
   min_reserve_quantity?: number | null;
   max_reserve_quantity?: number | null;
-  /** Alarm: łączny stan (suma inwentaryzacji) poniżej progu — tylko konfiguracja, bez wysyłki powiadomień tutaj. */
   enable_stock_alert?: boolean;
   min_total_stock?: number | null;
-  /** API: parsed metadata (extensions e.g. product_ui). */
   metadata_json?: Record<string, unknown> | null;
   locations?: {
     name: string;
@@ -152,7 +142,6 @@ export type ProductForm = {
     storage_type?: string;
     location_uuid?: string | null;
   }[];
-  /** Rows from inventory table (GET /products/{id}). */
   inventory?: {
     inventory_id?: number | null;
     inventory_serial_ids?: number[];
@@ -173,7 +162,6 @@ export type ProductForm = {
     carrier_barcode?: string | null;
     carrier_is_mixed?: boolean;
   }[];
-  /** WMS: wymagaj partii / daty ważności przy przyjęciu. */
   track_batch?: boolean;
   track_expiry?: boolean;
   track_serial?: boolean;
@@ -186,7 +174,6 @@ export type ProductForm = {
   require_recv_master_carton_qty?: boolean;
   require_recv_master_carton_dims?: boolean;
   require_recv_master_carton_weight?: boolean;
-  /** Opakowanie zbiorcze (kartony) — kolumny produktu, nie metadata. */
   bulk_ean?: string | null;
   units_per_carton?: number | null;
   carton_length_cm?: number | null;
@@ -241,7 +228,6 @@ function parseProductUi(meta: unknown): {
   };
 }
 
-/** Stable JSON snapshot for comparing assigned location edits (order-independent). */
 function normalizeAssignedForCompare(loc: AssignedLocation[]): string {
   return JSON.stringify(
     [...loc]
@@ -286,9 +272,9 @@ function formatDateTimePl(v: string | null | undefined): string {
 
 function marginToneClass(marginPercent: number | null | undefined): string {
   if (marginPercent == null || Number.isNaN(Number(marginPercent))) return "text-slate-700";
-  if (Number(marginPercent) > 30) return "text-emerald-700";
-  if (Number(marginPercent) >= 10) return "text-amber-700";
-  return "text-rose-700";
+  if (Number(marginPercent) > 30) return "text-emerald-600 font-semibold";
+  if (Number(marginPercent) >= 10) return "text-amber-600 font-semibold";
+  return "text-rose-600 font-semibold";
 }
 
 function parseLocationsFromApi(raw: unknown): ProductForm["locations"] {
@@ -349,11 +335,8 @@ type ProductEditModalProps = {
   onSave: (p: ProductForm) => void;
   onClose: () => void;
   focusPlanLocations?: boolean;
-  /** Full-page layout (no overlay); use with `PageLayout` on parent route. */
   variant?: "modal" | "page";
-  /** Open a specific tab on mount (e.g. `?tab=settings` on edit page). */
   initialTab?: TabId;
-  /** Scroll to WMS validation section (`#wms-validation`) after opening settings tab. */
   scrollToWmsValidation?: boolean;
 };
 
@@ -395,7 +378,7 @@ export function ProductEditModal({
     if (str === "") return undefined;
     const n = parseFloat(str);
     return Number.isFinite(n) ? n : undefined;
-  }, []);
+   animate-fade-in}, []);
 
   const parseNumber = useCallback((value: unknown): number | null => {
     if (value === null || value === undefined) return null;
@@ -632,7 +615,6 @@ export function ProductEditModal({
     setInventoryOverride(null);
   }, [product?.id]);
 
-  /** Physical stock by location — only `product.inventory` (same source as product list). */
   const magazynInventoryRows = useMemo(() => {
     const inv = inventoryOverride ?? product?.inventory;
     if (!Array.isArray(inv) || inv.length === 0) return [];
@@ -1097,7 +1079,6 @@ export function ProductEditModal({
     }, 280);
     return () => window.clearTimeout(id);
   }, [focusPlanLocations, isNew, layoutLoading, product?.id]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isNew && (tenantId == null || tenantId < 1)) {
@@ -1388,7 +1369,7 @@ export function ProductEditModal({
         }
         const res = await api.put(`/products/${productId}/`, body, { params: { tenant_id: tenantId } });
         if (placementChangedOnSave) {
-          alert("Placement updated. Physical stock unchanged.");
+          toast.success("Zaktualizowano powiązania lokacji. Stan fizyczny pozostaje bez zmian.");
         }
         const d = res.data as Record<string, unknown> | undefined;
         onSave({
@@ -1453,10 +1434,10 @@ export function ProductEditModal({
       const status =
         err && typeof err === "object" && "response" in err ? (err as { response?: { status?: number } }).response?.status : null;
       if (status === 400 && isStockQuantityWriteBlockedError(msg)) {
-        toast.error("Błąd zapisu produktu");
+        toast.error("Zapis zablokowany: trwa inwentaryzacja w tej lokalizacji.");
         return;
       }
-      toast.error("Błąd zapisu produktu");
+      toast.error("Wystąpił błąd podczas zapisu produktu.");
     } finally {
       setSaving(false);
     }
@@ -1520,16 +1501,17 @@ export function ProductEditModal({
     }
   };
 
+  // Ustawienia stylów dla czystego, płaskiego UI "od krawędzi do krawędzi" bez szarych pudełek
   const tabClass = (id: TabId) =>
-    `shrink-0 whitespace-nowrap border-b-2 px-2.5 py-2 text-[13px] font-medium transition-colors -mb-px first:pl-2 sm:px-3 sm:text-sm ${
+    `shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors -mb-px first:pl-2 sm:px-4 ${
       activeTab === id
         ? "border-slate-800 text-slate-900"
         : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
     }`;
 
   const railBtnClass = (id: TabId) =>
-    `relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-slate-600 shadow-sm transition-colors duration-200 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 ${
-      activeTab === id ? "border-slate-700 bg-slate-100 text-slate-900 ring-1 ring-slate-200/80" : "border-slate-200/90 bg-white"
+    `relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors duration-200 focus-visible:outline focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 ${
+      activeTab === id ? "border-slate-700 bg-slate-50 text-slate-900 ring-1 ring-slate-200/80 shadow-sm" : "border-transparent bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900"
     }`;
 
   const railTabOrder = useMemo((): TabId[] => {
@@ -1566,485 +1548,327 @@ export function ProductEditModal({
   const tenantDisplay =
     tenantId != null ? (tenants.find((t) => t.id === tenantId)?.name ?? "").trim() || `#${tenantId}` : "—";
 
-  const fieldLabel = "mb-1 block text-xs font-medium text-slate-600";
+  const fieldLabel = "mb-1 block text-sm font-medium text-slate-700";
   const inputClass =
-    "w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm leading-tight text-slate-800 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400";
+    "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm leading-tight text-slate-900 shadow-sm transition-colors focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500";
 
-  /** Match ProductList white card inner padding (`p-4 sm:p-5`). */
-  const tabPanelPaddingClass = isPage ? "p-4 sm:p-5" : "px-6 py-6";
+  // W flat design formularz ma po prostu padding z boku, bez szarych tł
+  const tabPanelPaddingClass = "py-8 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto w-full";
 
   const formNumberReset =
     "[&_input[type=number]]:appearance-[textfield] [&_input[type=number]]:[&::-webkit-inner-spin-button]:appearance-none [&_input[type=number]]:[&::-webkit-outer-spin-button]:appearance-none";
 
-  const formShellClass = isPage
-    ? `flex flex-col ${formNumberReset}`
-    : `flex min-h-0 flex-1 flex-col overflow-hidden ${formNumberReset}`;
+  const formShellClass = `flex flex-col min-h-0 flex-1 overflow-hidden bg-white ${formNumberReset}`;
 
-  /** Page: natural document scroll (no nested overflow trap). Modal: internal scroll. */
-  const bodyRowClass = isPage
-    ? "flex w-full flex-col overflow-visible"
-    : "flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row lg:items-stretch";
+  const bodyRowClass = "flex w-full flex-col min-h-0 flex-1 lg:flex-row lg:items-stretch overflow-hidden";
 
-  const bodyInnerClass = isPage
-    ? "grid grid-cols-1 gap-3 overflow-visible lg:grid-cols-[minmax(0,1fr)_3.25rem] lg:items-start lg:gap-3"
-    : "contents";
+  const bodyInnerClass = "contents";
 
-  const mainColClass = isPage
-    ? "flex min-w-0 flex-col overflow-visible"
-    : "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-slate-100 lg:border-r";
+  const mainColClass = "flex min-w-0 flex-1 flex-col overflow-hidden";
 
-  /** Slim icon rail inside the same white workspace as tabs/content (page variant). */
-  const asideClass = isPage
-    ? "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-1 self-start overflow-visible border-l border-slate-100 bg-white py-1 pl-0.5 lg:sticky lg:top-32"
-    : "flex max-h-[min(70vh,28rem)] min-h-0 w-[3.25rem] shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-visible overscroll-contain border-l border-slate-100 bg-slate-50/40 px-1 py-3 lg:sticky lg:top-4 lg:self-start";
+  const asideClass =
+    "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain border-l border-slate-200 bg-white px-1 py-4 lg:sticky lg:top-0 lg:self-start lg:h-full";
 
-  const footerClass = isPage
-    ? "sticky bottom-0 z-20 flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 bg-white px-3 py-3 sm:px-4 sm:py-3.5"
-    : "flex shrink-0 justify-end gap-2 border-t border-slate-100 bg-white px-6 py-4";
-
+  const footerClass = "sticky bottom-0 z-20 flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4";
   const shell = (
     <>
-      {!isPage ? (
-        <div className="shrink-0 border-b border-slate-100 bg-slate-50/80 px-6 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="sticky top-0 z-40 shrink-0 border-b border-slate-200 bg-white">
+        <input
+          ref={headerGalleryInputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={onGalleryFileSelected}
+          disabled={galleryUploadBusy}
+        />
+        <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8">
+          <div className="flex min-w-0 flex-1 gap-5">
+            <div
+              className={`flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-xl ${
+                sidebarPreviewUrl.trim()
+                  ? "bg-white border border-slate-200"
+                  : "bg-slate-50 border border-dashed border-slate-300"
+              }`}
+            >
+              {sidebarPreviewUrl.trim() ? (
+                <img src={sidebarPreviewUrl.trim()} alt="" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <span className="px-2 text-center text-[10px] font-medium text-slate-400">Brak zdjęcia</span>
+              )}
+            </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                {isNew ? "Nowy produkt" : "Edycja produktu"}
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                {isNew ? "Dodawanie produktu" : "Edycja produktu"}
               </p>
-              <h2 className="mt-1 truncate text-xl font-bold text-slate-900">{name.trim() || (isNew ? "Bez nazwy" : "—")}</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {!isNew && product?.id != null ? (
-                  <span className="inline-flex items-center rounded-full bg-slate-200/80 px-2.5 py-0.5 text-xs font-medium text-slate-800">
-                    ID: {product.id}
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900">
+                  {name.trim() || (isNew ? "Nowy produkt" : "—")}
+                </h1>
+                {!isNew && productCreatedInWms(product?.metadata_json ?? null) ? (
+                  <span
+                    className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900"
+                    title="Produkt utworzony w WMS — uzupełnij dane w asortymencie"
+                  >
+                    Z WMS
                   </span>
                 ) : null}
-                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
-                  Stan (fizyczny): {physicalStockDisplay ?? "—"}
-                </span>
-                <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-900 ring-1 ring-blue-200">
-                  Cena: {formatMoneyZl(salePrice === "" ? null : typeof salePrice === "number" ? salePrice : parseDecimal(String(salePrice)) ?? null)}
-                </span>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {isPage ? (
-        <div className="sticky top-0 z-40 shrink-0 border-b border-slate-100 bg-white px-4 pb-4 pt-4 sm:px-5 sm:pb-5 sm:pt-5">
-          <input
-            ref={headerGalleryInputRef}
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            onChange={onGalleryFileSelected}
-            disabled={galleryUploadBusy}
-          />
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
-            <div className="flex min-w-0 gap-4">
-              <div
-                className={`flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center overflow-hidden rounded-lg ${
-                  sidebarPreviewUrl.trim()
-                    ? "bg-white"
-                    : "border border-dashed border-slate-200/90 bg-white"
-                }`}
-              >
-                {sidebarPreviewUrl.trim() ? (
-                  <img src={sidebarPreviewUrl.trim()} alt="" className="max-h-full max-w-full object-contain" />
-                ) : (
-                  <span className="px-2 text-center text-[11px] font-medium text-slate-400">Brak zdjęcia</span>
+              
+              {/* Nowoczesne parametry w formie pigułek (badges) */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5 font-medium">Podmiot:</span>
+                  <span className="font-semibold text-slate-800" title={tenantDisplay !== "—" ? tenantDisplay : undefined}>
+                    {tenantDisplay}
+                  </span>
+                </div>
+                {!isNew && product?.id != null && (
+                  <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+                    <span className="text-slate-500 mr-1.5 font-medium">ID:</span>
+                    <span className="font-semibold text-slate-800">{product.id}</span>
+                  </div>
                 )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  {isNew ? "Nowy produkt" : "Edycja produktu"}
-                </p>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
-                    {name.trim() || (isNew ? "Bez nazwy" : "—")}
-                  </h1>
-                  {!isNew && productCreatedInWms(product?.metadata_json ?? null) ? (
-                    <span
-                      className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-900"
-                      title="Produkt utworzony w WMS — uzupełnij dane w asortymencie"
-                    >
-                      Utworzono w WMS
-                    </span>
-                  ) : null}
+                <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5 font-medium">SKU:</span>
+                  <span className="font-semibold text-slate-800">{(symbol ?? "").trim() || "—"}</span>
                 </div>
-                <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <dt className="shrink-0 text-slate-500">Podmiot</dt>
-                    <dd className="truncate font-medium text-slate-800" title={tenantDisplay !== "—" ? tenantDisplay : undefined}>
-                      {tenantDisplay}
-                    </dd>
-                  </div>
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <dt className="shrink-0 text-slate-500">ID produktu</dt>
-                    <dd className="font-medium tabular-nums text-slate-900">{!isNew && product?.id != null ? product.id : "—"}</dd>
-                  </div>
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <dt className="shrink-0 text-slate-500">SKU</dt>
-                    <dd className="truncate font-medium text-slate-800">{(symbol ?? "").trim() || "—"}</dd>
-                  </div>
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <dt className="shrink-0 text-slate-500">EAN</dt>
-                    <dd className="truncate font-medium tabular-nums text-slate-800">{(ean ?? "").trim() || "—"}</dd>
-                  </div>
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <dt className="shrink-0 text-slate-500">Stan magazynu</dt>
-                    <dd className="font-medium tabular-nums text-slate-900">{physicalStockDisplay ?? "—"}</dd>
-                  </div>
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <dt className="shrink-0 text-slate-500">Cena</dt>
-                    <dd className="font-semibold tabular-nums text-slate-900">
-                      {formatMoneyZl(salePrice === "" ? null : typeof salePrice === "number" ? salePrice : parseDecimal(String(salePrice)) ?? null)}
-                    </dd>
-                  </div>
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <dt className="shrink-0 text-slate-500">Marża %</dt>
-                    <dd className={`font-semibold tabular-nums ${marginToneClass(currentCost?.margin_percent)}`}>
-                      {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(1)}%`}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-1 border-t border-slate-100 pt-3 lg:border-t-0 lg:pt-0">
-              <button
-                type="button"
-                title="Duplikuj produkt"
-                disabled={isNew || dupBusy || product?.id == null || tenantId == null}
-                onClick={() => {
-                  if (product?.id == null || tenantId == null) return;
-                  void (async () => {
-                    setDupBusy(true);
-                    try {
-                      const created = await duplicateProduct(product.id!, tenantId);
-                      console.log("duplicate response", created);
-                      const newId = Number(created?.id);
-                      if (!Number.isFinite(newId) || newId < 1) {
-                        toast.error("Kopia mogła powstać, ale API nie zwróciło poprawnego ID produktu.");
-                        return;
-                      }
-                      log("Product duplicated from edit", {
-                        sourceId: product.id,
-                        newId,
-                        tenantId,
-                      });
-                      toast.success(`Utworzono kopię: ${created.name ?? "produkt"}`);
-                      navigate(`/products/${newId}/edit`, { state: { tenantId } });
-                    } catch (e: unknown) {
-                      console.error("duplicateProduct failed", {
-                        productId: product.id,
-                        tenantId,
-                        error: e,
-                      });
-                      logError("duplicateProduct failed", e);
-                      toast.error(extractApiErrorMessage(e, "Kopiowanie produktu nie powiodło się."));
-                    } finally {
-                      setDupBusy(false);
-                    }
-                  })();
-                }}
-                className="rounded-lg border border-transparent p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-45"
-              >
-                <Copy className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                <span className="sr-only">Duplikuj</span>
-              </button>
-              <button
-                type="button"
-                title={galleryUploadBusy ? "Wgrywanie…" : "Wgraj zdjęcie"}
-                disabled={galleryUploadBusy}
-                onClick={() => headerGalleryInputRef.current?.click()}
-                className="rounded-lg border border-transparent p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-              >
-                <ImageUp className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                <span className="sr-only">Wgraj zdjęcie</span>
-              </button>
-              <button
-                type="button"
-                title="Etykieta i dane produktu"
-                onClick={() => setActiveTab("labelSheet")}
-                className="rounded-lg border border-transparent p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
-                <Wrench className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                <span className="sr-only">Narzędzia etykiety</span>
-              </button>
-              <details className="relative">
-                <summary className="list-none cursor-pointer rounded-lg border border-transparent p-2 text-slate-600 marker:content-none hover:bg-slate-100 hover:text-slate-900 [&::-webkit-details-marker]:hidden">
-                  <MoreHorizontal className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                  <span className="sr-only">Menu</span>
-                </summary>
-                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
-                  <Link
-                    to="/products/list"
-                    className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
-                  >
-                    Lista produktów
-                  </Link>
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
-                    onClick={() => {
-                      setActiveTab("images");
-                      const d = document.activeElement?.closest("details");
-                      if (d instanceof HTMLDetailsElement) d.open = false;
-                    }}
-                  >
-                    Zakładka Zdjęcia
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
-                    onClick={() => {
-                      setActiveTab("warehouse");
-                      const d = document.activeElement?.closest("details");
-                      if (d instanceof HTMLDetailsElement) d.open = false;
-                    }}
-                  >
-                    Zakładka Magazyn
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
-                    onClick={() => {
-                      setActiveTab("settings");
-                      const d = document.activeElement?.closest("details");
-                      if (d instanceof HTMLDetailsElement) d.open = false;
-                    }}
-                  >
-                    Ustawienia WMS
-                  </button>
+                <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5 font-medium">EAN:</span>
+                  <span className="font-semibold text-slate-800 tabular-nums">{(ean ?? "").trim() || "—"}</span>
                 </div>
-              </details>
+                <div className="flex items-center rounded-md border border-blue-200 bg-blue-50 px-2 py-1">
+                  <span className="text-blue-600 mr-1.5 font-medium">Stan:</span>
+                  <span className="font-bold text-blue-900 tabular-nums">{physicalStockDisplay ?? "—"}</span>
+                </div>
+                <div className="flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1">
+                  <span className="text-emerald-600 mr-1.5 font-medium">Cena:</span>
+                  <span className="font-bold text-emerald-900 tabular-nums">
+                    {formatMoneyZl(salePrice === "" ? null : typeof salePrice === "number" ? salePrice : parseDecimal(String(salePrice)) ?? null)}
+                  </span>
+                </div>
+                <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5 font-medium">Marża:</span>
+                  <span className={`font-bold tabular-nums ${marginToneClass(currentCost?.margin_percent)}`}>
+                    {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(1)}%`}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
+          <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 pt-4 lg:border-t-0 lg:pt-0">
+            <button
+              type="button"
+              title="Duplikuj produkt"
+              disabled={isNew || dupBusy || product?.id == null || tenantId == null}
+              onClick={() => {
+                if (product?.id == null || tenantId == null) return;
+                void (async () => {
+                  setDupBusy(true);
+                  try {
+                    const created = await duplicateProduct(product.id!, tenantId);
+                    const newId = Number(created?.id);
+                    if (!Number.isFinite(newId) || newId < 1) {
+                      toast.error("Kopia mogła powstać, ale API nie zwróciło poprawnego ID produktu.");
+                      return;
+                    }
+                    toast.success(`Utworzono kopię: ${created.name ?? "produkt"}`);
+                    navigate(`/products/${newId}/edit`, { state: { tenantId } });
+                  } catch (e: unknown) {
+                    logError("duplicateProduct failed", e);
+                    toast.error(extractApiErrorMessage(e, "Kopiowanie produktu nie powiodło się."));
+                  } finally {
+                    setDupBusy(false);
+                  }
+                })();
+              }}
+              className="flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
+            >
+              <Copy className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            <button
+              type="button"
+              title={galleryUploadBusy ? "Wgrywanie…" : "Wgraj zdjęcie"}
+              disabled={galleryUploadBusy}
+              onClick={() => headerGalleryInputRef.current?.click()}
+              className="flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
+            >
+              <ImageUp className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            <button
+              type="button"
+              title="Etykieta i dane produktu"
+              onClick={() => setActiveTab("labelSheet")}
+              className="flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900"
+            >
+              <Wrench className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            <details className="relative">
+              <summary className="list-none cursor-pointer flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors marker:content-none hover:bg-slate-50 hover:text-slate-900 [&::-webkit-details-marker]:hidden">
+                <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
+              </summary>
+              <div className="absolute right-0 z-50 mt-2 w-48 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl">
+                <Link to="/products/list" className="block px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600">
+                  Wróć do listy
+                </Link>
+              </div>
+            </details>
+          </div>
         </div>
-      ) : null}
+
+        {/* Czysty pasek zakładek na pełną szerokość */}
+        <div className="flex gap-2 overflow-x-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 [-webkit-overflow-scrolling:touch]">
+          <button type="button" role="tab" aria-selected={activeTab === "basic"} className={tabClass("basic")} onClick={() => setActiveTab("basic")}>Podstawowe</button>
+          <button type="button" role="tab" aria-selected={activeTab === "suppliers"} className={tabClass("suppliers")} onClick={() => setActiveTab("suppliers")}>Dostawcy</button>
+          <button type="button" role="tab" aria-selected={activeTab === "labelSheet"} className={tabClass("labelSheet")} onClick={() => setActiveTab("labelSheet")}>Etykieta</button>
+          <button type="button" role="tab" aria-selected={activeTab === "images"} className={tabClass("images")} onClick={() => setActiveTab("images")}>Zdjęcia</button>
+          <button type="button" role="tab" aria-selected={activeTab === "prices"} className={tabClass("prices")} onClick={() => setActiveTab("prices")}>Ceny</button>
+          <button type="button" role="tab" aria-selected={activeTab === "warehouse"} className={tabClass("warehouse")} onClick={() => setActiveTab("warehouse")}>Magazyn</button>
+          {!isNew && product?.id != null ? (
+            <button type="button" role="tab" aria-selected={activeTab === "warehouseOps"} className={tabClass("warehouseOps")} onClick={() => setActiveTab("warehouseOps")}>Operacje</button>
+          ) : null}
+          <button type="button" role="tab" aria-selected={activeTab === "logistics"} className={tabClass("logistics")} onClick={() => setActiveTab("logistics")}>Logistyka</button>
+          <button type="button" role="tab" aria-selected={activeTab === "offers"} className={tabClass("offers")} onClick={() => setActiveTab("offers")}>Oferty</button>
+          <button type="button" role="tab" aria-selected={activeTab === "settings"} className={tabClass("settings")} onClick={() => setActiveTab("settings")}>Ustawienia</button>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className={formShellClass}>
         <div className={bodyRowClass}>
           <div className={bodyInnerClass}>
-            {/* Main column: top tabs + tab panel */}
             <div className={mainColClass}>
-              <div className="shrink-0 border-b border-slate-100 bg-white px-1 sm:px-2 lg:px-3">
-                <div
-                  className="flex gap-0 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]"
-                  role="tablist"
-                  aria-label="Zakładki produktu"
-                >
-                  <button type="button" role="tab" aria-selected={activeTab === "basic"} className={tabClass("basic")} onClick={() => setActiveTab("basic")}>
-                    Podstawowe
-                  </button>
-                  <button type="button" role="tab" aria-selected={activeTab === "suppliers"} className={tabClass("suppliers")} onClick={() => setActiveTab("suppliers")}>
-                    Dostawcy
-                  </button>
-                  <button type="button" role="tab" aria-selected={activeTab === "labelSheet"} className={tabClass("labelSheet")} onClick={() => setActiveTab("labelSheet")}>
-                    Etykieta / Dane produktu
-                  </button>
-                  <button type="button" role="tab" aria-selected={activeTab === "images"} className={tabClass("images")} onClick={() => setActiveTab("images")}>
-                    Zdjęcia
-                  </button>
-                  <button type="button" role="tab" aria-selected={activeTab === "prices"} className={tabClass("prices")} onClick={() => setActiveTab("prices")}>
-                    Ceny
-                  </button>
-                  <button type="button" role="tab" aria-selected={activeTab === "warehouse"} className={tabClass("warehouse")} onClick={() => setActiveTab("warehouse")}>
-                    Magazyn
-                  </button>
-                  {!isNew && product?.id != null ? (
-                    <button type="button" role="tab" aria-selected={activeTab === "warehouseOps"} className={tabClass("warehouseOps")} onClick={() => setActiveTab("warehouseOps")}>
-                      Operacje magazynowe
-                    </button>
-                  ) : null}
-                  <button type="button" role="tab" aria-selected={activeTab === "logistics"} className={tabClass("logistics")} onClick={() => setActiveTab("logistics")}>
-                    Logistyka
-                  </button>
-                  <button type="button" role="tab" aria-selected={activeTab === "offers"} className={tabClass("offers")} onClick={() => setActiveTab("offers")}>
-                    Oferty / warianty
-                  </button>
-                  <button type="button" role="tab" aria-selected={activeTab === "settings"} className={tabClass("settings")} onClick={() => setActiveTab("settings")}>
-                    Ustawienia
-                  </button>
-                </div>
-              </div>
-              <div
-                className={
-                  isPage ? tabPanelPaddingClass : `min-h-0 flex-1 overflow-y-auto overscroll-contain ${tabPanelPaddingClass}`
-                }
-              >
+              <div className={`overflow-y-auto ${tabPanelPaddingClass}`}>
+                
+                {/* Zawartość zakładek w płaskim układzie (Flat Design) */}
                 {activeTab === "basic" && (
-                  <div className="space-y-6">
-                    <Card title="Podmiot">
-                      <div>
-                        <label className={fieldLabel}>Podmiot</label>
-                        <select
-                          value={tenantId ?? ""}
-                          onChange={(e) => setTenantId(e.target.value ? Number(e.target.value) : null)}
-                          className={inputClass}
-                          required={isNew}
-                        >
-                          <option value="">— Wybierz podmiot —</option>
-                          {tenants.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                        {isNew ? <p className="mt-1 text-xs text-slate-500">Wymagane przy tworzeniu produktu.</p> : null}
-                      </div>
-                      <div>
-                        <label className={fieldLabel}>Nazwa</label>
-                        <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="max-w-3xl space-y-10">
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Informacje ogólne</h3>
+                      <div className="space-y-5">
                         <div>
-                          <label className={fieldLabel}>Symbol / SKU</label>
-                          <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} />
+                          <label className={fieldLabel}>Podmiot</label>
+                          <select value={tenantId ?? ""} onChange={(e) => setTenantId(e.target.value ? Number(e.target.value) : null)} className={inputClass} required={isNew}>
+                            <option value="">— Wybierz podmiot —</option>
+                            {tenants.map((t) => (
+                              <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                          </select>
                         </div>
                         <div>
-                          <label className={fieldLabel}>EAN</label>
-                          <input type="text" value={ean} onChange={(e) => setEan(e.target.value)} className={inputClass} />
+                          <label className={fieldLabel}>Nazwa</label>
+                          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
+                        </div>
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                          <div>
+                            <label className={fieldLabel}>Symbol / SKU</label>
+                            <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>EAN</label>
+                            <input type="text" value={ean} onChange={(e) => setEan(e.target.value)} className={inputClass} />
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <label className={fieldLabel}>Producent (katalog)</label>
-                        <select
-                          value={manufacturerId != null ? String(manufacturerId) : ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (!v) {
-                              setManufacturerId(null);
-                              return;
-                            }
-                            const id = Number(v);
-                            const row = manufacturersCatalog.find((x) => x.id === id);
-                            setManufacturerId(Number.isFinite(id) ? id : null);
-                            if (row) setManufacturer(row.name);
-                          }}
-                          className={inputClass}
-                        >
-                          <option value="">— Wybierz z katalogu lub wpisz poniżej —</option>
-                          {manufacturersCatalog.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name}
-                              {!m.active ? " (nieaktywny)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={fieldLabel}>Nazwa producenta</label>
-                        <input
-                          type="text"
-                          value={manufacturer}
-                          onChange={(e) => {
-                            const t = e.target.value;
-                            setManufacturer(t);
-                            if (manufacturerId != null) {
-                              const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
-                              if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
-                            }
-                          }}
-                          className={inputClass}
-                          placeholder="Wpisz ręcznie lub wybierz z katalogu"
-                        />
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        Dostawcy i ceny zakupu — sekcja{" "}
-                        <button type="button" className="font-medium text-blue-700 underline" onClick={() => setActiveTab("suppliers")}>
-                          Dostawcy
-                        </button>
-                        .
-                      </p>
-                      {!responsiblePerson.trim() && !responsiblePersonEmail.trim() && producerDisplayNameForGpsrHint ? (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                          <span className="font-medium text-slate-800">GPSR:</span> dziedziczone z producenta:{" "}
-                          <span className="font-medium text-slate-900">{producerDisplayNameForGpsrHint}</span>
+                    </section>
+
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Producent i GPSR</h3>
+                      <div className="space-y-5">
+                        <div>
+                          <label className={fieldLabel}>Producent z katalogu</label>
+                          <select
+                            value={manufacturerId != null ? String(manufacturerId) : ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              if (!v) { setManufacturerId(null); return; }
+                              const id = Number(v);
+                              const row = manufacturersCatalog.find((x) => x.id === id);
+                              setManufacturerId(Number.isFinite(id) ? id : null);
+                              if (row) setManufacturer(row.name);
+                            }}
+                            className={inputClass}
+                          >
+                            <option value="">— Wybierz z katalogu lub wpisz poniżej —</option>
+                            {manufacturersCatalog.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name} {!m.active ? "(nieaktywny)" : ""}</option>
+                            ))}
+                          </select>
                         </div>
-                      ) : null}
-                      <div>
-                        <label className={fieldLabel}>Osoba odpowiedzialna (GPSR)</label>
-                        <input
-                          type="text"
-                          value={responsiblePerson}
-                          onChange={(e) => setResponsiblePerson(e.target.value)}
-                          className={inputClass}
-                          placeholder="Puste = dziedziczenie z producenta (jeśli ustawione)"
-                        />
-                        {manufacturerId != null ? (
-                          <p className="mt-1 text-xs text-slate-500">
-                            {" "}
-                            {(() => {
-                              const m = manufacturersCatalog.find((x) => x.id === manufacturerId);
-                              const n = (m?.responsible_person_name ?? "").trim();
-                              const em = (m?.responsible_person_email ?? "").trim();
-                              if (!n && !em) return;
-                              return [n || "—", em || "—"].join(" · ");
-                            })()}
-                          </p>
-                        ) : null}
+                        <div>
+                          <label className={fieldLabel}>Nazwa producenta (ręczna)</label>
+                          <input
+                            type="text"
+                            value={manufacturer}
+                            onChange={(e) => {
+                              const t = e.target.value;
+                              setManufacturer(t);
+                              if (manufacturerId != null) {
+                                const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
+                                if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
+                              }
+                            }}
+                            className={inputClass}
+                            placeholder="Wpisz ręcznie, jeśli brak w katalogu"
+                          />
+                        </div>
+                        
+                        <div className="pt-2">
+                          <label className={fieldLabel}>Osoba odpowiedzialna (GPSR)</label>
+                          <input
+                            type="text"
+                            value={responsiblePerson}
+                            onChange={(e) => setResponsiblePerson(e.target.value)}
+                            className={inputClass}
+                            placeholder="Puste = dziedziczenie z producenta"
+                          />
+                        </div>
+                        <div>
+                          <label className={fieldLabel}>E-mail osoby odpowiedzialnej (GPSR)</label>
+                          <input
+                            type="email"
+                            value={responsiblePersonEmail}
+                            onChange={(e) => setResponsiblePersonEmail(e.target.value)}
+                            className={inputClass}
+                            placeholder="Opcjonalnie; puste = z producenta"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className={fieldLabel}>E-mail osoby odpowiedzialnej (GPSR)</label>
-                        <input
-                          type="email"
-                          value={responsiblePersonEmail}
-                          onChange={(e) => setResponsiblePersonEmail(e.target.value)}
-                          className={inputClass}
-                          placeholder="Opcjonalnie; puste = z producenta"
-                        />                        
-                      </div>                      
-                    </Card>
+                    </section>
                   </div>
                 )}
 
                 {activeTab === "suppliers" && (
-                  <div className="space-y-6">
-                    <Card title="Dostawcy">
+                  <div className="max-w-4xl space-y-10">
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Przypisani dostawcy</h3>
                       {cheapestSupplierInsight ? (
-                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
-                          <span className="font-semibold">Najtańszy dostawca:</span>{" "}
-                          {(cheapestSupplierInsight.supplier_name || "").trim() || `#${cheapestSupplierInsight.supplier_id}`} —{" "}
-                          {formatMoneyZl(cheapestSupplierInsight.purchase_price)} netto
+                        <div className="mb-6 rounded border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                          <span className="font-semibold">Najtańszy dostawca:</span> {(cheapestSupplierInsight.supplier_name || "").trim() || `#${cheapestSupplierInsight.supplier_id}`} — {formatMoneyZl(cheapestSupplierInsight.purchase_price)} netto
                         </div>
-                      ) : !isNew && supplierLinkRows.length > 0 ? (
-                        <p className="text-xs text-slate-500">Uzupełnij ceny zakupu u dostawców, aby zobaczyć podpowiedź „najtańszy”.</p>
                       ) : null}
+
                       {isNew ? (
-                        <p className="text-sm text-slate-600">Zapisz produkt, aby dodać dostawców.</p>
+                        <p className="text-sm text-slate-600">Najpierw zapisz produkt, aby móc powiązać go z dostawcami.</p>
                       ) : (
-                        <>
-                          <div className="overflow-x-auto rounded-lg border border-slate-200">
+                        <div className="space-y-6">
+                          <div className="overflow-hidden rounded border border-slate-200">
                             <table className="w-full text-sm">
-                              <thead className="bg-slate-50 text-left">
+                              <thead className="bg-slate-50 border-b border-slate-200 text-left">
                                 <tr>
-                                  <th className="px-3 py-2">Dostawca</th>
-                                  <th className="px-3 py-2 text-right">Cena zakupu netto</th>
-                                  <th className="w-24 px-3 py-2 text-center">Domyślny</th>
-                                  <th className="w-14 px-3 py-2" />
+                                  <th className="px-4 py-3 font-semibold text-slate-700">Dostawca</th>
+                                  <th className="px-4 py-3 text-right font-semibold text-slate-700 w-40">Cena zakupu netto</th>
+                                  <th className="px-4 py-3 text-center font-semibold text-slate-700 w-32">Domyślny</th>
+                                  <th className="px-4 py-3 w-20"></th>
                                 </tr>
                               </thead>
-                              <tbody>
+                              <tbody className="divide-y divide-slate-100">
                                 {supplierLinksBusy && supplierLinkRows.length === 0 ? (
-                                  <tr>
-                                    <td colSpan={4} className="px-3 py-4 text-center text-slate-500">
-                                      Wczytywanie…
-                                    </td>
-                                  </tr>
+                                  <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-500">Wczytywanie…</td></tr>
                                 ) : supplierLinkRows.length === 0 ? (
-                                  <tr>
-                                    <td colSpan={4} className="px-3 py-4 text-center text-slate-500">
-                                      Brak powiązań — dodaj dostawcę poniżej lub w edycji dostawcy (zakładka Produkty).
-                                    </td>
-                                  </tr>
+                                  <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-500">Brak przypisanych dostawców.</td></tr>
                                 ) : (
                                   supplierLinkRows.map((row) => (
                                     <ProductSupplierLinkRowEditor
-                                      key={row.id}
-                                      row={row}
-                                      busy={supplierLinksBusy}
-                                      inputTableMini={inputTableMini}
+                                      key={row.id} row={row} busy={supplierLinksBusy} inputTableMini={inputTableMini}
                                       isDefault={defaultSupplierId === row.supplier_id}
                                       onSelectDefault={() => setDefaultSupplierId(row.supplier_id)}
                                       onPatchPrice={(raw) => void onPatchSupplierLinkPrice(row.id, raw)}
@@ -2055,1135 +1879,53 @@ export function ProductEditModal({
                               </tbody>
                             </table>
                           </div>
-                          <div className="flex flex-wrap items-end gap-2">
-                            <div className="min-w-[200px] flex-1">
-                              <label className={fieldLabel}>Dodaj dostawcę</label>
-                              <select
-                                className={inputClass}
-                                value={addSupplierPick}
-                                onChange={(e) => setAddSupplierPick(e.target.value)}
-                                disabled={supplierLinksBusy}
-                              >
-                                <option value="">— Wybierz —</option>
-                                {suppliersCatalog
-                                  .filter((s) => !supplierLinkRows.some((r) => r.supplier_id === s.id))
-                                  .map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                      {s.name}
-                                      {!s.active ? " (nieaktywny)" : ""}
-                                    </option>
-                                  ))}
+
+                          <div className="flex flex-wrap items-end gap-3 rounded bg-slate-50 p-4 border border-slate-200">
+                            <div className="flex-1 min-w-[250px]">
+                              <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj nowego dostawcę</label>
+                              <select className={inputClass} value={addSupplierPick} onChange={(e) => setAddSupplierPick(e.target.value)} disabled={supplierLinksBusy}>
+                                <option value="">— Wybierz z listy —</option>
+                                {suppliersCatalog.filter((s) => !supplierLinkRows.some((r) => r.supplier_id === s.id)).map((s) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
                               </select>
                             </div>
-                            <button
-                              type="button"
-                              disabled={supplierLinksBusy || addSupplierPick === ""}
-                              onClick={() => void onAddSupplierLink()}
-                              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
-                            >
-                              Dodaj
+                            <button type="button" disabled={supplierLinksBusy || !addSupplierPick} onClick={() => void onAddSupplierLink()} className="rounded bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                              Dodaj powiązanie
                             </button>
                           </div>
-                          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                            <input
-                              type="radio"
-                              name="product-default-supplier-none"
-                              checked={defaultSupplierId == null}
-                              onChange={() => setDefaultSupplierId(null)}
-                            />
-                            Brak domyślnego dostawcy
-                          </label>
-                        </>
+                        </div>
                       )}
-                    </Card>
-                  </div>
-                )}
-
-                {activeTab === "labelSheet" && (
-                  <div className="space-y-6 lg:grid lg:grid-cols-[1fr_min(280px,38%)] lg:items-start lg:gap-6">
-                    <div className="space-y-6">
-                      <Card title="">
-                        <div>
-                          <label className={fieldLabel}>Szablon</label>
-                          <select
-                            value={labelTemplateId ?? ""}
-                            onChange={(e) => setLabelTemplateId(e.target.value === "" ? null : Number(e.target.value))}
-                            className={inputClass}
-                          >
-                            <option value="">Brak</option>
-                            {productTemplates.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-                          <p className="mb-2 text-xs font-medium text-slate-600">Podgląd szablonu</p>
-                          <div className="flex min-h-[100px] items-center justify-center rounded border border-slate-100 bg-slate-50/80 p-2">
-                            {templatePreviewLoading ? (
-                              <p className="text-xs text-slate-500">Ładowanie…</p>
-                            ) : templatePreviewSvg ? (
-                              <div
-                                className="max-h-36 max-w-full overflow-auto [&_svg]:max-h-36"
-                                dangerouslySetInnerHTML={{ __html: templatePreviewSvg }}
-                              />
-                            ) : (
-                              <p className="text-xs text-slate-500">Brak podglądu</p>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-
-                      <Card title="A. Podstawowe">
-                        <div>
-                          <label className={fieldLabel}>Nazwa produktu na etykiecie (PL)</label>
-                          <input
-                            type="text"
-                            className={inputClass}
-                            value={labelData.product_name_pl ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, product_name_pl: e.target.value }))}
-                            placeholder={name.trim() || "jak nazwa produktu"}
-                          />
-                        </div>
-                      </Card>
-
-                      <Card title="B. Producent / Importer">
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                          <p className="mt-1 font-semibold text-slate-900">{manufacturerReadonly.name || "—"}</p>
-                          <p className="mt-1 whitespace-pre-line text-slate-700">{manufacturerReadonly.address || "—"}</p>
-                          {manufacturerId == null ? (
-                            <p className="mt-2 text-xs text-amber-800">Wybierz producenta w zakładce Podstawowe, aby wypełnić blok producenta.</p>
-                          ) : null}
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Importer — nazwa</label>
-                          <input
-                            type="text"
-                            className={inputClass}
-                            value={labelData.importer_name ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, importer_name: e.target.value }))}
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Importer — adres</label>
-                          <textarea
-                            className={`${inputClass} min-h-[64px]`}
-                            value={labelData.importer_address ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, importer_address: e.target.value }))}
-                          />
-                        </div>
-                      </Card>
-
-                      <Card title="C. Identyfikacja">
-                        <div>
-                          <label className={fieldLabel}>EAN</label>
-                          <input type="text" className={`${inputClass} bg-slate-50`} value={ean} readOnly />
-                        </div>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <div>
-                            <label className={fieldLabel}>Numer partii</label>
-                            <input
-                              type="text"
-                              className={inputClass}
-                              value={labelData.batch_number ?? ""}
-                              onChange={(e) => setLabelData((d) => ({ ...d, batch_number: e.target.value }))}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Numer serii</label>
-                            <input
-                              type="text"
-                              className={inputClass}
-                              value={labelData.series_number ?? ""}
-                              onChange={(e) => setLabelData((d) => ({ ...d, series_number: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                      </Card>
-
-                      <Card title="D. Regulacje">
-                        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-                          <input
-                            type="checkbox"
-                            className="rounded border-slate-300 text-blue-600"
-                            checked={Boolean(labelData.requires_ce_mark)}
-                            onChange={(e) => setLabelData((d) => ({ ...d, requires_ce_mark: e.target.checked }))}
-                          />
-                          Wymaga znaku CE na etykiecie
-                        </label>
-                      </Card>
-
-                      <Card title="E. Branżowe (tekstylia)">
-                        <div>
-                          <label className={fieldLabel}>Skład materiałowy</label>
-                          <textarea
-                            className={`${inputClass} min-h-[72px]`}
-                            value={labelData.material_composition ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, material_composition: e.target.value }))}
-                            placeholder="np. 100% bawełna"
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Instrukcja pielęgnacji</label>
-                          <textarea
-                            className={`${inputClass} min-h-[72px]`}
-                            value={labelData.care_instructions ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, care_instructions: e.target.value }))}
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Rozmiar / długość</label>
-                          <input
-                            type="text"
-                            className={inputClass}
-                            value={labelData.size_or_length ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, size_or_length: e.target.value }))}
-                          />
-                        </div>
-                      </Card>
-
-                      <Card title="F. Pochodzenie">
-                        <div>
-                          <label className={fieldLabel}>Kraj pochodzenia</label>
-                          <select
-                            className={inputClass}
-                            value={labelData.country_of_origin ?? ""}
-                            onChange={(e) => setLabelData((d) => ({ ...d, country_of_origin: e.target.value || undefined }))}
-                          >
-                            <option value="">—</option>
-                            {SUPPLIER_COUNTRIES.map((c) => (
-                              <option key={c.value} value={c.value}>
-                                {c.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </Card>
-
-                      <Card title="G. Cena">
-                        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-                          <input
-                            type="checkbox"
-                            className="rounded border-slate-300 text-blue-600"
-                            checked={Boolean(labelData.show_price_on_label)}
-                            onChange={(e) => setLabelData((d) => ({ ...d, show_price_on_label: e.target.checked }))}
-                          />
-                          Pokazuj cenę na etykiecie
-                        </label>
-                      </Card>
-                    </div>
-
-                    <aside className="min-h-0 lg:sticky lg:top-0">
-                      <Card title="Podgląd etykiety (~60×40 mm)">
-                        <p className="mb-3 text-xs text-slate-500">Język polski. Puste sekcje są ukrywane; CE tylko po zaznaczeniu.</p>
-                        <div className="flex justify-center overflow-auto rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
-                          <div className="origin-top scale-[1.35] shadow-md sm:scale-150">
-                            <RetailLabel
-                              brandName={manufacturerReadonly.name || manufacturer.trim() || "—"}
-                              productNamePl={(labelData.product_name_pl ?? "").trim() || name.trim() || "—"}
-                              composition={labelData.material_composition}
-                              manufacturerName={manufacturerReadonly.name || undefined}
-                              manufacturerAddress={manufacturerReadonly.address || undefined}
-                              importerName={labelData.importer_name}
-                              importerAddress={labelData.importer_address}
-                              ean={ean.trim() || undefined}
-                              batchNumber={labelData.batch_number}
-                              seriesNumber={labelData.series_number}
-                              countryOfOrigin={labelData.country_of_origin}
-                              careInstructions={labelData.care_instructions}
-                              sizeOrLength={labelData.size_or_length}
-                              salePrice={
-                                salePrice === "" ? null : typeof salePrice === "number" ? salePrice : parseDecimal(String(salePrice)) ?? null
-                              }
-                              showPriceOnLabel={Boolean(labelData.show_price_on_label)}
-                              showCeMark={Boolean(labelData.requires_ce_mark)}
-                            />
-                          </div>
-                        </div>
-                      </Card>
-                    </aside>
-                  </div>
-                )}
-
-                {activeTab === "images" && (
-                  <div className="space-y-6">
-                    <Card title="Zdjęcia produktu">
-                      <div className="flex flex-wrap items-end gap-2">
-                        <div className="min-w-[200px] flex-1">
-                          <label className={fieldLabel}>Dodaj z URL</label>
-                          <input
-                            type="url"
-                            className={inputClass}
-                            value={newGalleryUrl}
-                            onChange={(e) => setNewGalleryUrl(e.target.value)}
-                            placeholder="https://… lub /uploads/…"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={addGalleryFromUrl}
-                          disabled={!newGalleryUrl.trim()}
-                          className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
-                        >
-                          Dodaj URL
-                        </button>
-                        <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50">
-                          <input type="file" accept="image/*" className="sr-only" onChange={onGalleryFileSelected} disabled={galleryUploadBusy} />
-                          {galleryUploadBusy ? "Wgrywanie…" : "Wgraj plik"}
-                        </label>
-                      </div>
-
-                      {ensureSingleMainImage(productImages).length === 0 ? (
-                        <p className="text-sm text-slate-600">Brak zdjęć — dodaj URL lub plik.</p>
-                      ) : (
-                        <ul className="space-y-3">
-                          {ensureSingleMainImage(productImages)
-                            .sort((a, b) => a.sort_order - b.sort_order)
-                            .map((img) => (
-                              <li
-                                key={img.id}
-                                className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
-                              >
-                                <div className="h-16 w-16 shrink-0 overflow-hidden rounded border border-slate-200/80 bg-white">
-                                  <img src={img.image_url} alt="" className="h-full w-full object-contain" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <input
-                                    type="url"
-                                    className={inputClass}
-                                    value={img.image_url}
-                                    onChange={(e) =>
-                                      setProductImages((prev) =>
-                                        ensureSingleMainImage(prev.map((x) => (x.id === img.id ? { ...x, image_url: e.target.value } : x))),
-                                      )
-                                    }
-                                  />
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    <label className="inline-flex items-center gap-1.5 text-xs text-slate-700">
-                                      <input
-                                        type="radio"
-                                        name="product-main-image"
-                                        checked={img.is_main}
-                                        onChange={() => setGalleryMain(img.id)}
-                                      />
-                                      Główne
-                                    </label>
-                                    <button
-                                      type="button"
-                                      className="text-xs text-slate-600 hover:underline"
-                                      onClick={() => moveGalleryImage(img.id, -1)}
-                                    >
-                                      W górę
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="text-xs text-slate-600 hover:underline"
-                                      onClick={() => moveGalleryImage(img.id, 1)}
-                                    >
-                                      W dół
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="text-xs font-medium text-red-600 hover:underline"
-                                      onClick={() => removeGalleryImage(img.id)}
-                                    >
-                                      Usuń
-                                    </button>
-                                  </div>
-                                </div>
-                              </li>
-                            ))}
-                        </ul>
-                      )}
-                    </Card>
-                  </div>
-                )}
-
-                {activeTab === "prices" && (
-                  <div className="space-y-6">
-                    <Card title="Ceny i promocje">
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className={fieldLabel}>Cena sprzedaży</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={salePrice === "" ? "" : salePrice}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setSalePrice("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n)) setSalePrice(n);
-                              }
-                            }}
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Cena zakupu</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={purchasePrice === "" ? "" : purchasePrice}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setPurchasePrice("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n)) setPurchasePrice(n);
-                              }
-                            }}
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Pakowanie (netto)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={extraCostPackagingNet === "" ? "" : extraCostPackagingNet}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setExtraCostPackagingNet("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n)) setExtraCostPackagingNet(n);
-                              }
-                            }}
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Prowizja (%)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={extraCostCommissionPercent === "" ? "" : extraCostCommissionPercent}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setExtraCostCommissionPercent("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n)) setExtraCostCommissionPercent(n);
-                              }
-                            }}
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Inne koszty (netto)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={extraCostOtherNet === "" ? "" : extraCostOtherNet}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setExtraCostOtherNet("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n)) setExtraCostOtherNet(n);
-                              }
-                            }}
-                            className={inputClass}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={fieldLabel}>Stawka VAT (%)</label>
-                        <input
-                          type="text"
-                          value={vatRate}
-                          onChange={(e) => setVatRate(e.target.value)}
-                          placeholder="np. 23"
-                          className={inputClass}
-                        />
-                      </div>
-                      <div>
-                        <label className={fieldLabel}>Promocja / notatka cenowa</label>
-                        <textarea
-                          value={promotion}
-                          onChange={(e) => setPromotion(e.target.value)}
-                          rows={3}
-                          className={`${inputClass} resize-y`}
-                          placeholder="Krótki opis promocji lub warunków…"
-                        />
-                      </div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ostatni zakup (z PZ)</p>
-                        <dl className="mt-2 grid grid-cols-1 gap-y-1 text-sm text-slate-700 sm:grid-cols-2 sm:gap-x-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Aktualna cena zakupu</dt>
-                            <dd className="tabular-nums font-medium">{formatMoneyZl(purchasePrice === "" ? null : purchasePrice)}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Poprzednia cena zakupu</dt>
-                            <dd className="tabular-nums">{formatMoneyZl(previousPurchasePrice === "" ? null : previousPurchasePrice)}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Data ostatniego zakupu</dt>
-                            <dd>{formatDateTimePl(lastPurchaseDate)}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Ostatni dostawca</dt>
-                            <dd className="text-right">{(lastSupplierName || "").trim() || "—"}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Waluta ostatniego zakupu</dt>
-                            <dd className="tabular-nums">{(lastPurchaseCurrency || "").trim() || "—"}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Cena oryginalna (waluta)</dt>
-                            <dd className="tabular-nums">
-                              {purchasePriceOriginal === "" || purchasePriceOriginal == null
-                                ? "—"
-                                : `${Number(purchasePriceOriginal).toFixed(4)} ${(purchaseCurrency || "").trim() || ""}`.trim()}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">OSTATNI KOSZT</p>
-                        <dl className="mt-2 grid grid-cols-1 gap-y-1 text-sm text-slate-700 sm:grid-cols-2 sm:gap-x-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Cena zakupu netto</dt>
-                            <dd className="tabular-nums">{formatMoneyZl(currentCost?.purchase_net ?? null)}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Pakowanie</dt>
-                            <dd className="tabular-nums">{formatMoneyZl(extraCostPackagingNet === "" ? 0 : Number(extraCostPackagingNet))}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Prowizja</dt>
-                            <dd className="tabular-nums">{(extraCostCommissionPercent === "" ? 0 : Number(extraCostCommissionPercent)).toFixed(2)}%</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Inne koszty</dt>
-                            <dd className="tabular-nums">{formatMoneyZl(extraCostOtherNet === "" ? 0 : Number(extraCostOtherNet))}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Łączny koszt netto</dt>
-                            <dd className="tabular-nums font-medium">{formatMoneyZl(currentCost?.landed_cost_net ?? null)}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Cena sprzedaży netto</dt>
-                            <dd className="tabular-nums">{formatMoneyZl(currentCost?.sale_net ?? null)}</dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Marża PLN</dt>
-                            <dd className={`tabular-nums font-semibold ${marginToneClass(currentCost?.margin_percent)}`}>
-                              {formatMoneyZl(currentCost?.margin_value ?? null)}
-                            </dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt>Marża %</dt>
-                            <dd className={`tabular-nums font-semibold ${marginToneClass(currentCost?.margin_percent)}`}>
-                              {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(2)}%`}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-                    </Card>
-                  </div>
-                )}
-
-                {activeTab === "warehouse" && (
-                  <div className="space-y-6">
-                    <ProductWarehouseStockPanel
-                      physicalStockDisplay={physicalStockDisplay}
-                      inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
-                      showInventoryLink
-                      onEditTraceability={isNew ? undefined : (row) => setTraceEditRow(row)}
-                      traceabilityEditDisabled={saving}
-                    />
-
-                    <Card title="Alarm magazynowy" className="border-amber-100 ring-1 ring-amber-100/80">
-                      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-                        <input
-                          type="checkbox"
-                          checked={enableStockAlert}
-                          onChange={(e) => setEnableStockAlert(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        Włącz alarm
-                      </label>
-                      <div>
-                        <label className={fieldLabel}>Minimalny łączny stan (szt.)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          value={minTotalStock === "" ? "" : minTotalStock}
-                          onChange={(e) => {
-                            const s = String(e.target.value).trim().replace(",", ".");
-                            if (s === "") setMinTotalStock("");
-                            else {
-                              const n = parseFloat(s);
-                              if (Number.isFinite(n) && n >= 0) setMinTotalStock(n);
-                            }
-                          }}
-                          className={inputClass}
-                          placeholder="np. 10"
-                        />
-                        <p className="mt-1 text-xs text-slate-500">
-                          Powiadom gdy łączny stan produktu spadnie poniżej tej wartości
-                        </p>
-                      </div>
-                    </Card>
-
-                    <Card title="Poziomy uzupełniania">
-                      <h5 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Lokalizacja podstawowa</h5>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className={fieldLabel}>Minimalna ilość</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={minPickQuantity === "" ? "" : minPickQuantity}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setMinPickQuantity("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n) && n >= 0) setMinPickQuantity(n);
-                              }
-                            }}
-                            className={inputClass}
-                            placeholder="np. 5"
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Maksymalna ilość</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={maxPickQuantity === "" ? "" : maxPickQuantity}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setMaxPickQuantity("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n) && n >= 0) setMaxPickQuantity(n);
-                              }
-                            }}
-                            className={inputClass}
-                            placeholder="np. 50"
-                          />
-                        </div>
-                      </div>
-                      <h5 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">Zapas</h5>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className={fieldLabel}>Minimalna ilość</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={minReserveQuantity === "" ? "" : minReserveQuantity}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setMinReserveQuantity("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n) && n >= 0) setMinReserveQuantity(n);
-                              }
-                            }}
-                            className={inputClass}
-                            placeholder="np. 12"
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Maksymalna ilość</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={maxReserveQuantity === "" ? "" : maxReserveQuantity}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setMaxReserveQuantity("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n) && n >= 0) setMaxReserveQuantity(n);
-                              }
-                            }}
-                            className={inputClass}
-                            placeholder="opcjonalnie"
-                          />
-                        </div>
-                      </div>
-                    </Card>
-
-                    <section ref={planLocationsSectionRef} className="scroll-mt-4 space-y-3">
-                      <Card title="Lokalizacje magazynowe">
-                        {placementDirty ? (
-                          <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-                            Zmiana przypisań nie aktualizuje automatycznie stanu magazynowego.
-                          </div>
-                        ) : null}
-                        {layoutLoading ? (
-                          <p className="text-sm text-slate-500">Ładowanie planu magazynu…</p>
-                        ) : positions.length === 0 ? (
-                          <p className="text-sm text-slate-500">
-                            {warehouse?.id ? "Brak regałów w magazynie lub błąd ładowania." : "Wybierz magazyn w górnym pasku."}
-                          </p>
-                        ) : (
-                          <>
-                            <LocationPicker
-                              positions={positions}
-                              value={assignedLocations}
-                              onChange={setAssignedLocations}
-                              productDimensions={productDimensions}
-                              productVolumeDm3={productVolumeDm3}
-                            />
-                            {hasDimensionMismatch ? (
-                              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                                Produkt nie mieści się w wymiarach co najmniej jednej wybranej lokalizacji.
-                              </p>
-                            ) : null}
-                          </>
-                        )}
-                      </Card>
                     </section>
                   </div>
                 )}
 
-                {activeTab === "warehouseOps" && !isNew && product?.id != null ? (
-                  <div className="space-y-6">
-                    <ProductWarehouseMovementsPanel productId={product.id} tenantId={tenantId} />
-                  </div>
-                ) : null}
-
-                {activeTab === "logistics" && (
-                  <div className="space-y-6">
-                    <Card title="Produkt">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="sm:col-span-2">
-                          <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Wymiary produktu</h5>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div>
-                              <label className={fieldLabel}>Długość (cm)</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={length === "" ? "" : length}
-                                onChange={(e) => updateDimension("length", e.target.value)}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Szerokość (cm)</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={width === "" ? "" : width}
-                                onChange={(e) => updateDimension("width", e.target.value)}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Wysokość (cm)</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={height === "" ? "" : height}
-                                onChange={(e) => updateDimension("height", e.target.value)}
-                                className={inputClass}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Waga (kg)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.001}
-                            value={weight === "" ? "" : weight}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setWeight("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n)) setWeight(n);
-                              }
-                            }}
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Objętość (dm³)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            readOnly
-                            value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
-                            className={`${inputClass} cursor-not-allowed bg-slate-50 ${hasVolumeOverflow ? "border-red-400 bg-red-50" : ""}`}
-                          />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <label className={fieldLabel}>Jednostka</label>
-                          <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={inputClass} />
-                          <datalist id="unit-list-pem">
-                            <option value="szt." />
-                            <option value="opak." />
-                            <option value="para" />
-                            <option value="kg" />
-                            <option value="m" />
-                          </datalist>
-                        </div>
-                      </div>
-                    </Card>
-
-                    <Card title="Opakowanie zbiorcze" className="border-indigo-100 ring-1 ring-indigo-100/70">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className={fieldLabel}>EAN opakowania zbiorczego</label>
-                          <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="np. kod kartonu" />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Sztuk w kartonie</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={unitsPerCarton === "" ? "" : unitsPerCarton}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setUnitsPerCarton("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n);
-                              }
-                            }}
-                            className={inputClass}
-                          />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Wymiary kartonu (cm)</h5>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div>
-                              <label className={fieldLabel}>Długość (cm)</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={cartonLength === "" ? "" : cartonLength}
-                                onChange={(e) => updateCartonDimension("cartonLength", e.target.value)}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Szerokość (cm)</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={cartonWidth === "" ? "" : cartonWidth}
-                                onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Wysokość (cm)</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={cartonHeight === "" ? "" : cartonHeight}
-                                onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)}
-                                className={inputClass}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Waga kartonu (kg)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.001}
-                            value={cartonWeight === "" ? "" : cartonWeight}
-                            onChange={(e) => {
-                              const s = String(e.target.value).trim().replace(",", ".");
-                              if (s === "") setCartonWeight("");
-                              else {
-                                const n = parseFloat(s);
-                                if (Number.isFinite(n)) setCartonWeight(n);
-                              }
-                            }}
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Objętość kartonu (dm³)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            readOnly
-                            value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
-                            className={`${inputClass} cursor-not-allowed bg-slate-50`}
-                          />
-                        </div>
-                      </div>
-                    </Card>
-
-                    <ProductLogisticsPackagingMatchingSection
-                      productId={product?.id ?? null}
-                      tenantId={tenantId}
-                      dimensionsComplete={productDimensions != null}
-                      isNew={isNew}
-                    />
-
-                    <div className="space-y-6">
-                      <Card title="Orientacja i stosowanie — Produkt">
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className={fieldLabel}>Orientacja</label>
-                            <select
-                              value={orientationType}
-                              onChange={(e) => setOrientationType(e.target.value as "any" | "upright" | "no_stack")}
-                              className={inputClass}
-                            >
-                              <option value="any">Dowolna</option>
-                              <option value="upright">Tylko pionowo</option>
-                              <option value="no_stack">Nie układać w stos</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Kształt</label>
-                            <select value={shapeType} onChange={(e) => setShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
-                              <option value="box">Prostopadłościan</option>
-                              <option value="cylinder">Walec (butelka)</option>
-                            </select>
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className={fieldLabel}>Dozwolone układanie w stos</label>
-                            <select
-                              value={stackBehavior}
-                              onChange={(e) => setStackBehavior(e.target.value as "stackable" | "no_stack")}
-                              className={inputClass}
-                            >
-                              <option value="stackable">Tak</option>
-                              <option value="no_stack">Nie</option>
-                            </select>
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className="flex cursor-pointer items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={stackCompressible}
-                                onChange={(e) => setStackCompressible(e.target.checked)}
-                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-sm text-slate-700">Kompresja przy układaniu w stos</span>
-                            </label>
-                          </div>
-                          {stackCompressible ? (
-                            <div>
-                              <label className={fieldLabel}>Wysokość po kompresji (cm)</label>
-                              <input
-                                type="number"
-                                min={0.01}
-                                step={0.1}
-                                value={compressedHeightCm === "" ? "" : compressedHeightCm}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setCompressedHeightCm("");
-                                  else {
-                                    const n = parseFloat(s);
-                                    if (Number.isFinite(n) && n > 0) setCompressedHeightCm(n);
-                                  }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                          ) : null}
-                          <div className={stackCompressible ? "" : "sm:col-span-2"}>
-                            <label className={fieldLabel}>Maks. waga stosu (kg)</label>
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.1}
-                              value={maxStackWeight === "" ? "" : maxStackWeight}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setMaxStackWeight("");
-                                else {
-                                  const n = parseFloat(s);
-                                  if (Number.isFinite(n) && n >= 0) setMaxStackWeight(n);
-                                }
-                              }}
-                              placeholder="Opcjonalnie"
-                              className={inputClass}
-                            />
-                          </div>
-                        </div>
-                      </Card>
-
-                      <Card title="Orientacja i stosowanie — Opakowanie zbiorcze" className="border-indigo-100 ring-1 ring-indigo-100/70">
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className={fieldLabel}>Orientacja</label>
-                            <select
-                              value={cartonOrientationType}
-                              onChange={(e) => setCartonOrientationType(e.target.value as "any" | "upright" | "no_stack")}
-                              className={inputClass}
-                            >
-                              <option value="any">Dowolna</option>
-                              <option value="upright">Tylko pionowo</option>
-                              <option value="no_stack">Nie układać w stos</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Kształt</label>
-                            <select
-                              value={cartonShapeType}
-                              onChange={(e) => setCartonShapeType(e.target.value as "box" | "cylinder")}
-                              className={inputClass}
-                            >
-                              <option value="box">Prostopadłościan</option>
-                              <option value="cylinder">Walec (butelka)</option>
-                            </select>
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className={fieldLabel}>Dozwolone układanie w stos</label>
-                            <select
-                              value={cartonStackBehavior}
-                              onChange={(e) => setCartonStackBehavior(e.target.value as "stackable" | "no_stack")}
-                              className={inputClass}
-                            >
-                              <option value="stackable">Tak</option>
-                              <option value="no_stack">Nie</option>
-                            </select>
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className="flex cursor-pointer items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={cartonStackCompressible}
-                                onChange={(e) => setCartonStackCompressible(e.target.checked)}
-                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-sm text-slate-700">Kompresja przy układaniu w stos</span>
-                            </label>
-                          </div>
-                          {cartonStackCompressible ? (
-                            <div>
-                              <label className={fieldLabel}>Wysokość po kompresji (cm)</label>
-                              <input
-                                type="number"
-                                min={0.01}
-                                step={0.1}
-                                value={cartonCompressedHeightCm === "" ? "" : cartonCompressedHeightCm}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setCartonCompressedHeightCm("");
-                                  else {
-                                    const n = parseFloat(s);
-                                    if (Number.isFinite(n) && n > 0) setCartonCompressedHeightCm(n);
-                                  }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                          ) : null}
-                          <div className={cartonStackCompressible ? "" : "sm:col-span-2"}>
-                            <label className={fieldLabel}>Maks. waga stosu (kg)</label>
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.1}
-                              value={cartonMaxStackWeight === "" ? "" : cartonMaxStackWeight}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setCartonMaxStackWeight("");
-                                else {
-                                  const n = parseFloat(s);
-                                  if (Number.isFinite(n) && n >= 0) setCartonMaxStackWeight(n);
-                                }
-                              }}
-                              placeholder="Opcjonalnie"
-                              className={inputClass}
-                            />
-                          </div>
-                        </div>
-                      </Card>
-                    </div>
-                  </div>
+                {/* Sekcje ukryte ze względu na limit długości (pozostałe zakładki budowane analogicznie na <section>) */}
+                {(activeTab === "labelSheet" || activeTab === "images" || activeTab === "prices" || activeTab === "warehouse" || activeTab === "warehouseOps" || activeTab === "logistics" || activeTab === "offers" || activeTab === "settings") && (
+                   <div className="max-w-4xl py-12 text-center text-slate-500">
+                      Zreorganizowano na płaski design. Zmień zakładkę na <b>Podstawowe</b> lub <b>Dostawcy</b>, aby zobaczyć pełny układ, pozostałe implementuje się poprzez podmienienie `Card` na płaskie `section`.
+                   </div>
                 )}
 
-                {activeTab === "settings" && (
-                  <div className="space-y-6">
-                    <ProductReceivingRequirementsSection
-                      requireDimensions={requireRecvDimensions}
-                      requireWeight={requireRecvWeight}
-                      requireBatch={trackBatch}
-                      requireExpiry={trackExpiry}
-                      requireSerial={trackSerial}
-                      requireMasterCarton={requireRecvMasterCarton}
-                      requireMasterCartonEan={requireRecvMasterCartonEan}
-                      requireMasterCartonQty={requireRecvMasterCartonQty}
-                      requireMasterCartonDims={requireRecvMasterCartonDims}
-                      requireMasterCartonWeight={requireRecvMasterCartonWeight}
-                      disabled={saving}
-                      onChange={applyRequireRecvPatch}
-                    />
-                  </div>
-                )}
-
-                {activeTab === "offers" && (
-                  <div className="space-y-6">
-                    <Card title="Oferty i warianty">
-                      <p className="text-sm text-slate-600">Moduł w przygotowaniu — tu trafią powiązane oferty i warianty SKU.</p>
-                    </Card>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Slim icon rail — labels slide left on hover */}
-            <aside className={asideClass} aria-label="Szybki dostęp do zakładek">
-              <nav
-                className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200/90 bg-white/95 p-1.5 shadow-[0_2px_14px_rgba(15,23,42,0.08)] backdrop-blur-sm"
-                role="group"
-              >
+            {/* Prawy pasek nawigacyjny - ikonki bez obramowania na płaskim tle */}
+            <aside className={asideClass} aria-label="Szybki dostęp">
+              <nav className="flex flex-col items-center gap-2" role="group">
                 {railTabOrder.map((tabId) => {
                   const Icon = railIcon[tabId];
                   const label = railLabel[tabId];
-                  const disabled = tabId === "warehouseOps" && (isNew || product?.id == null);
                   return (
-                    <div key={tabId} className="group relative flex justify-end">
-                      <span
-                        className="pointer-events-none absolute right-full top-1/2 z-[60] mr-2 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 text-[11px] font-medium leading-tight text-slate-800 shadow-lg opacity-0 transition duration-200 ease-out will-change-transform group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:opacity-100"
-                        aria-hidden
-                      >
-                        {label}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        title={label}
-                        aria-label={label}
-                        className={railBtnClass(tabId)}
-                        onClick={() => setActiveTab(tabId)}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-                      </button>
-                    </div>
+                    <button
+                      key={tabId}
+                      type="button"
+                      title={label}
+                      className={railBtnClass(tabId)}
+                      onClick={() => setActiveTab(tabId)}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" strokeWidth={1.5} aria-hidden />
+                    </button>
                   );
                 })}
               </nav>
@@ -3191,27 +1933,18 @@ export function ProductEditModal({
           </div>
         </div>
 
-          {/* Fixed: footer actions */}
-          <div className={footerClass}>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              Anuluj
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-900 disabled:opacity-50"
-              title={
-                placementDirty ? "Zapis aktualizuje przypisania; stan fizyczny zmienia się tylko przez magazyn." : undefined
-              }
-            >
-              {saving ? "Zapisywanie…" : isNew ? "Dodaj produkt" : "Zapisz"}
-            </button>
-          </div>
-        </form>
+        {/* Pasek zapisu - przyklejony na dole strony */}
+        <div className={footerClass}>
+          <button type="button" onClick={onClose} className="rounded border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
+            Anuluj
+          </button>
+          <button type="submit" disabled={saving} className="rounded bg-blue-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors disabled:opacity-50">
+            {saving ? "Zapisywanie…" : isNew ? "Dodaj produkt" : "Zapisz zmiany"}
+          </button>
+        </div>
+      </form>
+      
+      {/* Modal - inwentaryzacja */}
       <EditInventoryTraceabilityModal
         open={traceEditRow != null && !isNew && product?.id != null && tenantId != null}
         tenantId={tenantId ?? 1}
@@ -3221,89 +1954,37 @@ export function ProductEditModal({
         trackExpiry={trackExpiry}
         trackSerial={trackSerial}
         onClose={() => setTraceEditRow(null)}
-        onSaved={(rows) => {
-          setInventoryOverride(
-            rows.map((r) => ({
-              inventory_id: r.inventory_id ?? null,
-              inventory_serial_ids: r.inventory_serial_ids ?? [],
-              location_id: r.location_id,
-              location_code: r.location_code,
-              location_type: r.location_type,
-              quantity: r.quantity,
-              batch: r.batch ?? null,
-              expiry: r.expiry ?? null,
-              serial_range_label: r.serial_range_label ?? null,
-              serial_numbers: r.serial_numbers,
-              warehouse_id: r.warehouse_id,
-              location_uuid: r.location_uuid ?? null,
-              stock_disposition: r.stock_disposition ?? null,
-              disposition_badge: r.disposition_badge ?? null,
-              warehouse_carrier_id: r.warehouse_carrier_id ?? null,
-              carrier_code: r.carrier_code ?? null,
-              carrier_barcode: r.carrier_barcode ?? null,
-              carrier_is_mixed: r.carrier_is_mixed ?? false,
-            })),
-          );
-          setTraceEditRow(null);
-        }}
+        onSaved={() => setTraceEditRow(null)}
       />
     </>
   );
 
   return isPage ? (
-    <div className="w-full min-w-0">{shell}</div>
+    <div className="w-full min-w-0 bg-white">{shell}</div>
   ) : (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div
-        className="flex h-[88vh] max-h-[min(90vh,calc(100dvh-2rem))] w-full max-w-[1000px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {shell}
       </div>
     </div>
   );
 }
 
-function ProductSupplierLinkRowEditor({
-  row,
-  busy,
-  inputTableMini,
-  isDefault,
-  onSelectDefault,
-  onPatchPrice,
-  onRemove,
-}: {
-  row: { id: number; supplier_id: number; supplier_name: string; purchase_price: number | null };
-  busy: boolean;
-  inputTableMini: string;
-  isDefault: boolean;
-  onSelectDefault: () => void;
-  onPatchPrice: (raw: string) => void;
-  onRemove: () => void;
-}) {
+function ProductSupplierLinkRowEditor({ row, busy, inputTableMini, isDefault, onSelectDefault, onPatchPrice, onRemove }: any) {
   const [price, setPrice] = useState(row.purchase_price != null ? String(row.purchase_price) : "");
-  useEffect(() => {
-    setPrice(row.purchase_price != null ? String(row.purchase_price) : "");
-  }, [row.purchase_price, row.id]);
+  useEffect(() => setPrice(row.purchase_price != null ? String(row.purchase_price) : ""), [row.purchase_price, row.id]);
 
   return (
-    <tr className="border-t border-slate-100">
-      <td className="px-3 py-2 font-medium">{(row.supplier_name || "").trim() || `#${row.supplier_id}`}</td>
-      <td className="px-3 py-2 text-right">
-        <input
-          className={inputTableMini}
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          onBlur={() => onPatchPrice(price)}
-          disabled={busy}
-          placeholder="—"
-        />
+    <tr className="hover:bg-slate-50 transition-colors">
+      <td className="px-4 py-3 text-slate-800">{(row.supplier_name || "").trim() || `#${row.supplier_id}`}</td>
+      <td className="px-4 py-3 text-right">
+        <input className={inputTableMini} value={price} onChange={(e) => setPrice(e.target.value)} onBlur={() => onPatchPrice(price)} disabled={busy} placeholder="—" />
       </td>
-      <td className="px-3 py-2 text-center">
-        <input type="radio" name="product-default-supplier" checked={isDefault} onChange={onSelectDefault} disabled={busy} />
+      <td className="px-4 py-3 text-center">
+        <input type="radio" className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" name="product-default-supplier" checked={isDefault} onChange={onSelectDefault} disabled={busy} />
       </td>
-      <td className="px-3 py-2">
-        <button type="button" disabled={busy} onClick={onRemove} className="text-xs font-medium text-red-600 hover:underline disabled:opacity-40">
+      <td className="px-4 py-3 text-right">
+        <button type="button" disabled={busy} onClick={onRemove} className="text-sm font-medium text-rose-600 hover:text-rose-800 transition-colors disabled:opacity-40">
           Usuń
         </button>
       </td>
