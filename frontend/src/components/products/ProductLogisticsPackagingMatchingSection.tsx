@@ -325,10 +325,6 @@ export function ProductLogisticsPackagingMatchingSection({
     <Card className="border-slate-200 bg-white shadow-sm">
       <div className="space-y-10">
         <section>
-          <h3 className="mb-6 border-b border-slate-200 pb-2 text-lg font-bold text-slate-900">
-            Dopasowanie opakowań (Wysyłka)
-          </h3>
-
           <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-5 transition-colors hover:border-slate-300">
             <div>
               <p className="font-semibold text-slate-800">
