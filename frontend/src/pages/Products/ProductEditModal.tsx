@@ -1546,10 +1546,11 @@ export function ProductEditModal({
     "[&_input[type=number]]:appearance-[textfield] [&_input[type=number]]:[&::-webkit-inner-spin-button]:appearance-none [&_input[type=number]]:[&::-webkit-outer-spin-button]:appearance-none";
 
   const formShellClass = `flex flex-col min-h-0 flex-1 overflow-hidden bg-white ${formNumberReset}`;
-  const bodyRowClass = "flex w-full flex-col min-h-0 flex-1 overflow-hidden";
+  const bodyRowClass = "flex w-full flex-col min-h-0 flex-1 lg:flex-row lg:items-stretch overflow-hidden";
   const bodyInnerClass = "contents";
   const mainColClass = "flex min-w-0 flex-1 flex-col overflow-hidden";
-  const footerClass = "sticky bottom-0 z-20 flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4";
+  const asideClass = "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain border-l border-slate-200 bg-white px-1 py-4 lg:sticky lg:top-0 lg:self-start lg:h-full";
+  const footerClass = "sticky bottom-0 z-20 flex shrink-0 items-center justify-end border-t border-slate-200 bg-white px-6 py-4";
 
   const shell = (
     <>
@@ -2920,6 +2921,7 @@ export function ProductEditModal({
           </div>
         </div>
 
+        {/* Pasek akcji – zapis w prawym dolnym rogu na czarno */}
         {/* Pasek akcji – zapis w prawym dolnym rogu na czarno */}
         <div className={footerClass}>
           <button type="submit" disabled={saving} className="rounded bg-slate-900 px-8 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 transition-colors disabled:opacity-50">
