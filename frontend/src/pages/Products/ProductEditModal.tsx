@@ -378,7 +378,7 @@ export function ProductEditModal({
     if (str === "") return undefined;
     const n = parseFloat(str);
     return Number.isFinite(n) ? n : undefined;
-   animate-fade-in}, []);
+   }, []);
 
   const parseNumber = useCallback((value: unknown): number | null => {
     if (value === null || value === undefined) return null;
