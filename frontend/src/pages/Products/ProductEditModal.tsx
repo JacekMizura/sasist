@@ -1514,35 +1514,23 @@ export function ProductEditModal({
       activeTab === id ? "border-slate-700 bg-slate-50 text-slate-900 ring-1 ring-slate-200/80 shadow-sm" : "border-transparent bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900"
     }`;
 
-  // Usunięto 'suppliers', 'warehouseOps' i 'settings' jako osobne zakładki
+  // Zaktualizowana kolejność zakładek
   const railTabOrder = useMemo((): TabId[] => {
-    return ["basic", "labelSheet", "images", "prices", "warehouse", "logistics", "offers"];
+    return ["basic", "prices", "warehouse", "images", "offers", "labelSheet"];
   }, []);
 
   const railLabel: Record<TabId, string> = {
     basic: "Podstawowe",
-    suppliers: "Dostawcy",
-    labelSheet: "Etykieta",
-    images: "Zdjęcia",
     prices: "Ceny",
     warehouse: "Magazyn",
+    images: "Zdjęcia",
+    offers: "Oferty",
+    labelSheet: "Etykieta",
+    // Nieużywane w górnym menu, ale typ wymaga ich obecności:
+    suppliers: "Dostawcy",
     warehouseOps: "Operacje magazynowe",
     logistics: "Logistyka",
-    offers: "Oferty",
     settings: "Ustawienia",
-  };
-
-  const railIcon: Record<TabId, LucideIcon> = {
-    basic: LayoutList,
-    suppliers: Building2,
-    labelSheet: Printer,
-    images: ImageIcon,
-    prices: Tag,
-    warehouse: Warehouse,
-    warehouseOps: ClipboardList,
-    logistics: Truck,
-    offers: Layers,
-    settings: Wrench,
   };
 
   const tenantDisplay =
@@ -1558,11 +1546,9 @@ export function ProductEditModal({
     "[&_input[type=number]]:appearance-[textfield] [&_input[type=number]]:[&::-webkit-inner-spin-button]:appearance-none [&_input[type=number]]:[&::-webkit-outer-spin-button]:appearance-none";
 
   const formShellClass = `flex flex-col min-h-0 flex-1 overflow-hidden bg-white ${formNumberReset}`;
-  const bodyRowClass = "flex w-full flex-col min-h-0 flex-1 lg:flex-row lg:items-stretch overflow-hidden";
+  const bodyRowClass = "flex w-full flex-col min-h-0 flex-1 overflow-hidden";
   const bodyInnerClass = "contents";
   const mainColClass = "flex min-w-0 flex-1 flex-col overflow-hidden";
-  const asideClass =
-    "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain border-l border-slate-200 bg-white px-1 py-4 lg:sticky lg:top-0 lg:self-start lg:h-full";
   const footerClass = "sticky bottom-0 z-20 flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4";
 
   const shell = (
@@ -1576,20 +1562,23 @@ export function ProductEditModal({
           onChange={onGalleryFileSelected}
           disabled={galleryUploadBusy}
         />
-        <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8">
-          <div className="flex min-w-0 flex-1 gap-5">
-            <div className="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden bg-white">
+        <div className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8">
+          <div className="flex min-w-0 flex-1 gap-6">
+            {/* Powiększone zdjęcie produktu */}
+            <div className="flex h-20 w-20 sm:h-24 sm:w-24 shrink-0 items-center justify-center overflow-hidden bg-white">
               {sidebarPreviewUrl.trim() ? (
                 <img src={sidebarPreviewUrl.trim()} alt="" className="max-h-full max-w-full object-contain" />
               ) : (
-                <span className="text-[10px] font-medium text-slate-400">Brak zdjęcia</span>
+                <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50">
+                  <span className="text-[10px] font-medium text-slate-400">Brak zdjęcia</span>
+                </div>
               )}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+            <div className="min-w-0 flex-1 py-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                 {isNew ? "Dodawanie produktu" : "Edycja produktu"}
               </p>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-3">
                 <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900">
                   {name.trim() || (isNew ? "Nowy produkt" : "—")}
                 </h1>
@@ -1603,7 +1592,7 @@ export function ProductEditModal({
                 ) : null}
               </div>
               
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
                 <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
                   <span className="text-slate-500 mr-1.5">Podmiot:</span>
                   <span className="font-semibold text-slate-800" title={tenantDisplay !== "—" ? tenantDisplay : undefined}>
@@ -1695,9 +1684,20 @@ export function ProductEditModal({
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 [-webkit-overflow-scrolling:touch]">
+        <div className="flex gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 [-webkit-overflow-scrolling:touch]">
           {railTabOrder.map((tabId) => (
-            <button key={tabId} type="button" role="tab" aria-selected={activeTab === tabId} className={tabClass(tabId)} onClick={() => setActiveTab(tabId)}>
+            <button
+              key={tabId}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tabId}
+              className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors -mb-px ${
+                activeTab === tabId
+                  ? "border-slate-800 text-slate-900"
+                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
+              }`}
+              onClick={() => setActiveTab(tabId)}
+            >
               {railLabel[tabId]}
             </button>
           ))}
@@ -1712,7 +1712,6 @@ export function ProductEditModal({
                 
                 {activeTab === "basic" && (
                   <div className="flex flex-col xl:flex-row items-start gap-10 lg:gap-16">
-                    {/* Lewa kolumna: Formularze ograniczone do szerokości max-w-2xl */}
                     <div className="w-full xl:max-w-2xl space-y-12 shrink-0">
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900">Informacje ogólne</h3>
@@ -1736,9 +1735,13 @@ export function ProductEditModal({
                               <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} />
                             </div>
                             <div>
-                              <label className={fieldLabel}>EAN</label>
-                              <input type="text" value={ean} onChange={(e) => setEan(e.target.value)} className={inputClass} />
+                              <label className={fieldLabel}>Numer katalogowy</label>
+                              <input type="text" defaultValue="" className={inputClass} placeholder="Brak" />
                             </div>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>EAN</label>
+                            <input type="text" value={ean} onChange={(e) => setEan(e.target.value)} className={inputClass} />
                           </div>
                         </div>
                       </section>
@@ -1831,76 +1834,77 @@ export function ProductEditModal({
                       </section>
                     </div>
 
-                    {/* Prawa kolumna: Historia magazynowa (Mock w stylu Sellasist) */}
-                    <aside className="w-full xl:max-w-[700px] flex-1">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900">Historia magazynowa</h3>
-                        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-                          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-2 bg-slate-50/50">
-                            <button type="button" className="rounded-md bg-blue-600 px-4 py-1.5 text-[13px] font-medium text-white shadow-sm hover:bg-blue-700">
-                              Operacje magazynowe
-                            </button>
-                            <button type="button" className="rounded-md px-4 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-200/50 hover:text-slate-900">
-                              Historia dostaw
-                            </button>
-                            <div className="ml-auto flex items-center text-xs text-slate-500 px-2">
-                              Pokaż na stronie 
-                              <select className="ml-2 rounded border border-slate-300 bg-white py-1 text-slate-700 outline-none">
-                                <option>25</option>
-                                <option>50</option>
-                              </select>
+                    {!isNew && product?.id != null && (
+                      <aside className="w-full xl:max-w-[700px] flex-1">
+                        <section>
+                          <h3 className="mb-5 text-lg font-bold text-slate-900">Historia magazynowa</h3>
+                          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                            <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-2 bg-slate-50/50">
+                              <button type="button" className="rounded-md bg-blue-600 px-4 py-1.5 text-[13px] font-medium text-white shadow-sm hover:bg-blue-700">
+                                Operacje magazynowe
+                              </button>
+                              <button type="button" className="rounded-md px-4 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-200/50 hover:text-slate-900">
+                                Historia dostaw
+                              </button>
+                              <div className="ml-auto flex items-center text-xs text-slate-500 px-2">
+                                Pokaż na stronie 
+                                <select className="ml-2 rounded border border-slate-300 bg-white py-1 text-slate-700 outline-none">
+                                  <option>25</option>
+                                  <option>50</option>
+                                </select>
+                              </div>
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                              <table className="w-full min-w-[600px] text-sm text-left">
+                                <thead className="border-b border-slate-200 text-xs font-semibold text-slate-700 bg-white">
+                                  <tr>
+                                    <th className="px-5 py-3.5 w-40">Data</th>
+                                    <th className="px-5 py-3.5">Akcja</th>
+                                    <th className="px-5 py-3.5">Dokument</th>
+                                    <th className="px-5 py-3.5">Użytkownik</th>
+                                    <th className="px-5 py-3.5">Lokalizacja</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600">
+                                  <tr>
+                                    <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 19:12:35</td>
+                                    <td className="px-5 py-4"><span className="rounded bg-slate-100 px-2.5 py-1 font-medium text-slate-700">Kompletacja</span></td>
+                                    <td className="px-5 py-4 text-slate-900">ORDER-1216</td>
+                                    <td className="px-5 py-4">Super Admin</td>
+                                    <td className="px-5 py-4">A10-A-1</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 19:12:35</td>
+                                    <td className="px-5 py-4"><span className="rounded bg-slate-100 px-2.5 py-1 font-medium text-slate-700">Kompletacja</span></td>
+                                    <td className="px-5 py-4 text-slate-900">ORDER-1175</td>
+                                    <td className="px-5 py-4">Super Admin</td>
+                                    <td className="px-5 py-4">A10-A-1</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:57:30</td>
+                                    <td className="px-5 py-4"><span className="rounded bg-indigo-50 text-indigo-700 px-2.5 py-1 font-medium">Rozlokowanie</span></td>
+                                    <td className="px-5 py-4 text-slate-900">PZ-3</td>
+                                    <td className="px-5 py-4">Super Admin</td>
+                                    <td className="px-5 py-4">A10-A-1</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:51:15</td>
+                                    <td className="px-5 py-4"><span className="rounded bg-emerald-50 text-emerald-700 px-2.5 py-1 font-medium">Przyjęcie</span></td>
+                                    <td className="px-5 py-4 text-slate-900">PZ-3</td>
+                                    <td className="px-5 py-4">Super Admin</td>
+                                    <td className="px-5 py-4">A1-A-1</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="border-t border-slate-100 p-3 px-5 text-xs text-slate-500 bg-white">
+                              1-4 z 4
                             </div>
                           </div>
-                          
-                          <div className="overflow-x-auto">
-                            <table className="w-full min-w-[600px] text-sm text-left">
-                              <thead className="border-b border-slate-200 text-xs font-semibold text-slate-700 bg-white">
-                                <tr>
-                                  <th className="px-5 py-3.5 w-40">Data</th>
-                                  <th className="px-5 py-3.5">Akcja</th>
-                                  <th className="px-5 py-3.5">Dokument</th>
-                                  <th className="px-5 py-3.5">Użytkownik</th>
-                                  <th className="px-5 py-3.5">Lokalizacja</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600">
-                                <tr>
-                                  <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 19:12:35</td>
-                                  <td className="px-5 py-4"><span className="rounded bg-slate-100 px-2.5 py-1 font-medium text-slate-700">Kompletacja</span></td>
-                                  <td className="px-5 py-4 text-slate-900">ORDER-1216</td>
-                                  <td className="px-5 py-4">Super Admin</td>
-                                  <td className="px-5 py-4">A10-A-1</td>
-                                </tr>
-                                <tr>
-                                  <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 19:12:35</td>
-                                  <td className="px-5 py-4"><span className="rounded bg-slate-100 px-2.5 py-1 font-medium text-slate-700">Kompletacja</span></td>
-                                  <td className="px-5 py-4 text-slate-900">ORDER-1175</td>
-                                  <td className="px-5 py-4">Super Admin</td>
-                                  <td className="px-5 py-4">A10-A-1</td>
-                                </tr>
-                                <tr>
-                                  <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:57:30</td>
-                                  <td className="px-5 py-4"><span className="rounded bg-indigo-50 text-indigo-700 px-2.5 py-1 font-medium">Rozlokowanie</span></td>
-                                  <td className="px-5 py-4 text-slate-900">PZ-3</td>
-                                  <td className="px-5 py-4">Super Admin</td>
-                                  <td className="px-5 py-4">A10-A-1</td>
-                                </tr>
-                                <tr>
-                                  <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:51:15</td>
-                                  <td className="px-5 py-4"><span className="rounded bg-emerald-50 text-emerald-700 px-2.5 py-1 font-medium">Przyjęcie</span></td>
-                                  <td className="px-5 py-4 text-slate-900">PZ-3</td>
-                                  <td className="px-5 py-4">Super Admin</td>
-                                  <td className="px-5 py-4">A1-A-1</td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                          <div className="border-t border-slate-100 p-3 px-5 text-xs text-slate-500 bg-white">
-                            1-4 z 4
-                          </div>
-                        </div>
-                      </section>
-                    </aside>
+                        </section>
+                      </aside>
+                    )}
                   </div>
                 )}
 
@@ -1987,89 +1991,10 @@ export function ProductEditModal({
                           </div>
                         </div>
                       </section>
-
-                      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
-                        <section>
-                          <h3 className="mb-4 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Ostatni zakup (dane z PZ)</h3>
-                          <div className="rounded border border-slate-200 bg-slate-50 p-5">
-                            <dl className="space-y-3 text-sm text-slate-700">
-                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                                <dt className="font-medium text-slate-500">Aktualna cena zakupu</dt>
-                                <dd className="tabular-nums font-semibold text-slate-900">{formatMoneyZl(purchasePrice === "" ? null : purchasePrice)}</dd>
-                              </div>
-                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                                <dt className="font-medium text-slate-500">Poprzednia cena zakupu</dt>
-                                <dd className="tabular-nums">{formatMoneyZl(previousPurchasePrice === "" ? null : previousPurchasePrice)}</dd>
-                              </div>
-                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                                <dt className="font-medium text-slate-500">Data ostatniego zakupu</dt>
-                                <dd>{formatDateTimePl(lastPurchaseDate)}</dd>
-                              </div>
-                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                                <dt className="font-medium text-slate-500">Ostatni dostawca</dt>
-                                <dd className="text-right">{(lastSupplierName || "").trim() || "—"}</dd>
-                              </div>
-                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                                <dt className="font-medium text-slate-500">Waluta ostatniego zakupu</dt>
-                                <dd className="tabular-nums">{(lastPurchaseCurrency || "").trim() || "—"}</dd>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <dt className="font-medium text-slate-500">Cena oryginalna (waluta)</dt>
-                                <dd className="tabular-nums font-medium text-slate-900">
-                                  {purchasePriceOriginal === "" || purchasePriceOriginal == null ? "—" : `${Number(purchasePriceOriginal).toFixed(4)} ${(purchaseCurrency || "").trim() || ""}`.trim()}
-                                </dd>
-                              </div>
-                            </dl>
-                          </div>
-                        </section>
-
-                        <section>
-                          <h3 className="mb-4 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Podsumowanie kosztów</h3>
-                          <div className="rounded border border-slate-200 bg-white shadow-sm p-5">
-                            <dl className="space-y-3 text-sm text-slate-700">
-                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                <dt className="text-slate-500">Cena zakupu netto</dt>
-                                <dd className="tabular-nums">{formatMoneyZl(currentCost?.purchase_net ?? null)}</dd>
-                              </div>
-                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                <dt className="text-slate-500">Pakowanie</dt>
-                                <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostPackagingNet === "" ? 0 : Number(extraCostPackagingNet))}</dd>
-                              </div>
-                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                <dt className="text-slate-500">Prowizja</dt>
-                                <dd className="tabular-nums text-rose-600">+{(extraCostCommissionPercent === "" ? 0 : Number(extraCostCommissionPercent)).toFixed(2)}%</dd>
-                              </div>
-                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                <dt className="text-slate-500">Inne koszty</dt>
-                                <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostOtherNet === "" ? 0 : Number(extraCostOtherNet))}</dd>
-                              </div>
-                              <div className="flex items-center justify-between border-b border-slate-200 pb-3 mt-1">
-                                <dt className="font-semibold text-slate-900">Łączny koszt netto (Landed)</dt>
-                                <dd className="tabular-nums font-bold text-slate-900">{formatMoneyZl(currentCost?.landed_cost_net ?? null)}</dd>
-                              </div>
-                              <div className="flex items-center justify-between pt-1 border-b border-slate-100 pb-2">
-                                <dt className="text-slate-500">Cena sprzedaży netto</dt>
-                                <dd className="tabular-nums">{formatMoneyZl(currentCost?.sale_net ?? null)}</dd>
-                              </div>
-                              <div className="flex items-center justify-between pt-1">
-                                <dt className="font-medium text-slate-900">Zysk (Marża PLN)</dt>
-                                <dd className={`tabular-nums ${marginToneClass(currentCost?.margin_percent)}`}>
-                                  {formatMoneyZl(currentCost?.margin_value ?? null)}
-                                </dd>
-                              </div>
-                              <div className="flex items-center justify-between pt-1">
-                                <dt className="font-medium text-slate-900">Rentowność (Marża %)</dt>
-                                <dd className={`tabular-nums text-lg ${marginToneClass(currentCost?.margin_percent)}`}>
-                                  {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(2)}%`}
-                                </dd>
-                              </div>
-                            </dl>
-                          </div>
-                        </section>
-                      </div>
                     </div>
 
-                    <aside className="w-full xl:max-w-2xl flex-1 space-y-8">
+                    {/* Prawa kolumna w Ceny: Dostawcy, Ostatni zakup, Podsumowanie */}
+                    <aside className="w-full xl:max-w-[850px] flex-1 space-y-12">
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Dostawcy i ceny zakupu</h3>
                         {cheapestSupplierInsight ? (
@@ -2129,12 +2054,632 @@ export function ProductEditModal({
                           </div>
                         )}
                       </section>
+
+                      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                        <section>
+                          <h3 className="mb-4 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Ostatni zakup (z PZ)</h3>
+                          <dl className="space-y-3 text-sm text-slate-700 mt-5">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="font-medium text-slate-500">Aktualna cena zakupu</dt>
+                              <dd className="tabular-nums font-semibold text-slate-900">{formatMoneyZl(purchasePrice === "" ? null : purchasePrice)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="font-medium text-slate-500">Poprzednia cena</dt>
+                              <dd className="tabular-nums">{formatMoneyZl(previousPurchasePrice === "" ? null : previousPurchasePrice)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="font-medium text-slate-500">Data ostatniego zakupu</dt>
+                              <dd>{formatDateTimePl(lastPurchaseDate)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="font-medium text-slate-500">Ostatni dostawca</dt>
+                              <dd className="text-right">{(lastSupplierName || "").trim() || "—"}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="font-medium text-slate-500">Waluta ostatniego zakupu</dt>
+                              <dd className="tabular-nums">{(lastPurchaseCurrency || "").trim() || "—"}</dd>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <dt className="font-medium text-slate-500">Cena oryginalna (waluta)</dt>
+                              <dd className="tabular-nums font-medium text-slate-900">
+                                {purchasePriceOriginal === "" || purchasePriceOriginal == null ? "—" : `${Number(purchasePriceOriginal).toFixed(4)} ${(purchaseCurrency || "").trim() || ""}`.trim()}
+                              </dd>
+                            </div>
+                          </dl>
+                        </section>
+
+                        <section>
+                          <h3 className="mb-4 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Podsumowanie kosztów</h3>
+                          <dl className="space-y-3 text-sm text-slate-700 mt-5">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Cena zakupu netto</dt>
+                              <dd className="tabular-nums">{formatMoneyZl(currentCost?.purchase_net ?? null)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Pakowanie</dt>
+                              <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostPackagingNet === "" ? 0 : Number(extraCostPackagingNet))}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Prowizja</dt>
+                              <dd className="tabular-nums text-rose-600">+{(extraCostCommissionPercent === "" ? 0 : Number(extraCostCommissionPercent)).toFixed(2)}%</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Inne koszty</dt>
+                              <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostOtherNet === "" ? 0 : Number(extraCostOtherNet))}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mt-1">
+                              <dt className="font-semibold text-slate-900">Łączny koszt netto (Landed)</dt>
+                              <dd className="tabular-nums font-bold text-slate-900">{formatMoneyZl(currentCost?.landed_cost_net ?? null)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between pt-1 border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Cena sprzedaży netto</dt>
+                              <dd className="tabular-nums">{formatMoneyZl(currentCost?.sale_net ?? null)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <dt className="font-medium text-slate-900">Zysk (Marża PLN)</dt>
+                              <dd className={`tabular-nums font-semibold ${marginToneClass(currentCost?.margin_percent)}`}>
+                                {formatMoneyZl(currentCost?.margin_value ?? null)}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <dt className="font-medium text-slate-900">Rentowność (Marża %)</dt>
+                              <dd className={`tabular-nums text-lg font-bold ${marginToneClass(currentCost?.margin_percent)}`}>
+                                {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(2)}%`}
+                              </dd>
+                            </div>
+                          </dl>
+                        </section>
+                      </div>
                     </aside>
                   </div>
                 )}
 
+                {activeTab === "warehouse" && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 items-start gap-10 lg:gap-16">
+                    {/* Kolumna 1: Magazyn */}
+                    <div className="space-y-12">
+                      <section ref={planLocationsSectionRef} className="scroll-mt-8">
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Lokalizacje magazynowe</h3>
+                        {placementDirty ? (
+                          <div role="status" className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                            <span className="font-semibold">Uwaga:</span> Zmiana przypisań nie wpływa na fizyczny stan w WMS, służy jedynie logice układania towaru.
+                          </div>
+                        ) : null}
+                        
+                        {layoutLoading ? (
+                          <div className="py-8 text-center text-slate-500 rounded border border-dashed border-slate-300">
+                            Ładowanie planu magazynu…
+                          </div>
+                        ) : positions.length === 0 ? (
+                          <div className="py-8 text-center text-slate-500 rounded border border-dashed border-slate-300 bg-slate-50">
+                            {warehouse?.id ? "Brak regałów w obecnym magazynie." : "Wybierz główny magazyn z górnego paska aplikacji."}
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <LocationPicker
+                              positions={positions}
+                              value={assignedLocations}
+                              onChange={setAssignedLocations}
+                              productDimensions={productDimensions}
+                              productVolumeDm3={productVolumeDm3}
+                            />
+                            {hasDimensionMismatch ? (
+                              <p className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+                                Wymiary produktu przekraczają limity co najmniej jednej z przypisanych lokalizacji!
+                              </p>
+                            ) : null}
+                          </div>
+                        )}
+                      </section>
+
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
+                        <ProductWarehouseStockPanel
+                          physicalStockDisplay={physicalStockDisplay}
+                          inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
+                          showInventoryLink
+                          onEditTraceability={isNew ? undefined : (row) => setTraceEditRow(row)}
+                          traceabilityEditDisabled={saving}
+                        />
+                      </section>
+
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Powiadomienia i alarmy</h3>
+                        <div className="rounded border border-amber-200 bg-amber-50 p-5 space-y-4">
+                          <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-amber-900">
+                            <input
+                              type="checkbox"
+                              checked={enableStockAlert}
+                              onChange={(e) => setEnableStockAlert(e.target.checked)}
+                              className="h-5 w-5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                            />
+                            Włącz alarm niskiego stanu magazynowego
+                          </label>
+                          {enableStockAlert && (
+                            <div className="pl-8">
+                              <label className="mb-1 block text-sm font-medium text-amber-900">Próg alarmowy łącznego stanu (szt.)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={minTotalStock === "" ? "" : minTotalStock}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setMinTotalStock("");
+                                  else {
+                                    const n = parseFloat(s);
+                                    if (Number.isFinite(n) && n >= 0) setMinTotalStock(n);
+                                  }
+                                }}
+                                className="w-full rounded border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                                placeholder="np. 10"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Poziomy uzupełniania w strefach</h3>
+                        <div className="space-y-8">
+                          <div>
+                            <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Kompletacji (Pick-face)</h4>
+                            <div className="grid grid-cols-1 gap-5">
+                              <div>
+                                <label className={fieldLabel}>Minimalna ilość (szt.)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  value={minPickQuantity === "" ? "" : minPickQuantity}
+                                  onChange={(e) => {
+                                    const s = String(e.target.value).trim().replace(",", ".");
+                                    if (s === "") setMinPickQuantity("");
+                                    else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMinPickQuantity(n); }
+                                  }}
+                                  className={inputClass} placeholder="np. 5"
+                                />
+                              </div>
+                              <div>
+                                <label className={fieldLabel}>Maksymalna ilość (szt.)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  value={maxPickQuantity === "" ? "" : maxPickQuantity}
+                                  onChange={(e) => {
+                                    const s = String(e.target.value).trim().replace(",", ".");
+                                    if (s === "") setMaxPickQuantity("");
+                                    else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxPickQuantity(n); }
+                                  }}
+                                  className={inputClass} placeholder="np. 50"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <hr className="border-slate-100" />
+                          <div>
+                            <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Zapasu (Reserve)</h4>
+                            <div className="grid grid-cols-1 gap-5">
+                              <div>
+                                <label className={fieldLabel}>Minimalna ilość (szt.)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  value={minReserveQuantity === "" ? "" : minReserveQuantity}
+                                  onChange={(e) => {
+                                    const s = String(e.target.value).trim().replace(",", ".");
+                                    if (s === "") setMinReserveQuantity("");
+                                    else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMinReserveQuantity(n); }
+                                  }}
+                                  className={inputClass} placeholder="np. 12"
+                                />
+                              </div>
+                              <div>
+                                <label className={fieldLabel}>Maksymalna ilość (szt.)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  value={maxReserveQuantity === "" ? "" : maxReserveQuantity}
+                                  onChange={(e) => {
+                                    const s = String(e.target.value).trim().replace(",", ".");
+                                    if (s === "") setMaxReserveQuantity("");
+                                    else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxReserveQuantity(n); }
+                                  }}
+                                  className={inputClass} placeholder="opcjonalnie"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+
+                    {/* Kolumna 2: Logistyka i Produkt */}
+                    <div className="space-y-12">
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-1 gap-5">
+                            <div>
+                              <label className={fieldLabel}>Długość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={length === "" ? "" : length} onChange={(e) => updateDimension("length", e.target.value)} className={inputClass} />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Szerokość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={width === "" ? "" : width} onChange={(e) => updateDimension("width", e.target.value)} className={inputClass} />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Wysokość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={height === "" ? "" : height} onChange={(e) => updateDimension("height", e.target.value)} className={inputClass} />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Waga (kg)</label>
+                              <input
+                                type="number" min={0} step={0.001}
+                                value={weight === "" ? "" : weight}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setWeight("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setWeight(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Objętość całkowita (dm³)</label>
+                              <input
+                                type="number" min={0} step={0.01} readOnly
+                                value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
+                                className={`${inputClass} font-semibold text-slate-700 bg-slate-50 cursor-not-allowed ${hasVolumeOverflow ? "border-red-400 bg-red-50 text-red-700" : ""}`}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Jednostka miary</label>
+                              <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={inputClass} />
+                              <datalist id="unit-list-pem">
+                                <option value="szt." />
+                                <option value="opak." />
+                                <option value="para" />
+                                <option value="kg" />
+                                <option value="m" />
+                              </datalist>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Produkt (Sztuka)</h3>
+                        <div className="space-y-5 rounded border border-slate-200 p-5 bg-slate-50/50">
+                          <div>
+                            <label className={fieldLabel}>Wymagana orientacja</label>
+                            <select value={orientationType} onChange={(e) => setOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
+                              <option value="any">Dowolna orientacja</option>
+                              <option value="upright">Tylko w pionie (strzałki do góry)</option>
+                              <option value="no_stack">Nie obracać</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Kształt</label>
+                            <select value={shapeType} onChange={(e) => setShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
+                              <option value="box">Prostopadłościan (Pudełko)</option>
+                              <option value="cylinder">Walec (np. Butelka / Tuba)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Czy można układać w stos?</label>
+                            <select value={stackBehavior} onChange={(e) => setStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
+                              <option value="stackable">Tak, sztuka na sztuce</option>
+                              <option value="no_stack">Nie układać w stos!</option>
+                            </select>
+                          </div>
+                          
+                          {stackBehavior === "stackable" && (
+                            <div className="space-y-4 pt-2 border-t border-slate-200">
+                              <label className="flex cursor-pointer items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={stackCompressible}
+                                  onChange={(e) => setStackCompressible(e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-slate-700">Podlega kompresji przy nacisku</span>
+                              </label>
+                              
+                              <div className="grid grid-cols-1 gap-4">
+                                {stackCompressible ? (
+                                  <div>
+                                    <label className={fieldLabel}>Wys. po kompresji (cm)</label>
+                                    <input
+                                      type="number" min={0.01} step={0.1}
+                                      value={compressedHeightCm === "" ? "" : compressedHeightCm}
+                                      onChange={(e) => {
+                                        const s = String(e.target.value).trim().replace(",", ".");
+                                        if (s === "") setCompressedHeightCm("");
+                                        else { const n = parseFloat(s); if (Number.isFinite(n) && n > 0) setCompressedHeightCm(n); }
+                                      }}
+                                      className={inputClass}
+                                    />
+                                  </div>
+                                ) : null}
+                                <div>
+                                  <label className={fieldLabel}>Maks. ciężar stosu (kg)</label>
+                                  <input
+                                    type="number" min={0} step={0.1}
+                                    value={maxStackWeight === "" ? "" : maxStackWeight}
+                                    onChange={(e) => {
+                                      const s = String(e.target.value).trim().replace(",", ".");
+                                      if (s === "") setMaxStackWeight("");
+                                      else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxStackWeight(n); }
+                                    }}
+                                    placeholder="Opcjonalny limit"
+                                    className={inputClass}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    </div>
+
+                    {/* Kolumna 3: Kartony */}
+                    <div className="space-y-12">
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Opakowanie zbiorcze (Karton)</h3>
+                        <div className="rounded border border-indigo-100 bg-indigo-50/30 p-5 space-y-6">
+                          <div className="grid grid-cols-1 gap-5">
+                            <div>
+                              <label className={fieldLabel}>EAN kartonu zbiorczego</label>
+                              <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="Opcjonalny kod" />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Ilość sztuk w kartonie</label>
+                              <input
+                                type="number" min={0} step={1}
+                                value={unitsPerCarton === "" ? "" : unitsPerCarton}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setUnitsPerCarton("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="mb-3 text-sm font-bold text-slate-700">Zewnętrzne wymiary kartonu</h4>
+                            <div className="grid grid-cols-1 gap-5">
+                              <div>
+                                <label className={fieldLabel}>Długość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonLength === "" ? "" : cartonLength} onChange={(e) => updateCartonDimension("cartonLength", e.target.value)} className={inputClass} />
+                              </div>
+                              <div>
+                                <label className={fieldLabel}>Szerokość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonWidth === "" ? "" : cartonWidth} onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)} className={inputClass} />
+                              </div>
+                              <div>
+                                <label className={fieldLabel}>Wysokość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonHeight === "" ? "" : cartonHeight} onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)} className={inputClass} />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-5">
+                            <div>
+                              <label className={fieldLabel}>Waga brutto kartonu (kg)</label>
+                              <input
+                                type="number" min={0} step={0.001}
+                                value={cartonWeight === "" ? "" : cartonWeight}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setCartonWeight("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setCartonWeight(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Objętość kartonu (dm³)</label>
+                              <input
+                                type="number" min={0} step={0.01} readOnly
+                                value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
+                                className={`${inputClass} font-semibold text-slate-700 bg-white/50 cursor-not-allowed`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Karton</h3>
+                        <div className="space-y-5 rounded border border-indigo-100 p-5 bg-indigo-50/10 shadow-sm">
+                          <div>
+                            <label className={fieldLabel}>Wymagana orientacja kartonu</label>
+                            <select value={cartonOrientationType} onChange={(e) => setCartonOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
+                              <option value="any">Dowolna orientacja</option>
+                              <option value="upright">Tylko w pionie (strzałki do góry)</option>
+                              <option value="no_stack">Nie obracać</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Kształt opakowania</label>
+                            <select value={cartonShapeType} onChange={(e) => setCartonShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
+                              <option value="box">Prostopadłościan</option>
+                              <option value="cylinder">Walec (Beczka)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Czy kartony ułożysz w stos?</label>
+                            <select value={cartonStackBehavior} onChange={(e) => setCartonStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
+                              <option value="stackable">Tak, karton na kartonie</option>
+                              <option value="no_stack">Nie układać stosów!</option>
+                            </select>
+                          </div>
+                          
+                          {cartonStackBehavior === "stackable" && (
+                            <div className="space-y-4 pt-2 border-t border-indigo-100/50">
+                              <label className="flex cursor-pointer items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={cartonStackCompressible}
+                                  onChange={(e) => setCartonStackCompressible(e.target.checked)}
+                                  className="h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm font-medium text-slate-700">Karton "siada" przy nacisku</span>
+                              </label>
+
+                              <div className="grid grid-cols-1 gap-4">
+                                {cartonStackCompressible ? (
+                                  <div>
+                                    <label className={fieldLabel}>Wys. po kompresji (cm)</label>
+                                    <input
+                                      type="number" min={0.01} step={0.1}
+                                      value={cartonCompressedHeightCm === "" ? "" : cartonCompressedHeightCm}
+                                      onChange={(e) => {
+                                        const s = String(e.target.value).trim().replace(",", ".");
+                                        if (s === "") setCartonCompressedHeightCm("");
+                                        else { const n = parseFloat(s); if (Number.isFinite(n) && n > 0) setCartonCompressedHeightCm(n); }
+                                      }}
+                                      className={inputClass}
+                                    />
+                                  </div>
+                                ) : null}
+                                <div>
+                                  <label className={fieldLabel}>Maks. obciążenie na karton (kg)</label>
+                                  <input
+                                    type="number" min={0} step={0.1}
+                                    value={cartonMaxStackWeight === "" ? "" : cartonMaxStackWeight}
+                                    onChange={(e) => {
+                                      const s = String(e.target.value).trim().replace(",", ".");
+                                      if (s === "") setCartonMaxStackWeight("");
+                                      else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setCartonMaxStackWeight(n); }
+                                    }}
+                                    placeholder="Opcjonalny limit"
+                                    className={inputClass}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Dopasowanie opakowań (Wysyłka)</h3>
+                        <ProductLogisticsPackagingMatchingSection
+                          productId={product?.id ?? null}
+                          tenantId={tenantId}
+                          dimensionsComplete={productDimensions != null}
+                          isNew={isNew}
+                        />
+                      </section>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "images" && (
+                  <div className="w-full xl:max-w-4xl space-y-12">
+                    <section>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Galeria produktu</h3>
+                      <div className="space-y-6">
+                        <div className="flex flex-wrap items-end gap-3 rounded border border-slate-200 bg-slate-50 p-5 shadow-sm">
+                          <div className="min-w-[200px] flex-1">
+                            <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj zdjęcie z adresu URL</label>
+                            <input
+                              type="url"
+                              className={inputClass}
+                              value={newGalleryUrl}
+                              onChange={(e) => setNewGalleryUrl(e.target.value)}
+                              placeholder="https://... lub /uploads/..."
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addGalleryFromUrl}
+                            disabled={!newGalleryUrl.trim()}
+                            className="rounded bg-slate-500 px-6 py-2.5 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-50 transition-colors"
+                          >
+                            Dodaj URL
+                          </button>
+                          <label className="inline-flex cursor-pointer items-center justify-center rounded border border-slate-300 bg-white px-6 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+                            <input type="file" accept="image/*" className="sr-only" onChange={onGalleryFileSelected} disabled={galleryUploadBusy} />
+                            {galleryUploadBusy ? "Wgrywanie…" : "Wgraj z pliku"}
+                          </label>
+                        </div>
+
+                        {ensureSingleMainImage(productImages).length === 0 ? (
+                          <div className="text-center py-12 border border-dashed border-slate-300 rounded-lg bg-slate-50">
+                            <p className="text-sm font-medium text-slate-500">Brak zdjęć w galerii.</p>
+                            <p className="text-xs text-slate-400 mt-1">Użyj opcji powyżej, aby dodać pierwsze zdjęcie.</p>
+                          </div>
+                        ) : (
+                          <ul className="space-y-4">
+                            {ensureSingleMainImage(productImages)
+                              .sort((a, b) => a.sort_order - b.sort_order)
+                              .map((img) => (
+                                <li
+                                  key={img.id}
+                                  className="flex flex-col sm:flex-row sm:items-center gap-6 rounded border border-slate-200 bg-white p-5 shadow-sm"
+                                >
+                                  {/* Czyste zdjęcie na białym tle, bez ramki ograniczającej */}
+                                  <div className="flex w-24 shrink-0 items-center justify-center overflow-hidden bg-white">
+                                    <img src={img.image_url} alt="" className="max-h-24 max-w-full object-contain" />
+                                  </div>
+                                  <div className="min-w-0 flex-1 space-y-4">
+                                    <input
+                                      type="url"
+                                      className={inputClass}
+                                      value={img.image_url}
+                                      onChange={(e) =>
+                                        setProductImages((prev) =>
+                                          ensureSingleMainImage(prev.map((x) => (x.id === img.id ? { ...x, image_url: e.target.value } : x))),
+                                        )
+                                      }
+                                    />
+                                    <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
+                                      <label className="flex cursor-pointer items-center gap-2 text-blue-700">
+                                        <input
+                                          type="radio"
+                                          name="product-main-image"
+                                          className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
+                                          checked={img.is_main}
+                                          onChange={() => setGalleryMain(img.id)}
+                                        />
+                                        Główne zdjęcie
+                                      </label>
+                                      <div className="hidden h-4 w-px bg-slate-200 sm:block"></div>
+                                      <div className="flex items-center gap-4">
+                                        <button type="button" className="text-slate-600 transition-colors hover:text-slate-900" onClick={() => moveGalleryImage(img.id, -1)}>
+                                          W górę
+                                        </button>
+                                        <button type="button" className="text-slate-600 transition-colors hover:text-slate-900" onClick={() => moveGalleryImage(img.id, 1)}>
+                                          W dół
+                                        </button>
+                                      </div>
+                                      <div className="hidden h-4 w-px bg-slate-200 sm:block"></div>
+                                      <button type="button" className="text-rose-600 transition-colors hover:text-rose-800" onClick={() => removeGalleryImage(img.id)}>
+                                        Usuń zdjęcie
+                                      </button>
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                          </ul>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeTab === "offers" && (
+                  <div className="w-full xl:max-w-4xl space-y-12">
+                    <section>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Aktywne oferty i warianty</h3>
+                      <div className="rounded border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
+                        <p className="text-slate-500 font-medium">Moduł wariantowania w przygotowaniu.</p>
+                        <p className="text-slate-400 text-sm mt-1">Tutaj pojawią się powiązane oferty z marketplace'ów i powiązania SKU.</p>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
                 {activeTab === "labelSheet" && (
-                  <div className="w-full xl:max-w-5xl space-y-10 lg:grid lg:grid-cols-[1fr_min(340px,35%)] lg:items-start lg:gap-10 lg:space-y-0">
+                  <div className="w-full xl:max-w-5xl space-y-12 lg:grid lg:grid-cols-[1fr_min(340px,35%)] lg:items-start lg:gap-12 lg:space-y-0">
                     <div className="space-y-12">
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wybór szablonu</h3>
@@ -2152,7 +2697,7 @@ export function ProductEditModal({
                               ))}
                             </select>
                           </div>
-                          <div className="rounded border border-slate-200 bg-slate-50 p-4">
+                          <div className="rounded border border-slate-200 bg-slate-50 p-5">
                             <p className="mb-3 text-sm font-medium text-slate-700">Podgląd szablonu (SVG)</p>
                             <div className="flex min-h-[100px] items-center justify-center rounded border border-dashed border-slate-300 bg-white p-2">
                               {templatePreviewLoading ? (
@@ -2321,10 +2866,10 @@ export function ProductEditModal({
                     <aside className="min-h-0 lg:sticky lg:top-8 mt-10 lg:mt-0">
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Podgląd gotowej etykiety</h3>
-                        <p className="mb-4 text-xs text-slate-500">Symulacja wydruku (~60×40 mm). Puste sekcje są automatycznie ukrywane.</p>
-                        <div className="flex justify-center rounded bg-slate-50 border border-slate-200 p-8 shadow-inner overflow-hidden">
-                          {/* Dodano odpowiedni margines (pb-16 sm:pb-24), aby powiększony podgląd CSS nie był ucinany przez kontener */}
-                          <div className="origin-top scale-[1.35] shadow-md sm:scale-150 bg-white mb-16 sm:mb-24">
+                        <p className="mb-5 text-sm text-slate-500">Symulacja wydruku (~60×40 mm). Puste sekcje są automatycznie ukrywane.</p>
+                        {/* Dodano mb-24 aby uniknąć ucinania przeskalowanego tła gotowej etykiety */}
+                        <div className="flex justify-center rounded bg-slate-50 border border-slate-200 px-4 py-8 shadow-inner overflow-hidden mb-24 sm:mb-32">
+                          <div className="origin-top scale-[1.35] shadow-md sm:scale-150 bg-white">
                             <RetailLabel
                               brandName={manufacturerReadonly.name || manufacturer.trim() || "—"}
                               productNamePl={(labelData.product_name_pl ?? "").trim() || name.trim() || "—"}
@@ -2347,560 +2892,6 @@ export function ProductEditModal({
                         </div>
                       </section>
                     </aside>
-                  </div>
-                )}
-
-                {activeTab === "images" && (
-                  <div className="w-full xl:max-w-4xl space-y-12">
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Galeria produktu</h3>
-                      <div className="space-y-6">
-                        <div className="flex flex-wrap items-end gap-3 rounded bg-slate-50 p-4 border border-slate-200">
-                          <div className="min-w-[200px] flex-1">
-                            <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj zdjęcie z adresu URL</label>
-                            <input
-                              type="url"
-                              className={inputClass}
-                              value={newGalleryUrl}
-                              onChange={(e) => setNewGalleryUrl(e.target.value)}
-                              placeholder="https://... lub /uploads/..."
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={addGalleryFromUrl}
-                            disabled={!newGalleryUrl.trim()}
-                            className="rounded bg-slate-500 px-5 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-50 transition-colors"
-                          >
-                            Dodaj URL
-                          </button>
-                          <label className="inline-flex cursor-pointer items-center justify-center rounded border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-                            <input type="file" accept="image/*" className="sr-only" onChange={onGalleryFileSelected} disabled={galleryUploadBusy} />
-                            {galleryUploadBusy ? "Wgrywanie…" : "Wgraj z pliku"}
-                          </label>
-                        </div>
-
-                        {ensureSingleMainImage(productImages).length === 0 ? (
-                          <div className="text-center py-10 border border-dashed border-slate-300 rounded-lg bg-slate-50">
-                            <p className="text-sm text-slate-500">Brak zdjęć w galerii. Użyj opcji powyżej, aby dodać pierwsze zdjęcie.</p>
-                          </div>
-                        ) : (
-                          <ul className="space-y-3">
-                            {ensureSingleMainImage(productImages)
-                              .sort((a, b) => a.sort_order - b.sort_order)
-                              .map((img) => (
-                                <li
-                                  key={img.id}
-                                  className="flex flex-wrap items-center gap-6 rounded border border-slate-200 bg-white p-4 shadow-sm"
-                                >
-                                  {/* Brak szarej ramki, czyste tło w sekcji zdjęcia */}
-                                  <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden bg-white">
-                                    <img src={img.image_url} alt="" className="max-h-full max-w-full object-contain" />
-                                  </div>
-                                  <div className="min-w-0 flex-1 space-y-4">
-                                    <input
-                                      type="url"
-                                      className={inputClass}
-                                      value={img.image_url}
-                                      onChange={(e) =>
-                                        setProductImages((prev) =>
-                                          ensureSingleMainImage(prev.map((x) => (x.id === img.id ? { ...x, image_url: e.target.value } : x))),
-                                        )
-                                      }
-                                    />
-                                    <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
-                                      <label className="flex cursor-pointer items-center gap-2 text-slate-700">
-                                        <input
-                                          type="radio"
-                                          name="product-main-image"
-                                          className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
-                                          checked={img.is_main}
-                                          onChange={() => setGalleryMain(img.id)}
-                                        />
-                                        Główne zdjęcie
-                                      </label>
-                                      <div className="hidden h-4 w-px bg-slate-200 sm:block"></div>
-                                      <div className="flex items-center gap-3">
-                                        <button type="button" className="text-slate-600 transition-colors hover:text-blue-600" onClick={() => moveGalleryImage(img.id, -1)}>
-                                          W górę
-                                        </button>
-                                        <button type="button" className="text-slate-600 transition-colors hover:text-blue-600" onClick={() => moveGalleryImage(img.id, 1)}>
-                                          W dół
-                                        </button>
-                                      </div>
-                                      <div className="hidden h-4 w-px bg-slate-200 sm:block"></div>
-                                      <button type="button" className="text-rose-600 transition-colors hover:text-rose-800" onClick={() => removeGalleryImage(img.id)}>
-                                        Usuń zdjęcie
-                                      </button>
-                                    </div>
-                                  </div>
-                                </li>
-                              ))}
-                          </ul>
-                        )}
-                      </div>
-                    </section>
-                  </div>
-                )}
-
-                {activeTab === "warehouse" && (
-                  <div className="w-full xl:max-w-2xl space-y-12">
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
-                      <ProductWarehouseStockPanel
-                        physicalStockDisplay={physicalStockDisplay}
-                        inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
-                        showInventoryLink
-                        onEditTraceability={isNew ? undefined : (row) => setTraceEditRow(row)}
-                        traceabilityEditDisabled={saving}
-                      />
-                    </section>
-
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Powiadomienia i alarmy</h3>
-                      <div className="rounded border border-amber-200 bg-amber-50 p-5 space-y-4">
-                        <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-amber-900">
-                          <input
-                            type="checkbox"
-                            checked={enableStockAlert}
-                            onChange={(e) => setEnableStockAlert(e.target.checked)}
-                            className="h-5 w-5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-                          />
-                          Włącz alarm niskiego stanu magazynowego
-                        </label>
-                        {enableStockAlert && (
-                          <div className="pl-8">
-                            <label className="mb-1 block text-sm font-medium text-amber-900">Próg alarmowy łącznego stanu (szt.)</label>
-                            <input
-                              type="number" min={0} step={0.01}
-                              value={minTotalStock === "" ? "" : minTotalStock}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setMinTotalStock("");
-                                else {
-                                  const n = parseFloat(s);
-                                  if (Number.isFinite(n) && n >= 0) setMinTotalStock(n);
-                                }
-                              }}
-                              className="w-full sm:w-64 rounded border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                              placeholder="np. 10"
-                            />
-                            <p className="mt-2 text-xs text-amber-700">Powiadomienie zostanie wygenerowane, gdy całkowity stan spadnie poniżej tej wartości.</p>
-                          </div>
-                        )}
-                      </div>
-                    </section>
-
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Poziomy uzupełniania w strefach</h3>
-                      <div className="space-y-8">
-                        <div>
-                          <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Kompletacji (Pick-face)</h4>
-                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                            <div>
-                              <label className={fieldLabel}>Minimalna ilość (szt.)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={minPickQuantity === "" ? "" : minPickQuantity}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setMinPickQuantity("");
-                                  else {
-                                    const n = parseFloat(s);
-                                    if (Number.isFinite(n) && n >= 0) setMinPickQuantity(n);
-                                  }
-                                }}
-                                className={inputClass} placeholder="np. 5"
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Maksymalna ilość (szt.)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={maxPickQuantity === "" ? "" : maxPickQuantity}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setMaxPickQuantity("");
-                                  else {
-                                    const n = parseFloat(s);
-                                    if (Number.isFinite(n) && n >= 0) setMaxPickQuantity(n);
-                                  }
-                                }}
-                                className={inputClass} placeholder="np. 50"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <hr className="border-slate-100" />
-                        <div>
-                          <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Zapasu (Reserve)</h4>
-                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                            <div>
-                              <label className={fieldLabel}>Minimalna ilość (szt.)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={minReserveQuantity === "" ? "" : minReserveQuantity}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setMinReserveQuantity("");
-                                  else {
-                                    const n = parseFloat(s);
-                                    if (Number.isFinite(n) && n >= 0) setMinReserveQuantity(n);
-                                  }
-                                }}
-                                className={inputClass} placeholder="np. 12"
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Maksymalna ilość (szt.)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                value={maxReserveQuantity === "" ? "" : maxReserveQuantity}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setMaxReserveQuantity("");
-                                  else {
-                                    const n = parseFloat(s);
-                                    if (Number.isFinite(n) && n >= 0) setMaxReserveQuantity(n);
-                                  }
-                                }}
-                                className={inputClass} placeholder="opcjonalnie"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section ref={planLocationsSectionRef} className="scroll-mt-8">
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Planowanie lokalizacji</h3>
-                      {placementDirty ? (
-                        <div role="status" className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                          <span className="font-semibold">Uwaga:</span> Zmiana przypisań nie wpływa na fizyczny stan w WMS, służy jedynie logice układania towaru.
-                        </div>
-                      ) : null}
-                      
-                      {layoutLoading ? (
-                        <div className="py-8 text-center text-slate-500 rounded border border-dashed border-slate-300">
-                          Ładowanie planu magazynu…
-                        </div>
-                      ) : positions.length === 0 ? (
-                        <div className="py-8 text-center text-slate-500 rounded border border-dashed border-slate-300 bg-slate-50">
-                          {warehouse?.id ? "Brak regałów w obecnym magazynie." : "Wybierz główny magazyn z górnego paska aplikacji."}
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <LocationPicker
-                            positions={positions}
-                            value={assignedLocations}
-                            onChange={setAssignedLocations}
-                            productDimensions={productDimensions}
-                            productVolumeDm3={productVolumeDm3}
-                          />
-                          {hasDimensionMismatch ? (
-                            <p className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-                              Wymiary produktu przekraczają limity co najmniej jednej z przypisanych lokalizacji!
-                            </p>
-                          ) : null}
-                        </div>
-                      )}
-                    </section>
-                  </div>
-                )}
-
-                {activeTab === "logistics" && (
-                  <div className="w-full xl:max-w-2xl space-y-12">
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-                          <div>
-                            <label className={fieldLabel}>Długość (cm)</label>
-                            <input type="number" min={0} step={0.01} value={length === "" ? "" : length} onChange={(e) => updateDimension("length", e.target.value)} className={inputClass} />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Szerokość (cm)</label>
-                            <input type="number" min={0} step={0.01} value={width === "" ? "" : width} onChange={(e) => updateDimension("width", e.target.value)} className={inputClass} />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Wysokość (cm)</label>
-                            <input type="number" min={0} step={0.01} value={height === "" ? "" : height} onChange={(e) => updateDimension("height", e.target.value)} className={inputClass} />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                          <div>
-                            <label className={fieldLabel}>Waga (kg)</label>
-                            <input
-                              type="number" min={0} step={0.001}
-                              value={weight === "" ? "" : weight}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setWeight("");
-                                else { const n = parseFloat(s); if (Number.isFinite(n)) setWeight(n); }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Objętość całkowita (dm³)</label>
-                            <input
-                              type="number" min={0} step={0.01} readOnly
-                              value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
-                              className={`${inputClass} font-semibold text-slate-700 bg-slate-50 cursor-not-allowed ${hasVolumeOverflow ? "border-red-400 bg-red-50 text-red-700" : ""}`}
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Jednostka miary</label>
-                          <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={`${inputClass} sm:w-1/2`} />
-                          <datalist id="unit-list-pem">
-                            <option value="szt." />
-                            <option value="opak." />
-                            <option value="para" />
-                            <option value="kg" />
-                            <option value="m" />
-                          </datalist>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Opakowanie zbiorcze (Karton)</h3>
-                      <div className="rounded border border-indigo-100 bg-indigo-50/30 p-6 space-y-6">
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                          <div>
-                            <label className={fieldLabel}>EAN kartonu zbiorczego</label>
-                            <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="Opcjonalny kod" />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Ilość sztuk w kartonie</label>
-                            <input
-                              type="number" min={0} step={1}
-                              value={unitsPerCarton === "" ? "" : unitsPerCarton}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setUnitsPerCarton("");
-                                else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n); }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <h4 className="mb-3 text-sm font-bold text-slate-700">Zewnętrzne wymiary kartonu</h4>
-                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-                            <div>
-                              <label className={fieldLabel}>Długość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={cartonLength === "" ? "" : cartonLength} onChange={(e) => updateCartonDimension("cartonLength", e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Szerokość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={cartonWidth === "" ? "" : cartonWidth} onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Wysokość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={cartonHeight === "" ? "" : cartonHeight} onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)} className={inputClass} />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                          <div>
-                            <label className={fieldLabel}>Waga brutto kartonu (kg)</label>
-                            <input
-                              type="number" min={0} step={0.001}
-                              value={cartonWeight === "" ? "" : cartonWeight}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setCartonWeight("");
-                                else { const n = parseFloat(s); if (Number.isFinite(n)) setCartonWeight(n); }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Objętość kartonu (dm³)</label>
-                            <input
-                              type="number" min={0} step={0.01} readOnly
-                              value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
-                              className={`${inputClass} font-semibold text-slate-700 bg-white/50 cursor-not-allowed`}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section>
-                      <ProductLogisticsPackagingMatchingSection
-                        productId={product?.id ?? null}
-                        tenantId={tenantId}
-                        dimensionsComplete={productDimensions != null}
-                        isNew={isNew}
-                      />
-                    </section>
-
-                    <div className="space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Produkt (Sztuka)</h3>
-                        <div className="space-y-5 rounded border border-slate-200 p-5 bg-white shadow-sm">
-                          <div>
-                            <label className={fieldLabel}>Wymagana orientacja</label>
-                            <select value={orientationType} onChange={(e) => setOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
-                              <option value="any">Dowolna orientacja</option>
-                              <option value="upright">Tylko w pionie (strzałki do góry)</option>
-                              <option value="no_stack">Nie obracać</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Kształt</label>
-                            <select value={shapeType} onChange={(e) => setShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
-                              <option value="box">Prostopadłościan (Pudełko)</option>
-                              <option value="cylinder">Walec (np. Butelka / Tuba)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Czy można układać w stos?</label>
-                            <select value={stackBehavior} onChange={(e) => setStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
-                              <option value="stackable">Tak, sztuka na sztuce</option>
-                              <option value="no_stack">Nie układać w stos!</option>
-                            </select>
-                          </div>
-                          
-                          {stackBehavior === "stackable" && (
-                            <div className="space-y-4 pt-2 border-t border-slate-100">
-                              <label className="flex cursor-pointer items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={stackCompressible}
-                                  onChange={(e) => setStackCompressible(e.target.checked)}
-                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-sm font-medium text-slate-700">Towar podlega kompresji przy nacisku</span>
-                              </label>
-                              
-                              <div className="grid grid-cols-2 gap-4">
-                                {stackCompressible ? (
-                                  <div>
-                                    <label className={fieldLabel}>Wys. po kompresji (cm)</label>
-                                    <input
-                                      type="number" min={0.01} step={0.1}
-                                      value={compressedHeightCm === "" ? "" : compressedHeightCm}
-                                      onChange={(e) => {
-                                        const s = String(e.target.value).trim().replace(",", ".");
-                                        if (s === "") setCompressedHeightCm("");
-                                        else { const n = parseFloat(s); if (Number.isFinite(n) && n > 0) setCompressedHeightCm(n); }
-                                      }}
-                                      className={inputClass}
-                                    />
-                                  </div>
-                                ) : null}
-                                <div className={stackCompressible ? "" : "col-span-2"}>
-                                  <label className={fieldLabel}>Maksymalny ciężar stosu (kg)</label>
-                                  <input
-                                    type="number" min={0} step={0.1}
-                                    value={maxStackWeight === "" ? "" : maxStackWeight}
-                                    onChange={(e) => {
-                                      const s = String(e.target.value).trim().replace(",", ".");
-                                      if (s === "") setMaxStackWeight("");
-                                      else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxStackWeight(n); }
-                                    }}
-                                    placeholder="Opcjonalny limit"
-                                    className={inputClass}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Karton</h3>
-                        <div className="space-y-5 rounded border border-indigo-100 p-5 bg-indigo-50/10 shadow-sm">
-                          <div>
-                            <label className={fieldLabel}>Wymagana orientacja kartonu</label>
-                            <select value={cartonOrientationType} onChange={(e) => setCartonOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
-                              <option value="any">Dowolna orientacja</option>
-                              <option value="upright">Tylko w pionie (strzałki do góry)</option>
-                              <option value="no_stack">Nie obracać</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Kształt opakowania</label>
-                            <select value={cartonShapeType} onChange={(e) => setCartonShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
-                              <option value="box">Prostopadłościan</option>
-                              <option value="cylinder">Walec (Beczka)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Czy kartony ułożysz w stos?</label>
-                            <select value={cartonStackBehavior} onChange={(e) => setCartonStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
-                              <option value="stackable">Tak, karton na kartonie</option>
-                              <option value="no_stack">Nie układać stosów!</option>
-                            </select>
-                          </div>
-                          
-                          {cartonStackBehavior === "stackable" && (
-                            <div className="space-y-4 pt-2 border-t border-indigo-100/50">
-                              <label className="flex cursor-pointer items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={cartonStackCompressible}
-                                  onChange={(e) => setCartonStackCompressible(e.target.checked)}
-                                  className="h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <span className="text-sm font-medium text-slate-700">Karton "siada" przy nacisku</span>
-                              </label>
-
-                              <div className="grid grid-cols-2 gap-4">
-                                {cartonStackCompressible ? (
-                                  <div>
-                                    <label className={fieldLabel}>Wys. po kompresji (cm)</label>
-                                    <input
-                                      type="number" min={0.01} step={0.1}
-                                      value={cartonCompressedHeightCm === "" ? "" : cartonCompressedHeightCm}
-                                      onChange={(e) => {
-                                        const s = String(e.target.value).trim().replace(",", ".");
-                                        if (s === "") setCartonCompressedHeightCm("");
-                                        else { const n = parseFloat(s); if (Number.isFinite(n) && n > 0) setCartonCompressedHeightCm(n); }
-                                      }}
-                                      className={inputClass}
-                                    />
-                                  </div>
-                                ) : null}
-                                <div className={cartonStackCompressible ? "" : "col-span-2"}>
-                                  <label className={fieldLabel}>Maks. obciążenie na karton (kg)</label>
-                                  <input
-                                    type="number" min={0} step={0.1}
-                                    value={cartonMaxStackWeight === "" ? "" : cartonMaxStackWeight}
-                                    onChange={(e) => {
-                                      const s = String(e.target.value).trim().replace(",", ".");
-                                      if (s === "") setCartonMaxStackWeight("");
-                                      else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setCartonMaxStackWeight(n); }
-                                    }}
-                                    placeholder="Opcjonalny limit"
-                                    className={inputClass}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </section>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "offers" && (
-                  <div className="w-full xl:max-w-2xl space-y-10">
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Aktywne oferty i warianty</h3>
-                      <div className="rounded border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
-                        <p className="text-slate-500 font-medium">Moduł wariantowania w przygotowaniu.</p>
-                        <p className="text-slate-400 text-sm mt-1">Tutaj pojawią się powiązane oferty z marketplace'ów i powiązania SKU.</p>
-                      </div>
-                    </section>
                   </div>
                 )}
 
@@ -2929,12 +2920,10 @@ export function ProductEditModal({
           </div>
         </div>
 
+        {/* Pasek akcji – zapis w prawym dolnym rogu na czarno */}
         <div className={footerClass}>
-          <button type="button" onClick={onClose} className="rounded border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
-            Anuluj
-          </button>
-          <button type="submit" disabled={saving} className="rounded bg-blue-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors disabled:opacity-50">
-            {saving ? "Zapisywanie…" : isNew ? "Dodaj produkt" : "Zapisz zmiany"}
+          <button type="submit" disabled={saving} className="rounded bg-slate-900 px-8 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 transition-colors disabled:opacity-50">
+            {saving ? "Zapisywanie…" : "Zapisz"}
           </button>
         </div>
       </form>
