@@ -1583,11 +1583,12 @@ export function ProductEditModal({
         />
         <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8">
           <div className="flex min-w-0 flex-1 gap-5">
+            {/* Usunięto wymuszoną ramkę dla wgranego zdjęcia */}
             <div
-              className={`flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-xl ${
-                sidebarPreviewUrl.trim()
-                  ? "bg-white border border-slate-200"
-                  : "bg-slate-50 border border-dashed border-slate-300"
+              className={`flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden ${
+                !sidebarPreviewUrl.trim()
+                  ? "bg-slate-50 border border-dashed border-slate-300 rounded-xl"
+                  : "rounded-md"
               }`}
             >
               {sidebarPreviewUrl.trim() ? (
@@ -1614,7 +1615,6 @@ export function ProductEditModal({
                 ) : null}
               </div>
               
-              {/* Nowoczesne parametry w formie pigułek (badges) */}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                 <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
                   <span className="text-slate-500 mr-1.5 font-medium">Podmiot:</span>
@@ -1715,7 +1715,6 @@ export function ProductEditModal({
           </div>
         </div>
 
-        {/* Czysty pasek zakładek na pełną szerokość */}
         <div className="flex gap-2 overflow-x-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 [-webkit-overflow-scrolling:touch]">
           <button type="button" role="tab" aria-selected={activeTab === "basic"} className={tabClass("basic")} onClick={() => setActiveTab("basic")}>Podstawowe</button>
           <button type="button" role="tab" aria-selected={activeTab === "suppliers"} className={tabClass("suppliers")} onClick={() => setActiveTab("suppliers")}>Dostawcy</button>
@@ -1736,11 +1735,11 @@ export function ProductEditModal({
         <div className={bodyRowClass}>
           <div className={bodyInnerClass}>
             <div className={mainColClass}>
-              <div className={`overflow-y-auto ${tabPanelPaddingClass}`}>
+              {/* Zmieniono kontener tak, aby rozciągał się od lewej do prawej i nie był wyśrodkowany */}
+              <div className="overflow-y-auto w-full px-4 py-8 sm:px-6 lg:px-8">
                 
-                {/* Zawartość zakładek w płaskim układzie (Flat Design) */}
                 {activeTab === "basic" && (
-                  <div className="max-w-3xl space-y-10">
+                  <div className="space-y-10">
                     <section>
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Informacje ogólne</h3>
                       <div className="space-y-5">
@@ -1837,7 +1836,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "suppliers" && (
-                  <div className="max-w-4xl space-y-10">
+                  <div className="space-y-10">
                     <section>
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Przypisani dostawcy</h3>
                       {cheapestSupplierInsight ? (
@@ -1901,7 +1900,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "labelSheet" && (
-                  <div className="max-w-[1200px] space-y-10 lg:grid lg:grid-cols-[1fr_min(340px,38%)] lg:items-start lg:gap-10 lg:space-y-0">
+                  <div className="space-y-10 lg:grid lg:grid-cols-[1fr_min(340px,25%)] lg:items-start lg:gap-10 lg:space-y-0">
                     <div className="space-y-10">
                       <section>
                         <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Wybór szablonu</h3>
@@ -2117,7 +2116,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "images" && (
-                  <div className="max-w-4xl space-y-10">
+                  <div className="space-y-10">
                     <section>
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Galeria produktu</h3>
                       <div className="space-y-6">
@@ -2209,7 +2208,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "prices" && (
-                  <div className="max-w-4xl space-y-10">
+                  <div className="space-y-10">
                     <section>
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Kalkulacja cenowa</h3>
                       <div className="space-y-5">
@@ -2403,7 +2402,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "warehouse" && (
-                  <div className="max-w-4xl space-y-10">
+                  <div className="space-y-10">
                     <section>
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
                       <ProductWarehouseStockPanel
@@ -2568,10 +2567,9 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "warehouseOps" && !isNew && product?.id != null ? (
-                  <div className="max-w-[1200px] space-y-10">
+                  <div className="space-y-10">
                     <section>
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Historia operacji</h3>
-                      {/* MovemetsPanel zwykle zajmuje pełną szerokość i ma własne style/tabele, dlatego owijamy go luźniej */}
                       <div className="rounded border border-slate-200 bg-white">
                         <ProductWarehouseMovementsPanel productId={product.id} tenantId={tenantId} />
                       </div>
@@ -2580,7 +2578,7 @@ export function ProductEditModal({
                 ) : null}
 
                 {activeTab === "logistics" && (
-                  <div className="max-w-4xl space-y-12">
+                  <div className="space-y-12">
                     <section>
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
                       <div className="space-y-6">
@@ -2703,7 +2701,6 @@ export function ProductEditModal({
                     </section>
 
                     <section>
-                      {/* ProductLogisticsPackagingMatchingSection ma już u Ciebie swój własny design przypominający listę kartonów. Upewnij się tylko, że w jego kodzie nie ma <Card>, by zachować spójność. */}
                       <ProductLogisticsPackagingMatchingSection
                         productId={product?.id ?? null}
                         tenantId={tenantId}
@@ -2865,7 +2862,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "offers" && (
-                  <div className="max-w-4xl space-y-10">
+                  <div className="space-y-10">
                     <section>
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Aktywne oferty i warianty</h3>
                       <div className="rounded border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
@@ -2877,33 +2874,31 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "settings" && (
-                  <div className="max-w-4xl space-y-10">
+                  <div className="space-y-10">
                     <section id="wms-validation">
                       <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Polityka przyjęcia do magazynu (WMS)</h3>
-                      <div className="rounded border border-slate-200 bg-white p-5 shadow-sm">
-                        {/* W komponencie ProductReceivingRequirementsSection również należałoby usunąć tag Card na rzecz div-a, jeśli jest tam użyty. */}
-                        <ProductReceivingRequirementsSection
-                          requireDimensions={requireRecvDimensions}
-                          requireWeight={requireRecvWeight}
-                          requireBatch={trackBatch}
-                          requireExpiry={trackExpiry}
-                          requireSerial={trackSerial}
-                          requireMasterCarton={requireRecvMasterCarton}
-                          requireMasterCartonEan={requireRecvMasterCartonEan}
-                          requireMasterCartonQty={requireRecvMasterCartonQty}
-                          requireMasterCartonDims={requireRecvMasterCartonDims}
-                          requireMasterCartonWeight={requireRecvMasterCartonWeight}
-                          disabled={saving}
-                          onChange={applyRequireRecvPatch}
-                        />
-                      </div>
+                      {/* Usunięto otaczający box - sam komponent wtapia się teraz w płaskie tło */}
+                      <ProductReceivingRequirementsSection
+                        requireDimensions={requireRecvDimensions}
+                        requireWeight={requireRecvWeight}
+                        requireBatch={trackBatch}
+                        requireExpiry={trackExpiry}
+                        requireSerial={trackSerial}
+                        requireMasterCarton={requireRecvMasterCarton}
+                        requireMasterCartonEan={requireRecvMasterCartonEan}
+                        requireMasterCartonQty={requireRecvMasterCartonQty}
+                        requireMasterCartonDims={requireRecvMasterCartonDims}
+                        requireMasterCartonWeight={requireRecvMasterCartonWeight}
+                        disabled={saving}
+                        onChange={applyRequireRecvPatch}
+                      />
                     </section>
                   </div>
                 )}
+
               </div>
             </div>
 
-            {/* Prawy pasek nawigacyjny - ikonki bez obramowania na płaskim tle */}
             <aside className={asideClass} aria-label="Szybki dostęp">
               <nav className="flex flex-col items-center gap-2" role="group">
                 {railTabOrder.map((tabId) => {
@@ -2926,7 +2921,6 @@ export function ProductEditModal({
           </div>
         </div>
 
-        {/* Pasek zapisu - przyklejony na dole strony */}
         <div className={footerClass}>
           <button type="button" onClick={onClose} className="rounded border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
             Anuluj
@@ -2937,7 +2931,6 @@ export function ProductEditModal({
         </div>
       </form>
       
-      {/* Modal - inwentaryzacja */}
       <EditInventoryTraceabilityModal
         open={traceEditRow != null && !isNew && product?.id != null && tenantId != null}
         tenantId={tenantId ?? 1}
@@ -2968,7 +2961,7 @@ function ProductSupplierLinkRowEditor({ row, busy, inputTableMini, isDefault, on
   useEffect(() => setPrice(row.purchase_price != null ? String(row.purchase_price) : ""), [row.purchase_price, row.id]);
 
   return (
-    <tr className="hover:bg-slate-50 transition-colors">
+    <tr className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
       <td className="px-4 py-3 text-slate-800">{(row.supplier_name || "").trim() || `#${row.supplier_id}`}</td>
       <td className="px-4 py-3 text-right">
         <input className={inputTableMini} value={price} onChange={(e) => setPrice(e.target.value)} onBlur={() => onPatchPrice(price)} disabled={busy} placeholder="—" />
