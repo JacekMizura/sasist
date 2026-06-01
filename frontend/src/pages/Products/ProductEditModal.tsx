@@ -1578,7 +1578,6 @@ export function ProductEditModal({
         />
         <div className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8">
           <div className="flex min-w-0 flex-1 gap-6">
-            {/* Powiększone zdjęcie produktu */}
             <div className="flex h-20 w-20 sm:h-24 sm:w-24 shrink-0 items-center justify-center overflow-hidden bg-white">
               {sidebarPreviewUrl.trim() ? (
                 <img src={sidebarPreviewUrl.trim()} alt="" className="max-h-full max-w-full object-contain" />
@@ -1725,10 +1724,11 @@ export function ProductEditModal({
               <div className={`overflow-y-auto ${tabPanelPaddingClass}`}>
                 
                 {activeTab === "basic" && (
-                  <div className="flex flex-col xl:flex-row items-start gap-10 lg:gap-16">
-                    <div className="w-full xl:max-w-2xl space-y-12 shrink-0">
+                  <div className="flex flex-col 2xl:flex-row items-start gap-10 lg:gap-12">
+                    {/* Lewa kolumna: Informacje ogólne, Producent, Walidacja */}
+                    <div className="w-full 2xl:w-[420px] shrink-0 space-y-12">
                       <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900">Informacje ogólne</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Informacje ogólne</h3>
                         <div className="space-y-5">
                           <div>
                             <label className={fieldLabel}>Podmiot</label>
@@ -1743,7 +1743,7 @@ export function ProductEditModal({
                             <label className={fieldLabel}>Nazwa</label>
                             <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
                           </div>
-                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                          <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label className={fieldLabel}>Symbol / SKU</label>
                               <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} />
@@ -1761,75 +1761,70 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900">Producent i GPSR</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Producent i GPSR</h3>
                         <div className="space-y-5">
-                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                            <div>
-                              <label className={fieldLabel}>Producent z katalogu</label>
-                              <select
-                                value={manufacturerId != null ? String(manufacturerId) : ""}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (!v) { setManufacturerId(null); return; }
-                                  const id = Number(v);
-                                  const row = manufacturersCatalog.find((x) => x.id === id);
-                                  setManufacturerId(Number.isFinite(id) ? id : null);
-                                  if (row) setManufacturer(row.name);
-                                }}
-                                className={inputClass}
-                              >
-                                <option value="">— Wybierz —</option>
-                                {manufacturersCatalog.map((m) => (
-                                  <option key={m.id} value={m.id}>{m.name} {!m.active ? "(nieaktywny)" : ""}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Nazwa producenta (ręczna)</label>
-                              <input
-                                type="text"
-                                value={manufacturer}
-                                onChange={(e) => {
-                                  const t = e.target.value;
-                                  setManufacturer(t);
-                                  if (manufacturerId != null) {
-                                    const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
-                                    if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
-                                  }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
+                          <div>
+                            <label className={fieldLabel}>Producent z katalogu</label>
+                            <select
+                              value={manufacturerId != null ? String(manufacturerId) : ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (!v) { setManufacturerId(null); return; }
+                                const id = Number(v);
+                                const row = manufacturersCatalog.find((x) => x.id === id);
+                                setManufacturerId(Number.isFinite(id) ? id : null);
+                                if (row) setManufacturer(row.name);
+                              }}
+                              className={inputClass}
+                            >
+                              <option value="">— Wybierz —</option>
+                              {manufacturersCatalog.map((m) => (
+                                <option key={m.id} value={m.id}>{m.name} {!m.active ? "(nieaktywny)" : ""}</option>
+                              ))}
+                            </select>
                           </div>
-                          
-                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                            <div>
-                              <label className={fieldLabel}>Osoba odpowiedzialna (GPSR)</label>
-                              <input
-                                type="text"
-                                value={responsiblePerson}
-                                onChange={(e) => setResponsiblePerson(e.target.value)}
-                                className={inputClass}
-                                placeholder="Puste = dziedziczenie z producenta"
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>E-mail osoby odpowiedzialnej (GPSR)</label>
-                              <input
-                                type="email"
-                                value={responsiblePersonEmail}
-                                onChange={(e) => setResponsiblePersonEmail(e.target.value)}
-                                className={inputClass}
-                                placeholder="Opcjonalnie; puste = z producenta"
-                              />
-                            </div>
+                          <div>
+                            <label className={fieldLabel}>Nazwa producenta (ręczna)</label>
+                            <input
+                              type="text"
+                              value={manufacturer}
+                              onChange={(e) => {
+                                const t = e.target.value;
+                                setManufacturer(t);
+                                if (manufacturerId != null) {
+                                  const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
+                                  if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
+                                }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Osoba odpowiedzialna (GPSR)</label>
+                            <input
+                              type="text"
+                              value={responsiblePerson}
+                              onChange={(e) => setResponsiblePerson(e.target.value)}
+                              className={inputClass}
+                              placeholder="Puste = dziedziczenie z producenta"
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>E-mail osoby odpowiedzialnej (GPSR)</label>
+                            <input
+                              type="email"
+                              value={responsiblePersonEmail}
+                              onChange={(e) => setResponsiblePersonEmail(e.target.value)}
+                              className={inputClass}
+                              placeholder="Opcjonalnie; puste = z producenta"
+                            />
                           </div>
                         </div>
                       </section>
 
                       <section id="wms-validation">
-                        <h3 className="mb-5 text-lg font-bold text-slate-900">Walidacja</h3>
-                        <div className="rounded-xl border border-[#e5e7eb] bg-slate-50/50 p-6">
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Walidacja</h3>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-6">
                           <ProductReceivingRequirementsSection
                             requireDimensions={requireRecvDimensions}
                             requireWeight={requireRecvWeight}
@@ -1848,29 +1843,152 @@ export function ProductEditModal({
                       </section>
                     </div>
 
-                    {!isNew && product?.id != null && (
-                      <aside className="w-full xl:max-w-[700px] flex-1">
-                        <section>
-                          <h3 className="mb-5 text-lg font-bold text-slate-900">Historia magazynowa</h3>
-                          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-                            <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-2 bg-slate-50/50">
-                              <button type="button" className="rounded-md bg-blue-600 px-4 py-1.5 text-[13px] font-medium text-white shadow-sm hover:bg-blue-700">
-                                Operacje magazynowe
-                              </button>
-                              <button type="button" className="rounded-md px-4 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-200/50 hover:text-slate-900">
-                                Historia dostaw
-                              </button>
-                              <div className="ml-auto flex items-center text-xs text-slate-500 px-2">
-                                Pokaż na stronie 
-                                <select className="ml-2 rounded border border-slate-300 bg-white py-1 text-slate-700 outline-none">
-                                  <option>25</option>
-                                  <option>50</option>
-                                </select>
+                    {/* Środkowa kolumna: Wymiary i Opakowanie Zbiorcze */}
+                    <div className="w-full 2xl:w-[420px] shrink-0 space-y-12">
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
+                        <div className="space-y-5">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className={fieldLabel}>Długość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={length === "" ? "" : length} onChange={(e) => updateDimension("length", e.target.value)} className={inputClass} />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Szerokość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={width === "" ? "" : width} onChange={(e) => updateDimension("width", e.target.value)} className={inputClass} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className={fieldLabel}>Wysokość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={height === "" ? "" : height} onChange={(e) => updateDimension("height", e.target.value)} className={inputClass} />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Waga (kg)</label>
+                              <input
+                                type="number" min={0} step={0.001}
+                                value={weight === "" ? "" : weight}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setWeight("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setWeight(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className={fieldLabel}>Objętość (dm³)</label>
+                              <input
+                                type="number" min={0} step={0.01} readOnly
+                                value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
+                                className={`${inputClass} font-semibold text-slate-700 bg-slate-50 cursor-not-allowed ${hasVolumeOverflow ? "border-red-400 bg-red-50 text-red-700" : ""}`}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Jednostka miary</label>
+                              <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={inputClass} />
+                              <datalist id="unit-list-pem">
+                                <option value="szt." />
+                                <option value="opak." />
+                                <option value="para" />
+                                <option value="kg" />
+                                <option value="m" />
+                              </datalist>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Opakowanie zbiorcze (Karton)</h3>
+                        <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-5 space-y-5">
+                          <div>
+                            <label className={fieldLabel}>EAN kartonu zbiorczego</label>
+                            <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="Opcjonalny kod" />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Ilość sztuk w kartonie</label>
+                            <input
+                              type="number" min={0} step={1}
+                              value={unitsPerCarton === "" ? "" : unitsPerCarton}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setUnitsPerCarton("");
+                                else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n); }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          
+                          <div className="pt-2">
+                            <h4 className="mb-3 text-sm font-bold text-slate-700">Zewnętrzne wymiary kartonu</h4>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                              <div>
+                                <label className={fieldLabel}>Długość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonLength === "" ? "" : cartonLength} onChange={(e) => updateCartonDimension("cartonLength", e.target.value)} className={inputClass} />
+                              </div>
+                              <div>
+                                <label className={fieldLabel}>Szerokość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonWidth === "" ? "" : cartonWidth} onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)} className={inputClass} />
                               </div>
                             </div>
-                            
-                            <div className="overflow-x-auto">
-                              <table className="w-full min-w-[600px] text-sm text-left">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className={fieldLabel}>Wysokość (cm)</label>
+                                <input type="number" min={0} step={0.01} value={cartonHeight === "" ? "" : cartonHeight} onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)} className={inputClass} />
+                              </div>
+                              <div>
+                                <label className={fieldLabel}>Waga brutto (kg)</label>
+                                <input
+                                  type="number" min={0} step={0.001}
+                                  value={cartonWeight === "" ? "" : cartonWeight}
+                                  onChange={(e) => {
+                                    const s = String(e.target.value).trim().replace(",", ".");
+                                    if (s === "") setCartonWeight("");
+                                    else { const n = parseFloat(s); if (Number.isFinite(n)) setCartonWeight(n); }
+                                  }}
+                                  className={inputClass}
+                                />
+                              </div>
+                            </div>
+                            <div className="mt-4">
+                              <label className={fieldLabel}>Objętość kartonu (dm³)</label>
+                              <input
+                                type="number" min={0} step={0.01} readOnly
+                                value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
+                                className={`${inputClass} font-semibold text-slate-700 bg-white/50 cursor-not-allowed`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+
+                    {/* Prawa kolumna: Historia magazynowa */}
+                    {!isNew && product?.id != null && (
+                      <aside className="w-full flex-1 min-w-0">
+                        <section>
+                          <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Historia magazynowa</h3>
+                          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
+                            <div className="min-w-[600px]">
+                              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-2 bg-slate-50/50">
+                                <button type="button" className="rounded-md bg-blue-600 px-4 py-1.5 text-[13px] font-medium text-white shadow-sm hover:bg-blue-700">
+                                  Operacje magazynowe
+                                </button>
+                                <button type="button" className="rounded-md px-4 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-200/50 hover:text-slate-900">
+                                  Historia dostaw
+                                </button>
+                                <div className="ml-auto flex items-center text-xs text-slate-500 px-2">
+                                  Pokaż na stronie 
+                                  <select className="ml-2 rounded border border-slate-300 bg-white py-1 text-slate-700 outline-none">
+                                    <option>25</option>
+                                    <option>50</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <table className="w-full text-sm text-left">
                                 <thead className="border-b border-slate-200 text-xs font-semibold text-slate-700 bg-white">
                                   <tr>
                                     <th className="px-5 py-3.5 w-40">Data</th>
@@ -1911,9 +2029,9 @@ export function ProductEditModal({
                                   </tr>
                                 </tbody>
                               </table>
-                            </div>
-                            <div className="border-t border-slate-100 p-3 px-5 text-xs text-slate-500 bg-white">
-                              1-4 z 4
+                              <div className="border-t border-slate-100 p-3 px-5 text-xs text-slate-500 bg-white">
+                                1-4 z 4
+                              </div>
                             </div>
                           </div>
                         </section>
@@ -1926,7 +2044,7 @@ export function ProductEditModal({
                   <div className="flex flex-col xl:flex-row items-start gap-10 lg:gap-16">
                     <div className="w-full xl:max-w-2xl space-y-12 shrink-0">
                       <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900">Kalkulacja cenowa</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Kalkulacja cenowa</h3>
                         <div className="space-y-5">
                           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                             <div>
@@ -2007,7 +2125,6 @@ export function ProductEditModal({
                       </section>
                     </div>
 
-                    {/* Prawa kolumna w Ceny: Dostawcy, Ostatni zakup, Podsumowanie */}
                     <aside className="w-full xl:max-w-[850px] flex-1 space-y-12">
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Dostawcy i ceny zakupu</h3>
@@ -2149,7 +2266,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "warehouse" && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 items-start gap-10 lg:gap-16">
+                  <div className="grid grid-cols-1 xl:grid-cols-3 items-start gap-10 lg:gap-12">
                     {/* Kolumna 1: Magazyn */}
                     <div className="space-y-12">
                       <section ref={planLocationsSectionRef} className="scroll-mt-8">
@@ -2301,60 +2418,8 @@ export function ProductEditModal({
                       </section>
                     </div>
 
-                    {/* Kolumna 2: Logistyka i Produkt */}
+                    {/* Kolumna 2: Magazynowanie */}
                     <div className="space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
-                        <div className="space-y-6">
-                          <div className="grid grid-cols-1 gap-5">
-                            <div>
-                              <label className={fieldLabel}>Długość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={length === "" ? "" : length} onChange={(e) => updateDimension("length", e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Szerokość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={width === "" ? "" : width} onChange={(e) => updateDimension("width", e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Wysokość (cm)</label>
-                              <input type="number" min={0} step={0.01} value={height === "" ? "" : height} onChange={(e) => updateDimension("height", e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Waga (kg)</label>
-                              <input
-                                type="number" min={0} step={0.001}
-                                value={weight === "" ? "" : weight}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setWeight("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setWeight(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Objętość całkowita (dm³)</label>
-                              <input
-                                type="number" min={0} step={0.01} readOnly
-                                value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
-                                className={`${inputClass} font-semibold text-slate-700 bg-slate-50 cursor-not-allowed ${hasVolumeOverflow ? "border-red-400 bg-red-50 text-red-700" : ""}`}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Jednostka miary</label>
-                              <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={inputClass} />
-                              <datalist id="unit-list-pem">
-                                <option value="szt." />
-                                <option value="opak." />
-                                <option value="para" />
-                                <option value="kg" />
-                                <option value="m" />
-                              </datalist>
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Produkt (Sztuka)</h3>
                         <div className="space-y-5 rounded border border-slate-200 p-5 bg-slate-50/50">
@@ -2426,76 +2491,6 @@ export function ProductEditModal({
                               </div>
                             </div>
                           )}
-                        </div>
-                      </section>
-                    </div>
-
-                    {/* Kolumna 3: Kartony */}
-                    <div className="space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Opakowanie zbiorcze (Karton)</h3>
-                        <div className="rounded border border-indigo-100 bg-indigo-50/30 p-5 space-y-6">
-                          <div className="grid grid-cols-1 gap-5">
-                            <div>
-                              <label className={fieldLabel}>EAN kartonu zbiorczego</label>
-                              <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="Opcjonalny kod" />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Ilość sztuk w kartonie</label>
-                              <input
-                                type="number" min={0} step={1}
-                                value={unitsPerCarton === "" ? "" : unitsPerCarton}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setUnitsPerCarton("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <h4 className="mb-3 text-sm font-bold text-slate-700">Zewnętrzne wymiary kartonu</h4>
-                            <div className="grid grid-cols-1 gap-5">
-                              <div>
-                                <label className={fieldLabel}>Długość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonLength === "" ? "" : cartonLength} onChange={(e) => updateCartonDimension("cartonLength", e.target.value)} className={inputClass} />
-                              </div>
-                              <div>
-                                <label className={fieldLabel}>Szerokość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonWidth === "" ? "" : cartonWidth} onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)} className={inputClass} />
-                              </div>
-                              <div>
-                                <label className={fieldLabel}>Wysokość (cm)</label>
-                                <input type="number" min={0} step={0.01} value={cartonHeight === "" ? "" : cartonHeight} onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)} className={inputClass} />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 gap-5">
-                            <div>
-                              <label className={fieldLabel}>Waga brutto kartonu (kg)</label>
-                              <input
-                                type="number" min={0} step={0.001}
-                                value={cartonWeight === "" ? "" : cartonWeight}
-                                onChange={(e) => {
-                                  const s = String(e.target.value).trim().replace(",", ".");
-                                  if (s === "") setCartonWeight("");
-                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setCartonWeight(n); }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div>
-                              <label className={fieldLabel}>Objętość kartonu (dm³)</label>
-                              <input
-                                type="number" min={0} step={0.01} readOnly
-                                value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
-                                className={`${inputClass} font-semibold text-slate-700 bg-white/50 cursor-not-allowed`}
-                              />
-                            </div>
-                          </div>
                         </div>
                       </section>
 
@@ -2572,7 +2567,10 @@ export function ProductEditModal({
                           )}
                         </div>
                       </section>
+                    </div>
 
+                    {/* Kolumna 3: Logistyka i dopasowanie */}
+                    <div className="space-y-12">
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Dopasowanie opakowań (Wysyłka)</h3>
                         <ProductLogisticsPackagingMatchingSection
@@ -2881,7 +2879,6 @@ export function ProductEditModal({
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Podgląd gotowej etykiety</h3>
                         <p className="mb-5 text-sm text-slate-500">Symulacja wydruku (~60×40 mm). Puste sekcje są automatycznie ukrywane.</p>
-                        {/* Dodano mb-24 aby uniknąć ucinania przeskalowanego tła gotowej etykiety */}
                         <div className="flex justify-center rounded bg-slate-50 border border-slate-200 px-4 py-8 shadow-inner overflow-hidden mb-24 sm:mb-32">
                           <div className="origin-top scale-[1.35] shadow-md sm:scale-150 bg-white">
                             <RetailLabel
@@ -2934,8 +2931,7 @@ export function ProductEditModal({
           </div>
         </div>
 
-        {/* Pasek akcji – zapis w prawym dolnym rogu na czarno */}
-        {/* Pasek akcji – zapis w prawym dolnym rogu na czarno */}
+        {/* Czysty przycisk zapisz po prawej */}
         <div className={footerClass}>
           <button type="submit" disabled={saving} className="rounded bg-slate-900 px-8 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 transition-colors disabled:opacity-50">
             {saving ? "Zapisywanie…" : "Zapisz"}
