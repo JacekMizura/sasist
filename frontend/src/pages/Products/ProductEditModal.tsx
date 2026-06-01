@@ -1514,23 +1514,21 @@ export function ProductEditModal({
       activeTab === id ? "border-slate-700 bg-slate-50 text-slate-900 ring-1 ring-slate-200/80 shadow-sm" : "border-transparent bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900"
     }`;
 
-  // Usunięto 'settings' i 'warehouseOps' z zakładek bocznych
+  // Usunięto 'suppliers', 'warehouseOps' i 'settings' jako osobne zakładki
   const railTabOrder = useMemo((): TabId[] => {
-    const order: TabId[] = ["basic", "suppliers", "labelSheet", "images", "prices", "warehouse"];
-    order.push("logistics", "offers");
-    return order;
-  }, [isNew, product?.id]);
+    return ["basic", "labelSheet", "images", "prices", "warehouse", "logistics", "offers"];
+  }, []);
 
   const railLabel: Record<TabId, string> = {
     basic: "Podstawowe",
     suppliers: "Dostawcy",
-    labelSheet: "Etykieta / dane produktu",
+    labelSheet: "Etykieta",
     images: "Zdjęcia",
     prices: "Ceny",
     warehouse: "Magazyn",
     warehouseOps: "Operacje magazynowe",
     logistics: "Logistyka",
-    offers: "Oferty / warianty",
+    offers: "Oferty",
     settings: "Ustawienia",
   };
 
@@ -1550,11 +1548,10 @@ export function ProductEditModal({
   const tenantDisplay =
     tenantId != null ? (tenants.find((t) => t.id === tenantId)?.name ?? "").trim() || `#${tenantId}` : "—";
 
-  const fieldLabel = "mb-1 block text-sm font-medium text-slate-700";
+  const fieldLabel = "mb-1.5 block text-sm font-medium text-slate-700";
   const inputClass =
-    "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm leading-tight text-slate-900 shadow-sm transition-colors focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500";
+    "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm leading-tight text-slate-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
-  // Wyrównanie do lewej (brak mx-auto) i zachowanie pełnej szerokości kontenera
   const tabPanelPaddingClass = "py-8 px-4 sm:px-6 lg:px-8 w-full";
 
   const formNumberReset =
@@ -1581,8 +1578,7 @@ export function ProductEditModal({
         />
         <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8">
           <div className="flex min-w-0 flex-1 gap-5">
-            {/* Czyste zdjęcie bez obramowania */}
-            <div className="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded">
+            <div className="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden bg-white">
               {sidebarPreviewUrl.trim() ? (
                 <img src={sidebarPreviewUrl.trim()} alt="" className="max-h-full max-w-full object-contain" />
               ) : (
@@ -1608,38 +1604,38 @@ export function ProductEditModal({
               </div>
               
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5 font-medium">Podmiot:</span>
+                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5">Podmiot:</span>
                   <span className="font-semibold text-slate-800" title={tenantDisplay !== "—" ? tenantDisplay : undefined}>
                     {tenantDisplay}
                   </span>
                 </div>
                 {!isNew && product?.id != null && (
-                  <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
-                    <span className="text-slate-500 mr-1.5 font-medium">ID:</span>
+                  <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                    <span className="text-slate-500 mr-1.5">ID:</span>
                     <span className="font-semibold text-slate-800">{product.id}</span>
                   </div>
                 )}
-                <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5 font-medium">SKU:</span>
+                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5">SKU:</span>
                   <span className="font-semibold text-slate-800">{(symbol ?? "").trim() || "—"}</span>
                 </div>
-                <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5 font-medium">EAN:</span>
+                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5">EAN:</span>
                   <span className="font-semibold text-slate-800 tabular-nums">{(ean ?? "").trim() || "—"}</span>
                 </div>
-                <div className="flex items-center rounded-md border border-blue-200 bg-blue-50 px-2 py-1">
-                  <span className="text-blue-600 mr-1.5 font-medium">Stan:</span>
+                <div className="flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-1">
+                  <span className="text-blue-600 mr-1.5">Stan:</span>
                   <span className="font-bold text-blue-900 tabular-nums">{physicalStockDisplay ?? "—"}</span>
                 </div>
-                <div className="flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1">
-                  <span className="text-emerald-600 mr-1.5 font-medium">Cena:</span>
+                <div className="flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-1">
+                  <span className="text-emerald-600 mr-1.5">Cena:</span>
                   <span className="font-bold text-emerald-900 tabular-nums">
                     {formatMoneyZl(salePrice === "" ? null : typeof salePrice === "number" ? salePrice : parseDecimal(String(salePrice)) ?? null)}
                   </span>
                 </div>
-                <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5 font-medium">Marża:</span>
+                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5">Marża:</span>
                   <span className={`font-bold tabular-nums ${marginToneClass(currentCost?.margin_percent)}`}>
                     {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(1)}%`}
                   </span>
@@ -1686,14 +1682,6 @@ export function ProductEditModal({
             >
               <ImageUp className="h-4 w-4" strokeWidth={2} aria-hidden />
             </button>
-            <button
-              type="button"
-              title="Etykieta i dane produktu"
-              onClick={() => setActiveTab("labelSheet")}
-              className="flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900"
-            >
-              <Wrench className="h-4 w-4" strokeWidth={2} aria-hidden />
-            </button>
             <details className="relative">
               <summary className="list-none cursor-pointer flex items-center justify-center rounded border border-slate-300 bg-white p-2 text-slate-600 shadow-sm transition-colors marker:content-none hover:bg-slate-50 hover:text-slate-900 [&::-webkit-details-marker]:hidden">
                 <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
@@ -1707,16 +1695,12 @@ export function ProductEditModal({
           </div>
         </div>
 
-        {/* Usunięto 'Ustawienia' i 'Operacje' ze standardowych zakładek */}
-        <div className="flex gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 [-webkit-overflow-scrolling:touch]">
-          <button type="button" role="tab" aria-selected={activeTab === "basic"} className={tabClass("basic")} onClick={() => setActiveTab("basic")}>Podstawowe</button>
-          <button type="button" role="tab" aria-selected={activeTab === "suppliers"} className={tabClass("suppliers")} onClick={() => setActiveTab("suppliers")}>Dostawcy</button>
-          <button type="button" role="tab" aria-selected={activeTab === "labelSheet"} className={tabClass("labelSheet")} onClick={() => setActiveTab("labelSheet")}>Etykieta</button>
-          <button type="button" role="tab" aria-selected={activeTab === "images"} className={tabClass("images")} onClick={() => setActiveTab("images")}>Zdjęcia</button>
-          <button type="button" role="tab" aria-selected={activeTab === "prices"} className={tabClass("prices")} onClick={() => setActiveTab("prices")}>Ceny</button>
-          <button type="button" role="tab" aria-selected={activeTab === "warehouse"} className={tabClass("warehouse")} onClick={() => setActiveTab("warehouse")}>Magazyn</button>
-          <button type="button" role="tab" aria-selected={activeTab === "logistics"} className={tabClass("logistics")} onClick={() => setActiveTab("logistics")}>Logistyka</button>
-          <button type="button" role="tab" aria-selected={activeTab === "offers"} className={tabClass("offers")} onClick={() => setActiveTab("offers")}>Oferty</button>
+        <div className="flex gap-2 overflow-x-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 [-webkit-overflow-scrolling:touch]">
+          {railTabOrder.map((tabId) => (
+            <button key={tabId} type="button" role="tab" aria-selected={activeTab === tabId} className={tabClass(tabId)} onClick={() => setActiveTab(tabId)}>
+              {railLabel[tabId]}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1728,10 +1712,10 @@ export function ProductEditModal({
                 
                 {activeTab === "basic" && (
                   <div className="flex flex-col xl:flex-row items-start gap-10 lg:gap-16">
-                    {/* Lewa kolumna: Formularze ograniczone do sensownej szerokości max-w-3xl */}
-                    <div className="w-full xl:max-w-3xl space-y-12 shrink-0">
+                    {/* Lewa kolumna: Formularze ograniczone do szerokości max-w-2xl */}
+                    <div className="w-full xl:max-w-2xl space-y-12 shrink-0">
                       <section>
-                        <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Informacje ogólne</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900">Informacje ogólne</h3>
                         <div className="space-y-5">
                           <div>
                             <label className={fieldLabel}>Podmiot</label>
@@ -1760,177 +1744,400 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Producent i GPSR</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900">Producent i GPSR</h3>
                         <div className="space-y-5">
-                          <div>
-                            <label className={fieldLabel}>Producent z katalogu</label>
-                            <select
-                              value={manufacturerId != null ? String(manufacturerId) : ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (!v) { setManufacturerId(null); return; }
-                                const id = Number(v);
-                                const row = manufacturersCatalog.find((x) => x.id === id);
-                                setManufacturerId(Number.isFinite(id) ? id : null);
-                                if (row) setManufacturer(row.name);
-                              }}
-                              className={inputClass}
-                            >
-                              <option value="">— Wybierz z katalogu lub wpisz poniżej —</option>
-                              {manufacturersCatalog.map((m) => (
-                                <option key={m.id} value={m.id}>{m.name} {!m.active ? "(nieaktywny)" : ""}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Nazwa producenta (ręczna)</label>
-                            <input
-                              type="text"
-                              value={manufacturer}
-                              onChange={(e) => {
-                                const t = e.target.value;
-                                setManufacturer(t);
-                                if (manufacturerId != null) {
-                                  const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
-                                  if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
-                                }
-                              }}
-                              className={inputClass}
-                              placeholder="Wpisz ręcznie, jeśli brak w katalogu"
-                            />
-                          </div>
-                          
-                          <div className="pt-2">
-                            <label className={fieldLabel}>Osoba odpowiedzialna (GPSR)</label>
-                            <input
-                              type="text"
-                              value={responsiblePerson}
-                              onChange={(e) => setResponsiblePerson(e.target.value)}
-                              className={inputClass}
-                              placeholder="Puste = dziedziczenie z producenta"
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>E-mail osoby odpowiedzialnej (GPSR)</label>
-                            <input
-                              type="email"
-                              value={responsiblePersonEmail}
-                              onChange={(e) => setResponsiblePersonEmail(e.target.value)}
-                              className={inputClass}
-                              placeholder="Opcjonalnie; puste = z producenta"
-                            />
-                          </div>
-                        </div>
-                      </section>
-
-                      {/* Ustawienia (Walidacja) zintegrowane w Podstawowych */}
-                      <section id="wms-validation">
-                        <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Walidacja</h3>
-                        <ProductReceivingRequirementsSection
-                          requireDimensions={requireRecvDimensions}
-                          requireWeight={requireRecvWeight}
-                          requireBatch={trackBatch}
-                          requireExpiry={trackExpiry}
-                          requireSerial={trackSerial}
-                          requireMasterCarton={requireRecvMasterCarton}
-                          requireMasterCartonEan={requireRecvMasterCartonEan}
-                          requireMasterCartonQty={requireRecvMasterCartonQty}
-                          requireMasterCartonDims={requireRecvMasterCartonDims}
-                          requireMasterCartonWeight={requireRecvMasterCartonWeight}
-                          disabled={saving}
-                          onChange={applyRequireRecvPatch}
-                        />
-                      </section>
-                    </div>
-
-                    {/* Prawa kolumna: Historia magazynowa */}
-                    {!isNew && product?.id != null && (
-                      <aside className="w-full xl:max-w-xl flex-1 space-y-8">
-                        <section>
-                          <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Historia magazynowa</h3>
-                          <div className="rounded border border-slate-200 bg-white shadow-sm overflow-hidden">
-                            <div className="overflow-x-auto">
-                              {/* min-w żeby tabela historii się nie zgniotła na wąskim ekranie */}
-                              <div className="min-w-[700px]">
-                                <ProductWarehouseMovementsPanel productId={product.id} tenantId={tenantId} />
-                              </div>
-                            </div>
-                          </div>
-                        </section>
-                      </aside>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === "suppliers" && (
-                  <div className="w-full xl:max-w-4xl space-y-10">
-                    <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Przypisani dostawcy</h3>
-                      {cheapestSupplierInsight ? (
-                        <div className="mb-6 rounded border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                          <span className="font-semibold">Najtańszy dostawca:</span> {(cheapestSupplierInsight.supplier_name || "").trim() || `#${cheapestSupplierInsight.supplier_id}`} — {formatMoneyZl(cheapestSupplierInsight.purchase_price)} netto
-                        </div>
-                      ) : null}
-
-                      {isNew ? (
-                        <p className="text-sm text-slate-600">Najpierw zapisz produkt, aby móc powiązać go z dostawcami.</p>
-                      ) : (
-                        <div className="space-y-6">
-                          <div className="overflow-hidden rounded border border-slate-200">
-                            <table className="w-full text-sm">
-                              <thead className="bg-slate-50 border-b border-slate-200 text-left">
-                                <tr>
-                                  <th className="px-4 py-3 font-semibold text-slate-700">Dostawca</th>
-                                  <th className="px-4 py-3 text-right font-semibold text-slate-700 w-40">Cena zakupu netto</th>
-                                  <th className="px-4 py-3 text-center font-semibold text-slate-700 w-32">Domyślny</th>
-                                  <th className="px-4 py-3 w-20"></th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {supplierLinksBusy && supplierLinkRows.length === 0 ? (
-                                  <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-500">Wczytywanie…</td></tr>
-                                ) : supplierLinkRows.length === 0 ? (
-                                  <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-500">Brak przypisanych dostawców.</td></tr>
-                                ) : (
-                                  supplierLinkRows.map((row) => (
-                                    <ProductSupplierLinkRowEditor
-                                      key={row.id} row={row} busy={supplierLinksBusy} inputTableMini={inputTableMini}
-                                      isDefault={defaultSupplierId === row.supplier_id}
-                                      onSelectDefault={() => setDefaultSupplierId(row.supplier_id)}
-                                      onPatchPrice={(raw) => void onPatchSupplierLinkPrice(row.id, raw)}
-                                      onRemove={() => void onRemoveSupplierLink(row.id, row.supplier_id)}
-                                    />
-                                  ))
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          <div className="flex flex-wrap items-end gap-3 rounded bg-slate-50 p-4 border border-slate-200">
-                            <div className="flex-1 min-w-[250px]">
-                              <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj nowego dostawcę</label>
-                              <select className={inputClass} value={addSupplierPick} onChange={(e) => setAddSupplierPick(e.target.value)} disabled={supplierLinksBusy}>
-                                <option value="">— Wybierz z listy —</option>
-                                {suppliersCatalog.filter((s) => !supplierLinkRows.some((r) => r.supplier_id === s.id)).map((s) => (
-                                  <option key={s.id} value={s.id}>{s.name}</option>
+                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <div>
+                              <label className={fieldLabel}>Producent z katalogu</label>
+                              <select
+                                value={manufacturerId != null ? String(manufacturerId) : ""}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (!v) { setManufacturerId(null); return; }
+                                  const id = Number(v);
+                                  const row = manufacturersCatalog.find((x) => x.id === id);
+                                  setManufacturerId(Number.isFinite(id) ? id : null);
+                                  if (row) setManufacturer(row.name);
+                                }}
+                                className={inputClass}
+                              >
+                                <option value="">— Wybierz —</option>
+                                {manufacturersCatalog.map((m) => (
+                                  <option key={m.id} value={m.id}>{m.name} {!m.active ? "(nieaktywny)" : ""}</option>
                                 ))}
                               </select>
                             </div>
-                            <button type="button" disabled={supplierLinksBusy || !addSupplierPick} onClick={() => void onAddSupplierLink()} className="rounded bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                              Dodaj powiązanie
-                            </button>
+                            <div>
+                              <label className={fieldLabel}>Nazwa producenta (ręczna)</label>
+                              <input
+                                type="text"
+                                value={manufacturer}
+                                onChange={(e) => {
+                                  const t = e.target.value;
+                                  setManufacturer(t);
+                                  if (manufacturerId != null) {
+                                    const row = manufacturersCatalog.find((x) => x.id === manufacturerId);
+                                    if (row && t.trim() !== (row.name || "").trim()) setManufacturerId(null);
+                                  }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <div>
+                              <label className={fieldLabel}>Osoba odpowiedzialna (GPSR)</label>
+                              <input
+                                type="text"
+                                value={responsiblePerson}
+                                onChange={(e) => setResponsiblePerson(e.target.value)}
+                                className={inputClass}
+                                placeholder="Puste = dziedziczenie z producenta"
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>E-mail osoby odpowiedzialnej (GPSR)</label>
+                              <input
+                                type="email"
+                                value={responsiblePersonEmail}
+                                onChange={(e) => setResponsiblePersonEmail(e.target.value)}
+                                className={inputClass}
+                                placeholder="Opcjonalnie; puste = z producenta"
+                              />
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </section>
+                      </section>
+
+                      <section id="wms-validation">
+                        <h3 className="mb-5 text-lg font-bold text-slate-900">Walidacja</h3>
+                        <div className="rounded-xl border border-[#e5e7eb] bg-slate-50/50 p-6">
+                          <ProductReceivingRequirementsSection
+                            requireDimensions={requireRecvDimensions}
+                            requireWeight={requireRecvWeight}
+                            requireBatch={trackBatch}
+                            requireExpiry={trackExpiry}
+                            requireSerial={trackSerial}
+                            requireMasterCarton={requireRecvMasterCarton}
+                            requireMasterCartonEan={requireRecvMasterCartonEan}
+                            requireMasterCartonQty={requireRecvMasterCartonQty}
+                            requireMasterCartonDims={requireRecvMasterCartonDims}
+                            requireMasterCartonWeight={requireRecvMasterCartonWeight}
+                            disabled={saving}
+                            onChange={applyRequireRecvPatch}
+                          />
+                        </div>
+                      </section>
+                    </div>
+
+                    {/* Prawa kolumna: Historia magazynowa (Mock w stylu Sellasist) */}
+                    <aside className="w-full xl:max-w-[700px] flex-1">
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900">Historia magazynowa</h3>
+                        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-2 bg-slate-50/50">
+                            <button type="button" className="rounded-md bg-blue-600 px-4 py-1.5 text-[13px] font-medium text-white shadow-sm hover:bg-blue-700">
+                              Operacje magazynowe
+                            </button>
+                            <button type="button" className="rounded-md px-4 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-200/50 hover:text-slate-900">
+                              Historia dostaw
+                            </button>
+                            <div className="ml-auto flex items-center text-xs text-slate-500 px-2">
+                              Pokaż na stronie 
+                              <select className="ml-2 rounded border border-slate-300 bg-white py-1 text-slate-700 outline-none">
+                                <option>25</option>
+                                <option>50</option>
+                              </select>
+                            </div>
+                          </div>
+                          
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[600px] text-sm text-left">
+                              <thead className="border-b border-slate-200 text-xs font-semibold text-slate-700 bg-white">
+                                <tr>
+                                  <th className="px-5 py-3.5 w-40">Data</th>
+                                  <th className="px-5 py-3.5">Akcja</th>
+                                  <th className="px-5 py-3.5">Dokument</th>
+                                  <th className="px-5 py-3.5">Użytkownik</th>
+                                  <th className="px-5 py-3.5">Lokalizacja</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600">
+                                <tr>
+                                  <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 19:12:35</td>
+                                  <td className="px-5 py-4"><span className="rounded bg-slate-100 px-2.5 py-1 font-medium text-slate-700">Kompletacja</span></td>
+                                  <td className="px-5 py-4 text-slate-900">ORDER-1216</td>
+                                  <td className="px-5 py-4">Super Admin</td>
+                                  <td className="px-5 py-4">A10-A-1</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 19:12:35</td>
+                                  <td className="px-5 py-4"><span className="rounded bg-slate-100 px-2.5 py-1 font-medium text-slate-700">Kompletacja</span></td>
+                                  <td className="px-5 py-4 text-slate-900">ORDER-1175</td>
+                                  <td className="px-5 py-4">Super Admin</td>
+                                  <td className="px-5 py-4">A10-A-1</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:57:30</td>
+                                  <td className="px-5 py-4"><span className="rounded bg-indigo-50 text-indigo-700 px-2.5 py-1 font-medium">Rozlokowanie</span></td>
+                                  <td className="px-5 py-4 text-slate-900">PZ-3</td>
+                                  <td className="px-5 py-4">Super Admin</td>
+                                  <td className="px-5 py-4">A10-A-1</td>
+                                </tr>
+                                <tr>
+                                  <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:51:15</td>
+                                  <td className="px-5 py-4"><span className="rounded bg-emerald-50 text-emerald-700 px-2.5 py-1 font-medium">Przyjęcie</span></td>
+                                  <td className="px-5 py-4 text-slate-900">PZ-3</td>
+                                  <td className="px-5 py-4">Super Admin</td>
+                                  <td className="px-5 py-4">A1-A-1</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="border-t border-slate-100 p-3 px-5 text-xs text-slate-500 bg-white">
+                            1-4 z 4
+                          </div>
+                        </div>
+                      </section>
+                    </aside>
+                  </div>
+                )}
+
+                {activeTab === "prices" && (
+                  <div className="flex flex-col xl:flex-row items-start gap-10 lg:gap-16">
+                    <div className="w-full xl:max-w-2xl space-y-12 shrink-0">
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900">Kalkulacja cenowa</h3>
+                        <div className="space-y-5">
+                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <div>
+                              <label className={fieldLabel}>Docelowa cena sprzedaży</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={salePrice === "" ? "" : salePrice}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setSalePrice("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setSalePrice(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Ręczna cena zakupu netto</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={purchasePrice === "" ? "" : purchasePrice}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setPurchasePrice("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setPurchasePrice(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Koszty pakowania (netto)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={extraCostPackagingNet === "" ? "" : extraCostPackagingNet}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setExtraCostPackagingNet("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setExtraCostPackagingNet(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Prowizja marketplace (%)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={extraCostCommissionPercent === "" ? "" : extraCostCommissionPercent}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setExtraCostCommissionPercent("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setExtraCostCommissionPercent(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Inne koszty operacyjne (netto)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={extraCostOtherNet === "" ? "" : extraCostOtherNet}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setExtraCostOtherNet("");
+                                  else { const n = parseFloat(s); if (Number.isFinite(n)) setExtraCostOtherNet(n); }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Stawka VAT (%)</label>
+                              <input type="text" value={vatRate} onChange={(e) => setVatRate(e.target.value)} placeholder="np. 23" className={inputClass} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Notatka promocyjna / cenowa</label>
+                            <textarea value={promotion} onChange={(e) => setPromotion(e.target.value)} rows={3} className={`${inputClass} resize-y`} placeholder="Krótki opis promocji, rabatów lub warunków…" />
+                          </div>
+                        </div>
+                      </section>
+
+                      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+                        <section>
+                          <h3 className="mb-4 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Ostatni zakup (dane z PZ)</h3>
+                          <div className="rounded border border-slate-200 bg-slate-50 p-5">
+                            <dl className="space-y-3 text-sm text-slate-700">
+                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                                <dt className="font-medium text-slate-500">Aktualna cena zakupu</dt>
+                                <dd className="tabular-nums font-semibold text-slate-900">{formatMoneyZl(purchasePrice === "" ? null : purchasePrice)}</dd>
+                              </div>
+                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                                <dt className="font-medium text-slate-500">Poprzednia cena zakupu</dt>
+                                <dd className="tabular-nums">{formatMoneyZl(previousPurchasePrice === "" ? null : previousPurchasePrice)}</dd>
+                              </div>
+                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                                <dt className="font-medium text-slate-500">Data ostatniego zakupu</dt>
+                                <dd>{formatDateTimePl(lastPurchaseDate)}</dd>
+                              </div>
+                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                                <dt className="font-medium text-slate-500">Ostatni dostawca</dt>
+                                <dd className="text-right">{(lastSupplierName || "").trim() || "—"}</dd>
+                              </div>
+                              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                                <dt className="font-medium text-slate-500">Waluta ostatniego zakupu</dt>
+                                <dd className="tabular-nums">{(lastPurchaseCurrency || "").trim() || "—"}</dd>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <dt className="font-medium text-slate-500">Cena oryginalna (waluta)</dt>
+                                <dd className="tabular-nums font-medium text-slate-900">
+                                  {purchasePriceOriginal === "" || purchasePriceOriginal == null ? "—" : `${Number(purchasePriceOriginal).toFixed(4)} ${(purchaseCurrency || "").trim() || ""}`.trim()}
+                                </dd>
+                              </div>
+                            </dl>
+                          </div>
+                        </section>
+
+                        <section>
+                          <h3 className="mb-4 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Podsumowanie kosztów</h3>
+                          <div className="rounded border border-slate-200 bg-white shadow-sm p-5">
+                            <dl className="space-y-3 text-sm text-slate-700">
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <dt className="text-slate-500">Cena zakupu netto</dt>
+                                <dd className="tabular-nums">{formatMoneyZl(currentCost?.purchase_net ?? null)}</dd>
+                              </div>
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <dt className="text-slate-500">Pakowanie</dt>
+                                <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostPackagingNet === "" ? 0 : Number(extraCostPackagingNet))}</dd>
+                              </div>
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <dt className="text-slate-500">Prowizja</dt>
+                                <dd className="tabular-nums text-rose-600">+{(extraCostCommissionPercent === "" ? 0 : Number(extraCostCommissionPercent)).toFixed(2)}%</dd>
+                              </div>
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <dt className="text-slate-500">Inne koszty</dt>
+                                <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostOtherNet === "" ? 0 : Number(extraCostOtherNet))}</dd>
+                              </div>
+                              <div className="flex items-center justify-between border-b border-slate-200 pb-3 mt-1">
+                                <dt className="font-semibold text-slate-900">Łączny koszt netto (Landed)</dt>
+                                <dd className="tabular-nums font-bold text-slate-900">{formatMoneyZl(currentCost?.landed_cost_net ?? null)}</dd>
+                              </div>
+                              <div className="flex items-center justify-between pt-1 border-b border-slate-100 pb-2">
+                                <dt className="text-slate-500">Cena sprzedaży netto</dt>
+                                <dd className="tabular-nums">{formatMoneyZl(currentCost?.sale_net ?? null)}</dd>
+                              </div>
+                              <div className="flex items-center justify-between pt-1">
+                                <dt className="font-medium text-slate-900">Zysk (Marża PLN)</dt>
+                                <dd className={`tabular-nums ${marginToneClass(currentCost?.margin_percent)}`}>
+                                  {formatMoneyZl(currentCost?.margin_value ?? null)}
+                                </dd>
+                              </div>
+                              <div className="flex items-center justify-between pt-1">
+                                <dt className="font-medium text-slate-900">Rentowność (Marża %)</dt>
+                                <dd className={`tabular-nums text-lg ${marginToneClass(currentCost?.margin_percent)}`}>
+                                  {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(2)}%`}
+                                </dd>
+                              </div>
+                            </dl>
+                          </div>
+                        </section>
+                      </div>
+                    </div>
+
+                    <aside className="w-full xl:max-w-2xl flex-1 space-y-8">
+                      <section>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Dostawcy i ceny zakupu</h3>
+                        {cheapestSupplierInsight ? (
+                          <div className="mb-5 rounded border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                            <span className="font-semibold">Najtańszy dostawca:</span> {(cheapestSupplierInsight.supplier_name || "").trim() || `#${cheapestSupplierInsight.supplier_id}`} — {formatMoneyZl(cheapestSupplierInsight.purchase_price)} netto
+                          </div>
+                        ) : null}
+
+                        {isNew ? (
+                          <p className="text-sm text-slate-600">Najpierw zapisz produkt, aby móc powiązać go z dostawcami.</p>
+                        ) : (
+                          <div className="space-y-6">
+                            <div className="overflow-hidden rounded border border-slate-200">
+                              <table className="w-full text-sm">
+                                <thead className="bg-slate-50 border-b border-slate-200 text-left">
+                                  <tr>
+                                    <th className="px-4 py-3 font-semibold text-slate-700">Dostawca</th>
+                                    <th className="px-4 py-3 text-right font-semibold text-slate-700 w-36">Cena netto</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-slate-700 w-24">Domyślny</th>
+                                    <th className="px-4 py-3 w-16"></th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {supplierLinksBusy && supplierLinkRows.length === 0 ? (
+                                    <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-500">Wczytywanie…</td></tr>
+                                  ) : supplierLinkRows.length === 0 ? (
+                                    <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-500">Brak przypisanych dostawców.</td></tr>
+                                  ) : (
+                                    supplierLinkRows.map((row) => (
+                                      <ProductSupplierLinkRowEditor
+                                        key={row.id} row={row} busy={supplierLinksBusy} inputTableMini={inputTableMini}
+                                        isDefault={defaultSupplierId === row.supplier_id}
+                                        onSelectDefault={() => setDefaultSupplierId(row.supplier_id)}
+                                        onPatchPrice={(raw) => void onPatchSupplierLinkPrice(row.id, raw)}
+                                        onRemove={() => void onRemoveSupplierLink(row.id, row.supplier_id)}
+                                      />
+                                    ))
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            <div className="flex flex-wrap items-end gap-3 rounded bg-slate-50 p-4 border border-slate-200">
+                              <div className="flex-1 min-w-[200px]">
+                                <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj nowego dostawcę</label>
+                                <select className={inputClass} value={addSupplierPick} onChange={(e) => setAddSupplierPick(e.target.value)} disabled={supplierLinksBusy}>
+                                  <option value="">— Wybierz z listy —</option>
+                                  {suppliersCatalog.filter((s) => !supplierLinkRows.some((r) => r.supplier_id === s.id)).map((s) => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button type="button" disabled={supplierLinksBusy || !addSupplierPick} onClick={() => void onAddSupplierLink()} className="rounded bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                                Dodaj
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </section>
+                    </aside>
                   </div>
                 )}
 
                 {activeTab === "labelSheet" && (
                   <div className="w-full xl:max-w-5xl space-y-10 lg:grid lg:grid-cols-[1fr_min(340px,35%)] lg:items-start lg:gap-10 lg:space-y-0">
-                    <div className="space-y-10">
+                    <div className="space-y-12">
                       <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Wybór szablonu</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wybór szablonu</h3>
                         <div className="space-y-5">
                           <div>
                             <label className={fieldLabel}>Szablon etykiety</label>
@@ -1964,7 +2171,7 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">A. Podstawowe</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">A. Podstawowe</h3>
                         <div>
                           <label className={fieldLabel}>Nazwa produktu na etykiecie (PL)</label>
                           <input
@@ -1978,7 +2185,7 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">B. Producent / Importer</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">B. Producent / Importer</h3>
                         <div className="space-y-5">
                           <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
                             <p className="font-semibold text-slate-900">{manufacturerReadonly.name || "—"}</p>
@@ -2008,7 +2215,7 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">C. Identyfikacja</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">C. Identyfikacja</h3>
                         <div className="space-y-5">
                           <div>
                             <label className={fieldLabel}>EAN</label>
@@ -2038,9 +2245,9 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">D. Regulacje i Cechy</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">D. Regulacje i Cechy</h3>
                         <div className="space-y-5">
-                          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                          <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
                             <input
                               type="checkbox"
                               className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
@@ -2049,7 +2256,7 @@ export function ProductEditModal({
                             />
                             Wymaga znaku CE na etykiecie
                           </label>
-                          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                          <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
                             <input
                               type="checkbox"
                               className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
@@ -2062,7 +2269,7 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">E. Branżowe (tekstylia)</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">E. Branżowe (tekstylia)</h3>
                         <div className="space-y-5">
                           <div>
                             <label className={fieldLabel}>Skład materiałowy</label>
@@ -2094,7 +2301,7 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">F. Pochodzenie</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">F. Pochodzenie</h3>
                         <div>
                           <label className={fieldLabel}>Kraj pochodzenia</label>
                           <select
@@ -2113,10 +2320,11 @@ export function ProductEditModal({
 
                     <aside className="min-h-0 lg:sticky lg:top-8 mt-10 lg:mt-0">
                       <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Podgląd gotowej etykiety</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Podgląd gotowej etykiety</h3>
                         <p className="mb-4 text-xs text-slate-500">Symulacja wydruku (~60×40 mm). Puste sekcje są automatycznie ukrywane.</p>
-                        <div className="flex justify-center overflow-auto rounded bg-slate-50 border border-slate-200 p-8 shadow-inner">
-                          <div className="origin-top scale-[1.35] shadow-md sm:scale-150 bg-white">
+                        <div className="flex justify-center rounded bg-slate-50 border border-slate-200 p-8 shadow-inner overflow-hidden">
+                          {/* Dodano odpowiedni margines (pb-16 sm:pb-24), aby powiększony podgląd CSS nie był ucinany przez kontener */}
+                          <div className="origin-top scale-[1.35] shadow-md sm:scale-150 bg-white mb-16 sm:mb-24">
                             <RetailLabel
                               brandName={manufacturerReadonly.name || manufacturer.trim() || "—"}
                               productNamePl={(labelData.product_name_pl ?? "").trim() || name.trim() || "—"}
@@ -2143,9 +2351,9 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "images" && (
-                  <div className="w-full xl:max-w-4xl space-y-10">
+                  <div className="w-full xl:max-w-4xl space-y-12">
                     <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Galeria produktu</h3>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Galeria produktu</h3>
                       <div className="space-y-6">
                         <div className="flex flex-wrap items-end gap-3 rounded bg-slate-50 p-4 border border-slate-200">
                           <div className="min-w-[200px] flex-1">
@@ -2162,7 +2370,7 @@ export function ProductEditModal({
                             type="button"
                             onClick={addGalleryFromUrl}
                             disabled={!newGalleryUrl.trim()}
-                            className="rounded bg-slate-800 px-5 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50 transition-colors"
+                            className="rounded bg-slate-500 px-5 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-50 transition-colors"
                           >
                             Dodaj URL
                           </button>
@@ -2183,12 +2391,13 @@ export function ProductEditModal({
                               .map((img) => (
                                 <li
                                   key={img.id}
-                                  className="flex flex-wrap items-center gap-4 rounded border border-slate-200 bg-white p-4 shadow-sm"
+                                  className="flex flex-wrap items-center gap-6 rounded border border-slate-200 bg-white p-4 shadow-sm"
                                 >
-                                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded bg-slate-50 border border-slate-100 p-1">
-                                    <img src={img.image_url} alt="" className="h-full w-full object-contain" />
+                                  {/* Brak szarej ramki, czyste tło w sekcji zdjęcia */}
+                                  <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden bg-white">
+                                    <img src={img.image_url} alt="" className="max-h-full max-w-full object-contain" />
                                   </div>
-                                  <div className="min-w-0 flex-1 space-y-3">
+                                  <div className="min-w-0 flex-1 space-y-4">
                                     <input
                                       type="url"
                                       className={inputClass}
@@ -2199,28 +2408,28 @@ export function ProductEditModal({
                                         )
                                       }
                                     />
-                                    <div className="flex flex-wrap items-center gap-4">
-                                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
+                                      <label className="flex cursor-pointer items-center gap-2 text-slate-700">
                                         <input
                                           type="radio"
                                           name="product-main-image"
-                                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300"
+                                          className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
                                           checked={img.is_main}
                                           onChange={() => setGalleryMain(img.id)}
                                         />
                                         Główne zdjęcie
                                       </label>
-                                      <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
+                                      <div className="hidden h-4 w-px bg-slate-200 sm:block"></div>
                                       <div className="flex items-center gap-3">
-                                        <button type="button" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors" onClick={() => moveGalleryImage(img.id, -1)}>
+                                        <button type="button" className="text-slate-600 transition-colors hover:text-blue-600" onClick={() => moveGalleryImage(img.id, -1)}>
                                           W górę
                                         </button>
-                                        <button type="button" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors" onClick={() => moveGalleryImage(img.id, 1)}>
+                                        <button type="button" className="text-slate-600 transition-colors hover:text-blue-600" onClick={() => moveGalleryImage(img.id, 1)}>
                                           W dół
                                         </button>
                                       </div>
-                                      <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
-                                      <button type="button" className="text-sm font-medium text-rose-600 hover:text-rose-800 transition-colors" onClick={() => removeGalleryImage(img.id)}>
+                                      <div className="hidden h-4 w-px bg-slate-200 sm:block"></div>
+                                      <button type="button" className="text-rose-600 transition-colors hover:text-rose-800" onClick={() => removeGalleryImage(img.id)}>
                                         Usuń zdjęcie
                                       </button>
                                     </div>
@@ -2234,204 +2443,10 @@ export function ProductEditModal({
                   </div>
                 )}
 
-                {activeTab === "prices" && (
-                  <div className="w-full xl:max-w-5xl space-y-10">
-                    <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Kalkulacja cenowa</h3>
-                      <div className="space-y-5">
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                          <div>
-                            <label className={fieldLabel}>Docelowa cena sprzedaży (brutto/netto zal. od reguł)</label>
-                            <input
-                              type="number" min={0} step={0.01}
-                              value={salePrice === "" ? "" : salePrice}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setSalePrice("");
-                                else {
-                                  const n = parseFloat(s);
-                                  if (Number.isFinite(n)) setSalePrice(n);
-                                }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Ręczna cena zakupu netto</label>
-                            <input
-                              type="number" min={0} step={0.01}
-                              value={purchasePrice === "" ? "" : purchasePrice}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setPurchasePrice("");
-                                else {
-                                  const n = parseFloat(s);
-                                  if (Number.isFinite(n)) setPurchasePrice(n);
-                                }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Koszty pakowania (netto)</label>
-                            <input
-                              type="number" min={0} step={0.01}
-                              value={extraCostPackagingNet === "" ? "" : extraCostPackagingNet}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setExtraCostPackagingNet("");
-                                else {
-                                  const n = parseFloat(s);
-                                  if (Number.isFinite(n)) setExtraCostPackagingNet(n);
-                                }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Prowizja marketplace (%)</label>
-                            <input
-                              type="number" min={0} step={0.01}
-                              value={extraCostCommissionPercent === "" ? "" : extraCostCommissionPercent}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setExtraCostCommissionPercent("");
-                                else {
-                                  const n = parseFloat(s);
-                                  if (Number.isFinite(n)) setExtraCostCommissionPercent(n);
-                                }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Inne koszty operacyjne (netto)</label>
-                            <input
-                              type="number" min={0} step={0.01}
-                              value={extraCostOtherNet === "" ? "" : extraCostOtherNet}
-                              onChange={(e) => {
-                                const s = String(e.target.value).trim().replace(",", ".");
-                                if (s === "") setExtraCostOtherNet("");
-                                else {
-                                  const n = parseFloat(s);
-                                  if (Number.isFinite(n)) setExtraCostOtherNet(n);
-                                }
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className={fieldLabel}>Stawka VAT (%)</label>
-                            <input
-                              type="text"
-                              value={vatRate}
-                              onChange={(e) => setVatRate(e.target.value)}
-                              placeholder="np. 23"
-                              className={inputClass}
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className={fieldLabel}>Notatka promocyjna / cenowa</label>
-                          <textarea
-                            value={promotion}
-                            onChange={(e) => setPromotion(e.target.value)}
-                            rows={3}
-                            className={`${inputClass} resize-y`}
-                            placeholder="Krótki opis promocji, rabatów lub warunków…"
-                          />
-                        </div>
-                      </div>
-                    </section>
-
-                    <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
-                      <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Ostatni zakup (dane z PZ)</h3>
-                        <div className="rounded border border-slate-200 bg-slate-50 p-5">
-                          <dl className="space-y-3 text-sm text-slate-700">
-                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                              <dt className="font-medium text-slate-500">Aktualna cena zakupu</dt>
-                              <dd className="tabular-nums font-semibold text-slate-900">{formatMoneyZl(purchasePrice === "" ? null : purchasePrice)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                              <dt className="font-medium text-slate-500">Poprzednia cena zakupu</dt>
-                              <dd className="tabular-nums">{formatMoneyZl(previousPurchasePrice === "" ? null : previousPurchasePrice)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                              <dt className="font-medium text-slate-500">Data ostatniego zakupu</dt>
-                              <dd>{formatDateTimePl(lastPurchaseDate)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                              <dt className="font-medium text-slate-500">Ostatni dostawca</dt>
-                              <dd className="text-right">{(lastSupplierName || "").trim() || "—"}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                              <dt className="font-medium text-slate-500">Waluta ostatniego zakupu</dt>
-                              <dd className="tabular-nums">{(lastPurchaseCurrency || "").trim() || "—"}</dd>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <dt className="font-medium text-slate-500">Cena oryginalna (waluta)</dt>
-                              <dd className="tabular-nums font-medium text-slate-900">
-                                {purchasePriceOriginal === "" || purchasePriceOriginal == null
-                                  ? "—"
-                                  : `${Number(purchasePriceOriginal).toFixed(4)} ${(purchaseCurrency || "").trim() || ""}`.trim()}
-                              </dd>
-                            </div>
-                          </dl>
-                        </div>
-                      </section>
-
-                      <section>
-                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Podsumowanie kosztów</h3>
-                        <div className="rounded border border-slate-200 bg-white shadow-sm p-5">
-                          <dl className="space-y-3 text-sm text-slate-700">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Cena zakupu netto</dt>
-                              <dd className="tabular-nums">{formatMoneyZl(currentCost?.purchase_net ?? null)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Pakowanie</dt>
-                              <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostPackagingNet === "" ? 0 : Number(extraCostPackagingNet))}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Prowizja</dt>
-                              <dd className="tabular-nums text-rose-600">+{(extraCostCommissionPercent === "" ? 0 : Number(extraCostCommissionPercent)).toFixed(2)}%</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Inne koszty</dt>
-                              <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostOtherNet === "" ? 0 : Number(extraCostOtherNet))}</dd>
-                            </div>
-                            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mt-1">
-                              <dt className="font-semibold text-slate-900">Łączny koszt netto (Landed Cost)</dt>
-                              <dd className="tabular-nums font-bold text-slate-900">{formatMoneyZl(currentCost?.landed_cost_net ?? null)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between pt-1 border-b border-slate-100 pb-2">
-                              <dt className="text-slate-500">Cena sprzedaży netto</dt>
-                              <dd className="tabular-nums">{formatMoneyZl(currentCost?.sale_net ?? null)}</dd>
-                            </div>
-                            <div className="flex items-center justify-between pt-1">
-                              <dt className="font-medium text-slate-900">Zysk (Marża PLN)</dt>
-                              <dd className={`tabular-nums ${marginToneClass(currentCost?.margin_percent)}`}>
-                                {formatMoneyZl(currentCost?.margin_value ?? null)}
-                              </dd>
-                            </div>
-                            <div className="flex items-center justify-between pt-1">
-                              <dt className="font-medium text-slate-900">Rentowność (Marża %)</dt>
-                              <dd className={`tabular-nums text-lg ${marginToneClass(currentCost?.margin_percent)}`}>
-                                {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(2)}%`}
-                              </dd>
-                            </div>
-                          </dl>
-                        </div>
-                      </section>
-                    </div>
-                  </div>
-                )}
-
                 {activeTab === "warehouse" && (
-                  <div className="w-full xl:max-w-4xl space-y-10">
+                  <div className="w-full xl:max-w-2xl space-y-12">
                     <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
                       <ProductWarehouseStockPanel
                         physicalStockDisplay={physicalStockDisplay}
                         inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
@@ -2442,7 +2457,7 @@ export function ProductEditModal({
                     </section>
 
                     <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Powiadomienia i alarmy</h3>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Powiadomienia i alarmy</h3>
                       <div className="rounded border border-amber-200 bg-amber-50 p-5 space-y-4">
                         <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-amber-900">
                           <input
@@ -2477,7 +2492,7 @@ export function ProductEditModal({
                     </section>
 
                     <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Poziomy uzupełniania w strefach</h3>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Poziomy uzupełniania w strefach</h3>
                       <div className="space-y-8">
                         <div>
                           <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Kompletacji (Pick-face)</h4>
@@ -2558,7 +2573,7 @@ export function ProductEditModal({
                     </section>
 
                     <section ref={planLocationsSectionRef} className="scroll-mt-8">
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Planowanie lokalizacji</h3>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Planowanie lokalizacji</h3>
                       {placementDirty ? (
                         <div role="status" className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                           <span className="font-semibold">Uwaga:</span> Zmiana przypisań nie wpływa na fizyczny stan w WMS, służy jedynie logice układania towaru.
@@ -2594,9 +2609,9 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "logistics" && (
-                  <div className="w-full xl:max-w-4xl space-y-12">
+                  <div className="w-full xl:max-w-2xl space-y-12">
                     <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
                       <div className="space-y-6">
                         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                           <div>
@@ -2650,7 +2665,7 @@ export function ProductEditModal({
                     </section>
 
                     <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Opakowanie zbiorcze (Karton)</h3>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Opakowanie zbiorcze (Karton)</h3>
                       <div className="rounded border border-indigo-100 bg-indigo-50/30 p-6 space-y-6">
                         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                           <div>
@@ -2725,9 +2740,9 @@ export function ProductEditModal({
                       />
                     </section>
 
-                    <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+                    <div className="space-y-12">
                       <section>
-                        <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Produkt (Sztuka)</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Produkt (Sztuka)</h3>
                         <div className="space-y-5 rounded border border-slate-200 p-5 bg-white shadow-sm">
                           <div>
                             <label className={fieldLabel}>Wymagana orientacja</label>
@@ -2801,7 +2816,7 @@ export function ProductEditModal({
                       </section>
 
                       <section>
-                        <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Karton</h3>
+                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Karton</h3>
                         <div className="space-y-5 rounded border border-indigo-100 p-5 bg-indigo-50/10 shadow-sm">
                           <div>
                             <label className={fieldLabel}>Wymagana orientacja kartonu</label>
@@ -2878,9 +2893,9 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "offers" && (
-                  <div className="w-full xl:max-w-4xl space-y-10">
+                  <div className="w-full xl:max-w-2xl space-y-10">
                     <section>
-                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Aktywne oferty i warianty</h3>
+                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Aktywne oferty i warianty</h3>
                       <div className="rounded border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
                         <p className="text-slate-500 font-medium">Moduł wariantowania w przygotowaniu.</p>
                         <p className="text-slate-400 text-sm mt-1">Tutaj pojawią się powiązane oferty z marketplace'ów i powiązania SKU.</p>
@@ -2888,6 +2903,7 @@ export function ProductEditModal({
                     </section>
                   </div>
                 )}
+
               </div>
             </div>
 
