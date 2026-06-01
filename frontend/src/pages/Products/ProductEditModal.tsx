@@ -1533,9 +1533,22 @@ export function ProductEditModal({
     settings: "Ustawienia",
   };
 
+  // Tego fragmentu zabrakło:
+  const railIcon: Record<TabId, LucideIcon> = {
+    basic: LayoutList,
+    suppliers: Building2,
+    labelSheet: Printer,
+    images: ImageIcon,
+    prices: Tag,
+    warehouse: Warehouse,
+    warehouseOps: ClipboardList,
+    logistics: Truck,
+    offers: Layers,
+    settings: Wrench,
+  };
+
   const tenantDisplay =
     tenantId != null ? (tenants.find((t) => t.id === tenantId)?.name ?? "").trim() || `#${tenantId}` : "—";
-
   const fieldLabel = "mb-1.5 block text-sm font-medium text-slate-700";
   const inputClass =
     "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm leading-tight text-slate-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
