@@ -1558,12 +1558,27 @@ export function ProductEditModal({
   const formNumberReset =
     "[&_input[type=number]]:appearance-[textfield] [&_input[type=number]]:[&::-webkit-inner-spin-button]:appearance-none [&_input[type=number]]:[&::-webkit-outer-spin-button]:appearance-none";
 
-  const formShellClass = `flex flex-col min-h-0 flex-1 overflow-hidden bg-white ${formNumberReset}`;
-  const bodyRowClass = "flex w-full flex-col min-h-0 flex-1 lg:flex-row lg:items-stretch overflow-hidden";
+  const formShellClass = isPage
+    ? `flex flex-col bg-white ${formNumberReset}`
+    : `flex flex-col min-h-0 flex-1 overflow-hidden bg-white ${formNumberReset}`;
+
+  const bodyRowClass = isPage
+    ? "flex w-full flex-col lg:flex-row lg:items-stretch"
+    : "flex w-full flex-col min-h-0 flex-1 lg:flex-row lg:items-stretch overflow-hidden";
+
   const bodyInnerClass = "contents";
-  const mainColClass = "flex min-w-0 flex-1 flex-col overflow-hidden";
-  const asideClass = "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain border-l border-slate-200 bg-white px-1 py-4 lg:sticky lg:top-0 lg:self-start lg:h-full";
-  const footerClass = "sticky bottom-0 z-20 flex shrink-0 items-center justify-end border-t border-slate-200 bg-white px-6 py-4";
+
+  const mainColClass = isPage
+    ? "flex min-w-0 flex-1 flex-col pb-8" // Dodatkowy margines, żeby pasek nie zasłaniał treści na samym końcu
+    : "flex min-w-0 flex-1 flex-col overflow-hidden";
+
+  const asideClass = isPage
+    ? "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-2 border-l border-slate-200 bg-white px-1 py-4 lg:sticky lg:top-[120px] lg:self-start lg:h-[calc(100vh-120px)] lg:overflow-y-auto"
+    : "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain border-l border-slate-200 bg-white px-1 py-4 lg:sticky lg:top-0 lg:self-start lg:h-full";
+
+  const footerClass = isPage
+    ? "sticky bottom-0 z-50 flex items-center justify-end border-t border-slate-200 bg-white px-6 py-4 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.08)]"
+    : "flex shrink-0 items-center justify-end border-t border-slate-200 bg-white px-6 py-4 mt-auto";
 
   const shell = (
     <>
@@ -1721,7 +1736,7 @@ export function ProductEditModal({
         <div className={bodyRowClass}>
           <div className={bodyInnerClass}>
             <div className={mainColClass}>
-              <div className={`overflow-y-auto ${tabPanelPaddingClass}`}>
+              <div className={isPage ? tabPanelPaddingClass : `overflow-y-auto ${tabPanelPaddingClass}`}>
                 
                 {activeTab === "basic" && (
                   <div className="flex flex-col 2xl:flex-row items-start gap-10 lg:gap-12">
