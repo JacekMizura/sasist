@@ -2584,7 +2584,7 @@ export function ProductEditModal({
                       </section>
                     </div>
 
-                    {/* Kolumna 3: Logistyka i dopasowanie */}
+                    {/* Kolumna 3: Logistyka i dopasowanie (Wywolanie istniejacego komponentu) */}
                     <div className="space-y-12">
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Dopasowanie opakowań (Wysyłka)</h3>
