@@ -1900,13 +1900,1006 @@ export function ProductEditModal({
                   </div>
                 )}
 
-                {/* Sekcje ukryte ze względu na limit długości (pozostałe zakładki budowane analogicznie na <section>) */}
-                {(activeTab === "labelSheet" || activeTab === "images" || activeTab === "prices" || activeTab === "warehouse" || activeTab === "warehouseOps" || activeTab === "logistics" || activeTab === "offers" || activeTab === "settings") && (
-                   <div className="max-w-4xl py-12 text-center text-slate-500">
-                      Zreorganizowano na płaski design. Zmień zakładkę na <b>Podstawowe</b> lub <b>Dostawcy</b>, aby zobaczyć pełny układ, pozostałe implementuje się poprzez podmienienie `Card` na płaskie `section`.
-                   </div>
+                {activeTab === "labelSheet" && (
+                  <div className="max-w-[1200px] space-y-10 lg:grid lg:grid-cols-[1fr_min(340px,38%)] lg:items-start lg:gap-10 lg:space-y-0">
+                    <div className="space-y-10">
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Wybór szablonu</h3>
+                        <div className="space-y-5">
+                          <div>
+                            <label className={fieldLabel}>Szablon etykiety</label>
+                            <select
+                              value={labelTemplateId ?? ""}
+                              onChange={(e) => setLabelTemplateId(e.target.value === "" ? null : Number(e.target.value))}
+                              className={inputClass}
+                            >
+                              <option value="">Brak</option>
+                              {productTemplates.map((t) => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="rounded border border-slate-200 bg-slate-50 p-4">
+                            <p className="mb-3 text-sm font-medium text-slate-700">Podgląd szablonu (SVG)</p>
+                            <div className="flex min-h-[100px] items-center justify-center rounded border border-dashed border-slate-300 bg-white p-2">
+                              {templatePreviewLoading ? (
+                                <p className="text-xs text-slate-500">Ładowanie…</p>
+                              ) : templatePreviewSvg ? (
+                                <div
+                                  className="max-h-36 max-w-full overflow-auto [&_svg]:max-h-36"
+                                  dangerouslySetInnerHTML={{ __html: templatePreviewSvg }}
+                                />
+                              ) : (
+                                <p className="text-xs text-slate-500">Brak podglądu</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">A. Podstawowe</h3>
+                        <div>
+                          <label className={fieldLabel}>Nazwa produktu na etykiecie (PL)</label>
+                          <input
+                            type="text"
+                            className={inputClass}
+                            value={labelData.product_name_pl ?? ""}
+                            onChange={(e) => setLabelData((d) => ({ ...d, product_name_pl: e.target.value }))}
+                            placeholder={name.trim() || "jak nazwa produktu"}
+                          />
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">B. Producent / Importer</h3>
+                        <div className="space-y-5">
+                          <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                            <p className="font-semibold text-slate-900">{manufacturerReadonly.name || "—"}</p>
+                            <p className="mt-1 whitespace-pre-line text-slate-700">{manufacturerReadonly.address || "—"}</p>
+                            {manufacturerId == null ? (
+                              <p className="mt-2 text-xs text-amber-600 font-medium">Wybierz producenta w zakładce Podstawowe, aby wypełnić blok producenta.</p>
+                            ) : null}
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Importer — nazwa</label>
+                            <input
+                              type="text"
+                              className={inputClass}
+                              value={labelData.importer_name ?? ""}
+                              onChange={(e) => setLabelData((d) => ({ ...d, importer_name: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Importer — adres</label>
+                            <textarea
+                              className={`${inputClass} min-h-[64px] resize-y`}
+                              value={labelData.importer_address ?? ""}
+                              onChange={(e) => setLabelData((d) => ({ ...d, importer_address: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">C. Identyfikacja</h3>
+                        <div className="space-y-5">
+                          <div>
+                            <label className={fieldLabel}>EAN</label>
+                            <input type="text" className={`${inputClass} bg-slate-50 cursor-not-allowed`} value={ean} readOnly />
+                          </div>
+                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <div>
+                              <label className={fieldLabel}>Numer partii</label>
+                              <input
+                                type="text"
+                                className={inputClass}
+                                value={labelData.batch_number ?? ""}
+                                onChange={(e) => setLabelData((d) => ({ ...d, batch_number: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Numer serii</label>
+                              <input
+                                type="text"
+                                className={inputClass}
+                                value={labelData.series_number ?? ""}
+                                onChange={(e) => setLabelData((d) => ({ ...d, series_number: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">D. Regulacje i Cechy</h3>
+                        <div className="space-y-5">
+                          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              checked={Boolean(labelData.requires_ce_mark)}
+                              onChange={(e) => setLabelData((d) => ({ ...d, requires_ce_mark: e.target.checked }))}
+                            />
+                            Wymaga znaku CE na etykiecie
+                          </label>
+                          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              checked={Boolean(labelData.show_price_on_label)}
+                              onChange={(e) => setLabelData((d) => ({ ...d, show_price_on_label: e.target.checked }))}
+                            />
+                            Pokazuj cenę na etykiecie
+                          </label>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">E. Branżowe (tekstylia)</h3>
+                        <div className="space-y-5">
+                          <div>
+                            <label className={fieldLabel}>Skład materiałowy</label>
+                            <textarea
+                              className={`${inputClass} min-h-[72px] resize-y`}
+                              value={labelData.material_composition ?? ""}
+                              onChange={(e) => setLabelData((d) => ({ ...d, material_composition: e.target.value }))}
+                              placeholder="np. 100% bawełna"
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Instrukcja pielęgnacji</label>
+                            <textarea
+                              className={`${inputClass} min-h-[72px] resize-y`}
+                              value={labelData.care_instructions ?? ""}
+                              onChange={(e) => setLabelData((d) => ({ ...d, care_instructions: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Rozmiar / długość</label>
+                            <input
+                              type="text"
+                              className={inputClass}
+                              value={labelData.size_or_length ?? ""}
+                              onChange={(e) => setLabelData((d) => ({ ...d, size_or_length: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">F. Pochodzenie</h3>
+                        <div>
+                          <label className={fieldLabel}>Kraj pochodzenia</label>
+                          <select
+                            className={inputClass}
+                            value={labelData.country_of_origin ?? ""}
+                            onChange={(e) => setLabelData((d) => ({ ...d, country_of_origin: e.target.value || undefined }))}
+                          >
+                            <option value="">— Brak —</option>
+                            {SUPPLIER_COUNTRIES.map((c) => (
+                              <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </section>
+                    </div>
+
+                    <aside className="min-h-0 lg:sticky lg:top-8 mt-10 lg:mt-0">
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Podgląd gotowej etykiety</h3>
+                        <p className="mb-4 text-xs text-slate-500">Symulacja wydruku (~60×40 mm). Puste sekcje są automatycznie ukrywane.</p>
+                        <div className="flex justify-center overflow-auto rounded bg-slate-50 border border-slate-200 p-8 shadow-inner">
+                          <div className="origin-top scale-[1.35] shadow-md sm:scale-150 bg-white">
+                            <RetailLabel
+                              brandName={manufacturerReadonly.name || manufacturer.trim() || "—"}
+                              productNamePl={(labelData.product_name_pl ?? "").trim() || name.trim() || "—"}
+                              composition={labelData.material_composition}
+                              manufacturerName={manufacturerReadonly.name || undefined}
+                              manufacturerAddress={manufacturerReadonly.address || undefined}
+                              importerName={labelData.importer_name}
+                              importerAddress={labelData.importer_address}
+                              ean={ean.trim() || undefined}
+                              batchNumber={labelData.batch_number}
+                              seriesNumber={labelData.series_number}
+                              countryOfOrigin={labelData.country_of_origin}
+                              careInstructions={labelData.care_instructions}
+                              sizeOrLength={labelData.size_or_length}
+                              salePrice={salePrice === "" ? null : typeof salePrice === "number" ? salePrice : parseDecimal(String(salePrice)) ?? null}
+                              showPriceOnLabel={Boolean(labelData.show_price_on_label)}
+                              showCeMark={Boolean(labelData.requires_ce_mark)}
+                            />
+                          </div>
+                        </div>
+                      </section>
+                    </aside>
+                  </div>
                 )}
 
+                {activeTab === "images" && (
+                  <div className="max-w-4xl space-y-10">
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Galeria produktu</h3>
+                      <div className="space-y-6">
+                        <div className="flex flex-wrap items-end gap-3 rounded bg-slate-50 p-4 border border-slate-200">
+                          <div className="min-w-[200px] flex-1">
+                            <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj zdjęcie z adresu URL</label>
+                            <input
+                              type="url"
+                              className={inputClass}
+                              value={newGalleryUrl}
+                              onChange={(e) => setNewGalleryUrl(e.target.value)}
+                              placeholder="https://... lub /uploads/..."
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addGalleryFromUrl}
+                            disabled={!newGalleryUrl.trim()}
+                            className="rounded bg-slate-800 px-5 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50 transition-colors"
+                          >
+                            Dodaj URL
+                          </button>
+                          <label className="inline-flex cursor-pointer items-center justify-center rounded border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+                            <input type="file" accept="image/*" className="sr-only" onChange={onGalleryFileSelected} disabled={galleryUploadBusy} />
+                            {galleryUploadBusy ? "Wgrywanie…" : "Wgraj z pliku"}
+                          </label>
+                        </div>
+
+                        {ensureSingleMainImage(productImages).length === 0 ? (
+                          <div className="text-center py-10 border border-dashed border-slate-300 rounded-lg bg-slate-50">
+                            <p className="text-sm text-slate-500">Brak zdjęć w galerii. Użyj opcji powyżej, aby dodać pierwsze zdjęcie.</p>
+                          </div>
+                        ) : (
+                          <ul className="space-y-3">
+                            {ensureSingleMainImage(productImages)
+                              .sort((a, b) => a.sort_order - b.sort_order)
+                              .map((img) => (
+                                <li
+                                  key={img.id}
+                                  className="flex flex-wrap items-center gap-4 rounded border border-slate-200 bg-white p-4 shadow-sm"
+                                >
+                                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded bg-slate-50 border border-slate-100 p-1">
+                                    <img src={img.image_url} alt="" className="h-full w-full object-contain" />
+                                  </div>
+                                  <div className="min-w-0 flex-1 space-y-3">
+                                    <input
+                                      type="url"
+                                      className={inputClass}
+                                      value={img.image_url}
+                                      onChange={(e) =>
+                                        setProductImages((prev) =>
+                                          ensureSingleMainImage(prev.map((x) => (x.id === img.id ? { ...x, image_url: e.target.value } : x))),
+                                        )
+                                      }
+                                    />
+                                    <div className="flex flex-wrap items-center gap-4">
+                                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="product-main-image"
+                                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300"
+                                          checked={img.is_main}
+                                          onChange={() => setGalleryMain(img.id)}
+                                        />
+                                        Główne zdjęcie
+                                      </label>
+                                      <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
+                                      <div className="flex items-center gap-3">
+                                        <button type="button" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors" onClick={() => moveGalleryImage(img.id, -1)}>
+                                          W górę
+                                        </button>
+                                        <button type="button" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors" onClick={() => moveGalleryImage(img.id, 1)}>
+                                          W dół
+                                        </button>
+                                      </div>
+                                      <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
+                                      <button type="button" className="text-sm font-medium text-rose-600 hover:text-rose-800 transition-colors" onClick={() => removeGalleryImage(img.id)}>
+                                        Usuń zdjęcie
+                                      </button>
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                          </ul>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeTab === "prices" && (
+                  <div className="max-w-4xl space-y-10">
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Kalkulacja cenowa</h3>
+                      <div className="space-y-5">
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                          <div>
+                            <label className={fieldLabel}>Docelowa cena sprzedaży (brutto/netto zal. od reguł)</label>
+                            <input
+                              type="number" min={0} step={0.01}
+                              value={salePrice === "" ? "" : salePrice}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setSalePrice("");
+                                else {
+                                  const n = parseFloat(s);
+                                  if (Number.isFinite(n)) setSalePrice(n);
+                                }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Ręczna cena zakupu netto</label>
+                            <input
+                              type="number" min={0} step={0.01}
+                              value={purchasePrice === "" ? "" : purchasePrice}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setPurchasePrice("");
+                                else {
+                                  const n = parseFloat(s);
+                                  if (Number.isFinite(n)) setPurchasePrice(n);
+                                }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Koszty pakowania (netto)</label>
+                            <input
+                              type="number" min={0} step={0.01}
+                              value={extraCostPackagingNet === "" ? "" : extraCostPackagingNet}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setExtraCostPackagingNet("");
+                                else {
+                                  const n = parseFloat(s);
+                                  if (Number.isFinite(n)) setExtraCostPackagingNet(n);
+                                }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Prowizja marketplace (%)</label>
+                            <input
+                              type="number" min={0} step={0.01}
+                              value={extraCostCommissionPercent === "" ? "" : extraCostCommissionPercent}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setExtraCostCommissionPercent("");
+                                else {
+                                  const n = parseFloat(s);
+                                  if (Number.isFinite(n)) setExtraCostCommissionPercent(n);
+                                }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Inne koszty operacyjne (netto)</label>
+                            <input
+                              type="number" min={0} step={0.01}
+                              value={extraCostOtherNet === "" ? "" : extraCostOtherNet}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setExtraCostOtherNet("");
+                                else {
+                                  const n = parseFloat(s);
+                                  if (Number.isFinite(n)) setExtraCostOtherNet(n);
+                                }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Stawka VAT (%)</label>
+                            <input
+                              type="text"
+                              value={vatRate}
+                              onChange={(e) => setVatRate(e.target.value)}
+                              placeholder="np. 23"
+                              className={inputClass}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className={fieldLabel}>Notatka promocyjna / cenowa</label>
+                          <textarea
+                            value={promotion}
+                            onChange={(e) => setPromotion(e.target.value)}
+                            rows={3}
+                            className={`${inputClass} resize-y`}
+                            placeholder="Krótki opis promocji, rabatów lub warunków…"
+                          />
+                        </div>
+                      </div>
+                    </section>
+
+                    <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Ostatni zakup (dane z PZ)</h3>
+                        <div className="rounded border border-slate-200 bg-slate-50 p-5">
+                          <dl className="space-y-3 text-sm text-slate-700">
+                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                              <dt className="font-medium text-slate-500">Aktualna cena zakupu</dt>
+                              <dd className="tabular-nums font-semibold text-slate-900">{formatMoneyZl(purchasePrice === "" ? null : purchasePrice)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                              <dt className="font-medium text-slate-500">Poprzednia cena zakupu</dt>
+                              <dd className="tabular-nums">{formatMoneyZl(previousPurchasePrice === "" ? null : previousPurchasePrice)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                              <dt className="font-medium text-slate-500">Data ostatniego zakupu</dt>
+                              <dd>{formatDateTimePl(lastPurchaseDate)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                              <dt className="font-medium text-slate-500">Ostatni dostawca</dt>
+                              <dd className="text-right">{(lastSupplierName || "").trim() || "—"}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                              <dt className="font-medium text-slate-500">Waluta ostatniego zakupu</dt>
+                              <dd className="tabular-nums">{(lastPurchaseCurrency || "").trim() || "—"}</dd>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <dt className="font-medium text-slate-500">Cena oryginalna (waluta)</dt>
+                              <dd className="tabular-nums font-medium text-slate-900">
+                                {purchasePriceOriginal === "" || purchasePriceOriginal == null
+                                  ? "—"
+                                  : `${Number(purchasePriceOriginal).toFixed(4)} ${(purchaseCurrency || "").trim() || ""}`.trim()}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-4 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Podsumowanie kosztów</h3>
+                        <div className="rounded border border-slate-200 bg-white shadow-sm p-5">
+                          <dl className="space-y-3 text-sm text-slate-700">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Cena zakupu netto</dt>
+                              <dd className="tabular-nums">{formatMoneyZl(currentCost?.purchase_net ?? null)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Pakowanie</dt>
+                              <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostPackagingNet === "" ? 0 : Number(extraCostPackagingNet))}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Prowizja</dt>
+                              <dd className="tabular-nums text-rose-600">+{(extraCostCommissionPercent === "" ? 0 : Number(extraCostCommissionPercent)).toFixed(2)}%</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Inne koszty</dt>
+                              <dd className="tabular-nums text-rose-600">+{formatMoneyZl(extraCostOtherNet === "" ? 0 : Number(extraCostOtherNet))}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mt-1">
+                              <dt className="font-semibold text-slate-900">Łączny koszt netto (Landed Cost)</dt>
+                              <dd className="tabular-nums font-bold text-slate-900">{formatMoneyZl(currentCost?.landed_cost_net ?? null)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between pt-1 border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Cena sprzedaży netto</dt>
+                              <dd className="tabular-nums">{formatMoneyZl(currentCost?.sale_net ?? null)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <dt className="font-medium text-slate-900">Zysk (Marża PLN)</dt>
+                              <dd className={`tabular-nums ${marginToneClass(currentCost?.margin_percent)}`}>
+                                {formatMoneyZl(currentCost?.margin_value ?? null)}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <dt className="font-medium text-slate-900">Rentowność (Marża %)</dt>
+                              <dd className={`tabular-nums text-lg ${marginToneClass(currentCost?.margin_percent)}`}>
+                                {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(2)}%`}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "warehouse" && (
+                  <div className="max-w-4xl space-y-10">
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
+                      <ProductWarehouseStockPanel
+                        physicalStockDisplay={physicalStockDisplay}
+                        inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
+                        showInventoryLink
+                        onEditTraceability={isNew ? undefined : (row) => setTraceEditRow(row)}
+                        traceabilityEditDisabled={saving}
+                      />
+                    </section>
+
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Powiadomienia i alarmy</h3>
+                      <div className="rounded border border-amber-200 bg-amber-50 p-5 space-y-4">
+                        <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-amber-900">
+                          <input
+                            type="checkbox"
+                            checked={enableStockAlert}
+                            onChange={(e) => setEnableStockAlert(e.target.checked)}
+                            className="h-5 w-5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                          />
+                          Włącz alarm niskiego stanu magazynowego
+                        </label>
+                        {enableStockAlert && (
+                          <div className="pl-8">
+                            <label className="mb-1 block text-sm font-medium text-amber-900">Próg alarmowy łącznego stanu (szt.)</label>
+                            <input
+                              type="number" min={0} step={0.01}
+                              value={minTotalStock === "" ? "" : minTotalStock}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setMinTotalStock("");
+                                else {
+                                  const n = parseFloat(s);
+                                  if (Number.isFinite(n) && n >= 0) setMinTotalStock(n);
+                                }
+                              }}
+                              className="w-full sm:w-64 rounded border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                              placeholder="np. 10"
+                            />
+                            <p className="mt-2 text-xs text-amber-700">Powiadomienie zostanie wygenerowane, gdy całkowity stan spadnie poniżej tej wartości.</p>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Poziomy uzupełniania w strefach</h3>
+                      <div className="space-y-8">
+                        <div>
+                          <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Kompletacji (Pick-face)</h4>
+                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <div>
+                              <label className={fieldLabel}>Minimalna ilość (szt.)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={minPickQuantity === "" ? "" : minPickQuantity}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setMinPickQuantity("");
+                                  else {
+                                    const n = parseFloat(s);
+                                    if (Number.isFinite(n) && n >= 0) setMinPickQuantity(n);
+                                  }
+                                }}
+                                className={inputClass} placeholder="np. 5"
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Maksymalna ilość (szt.)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={maxPickQuantity === "" ? "" : maxPickQuantity}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setMaxPickQuantity("");
+                                  else {
+                                    const n = parseFloat(s);
+                                    if (Number.isFinite(n) && n >= 0) setMaxPickQuantity(n);
+                                  }
+                                }}
+                                className={inputClass} placeholder="np. 50"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <hr className="border-slate-100" />
+                        <div>
+                          <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Zapasu (Reserve)</h4>
+                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <div>
+                              <label className={fieldLabel}>Minimalna ilość (szt.)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={minReserveQuantity === "" ? "" : minReserveQuantity}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setMinReserveQuantity("");
+                                  else {
+                                    const n = parseFloat(s);
+                                    if (Number.isFinite(n) && n >= 0) setMinReserveQuantity(n);
+                                  }
+                                }}
+                                className={inputClass} placeholder="np. 12"
+                              />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Maksymalna ilość (szt.)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                value={maxReserveQuantity === "" ? "" : maxReserveQuantity}
+                                onChange={(e) => {
+                                  const s = String(e.target.value).trim().replace(",", ".");
+                                  if (s === "") setMaxReserveQuantity("");
+                                  else {
+                                    const n = parseFloat(s);
+                                    if (Number.isFinite(n) && n >= 0) setMaxReserveQuantity(n);
+                                  }
+                                }}
+                                className={inputClass} placeholder="opcjonalnie"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section ref={planLocationsSectionRef} className="scroll-mt-8">
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Planowanie lokalizacji</h3>
+                      {placementDirty ? (
+                        <div role="status" className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                          <span className="font-semibold">Uwaga:</span> Zmiana przypisań nie wpływa na fizyczny stan w WMS, służy jedynie logice układania towaru.
+                        </div>
+                      ) : null}
+                      
+                      {layoutLoading ? (
+                        <div className="py-8 text-center text-slate-500 rounded border border-dashed border-slate-300">
+                          Ładowanie planu magazynu…
+                        </div>
+                      ) : positions.length === 0 ? (
+                        <div className="py-8 text-center text-slate-500 rounded border border-dashed border-slate-300 bg-slate-50">
+                          {warehouse?.id ? "Brak regałów w obecnym magazynie." : "Wybierz główny magazyn z górnego paska aplikacji."}
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <LocationPicker
+                            positions={positions}
+                            value={assignedLocations}
+                            onChange={setAssignedLocations}
+                            productDimensions={productDimensions}
+                            productVolumeDm3={productVolumeDm3}
+                          />
+                          {hasDimensionMismatch ? (
+                            <p className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+                              Wymiary produktu przekraczają limity co najmniej jednej z przypisanych lokalizacji!
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+                    </section>
+                  </div>
+                )}
+
+                {activeTab === "warehouseOps" && !isNew && product?.id != null ? (
+                  <div className="max-w-[1200px] space-y-10">
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Historia operacji</h3>
+                      {/* MovemetsPanel zwykle zajmuje pełną szerokość i ma własne style/tabele, dlatego owijamy go luźniej */}
+                      <div className="rounded border border-slate-200 bg-white">
+                        <ProductWarehouseMovementsPanel productId={product.id} tenantId={tenantId} />
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
+
+                {activeTab === "logistics" && (
+                  <div className="max-w-4xl space-y-12">
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Wymiary i waga produktu</h3>
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                          <div>
+                            <label className={fieldLabel}>Długość (cm)</label>
+                            <input type="number" min={0} step={0.01} value={length === "" ? "" : length} onChange={(e) => updateDimension("length", e.target.value)} className={inputClass} />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Szerokość (cm)</label>
+                            <input type="number" min={0} step={0.01} value={width === "" ? "" : width} onChange={(e) => updateDimension("width", e.target.value)} className={inputClass} />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Wysokość (cm)</label>
+                            <input type="number" min={0} step={0.01} value={height === "" ? "" : height} onChange={(e) => updateDimension("height", e.target.value)} className={inputClass} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                          <div>
+                            <label className={fieldLabel}>Waga (kg)</label>
+                            <input
+                              type="number" min={0} step={0.001}
+                              value={weight === "" ? "" : weight}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setWeight("");
+                                else { const n = parseFloat(s); if (Number.isFinite(n)) setWeight(n); }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Objętość całkowita (dm³)</label>
+                            <input
+                              type="number" min={0} step={0.01} readOnly
+                              value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
+                              className={`${inputClass} font-semibold text-slate-700 bg-slate-50 cursor-not-allowed ${hasVolumeOverflow ? "border-red-400 bg-red-50 text-red-700" : ""}`}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className={fieldLabel}>Jednostka miary</label>
+                          <input type="text" list="unit-list-pem" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="np. szt." className={`${inputClass} sm:w-1/2`} />
+                          <datalist id="unit-list-pem">
+                            <option value="szt." />
+                            <option value="opak." />
+                            <option value="para" />
+                            <option value="kg" />
+                            <option value="m" />
+                          </datalist>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Opakowanie zbiorcze (Karton)</h3>
+                      <div className="rounded border border-indigo-100 bg-indigo-50/30 p-6 space-y-6">
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                          <div>
+                            <label className={fieldLabel}>EAN kartonu zbiorczego</label>
+                            <input type="text" value={bulkEan} onChange={(e) => setBulkEan(e.target.value)} className={inputClass} placeholder="Opcjonalny kod" />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Ilość sztuk w kartonie</label>
+                            <input
+                              type="number" min={0} step={1}
+                              value={unitsPerCarton === "" ? "" : unitsPerCarton}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setUnitsPerCarton("");
+                                else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setUnitsPerCarton(n); }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <h4 className="mb-3 text-sm font-bold text-slate-700">Zewnętrzne wymiary kartonu</h4>
+                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                            <div>
+                              <label className={fieldLabel}>Długość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={cartonLength === "" ? "" : cartonLength} onChange={(e) => updateCartonDimension("cartonLength", e.target.value)} className={inputClass} />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Szerokość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={cartonWidth === "" ? "" : cartonWidth} onChange={(e) => updateCartonDimension("cartonWidth", e.target.value)} className={inputClass} />
+                            </div>
+                            <div>
+                              <label className={fieldLabel}>Wysokość (cm)</label>
+                              <input type="number" min={0} step={0.01} value={cartonHeight === "" ? "" : cartonHeight} onChange={(e) => updateCartonDimension("cartonHeight", e.target.value)} className={inputClass} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                          <div>
+                            <label className={fieldLabel}>Waga brutto kartonu (kg)</label>
+                            <input
+                              type="number" min={0} step={0.001}
+                              value={cartonWeight === "" ? "" : cartonWeight}
+                              onChange={(e) => {
+                                const s = String(e.target.value).trim().replace(",", ".");
+                                if (s === "") setCartonWeight("");
+                                else { const n = parseFloat(s); if (Number.isFinite(n)) setCartonWeight(n); }
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Objętość kartonu (dm³)</label>
+                            <input
+                              type="number" min={0} step={0.01} readOnly
+                              value={cartonVolume === "" ? "" : typeof cartonVolume === "number" ? round2(cartonVolume) : cartonVolume}
+                              className={`${inputClass} font-semibold text-slate-700 bg-white/50 cursor-not-allowed`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      {/* ProductLogisticsPackagingMatchingSection ma już u Ciebie swój własny design przypominający listę kartonów. Upewnij się tylko, że w jego kodzie nie ma <Card>, by zachować spójność. */}
+                      <ProductLogisticsPackagingMatchingSection
+                        productId={product?.id ?? null}
+                        tenantId={tenantId}
+                        dimensionsComplete={productDimensions != null}
+                        isNew={isNew}
+                      />
+                    </section>
+
+                    <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+                      <section>
+                        <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Produkt (Sztuka)</h3>
+                        <div className="space-y-5 rounded border border-slate-200 p-5 bg-white shadow-sm">
+                          <div>
+                            <label className={fieldLabel}>Wymagana orientacja</label>
+                            <select value={orientationType} onChange={(e) => setOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
+                              <option value="any">Dowolna orientacja</option>
+                              <option value="upright">Tylko w pionie (strzałki do góry)</option>
+                              <option value="no_stack">Nie obracać</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Kształt</label>
+                            <select value={shapeType} onChange={(e) => setShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
+                              <option value="box">Prostopadłościan (Pudełko)</option>
+                              <option value="cylinder">Walec (np. Butelka / Tuba)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Czy można układać w stos?</label>
+                            <select value={stackBehavior} onChange={(e) => setStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
+                              <option value="stackable">Tak, sztuka na sztuce</option>
+                              <option value="no_stack">Nie układać w stos!</option>
+                            </select>
+                          </div>
+                          
+                          {stackBehavior === "stackable" && (
+                            <div className="space-y-4 pt-2 border-t border-slate-100">
+                              <label className="flex cursor-pointer items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={stackCompressible}
+                                  onChange={(e) => setStackCompressible(e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-slate-700">Towar podlega kompresji przy nacisku</span>
+                              </label>
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                {stackCompressible ? (
+                                  <div>
+                                    <label className={fieldLabel}>Wys. po kompresji (cm)</label>
+                                    <input
+                                      type="number" min={0.01} step={0.1}
+                                      value={compressedHeightCm === "" ? "" : compressedHeightCm}
+                                      onChange={(e) => {
+                                        const s = String(e.target.value).trim().replace(",", ".");
+                                        if (s === "") setCompressedHeightCm("");
+                                        else { const n = parseFloat(s); if (Number.isFinite(n) && n > 0) setCompressedHeightCm(n); }
+                                      }}
+                                      className={inputClass}
+                                    />
+                                  </div>
+                                ) : null}
+                                <div className={stackCompressible ? "" : "col-span-2"}>
+                                  <label className={fieldLabel}>Maksymalny ciężar stosu (kg)</label>
+                                  <input
+                                    type="number" min={0} step={0.1}
+                                    value={maxStackWeight === "" ? "" : maxStackWeight}
+                                    onChange={(e) => {
+                                      const s = String(e.target.value).trim().replace(",", ".");
+                                      if (s === "") setMaxStackWeight("");
+                                      else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxStackWeight(n); }
+                                    }}
+                                    placeholder="Opcjonalny limit"
+                                    className={inputClass}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+
+                      <section>
+                        <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Karton</h3>
+                        <div className="space-y-5 rounded border border-indigo-100 p-5 bg-indigo-50/10 shadow-sm">
+                          <div>
+                            <label className={fieldLabel}>Wymagana orientacja kartonu</label>
+                            <select value={cartonOrientationType} onChange={(e) => setCartonOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
+                              <option value="any">Dowolna orientacja</option>
+                              <option value="upright">Tylko w pionie (strzałki do góry)</option>
+                              <option value="no_stack">Nie obracać</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Kształt opakowania</label>
+                            <select value={cartonShapeType} onChange={(e) => setCartonShapeType(e.target.value as "box" | "cylinder")} className={inputClass}>
+                              <option value="box">Prostopadłościan</option>
+                              <option value="cylinder">Walec (Beczka)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Czy kartony ułożysz w stos?</label>
+                            <select value={cartonStackBehavior} onChange={(e) => setCartonStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
+                              <option value="stackable">Tak, karton na kartonie</option>
+                              <option value="no_stack">Nie układać stosów!</option>
+                            </select>
+                          </div>
+                          
+                          {cartonStackBehavior === "stackable" && (
+                            <div className="space-y-4 pt-2 border-t border-indigo-100/50">
+                              <label className="flex cursor-pointer items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={cartonStackCompressible}
+                                  onChange={(e) => setCartonStackCompressible(e.target.checked)}
+                                  className="h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm font-medium text-slate-700">Karton "siada" przy nacisku</span>
+                              </label>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                {cartonStackCompressible ? (
+                                  <div>
+                                    <label className={fieldLabel}>Wys. po kompresji (cm)</label>
+                                    <input
+                                      type="number" min={0.01} step={0.1}
+                                      value={cartonCompressedHeightCm === "" ? "" : cartonCompressedHeightCm}
+                                      onChange={(e) => {
+                                        const s = String(e.target.value).trim().replace(",", ".");
+                                        if (s === "") setCartonCompressedHeightCm("");
+                                        else { const n = parseFloat(s); if (Number.isFinite(n) && n > 0) setCartonCompressedHeightCm(n); }
+                                      }}
+                                      className={inputClass}
+                                    />
+                                  </div>
+                                ) : null}
+                                <div className={cartonStackCompressible ? "" : "col-span-2"}>
+                                  <label className={fieldLabel}>Maks. obciążenie na karton (kg)</label>
+                                  <input
+                                    type="number" min={0} step={0.1}
+                                    value={cartonMaxStackWeight === "" ? "" : cartonMaxStackWeight}
+                                    onChange={(e) => {
+                                      const s = String(e.target.value).trim().replace(",", ".");
+                                      if (s === "") setCartonMaxStackWeight("");
+                                      else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setCartonMaxStackWeight(n); }
+                                    }}
+                                    placeholder="Opcjonalny limit"
+                                    className={inputClass}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "offers" && (
+                  <div className="max-w-4xl space-y-10">
+                    <section>
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Aktywne oferty i warianty</h3>
+                      <div className="rounded border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
+                        <p className="text-slate-500 font-medium">Moduł wariantowania w przygotowaniu.</p>
+                        <p className="text-slate-400 text-sm mt-1">Tutaj pojawią się powiązane oferty z marketplace'ów i powiązania SKU.</p>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeTab === "settings" && (
+                  <div className="max-w-4xl space-y-10">
+                    <section id="wms-validation">
+                      <h3 className="mb-5 text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Polityka przyjęcia do magazynu (WMS)</h3>
+                      <div className="rounded border border-slate-200 bg-white p-5 shadow-sm">
+                        {/* W komponencie ProductReceivingRequirementsSection również należałoby usunąć tag Card na rzecz div-a, jeśli jest tam użyty. */}
+                        <ProductReceivingRequirementsSection
+                          requireDimensions={requireRecvDimensions}
+                          requireWeight={requireRecvWeight}
+                          requireBatch={trackBatch}
+                          requireExpiry={trackExpiry}
+                          requireSerial={trackSerial}
+                          requireMasterCarton={requireRecvMasterCarton}
+                          requireMasterCartonEan={requireRecvMasterCartonEan}
+                          requireMasterCartonQty={requireRecvMasterCartonQty}
+                          requireMasterCartonDims={requireRecvMasterCartonDims}
+                          requireMasterCartonWeight={requireRecvMasterCartonWeight}
+                          disabled={saving}
+                          onChange={applyRequireRecvPatch}
+                        />
+                      </div>
+                    </section>
+                  </div>
+                )}
               </div>
             </div>
 
