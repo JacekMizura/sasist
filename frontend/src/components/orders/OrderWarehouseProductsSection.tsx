@@ -472,7 +472,7 @@ export function OrderWarehouseProductsSection({
                 className={
                   hideLineTotalHeader
                     ? "mt-3 hidden items-start gap-x-4 lg:grid lg:grid-cols-[minmax(320px,1fr)_4.5rem_6rem_6rem_5rem_7rem_3rem]"
-                    : "mt-3 hidden items-start gap-x-4 lg:grid lg:grid-cols-[minmax(320px,1fr)_4.5rem_6rem_6rem_5rem_7rem_7rem_3rem]"
+                    : "mt-3 hidden items-start gap-x-4 lg:grid lg:grid-cols-[minmax(320px,1fr)_5rem_7rem_7rem_5rem_6rem_8rem_4rem]"
                 }
               >
                 <div className="min-w-0 pr-1">
@@ -756,7 +756,7 @@ export function OrderWarehouseProductsSection({
               className={
                 hideLineTotalHeader
                   ? "mt-3 hidden items-start gap-x-3 lg:grid lg:grid-cols-[minmax(0,1fr)_3.5rem_5rem_5rem_4rem_5.5rem_2.5rem]"
-                  : "mt-3 hidden items-start gap-x-3 lg:grid lg:grid-cols-[minmax(0,1fr)_3.5rem_5rem_5rem_4rem_6.5rem_5.5rem_2.5rem]"
+                  : "mt-3 hidden items-start gap-x-3 lg:grid lg:grid-cols-[minmax(420px,1fr)_5rem_7rem_7rem_5rem_5rem_7rem_4rem]"
               }
             >
               <div className="min-w-0 pr-1">
@@ -829,11 +829,11 @@ export function OrderWarehouseProductsSection({
                   <span className="font-extrabold text-slate-900">{row.lineGross}</span>
                 </WarehouseMetricCell>
               )}
-              <WarehouseMetricCell label="Stan / Rezerw.">
+              <WarehouseMetricCell label="Stan / Rez.">
                 <div className="font-semibold text-slate-900">{stockDisp}</div>
                 <div className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-500">Rez.: {qtyDisplay}</div>
               </WarehouseMetricCell>
-              <div className="flex justify-end pt-1">
+              <div className="flex items-start justify-center pt-0">
                 <OrderLineKebabMenu
                   lineId={row.item.id}
                   anchorId={`order-wh-line-kebab-desk-${row.item.id}`}
