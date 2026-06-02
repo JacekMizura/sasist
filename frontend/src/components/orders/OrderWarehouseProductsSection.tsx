@@ -755,11 +755,11 @@ export function OrderWarehouseProductsSection({
             <div
               className={
                 hideLineTotalHeader
-                  ? "mt-3 hidden items-start gap-x-3 lg:grid lg:grid-cols-[minmax(0,1fr)_3.5rem_5rem_5rem_4rem_5.5rem_2.5rem]"
-                  : "mt-3 hidden items-start gap-x-4 lg:grid lg:grid-cols-[minmax(420px,1fr)_5rem_7rem_7rem_5rem_5rem_7rem_7rem_4rem]"
+                  ? "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_4rem_6rem_6rem_4rem_4rem_6rem_6rem_3rem]"
+                  : "mt-3 hidden items-start gap-x-2 lg:grid lg:grid-cols-[minmax(0,1fr)_4rem_6rem_6rem_4rem_4rem_6rem_6rem_3rem]"
               }
             >
-              <div className="min-w-0 pr-1">
+              <div className="min-w-0 overflow-hidden pr-4">
                 <div className="flex gap-3">
                   <div
                     className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
