@@ -59,9 +59,9 @@ function lineArticleSurfaceClass(resolvedRemoved: boolean, resolvedReduced: bool
 
 function lineQtyBadgeClass(resolvedRemoved: boolean): string {
   if (resolvedRemoved) {
-    return "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-rose-300 bg-rose-100 text-[15px] font-extrabold tabular-nums text-rose-950";
+    return "flex h-8 min-w-[2rem] px-2 shrink-0 items-center justify-center rounded-md border border-rose-200 bg-rose-50 text-[14px] font-bold tabular-nums text-rose-800 line-through opacity-70 shadow-sm";
   }
-  return "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-[15px] font-extrabold tabular-nums text-white shadow-sm";
+  return "flex h-8 min-w-[2rem] px-2 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-[14px] font-bold tabular-nums text-slate-800 shadow-sm";
 }
 
 function locationBadgeClass(storageType?: string | null): string {
@@ -92,7 +92,7 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
           return (
             <span
               key={`${loc.location_label}-${batch}-${loc.expiry_date ?? ""}-${i}`}
-              className="inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded px-1.5 py-0.5 border border-emerald-200/60 bg-emerald-50 text-[11px] font-medium text-emerald-800"
+              className="inline-flex w-fit max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded px-1.5 py-0.5 border border-emerald-200/60 bg-emerald-50 text-[11px] font-medium text-emerald-800"
             >
               <span className="truncate">{loc.location_label}</span>
               {batch ? <span className="font-mono text-[10px] opacity-80">Partia {batch}</span> : null}
@@ -113,7 +113,7 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
         {slots.map((loc, i) => (
           <span
             key={`${loc.location_label}-${i}`}
-            className={`inline-flex max-w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${locationBadgeClass(loc.storage_type)}`}
+            className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${locationBadgeClass(loc.storage_type)}`}
             title={loc.storage_type ?? undefined}
           >
             <span className="truncate">{loc.location_label}</span>
@@ -129,7 +129,7 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
   if (!lab) return null;
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium ${locationBadgeClass(wm?.location_storage_type)}`}
+      className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium ${locationBadgeClass(wm?.location_storage_type)}`}
     >
       {lab}
       {wm?.location_bin_qty != null && wm.location_bin_qty > 0 ? (
@@ -139,12 +139,19 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
   );
 }
 
+const CodeBadge = ({ label, value }: { label: string; value: string }) => (
+  <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+    <span className="text-slate-400 font-normal">{label}</span>
+    <span className="font-mono">{value}</span>
+  </span>
+);
+
 const WH_METRIC_L = "text-[10px] font-bold uppercase tracking-wider text-slate-400 whitespace-nowrap text-left lg:text-right";
-const WH_METRIC_V = "mt-0.5 text-[13px] font-semibold tabular-nums text-slate-800 whitespace-nowrap text-left lg:text-right leading-tight";
+const WH_METRIC_V = "mt-1 text-[13px] font-semibold tabular-nums text-slate-800 whitespace-nowrap text-left lg:text-right leading-tight";
 
 function WarehouseMetricCell({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 flex flex-col h-full justify-start">
       <p className={WH_METRIC_L}>{label}</p>
       <div className={WH_METRIC_V}>{children}</div>
     </div>
@@ -187,8 +194,8 @@ function BundleSetPreviewBadge({
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold leading-snug text-slate-900">{name}</p>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {sku && <span className="rounded bg-white px-1 py-[1px] font-mono text-[9px] text-slate-500 shadow-sm border border-slate-100">SKU: {sku}</span>}
-                    {ean && <span className="rounded bg-white px-1 py-[1px] font-mono text-[9px] text-slate-500 shadow-sm border border-slate-100">EAN: {ean}</span>}
+                    {sku && <CodeBadge label="SKU" value={sku} />}
+                    {ean && <CodeBadge label="EAN" value={ean} />}
                   </div>
                   <p className="mt-1 text-[10px] font-medium tabular-nums text-slate-500">W zestawie: {q} szt.</p>
                 </div>
@@ -236,17 +243,21 @@ function BundleComponentWarehouseRow({
           <div>
             <p className="text-[13px] font-semibold leading-snug text-slate-900">{name}</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {sku && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">SKU: {sku}</span>}
-              {ean && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">EAN: {ean}</span>}
+              {sku && <CodeBadge label="SKU" value={sku} />}
+              {ean && <CodeBadge label="EAN" value={ean} />}
             </div>
-            <p className="mt-1.5 text-[11px] font-medium tabular-nums text-slate-500">
+            
+            <div className="mt-2">
+              <LocationsBadges wm={wm} />
+            </div>
+
+            <p className="mt-2 text-[11px] font-medium tabular-nums text-slate-500">
               Do pobrania: {fmtOmsQty(component.quantity)} szt.
             </p>
           </div>
 
           <div className="overflow-hidden rounded-md border border-slate-100 bg-white">
             <OrderLineOperationalWorkflowModule
-              locationsSlot={<LocationsBadges wm={wm} />}
               quantity={cq}
               pickedQuantity={picked}
               packedQuantity={packed}
@@ -332,7 +343,6 @@ export function OrderWarehouseProductsSection({
     return <p className="py-8 text-center text-sm text-slate-500">Brak pozycji</p>;
   }
 
-  // Uproszczona konfiguracja siatki na desktop. Usunięto kolumnę 'Wartość' by lepiej pasować do screenshota.
   const desktopGridClass = "mt-4 hidden items-start gap-x-4 lg:grid lg:grid-cols-[minmax(0,1fr)_4rem_5rem_5rem_4rem_4rem_5rem_3rem]";
 
   return (
@@ -386,7 +396,7 @@ export function OrderWarehouseProductsSection({
               }`}
             >
               <div className="flex flex-wrap items-start gap-3 lg:hidden">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-[15px] font-extrabold tabular-nums text-white shadow-sm">
+                <span className={lineQtyBadgeClass(false)}>
                   {row.quantityDisplay}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -489,7 +499,7 @@ export function OrderWarehouseProductsSection({
                   </div>
                 </div>
                 <div className="flex justify-center pt-0.5">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-[15px] font-extrabold tabular-nums text-white shadow-sm">
+                  <span className={lineQtyBadgeClass(false)}>
                     {row.quantityDisplay}
                   </span>
                 </div>
@@ -680,22 +690,27 @@ export function OrderWarehouseProductsSection({
                         ) : null}
                       </div>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {row.sku && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">SKU: {row.sku}</span>}
-                        {row.ean && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">EAN: {row.ean}</span>}
-                        {row.catalog && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">NR: {row.catalog}</span>}
+                        {row.sku && <CodeBadge label="SKU" value={row.sku} />}
+                        {row.ean && <CodeBadge label="EAN" value={row.ean} />}
+                        {row.catalog && <CodeBadge label="NR" value={row.catalog} />}
                       </div>
+
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <LocationsBadges wm={wm} />
+                      </div>
+
                       {resolvedMeta && (resolvedRemoved || resolvedReduced) ? (
                         <div className="mt-2">
                           <OrderLineResolvedShortageCallout meta={resolvedMeta} formatDetailDate={formatDetailDate} compact />
                         </div>
                       ) : null}
                       {subIn && oldSub ? (
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-2 text-xs text-slate-500">
                           Zamiast: <span className="font-medium text-slate-700">{oldSub}</span>
                         </p>
                       ) : null}
                       {(wm?.oms_line_secondary_trace ?? "").trim() && !subIn && !resolvedRemoved ? (
-                        <p className="mt-1 text-xs leading-snug text-slate-500">{(wm?.oms_line_secondary_trace ?? "").trim()}</p>
+                        <p className="mt-2 text-xs leading-snug text-slate-500">{(wm?.oms_line_secondary_trace ?? "").trim()}</p>
                       ) : null}
                     </div>
                   </div>
@@ -769,9 +784,13 @@ export function OrderWarehouseProductsSection({
                     </div>
                     
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {row.sku && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">SKU: {row.sku}</span>}
-                      {row.ean && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">EAN: {row.ean}</span>}
-                      {row.catalog && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">NR: {row.catalog}</span>}
+                      {row.sku && <CodeBadge label="SKU" value={row.sku} />}
+                      {row.ean && <CodeBadge label="EAN" value={row.ean} />}
+                      {row.catalog && <CodeBadge label="NR" value={row.catalog} />}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <LocationsBadges wm={wm} />
                     </div>
 
                     {resolvedMeta && (resolvedRemoved || resolvedReduced) ? (
@@ -780,12 +799,12 @@ export function OrderWarehouseProductsSection({
                       </div>
                     ) : null}
                     {subIn && oldSub ? (
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-2 text-xs text-slate-500">
                         Zamiast: <span className="font-medium text-slate-700">{oldSub}</span>
                       </p>
                     ) : null}
                     {(wm?.oms_line_secondary_trace ?? "").trim() && !subIn && !resolvedRemoved ? (
-                      <p className="mt-1 text-xs leading-snug text-slate-500">{(wm?.oms_line_secondary_trace ?? "").trim()}</p>
+                      <p className="mt-2 text-xs leading-snug text-slate-500">{(wm?.oms_line_secondary_trace ?? "").trim()}</p>
                     ) : null}
                   </div>
                 </div>
@@ -864,7 +883,6 @@ export function OrderWarehouseProductsSection({
             ) : (
               <div className="mt-4 overflow-hidden rounded-lg border border-slate-100 bg-white">
                 <OrderLineOperationalWorkflowModule
-                  locationsSlot={<LocationsBadges wm={wm} />}
                   quantity={qtyN}
                   pickedQuantity={picked}
                   packedQuantity={packed}
@@ -889,19 +907,6 @@ export function OrderWarehouseProductsSection({
           </article>
         );
       })}
-
-      {linesTotalDisplay && lines.length > 0 ? (
-        <div className="mt-8 flex items-center justify-end border-t border-slate-200 pt-6 pr-4">
-          <div className="flex items-center gap-4">
-            <span className="text-[12px] font-bold uppercase tracking-widest text-slate-500">
-              Razem (Produkty)
-            </span>
-            <span className="text-3xl font-extrabold text-slate-900">
-              {linesTotalDisplay}
-            </span>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
