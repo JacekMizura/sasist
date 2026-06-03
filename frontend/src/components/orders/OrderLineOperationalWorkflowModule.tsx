@@ -9,7 +9,7 @@ function MiniTrack({ value01, activeClass }: { value01: number; activeClass: str
   const pct = Math.round(Math.min(1, Math.max(0, value01)) * 100);
   return (
     <div
-      className="h-1.5 w-full max-w-[7rem] overflow-hidden rounded-full bg-slate-200/90"
+      className="h-1.5 w-full max-w-[7rem] overflow-hidden rounded-full bg-slate-100"
       role="progressbar"
       aria-valuenow={pct}
       aria-valuemin={0}
@@ -101,16 +101,14 @@ export function OrderLineOperationalWorkflowModule({
 
   return (
     <section
-      className="border-t border-slate-200/80 bg-slate-50/40 px-2 py-1.5 sm:px-2.5"
+      className="bg-white px-5 py-4"
       aria-label="Realizacja magazynowa — pozycja"
     >
-      <div className="flex flex-col gap-1.5 lg:flex-row lg:items-stretch lg:gap-0">
-        <div className="flex min-w-0 flex-1 flex-col border-slate-200/80 lg:border-r lg:pr-2.5">
-          <div className="mb-0.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-            <MapPin className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
-            Lokalizacje
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col border-slate-200/80">
+          <div className="flex flex-wrap gap-2">
+            {locationsSlot}
           </div>
-          <div className="min-w-0 flex-1 text-[11px] leading-snug">{locationsSlot}</div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 border-t border-slate-200/70 pt-1.5 sm:gap-3 lg:border-t-0 lg:border-slate-200/80 lg:px-2.5 lg:pt-0">
@@ -138,8 +136,6 @@ export function OrderLineOperationalWorkflowModule({
               ) : null}
             </div>
           </div>
-
-          <div className="hidden h-8 w-px shrink-0 bg-slate-200/90 sm:block" aria-hidden />
 
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-[10.5rem] sm:flex-none sm:max-w-[13rem]">
             <Package className="h-3.5 w-3.5 shrink-0 text-indigo-800" strokeWidth={2} aria-hidden />
