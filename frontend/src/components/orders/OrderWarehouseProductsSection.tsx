@@ -748,7 +748,7 @@ export function OrderWarehouseProductsSection({
             </div>
             <div className={desktopGridClass}>
               <div
-                className={`group relative max-w-[980px] overflow-hidden rounded-[22px] border transition-all duration-200 ${
+                className={`group relative w-full overflow-hidden rounded-[22px] border transition-all duration-200 ${
                   resolvedRemoved
                     ? "border-rose-200 bg-rose-50/40"
                     : resolvedReduced
@@ -757,8 +757,7 @@ export function OrderWarehouseProductsSection({
                 }`}
               >
                 <div className="p-6">
-                  <div className="max-w-[1100px]">
-                  </div>
+                  
                   {/* HEADER */}
                   <div className="flex items-start gap-5">
                     {/* IMAGE */}
