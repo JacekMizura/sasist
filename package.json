@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@react-pdf/renderer": "^4.3.2"
+    "@react-pdf/renderer": "^4.3.2",
+    "bcryptjs": "^3.0.3"
   }
 }

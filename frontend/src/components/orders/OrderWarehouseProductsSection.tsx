@@ -47,10 +47,10 @@ function pickFirstFinite(...vals: (number | null | undefined)[]): number | null 
 
 function lineArticleSurfaceClass(resolvedRemoved: boolean, resolvedReduced: boolean, isArchive: boolean): string {
   if (resolvedRemoved) {
-    return "rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm";
+    return "rounded-xl border border-rose-200 bg-rose-50/40 p-4 shadow-sm";
   }
   if (resolvedReduced) {
-    return "rounded-xl border border-rose-100 bg-rose-50/30 p-4 shadow-sm";
+    return "rounded-xl border border-rose-100 bg-rose-50/20 p-4 shadow-sm";
   }
   return `rounded-xl border border-slate-100 bg-white p-4 shadow-sm ${
     isArchive ? "opacity-[0.92]" : ""
@@ -59,9 +59,9 @@ function lineArticleSurfaceClass(resolvedRemoved: boolean, resolvedReduced: bool
 
 function lineQtyBadgeClass(resolvedRemoved: boolean): string {
   if (resolvedRemoved) {
-    return "flex h-8 min-w-[2rem] px-2 shrink-0 items-center justify-center rounded-md border border-rose-200 bg-rose-50 text-[14px] font-bold tabular-nums text-rose-800 line-through opacity-70 shadow-sm";
+    return "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-rose-300 bg-rose-100 text-[15px] font-extrabold tabular-nums text-rose-950";
   }
-  return "flex h-8 min-w-[2rem] px-2 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-[14px] font-bold tabular-nums text-slate-800 shadow-sm";
+  return "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-[15px] font-extrabold tabular-nums text-white shadow-sm";
 }
 
 function locationBadgeClass(storageType?: string | null): string {
@@ -70,7 +70,7 @@ function locationBadgeClass(storageType?: string | null): string {
     return "bg-blue-50 text-blue-700 border border-blue-200/60";
   if (s.includes("reserve") || s.includes("rez"))
     return "bg-amber-50 text-amber-800 border border-amber-200/60";
-  return "bg-emerald-50 text-emerald-800 border border-emerald-200/60";
+  return "bg-emerald-50 text-emerald-700 border border-emerald-200/60";
 }
 
 function formatExpiryPl(iso: string | null | undefined): string | null {
@@ -85,14 +85,14 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
   const picked = wm?.picked_locations;
   if (picked?.length) {
     return (
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-wrap gap-1.5">
         {picked.map((loc, i) => {
           const batch = (loc.batch_number ?? "").trim();
           const exp = formatExpiryPl(loc.expiry_date);
           return (
             <span
               key={`${loc.location_label}-${batch}-${loc.expiry_date ?? ""}-${i}`}
-              className="inline-flex w-fit max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded px-1.5 py-0.5 border border-emerald-200/60 bg-emerald-50 text-[11px] font-medium text-emerald-800"
+              className="inline-flex w-fit max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-1.5 py-0.5 border border-emerald-200/60 bg-emerald-50 text-[11px] font-medium text-emerald-800"
             >
               <span className="truncate">{loc.location_label}</span>
               {batch ? <span className="font-mono text-[10px] opacity-80">Partia {batch}</span> : null}
@@ -109,11 +109,11 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
   const slots = wm?.available_stock_locations;
   if (slots?.length) {
     return (
-      <div className="flex min-w-0 flex-wrap gap-1">
+      <div className="flex min-w-0 flex-wrap gap-1.5">
         {slots.map((loc, i) => (
           <span
             key={`${loc.location_label}-${i}`}
-            className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${locationBadgeClass(loc.storage_type)}`}
+            className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${locationBadgeClass(loc.storage_type)}`}
             title={loc.storage_type ?? undefined}
           >
             <span className="truncate">{loc.location_label}</span>
@@ -129,7 +129,7 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
   if (!lab) return null;
   return (
     <span
-      className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium ${locationBadgeClass(wm?.location_storage_type)}`}
+      className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${locationBadgeClass(wm?.location_storage_type)}`}
     >
       {lab}
       {wm?.location_bin_qty != null && wm.location_bin_qty > 0 ? (
@@ -140,9 +140,9 @@ function LocationsBadges({ wm }: { wm: WmsPackingOrderLineApi | undefined }) {
 }
 
 const CodeBadge = ({ label, value }: { label: string; value: string }) => (
-  <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
-    <span className="text-slate-400 font-normal">{label}</span>
-    <span className="font-mono">{value}</span>
+  <span className="inline-flex items-center gap-1 rounded bg-slate-100/80 px-1.5 py-0.5 text-[10px] border border-slate-200/60 shadow-sm">
+    <span className="font-medium text-slate-400">{label}</span>
+    <span className="font-mono font-medium text-slate-700">{value}</span>
   </span>
 );
 
@@ -151,7 +151,7 @@ const WH_METRIC_V = "mt-1 text-[13px] font-semibold tabular-nums text-slate-800 
 
 function WarehouseMetricCell({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0 flex flex-col h-full justify-start">
+    <div className="min-w-0">
       <p className={WH_METRIC_L}>{label}</p>
       <div className={WH_METRIC_V}>{children}</div>
     </div>
@@ -189,11 +189,11 @@ function BundleSetPreviewBadge({
             return (
               <li key={c.id} className="flex gap-2 rounded-md bg-slate-50 p-1.5">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-                  {img ? <img src={img} alt="" className="max-h-10 max-w-10 object-contain" loading="lazy" /> : <span className="text-[9px] text-slate-300">—</span>}
+                  {img ? <img src={img} alt="" className="max-h-10 max-w-10 object-contain drop-shadow-sm" loading="lazy" /> : <span className="text-[9px] text-slate-300">—</span>}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold leading-snug text-slate-900">{name}</p>
-                  <div className="mt-1 flex flex-wrap gap-1">
+                  <div className="mt-1 flex flex-wrap gap-1.5">
                     {sku && <CodeBadge label="SKU" value={sku} />}
                     {ean && <CodeBadge label="EAN" value={ean} />}
                   </div>
@@ -234,7 +234,7 @@ function BundleComponentWarehouseRow({
       <div className="flex gap-2.5">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center">
           {img ? (
-            <img src={img} alt="" className="max-h-12 max-w-12 object-contain" loading="lazy" />
+            <img src={img} alt="" className="max-h-12 max-w-12 object-contain drop-shadow-sm" loading="lazy" />
           ) : (
             <span className="text-[10px] text-slate-300">—</span>
           )}
@@ -343,7 +343,10 @@ export function OrderWarehouseProductsSection({
     return <p className="py-8 text-center text-sm text-slate-500">Brak pozycji</p>;
   }
 
-  const desktopGridClass = "mt-4 hidden items-start gap-x-4 lg:grid lg:grid-cols-[minmax(0,1fr)_4rem_5rem_5rem_4rem_4rem_5rem_3rem]";
+  // Siatka uwzględniająca to, czy "Wartość" jest ukryta (hideLineTotalHeader) 
+  const desktopGridClass = hideLineTotalHeader
+    ? "mt-2 hidden items-start gap-x-4 lg:grid lg:grid-cols-[minmax(0,1fr)_3rem_4.5rem_4.5rem_3.5rem_4rem_5.5rem_2rem]"
+    : "mt-2 hidden items-start gap-x-4 lg:grid lg:grid-cols-[minmax(0,1fr)_3rem_4.5rem_4.5rem_3.5rem_4rem_5rem_5.5rem_2rem]";
 
   return (
     <div className="space-y-4">
@@ -404,7 +407,7 @@ export function OrderWarehouseProductsSection({
                     <div className="flex min-w-0 flex-1 gap-4">
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center">
                         {row.imageUrl ? (
-                          <img src={row.imageUrl} alt="" className="max-h-16 max-w-16 object-contain" loading="lazy" />
+                          <img src={row.imageUrl} alt="" className="max-h-16 max-w-16 object-contain drop-shadow-sm" loading="lazy" />
                         ) : (
                           <span className="text-[11px] text-slate-300">—</span>
                         )}
@@ -455,7 +458,6 @@ export function OrderWarehouseProductsSection({
                       onEdit={() => onLineAction?.("edit", row.item)}
                       onRabat={() => onLineAction?.("rabat", row.item)}
                       onRemove={() => onLineAction?.("remove", row.item)}
-                      removeLabel="Usuń z zamówienia"
                     />
                   </div>
                 </div>
@@ -464,9 +466,9 @@ export function OrderWarehouseProductsSection({
               <div className={desktopGridClass}>
                 <div className="min-w-0 pr-2">
                   <div className="flex gap-4">
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center">
+                    <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center">
                       {row.imageUrl ? (
-                        <img src={row.imageUrl} alt="" className="max-h-16 max-w-16 object-contain" loading="lazy" />
+                        <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain drop-shadow-sm" loading="lazy" />
                       ) : (
                         <span className="text-[11px] text-slate-300">—</span>
                       )}
@@ -507,9 +509,14 @@ export function OrderWarehouseProductsSection({
                 <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
                 <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
                 <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
+                {hideLineTotalHeader ? null : (
+                  <WarehouseMetricCell label="Wartość">
+                    <span className="font-extrabold text-slate-900">{row.lineGross}</span>
+                  </WarehouseMetricCell>
+                )}
                 <WarehouseMetricCell label="Stan / Rez.">
-                  <div className="font-semibold text-slate-800">—</div>
-                  <div className="text-[11px] font-medium text-slate-500 mt-1">per składnik</div>
+                  <span className="block font-semibold text-slate-800">—</span>
+                  <span className="block text-[11px] font-medium text-slate-500 mt-0.5">per składnik</span>
                 </WarehouseMetricCell>
                 <div className="flex justify-end pt-0.5">
                   <OrderLineKebabMenu
@@ -523,7 +530,6 @@ export function OrderWarehouseProductsSection({
                     onEdit={() => onLineAction?.("edit", row.item)}
                     onRabat={() => onLineAction?.("rabat", row.item)}
                     onRemove={() => onLineAction?.("remove", row.item)}
-                    removeLabel="Usuń z zamówienia"
                   />
                 </div>
               </div>
@@ -534,9 +540,14 @@ export function OrderWarehouseProductsSection({
                 <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
                 <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
                 <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
+                {hideLineTotalHeader ? null : (
+                  <WarehouseMetricCell label="Wartość">
+                    <span className="font-extrabold">{row.lineGross}</span>
+                  </WarehouseMetricCell>
+                )}
                 <WarehouseMetricCell label="Stan mag.">
-                  —
-                  <span className="mt-0.5 block text-[9px] font-normal leading-tight text-slate-400">per składnik</span>
+                  <span className="block">—</span>
+                  <span className="block text-[9px] font-normal leading-tight text-slate-400 mt-0.5">per składnik</span>
                 </WarehouseMetricCell>
                 <WarehouseMetricCell label="Rezerwacja">{row.quantityDisplay}</WarehouseMetricCell>
               </div>
@@ -647,10 +658,10 @@ export function OrderWarehouseProductsSection({
                 <div className="flex flex-wrap items-start gap-3">
                   <div className="flex min-w-0 flex-1 gap-4">
                     <div
-                      className={`flex h-16 w-16 shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
+                      className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
                     >
                       {row.imageUrl ? (
-                        <img src={row.imageUrl} alt="" className="max-h-16 max-w-16 object-contain" loading="lazy" />
+                        <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain drop-shadow-sm" loading="lazy" />
                       ) : (
                         <span className="text-[11px] text-slate-300">—</span>
                       )}
@@ -744,10 +755,10 @@ export function OrderWarehouseProductsSection({
               <div className="min-w-0 overflow-hidden pr-2">
                 <div className="flex gap-4">
                   <div
-                    className={`flex h-16 w-16 shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
+                    className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
                   >
                     {row.imageUrl ? (
-                      <img src={row.imageUrl} alt="" className="max-h-16 max-w-16 object-contain" loading="lazy" />
+                      <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain drop-shadow-sm" loading="lazy" />
                     ) : (
                       <span className="text-[11px] text-slate-300">—</span>
                     )}
@@ -816,9 +827,14 @@ export function OrderWarehouseProductsSection({
               <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
               <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
               <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
+              {hideLineTotalHeader ? null : (
+                <WarehouseMetricCell label="Wartość">
+                  <span className="font-extrabold text-slate-900">{row.lineGross}</span>
+                </WarehouseMetricCell>
+              )}
               <WarehouseMetricCell label="Stan / Rez.">
-                <div className="font-semibold text-slate-800">{stockDisp}</div>
-                <div className="text-[11px] font-medium text-slate-500 mt-1">Rez.: {qtyDisplay}</div>
+                <span className="block">{stockDisp}</span>
+                <span className="block text-[11px] font-medium text-slate-500 mt-0.5">Rez.: {qtyDisplay}</span>
               </WarehouseMetricCell>
               <div className="flex justify-end pt-1">
                 <OrderLineKebabMenu
@@ -842,7 +858,15 @@ export function OrderWarehouseProductsSection({
               <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
               <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
               <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
-              <WarehouseMetricCell label="Stan mag.">{stockDisp}</WarehouseMetricCell>
+              {hideLineTotalHeader ? null : (
+                <WarehouseMetricCell label="Wartość">
+                  <span className="font-extrabold">{row.lineGross}</span>
+                </WarehouseMetricCell>
+              )}
+              <WarehouseMetricCell label="Stan mag.">
+                <span className="block">{stockDisp}</span>
+                <span className="block text-[9px] font-normal leading-tight text-slate-400 mt-0.5">per składnik</span>
+              </WarehouseMetricCell>
               <WarehouseMetricCell label="Rezerwacja">{qtyDisplay}</WarehouseMetricCell>
             </div>
 
