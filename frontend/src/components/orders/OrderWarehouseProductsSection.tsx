@@ -187,8 +187,8 @@ function BundleSetPreviewBadge({
             const name = (wm?.product_name?.trim() || c.product?.name?.trim() || "—") || "—";
             const q = fmtOmsQty(c.quantity);
             return (
-              <li key={c.id} className="flex gap-2 rounded-md bg-slate-50 p-1.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+              <li key={c.id} className="flex gap-2 rounded-md bg-white p-1.5">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-200/70 bg-white shadow-sm">
                   {img ? <img src={img} alt="" className="max-h-10 max-w-10 object-contain drop-shadow-sm" loading="lazy" /> : <span className="text-[9px] text-slate-300">—</span>}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -761,11 +761,13 @@ export function OrderWarehouseProductsSection({
                 }`}
               >
                 <div className="p-6">
+                  <div className="max-w-[1100px]">
+                  </div>
                   {/* HEADER */}
                   <div className="flex items-start gap-5">
                     {/* IMAGE */}
                     <div
-                      className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 ${
+                      className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-white ${
                         resolvedRemoved ? "opacity-50 grayscale" : ""
                       }`}
                     >
@@ -922,7 +924,7 @@ export function OrderWarehouseProductsSection({
 
                       {/* METRICS */}
                       <div className="mt-5 grid grid-cols-5 gap-3">
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Netto
                           </p>
@@ -932,7 +934,7 @@ export function OrderWarehouseProductsSection({
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Brutto
                           </p>
@@ -942,7 +944,7 @@ export function OrderWarehouseProductsSection({
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             VAT
                           </p>
@@ -952,7 +954,7 @@ export function OrderWarehouseProductsSection({
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Rabat
                           </p>
@@ -962,7 +964,7 @@ export function OrderWarehouseProductsSection({
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Stan / Rez.
                           </p>
@@ -1021,7 +1023,7 @@ export function OrderWarehouseProductsSection({
 
                       {/* WORKFLOW */}
                       {!resolvedRemoved ? (
-                        <div className="mt-6 -ml-[116px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80">
+                        <div className="mt-6 -ml-[116px] overflow-hidden rounded-2xl border border-slate-200 bg-white">
                           <OrderLineOperationalWorkflowModule
                             quantity={qtyN}
                             pickedQuantity={picked}
@@ -1111,7 +1113,7 @@ export function OrderWarehouseProductsSection({
                 Pozycja wyłączona z kompletacji i pakowania — usunięta podczas obsługi braków magazynowych.
               </p>
             ) : (
-              <div className="mt-4 overflow-hidden rounded-lg border border-slate-100 bg-white">
+              <div className="mt-4 overflow-hidden rounded-lg border border-slate-200/70 bg-white">
                 <OrderLineOperationalWorkflowModule
                   quantity={qtyN}
                   pickedQuantity={picked}
