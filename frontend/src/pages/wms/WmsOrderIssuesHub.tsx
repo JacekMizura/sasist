@@ -180,7 +180,6 @@ export default function WmsOrderIssuesHub() {
     return () => registerScanHandler(null);
   }, [registerScanHandler, resolveScan]);
 
-  // Logika filtrowania w UI
   const filteredGroups = useMemo(() => {
     if (activeFilter === "Wszystkie statusy") return taskGroups;
     return taskGroups.filter((g) => g.label === activeFilter);
@@ -188,15 +187,15 @@ export default function WmsOrderIssuesHub() {
 
   if (warehouseId == null) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center p-6 text-center text-slate-600">
+      <div className="flex min-h-[50vh] items-center justify-center p-6 text-center text-slate-600 bg-white">
         Wybierz magazyn w nagłówku.
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-50 antialiased">
-      {/* Top Bar (Responsywny) */}
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white antialiased">
+      {/* Top Bar */}
       <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 md:h-16 md:px-6">
         <div className="flex items-center gap-3 md:gap-4">
           <button
@@ -212,7 +211,7 @@ export default function WmsOrderIssuesHub() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => void load()}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent px-3 font-medium text-slate-600 transition-all hover:bg-slate-100 active:scale-95 md:border-slate-200 md:px-4"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-95 md:px-4"
           >
             <i className="fa-solid fa-rotate-right text-lg text-slate-500 md:text-sm"></i>
             <span className="hidden text-sm md:inline">Odśwież</span>
@@ -220,15 +219,16 @@ export default function WmsOrderIssuesHub() {
         </div>
       </header>
 
-      {/* Sekcja Filtrów */}
+      {/* Sekcja Filtrów - Białe tło, zaktualizowane ikony w kolorowych akcentach */}
       <div className="z-10 flex shrink-0 flex-col gap-2 border-b border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:gap-4 md:px-6 md:py-4">
+        {/* Przycisk Filtru Statusu */}
         <button
           onClick={() => setIsFilterModalOpen(true)}
-          className="flex w-full items-center justify-between rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-left transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 active:bg-slate-200 sm:w-72"
+          className="flex w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 active:bg-slate-100 sm:w-72"
         >
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-white shadow-sm">
-              <i className="fa-solid fa-filter text-xs text-slate-500"></i>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-blue-50 text-blue-600 shadow-sm">
+              <i className="fa-solid fa-sliders text-xs"></i>
             </div>
             <div className="flex flex-col">
               <span className="mb-0.5 text-[10px] font-bold uppercase leading-none tracking-wider text-slate-400">
@@ -240,9 +240,10 @@ export default function WmsOrderIssuesHub() {
           <i className="fa-solid fa-chevron-down ml-2 shrink-0 text-sm text-slate-400"></i>
         </button>
 
-        <button className="flex w-full items-center gap-3 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-left transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300 active:bg-slate-200 sm:w-80">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-white shadow-sm">
-            <i className="fa-regular fa-file-lines text-xs text-slate-500"></i>
+        {/* Przycisk Aktywnego Dokumentu */}
+        <button class="flex w-full items-center gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 active:bg-slate-100 sm:w-80">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-amber-50 text-amber-600 shadow-sm">
+            <i className="fa-solid fa-file-invoice text-xs"></i>
           </div>
           <div className="flex flex-col overflow-hidden">
             <span className="mb-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-slate-400">
@@ -253,8 +254,8 @@ export default function WmsOrderIssuesHub() {
         </button>
       </div>
 
-      {/* Główne błędy i warningi */}
-      <div className="px-3 pt-3 md:px-6 md:pt-4">
+      {/* Komunikaty błędów */}
+      <div className="px-3 pt-3 md:px-6 md:pt-4 bg-white">
         {err ? <p className="text-center text-sm font-medium text-amber-800">{err}</p> : null}
         {deeplinkMiss ? (
           <p className="text-center text-sm font-medium text-amber-900">{deeplinkMiss}</p>
@@ -276,8 +277,8 @@ export default function WmsOrderIssuesHub() {
         ) : null}
       </div>
 
-      {/* Lista Zamówień */}
-      <main className="custom-scrollbar flex-1 overflow-y-auto p-3 pb-8 md:p-6">
+      {/* Lista Zamówień - Tło główne zmienione na białe */}
+      <main className="custom-scrollbar flex-1 overflow-y-auto p-3 pb-8 md:p-6 bg-white">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <i className="fa-solid fa-circle-notch animate-spin text-4xl"></i>
@@ -295,7 +296,7 @@ export default function WmsOrderIssuesHub() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
             {filteredGroups.flatMap((g) =>
               g.items.map((t) => {
                 const sl = shortageLinesForCard(t);
@@ -304,7 +305,6 @@ export default function WmsOrderIssuesHub() {
                 const r = t.replacement_pick_pending_count ?? 0;
                 const num = displayOrderNumber(t.order_number).replace("#", "");
 
-                // Ustalanie typów tekstu i kolorów
                 const bucketId = normalizeBrakiBucket(t);
                 const isDanger = bucketId === "awaiting_oms";
                 const isWarning = bucketId === "waiting_customer";
@@ -327,7 +327,7 @@ export default function WmsOrderIssuesHub() {
                   missingNumber = r;
                   qtyLine = `Gotowe do zebrania po zamianie`;
                 } else {
-                  missingNumber = 1; // fallback UI
+                  missingNumber = 1;
                   qtyLine = (t.issue_queue_summary_line ?? "").trim() || "Wymaga uwagi";
                 }
 
@@ -335,7 +335,7 @@ export default function WmsOrderIssuesHub() {
                   <div
                     key={t.id}
                     onClick={() => openIssueTask(navigate, t)}
-                    className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] transition-all hover:border-slate-300 hover:shadow-md active:scale-[0.99] md:p-5"
+                    className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all hover:border-slate-300 hover:shadow-md active:scale-[0.99] md:p-5"
                   >
                     <div className={`absolute bottom-0 left-0 top-0 w-1.5 ${accentColor}`}></div>
 
