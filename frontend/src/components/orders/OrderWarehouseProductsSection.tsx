@@ -752,7 +752,7 @@ export function OrderWarehouseProductsSection({
             </div>
             <div className={desktopGridClass}>
               <div
-                className={`group relative overflow-hidden rounded-[22px] border transition-all duration-200 ${
+                className={`group relative max-w-[980px] overflow-hidden rounded-[22px] border transition-all duration-200 ${
                   resolvedRemoved
                     ? "border-rose-200 bg-rose-50/40"
                     : resolvedReduced
@@ -760,7 +760,7 @@ export function OrderWarehouseProductsSection({
                       : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
                 }`}
               >
-                <div className="p-5">
+                <div className="p-6">
                   {/* HEADER */}
                   <div className="flex items-start gap-5">
                     {/* IMAGE */}
@@ -868,7 +868,7 @@ export function OrderWarehouseProductsSection({
                         <div className="flex items-start gap-4">
                           <div className="flex flex-col items-end">
                             <span
-                              className={`flex h-12 min-w-[52px] items-center justify-center rounded-2xl px-3 text-lg font-black tabular-nums shadow-sm ${
+                              className={`flex h-11 min-w-[46px] items-center justify-center rounded-2xl px-3 text-[17px] font-black tabular-nums shadow-sm ${
                                 resolvedRemoved
                                   ? "bg-rose-100 text-rose-700"
                                   : "bg-amber-500 text-white"
@@ -1021,7 +1021,7 @@ export function OrderWarehouseProductsSection({
 
                       {/* WORKFLOW */}
                       {!resolvedRemoved ? (
-                        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                        <div className="mt-6 -ml-[116px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80">
                           <OrderLineOperationalWorkflowModule
                             quantity={qtyN}
                             pickedQuantity={picked}
