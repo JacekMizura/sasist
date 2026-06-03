@@ -750,107 +750,313 @@ export function OrderWarehouseProductsSection({
                 </div>
               </div>
             </div>
-
             <div className={desktopGridClass}>
-              <div className="min-w-0 overflow-hidden pr-2">
-                <div className="flex gap-4">
-                  <div
-                    className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center ${resolvedRemoved ? "opacity-50 grayscale" : ""}`}
-                  >
-                    {row.imageUrl ? (
-                      <img src={row.imageUrl} alt="" className="max-h-[72px] max-w-[72px] object-contain drop-shadow-sm" loading="lazy" />
-                    ) : (
-                      <span className="text-[11px] text-slate-300">—</span>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {canProductLink ? (
-                        <Link to={`/products/${pid}/edit`} state={{ tenantId: productEditTenantId }} className={productTitleClass}>
-                          {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
-                        </Link>
+              <div
+                className={`group relative overflow-hidden rounded-[22px] border transition-all duration-200 ${
+                  resolvedRemoved
+                    ? "border-rose-200 bg-rose-50/40"
+                    : resolvedReduced
+                      ? "border-amber-200 bg-amber-50/30"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
+                }`}
+              >
+                <div className="p-5">
+                  {/* HEADER */}
+                  <div className="flex items-start gap-5">
+                    {/* IMAGE */}
+                    <div
+                      className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 ${
+                        resolvedRemoved ? "opacity-50 grayscale" : ""
+                      }`}
+                    >
+                      {row.imageUrl ? (
+                        <img
+                          src={row.imageUrl}
+                          alt=""
+                          className="max-h-20 max-w-20 object-contain"
+                          loading="lazy"
+                        />
                       ) : (
-                        <span className={productTitleClassPlain}>{row.name}</span>
+                        <span className="text-[11px] text-slate-300">—</span>
                       )}
-                      {resolvedRemoved && resolvedMeta ? (
-                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-800">
-                          USUNIĘTO PRZEZ BRAK MAGAZYNOWY
-                        </span>
-                      ) : null}
-                      {resolvedReduced && resolvedMeta && !resolvedRemoved ? (
-                        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-700">
-                          ZMNIEJSZONO (BRAK)
-                        </span>
-                      ) : null}
-                      {ols === "REPLACED" ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-600">
-                          Archiwum
-                        </span>
-                      ) : null}
-                      {showSubstituteBadge ? (
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-blue-800">
-                          Produkt zastępczy
-                        </span>
-                      ) : null}
-                    </div>
-                    
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {row.sku && <CodeBadge label="SKU" value={row.sku} />}
-                      {row.ean && <CodeBadge label="EAN" value={row.ean} />}
-                      {row.catalog && <CodeBadge label="NR" value={row.catalog} />}
                     </div>
 
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <LocationsBadges wm={wm} />
-                    </div>
+                    {/* CENTER */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-6">
+                        {/* LEFT */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {canProductLink ? (
+                              <Link
+                                to={`/products/${pid}/edit`}
+                                state={{ tenantId: productEditTenantId }}
+                                className={productTitleClass}
+                              >
+                                {row.name}
 
-                    {resolvedMeta && (resolvedRemoved || resolvedReduced) ? (
-                      <div className="mt-2">
-                        <OrderLineResolvedShortageCallout meta={resolvedMeta} formatDetailDate={formatDetailDate} />
+                                <ExternalLink
+                                  size={14}
+                                  className="ml-1.5 inline text-slate-400"
+                                />
+                              </Link>
+                            ) : (
+                              <span className={productTitleClassPlain}>
+                                {row.name}
+                              </span>
+                            )}
+
+                            {resolvedRemoved && resolvedMeta ? (
+                              <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                                Usunięto
+                              </span>
+                            ) : null}
+
+                            {resolvedReduced && resolvedMeta && !resolvedRemoved ? (
+                              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                                Zmniejszono
+                              </span>
+                            ) : null}
+
+                            {ols === "REPLACED" ? (
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                                Archiwum
+                              </span>
+                            ) : null}
+
+                            {showSubstituteBadge ? (
+                              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-800">
+                                Zamiennik
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {/* CODES */}
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {row.sku && <CodeBadge label="SKU" value={row.sku} />}
+                            {row.ean && <CodeBadge label="EAN" value={row.ean} />}
+                            {row.catalog && (
+                              <CodeBadge label="NR" value={row.catalog} />
+                            )}
+                          </div>
+
+                          {/* LOCATIONS */}
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            <LocationsBadges wm={wm} />
+                          </div>
+
+                          {/* TRACE */}
+                          {subIn && oldSub ? (
+                            <p className="mt-3 text-xs text-slate-500">
+                              Zamiast:
+                              <span className="ml-1 font-medium text-slate-700">
+                                {oldSub}
+                              </span>
+                            </p>
+                          ) : null}
+
+                          {(wm?.oms_line_secondary_trace ?? "").trim() &&
+                          !subIn &&
+                          !resolvedRemoved ? (
+                            <p className="mt-3 text-xs leading-snug text-slate-500">
+                              {(wm?.oms_line_secondary_trace ?? "").trim()}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {/* RIGHT */}
+                        <div className="flex items-start gap-4">
+                          <div className="flex flex-col items-end">
+                            <span
+                              className={`flex h-12 min-w-[52px] items-center justify-center rounded-2xl px-3 text-lg font-black tabular-nums shadow-sm ${
+                                resolvedRemoved
+                                  ? "bg-rose-100 text-rose-700"
+                                  : "bg-amber-500 text-white"
+                              }`}
+                            >
+                              {qtyDisplay}
+                            </span>
+
+                            {!hideLineTotalHeader ? (
+                              <div className="mt-3 text-right">
+                                <p
+                                  className={`text-[28px] font-black leading-none tabular-nums ${
+                                    resolvedRemoved
+                                      ? "text-rose-700/70 line-through"
+                                      : "text-slate-900"
+                                  }`}
+                                >
+                                  {row.lineGross}
+                                </p>
+
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {qtyDisplay} × {row.unitGross}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <OrderLineKebabMenu
+                            lineId={row.item.id}
+                            anchorId={`order-wh-line-kebab-desk-${row.item.id}`}
+                            buttonClassName="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                            open={
+                              openMenuKey ===
+                              whKebabMenuKey("desk", row.item.id)
+                            }
+                            onOpenChange={(next) =>
+                              setOpenMenuKey(
+                                next
+                                  ? whKebabMenuKey("desk", row.item.id)
+                                  : null,
+                              )
+                            }
+                            locked={lineLocked}
+                            lockedMessage={lineLockedMessage ?? undefined}
+                            onEdit={() => onLineAction?.("edit", row.item)}
+                            onRabat={() => onLineAction?.("rabat", row.item)}
+                            onRemove={() => onLineAction?.("remove", row.item)}
+                          />
+                        </div>
                       </div>
-                    ) : null}
-                    {subIn && oldSub ? (
-                      <p className="mt-2 text-xs text-slate-500">
-                        Zamiast: <span className="font-medium text-slate-700">{oldSub}</span>
-                      </p>
-                    ) : null}
-                    {(wm?.oms_line_secondary_trace ?? "").trim() && !subIn && !resolvedRemoved ? (
-                      <p className="mt-2 text-xs leading-snug text-slate-500">{(wm?.oms_line_secondary_trace ?? "").trim()}</p>
-                    ) : null}
+
+                      {/* METRICS */}
+                      <div className="mt-5 grid grid-cols-5 gap-3">
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Netto
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-slate-900">
+                            {row.unitNet}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Brutto
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-slate-900">
+                            {row.unitGross}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            VAT
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-slate-900">
+                            {row.vatLabel}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Rabat
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-slate-900">
+                            {rabatDisplay}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Stan / Rez.
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-slate-900">
+                            {stockDisp}
+                          </p>
+
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Rez.: {qtyDisplay}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* SHORTAGE */}
+                      {shortageUi ? (
+                        <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-4">
+                          <p className="text-sm font-bold text-red-900">
+                            Zebrano {picked} / {qtyN} · Brak:{" "}
+                            {Number(wm?.missing_quantity ?? 0)}
+                          </p>
+
+                          <div className="mt-3">
+                            <OrderFulfillmentLineShortageInlineActions
+                              orderId={orderId}
+                              orderItemId={row.item.id}
+                              waiting={
+                                itemWaitingById.get(row.item.id) ?? false
+                              }
+                              onRefreshOrder={onRefreshOrder}
+                              onRefreshWms={onRefreshWms}
+                              onReplaceProduct={onReplaceProduct}
+                              productName={row.name}
+                              sku={row.sku || null}
+                              ean={row.ean || null}
+                              orderedQuantity={qtyN}
+                              missingQuantity={Number(
+                                wm?.missing_quantity ?? 0,
+                              )}
+                              productImageUrl={row.imageUrl}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* RESOLVED */}
+                      {resolvedMeta &&
+                      (resolvedRemoved || resolvedReduced) ? (
+                        <div className="mt-5">
+                          <OrderLineResolvedShortageCallout
+                            meta={resolvedMeta}
+                            formatDetailDate={formatDetailDate}
+                          />
+                        </div>
+                      ) : null}
+
+                      {/* WORKFLOW */}
+                      {!resolvedRemoved ? (
+                        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                          <OrderLineOperationalWorkflowModule
+                            quantity={qtyN}
+                            pickedQuantity={picked}
+                            packedQuantity={packed}
+                            pickedQuantityFinal={
+                              wm?.picked_quantity_final ?? null
+                            }
+                            wmsPickingLineStatus={
+                              wm?.wms_picking_line_status ?? null
+                            }
+                            shortageLine={shortageUi}
+                            timeline={timeline}
+                            pickSubtitle={
+                              wm?.last_pick_audit_summary ?? null
+                            }
+                            packSubtitle={
+                              wm?.last_pack_audit_summary ?? null
+                            }
+                            logisticsLines={logisticsLines}
+                          />
+                        </div>
+                      ) : (
+                        <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4">
+                          <p className="text-sm font-medium text-rose-800">
+                            Pozycja usunięta z kompletacji z powodu braków
+                            magazynowych.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="flex justify-center pt-0.5">
-                <span className={lineQtyBadgeClass(resolvedRemoved)}>{qtyDisplay}</span>
-              </div>
-              <WarehouseMetricCell label="Netto/szt">{row.unitNet}</WarehouseMetricCell>
-              <WarehouseMetricCell label="Brutto/szt">{row.unitGross}</WarehouseMetricCell>
-              <WarehouseMetricCell label="VAT">{row.vatLabel}</WarehouseMetricCell>
-              <WarehouseMetricCell label="Rabat">{rabatDisplay}</WarehouseMetricCell>
-              {hideLineTotalHeader ? null : (
-                <WarehouseMetricCell label="Wartość">
-                  <span className="font-extrabold text-slate-900">{row.lineGross}</span>
-                </WarehouseMetricCell>
-              )}
-              <WarehouseMetricCell label="Stan / Rez.">
-                <span className="block">{stockDisp}</span>
-                <span className="block text-[11px] font-medium text-slate-500 mt-0.5">Rez.: {qtyDisplay}</span>
-              </WarehouseMetricCell>
-              <div className="flex justify-end pt-1">
-                <OrderLineKebabMenu
-                  lineId={row.item.id}
-                  anchorId={`order-wh-line-kebab-desk-${row.item.id}`}
-                  buttonClassName={whKebabBtn}
-                  open={openMenuKey === whKebabMenuKey("desk", row.item.id)}
-                  onOpenChange={(next) => setOpenMenuKey(next ? whKebabMenuKey("desk", row.item.id) : null)}
-                  locked={lineLocked}
-                  lockedMessage={lineLockedMessage ?? undefined}
-                  onEdit={() => onLineAction?.("edit", row.item)}
-                  onRabat={() => onLineAction?.("rabat", row.item)}
-                  onRemove={() => onLineAction?.("remove", row.item)}
-                />
-              </div>
             </div>
+            
 
             <div className="mt-4 grid grid-cols-2 gap-3 pt-3 sm:grid-cols-3 lg:hidden">
               <WarehouseMetricCell label="Ilość">{qtyDisplay}</WarehouseMetricCell>
