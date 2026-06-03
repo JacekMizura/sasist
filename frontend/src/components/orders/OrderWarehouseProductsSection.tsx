@@ -1014,7 +1014,7 @@ export function OrderWarehouseProductsSection({
 
                       {/* WORKFLOW */}
                       {!resolvedRemoved ? (
-                        <div className="mt-6 -ml-[116px] overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        <div className="mt-5 overflow-hidden rounded-xl border border-slate-200/80 bg-white">
                           <OrderLineOperationalWorkflowModule
                             quantity={qtyN}
                             pickedQuantity={picked}

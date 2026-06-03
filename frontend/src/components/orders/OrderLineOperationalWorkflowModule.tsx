@@ -101,10 +101,10 @@ export function OrderLineOperationalWorkflowModule({
 
   return (
     <section
-      className="bg-white px-5 py-4"
+      className="bg-white px-4 py-3"
       aria-label="Realizacja magazynowa — pozycja"
     >
-      <div className="flex items-center gap-10">
+      <div className="flex items-center gap-6">
         {/* LOCATION */}
         <div className="shrink-0">
           {locationsSlot}
