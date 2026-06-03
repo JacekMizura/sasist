@@ -37,7 +37,6 @@ type OrderItemRow = {
 type OrderDetail = {
   id: number;
   tenant_id?: number;
-  /** Magazyn zamówienia — musi trafić do `GET /complaints` (filt `warehouse_id`), inaczej reklamacje OMS znikają z kolejki WMS. */
   warehouse_id?: number;
   number?: string | null;
   external_id?: string | null;
@@ -46,7 +45,6 @@ type OrderDetail = {
   first_name?: string | null;
   last_name?: string | null;
   source?: string | null;
-  /** Z GET `orders/:id/` — używane tylko do wyświetlenia na karcie (bez zmiany zapytań). */
   order_date?: string | null;
   created_at?: string | null;
   addresses_json?: string | null;
@@ -88,7 +86,6 @@ function wmsReturnListUnitsAndLineCount(r: WmsReturnListItem): { lineCount: numb
   return { lineCount, unitSum };
 }
 
-/** Skrót listy RMZ: „3 pozycje • 5 szt.” (bez nazw produktów). */
 function returnQueueSummaryLine(r: WmsReturnListItem): string | null {
   const { lineCount, unitSum } = wmsReturnListUnitsAndLineCount(r);
   if (lineCount <= 0) return null;
@@ -112,7 +109,6 @@ function complaintListLinesCount(c: ComplaintListItem): number {
   return 1;
 }
 
-/** Skrót reklamacji na liście — tylko liczba pozycji (bez nazw produktów). */
 function complaintQueuePositionSummary(c: ComplaintListItem): string {
   const n = complaintListLinesCount(c);
   if (n === 0) return "0 pozycji reklamacyjnych";
@@ -124,7 +120,6 @@ function complaintQueuePositionSummary(c: ComplaintListItem): string {
   return `${n} pozycji reklamacyjnych`;
 }
 
-/** Dokument sprzedaży — podtytuł w wynikach wyszukiwania. */
 function orderDocSubtitle(sales_document_number?: string | null): string | null {
   const doc = (sales_document_number || "").trim();
   return doc ? `Dok. sprz.: ${doc}` : null;
@@ -222,7 +217,6 @@ function wmsReturnListStatusMatchesTerminalKeywords(st: ReturnStatusBrief): bool
   return false;
 }
 
-/** Kafel zakończony — szara karta + wstążka (skan kolejki). */
 function wmsReturnListItemIsCompleted(r: WmsReturnListItem): boolean {
   const tp = (r.status?.type ?? "").toLowerCase();
   if (tp === "done_success" || tp === "done_rejected") return true;
@@ -271,7 +265,6 @@ function complaintListRibbon(c: ComplaintListItem): { text: string; tone: WmsQue
   return null;
 }
 
-/** Duża przekątna wstążka „stemplowa” — pełna czytelność, poza warstwą opacity karty. */
 function WmsQueueDiagonalRibbon({ text, tone }: { text: string; tone: WmsQueueRibbonTone }) {
   const band =
     tone === "green"
@@ -301,7 +294,6 @@ function WmsQueueDiagonalRibbon({ text, tone }: { text: string; tone: WmsQueueRi
   );
 }
 
-/** Maps `status.color` from API to badge (fallback: slate). Card tint uses `status.type`. */
 const RMZ_COLOR_BADGE: Record<string, string> = {
   blue: "bg-blue-100 text-blue-700 ring-1 ring-blue-200/90",
   green: "bg-green-100 text-green-700 ring-1 ring-green-200/90",
@@ -381,53 +373,6 @@ function orderTileContactFromAddresses(raw: string | null | undefined): {
   return { phone, email, login };
 }
 
-function BarcodeScanIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      aria-hidden
-    >
-      <path d="M4 7V5a1 1 0 0 1 1-1h2" />
-      <path d="M4 17v2a1 1 0 0 0 1 1h2" />
-      <path d="M16 4h2a1 1 0 0 1 1 1v2" />
-      <path d="M16 20h2a1 1 0 0 0 1-1v-2" />
-      <path d="M7 8v8" />
-      <path d="M10 7v10" />
-      <path d="M13 8v8" />
-      <path d="M16 7v10" />
-    </svg>
-  );
-}
-
-function PackageWaitIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="72"
-      height="72"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="m7.5 4.27 9 5.15" />
-      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-      <path d="m3.3 7.8 8.7 5 8.7-5" />
-      <path d="M12 22V12" />
-    </svg>
-  );
-}
-
 const LIST_CARD_THEME = {
   return: {
     border: "border-blue-200/90 hover:border-blue-400",
@@ -458,15 +403,10 @@ type WmsListCardTileProps = {
   idLine: string;
   statusLabel: string;
   statusBadgeClassName: string;
-  /** Świeży zwrot (niebieska plakietka) — tylko sensowne dla ``variant === \"return\"``. */
   freshIncoming?: boolean;
-  /** Meta pod nagłówkiem (zamówienie, klient, SLA). */
   metaLines?: string[];
-  /** Skrót operacyjny (np. „3 pozycje • 5 szt.” / pozycje reklamacji). */
   bodyLine?: string | null;
-  /** Druga linia treści (np. powód). */
   bodyExtra?: string | null;
-  /** Zakończony dokument — stonowany wygląd + wstążka. */
   isCompleted?: boolean;
   ribbon?: { text: string; tone: WmsQueueRibbonTone } | null;
   createdAtIso?: string | null;
@@ -619,8 +559,8 @@ export default function WmsReturnsEntryPage() {
   const [highlightReturnId, setHighlightReturnId] = useState<number | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [returnPanelEntered, setReturnPanelEntered] = useState(false);
-  /** Po „Zapisz” na ekranie procesu RMZ — komunikat na hubie (sessionStorage, bo navigate czyści state). */
   const [savedReturnFlash, setSavedReturnFlash] = useState<string | null>(null);
+  
   const preselectSig = useRef<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const firstHitButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -629,6 +569,7 @@ export default function WmsReturnsEntryPage() {
   const createFormSectionRef = useRef<HTMLElement | null>(null);
 
   const { registerScanHandler, setActiveDocument, showScannerToast } = useWmsScanner();
+  
   useEffect(() => {
     setActiveDocument({ kind: "custom", label: "Zwroty WMS" });
     registerScanHandler((ean) => {
@@ -971,28 +912,76 @@ export default function WmsReturnsEntryPage() {
   const showScanIdle = !selectedOrder && hits.length === 0 && !loading && !err && !orderLoadErr;
 
   return (
-    <div className="flex min-h-[85vh] w-full flex-col bg-[#f0f2f4]">
-      <div className="flex w-full flex-col px-6 pb-8 pt-4">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-white text-slate-800 antialiased">
+      
+      {/* Top Navigation */}
+      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-3 shadow-sm md:h-16 md:px-6">
+        <div className="flex items-center gap-3">
+          <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-slate-500 transition-all hover:bg-slate-100 active:scale-95 md:h-9 md:w-9 md:border-slate-200">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" className="h-5 w-5 md:h-4 md:w-4 text-slate-500">
+              <path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM416 416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416z"/>
+            </svg>
+          </button>
+          <h1 className="text-lg font-bold leading-tight text-slate-800 md:text-xl">
+            Zwroty / Reklamacje
+          </h1>
+        </div>
+        <div className="ml-auto hidden items-center gap-3 pr-2 md:flex">
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-bold text-slate-800">Super Admin</span>
+            <span className="block text-right text-[9px] uppercase tracking-wider text-slate-400">SUPER_ADMIN</span>
+          </div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+            SA
+          </div>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="flex w-full flex-1 flex-col overflow-y-auto bg-white custom-scrollbar">
         {savedReturnFlash ? (
           <div
             role="status"
-            className="mx-auto mb-4 w-full max-w-xl rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-center text-sm font-semibold text-emerald-900 shadow-sm"
+            className="mx-auto mt-4 w-full max-w-xl rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-center text-sm font-semibold text-emerald-900 shadow-sm"
           >
             {savedReturnFlash}
           </div>
         ) : null}
-        <div className="mb-10 mt-4 flex w-full justify-center">
-          <div className="w-full max-w-xl">
-            <div className="relative w-full">
-              <label className="sr-only" htmlFor="wms-returns-scan-input">
-                Zeskanuj numer zamówienia lub kod zwrotu
-              </label>
-              <span
-                className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-400"
-                aria-hidden
+
+        <div className={showScanIdle ? "flex flex-1 items-center justify-center w-full" : "w-full px-4 md:px-6 pt-4 md:pt-6"}>
+          
+          <div className={showScanIdle ? "flex w-full max-w-2xl flex-col items-center justify-center p-4 text-center md:p-8 -mt-10" : "mx-auto mb-6 w-full max-w-xl"}>
+            
+            {showScanIdle && (
+              <>
+                <div className="relative mb-6 h-24 w-24 md:h-32 md:w-32">
+                  <div className="absolute inset-0 animate-[pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] rounded-full bg-blue-50"></div>
+                  <div className="absolute inset-2 flex items-center justify-center rounded-full border-2 border-dashed border-blue-200 bg-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" className="h-10 w-10 text-blue-500 md:h-12 md:w-12">
+                      <path d="M256 0c-12.8 0-24.8 5.6-33 15L64 185l-44.5 13.9C7.8 202.5 0 212.8 0 224V448c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V224c0-11.2-7.8-21.5-19.5-25.1L448 185 289 15c-8.2-9.4-20.2-15-33-15zM64 220l41.6-13.1L256 31.5l150.4 175.4L448 220v36H64V220zm416 76H320v44c0 24.3-19.7 44-44 44H236c-24.3 0-44-19.7-44-44V296H64V448c0 8.8 7.2 16 16 16H432c8.8 0 16-7.2 16-16V296z"/>
+                    </svg>
+                  </div>
+                </div>
+                <h2 className="mb-8 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
+                  Skanowanie zwrotu
+                </h2>
+              </>
+            )}
+
+            <div className={`relative mx-auto w-full ${showScanIdle ? "max-w-md mb-8" : "w-full"}`}>
+              <svg 
+                className="absolute left-4 top-1/2 z-10 -translate-y-1/2 text-slate-400 h-5 w-5" 
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden
               >
-                <BarcodeScanIcon className="h-5 w-5" />
-              </span>
+                <path d="M4 7V5a1 1 0 0 1 1-1h2" />
+                <path d="M4 17v2a1 1 0 0 0 1 1h2" />
+                <path d="M16 4h2a1 1 0 0 1 1 1v2" />
+                <path d="M16 20h2a1 1 0 0 0 1-1v-2" />
+                <path d="M7 8v8" />
+                <path d="M10 7v10" />
+                <path d="M13 8v8" />
+                <path d="M16 7v10" />
+              </svg>
               <input
                 id="wms-returns-scan-input"
                 ref={searchInputRef}
@@ -1001,221 +990,234 @@ export default function WmsReturnsEntryPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void search();
                 }}
-                placeholder="Zeskanuj numer zamówienia lub kod zwrotu"
-                className="box-border h-11 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 text-sm font-medium text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-gray-300 focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
+                placeholder="Zeskanuj list przewozowy"
+                className={`w-full rounded-xl border-2 border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
+                  showScanIdle ? "h-14 pl-12 pr-4" : "h-11 pl-11 pr-4"
+                }`}
                 autoComplete="off"
                 spellCheck={false}
               />
             </div>
+
+            {showScanIdle && (
+              <button className="mx-auto flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-6 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/10 active:bg-slate-100">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" className="h-4 w-4 text-slate-400">
+                  <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
+                </svg>
+                Zaawansowana wyszukiwarka
+              </button>
+            )}
+
+            {!showScanIdle && (
+              <>
+                {err && <p className="mt-3 text-center text-sm text-rose-600">{err}</p>}
+                {orderLoadErr && <p className="mt-3 text-center text-sm text-rose-600">{orderLoadErr}</p>}
+                {loading && <p className="mt-6 text-center text-sm font-medium text-slate-500">Szukam…</p>}
+              </>
+            )}
           </div>
-        </div>
 
-        {err && <p className="mt-3 text-center text-sm text-rose-600">{err}</p>}
-        {orderLoadErr && <p className="mt-3 text-center text-sm text-rose-600">{orderLoadErr}</p>}
-        {loading && (
-          <p className="mt-6 text-center text-sm font-medium text-slate-500">Szukam…</p>
-        )}
-
-        {showScanIdle && (
-          <div className="flex flex-col items-center gap-4 text-slate-500">
-            <PackageWaitIcon className="text-slate-400" />
-            <p className="text-lg font-medium tracking-wide text-slate-600">Czekam na skan…</p>
-          </div>
-        )}
-
-        {hits.length > 0 && !selectedOrder && (
-          <ul className="mt-8 w-full space-y-2">
-            {hits.map((h, hi) => {
-              const sub = orderDocSubtitle(h.sales_document_number);
-              return (
-                <li key={h.id}>
-                  <button
-                    type="button"
-                    ref={hi === 0 ? firstHitButtonRef : undefined}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm outline-none transition hover:border-slate-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#41546a]/35"
-                    onClick={() =>
-                      void loadOrderById(h.id, {
-                        highlightReturnId:
-                          h.matched_return_id != null && Number.isFinite(h.matched_return_id)
-                            ? h.matched_return_id
-                            : undefined,
-                      })
-                    }
-                  >
-                    <span className="text-base font-semibold text-slate-900">{h.number ?? `#${h.id}`}</span>
-                    {sub ? <span className="truncate text-xs text-slate-500">{sub}</span> : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        {selectedOrder && (
-          <div className="mt-8 w-full space-y-6">
-            <div className="flex w-full flex-col gap-4 rounded-xl border-2 border-slate-200/90 bg-white p-4 shadow-md sm:flex-row sm:items-center sm:gap-0">
-              <div className="flex shrink-0 flex-col text-left">
-                <div className="text-2xl font-bold tabular-nums text-slate-900">
-                  #{selectedOrder.number ?? selectedOrder.id}
-                </div>
-                <div className="text-sm text-gray-500 tabular-nums">{orderTileDateLine}</div>
-              </div>
-
-              <div className="ml-0 flex min-w-0 flex-col space-y-1.5 text-left sm:ml-6">
-                <div
-                  className={`text-lg font-semibold ${orderHeaderMissingCustomer ? "italic text-gray-400" : "text-slate-900"}`}
-                >
-                  {orderHeaderCustomer}
-                </div>
-                {orderTileContact.login ? (
-                  <div className="text-base text-gray-500">{orderTileContact.login}</div>
-                ) : null}
-                <div className="text-base text-gray-500">{orderHeaderSource}</div>
-              </div>
-
-              <div className="ml-0 flex min-w-0 flex-col space-y-1.5 text-left text-base font-medium sm:ml-10">
-                <span className="tabular-nums text-slate-800">{orderTileContact.phone ?? "—"}</span>
-                <span className="break-all text-slate-700">{orderTileContact.email ?? "—"}</span>
-              </div>
-
-              <div className="flex items-center sm:ml-auto">
-                <button
-                  type="button"
-                  disabled={listLoading}
-                  className="h-12 w-full rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                  onClick={openNewReturnForm}
-                >
-                  + Nowy zwrot
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <h2 className="mb-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
-                Zwroty / Reklamacje
-              </h2>
-
-              {orderReturnsErr && <p className="mb-2 text-sm text-rose-600">{orderReturnsErr}</p>}
-              {orderComplaintsErr && <p className="mb-2 text-sm text-rose-600">{orderComplaintsErr}</p>}
-              {listLoading && <p className="text-sm text-slate-500">Ładowanie…</p>}
-
-              {!listLoading && !orderReturnsErr && !orderComplaintsErr && !hasReturns && !hasComplaints && (
-                <p className="rounded-lg border border-dashed border-slate-300 bg-white/80 px-3 py-3 text-left text-sm text-slate-600">
-                  Brak zwrotów i reklamacji — użyj „Nowy zwrot”, aby dodać RMZ.
-                </p>
+          {!showScanIdle && (
+            <div className="mx-auto w-full max-w-5xl">
+              {hits.length > 0 && !selectedOrder && (
+                <ul className="mb-8 w-full space-y-2">
+                  {hits.map((h, hi) => {
+                    const sub = orderDocSubtitle(h.sales_document_number);
+                    return (
+                      <li key={h.id}>
+                        <button
+                          type="button"
+                          ref={hi === 0 ? firstHitButtonRef : undefined}
+                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm outline-none transition hover:border-slate-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#41546a]/35"
+                          onClick={() =>
+                            void loadOrderById(h.id, {
+                              highlightReturnId:
+                                h.matched_return_id != null && Number.isFinite(h.matched_return_id)
+                                  ? h.matched_return_id
+                                  : undefined,
+                            })
+                          }
+                        >
+                          <span className="text-base font-semibold text-slate-900">{h.number ?? `#${h.id}`}</span>
+                          {sub ? <span className="truncate text-xs text-slate-500">{sub}</span> : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
 
-              {(hasReturns || hasComplaints) ? (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filtr kolejki zwroty i reklamacje">
-                    {(
-                      [
-                        { key: "all" as const, label: "Wszystko" },
-                        { key: "returns" as const, label: "Zwroty" },
-                        { key: "complaints" as const, label: "Reklamacje" },
-                      ] as const
-                    ).map(({ key, label }) => {
-                      const active = queueFilter === key;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          role="tab"
-                          aria-selected={active}
-                          disabled={listLoading}
-                          onClick={() => setQueueFilter(key)}
-                          className={`rounded-full border px-3 py-1.5 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                            active
-                              ? "border-slate-900 bg-slate-900 text-white"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {!listLoading && !orderReturnsErr && !orderComplaintsErr && mergedQueueTiles.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50/90 px-3 py-3 text-left text-sm text-amber-950">
-                      Brak pozycji w wybranym filtrze — przełącz na „Wszystko”, „Zwroty” lub „Reklamacje”.
-                    </p>
-                  ) : null}
-                  {mergedQueueTiles.length > 0 ? (
-                  <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {mergedQueueTiles.map((entry, idx) => {
-                      if (entry.kind === "return") {
-                        const r = entry.ret;
-                        const { label: statusLabel, badge } = rmzCardClasses(r.status);
-                        const retDone = wmsReturnListItemIsCompleted(r);
-                        const retRibbon = wmsReturnListRibbon(r);
-                        const retContent = returnQueueCardContent(r, selectedOrder);
-                        return (
-                          <div
-                            key={`rmz-${r.id}`}
-                            className="min-h-0"
-                            ref={(el) => {
-                              rowRefs.current[r.id] = el;
-                            }}
-                          >
-                            <WmsListCardTile
-                              variant="return"
-                              idLine={r.rmz_number}
-                              metaLines={retContent.metaLines}
-                              bodyLine={retContent.bodyLine}
-                              isCompleted={retDone}
-                              ribbon={retRibbon}
-                              statusLabel={statusLabel}
-                              statusBadgeClassName={badge}
-                              freshIncoming={wmsReturnShowsFreshIncomingBadge(r.status)}
-                              createdAtIso={r.created_at}
-                              onActivate={() => navigate(WMS_ROUTES.returnsProcess(r.id))}
-                              tileRef={idx === 0 ? firstQueueTileRef : undefined}
-                            />
-                          </div>
-                        );
-                      }
-                      const c = entry.cmp;
-                      const st = complaintRowStatusPresentation(c.status);
-                      const cmpDone = complaintListItemIsCompleted(c);
-                      const cmpRibbon = complaintListRibbon(c);
-                      const cmpContent = complaintQueueCardContent(c, selectedOrder);
-                      return (
-                        <div key={`cmp-${c.id}`} className="min-h-0">
-                          <WmsListCardTile
-                            variant="complaint"
-                            idLine={`Reklamacja #${c.id}`}
-                            metaLines={cmpContent.metaLines}
-                            bodyLine={cmpContent.bodyLine}
-                            bodyExtra={cmpContent.bodyExtra}
-                            isCompleted={cmpDone}
-                            ribbon={cmpRibbon}
-                            statusLabel={st.label}
-                            statusBadgeClassName={st.badgeClass}
-                            createdAtIso={c.created_at}
-                            onActivate={() => {
-                              if (import.meta.env.DEV) {
-                                console.log("Open complaint", {
-                                  complaintId: c.id,
-                                  complaintNumber: c.reference_code,
-                                  orderId: c.order_id,
-                                });
-                              }
-                              navigate(WMS_ROUTES.complaintsProcess(c.id));
-                            }}
-                            tileRef={idx === 0 ? firstQueueTileRef : undefined}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        )}
-      </div>
+              {selectedOrder && (
+                <div className="mb-8 w-full space-y-6">
+                  <div className="flex w-full flex-col gap-4 rounded-xl border-2 border-slate-200/90 bg-white p-4 shadow-md sm:flex-row sm:items-center sm:gap-0">
+                    <div className="flex shrink-0 flex-col text-left">
+                      <div className="text-2xl font-bold tabular-nums text-slate-900">
+                        #{selectedOrder.number ?? selectedOrder.id}
+                      </div>
+                      <div className="text-sm text-gray-500 tabular-nums">{orderTileDateLine}</div>
+                    </div>
 
+                    <div className="ml-0 flex min-w-0 flex-col space-y-1.5 text-left sm:ml-6">
+                      <div
+                        className={`text-lg font-semibold ${orderHeaderMissingCustomer ? "italic text-gray-400" : "text-slate-900"}`}
+                      >
+                        {orderHeaderCustomer}
+                      </div>
+                      {orderTileContact.login ? (
+                        <div className="text-base text-gray-500">{orderTileContact.login}</div>
+                      ) : null}
+                      <div className="text-base text-gray-500">{orderHeaderSource}</div>
+                    </div>
+
+                    <div className="ml-0 flex min-w-0 flex-col space-y-1.5 text-left text-base font-medium sm:ml-10">
+                      <span className="tabular-nums text-slate-800">{orderTileContact.phone ?? "—"}</span>
+                      <span className="break-all text-slate-700">{orderTileContact.email ?? "—"}</span>
+                    </div>
+
+                    <div className="flex items-center sm:ml-auto">
+                      <button
+                        type="button"
+                        disabled={listLoading}
+                        className="h-12 w-full rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                        onClick={openNewReturnForm}
+                      >
+                        + Nowy zwrot
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="mb-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Zwroty / Reklamacje
+                    </h2>
+
+                    {orderReturnsErr && <p className="mb-2 text-sm text-rose-600">{orderReturnsErr}</p>}
+                    {orderComplaintsErr && <p className="mb-2 text-sm text-rose-600">{orderComplaintsErr}</p>}
+                    {listLoading && <p className="text-sm text-slate-500">Ładowanie…</p>}
+
+                    {!listLoading && !orderReturnsErr && !orderComplaintsErr && !hasReturns && !hasComplaints && (
+                      <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-left text-sm text-slate-600">
+                        Brak zwrotów i reklamacji — użyj „Nowy zwrot”, aby dodać RMZ.
+                      </p>
+                    )}
+
+                    {(hasReturns || hasComplaints) ? (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filtr kolejki zwroty i reklamacje">
+                          {(
+                            [
+                              { key: "all" as const, label: "Wszystko" },
+                              { key: "returns" as const, label: "Zwroty" },
+                              { key: "complaints" as const, label: "Reklamacje" },
+                            ] as const
+                          ).map(({ key, label }) => {
+                            const active = queueFilter === key;
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                role="tab"
+                                aria-selected={active}
+                                disabled={listLoading}
+                                onClick={() => setQueueFilter(key)}
+                                className={`rounded-full border px-4 py-1.5 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  active
+                                    ? "border-slate-900 bg-slate-900 text-white"
+                                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        
+                        {!listLoading && !orderReturnsErr && !orderComplaintsErr && mergedQueueTiles.length === 0 ? (
+                          <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50/90 px-3 py-3 text-left text-sm text-amber-950">
+                            Brak pozycji w wybranym filtrze — przełącz na „Wszystko”, „Zwroty” lub „Reklamacje”.
+                          </p>
+                        ) : null}
+                        
+                        {mergedQueueTiles.length > 0 ? (
+                        <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {mergedQueueTiles.map((entry, idx) => {
+                            if (entry.kind === "return") {
+                              const r = entry.ret;
+                              const { label: statusLabel, badge } = rmzCardClasses(r.status);
+                              const retDone = wmsReturnListItemIsCompleted(r);
+                              const retRibbon = wmsReturnListRibbon(r);
+                              const retContent = returnQueueCardContent(r, selectedOrder);
+                              return (
+                                <div
+                                  key={`rmz-${r.id}`}
+                                  className="min-h-0"
+                                  ref={(el) => {
+                                    rowRefs.current[r.id] = el;
+                                  }}
+                                >
+                                  <WmsListCardTile
+                                    variant="return"
+                                    idLine={r.rmz_number}
+                                    metaLines={retContent.metaLines}
+                                    bodyLine={retContent.bodyLine}
+                                    isCompleted={retDone}
+                                    ribbon={retRibbon}
+                                    statusLabel={statusLabel}
+                                    statusBadgeClassName={badge}
+                                    freshIncoming={wmsReturnShowsFreshIncomingBadge(r.status)}
+                                    createdAtIso={r.created_at}
+                                    onActivate={() => navigate(WMS_ROUTES.returnsProcess(r.id))}
+                                    tileRef={idx === 0 ? firstQueueTileRef : undefined}
+                                  />
+                                </div>
+                              );
+                            }
+                            const c = entry.cmp;
+                            const st = complaintRowStatusPresentation(c.status);
+                            const cmpDone = complaintListItemIsCompleted(c);
+                            const cmpRibbon = complaintListRibbon(c);
+                            const cmpContent = complaintQueueCardContent(c, selectedOrder);
+                            return (
+                              <div key={`cmp-${c.id}`} className="min-h-0">
+                                <WmsListCardTile
+                                  variant="complaint"
+                                  idLine={`Reklamacja #${c.id}`}
+                                  metaLines={cmpContent.metaLines}
+                                  bodyLine={cmpContent.bodyLine}
+                                  bodyExtra={cmpContent.bodyExtra}
+                                  isCompleted={cmpDone}
+                                  ribbon={cmpRibbon}
+                                  statusLabel={st.label}
+                                  statusBadgeClassName={st.badgeClass}
+                                  createdAtIso={c.created_at}
+                                  onActivate={() => {
+                                    if (import.meta.env.DEV) {
+                                      console.log("Open complaint", {
+                                        complaintId: c.id,
+                                        complaintNumber: c.reference_code,
+                                        orderId: c.order_id,
+                                      });
+                                    }
+                                    navigate(WMS_ROUTES.complaintsProcess(c.id));
+                                  }}
+                                  tileRef={idx === 0 ? firstQueueTileRef : undefined}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Wyjeżdżający panel - "Nowy Zwrot" */}
       {showCreateForm && selectedOrder && (
         <div
           className="fixed inset-0 z-50 flex justify-end"
@@ -1242,7 +1244,7 @@ export default function WmsReturnsEntryPage() {
               </h2>
               <button
                 type="button"
-                className="rounded-xl p-2 text-slate-500 transition hover:bg-indigo-50 hover:text-indigo-950"
+                className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
                 aria-label="Zamknij"
                 onClick={closeCreateFormPanel}
               >
@@ -1269,7 +1271,7 @@ export default function WmsReturnsEntryPage() {
                 <select
                   value={newReturnType}
                   onChange={(e) => setNewReturnType(e.target.value as "RMA" | "UNCLAIMED")}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 >
                   <option value="RMA">Zwrot</option>
                   <option value="UNCLAIMED">Nieodebrane</option>
@@ -1280,7 +1282,7 @@ export default function WmsReturnsEntryPage() {
                   {createReturnErr}
                 </p>
               ) : null}
-              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+              <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
                 {selectedOrder.items.map((it, ii) => {
                   const p = it.product;
                   const imgRaw = (p.image_url || "").trim();
@@ -1346,7 +1348,7 @@ export default function WmsReturnsEntryPage() {
               <button
                 type="submit"
                 disabled={linesForCreate.length === 0 || submitting}
-                className="w-full shrink-0 rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full shrink-0 rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-md transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Dodaj zwrot
               </button>
@@ -1354,7 +1356,6 @@ export default function WmsReturnsEntryPage() {
           </aside>
         </div>
       )}
-
     </div>
   );
 }
