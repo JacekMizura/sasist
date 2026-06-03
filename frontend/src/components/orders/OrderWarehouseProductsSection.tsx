@@ -763,7 +763,7 @@ export function OrderWarehouseProductsSection({
                   <div className="flex items-start gap-5">
                     {/* IMAGE */}
                     <div
-                      className={`flex h-32 w-32 shrink-0 items-center justify-center ${
+                      className={`flex h-40 w-40 shrink-0 items-center justify-center ${
                         resolvedRemoved ? "opacity-50 grayscale" : ""
                       }`}
                     >
@@ -771,7 +771,7 @@ export function OrderWarehouseProductsSection({
                         <img
                           src={row.imageUrl}
                           alt=""
-                          className="max-h-20 max-w-28 object-contain"
+                          className="max-h-28 max-w-28 object-contain"
                           loading="lazy"
                         />
                       ) : (
@@ -864,7 +864,7 @@ export function OrderWarehouseProductsSection({
 
                         {/* RIGHT */}
                         <div className="flex items-start gap-4">
-                          <div className="flex flex-col items-end">
+                          <div className="flex flex-col items-end pt-1">
                             <span
                               className={`flex h-11 min-w-[46px] items-center justify-center rounded-2xl px-3 text-[17px] font-black tabular-nums shadow-sm ${
                                 resolvedRemoved
