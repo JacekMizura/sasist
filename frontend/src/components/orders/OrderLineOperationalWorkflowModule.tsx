@@ -101,54 +101,82 @@ export function OrderLineOperationalWorkflowModule({
 
   return (
     <section
-      className="bg-white px-5 py-5"
+      className="bg-white px-5 py-4"
       aria-label="Realizacja magazynowa — pozycja"
     >
-        <div className="flex w-full items-center gap-8">
+      <div className="flex items-center gap-10">
+        {/* LOCATION */}
+        <div className="shrink-0">
+          {locationsSlot}
+        </div>
+
+        {/* PICK */}
+        <div className="flex items-center gap-2">
+          <ShoppingCart
+            className="h-3.5 w-3.5 shrink-0 text-blue-700"
+            strokeWidth={2}
+            aria-hidden
+          />
+
           <div className="shrink-0">
-            {locationsSlot}
-          </div>
+            <div className="flex items-center gap-2">
+              <span className={statusPill(m.pickTone, "pick")}>
+                Zbieranie
+              </span>
 
-          <div className="flex items-center gap-8">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-[10.5rem] sm:flex-none sm:max-w-[13rem]">
-            <ShoppingCart className="h-3.5 w-3.5 shrink-0 text-blue-700" strokeWidth={2} aria-hidden />
-            <div className="shrink-0">
-              <div className="flex flex-wrap items-center gap-1">
-                <span className={statusPill(m.pickTone, "pick")}>Zbieranie</span>
-                <span className="text-[11px] font-bold tabular-nums text-slate-900">{qtyLine}</span>
-              </div>
-              <MiniTrack value01={m.pickProgress01} activeClass={progressBarFillClass(m.pickTone, "pick")} />
-              {logistics.length ? (
-                <div className="mt-0.5 space-y-0.5">
-                  {logistics.map((ln) => (
-                    <p key={ln} className="truncate text-[10px] font-medium text-slate-600" title={ln}>
-                      {ln}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-              {pickOpLine ? (
-                <p className="mt-0.5 truncate text-[10px] font-medium text-slate-600" title={pickOpLine}>
-                  {pickOpLine}
-                </p>
-              ) : null}
+              <span className="text-[11px] font-bold tabular-nums text-slate-900">
+                {qtyLine}
+              </span>
             </div>
-          </div>
 
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-[10.5rem] sm:flex-none sm:max-w-[13rem]">
-            <Package className="h-3.5 w-3.5 shrink-0 text-indigo-800" strokeWidth={2} aria-hidden />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1">
-                <span className={statusPill(m.packTone, "pack")}>Pakowanie</span>
-                <span className="text-[11px] font-bold tabular-nums text-slate-900">{packQtyLine}</span>
-              </div>
-              <MiniTrack value01={m.packProgress01} activeClass={progressBarFillClass(m.packTone, "pack")} />
-              {packOpLine ? (
-                <p className="mt-0.5 truncate text-[10px] font-medium text-slate-600" title={packOpLine}>
-                  {packOpLine}
-                </p>
-              ) : null}
+            <MiniTrack
+              value01={m.pickProgress01}
+              activeClass={progressBarFillClass(m.pickTone, "pick")}
+            />
+
+            {pickOpLine ? (
+              <p
+                className="mt-0.5 truncate text-[10px] font-medium text-slate-600"
+                title={pickOpLine}
+              >
+                {pickOpLine}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {/* PACK */}
+        <div className="flex items-center gap-2">
+          <Package
+            className="h-3.5 w-3.5 shrink-0 text-indigo-800"
+            strokeWidth={2}
+            aria-hidden
+          />
+
+          <div className="shrink-0">
+            <div className="flex items-center gap-2">
+              <span className={statusPill(m.packTone, "pack")}>
+                Pakowanie
+              </span>
+
+              <span className="text-[11px] font-bold tabular-nums text-slate-900">
+                {packQtyLine}
+              </span>
             </div>
+
+            <MiniTrack
+              value01={m.packProgress01}
+              activeClass={progressBarFillClass(m.packTone, "pack")}
+            />
+
+            {packOpLine ? (
+              <p
+                className="mt-0.5 truncate text-[10px] font-medium text-slate-600"
+                title={packOpLine}
+              >
+                {packOpLine}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
