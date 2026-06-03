@@ -104,18 +104,15 @@ export function OrderLineOperationalWorkflowModule({
       className="bg-white px-5 py-5"
       aria-label="Realizacja magazynowa — pozycja"
     >
-      <div className="flex flex-wrap items-center gap-6">
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            Lokalizacje
-          </span>
+      <div className="flex items-center gap-8">
+        <div className="flex shrink-0 items-center gap-3">
 
           <div className="flex flex-wrap gap-2">
             {locationsSlot}
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 border-t border-slate-200/70 pt-1.5 sm:gap-3 lg:border-t-0 lg:border-slate-200/80 lg:px-2.5 lg:pt-0">
+        <div className="ml-auto flex items-center gap-8">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-[10.5rem] sm:flex-none sm:max-w-[13rem]">
             <ShoppingCart className="h-3.5 w-3.5 shrink-0 text-blue-700" strokeWidth={2} aria-hidden />
             <div className="min-w-0 flex-1">
