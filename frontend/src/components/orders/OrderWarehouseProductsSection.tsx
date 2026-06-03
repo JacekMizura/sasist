@@ -414,7 +414,7 @@ export function OrderWarehouseProductsSection({
                             <Link
                               to={`/products/${pid}/edit`}
                               state={{ tenantId: productEditTenantId }}
-                              className="text-[15px] font-semibold leading-snug text-slate-900 hover:text-slate-700 flex items-center transition-colors"
+                              className="text-[28px] font-bold leading-snug text-slate-900 hover:text-slate-700 flex items-center transition-colors"
                             >
                               {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
                             </Link>
@@ -838,11 +838,6 @@ export function OrderWarehouseProductsSection({
                             )}
                           </div>
 
-                          {/* LOCATIONS */}
-                          <div className="mt-3 flex flex-wrap gap-1.5">
-                            <LocationsBadges wm={wm} />
-                          </div>
-
                           {/* TRACE */}
                           {subIn && oldSub ? (
                             <p className="mt-3 text-xs text-slate-500">
@@ -897,7 +892,7 @@ export function OrderWarehouseProductsSection({
                           <OrderLineKebabMenu
                             lineId={row.item.id}
                             anchorId={`order-wh-line-kebab-desk-${row.item.id}`}
-                            buttonClassName="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                            buttonClassName="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
                             open={
                               openMenuKey ===
                               whKebabMenuKey("desk", row.item.id)
@@ -1020,13 +1015,6 @@ export function OrderWarehouseProductsSection({
                       {/* WORKFLOW */}
                       {!resolvedRemoved ? (
                         <div className="mt-6 -ml-[116px] overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                          <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-3">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                              Lokalizacje
-                            </span>
-
-                            <LocationsBadges wm={wm} />
-                          </div>
                           <OrderLineOperationalWorkflowModule
                             quantity={qtyN}
                             pickedQuantity={picked}
