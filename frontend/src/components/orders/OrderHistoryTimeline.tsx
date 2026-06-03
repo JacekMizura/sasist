@@ -37,7 +37,7 @@ function AutomationMetaRow({ children, compact }: { children: ReactNode; compact
   return (
     <div className={`flex items-start gap-2 text-xs text-slate-500 ${compact ? "mt-1" : "mt-2"}`}>
       <span
-        className={`mt-0.5 flex shrink-0 items-center justify-center rounded-full border border-slate-300 bg-slate-50 font-bold leading-none text-slate-600 ${compact ? "h-3 w-3 text-[8px]" : "h-3.5 w-3.5 text-[9px]"}`}
+        className={`mt-0.5 flex shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white font-bold leading-none text-slate-600 ${compact ? "h-3 w-3 text-[8px]" : "h-3.5 w-3.5 text-[9px]"}`}
         aria-hidden
       >
         A

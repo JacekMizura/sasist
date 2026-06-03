@@ -104,8 +104,12 @@ export function OrderLineOperationalWorkflowModule({
       className="bg-white px-5 py-5"
       aria-label="Realizacja magazynowa — pozycja"
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch lg:justify-between">
-        <div className="flex min-w-0 flex-1 flex-col border-slate-200/80">
+      <div className="flex flex-wrap items-center gap-6">
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Lokalizacje
+          </span>
+
           <div className="flex flex-wrap gap-2">
             {locationsSlot}
           </div>
