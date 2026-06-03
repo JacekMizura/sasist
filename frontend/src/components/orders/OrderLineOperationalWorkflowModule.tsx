@@ -104,14 +104,14 @@ export function OrderLineOperationalWorkflowModule({
       className="bg-white px-4 py-3"
       aria-label="Realizacja magazynowa — pozycja"
     >
-      <div className="flex items-center gap-6">
+      <div className="flex w-full items-center justify-between gap-6">
         {/* LOCATION */}
-        <div className="shrink-0">
+        <div className="flex min-w-0 flex-1 items-center">
           {locationsSlot}
         </div>
 
         {/* PICK */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 border-l border-slate-200 pl-6">
           <ShoppingCart
             className="h-3.5 w-3.5 shrink-0 text-blue-700"
             strokeWidth={2}
@@ -119,7 +119,7 @@ export function OrderLineOperationalWorkflowModule({
           />
 
           <div className="shrink-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 border-l border-slate-200 pl-6">
               <span className={statusPill(m.pickTone, "pick")}>
                 Zbieranie
               </span>
