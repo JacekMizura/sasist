@@ -52,7 +52,7 @@ function lineArticleSurfaceClass(resolvedRemoved: boolean, resolvedReduced: bool
   if (resolvedReduced) {
     return "rounded-xl border border-rose-100 bg-rose-50/20 p-4 shadow-sm";
   }
-  return `rounded-xl border border-slate-100 bg-white p-4 shadow-sm ${
+  return `rounded-xl border border-slate-200/60 bg-white p-4 shadow-sm ${
     isArchive ? "opacity-[0.92]" : ""
   }`;
 }
@@ -174,7 +174,7 @@ function BundleSetPreviewBadge({
       <Package className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
       Zestaw
       <span
-        className="pointer-events-none invisible absolute left-0 top-[calc(100%+0.35rem)] z-50 w-[min(22rem,calc(100vw-2.5rem))] rounded-lg border border-slate-100 bg-white p-2 text-left text-[11px] font-normal normal-case opacity-0 shadow-xl ring-1 ring-slate-900/5 transition duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100"
+        className="pointer-events-none invisible absolute left-0 top-[calc(100%+0.35rem)] z-50 w-[min(22rem,calc(100vw-2.5rem))] rounded-lg border border-slate-200/60 bg-white p-2 text-left text-[11px] font-normal normal-case opacity-0 shadow-xl ring-1 ring-slate-900/5 transition duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100"
         role="tooltip"
       >
         <p className="border-b border-slate-50 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">Skład zestawu</p>
@@ -246,17 +246,13 @@ function BundleComponentWarehouseRow({
               {sku && <CodeBadge label="SKU" value={sku} />}
               {ean && <CodeBadge label="EAN" value={ean} />}
             </div>
-            
-            <div className="mt-2">
-              <LocationsBadges wm={wm} />
-            </div>
 
             <p className="mt-2 text-[11px] font-medium tabular-nums text-slate-500">
               Do pobrania: {fmtOmsQty(component.quantity)} szt.
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-md border border-slate-100 bg-white">
+          <div className="overflow-hidden rounded-md border border-slate-200/60 bg-white">
             <OrderLineOperationalWorkflowModule
               quantity={cq}
               pickedQuantity={picked}
@@ -394,7 +390,7 @@ export function OrderWarehouseProductsSection({
           return (
             <article
               key={row.item.id}
-              className={`rounded-xl border border-slate-100 bg-white p-4 shadow-sm ${
+              className={`rounded-xl border border-slate-200/60 bg-white p-4 shadow-sm ${
                 isArchive ? "opacity-[0.92]" : ""
               }`}
             >
@@ -552,7 +548,7 @@ export function OrderWarehouseProductsSection({
                 <WarehouseMetricCell label="Rezerwacja">{row.quantityDisplay}</WarehouseMetricCell>
               </div>
 
-              <div className="mt-4 border-t border-slate-100 pt-4">
+              <div className="mt-4 border-t border-slate-200/60 pt-4">
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-violet-700">
                   Składniki do zebrania
                 </p>
@@ -767,7 +763,7 @@ export function OrderWarehouseProductsSection({
                   <div className="flex items-start gap-5">
                     {/* IMAGE */}
                     <div
-                      className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-white ${
+                      className={`flex h-32 w-32 shrink-0 items-center justify-center ${
                         resolvedRemoved ? "opacity-50 grayscale" : ""
                       }`}
                     >
@@ -775,7 +771,7 @@ export function OrderWarehouseProductsSection({
                         <img
                           src={row.imageUrl}
                           alt=""
-                          className="max-h-20 max-w-20 object-contain"
+                          className="max-h-20 max-w-28 object-contain"
                           loading="lazy"
                         />
                       ) : (
@@ -924,7 +920,7 @@ export function OrderWarehouseProductsSection({
 
                       {/* METRICS */}
                       <div className="mt-5 grid grid-cols-5 gap-3">
-                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                        <div className="rounded-2xl border border-slate-200/60 bg-transparent px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Netto
                           </p>
@@ -934,7 +930,7 @@ export function OrderWarehouseProductsSection({
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                        <div className="rounded-2xl border border-slate-200/60 bg-transparent px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Brutto
                           </p>
@@ -944,7 +940,7 @@ export function OrderWarehouseProductsSection({
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                        <div className="rounded-2xl border border-slate-200/60 bg-transparent px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             VAT
                           </p>
@@ -954,7 +950,7 @@ export function OrderWarehouseProductsSection({
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                        <div className="rounded-2xl border border-slate-200/60 bg-transparent px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Rabat
                           </p>
@@ -964,7 +960,7 @@ export function OrderWarehouseProductsSection({
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                        <div className="rounded-2xl border border-slate-200/60 bg-transparent px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Stan / Rez.
                           </p>
@@ -1024,6 +1020,13 @@ export function OrderWarehouseProductsSection({
                       {/* WORKFLOW */}
                       {!resolvedRemoved ? (
                         <div className="mt-6 -ml-[116px] overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                          <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-3">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                              Lokalizacje
+                            </span>
+
+                            <LocationsBadges wm={wm} />
+                          </div>
                           <OrderLineOperationalWorkflowModule
                             quantity={qtyN}
                             pickedQuantity={picked}
