@@ -1108,27 +1108,6 @@ export function OrderWarehouseProductsSection({
               </div>
             ) : null}
 
-            {resolvedRemoved ? (
-              <p className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-[12px] font-medium text-rose-800">
-                Pozycja wyłączona z kompletacji i pakowania — usunięta podczas obsługi braków magazynowych.
-              </p>
-            ) : (
-              <div className="mt-4 overflow-hidden rounded-lg border border-slate-200/70 bg-white">
-                <OrderLineOperationalWorkflowModule
-                  quantity={qtyN}
-                  pickedQuantity={picked}
-                  packedQuantity={packed}
-                  pickedQuantityFinal={wm?.picked_quantity_final ?? null}
-                  wmsPickingLineStatus={wm?.wms_picking_line_status ?? null}
-                  shortageLine={shortageUi}
-                  timeline={timeline}
-                  pickSubtitle={wm?.last_pick_audit_summary ?? null}
-                  packSubtitle={wm?.last_pack_audit_summary ?? null}
-                  logisticsLines={logisticsLines}
-                />
-              </div>
-            )}
-
             {showProductLineHistory && row.eventTimeline && row.eventTimeline.length > 0 ? (
               <OrderLineEventTimeline
                 events={row.eventTimeline}
