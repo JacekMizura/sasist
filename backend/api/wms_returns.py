@@ -243,6 +243,9 @@ def _rmz_line_has_damage_photos(ln: RMZLine) -> bool:
         if e.photo_urls:
             return True
     return False
+
+
+def _normalize_wms_returns_lookup_query(raw: str) -> Tuple[str, Optional[int]]:
     """
     Zwraca (tekst_do dopasowań stringowych, opcjonalny token numeryczny dla id zamówienia / id RMZ).
     Obsługa: trim, wiodący #, ORD-13 / RET-13 / RMZ-13, same cyfry (w tym z zerami wiodącymi).
@@ -1456,6 +1459,9 @@ def get_wms_return_queue_counts(
     except SQLAlchemyError:
         logger.exception("get_wms_return_queue_counts: database error")
         return WmsReturnQueueCountsRead(counts={k: 0 for k in RETURN_QUEUE_TAB_KEYS})
+
+
+@router.get("/orders/lookup", response_model=List[OrderLookupHit])
 def lookup_orders(
     tenant_id: int = Query(...),
     warehouse_id: Optional[int] = Query(
