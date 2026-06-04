@@ -67,13 +67,35 @@ function locationMatchesScan(loc: WmsPickingProductLocationRowApi, scan: string)
   return false;
 }
 
-function ModalShell({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+function ModalShell({
+  title,
+  children,
+  onClose,
+  closeDisabled = false,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  closeDisabled?: boolean;
+}) {
+  const requestClose = () => {
+    if (closeDisabled) return;
+    onClose();
+  };
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="wms-modal-title" onClick={onClose}>
-      <div className="max-h-[min(92vh,720px)] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wms-modal-title"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) requestClose();
+      }}
+    >
+      <div className="max-h-[min(92vh,720px)] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-2xl">
         <div className="sticky top-0 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
           <h2 id="wms-modal-title" className="text-base font-semibold text-slate-900">{title}</h2>
-          <button type="button" onClick={onClose} className="min-h-[44px] min-w-[44px] rounded-xl text-sm font-semibold text-slate-600 transition hover:bg-indigo-50 hover:text-indigo-950">Zamknij</button>
+          <button type="button" onClick={requestClose} disabled={closeDisabled} className="min-h-[44px] min-w-[44px] rounded-xl text-sm font-semibold text-slate-600 transition hover:bg-indigo-50 hover:text-indigo-950 disabled:opacity-40">Zamknij</button>
         </div>
         <div className="px-4 py-4">{children}</div>
       </div>
@@ -329,10 +351,42 @@ export default function WmsPickingProductDetailPage() {
     setManualOpen(true);
   };
 
+  const openShortageModal = useCallback(() => {
+    if (!detail || reportShortageBlocked) return;
+    setShortageQtyInput(wmsPickingShortageDefaultQty(detail));
+    setShortageErr(null);
+    console.info("[shortage.modal] OPEN", { product_id: productId, line_id: productId });
+    window.requestAnimationFrame(() => setShortageConfirmOpen(true));
+  }, [detail, reportShortageBlocked, productId]);
+
+  useEffect(() => {
+    if (shortageConfirmOpen || manualOpen) return;
+    refocusScannerInput();
+  }, [shortageConfirmOpen, manualOpen, refocusScannerInput]);
+
   const submitShortage = async () => {
-    if (!pickingSession || warehouseId == null || !detail || reportShortageBlocked || shortageQtyInput <= 0) return;
+    if (shortageBusy) return;
+    if (!pickingSession || warehouseId == null || !detail || reportShortageBlocked || shortageQtyInput <= 0) {
+      console.warn("[shortage.modal] SUBMIT skipped", {
+        blocked: reportShortageBlocked,
+        qty: shortageQtyInput,
+        has_detail: Boolean(detail),
+      });
+      return;
+    }
     const fifoOrder =
       detail.orders.find((o) => o.order_id === detail.active_fifo_order_id) ?? detail.orders[0] ?? null;
+    const lineId = fifoOrder?.order_item_id ?? null;
+    console.info("[shortage.modal] SUBMIT", {
+      payload: {
+        product_id: productId,
+        missing_qty: shortageQtyInput,
+        cart_id: pickingSession.cartId,
+        order_item_id: lineId,
+      },
+      line_id: lineId,
+      qty: shortageQtyInput,
+    });
     setShortageBusy(true);
     setShortageErr(null);
     try {
@@ -343,17 +397,18 @@ export default function WmsPickingProductDetailPage() {
         cart_id: pickingSession.cartId!,
         order_ids: detail.orders.map((o) => o.order_id),
         ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
-        ...(fifoOrder?.order_item_id != null && fifoOrder.order_item_id > 0
-          ? { order_item_id: fifoOrder.order_item_id }
-          : {}),
+        ...(lineId != null && lineId > 0 ? { order_item_id: lineId } : {}),
       });
+      console.info("[shortage.modal] API_OK", { line_id: lineId, qty: shortageQtyInput });
       const optimistic = applyWmsPickingShortageToDetail(detail, shortageQtyInput);
       applyDetailToState(optimistic);
       playScanBeep();
       setShortageConfirmOpen(false);
       showScannerToast("Brak zapisany. Kontynuuj zbieranie.");
       void refreshDetailSilently();
-    } catch {
+      refocusScannerInput();
+    } catch (e: unknown) {
+      console.error("[shortage.modal] API_ERROR", e);
       setShortageErr("Zgłoszenie braku nie powiodło się.");
     } finally {
       setShortageBusy(false);
@@ -457,7 +512,7 @@ export default function WmsPickingProductDetailPage() {
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="flex gap-2">
             <button type="button" onClick={openManual} disabled={pickQueueDone} className="px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Ręczny wpis</button>
-            <button type="button" onClick={() => setShortageConfirmOpen(true)} disabled={reportShortageBlocked} className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Zgłoś brak</button>
+            <button type="button" onClick={openShortageModal} disabled={reportShortageBlocked} className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Zgłoś brak</button>
           </div>
           
           <button type="button" onClick={goBackToList} className="px-6 py-3.5 bg-[#5a4fcf] hover:bg-[#4a40b2] text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all active:scale-95">
@@ -479,9 +534,27 @@ export default function WmsPickingProductDetailPage() {
 
       {/* MODAL POTWIERDZENIA BRAKU */}
       {shortageConfirmOpen && detail && (
-        <ModalShell title="Zgłosić brak produktu?" onClose={() => setShortageConfirmOpen(false)}>
+        <ModalShell
+          title="Zgłosić brak produktu?"
+          onClose={() => {
+            if (!shortageBusy) setShortageConfirmOpen(false);
+          }}
+          closeDisabled={shortageBusy}
+        >
           <p className="text-sm text-slate-600 mb-4">Czy na pewno chcesz oznaczyć tę pozycję jako brak w magazynie?</p>
-          <button type="button" onClick={() => void submitShortage()} className="w-full py-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold uppercase tracking-wider">Zgłoś brak produktu</button>
+          {shortageErr ? <p className="mb-3 text-sm font-semibold text-red-700">{shortageErr}</p> : null}
+          <button
+            type="button"
+            disabled={shortageBusy || shortageQtyInput <= 0}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void submitShortage();
+            }}
+            className="w-full py-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold uppercase tracking-wider disabled:opacity-50"
+          >
+            {shortageBusy ? "Zapisywanie…" : "Zgłoś brak produktu"}
+          </button>
         </ModalShell>
       )}
     </div>

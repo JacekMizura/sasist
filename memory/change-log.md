@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — WMS picking: scanner, shortage modal, finalize-cart
+
+- **Scanner:** `DevScannerPanel` auto-expand + focus on `mode=picking`; modal backdrop `onMouseDown`; refocus po zamknięciu modala braku.
+- **Shortage modal:** jeden klik submit (`shortageBusy`, deferred open); logi `[shortage.modal]`.
+- **Finalize-cart:** `_picking_line_resolved_for_finalize`, `compute_line_missing_qty` + declared shortage; pomijanie `REPLACED`; logi `[picking.finalize]`.
+
 ## 2026-06-04 — WMS Braki: filtry workflow, dedupe, detail, recovery finalize
 
 - **Kolejka braków:** deduplikacja po `order_id` (lista + `consolidate_duplicate_open_issue_tasks` przy sync).

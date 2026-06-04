@@ -293,6 +293,13 @@ export default function DevScannerPanel() {
   }, [setDrawerExpanded]);
 
   useEffect(() => {
+    if (!SHOW_WMS_DEV_SCANNER || mode !== "picking") return;
+    setDrawerExpanded(true);
+    const t = window.setTimeout(() => scannerInputRef.current?.focus(), 80);
+    return () => window.clearTimeout(t);
+  }, [mode, setDrawerExpanded, scannerInputRef]);
+
+  useEffect(() => {
     if (!SHOW_WMS_DEV_SCANNER) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") {
