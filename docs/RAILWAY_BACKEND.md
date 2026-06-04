@@ -85,8 +85,10 @@ Procfile
 After a successful backend deploy, **Deploy logs → Runtime / startup** must include:
 
 ```text
-[startup] wms_returns_lookup_build=2026-06-04-returns-id-prefix-v12
+[startup] wms_returns_lookup_build=2026-06-04-returns-lookup-router-v13
+[routes] returns dynamic routes moved under /id
 [routes] early-mount /api/wms/returns/orders/lookup
+[routes] early-mount /api/wms/returns/lookup
 ```
 
 On each lookup request, **HTTP logs**:

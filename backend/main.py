@@ -206,6 +206,7 @@ from .api.cart import router as cart_router
 from .api.import_api import router as import_router
 from .api.export_api import router as export_router
 # Load before order.py (order used to import helpers from wms_returns at module level).
+from .api.wms_returns import lookup_router as wms_returns_lookup_router
 from .api.wms_returns import router as wms_returns_router
 from .api.order import router as order_router
 from .api.order_custom_fields import router as order_custom_fields_router
@@ -1176,33 +1177,14 @@ except Exception:
 # ==================================================
 
 API_PREFIX = "/api"
-WMS_RETURNS_ORDER_LOOKUP_PATH = f"{API_PREFIX}/wms/returns/orders/lookup"
-
-
-def _register_wms_returns_orders_lookup_route() -> None:
-    """
-    Mount lookup before other /api/wms/returns/* routes (RMZ by id lives under ``/id/{return_id}``).
-    Production symptom: GET .../orders/lookup → 404, GET .../lookup → 422 (return_id='lookup').
-    """
-    from .api.wms_returns import lookup_orders
-
-    existing = {getattr(r, "path", None) for r in app.routes}
-    if WMS_RETURNS_ORDER_LOOKUP_PATH in existing:
-        return
-    app.add_api_route(
-        WMS_RETURNS_ORDER_LOOKUP_PATH,
-        lookup_orders,
-        methods=["GET"],
-        tags=["WMS Returns"],
-        name="wms_returns_orders_lookup_canonical",
-    )
-    print(f"[routes] early-mount {WMS_RETURNS_ORDER_LOOKUP_PATH}", flush=True)
-
-
-_register_wms_returns_orders_lookup_route()
+WMS_RETURNS_LOOKUP_PATHS = (
+    f"{API_PREFIX}/wms/returns/orders/lookup",
+    f"{API_PREFIX}/wms/returns/lookup",
+)
 
 _API_ROUTERS = (
     auth_router,
+    wms_returns_lookup_router,
     workforce_router,
     company_profile_router,
     admin_users_router,
@@ -1321,9 +1303,11 @@ def _ensure_wms_returns_router_mounted() -> None:
     )
     for path in sorted(set(app_paths)):
         print("[routes]", path, flush=True)
-    _register_wms_returns_orders_lookup_route()
-    if WMS_RETURNS_ORDER_LOOKUP_PATH not in app_paths:
-        print("[routes] MISSING", WMS_RETURNS_ORDER_LOOKUP_PATH, flush=True)
+    for _lookup_path in WMS_RETURNS_LOOKUP_PATHS:
+        if _lookup_path in app_paths:
+            print(f"[routes] early-mount {_lookup_path}", flush=True)
+        else:
+            print("[routes] MISSING", _lookup_path, flush=True)
     if not app_paths:
         print("[routes] CRITICAL: no /api/wms/returns/* mounted", flush=True)
 
@@ -1361,18 +1345,13 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 app.middleware("http")(outer_request_logger_middleware)
 
 
-def _mount_wms_returns_order_lookup_on_app() -> None:
-    """Ensure canonical lookup path exists after all routers are loaded."""
-    _register_wms_returns_orders_lookup_route()
-
-
 @app.on_event("startup")
 async def _log_backend_startup() -> None:
     from .serve import UVICORN_HOST
 
     # Deploy fingerprint — compare with GitHub commit on Railway → Deployments.
     print(
-        "[startup] wms_returns_lookup_build=2026-06-04-returns-id-prefix-v12",
+        "[startup] wms_returns_lookup_build=2026-06-04-returns-lookup-router-v13",
         flush=True,
     )
     print(
@@ -1386,7 +1365,6 @@ async def _log_backend_startup() -> None:
         flush=True,
     )
     _ensure_wms_returns_router_mounted()
-    _mount_wms_returns_order_lookup_on_app()
     print("Backend started OK", flush=True)
 
 

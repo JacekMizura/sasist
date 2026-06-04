@@ -59,7 +59,9 @@ from ..utils.ui_status_color import normalize_stored_color
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/wms/returns", tags=["WMS Returns"])
+lookup_router = APIRouter(prefix="/wms/returns", tags=["WMS Returns"])
 print("IMPORTING WMS RETURNS ROUTER", flush=True)
+print("[routes] returns dynamic routes moved under /id", flush=True)
 
 
 def _wms_returns_wh_dep(
@@ -1385,85 +1387,6 @@ def _apply_returns_list_filters(
     return q
 
 
-@router.get("/queue-counts", response_model=WmsReturnQueueCountsRead)
-def get_wms_return_queue_counts(
-    tenant_id: int = Query(...),
-    warehouse_id: Optional[int] = Query(
-        None,
-        ge=1,
-        description="Magazyn WMS; gdy brak — domyślny magazyn tenanta.",
-    ),
-    archive_scope: str = Query(
-        "active",
-        description="active | archived | all — jak lista zwrotów.",
-    ),
-    search: Optional[str] = Query(None, description="Jak lista zwrotów — wąskie liczniki przy wyszukiwaniu."),
-    created_from: Optional[str] = Query(None, description="YYYY-MM-DD — data utworzenia RMZ od"),
-    created_to: Optional[str] = Query(None, description="YYYY-MM-DD — data utworzenia RMZ do (włącznie)"),
-    return_status_id: Optional[int] = Query(None, ge=1),
-    shipping_method_id: Optional[str] = Query(None),
-    order_number: Optional[str] = Query(None),
-    customer_search: Optional[str] = Query(None),
-    tracking: Optional[str] = Query(None),
-    has_panel_label: Optional[str] = Query(None),
-    panel_ui_status_id: Optional[int] = Query(
-        None,
-        description="Jak lista — liczniki w kontekście wybranego filtra panelu (oprócz kolejek 'nowe' / 'w_toku', które nadpisują grupę).",
-    ),
-    panel_ui_unassigned: bool = Query(False),
-    panel_ui_main_group: Optional[str] = Query(None),
-    panel_ui_status_ids: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """
-    Operational queue badge counts for the returns list.
-    Respects the same list filters as the main endpoint (search, dates, workflow status, etc.)
-    and optional panel sidebar filters, so badges stay comparable to the visible table.
-    """
-    try:
-        wh_id = (
-            int(warehouse_id)
-            if warehouse_id is not None and int(warehouse_id) > 0
-            else resolve_tenant_default_warehouse_id(db, tenant_id)
-        )
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
-    try:
-        asc = (archive_scope or "active").strip().lower()
-        if asc not in ("active", "archived", "all"):
-            raise HTTPException(status_code=400, detail="Invalid archive_scope")
-        counts: dict[str, int] = {}
-        for key in RETURN_QUEUE_TAB_KEYS:
-            q_base = _returns_query(db, tenant_id, wh_id, archive_scope=asc)
-            q2 = _apply_returns_list_filters(
-                q_base,
-                tenant_id,
-                wh_id,
-                operational_queue=key,
-                panel_ui_status_id=panel_ui_status_id,
-                panel_ui_unassigned=panel_ui_unassigned,
-                panel_ui_main_group=panel_ui_main_group,
-                panel_ui_status_ids=panel_ui_status_ids,
-                has_panel_label=has_panel_label,
-                return_status_id=return_status_id,
-                shipping_method_id=shipping_method_id,
-                order_number=order_number,
-                customer_search=customer_search,
-                tracking=tracking,
-                created_from=created_from,
-                created_to=created_to,
-                search=search,
-            )
-            cnt = q2.with_entities(func.count(WmsOrderReturn.id)).scalar()
-            counts[key] = int(cnt or 0)
-        return WmsReturnQueueCountsRead(counts=counts)
-    except HTTPException:
-        raise
-    except SQLAlchemyError:
-        logger.exception("get_wms_return_queue_counts: database error")
-        return WmsReturnQueueCountsRead(counts={k: 0 for k in RETURN_QUEUE_TAB_KEYS})
-
-
 def _wms_returns_orders_lookup_search(
     db: Session,
     tenant_id: int,
@@ -1608,12 +1531,6 @@ def _wms_returns_orders_lookup_search(
     return [_order_lookup_hit_from_row(o, None) for o in partial]
 
 
-@router.get(
-    "/orders/lookup",
-    status_code=200,
-    summary="Wyszukiwanie zamówienia pod zwrot WMS",
-)
-@router.get("/orders/lookup/", include_in_schema=False)
 def lookup_orders(
     tenant_id: int = Query(...),
     warehouse_id: Optional[int] = Query(
@@ -1629,7 +1546,7 @@ def lookup_orders(
 
     Zawsze HTTP 200 + JSON array (pusta lista gdy brak trafień). Nigdy 404.
     """
-    print("[returns.lookup] q=", q, flush=True)
+    print(f"[returns.lookup] q={q}", flush=True)
     try:
         results = _wms_returns_orders_lookup_search(db, tenant_id, q, warehouse_id)
     except HTTPException as exc:
@@ -1643,6 +1560,85 @@ def lookup_orders(
 
     print("[returns.lookup] results=", len(results), flush=True)
     return JSONResponse(status_code=200, content=jsonable_encoder(results))
+
+
+@router.get("/queue-counts", response_model=WmsReturnQueueCountsRead)
+def get_wms_return_queue_counts(
+    tenant_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Magazyn WMS; gdy brak — domyślny magazyn tenanta.",
+    ),
+    archive_scope: str = Query(
+        "active",
+        description="active | archived | all — jak lista zwrotów.",
+    ),
+    search: Optional[str] = Query(None, description="Jak lista zwrotów — wąskie liczniki przy wyszukiwaniu."),
+    created_from: Optional[str] = Query(None, description="YYYY-MM-DD — data utworzenia RMZ od"),
+    created_to: Optional[str] = Query(None, description="YYYY-MM-DD — data utworzenia RMZ do (włącznie)"),
+    return_status_id: Optional[int] = Query(None, ge=1),
+    shipping_method_id: Optional[str] = Query(None),
+    order_number: Optional[str] = Query(None),
+    customer_search: Optional[str] = Query(None),
+    tracking: Optional[str] = Query(None),
+    has_panel_label: Optional[str] = Query(None),
+    panel_ui_status_id: Optional[int] = Query(
+        None,
+        description="Jak lista — liczniki w kontekście wybranego filtra panelu (oprócz kolejek 'nowe' / 'w_toku', które nadpisują grupę).",
+    ),
+    panel_ui_unassigned: bool = Query(False),
+    panel_ui_main_group: Optional[str] = Query(None),
+    panel_ui_status_ids: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Operational queue badge counts for the returns list.
+    Respects the same list filters as the main endpoint (search, dates, workflow status, etc.)
+    and optional panel sidebar filters, so badges stay comparable to the visible table.
+    """
+    try:
+        wh_id = (
+            int(warehouse_id)
+            if warehouse_id is not None and int(warehouse_id) > 0
+            else resolve_tenant_default_warehouse_id(db, tenant_id)
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
+    try:
+        asc = (archive_scope or "active").strip().lower()
+        if asc not in ("active", "archived", "all"):
+            raise HTTPException(status_code=400, detail="Invalid archive_scope")
+        counts: dict[str, int] = {}
+        for key in RETURN_QUEUE_TAB_KEYS:
+            q_base = _returns_query(db, tenant_id, wh_id, archive_scope=asc)
+            q2 = _apply_returns_list_filters(
+                q_base,
+                tenant_id,
+                wh_id,
+                operational_queue=key,
+                panel_ui_status_id=panel_ui_status_id,
+                panel_ui_unassigned=panel_ui_unassigned,
+                panel_ui_main_group=panel_ui_main_group,
+                panel_ui_status_ids=panel_ui_status_ids,
+                has_panel_label=has_panel_label,
+                return_status_id=return_status_id,
+                shipping_method_id=shipping_method_id,
+                order_number=order_number,
+                customer_search=customer_search,
+                tracking=tracking,
+                created_from=created_from,
+                created_to=created_to,
+                search=search,
+            )
+            cnt = q2.with_entities(func.count(WmsOrderReturn.id)).scalar()
+            counts[key] = int(cnt or 0)
+        return WmsReturnQueueCountsRead(counts=counts)
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        logger.exception("get_wms_return_queue_counts: database error")
+        return WmsReturnQueueCountsRead(counts={k: 0 for k in RETURN_QUEUE_TAB_KEYS})
 
 
 @router.get("/orders/{order_id:int}/returns", response_model=List[WmsReturnListItem])
@@ -1866,6 +1862,61 @@ def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=500, detail="Failed to load created return")
     return _serialize_return_read(db, row)
+
+
+@router.get("/customer-insights", response_model=CustomerInsightsRead)
+def get_customer_insights(
+    tenant_id: int = Query(...),
+    warehouse_id: int = Depends(_wms_returns_wh_dep),
+    email: Optional[str] = Query(None),
+    external_id: Optional[str] = Query(None, description="Order external_id when email is missing; email is read from that order"),
+    db: Session = Depends(get_db),
+):
+    """
+    Aggregate orders and RMZ rows for one customer (matched by e-mail in `addresses_json`)
+    within tenant + warehouse. `return_rate` = returns / orders (0 if no orders).
+    """
+    email_norm = _resolve_insights_email(db, tenant_id, warehouse_id, email, external_id)
+    order_ids = _order_ids_matching_email(db, tenant_id, warehouse_id, email_norm)
+    n_orders = len(order_ids)
+    if not order_ids:
+        n_returns = 0
+    else:
+        cnt = (
+            db.query(func.count(WmsOrderReturn.id))
+            .filter(
+                WmsOrderReturn.tenant_id == tenant_id,
+                WmsOrderReturn.warehouse_id == warehouse_id,
+                WmsOrderReturn.order_id.in_(order_ids),
+                WmsOrderReturn.deleted_at.is_(None),
+            )
+            .scalar()
+        )
+        n_returns = int(cnt or 0)
+    rate = (float(n_returns) / float(n_orders)) if n_orders > 0 else 0.0
+    label, tier = _risk_from_return_rate(rate)
+    return CustomerInsightsRead(
+        matched_email=email_norm,
+        total_orders_count=n_orders,
+        total_returns_count=n_returns,
+        return_rate=rate,
+        risk_label=label,
+        risk_tier=tier,
+    )
+
+
+@router.post("/bulk-archive", response_model=EntityBulkDeleteResult)
+def wms_returns_bulk_archive(body: WmsReturnsBulkArchiveBody, db: Session = Depends(get_db)):
+    """Archiwizacja wielu RMZ: usuwa linie operacyjne, ustawia deleted_at na nagłówku."""
+    result = archive_wms_returns_bulk(db, body.tenant_id, body.warehouse_id, body.ids)
+    if result.get("errors"):
+        db.rollback()
+    else:
+        db.commit()
+    return entity_bulk_delete_result_from_service_dict(result)
+
+
+# --- RMZ by id: always under /id/{return_id:int} (registered after static + lookup routes) ---
 
 
 @router.post("/id/{return_id:int}/lines/{order_item_id}/split-process", response_model=WmsReturnRead)
@@ -2372,47 +2423,6 @@ def patch_wms_return_workflow_status(
     return _serialize_return_read(db, row)
 
 
-@router.get("/customer-insights", response_model=CustomerInsightsRead)
-def get_customer_insights(
-    tenant_id: int = Query(...),
-    warehouse_id: int = Depends(_wms_returns_wh_dep),
-    email: Optional[str] = Query(None),
-    external_id: Optional[str] = Query(None, description="Order external_id when email is missing; email is read from that order"),
-    db: Session = Depends(get_db),
-):
-    """
-    Aggregate orders and RMZ rows for one customer (matched by e-mail in `addresses_json`)
-    within tenant + warehouse. `return_rate` = returns / orders (0 if no orders).
-    """
-    email_norm = _resolve_insights_email(db, tenant_id, warehouse_id, email, external_id)
-    order_ids = _order_ids_matching_email(db, tenant_id, warehouse_id, email_norm)
-    n_orders = len(order_ids)
-    if not order_ids:
-        n_returns = 0
-    else:
-        cnt = (
-            db.query(func.count(WmsOrderReturn.id))
-            .filter(
-                WmsOrderReturn.tenant_id == tenant_id,
-                WmsOrderReturn.warehouse_id == warehouse_id,
-                WmsOrderReturn.order_id.in_(order_ids),
-                WmsOrderReturn.deleted_at.is_(None),
-            )
-            .scalar()
-        )
-        n_returns = int(cnt or 0)
-    rate = (float(n_returns) / float(n_orders)) if n_orders > 0 else 0.0
-    label, tier = _risk_from_return_rate(rate)
-    return CustomerInsightsRead(
-        matched_email=email_norm,
-        total_orders_count=n_orders,
-        total_returns_count=n_returns,
-        return_rate=rate,
-        risk_label=label,
-        risk_tier=tier,
-    )
-
-
 @router.get("/id/{return_id:int}", response_model=WmsReturnRead)
 def get_wms_return(
     return_id: int,
@@ -2443,17 +2453,6 @@ def get_wms_return(
     return _serialize_return_read(db, row)
 
 
-@router.post("/bulk-archive", response_model=EntityBulkDeleteResult)
-def wms_returns_bulk_archive(body: WmsReturnsBulkArchiveBody, db: Session = Depends(get_db)):
-    """Archiwizacja wielu RMZ: usuwa linie operacyjne, ustawia deleted_at na nagłówku."""
-    result = archive_wms_returns_bulk(db, body.tenant_id, body.warehouse_id, body.ids)
-    if result.get("errors"):
-        db.rollback()
-    else:
-        db.commit()
-    return entity_bulk_delete_result_from_service_dict(result)
-
-
 @router.delete("/id/{return_id:int}", response_model=EntityBulkDeleteResult)
 def archive_single_wms_return(
     return_id: int,
@@ -2474,6 +2473,23 @@ def archive_single_wms_return(
         db.commit()
     return entity_bulk_delete_result_from_service_dict(result)
 
+
+# Lookup routes on a dedicated router (mounted before ``router`` in main.py).
+lookup_router.add_api_route(
+    "/orders/lookup",
+    lookup_orders,
+    methods=["GET"],
+    status_code=200,
+    summary="Wyszukiwanie zamówienia pod zwrot WMS",
+    name="wms_returns_orders_lookup",
+)
+lookup_router.add_api_route(
+    "/lookup",
+    lookup_orders,
+    methods=["GET"],
+    include_in_schema=False,
+    name="wms_returns_lookup_alias",
+)
 
 _WMS_RETURNS_ROUTE_COUNT = len(router.routes)
 print(
