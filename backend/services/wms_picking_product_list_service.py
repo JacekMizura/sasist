@@ -1516,29 +1516,42 @@ def report_wms_picking_product_shortage(
     is_recovery = recovery_order_id is not None and int(recovery_order_id) > 0
     roid = int(recovery_order_id) if is_recovery else None
 
+    from .picking_config_query import resolve_picking_config_for_shortage_report
+
+    pc, picking_ctx = resolve_picking_config_for_shortage_report(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        source_status_id=int(source_status_id),
+        order_item_id=target_item_id,
+        recovery_order_id=roid,
+    )
+    workflow_scoped = bool(picking_ctx.get("workflow_scoped"))
+    workflow_type = str(picking_ctx.get("workflow_type") or "cohort")
+    effective_source_status_id = int(
+        picking_ctx.get("resolved_source_status_id") or int(source_status_id)
+    )
+    source_type = "recovery" if is_recovery else workflow_type
+
     logger.info(
-        "[report_shortage] ENTER payload=%s order_id=%s order_item_id=%s "
-        "replacement_line_id=%s is_recovery=%s",
-        payload_log,
+        "[shortage.report] ENTER order_id=%s order_item_id=%s replacement_item_id=%s "
+        "recovery_task_id=%s source_status_id=%s source_type=%s picking_context=%s workflow_type=%s payload=%s",
+        roid or picking_ctx.get("order_id"),
+        target_item_id,
+        picking_ctx.get("replacement_item_id"),
         roid,
-        target_item_id,
-        target_item_id,
-        is_recovery,
+        effective_source_status_id,
+        source_type,
+        picking_ctx,
+        workflow_type,
+        payload_log,
     )
 
-    pc = (
-        db.query(PickingConfig)
-        .filter(
-            PickingConfig.tenant_id == int(tenant_id),
-            PickingConfig.warehouse_id == int(warehouse_id),
-            PickingConfig.source_status_id == int(source_status_id),
-        )
-        .first()
-    )
-    if not pc:
+    if pc is None and not workflow_scoped:
         _report_shortage_reject(
             "Brak konfiguracji zbierania dla tego statusu źródłowego.",
             payload=payload_log,
+            picking_context=picking_ctx,
         )
 
     pid = int(product_id)
@@ -1827,10 +1840,17 @@ def report_wms_picking_product_shortage(
             reason="wms_report_shortage",
         )
 
+    logger.info(
+        "[shortage.report] OK order_ids=%s workflow_type=%s source_status_id=%s",
+        aff_set,
+        workflow_type,
+        effective_source_status_id,
+    )
+
     rep = WmsPickingShortageReport(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
-        source_status_id=int(source_status_id),
+        source_status_id=effective_source_status_id,
         order_type=str(order_type),
         product_id=pid,
         location_id=int(location_id) if location_id is not None else None,

@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Zgłoszenie braku na linii zamiennika (report-shortage)
+
+- ``resolve_picking_config_for_shortage_report``: fallback status panelu zamówienia / domyślna reguła magazynu gdy ``order_item_id`` lub ``recovery_order_id``.
+- Logi ``[shortage.report]`` (order_item, replacement, recovery, picking_context).
+- Testy ``test_report_shortage_substitute.py``.
+
 ## 2026-06-04 — Braki: OMS removal → relocation, etykiety, archiwizacja, CORS
 
 - Usunięcie zebranego produktu (OMS): ``ensure_relocation_for_order_item_picks`` z sumą PICK + fallback ``merge_relocation_task``; log ``[wms.relocation.create]``; purge nie kasuje TASK_RELOCATION.
