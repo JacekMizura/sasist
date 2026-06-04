@@ -1370,6 +1370,16 @@ def _mount_wms_returns_order_lookup_on_app() -> None:
 async def _log_backend_startup() -> None:
     from .serve import UVICORN_HOST
 
+    # Deploy fingerprint — compare with GitHub commit on Railway → Deployments.
+    print(
+        "[startup] wms_returns_lookup_build=2026-06-04-returns-lookup-v11",
+        flush=True,
+    )
+    print(
+        f"[startup] railway_git_commit={os.getenv('RAILWAY_GIT_COMMIT_SHA')!r} "
+        f"railway_git_branch={os.getenv('RAILWAY_GIT_BRANCH')!r}",
+        flush=True,
+    )
     print(
         f"[startup] app ready routes={len(app.routes)} "
         f"bind_host={UVICORN_HOST} PORT env={os.getenv('PORT')!r}",

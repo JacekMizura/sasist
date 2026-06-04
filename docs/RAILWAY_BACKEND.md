@@ -80,11 +80,53 @@ railway.json
 Procfile
 ```
 
-## Verify after deploy
+## Verify deploy (not just route dump)
+
+After a successful backend deploy, **Deploy logs → Runtime / startup** must include:
+
+```text
+[startup] wms_returns_lookup_build=2026-06-04-returns-lookup-v11
+[routes] early-mount /api/wms/returns/orders/lookup
+```
+
+On each lookup request, **HTTP logs**:
+
+```text
+[returns.lookup] q= ...
+[returns.lookup] results= ...
+[HTTP] GET /api/wms/returns/orders/lookup 200
+```
+
+If you see `[routes] /api/wms/returns/orders/lookup` in a manual route list but **no** lines above, the running container is still an **older image** (stale deployment).
+
+### Git (local)
+
+```bash
+git log -1 --oneline
+# must include commit with: returns.lookup, early-mount, {return_id:int}
+
+git status
+# main should match origin/main after git push
+```
+
+### Railway dashboard checklist
+
+| Check | Expected |
+|-------|----------|
+| Service | **Backend API** (not `frontend`) |
+| Root Directory | **empty** / repo root (not `frontend`) |
+| Branch | `main` |
+| Latest deployment | **Success**, commit `3621a93` or newer |
+| `RAILWAY_GIT_COMMIT_SHA` in startup log | matches GitHub commit |
+| Build log | `setup │ python3`, not `nodejs_18` |
+
+Trigger **Redeploy** on the backend service after `git push` if the active deployment is older.
+
+## Verify HTTP after deploy
 
 ```bash
 curl -sS "https://YOUR-BACKEND.up.railway.app/healthz"
-curl -sS "https://YOUR-BACKEND.up.railway.app/api/wms/returns/orders/lookup?tenant_id=1&q=1"
+curl -sS "https://YOUR-BACKEND.up.railway.app/api/wms/returns/orders/lookup?tenant_id=1&q=999999&warehouse_id=1"
 ```
 
-Second call should return JSON (often `[]`), not `{"detail":"Not Found"}`.
+Second call must return `[]` with HTTP **200**, not `{"detail":"Not Found"}`.
