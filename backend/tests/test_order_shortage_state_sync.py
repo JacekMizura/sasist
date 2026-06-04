@@ -33,11 +33,14 @@ class OrderRequiresShortageHandlingTests(unittest.TestCase):
         )
         db = MagicMock()
         with patch(
-            "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
-            return_value=(0, 0),
+            "backend.services.braki_order_state_service.order_has_waiting_for_stock_lines",
+            return_value=False,
         ), patch(
-            "backend.services.braki_order_state_service.order_braki_workflow_complete",
+            "backend.services.braki_order_state_service.order_braki_picking_resolved",
             return_value=True,
+        ), patch(
+            "backend.services.braki_order_state_service.order_had_braki_workflow_signals",
+            return_value=False,
         ):
             self.assertFalse(order_requires_shortage_handling(db, order))
 

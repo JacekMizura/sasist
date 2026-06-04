@@ -41,20 +41,15 @@ def order_has_waiting_for_stock_lines(order: Order) -> bool:
 
 
 def order_line_awaiting_oms_attention(db: Session, order: Order, oi: OrderItem) -> bool:
-    """Linia wymaga decyzji OMS lub oczekuje — musi trzymać zamówienie w kolejce."""
-    from .order_fulfillment_recompute import compute_line_missing_qty, line_shortage_display_kind
+    """Linia wymaga aktywnej decyzji OMS — nie historycznego zgłoszenia braku po recovery."""
+    from .order_fulfillment_recompute import compute_line_missing_qty
 
     missing = float(compute_line_missing_qty(db, order, oi))
     if missing > 1e-9:
         return True
     meta = _order_item_meta_dict(oi)
-    if meta.get("oms_waiting_for_stock"):
+    if meta.get("oms_waiting_for_stock") and missing > 1e-9:
         return True
-    kind = line_shortage_display_kind(oi, missing)
-    if kind in ("shortage", "waiting"):
-        declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
-        if declared > 1e-9 and missing <= 1e-9:
-            return True
     return False
 
 
@@ -151,9 +146,37 @@ def order_had_braki_workflow_signals(db: Session, order: Order) -> bool:
     return False
 
 
-def order_braki_workflow_complete(db: Session, order: Order) -> bool:
-    """Prawdziwe zakończenie workflow braków — nie tylko recovery pick."""
+def order_braki_picking_resolved(db: Session, order: Order) -> bool:
+    """
+    Braki rozliczone po stronie magazynu (zbiórka / dogrywka / brak operacyjny).
+    Nie wymaga pełnego pakowania — to warunek ``ready_pack``.
+    """
+    from .order_fulfillment_recompute import compute_line_missing_qty, _order_fully_picked_for_fulfillment
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+
     if order_has_active_braki_operations(db, order):
+        return False
+    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    if int(u_short) > 0 or int(r_pend) > 0:
+        return False
+    tid = int(order.tenant_id)
+    wid = int(order.warehouse_id)
+    oid = int(order.id)
+    if get_open_recovery_task_for_order(db, tenant_id=tid, warehouse_id=wid, order_id=oid):
+        return False
+    if order_has_pending_relocation_work(db, tenant_id=tid, warehouse_id=wid, order_id=oid):
+        return False
+    for oi in order.items or []:
+        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
+            return False
+        if order_line_awaiting_oms_attention(db, order, oi):
+            return False
+    return _order_fully_picked_for_fulfillment(db, order)
+
+
+def order_braki_workflow_complete(db: Session, order: Order) -> bool:
+    """Pełne domknięcie workflow braków (w tym pakowanie po sygnałach braków)."""
+    if not order_braki_picking_resolved(db, order):
         return False
     if order_had_braki_workflow_signals(db, order) and not order_fully_packed(db, order):
         return False
@@ -164,10 +187,11 @@ def order_requires_shortage_handling(db: Session, order: Order) -> bool:
     """Czy zamówienie pozostaje w kolejce Braki WMS."""
     if order_has_waiting_for_stock_lines(order):
         return True
-    u_short, repl_pending = count_issue_queue_operational_lines(db, order)
-    if u_short > 0 or repl_pending > 0:
+    if not order_braki_picking_resolved(db, order):
         return True
-    return not order_braki_workflow_complete(db, order)
+    if order_had_braki_workflow_signals(db, order) and not order_fully_packed(db, order):
+        return True
+    return False
 
 
 def order_has_open_issue_task(db: Session, order: Order) -> bool:
@@ -183,27 +207,8 @@ def order_has_open_issue_task(db: Session, order: Order) -> bool:
 
 
 def order_can_show_ready_pack(db: Session, order: Order) -> bool:
-    """
-    ``ready_pack`` tylko gdy brak aktywnego workflow braków, otwartego zadania Braki
-    i nierozwiązanych linii operacyjnych.
-    """
-    from .order_fulfillment_recompute import compute_line_missing_qty
-
-    if order_requires_shortage_handling(db, order):
-        return False
-    if order_has_open_issue_task(db, order):
-        return False
-    u_short, r_pend = count_issue_queue_operational_lines(db, order)
-    if int(u_short) > 0 or int(r_pend) > 0:
-        return False
-    for oi in order.items or []:
-        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
-            return False
-        if order_line_awaiting_oms_attention(db, order, oi):
-            return False
-    if order_has_active_braki_operations(db, order):
-        return False
-    return order_braki_workflow_complete(db, order)
+    """``ready_pack`` gdy braki rozliczone magazynowo — niezależnie od historycznego zgłoszenia braku."""
+    return order_braki_picking_resolved(db, order)
 
 
 def evaluate_order_braki_state(

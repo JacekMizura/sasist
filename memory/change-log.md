@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Braki: ready_pack po recovery pick
+
+- **`order_braki_picking_resolved`**: `ready_pack` gdy zbiórka/recovery domknięta (nie czeka na pełne pakowanie); naprawa `order_line_awaiting_oms_attention` (nie blokuje po historycznym braku).
+- **Fulfillment**: `_clear_fulfillment_shortage_state_if_resolved` → `READY_TO_PACK` po picking resolved.
+- **Front**: `brakiWorkflowCta.ts` — CTA wyłącznie z `braki_workflow_status`; detail: baner „gotowe do pakowania”, bez pustych sekcji braków.
+
 ## 2026-06-04 — Braki: ready_pack gate, soft-delete linii, pakowanie
 
 - **`order_can_show_ready_pack`**: brak `ready_pack` przy otwartych brakach / issue task / recovery; log `[braki.workflow] ORDER_STATE_EVAL`.

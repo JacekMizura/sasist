@@ -407,13 +407,12 @@ def _close_open_issue_tasks_if_no_shortage(db: Session, order: Order) -> None:
 
 
 def _clear_fulfillment_shortage_state_if_resolved(db: Session, order: Order) -> None:
-    """Gdy workflow braków zakończony — wyjście z NEEDS_DECISION/MISSING do PICKING lub READY_TO_PACK."""
-    if order_requires_shortage_handling(db, order):
+    """Po rozliczeniu braków magazynowo — ustaw ``READY_TO_PACK`` (nie czekaj na pełne pakowanie)."""
+    from .braki_order_state_service import order_braki_picking_resolved
+
+    if not order_braki_picking_resolved(db, order):
         return
     cur = (getattr(order, "fulfillment_state", None) or "").strip().upper()
-    if cur not in (FS_MISSING, FS_NEEDS_DECISION):
+    if cur not in (FS_MISSING, FS_NEEDS_DECISION, FS_PICKING):
         return
-    if _order_fully_picked_for_fulfillment(db, order):
-        order.fulfillment_state = FS_READY_TO_PACK
-    else:
-        order.fulfillment_state = FS_PICKING
+    order.fulfillment_state = FS_READY_TO_PACK

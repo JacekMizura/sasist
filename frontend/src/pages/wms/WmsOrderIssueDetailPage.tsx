@@ -13,6 +13,7 @@ import {
 } from "../../api/wmsOrderIssueTasksApi";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { WMS_ROUTES } from "./wmsRoutes";
+import { brakiPrimaryCta, parseBrakiWorkflowStatus } from "./brakiWorkflowCta";
 
 function brakiQueueBucketLabel(bucket: string | undefined): string {
   const b = (bucket ?? "").trim();
@@ -300,26 +301,17 @@ export default function WmsOrderIssueDetailPage() {
   const shortageAsDetail = (task.shortage_lines ?? [])
     .filter((l) => l.missing_qty > 1e-9)
     .map(shortageLineToDetailLine);
-  const remainingLines =
-    (ctx.remaining_pick_lines?.length ?? 0) > 0
-      ? (ctx.remaining_pick_lines ?? [])
-      : shortageAsDetail;
-  const hasAnyLines =
-    totalContextLines(ctx) > 0 || remainingLines.length > 0 || (ctx.collected_lines?.length ?? 0) > 0;
-  const workflowStatus = (task.braki_workflow_status ?? "").trim();
+  const remainingLines = (ctx.remaining_pick_lines ?? []).filter(
+    (l) => (l.remaining_qty ?? l.missing_qty ?? 0) > 1e-9,
+  );
+  const collectedLines = ctx.collected_lines ?? [];
+  const hasActiveShortageLines = shortageAsDetail.length > 0 || remainingLines.length > 0;
+  const workflowStatus = parseBrakiWorkflowStatus(task);
   const readyForPacking = workflowStatus === "ready_pack";
-  const recoveryReady =
-    !readyForPacking &&
-    (workflowStatus === "pick" ||
-      workflowStatus === "pick_and_relocation" ||
-      (task.braki_queue_bucket ?? "") === "recovery_ready" ||
-      (task.replacement_pick_pending_count ?? 0) > 0);
+  const primaryCta = brakiPrimaryCta(task, navigate);
   const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
-  const statusHeadline =
-    workflowLabel ||
-    brakiQueueBucketLabel(task.braki_queue_bucket) ||
-    (task.issue_queue_status_label ?? "").trim() ||
-    "—";
+  const statusHeadline = workflowLabel || "—";
+  const showOmsLink = workflowStatus !== "awaiting";
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-50 antialiased">
@@ -385,22 +377,29 @@ export default function WmsOrderIssueDetailPage() {
             </div>
           </div>
 
-          {!hasAnyLines ? (
+          {readyForPacking && !hasActiveShortageLines ? (
+            <div className="mx-4 mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-5 text-center md:mx-6">
+              <p className="text-sm font-bold text-blue-900">Zamówienie gotowe do pakowania</p>
+              <p className="mt-1 text-xs text-blue-700">
+                Wszystkie braki zostały rozliczone — możesz przejść do pakowania.
+              </p>
+            </div>
+          ) : null}
+
+          {collectedLines.length === 0 && !hasActiveShortageLines && !readyForPacking ? (
             <div className="m-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500 md:m-6">
               Brak pozycji na zamówieniu.
             </div>
           ) : (
             <>
-              <IssueDetailSection
-                title="Produkty zebrane"
-                lines={ctx.collected_lines ?? []}
-                variant="collected"
-              />
-              <IssueDetailSection
-                title={remainingLines === shortageAsDetail ? "Braki do decyzji" : "Pozostałe do zebrania"}
-                lines={remainingLines}
-                variant="remaining"
-              />
+              <IssueDetailSection title="Produkty zebrane" lines={collectedLines} variant="collected" />
+              {hasActiveShortageLines ? (
+                <IssueDetailSection
+                  title="Braki do decyzji"
+                  lines={remainingLines.length > 0 ? remainingLines : shortageAsDetail}
+                  variant="remaining"
+                />
+              ) : null}
             </>
           )}
         </main>
@@ -410,27 +409,19 @@ export default function WmsOrderIssueDetailPage() {
           <div className="flex w-full flex-col gap-3 sm:flex-row-reverse">
             <button
               type="button"
-              onClick={() => {
-                if (readyForPacking) {
-                  navigate(WMS_ROUTES.packingOrder(task.order_id));
-                  return;
-                }
-                if (recoveryReady) {
-                  navigate(WMS_ROUTES.pickingRecovery(task.order_id));
-                  return;
-                }
-                navigate(WMS_ROUTES.pickingProducts);
-              }}
+              onClick={() => primaryCta.navigate()}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 active:scale-[0.98] sm:flex-1 md:text-base"
             >
-              {readyForPacking ? "Przejdź do pakowania" : "Przejdź do zbierania"}
+              {primaryCta.label}
             </button>
-            <Link
-              to={`/orders/${task.order_id}`}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100 active:scale-[0.98] active:bg-slate-100 sm:flex-1 md:text-base"
-            >
-              Otwórz zamówienie OMS
-            </Link>
+            {showOmsLink ? (
+              <Link
+                to={`/orders/${task.order_id}`}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100 active:scale-[0.98] active:bg-slate-100 sm:flex-1 md:text-base"
+              >
+                Otwórz zamówienie OMS
+              </Link>
+            ) : null}
           </div>
           {/* Bezpieczna strefa (Home Indicator dla iOS) */}
           <div className="mx-auto mt-2 h-1 w-1/3 rounded-full bg-slate-300 opacity-0"></div>
