@@ -1,3 +1,5 @@
+- 2026-06-04 — **WMS lookup routing (prod 404):** `GET /api/wms/returns/orders/lookup` early-mount w `main.py`; usunięty alias `/lookup` (kolidował z `/{return_id}`); handler zawsze `200` + `[]`; logi `[returns.lookup]`.
+
 - 2026-06-04 — **WMS zwroty frontend lookup:** skaner wywołuje `lookupOrdersForWms` (wcześniej tylko toast); logi debug; pusty `[]` → komunikat bez blokady idle; Enter + skan.
 
 - 2026-06-04 — **WMS returns router mount:** `wms_returns` preload przed `order`; `_ensure_wms_returns_router_mounted()` + logi `IMPORTING WMS RETURNS ROUTER`; lazy import w `order`/`complaint`; startup dump tylko `/api/wms/returns/*`.

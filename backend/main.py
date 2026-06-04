@@ -1177,6 +1177,30 @@ except Exception:
 
 API_PREFIX = "/api"
 WMS_RETURNS_ORDER_LOOKUP_PATH = f"{API_PREFIX}/wms/returns/orders/lookup"
+
+
+def _register_wms_returns_orders_lookup_route() -> None:
+    """
+    Mount lookup before other /api/wms/returns/* routes so ``/{return_id}`` cannot shadow it.
+    Production symptom: GET .../orders/lookup → 404, GET .../lookup → 422 (return_id='lookup').
+    """
+    from .api.wms_returns import lookup_orders
+
+    existing = {getattr(r, "path", None) for r in app.routes}
+    if WMS_RETURNS_ORDER_LOOKUP_PATH in existing:
+        return
+    app.add_api_route(
+        WMS_RETURNS_ORDER_LOOKUP_PATH,
+        lookup_orders,
+        methods=["GET"],
+        tags=["WMS Returns"],
+        name="wms_returns_orders_lookup_canonical",
+    )
+    print(f"[routes] early-mount {WMS_RETURNS_ORDER_LOOKUP_PATH}", flush=True)
+
+
+_register_wms_returns_orders_lookup_route()
+
 _API_ROUTERS = (
     auth_router,
     workforce_router,
@@ -1297,6 +1321,7 @@ def _ensure_wms_returns_router_mounted() -> None:
     )
     for path in sorted(set(app_paths)):
         print("[routes]", path, flush=True)
+    _register_wms_returns_orders_lookup_route()
     if WMS_RETURNS_ORDER_LOOKUP_PATH not in app_paths:
         print("[routes] MISSING", WMS_RETURNS_ORDER_LOOKUP_PATH, flush=True)
     if not app_paths:
@@ -1337,27 +1362,8 @@ app.middleware("http")(outer_request_logger_middleware)
 
 
 def _mount_wms_returns_order_lookup_on_app() -> None:
-    """
-    Canonical mount on FastAPI app (not only APIRouter).
-    Frontend: GET /api/wms/returns/orders/lookup
-    """
-    from .api.wms_returns import lookup_orders
-    from .schemas.wms_return import OrderLookupHit
-
-    paths = {getattr(r, "path", None) for r in app.routes}
-    if WMS_RETURNS_ORDER_LOOKUP_PATH not in paths:
-        app.add_api_route(
-            WMS_RETURNS_ORDER_LOOKUP_PATH,
-            lookup_orders,
-            methods=["GET"],
-            response_model=List[OrderLookupHit],
-            tags=["WMS Returns"],
-            name="wms_returns_orders_lookup_app",
-        )
-        print(f"[routes] mounted {WMS_RETURNS_ORDER_LOOKUP_PATH}", flush=True)
-
-
-_mount_wms_returns_order_lookup_on_app()
+    """Ensure canonical lookup path exists after all routers are loaded."""
+    _register_wms_returns_orders_lookup_route()
 
 
 @app.on_event("startup")

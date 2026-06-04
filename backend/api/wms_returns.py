@@ -10,6 +10,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy import cast, desc, exists, func, nullslast, or_, String
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -1462,30 +1464,13 @@ def get_wms_return_queue_counts(
         return WmsReturnQueueCountsRead(counts={k: 0 for k in RETURN_QUEUE_TAB_KEYS})
 
 
-@router.get(
-    "/orders/lookup",
-    response_model=List[OrderLookupHit],
-    status_code=200,
-    summary="Wyszukiwanie zamówienia pod zwrot WMS",
-)
-@router.get("/orders/lookup/", response_model=List[OrderLookupHit], include_in_schema=False)
-@router.get("/lookup", response_model=List[OrderLookupHit], include_in_schema=False)
-def lookup_orders(
-    tenant_id: int = Query(...),
-    warehouse_id: Optional[int] = Query(
-        None,
-        ge=1,
-        description="Magazyn z UI WMS; gdy brak — domyślny magazyn tenanta (jak wcześniej).",
-    ),
-    q: str = Query(..., min_length=1, description="Numer zamówienia, kod, #id, RET-id, id RMZ / zamówienia"),
-    db: Session = Depends(get_db),
+def _wms_returns_orders_lookup_search(
+    db: Session,
+    tenant_id: int,
+    q: str,
+    warehouse_id: Optional[int],
 ) -> List[OrderLookupHit]:
-    """
-    Wyszukiwanie zamówień pod zwrot WMS: id zamówienia, id RMZ, numer / kod kreskowy / prefiks ORD- / RET-.
-    Dla samego numeru id szuka także po całym tenancie (inny magazyn niż domyślny), żeby skan „13” znalazł #13.
-
-    Zawsze HTTP 200 — brak trafień zwraca ``[]`` (nigdy 404).
-    """
+    """Search orders for WMS return intake — never raises HTTP 404."""
     try:
         wh_id = (
             int(warehouse_id)
@@ -1497,7 +1482,6 @@ def lookup_orders(
 
     term_raw, num_token = _normalize_wms_returns_lookup_query(q)
     if not term_raw and num_token is None:
-        print(f"[lookup_orders] q={q!r} -> [] (empty query)", flush=True)
         return []
 
     base_wh = db.query(Order).filter(Order.tenant_id == tenant_id, Order.warehouse_id == wh_id)
@@ -1603,12 +1587,9 @@ def lookup_orders(
                 merge_hit(o, int(ret_row.id))
 
     if hits:
-        out = sorted(hits.values(), key=lambda h: h.id)
-        print(f"[lookup_orders] q={q!r} tenant={tenant_id} wh={wh_id} -> {len(out)} hit(s)", flush=True)
-        return out
+        return sorted(hits.values(), key=lambda h: h.id)
 
     if not term:
-        print(f"[lookup_orders] q={q!r} -> [] (numeric-only miss)", flush=True)
         return []
 
     like_term = f"%{term}%"
@@ -1624,12 +1605,47 @@ def lookup_orders(
         .limit(15)
         .all()
     )
-    out = [_order_lookup_hit_from_row(o, None) for o in partial]
-    print(f"[lookup_orders] q={q!r} tenant={tenant_id} wh={wh_id} -> {len(out)} partial", flush=True)
-    return out
+    return [_order_lookup_hit_from_row(o, None) for o in partial]
 
 
-@router.get("/orders/{order_id}/returns", response_model=List[WmsReturnListItem])
+@router.get(
+    "/orders/lookup",
+    status_code=200,
+    summary="Wyszukiwanie zamówienia pod zwrot WMS",
+)
+@router.get("/orders/lookup/", include_in_schema=False)
+def lookup_orders(
+    tenant_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Magazyn z UI WMS; gdy brak — domyślny magazyn tenanta (jak wcześniej).",
+    ),
+    q: str = Query(..., min_length=1, description="Numer zamówienia, kod, #id, RET-id, id RMZ / zamówienia"),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    """
+    Wyszukiwanie zamówień pod zwrot WMS.
+
+    Zawsze HTTP 200 + JSON array (pusta lista gdy brak trafień). Nigdy 404.
+    """
+    print("[returns.lookup] q=", q, flush=True)
+    try:
+        results = _wms_returns_orders_lookup_search(db, tenant_id, q, warehouse_id)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            print("[returns.lookup] results=", 0, "(swallowed 404)", flush=True)
+            return JSONResponse(status_code=200, content=[])
+        raise
+    except SQLAlchemyError:
+        logger.exception("[returns.lookup] database error q=%r", q)
+        raise HTTPException(status_code=500, detail="Błąd wyszukiwania zamówienia") from None
+
+    print("[returns.lookup] results=", len(results), flush=True)
+    return JSONResponse(status_code=200, content=jsonable_encoder(results))
+
+
+@router.get("/orders/{order_id:int}/returns", response_model=List[WmsReturnListItem])
 def list_returns_for_order(
     order_id: int,
     tenant_id: int = Query(...),
@@ -1852,7 +1868,7 @@ def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
     return _serialize_return_read(db, row)
 
 
-@router.post("/{return_id}/lines/{order_item_id}/split-process", response_model=WmsReturnRead)
+@router.post("/{return_id:int}/lines/{order_item_id}/split-process", response_model=WmsReturnRead)
 def process_rmz_line_split(
     return_id: int,
     order_item_id: int,
@@ -2092,7 +2108,7 @@ def process_rmz_line_split(
     return _serialize_return_read(db, row)
 
 
-@router.post("/{return_id}/lines/{order_item_id}/process", response_model=WmsReturnRead)
+@router.post("/{return_id:int}/lines/{order_item_id}/process", response_model=WmsReturnRead)
 def process_rmz_line(
     return_id: int,
     order_item_id: int,
@@ -2200,7 +2216,7 @@ def process_rmz_line(
     return _serialize_return_read(db, row)
 
 
-@router.post("/{return_id}/refund", response_model=WmsReturnRead)
+@router.post("/{return_id:int}/refund", response_model=WmsReturnRead)
 def process_rmz_refund(
     return_id: int,
     body: WmsRefundCreate,
@@ -2320,7 +2336,7 @@ def process_rmz_refund(
     return _serialize_return_read(db, row)
 
 
-@router.patch("/{return_id}/status", response_model=WmsReturnRead)
+@router.patch("/{return_id:int}/status", response_model=WmsReturnRead)
 def patch_wms_return_workflow_status(
     return_id: int,
     body: WmsReturnWorkflowStatusPatch,
@@ -2438,7 +2454,7 @@ def wms_returns_bulk_archive(body: WmsReturnsBulkArchiveBody, db: Session = Depe
     return entity_bulk_delete_result_from_service_dict(result)
 
 
-@router.delete("/{return_id}", response_model=EntityBulkDeleteResult)
+@router.delete("/{return_id:int}", response_model=EntityBulkDeleteResult)
 def archive_single_wms_return(
     return_id: int,
     tenant_id: int = Query(...),
