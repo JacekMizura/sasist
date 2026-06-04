@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Braki: fałszywe „Do rozlokowania” (order 1206)
+
+- Usunięto auto-``merge_relocation_from_picks`` z ``finalize_wms_recovery_picking_cart`` (udany recovery pick → ``ready_pack``).
+- ``relocation_reason`` (PICKED_ITEM_REMOVED / REPLACEMENT_LEFTOVER / …); agregacja ignoruje legacy ``recovery_finalize:*``.
+- ``prune_invalid_relocation_allocations`` + logi ``[braki.relocation.debug]``.
+
 ## 2026-06-04 — Zgłoszenie braku na linii zamiennika (report-shortage)
 
 - ``resolve_picking_config_for_shortage_report``: fallback status panelu zamówienia / domyślna reguła magazynu gdy ``order_item_id`` lub ``recovery_order_id``.

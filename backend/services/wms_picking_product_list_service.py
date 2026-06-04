@@ -2291,23 +2291,13 @@ def finalize_wms_recovery_picking_cart(
         completed_at=datetime.utcnow(),
     )
 
-    if finalized_ids:
-        from .wms_operational_task_service import merge_relocation_from_picks
-
-        cart_label = (getattr(cart, "code", None) or getattr(cart, "name", None) or "").strip()
-        if not cart_label:
-            cart_label = f"KOSZYK-{cid}"
-        finalized_picks = (
-            db.query(Pick).filter(Pick.id.in_(finalized_ids)).all() if finalized_ids else []
-        )
-        merge_relocation_from_picks(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            picks=finalized_picks,
-            picked_from_location=cart_label,
-            source_event_id=f"recovery_finalize:{int(order_id)}:{cid}",
-            close_recollect_for_items=True,
-        )
+    logger.info(
+        "[recovery.finalize] order_id=%s cart_id=%s finalized_picks=%s "
+        "fulfillment=%s relocation_skipped=successful_recovery_pick",
+        int(order_id),
+        cid,
+        len(finalized_ids),
+        fs,
+    )
 
     return {"ok": True, "order_id": int(order_id), "cart_id": cid}

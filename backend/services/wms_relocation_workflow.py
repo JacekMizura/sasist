@@ -464,11 +464,13 @@ def relocation_alloc_counts_for_order(
 
     Alokacje ``done`` lub z qty=0 nie blokują ``ready_pack``.
     """
-    from ..models.order_item import OrderItem, order_item_is_replaced_line
+    from ..models.order_item import OrderItem
+    from .relocation_reason import infer_relocation_reason, relocation_reason_is_actionable
     from .wms_operational_task_service import (
         _allocation_row_status,
         _normalize_relocation_allocation_row,
         _try_auto_complete_relocation_task,
+        prune_invalid_relocation_allocations,
     )
 
     oid = int(order_id)
@@ -482,10 +484,15 @@ def relocation_alloc_counts_for_order(
     if task is None:
         return 0, 0, 0
 
+    if prune_invalid_relocation_allocations(db, task):
+        db.flush()
+
     payload = _json_loads(getattr(task, "payload_json", None), {})
     if not isinstance(payload, dict):
         return 0, 0, 0
 
+    task_status = str(getattr(task, "status", "") or "")
+    is_cancelled = task_status.lower() == "cancelled"
     pending = partial = done = 0
     for raw in payload.get("allocations") or []:
         if not isinstance(raw, dict) or int(raw.get("order_id") or 0) != oid:
@@ -493,61 +500,68 @@ def relocation_alloc_counts_for_order(
         row = _normalize_relocation_allocation_row(raw)
         qty = float(row.get("qty") or 0)
         oiid = int(row.get("order_item_id") or 0)
-        if oiid > 0:
-            oi = db.query(OrderItem).filter(OrderItem.id == oiid).first()
-            if oi is not None:
-                line_qty = float(oi.quantity or 0)
-                if line_qty <= 1e-9 and float(row.get("relocated_qty") or 0) <= 1e-9:
-                    if log_checks:
-                        logger.info(
-                            "[braki.relocation.check] order_id=%s relocation_task_id=%s "
-                            "order_item_id=%s allocation_status=skipped_removed_line",
-                            oid,
-                            int(task.id),
-                            oiid,
-                        )
-                    continue
-                if order_item_is_replaced_line(oi) and float(row.get("relocated_qty") or 0) <= 1e-9:
-                    if log_checks:
-                        logger.info(
-                            "[braki.relocation.check] order_id=%s relocation_task_id=%s "
-                            "order_item_id=%s allocation_status=skipped_replaced_archive",
-                            oid,
-                            int(task.id),
-                            oiid,
-                        )
-                    continue
+        reason = infer_relocation_reason(row)
+        source_workflow = (str(row.get("source_event_id") or "")).strip() or None
+
+        if not relocation_reason_is_actionable(reason):
+            if log_checks:
+                logger.info(
+                    "[braki.relocation.debug] order_id=%s relocation_task_id=%s "
+                    "order_item_id=%s relocation_status=%s created_reason=%s "
+                    "created_from=%s is_completed=%s is_cancelled=%s relocation_qty=%s "
+                    "source_workflow=%s action=skip_invalid_reason",
+                    oid,
+                    int(task.id),
+                    oiid,
+                    task_status,
+                    reason,
+                    str(row.get("source_event_id") or ""),
+                    bool(row.get("done")),
+                    is_cancelled,
+                    qty,
+                    source_workflow,
+                )
+            continue
+
         if qty <= 1e-9:
             if log_checks:
                 logger.info(
-                    "[braki.relocation.check] order_id=%s relocation_task_id=%s "
-                    "status=%s is_completed=%s is_cancelled=%s relocation_qty=0 "
-                    "source=%s allocation_status=skipped_zero_qty",
+                    "[braki.relocation.debug] order_id=%s relocation_task_id=%s "
+                    "order_item_id=%s relocation_status=%s created_reason=%s "
+                    "created_from=%s is_completed=%s is_cancelled=%s relocation_qty=0 "
+                    "source_workflow=%s action=skip_zero_qty",
                     oid,
                     int(task.id),
-                    str(getattr(task, "status", "") or ""),
-                    str(getattr(task, "status", "")).lower() == "done",
-                    str(getattr(task, "status", "")).lower() == "cancelled",
+                    oiid,
+                    task_status,
+                    reason,
                     str(row.get("source_event_id") or ""),
+                    bool(row.get("done")),
+                    is_cancelled,
+                    source_workflow,
                 )
             continue
+
         st = _allocation_row_status(row)
         relocated = float(row.get("relocated_qty") or 0)
         is_done_flag = bool(row.get("done"))
         if log_checks:
             logger.info(
-                "[braki.relocation.check] order_id=%s relocation_task_id=%s "
-                "order_item_id=%s status=%s is_completed=%s is_cancelled=%s "
-                "relocation_qty=%s relocated_qty=%s source=%s allocation_status=%s",
+                "[braki.relocation.debug] order_id=%s relocation_task_id=%s "
+                "order_item_id=%s relocation_status=%s created_reason=%s "
+                "created_from=%s is_completed=%s is_cancelled=%s relocation_qty=%s "
+                "relocated_qty=%s source_workflow=%s allocation_status=%s",
                 oid,
                 int(task.id),
-                int(row.get("order_item_id") or 0),
-                str(getattr(task, "status", "") or ""),
+                oiid,
+                task_status,
+                reason,
+                str(row.get("source_event_id") or ""),
                 is_done_flag or st == "done",
-                str(getattr(task, "status", "")).lower() == "cancelled",
+                is_cancelled,
                 qty,
                 relocated,
-                str(row.get("source_event_id") or ""),
+                source_workflow,
                 st,
             )
         if st == "pending":

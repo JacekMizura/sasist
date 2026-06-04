@@ -488,6 +488,7 @@ def ensure_relocation_for_order_item_picks(
     from ..models.order_item import OrderItem
     from .fulfillment_event_service import line_picked_sum_for_order
     from .order_item_removal_service import REMOVAL_TYPE_MANUAL_OMS, normalize_removal_type
+    from .relocation_reason import RELOCATION_REASON_PICKED_ITEM_REMOVED
     from .wms_operational_task_service import merge_relocation_from_picks, merge_relocation_task
 
     oid = int(order.id)
@@ -539,6 +540,7 @@ def ensure_relocation_for_order_item_picks(
             picked_from_location=cart_label,
             source_event_id=source_event_id,
             close_recollect_for_items=True,
+            relocation_reason=RELOCATION_REASON_PICKED_ITEM_REMOVED,
         )
         task_ids = [int(t.id) for t in tasks if getattr(t, "id", None)]
     elif picked_qty > 1e-9 and oi.product_id:
@@ -556,10 +558,12 @@ def ensure_relocation_for_order_item_picks(
                     "order_item_id": oiid,
                     "qty": round(picked_qty, 6),
                     "target_zone": zone or None,
+                    "relocation_reason": RELOCATION_REASON_PICKED_ITEM_REMOVED,
                 }
             ],
             picked_from_location=cart_label,
             source_event_id=source_event_id,
+            relocation_reason=RELOCATION_REASON_PICKED_ITEM_REMOVED,
         )
         if task is not None:
             task_ids = [int(task.id)]

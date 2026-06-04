@@ -147,6 +147,7 @@ def append_relocation_allocations(
     new: list[dict[str, Any]],
     *,
     source_event_id: str,
+    relocation_reason: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Merge allocation lines idempotently.
@@ -165,12 +166,14 @@ def append_relocation_allocations(
         if qty < EPS:
             continue
         key = allocation_key(oid, oiid)
+        reason = (str(raw.get("relocation_reason") or relocation_reason or "")).strip().upper() or None
         row = {
             "order_id": oid,
             "order_item_id": oiid,
             "qty": qty,
             "target_zone": (str(raw.get("target_zone") or "").strip() or None),
             "source_event_id": str(source_event_id),
+            "relocation_reason": reason,
             "relocated_qty": 0.0,
             "carrier_id": None,
             "carrier_label": None,
@@ -195,6 +198,7 @@ def merge_relocation_task(
     allocations: list[dict[str, Any]],
     picked_from_location: str | None,
     source_event_id: str,
+    relocation_reason: str | None = None,
 ) -> WmsOperationalTask | None:
     """Create or update one aggregated RELOCATION task per warehouse+product."""
     if not allocations:
@@ -213,7 +217,12 @@ def merge_relocation_task(
             if not picked_from:
                 picked_from = (payload_old.get("picked_from_location") or "").strip() or None
 
-    merged_alloc = append_relocation_allocations(prior, allocations, source_event_id=str(source_event_id))
+    merged_alloc = append_relocation_allocations(
+        prior,
+        allocations,
+        source_event_id=str(source_event_id),
+        relocation_reason=relocation_reason,
+    )
     payload = rebuild_relocation_payload(
         merged_alloc,
         product_id=pid,
@@ -250,6 +259,7 @@ def merge_relocation_from_picks(
     picked_from_location: str | None,
     source_event_id: str,
     close_recollect_for_items: bool = True,
+    relocation_reason: str | None = None,
 ) -> list[WmsOperationalTask]:
     """Group finalized picks by product → one RELOCATION task per product."""
     from ..models.pick import Pick
@@ -286,6 +296,7 @@ def merge_relocation_from_picks(
                 "order_item_id": oiid,
                 "qty": round(qty, 6),
                 "target_zone": zone or None,
+                "relocation_reason": relocation_reason,
             }
         )
 
@@ -307,6 +318,7 @@ def merge_relocation_from_picks(
             allocations=allocs,
             picked_from_location=picked_from_location,
             source_event_id=str(source_event_id),
+            relocation_reason=relocation_reason,
         )
         if task:
             tasks.append(task)
@@ -336,12 +348,16 @@ def _normalize_relocation_allocation_row(raw: dict[str, Any]) -> dict[str, Any]:
     carrier_id = int(cid) if cid is not None and int(cid) > 0 else None
     relocated_by = raw.get("relocated_by")
     rb = int(relocated_by) if relocated_by is not None and int(relocated_by) > 0 else None
+    from .relocation_reason import infer_relocation_reason
+
+    reason = infer_relocation_reason(raw) if isinstance(raw, dict) else None
     return {
         "order_id": int(raw.get("order_id") or 0),
         "order_item_id": int(raw.get("order_item_id") or 0),
         "qty": qty,
         "target_zone": (str(raw.get("target_zone") or "").strip() or None),
         "source_event_id": (str(raw.get("source_event_id") or "").strip() or None),
+        "relocation_reason": reason,
         "carrier_id": carrier_id,
         "carrier_label": (str(raw.get("carrier_label") or "").strip() or None),
         "relocated_qty": relocated,
@@ -359,6 +375,41 @@ def _allocation_row_status(row: dict[str, Any]) -> str:
     if relocated > EPS:
         return "partial"
     return "pending"
+
+
+def prune_invalid_relocation_allocations(
+    db: Session,
+    task: WmsOperationalTask,
+) -> bool:
+    """
+    Usuwa alokacje bez aktywnego ``relocation_reason`` (np. legacy ``recovery_finalize:*``).
+    Zwraca True gdy payload został zmieniony.
+    """
+    from .relocation_reason import infer_relocation_reason, relocation_reason_is_actionable
+
+    payload = _json_loads(task.payload_json, {})
+    if not isinstance(payload, dict):
+        return False
+    raw_list = list(payload.get("allocations") or [])
+    kept: list[dict[str, Any]] = []
+    changed = False
+    for raw in raw_list:
+        if not isinstance(raw, dict):
+            changed = True
+            continue
+        row = _normalize_relocation_allocation_row(raw)
+        reason = infer_relocation_reason(row)
+        if not relocation_reason_is_actionable(reason):
+            changed = True
+            continue
+        kept.append(row)
+    if not changed:
+        return False
+    payload["allocations"] = kept
+    task.payload_json = _json_dumps(payload)
+    _recompute_relocation_task_progress(task)
+    task.updated_at = _now()
+    return True
 
 
 def _normalize_payload_allocations(allocs: list[Any]) -> list[dict[str, Any]]:

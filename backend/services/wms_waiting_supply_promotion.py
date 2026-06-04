@@ -310,6 +310,8 @@ def promote_waiting_supply_for_product(
             result.recollect_lines += 1
 
     if relocation_allocs:
+        from .relocation_reason import RELOCATION_REASON_RECOVERY_LEFTOVER
+
         merge_relocation_task(
             db,
             tenant_id=tid,
@@ -317,6 +319,7 @@ def promote_waiting_supply_for_product(
             product_id=pid,
             allocations=relocation_allocs,
             picked_from_location=reloc_label,
+            relocation_reason=RELOCATION_REASON_RECOVERY_LEFTOVER,
             source_event_id=f"waiting_promote:{source_event_id}",
         )
 
