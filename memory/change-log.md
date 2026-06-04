@@ -1,5 +1,10 @@
 # Change Log
 
+## 2026-06-04 — Fix React #310 (braki szczegół)
+
+- ``WmsOrderIssueDetailPage``: ``useCallback(onArchiveShortage)`` przeniesiony przed wczesne ``return`` (loading/error) — stabilna kolejność hooków.
+- ``App.tsx``: ``ErrorBoundary`` na trasach braki / issues/task / relocation.
+
 ## 2026-06-04 — OMS: polskie etykiety zdarzeń zamówienia
 
 - ``frontend/src/utils/orderEventLabels.ts`` — mapa kodów WMS/OMS → PL, kategorie, ikony/kolory, fallback title-case.

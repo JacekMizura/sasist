@@ -327,10 +327,38 @@ export const router = createBrowserRouter(
         <Route path="operational-queues" element={<WmsOperationalQueuesHub />} />
         <Route path="operational-queues/dashboard" element={<WmsOperationalDashboardPage />} />
         <Route path="operational-queues/task/:taskId" element={<WmsOperationalTaskShellPage />} />
-        <Route path="operational-queues/relocation/:taskId" element={<WmsRelocationDetailPage />} />
-        <Route path="braki" element={<WmsOrderIssuesHub />} />
-        <Route path="issues" element={<WmsOrderIssuesHub />} />
-        <Route path="issues/task/:taskId" element={<WmsOrderIssueDetailPage />} />
+        <Route
+          path="operational-queues/relocation/:taskId"
+          element={
+            <ErrorBoundary>
+              <WmsRelocationDetailPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="braki"
+          element={
+            <ErrorBoundary>
+              <WmsOrderIssuesHub />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="issues"
+          element={
+            <ErrorBoundary>
+              <WmsOrderIssuesHub />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="issues/task/:taskId"
+          element={
+            <ErrorBoundary>
+              <WmsOrderIssueDetailPage />
+            </ErrorBoundary>
+          }
+        />
         <Route path="product-preview" element={<WmsProductPreviewHubPage />} />
         <Route path="product-preview/:productId" element={<WmsProductPreviewPage />} />
         <Route path="packing" element={<Outlet />}>

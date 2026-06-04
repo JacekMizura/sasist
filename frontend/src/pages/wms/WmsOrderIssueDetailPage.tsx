@@ -266,6 +266,30 @@ export default function WmsOrderIssueDetailPage() {
     return () => registerScanHandler(null);
   }, [registerScanHandler, switchTaskByScan]);
 
+  const onArchiveShortage = useCallback(async () => {
+    if (!task || warehouseId == null) return;
+    const ctx = emptyContext(task.order_context);
+    const shortageAsDetail = (task.shortage_lines ?? [])
+      .filter((l) => l.missing_qty > 1e-9)
+      .map(shortageLineToDetailLine);
+    const remainingLines = (ctx.remaining_pick_lines ?? []).filter(
+      (l) => (l.remaining_qty ?? l.missing_qty ?? 0) > 1e-9,
+    );
+    const hasActiveShortageLines = shortageAsDetail.length > 0 || remainingLines.length > 0;
+    const workflowStatus = parseBrakiWorkflowStatus(task);
+    if (workflowStatus !== "ready_pack" || hasActiveShortageLines) return;
+
+    setArchivePending(true);
+    try {
+      await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
+      navigate(WMS_ROUTES.braki(), { replace: true });
+    } catch {
+      setErr("Nie udało się zamknąć braku w kolejce.");
+    } finally {
+      setArchivePending(false);
+    }
+  }, [task, warehouseId, navigate]);
+
   if (warehouseId == null) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center text-slate-600">
@@ -321,19 +345,6 @@ export default function WmsOrderIssueDetailPage() {
   const showOmsLink = workflowStatus !== "awaiting";
   const canArchive =
     readyForPacking && !hasActiveShortageLines && task != null && warehouseId != null;
-
-  const onArchiveShortage = useCallback(async () => {
-    if (!task || warehouseId == null || !canArchive) return;
-    setArchivePending(true);
-    try {
-      await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
-      navigate(WMS_ROUTES.braki(), { replace: true });
-    } catch {
-      setErr("Nie udało się zamknąć braku w kolejce.");
-    } finally {
-      setArchivePending(false);
-    }
-  }, [canArchive, navigate, task, warehouseId]);
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-50 antialiased">
