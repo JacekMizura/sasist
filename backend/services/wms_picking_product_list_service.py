@@ -779,7 +779,8 @@ def _refresh_order_item_line_picked_status(
     miss_ln = float(oi.wms_picking_line_missing_qty or 0)
     if miss_ln > 1e-9:
         return
-    if pq + 1e-9 >= need:
+    picked_eff = min(pq, max(0.0, need - miss_ln))
+    if picked_eff + miss_ln + 1e-9 >= need:
         oi.wms_picking_line_status = "picked"
         if (getattr(oi, "oms_line_status", None) or "").strip().upper() == OMS_LINE_STATUS_TO_PICK:
             oi.oms_line_status = None
@@ -1441,6 +1442,37 @@ def _report_shortage_reject(reason: str, *, payload: dict, **ctx: object) -> Non
     raise ValueError(reason)
 
 
+def _line_shortage_report_quantities(
+    db: Session,
+    oi: OrderItem,
+    cart_id: int,
+) -> dict[str, float]:
+    """
+    Ilości do zgłoszenia braku — ta sama semantyka co karta produktu (``quantity_to_pick``).
+
+    ``remaining_qty`` = ordered − picked (sesja) − już zapisany brak operacyjny (``wms_picking_line_missing_qty``).
+    Częściowe zbieranie (np. 1/2) pozostaje kwalifikowane do zgłoszenia braku.
+    """
+    qty = float(oi.quantity or 0)
+    cid = int(cart_id)
+    picked_raw = float(sum_pick_events_for_line_cart(db, int(oi.id), cid))
+    miss_ln = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
+    declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+    picked_eff = min(picked_raw, max(0.0, qty - miss_ln))
+    remaining_qty = max(0.0, qty - picked_eff - miss_ln)
+    shortage_existing = max(miss_ln, declared)
+    return {
+        "required_qty": qty,
+        "picked_qty": picked_eff,
+        "picked_qty_raw": picked_raw,
+        "shortage_qty_existing": shortage_existing,
+        "missing_qty_line": miss_ln,
+        "declared_qty": declared,
+        "remaining_qty": remaining_qty,
+        "declarable_qty": remaining_qty,
+    }
+
+
 def _line_eligible_for_shortage_report(oi: OrderItem) -> tuple[bool, str]:
     """Czy można zgłosić brak na tej linii (zamiennik / TO_PICK / aktywna — nie archiwum REPLACED)."""
     if getattr(oi, "parent_bundle_order_item_id", None) is not None:
@@ -1711,38 +1743,37 @@ def report_wms_picking_product_shortage(
             ok, reason = _line_eligible_for_shortage_report(oi)
             rep_oid = getattr(oi, "replaced_from_order_item_id", None)
             orig_oid = int(rep_oid) if rep_oid is not None and int(rep_oid) > 0 else None
-            picked_sum = sum_pick_events_for_line_cart(db, int(oi.id), cid)
-            declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
-            gap = max(0.0, float(oi.quantity or 0) - float(picked_sum or 0))
-            rem = gap - declared
+            q = _line_shortage_report_quantities(db, oi, cid)
             logger.info(
-                "[report_shortage] line order_id=%s order_item_id=%s replacement_line_id=%s "
-                "source_line_id=%s is_replacement=%s is_recovery=%s picked_qty=%s remaining_qty=%s allowed=%s reason=%s",
+                "[wms.shortage.report] order_id=%s order_item_id=%s required_qty=%s picked_qty=%s "
+                "shortage_qty_existing=%s remaining_qty=%s cart_id=%s allowed=%s reason=%s "
+                "replacement_line_id=%s is_recovery=%s",
                 int(o.id),
                 int(oi.id),
-                int(oi.id) if orig_oid is not None else None,
-                orig_oid,
-                orig_oid is not None,
-                is_recovery,
-                picked_sum,
-                rem,
+                q["required_qty"],
+                q["picked_qty"],
+                q["shortage_qty_existing"],
+                q["remaining_qty"],
+                cid,
                 ok,
                 reason,
+                int(oi.id) if orig_oid is not None else None,
+                is_recovery,
             )
             if not ok:
                 continue
-            yield oi, picked_sum, declared, gap, rem
+            yield oi, q
 
     affected: list[int] = []
     for o in orders:
-        for oi, _ps, _dec, _gap, rem in _iter_report_lines(o):
-            if rem > 1e-9:
+        for oi, q in _iter_report_lines(o):
+            if float(q["declarable_qty"]) > 1e-9:
                 affected.append(int(o.id))
                 break
 
     if not affected:
         _report_shortage_reject(
-            "Brak zamówień z niewypełnioną linią tego produktu w tej sesji (wózek).",
+            "Cała wymagana ilość została już rozliczona (zebrano + brak = zamówione).",
             payload=payload_log,
             session_scope_ids=session_scope_ids,
             is_recovery=is_recovery,
@@ -1753,8 +1784,8 @@ def report_wms_picking_product_shortage(
     for o in orders:
         if int(o.id) not in aff_set:
             continue
-        for _oi, _ps, declared_ln, gap_ln, rem_line in _iter_report_lines(o):
-            max_declarable += max(0.0, rem_line)
+        for _oi, q in _iter_report_lines(o):
+            max_declarable += max(0.0, float(q["declarable_qty"]))
     max_declarable = round(max_declarable, 6)
     if float(missing_qty) > max_declarable + 1e-6:
         _report_shortage_reject(
@@ -1774,7 +1805,8 @@ def report_wms_picking_product_shortage(
         if int(o.id) not in aff_set:
             continue
         touch_picking_in_progress(o)
-        for oi, picked_sum_line, declared_ln, gap_ln, rem_line in _iter_report_lines(o):
+        for oi, q in _iter_report_lines(o):
+            rem_line = float(q["declarable_qty"])
             if rem_line <= 1e-9:
                 continue
             take = min(rem_line, remaining_budget)
@@ -1782,6 +1814,7 @@ def report_wms_picking_product_shortage(
                 continue
             remaining_budget = max(0.0, remaining_budget - take)
             shortage_by_order[int(o.id)] += float(take)
+            declared_ln = float(q["declared_qty"])
             oi.wms_shortage_declared_qty = round(declared_ln + take, 6)
             oi.wms_picking_line_status = "missing"
             pending_pick_rows = (

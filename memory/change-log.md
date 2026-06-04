@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Zgłoszenie braku przy częściowym zbieraniu (1/2)
+
+- ``_line_shortage_report_quantities`` — ``remaining = ordered − picked − missing`` (jak karta produktu); nie ``picked > 0 ⇒ zamknięte``.
+- Komunikat odrzucenia: „Cała wymagana ilość została już rozliczona…”.
+- Log ``[wms.shortage.report]``; test ``test_report_shortage_partial_pick.py``.
+
 ## 2026-06-04 — Archive braków 500 + bezpośrednie pakowanie z braków
 
 - Archive: brakujący ``logger`` w ``order_issue_task_service`` (NameError → 500); idempotentność; ``archived_at`` / ``archived_by_user_id``; log ``[wms.shortage.archive]``.
