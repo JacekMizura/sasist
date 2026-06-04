@@ -39,6 +39,8 @@ from ..models.wms_order_event import (
     EVT_REPLACEMENT_SHORTAGE_REPORTED,
     EVT_RECOVERY_SHORTAGE_REPORTED,
     EVT_ORDER_LINE_REMOVED,
+    EVT_ORDER_ITEM_REMOVED,
+    EVT_REPLACEMENT_ITEM_REMOVED,
     EVT_ORDER_LINE_REPLACED,
     EVT_OMS_DECISION_WAIT,
     EVT_OMS_DECISION_ACCEPTED,
@@ -755,6 +757,96 @@ def emit_wms_shortage_reported(
     )
 
 
+def emit_replacement_item_removed(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    order_item_id: int,
+    product_id: int | None,
+    product_name: str,
+    original_product_name: str | None,
+    original_order_item_id: int | None,
+    quantity: float,
+    operator_user_id: int | None = None,
+    reason: str = "",
+) -> None:
+    meta = {
+        "product_name": product_name[:512],
+        "original_product_name": (original_product_name or "")[:512] or None,
+        "original_order_item_id": int(original_order_item_id) if original_order_item_id else None,
+        "reason": reason[:256],
+        "quantity": float(quantity),
+    }
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_REPLACEMENT_ITEM_REMOVED,
+        product_id=int(product_id) if product_id else None,
+        order_item_id=int(order_item_id),
+        quantity=float(quantity),
+        metadata=meta,
+    )
+    orig = (original_product_name or "").strip()
+    msg = f"Usunięto zamiennik: {product_name} ({_fmt_qty(quantity)} szt.)"
+    if orig:
+        msg += f" · zamiast: {orig}"
+    if reason:
+        msg += f" — {reason}"
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        event_type=EVT_REPLACEMENT_ITEM_REMOVED,
+        message=msg,
+    )
+
+
+def emit_order_item_removed(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    order_item_id: int,
+    product_id: int | None,
+    product_name: str,
+    quantity: float,
+    operator_user_id: int | None = None,
+    reason: str = "",
+) -> None:
+    """Audyt usunięcia zwykłej linii (alias operacyjny ORDER_ITEM_REMOVED)."""
+    meta = {"product_name": product_name[:512], "reason": reason[:256], "quantity": float(quantity)}
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_ORDER_ITEM_REMOVED,
+        product_id=int(product_id) if product_id else None,
+        order_item_id=int(order_item_id),
+        quantity=float(quantity),
+        metadata=meta,
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        event_type=EVT_ORDER_ITEM_REMOVED,
+        message=f"Usunięto pozycję: {product_name} ({_fmt_qty(quantity)} szt.)"
+        + (f" — {reason}" if reason else ""),
+    )
+
+
 def emit_order_line_removed(
     db: Session,
     *,
@@ -1429,10 +1521,15 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
             body.append(f"czas: {meta['picking_duration_label']}")
         if meta.get("new_order_ui_status_name"):
             body.append(f"status: {meta['new_order_ui_status_name']}")
-    elif et == EVT_ORDER_LINE_REMOVED:
-        title = "Usunięto produkt z zamówienia"
+    elif et in (EVT_ORDER_LINE_REMOVED, EVT_ORDER_ITEM_REMOVED, EVT_REPLACEMENT_ITEM_REMOVED):
+        title = {
+            EVT_REPLACEMENT_ITEM_REMOVED: "Usunięto zamiennik",
+            EVT_ORDER_ITEM_REMOVED: "Usunięto pozycję",
+        }.get(et, "Usunięto produkt z zamówienia")
         if meta.get("product_name"):
             body.append(str(meta["product_name"]))
+        if meta.get("original_product_name"):
+            body.append(f"zamiast: {meta['original_product_name']}")
         if meta.get("reason"):
             body.append(str(meta["reason"]))
     elif et == EVT_ORDER_LINE_REPLACED:

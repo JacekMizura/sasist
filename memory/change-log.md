@@ -21,3 +21,10 @@
 - **Przyczyna 400:** `report-shortage` wymagał kohorty statusu zbierania; zamówienia w dogrywce (BRAKI) nie przechodziły walidacji sesji.
 - **Backend:** `recovery_order_id` + `order_item_id` → `forced_scope_ids` (jak `fixed_order_ids` na liście recovery); `_line_eligible_for_shortage_report`; logi `[report_shortage] ENTER/REJECT/line`; audyt `ORDER_LINE_SHORTAGE_REPORTED` / `REPLACEMENT_SHORTAGE_REPORTED` / `RECOVERY_SHORTAGE_REPORTED`.
 - **API detail:** `order_item_id` na wierszu zamówienia w szczególe produktu; front przekazuje `recovery_order_id`, `order_ids`, `order_item_id` w POST.
+
+## 2026-06-04 — Braki: ready_pack CTA, delete zamiennika, UX błędów
+
+- **Workflow:** `resolve_braki_workflow_status` — OMS „czeka” nie blokuje `ready_pack` gdy zbieranie/recovery zakończone; `format_braki_issue_summary_line` zamiast „Brak aktywnej pracy…”.
+- **Recovery finalize:** `recalculate_order_shortage_state` po domknięciu dogrywki.
+- **DELETE pozycji:** `order_item_delete_service` + logi `[order.item.delete]`; audyt `REPLACEMENT_ITEM_REMOVED` / `ORDER_ITEM_REMOVED`.
+- **Front:** CTA z `braki_workflow_status` (pakowanie vs zbieranie); tylko imię klienta; `extractApiErrorMessage` + toast przy usuwaniu linii.

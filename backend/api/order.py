@@ -2432,97 +2432,178 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
 @router.delete("/{order_id}/items/{item_id}", response_model=OrderRead)
 def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(get_db)):
     """Usuwa pojedynczą linię zamówienia (OMS). Nie dotyczy linii rozbitych z zestawu."""
-    order = (
-        db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
-        .filter(Order.id == int(order_id))
-        .first()
-    )
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    item = (
-        db.query(OrderItem)
-        .filter(OrderItem.id == int(item_id), OrderItem.order_id == int(order_id))
-        .first()
-    )
-    if not item:
-        raise HTTPException(status_code=404, detail="Pozycja nie znaleziona")
-    if getattr(item, "parent_bundle_order_item_id", None) is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="To jest składnik zestawu — usuń nagłówek zestawu (linia „Zestaw”), aby usunąć całość.",
-        )
-    nm = ""
-    if item.product is not None and getattr(item.product, "name", None):
-        nm = str(item.product.name).strip()
-    elif item.product_id:
-        nm = f"Produkt #{int(item.product_id)}"
-    qty_line = int(item.quantity or 0)
-    had_shortage = float(getattr(item, "wms_picking_line_missing_qty", 0) or 0) > 1e-6
-    if not had_shortage:
-        try:
-            had_shortage = float(compute_line_missing_qty(db, order, item)) > 1e-6
-        except Exception:
-            had_shortage = False
-    lines_hist = [
-        "Usunięto produkt z zamówienia:",
-        f"- {nm} ({qty_line} szt.)",
-        "Powód: usunięto linię z zamówienia (OMS).",
-    ]
-    if had_shortage:
-        lines_hist.append("Rozwiązano brak przez usunięcie produktu.")
-    rm_unit = float(item.unit_price or 0) if getattr(item, "unit_price", None) is not None else 0.0
-    rm_tot = float(item.total_price) if getattr(item, "total_price", None) is not None else round(rm_unit * qty_line, 2)
-    _append_panel_fulfillment_history(
-        order,
-        lines_hist,
-        snapshot={
-            "kind": "order_line_removed",
-            "product_name": nm[:512],
-            "quantity_ordered": float(qty_line),
-            "unit_price": round(rm_unit, 4) if rm_unit else None,
-            "line_total": round(rm_tot, 2),
-        },
-    )
-    from ..services.braki_order_state_service import ensure_relocation_for_order_item_picks
-    from ..services.wms_audit_service import emit_order_line_removed
+    import traceback
 
-    ensure_relocation_for_order_item_picks(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order=order,
-        order_item_id=int(item.id),
-        source_event_id=f"order_line_removed:{int(item.id)}",
+    from ..services.order_item_delete_service import (
+        order_item_delete_audit_context,
+        purge_order_item_wms_dependents,
     )
-    emit_order_line_removed(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order_id=int(order.id),
-        order_item_id=int(item.id),
-        product_id=int(item.product_id) if item.product_id else None,
-        product_name=nm,
-        quantity=float(qty_line),
-        reason="usunięto linię z zamówienia (OMS)",
+    from ..services.wms_audit_service import (
+        emit_order_item_removed,
+        emit_order_line_removed,
+        emit_replacement_item_removed,
     )
-    db.delete(item)
-    db.flush()
-    _recompute_order_value_and_volume(order)
-    recalculate_order_shortage_state(db, int(order_id), commit=False)
-    db.commit()
-    order = (
-        db.query(Order)
-        .options(
-            joinedload(Order.items).joinedload(OrderItem.product),
-            joinedload(Order.order_ui_status),
-            joinedload(Order.shipping_method_row),
+
+    logger.info(
+        "[order.item.delete] ENTER order_id=%s item_id=%s",
+        order_id,
+        item_id,
+    )
+    try:
+        order = (
+            db.query(Order)
+            .options(joinedload(Order.items).joinedload(OrderItem.product))
+            .filter(Order.id == int(order_id))
+            .first()
         )
-        .filter(Order.id == int(order_id))
-        .first()
-    )
-    assert order is not None
-    return build_order_read(db, order)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        item = (
+            db.query(OrderItem)
+            .options(joinedload(OrderItem.product))
+            .filter(OrderItem.id == int(item_id), OrderItem.order_id == int(order_id))
+            .first()
+        )
+        if not item:
+            raise HTTPException(status_code=404, detail="Pozycja nie znaleziona")
+        if getattr(item, "parent_bundle_order_item_id", None) is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="To jest składnik zestawu — usuń nagłówek zestawu (linia „Zestaw”), aby usunąć całość.",
+            )
+
+        audit_ctx = order_item_delete_audit_context(item)
+        logger.info(
+            "[order.item.delete] order_id=%s item_id=%s is_replacement=%s replacement_parent_id=%s source_line_id=%s",
+            order_id,
+            item_id,
+            audit_ctx.get("is_replacement"),
+            audit_ctx.get("replacement_parent_id"),
+            audit_ctx.get("source_line_id"),
+        )
+
+        nm = ""
+        if item.product is not None and getattr(item.product, "name", None):
+            nm = str(item.product.name).strip()
+        elif item.product_id:
+            nm = f"Produkt #{int(item.product_id)}"
+        qty_line = int(item.quantity or 0)
+        orig_name = (getattr(item, "replaced_from_product_name", None) or "").strip() or None
+        had_shortage = float(getattr(item, "wms_picking_line_missing_qty", 0) or 0) > 1e-6
+        if not had_shortage:
+            try:
+                had_shortage = float(compute_line_missing_qty(db, order, item)) > 1e-6
+            except Exception:
+                had_shortage = False
+        lines_hist = [
+            "Usunięto produkt z zamówienia:",
+            f"- {nm} ({qty_line} szt.)",
+            "Powód: usunięto linię z zamówienia (OMS).",
+        ]
+        if had_shortage:
+            lines_hist.append("Rozwiązano brak przez usunięcie produktu.")
+        rm_unit = float(item.unit_price or 0) if getattr(item, "unit_price", None) is not None else 0.0
+        rm_tot = (
+            float(item.total_price)
+            if getattr(item, "total_price", None) is not None
+            else round(rm_unit * qty_line, 2)
+        )
+        _append_panel_fulfillment_history(
+            order,
+            lines_hist,
+            snapshot={
+                "kind": "order_line_removed",
+                "product_name": nm[:512],
+                "quantity_ordered": float(qty_line),
+                "unit_price": round(rm_unit, 4) if rm_unit else None,
+                "line_total": round(rm_tot, 2),
+            },
+        )
+        from ..services.braki_order_state_service import ensure_relocation_for_order_item_picks
+
+        ensure_relocation_for_order_item_picks(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order=order,
+            order_item_id=int(item.id),
+            source_event_id=f"order_line_removed:{int(item.id)}",
+        )
+        purge_order_item_wms_dependents(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_item_id=int(item.id),
+        )
+        if audit_ctx.get("is_replacement"):
+            emit_replacement_item_removed(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                order_item_id=int(item.id),
+                product_id=int(item.product_id) if item.product_id else None,
+                product_name=nm,
+                original_product_name=orig_name,
+                original_order_item_id=audit_ctx.get("replacement_parent_id"),
+                quantity=float(qty_line),
+                reason="usunięto linię zamiennika (OMS)",
+            )
+        else:
+            emit_order_item_removed(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                order_item_id=int(item.id),
+                product_id=int(item.product_id) if item.product_id else None,
+                product_name=nm,
+                quantity=float(qty_line),
+                reason="usunięto linię z zamówienia (OMS)",
+            )
+        emit_order_line_removed(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            order_item_id=int(item.id),
+            product_id=int(item.product_id) if item.product_id else None,
+            product_name=nm,
+            quantity=float(qty_line),
+            reason="usunięto linię z zamówienia (OMS)",
+        )
+        db.delete(item)
+        db.flush()
+        _recompute_order_value_and_volume(order)
+        recalculate_order_shortage_state(db, int(order_id), commit=False)
+        db.commit()
+        order = (
+            db.query(Order)
+            .options(
+                joinedload(Order.items).joinedload(OrderItem.product),
+                joinedload(Order.order_ui_status),
+                joinedload(Order.shipping_method_row),
+            )
+            .filter(Order.id == int(order_id))
+            .first()
+        )
+        assert order is not None
+        return build_order_read(db, order)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error(
+            "[order.item.delete] ERROR order_id=%s item_id=%s traceback=%s",
+            order_id,
+            item_id,
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Usunięcie pozycji nie powiodło się: {exc}",
+        ) from exc
 
 
 @router.patch("/{order_id}/items/{item_id}", response_model=OrderRead)

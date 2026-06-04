@@ -139,8 +139,17 @@ def order_item_needs_substitute_pick_completion(db: Session, order: Order, oi: O
     ordered = float(oi.quantity or 0)
     if ordered <= 1e-9:
         return False
-    picked = float(line_picked_sum_for_order(db, int(oi.id), order))
-    return picked + 1e-9 < ordered
+    cid = getattr(order, "cart_id", None)
+    if cid is not None and int(cid) > 0:
+        picked = float(sum_pick_events_for_line_cart(db, int(oi.id), int(cid)))
+    else:
+        picked = float(line_picked_sum_for_order(db, int(oi.id), order))
+    if picked + 1e-9 >= ordered:
+        return False
+    miss_ln = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
+    if miss_ln + picked + 1e-9 >= ordered:
+        return False
+    return True
 
 
 def order_has_pending_replacement_picking(db: Session, order: Order) -> bool:

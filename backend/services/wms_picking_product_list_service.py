@@ -2108,6 +2108,9 @@ def finalize_wms_recovery_picking_cart(
 
     mark_recovery_task_done(db, rt)
     recompute_order_fulfillment(db, int(order_id), commit=False, session_cart_id=cid)
+    from .order_fulfillment_recompute import recalculate_order_shortage_state
+
+    recalculate_order_shortage_state(db, int(order_id), commit=False)
     emit_wms_picking_finished(
         db,
         tenant_id=int(tenant_id),

@@ -298,7 +298,7 @@ export async function changePassword(current_password: string, new_password: str
 }
 
 /** Extract FastAPI / axios error message for toasts and console. */
-export function extractApiErrorMessage(err: unknown, fallback = "Błąd zapisu."): string {
+export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił błąd operacji."): string {
   if (err && typeof err === "object" && "response" in err) {
     const res = (err as { response?: { data?: unknown; status?: number } }).response;
     const data = res?.data;
@@ -326,8 +326,17 @@ export function extractApiErrorMessage(err: unknown, fallback = "Błąd zapisu."
         if (parts.length) return parts.join("; ");
       }
     }
-    if (res?.status != null) return `${fallback} (HTTP ${res.status})`;
+    if (data && typeof data === "object" && "error" in data) {
+      const er = String((data as { error?: unknown }).error ?? "").trim();
+      if (er) return er;
+    }
+    return fallback;
   }
-  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  if (err instanceof Error) {
+    const msg = err.message.trim();
+    if (msg && !/^Request failed with status code \d+/i.test(msg)) {
+      return msg;
+    }
+  }
   return fallback;
 }

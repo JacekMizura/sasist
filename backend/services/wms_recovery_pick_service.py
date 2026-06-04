@@ -42,15 +42,24 @@ def order_has_waiting_customer_line(order: Order) -> bool:
 def braki_queue_bucket(db: Session, order: Order, *, u_short: int, r_pend: int) -> str:
     """
     Etykieta kolejki Braki — rozdzielenie stanu operacyjnego od statusu OMS.
-    waiting_customer | awaiting_oms | recovery_ready
+    waiting_customer | awaiting_oms | recovery_ready | ready_pack
     """
+    from .braki_workflow_service import BRAKI_FILTER_READY_PACK, resolve_braki_workflow_status
+
+    workflow = resolve_braki_workflow_status(db, order, u_short=int(u_short), r_pend=int(r_pend))
+    if workflow == BRAKI_FILTER_READY_PACK:
+        return "ready_pack"
     if order_has_waiting_customer_line(order):
         return "waiting_customer"
-    if int(u_short) > 0:
-        return "awaiting_oms"
     if int(r_pend) > 0:
         return "recovery_ready"
-    return "awaiting_oms"
+    if int(u_short) > 0:
+        return "awaiting_oms"
+    from .order_fulfillment_recompute import order_has_waiting_for_stock_lines
+
+    if order_has_waiting_customer_line(order) or order_has_waiting_for_stock_lines(order):
+        return "awaiting_oms"
+    return "ready_pack"
 
 
 def _needs_recovery_picking(db: Session, order: Order) -> bool:

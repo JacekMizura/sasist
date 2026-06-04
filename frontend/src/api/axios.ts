@@ -1,6 +1,8 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
+import { extractApiErrorMessage } from "./authApi";
+
 import {
   applySecureApiBaseToConfig,
   getAxiosRequestDebugUrl,
@@ -161,6 +163,10 @@ api.interceptors.response.use(
       original._retryAfterRefresh ||
       isAuthNoRetryUrl(original.url)
     ) {
+      const friendly = extractApiErrorMessage(error);
+      if (friendly && error instanceof Error) {
+        error.message = friendly;
+      }
       return Promise.reject(error);
     }
 

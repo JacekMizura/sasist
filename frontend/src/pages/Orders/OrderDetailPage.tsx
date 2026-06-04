@@ -42,7 +42,9 @@ import {
   ExternalLink,
   MoreVertical
 } from "lucide-react";
+import toast from "react-hot-toast";
 import api from "../../api/axios";
+import { extractApiErrorMessage } from "../../api/authApi";
 import {
   deleteOrderDocument,
   deleteOrderItemLine,
@@ -2372,7 +2374,7 @@ export default function OrderDetailPage() {
       <OrderEditProductModal open={editProductItem != null} onClose={() => { setEditProductItem(null); setEditProductModalFocus("main"); }} orderId={order.id} item={editProductItem} focusSection={editProductModalFocus} currency={(order.currency ?? "PLN").trim() || "PLN"} onSaved={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); }} />
 
       {summaryLineRemoveItemId != null && (
-        <ConfirmModal title="Usunąć pozycję?" message={<>Czy na pewno usunąć pozycję z zamówienia?</>} confirmLabel="Usuń" pending={summaryLineRemovePending} onCancel={() => { if (!summaryLineRemovePending) setSummaryLineRemoveItemId(null); }} onConfirm={async () => { const id = summaryLineRemoveItemId; if (id == null) return; setSummaryLineRemovePending(true); try { await deleteOrderItemLine(order.id, id); await reloadOrderById(order.id); await loadWmsFulfillment(); dispatchWmsShortagesUpdated(); setSummaryLineRemoveItemId(null); } catch { window.alert("Błąd usunięcia."); } finally { setSummaryLineRemovePending(false); } }} />
+        <ConfirmModal title="Usunąć pozycję?" message={<>Czy na pewno usunąć pozycję z zamówienia?</>} confirmLabel="Usuń" pending={summaryLineRemovePending} onCancel={() => { if (!summaryLineRemovePending) setSummaryLineRemoveItemId(null); }} onConfirm={async () => { const id = summaryLineRemoveItemId; if (id == null) return; setSummaryLineRemovePending(true); try { await deleteOrderItemLine(order.id, id); await reloadOrderById(order.id); await loadWmsFulfillment(); dispatchWmsShortagesUpdated(); setSummaryLineRemoveItemId(null); } catch (e: unknown) { toast.error(extractApiErrorMessage(e, "Wystąpił błąd operacji.")); } finally { setSummaryLineRemovePending(false); } }} />
       )}
 
       {warehouseId != null && (

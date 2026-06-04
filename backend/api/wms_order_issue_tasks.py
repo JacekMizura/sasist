@@ -28,7 +28,10 @@ from ..schemas.order_issue_task import (
     OrderIssueTaskSkippedItem,
 )
 logger = logging.getLogger(__name__)
-from ..services.order_fulfillment_recompute import order_requires_shortage_handling
+from ..services.order_fulfillment_recompute import (
+    order_has_waiting_for_stock_lines,
+    order_requires_shortage_handling,
+)
 from ..services.order_issue_task_service import (
     build_fallback_shortage_lines_from_task_snapshot,
     build_order_issue_detail_context,
@@ -38,6 +41,7 @@ from ..services.order_issue_task_service import (
     compute_ui_decision,
     find_order_by_scan,
     first_pending_substitute_product,
+    format_braki_issue_summary_line,
     format_issue_queue_status_label,
     format_issue_queue_summary_line,
     log_operator_event,
@@ -150,7 +154,15 @@ def serialize_order_issue_task_item(
         bucket = braki_queue_bucket(db, o, u_short=u_short, r_pend=r_pend)
         workflow_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
         workflow_label = braki_workflow_status_label(workflow_status)
-        summary_line = format_issue_queue_summary_line(u_short, r_pend)
+        from ..services.wms_recovery_pick_service import order_has_waiting_customer_line
+
+        oms_wait = order_has_waiting_customer_line(o) or order_has_waiting_for_stock_lines(o)
+        summary_line = format_braki_issue_summary_line(
+            workflow_status,
+            unresolved=u_short,
+            repl_pending=r_pend,
+            oms_waiting=oms_wait,
+        )
         status_line = format_issue_queue_status_label(u_short, r_pend)
         sub_pid, sub_name = first_pending_substitute_product(db, o)
         ctx = build_order_issue_detail_context(

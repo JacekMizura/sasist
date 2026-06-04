@@ -16,6 +16,7 @@ import { WMS_ROUTES } from "./wmsRoutes";
 
 function brakiQueueBucketLabel(bucket: string | undefined): string {
   const b = (bucket ?? "").trim();
+  if (b === "ready_pack") return "Gotowe do pakowania";
   if (b === "waiting_customer") return "Oczekuje na klienta";
   if (b === "recovery_ready") return "Gotowe do dogrywki zbierki";
   return "Oczekuje na decyzję OMS";
@@ -305,8 +306,14 @@ export default function WmsOrderIssueDetailPage() {
       : shortageAsDetail;
   const hasAnyLines =
     totalContextLines(ctx) > 0 || remainingLines.length > 0 || (ctx.collected_lines?.length ?? 0) > 0;
+  const workflowStatus = (task.braki_workflow_status ?? "").trim();
+  const readyForPacking = workflowStatus === "ready_pack";
   const recoveryReady =
-    (task.braki_queue_bucket ?? "") === "recovery_ready" || (task.replacement_pick_pending_count ?? 0) > 0;
+    !readyForPacking &&
+    (workflowStatus === "pick" ||
+      workflowStatus === "pick_and_relocation" ||
+      (task.braki_queue_bucket ?? "") === "recovery_ready" ||
+      (task.replacement_pick_pending_count ?? 0) > 0);
   const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
   const statusHeadline = [
     task.order_ui_status_name,
@@ -364,24 +371,6 @@ export default function WmsOrderIssueDetailPage() {
                   {(task.customer_name ?? "").trim() || (task.delivery_name ?? "").trim() || "—"}
                 </span>
               </div>
-              {(task.customer_phone ?? "").trim() && (task.customer_phone ?? "").trim() !== "—" ? (
-                <div className="flex gap-2 text-sm text-slate-600">
-                  <span className="font-medium text-slate-500">Tel.:</span>
-                  <span>{task.customer_phone}</span>
-                </div>
-              ) : null}
-              {(task.customer_email ?? "").trim() && (task.customer_email ?? "").trim() !== "—" ? (
-                <div className="flex gap-2 text-sm text-slate-600">
-                  <span className="font-medium text-slate-500">E-mail:</span>
-                  <span className="break-all">{task.customer_email}</span>
-                </div>
-              ) : null}
-              {(task.customer_address ?? "").trim() && (task.customer_address ?? "").trim() !== "—" ? (
-                <div className="flex gap-2 text-sm text-slate-600">
-                  <span className="font-medium text-slate-500">Adres:</span>
-                  <span>{task.customer_address}</span>
-                </div>
-              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-slate-500">Status:</span>
                 <span className="font-bold text-slate-800">BRAKI</span>
@@ -422,14 +411,21 @@ export default function WmsOrderIssueDetailPage() {
         <div className="absolute bottom-0 left-0 z-30 w-full border-t border-slate-200 bg-white p-4 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)] md:p-6">
           <div className="flex w-full flex-col gap-3 sm:flex-row-reverse">
             <button
-              onClick={() =>
-                recoveryReady
-                  ? navigate(WMS_ROUTES.pickingRecovery(task.order_id))
-                  : navigate(WMS_ROUTES.pickingProducts)
-              }
+              type="button"
+              onClick={() => {
+                if (readyForPacking) {
+                  navigate(WMS_ROUTES.packingOrder(task.order_id));
+                  return;
+                }
+                if (recoveryReady) {
+                  navigate(WMS_ROUTES.pickingRecovery(task.order_id));
+                  return;
+                }
+                navigate(WMS_ROUTES.pickingProducts);
+              }}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 active:scale-[0.98] sm:flex-1 md:text-base"
             >
-              Przejdź do zbierania
+              {readyForPacking ? "Przejdź do pakowania" : "Przejdź do zbierania"}
             </button>
             <Link
               to={`/orders/${task.order_id}`}

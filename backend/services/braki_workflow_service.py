@@ -119,12 +119,22 @@ def resolve_braki_workflow_status(
     u_short = int(u_short)
     r_pend = int(r_pend)
 
-    awaiting = (
-        u_short > 0
-        or order_has_waiting_customer_line(order)
-        or order_has_waiting_for_stock_lines(order)
-    )
     needs_pick = order_needs_warehouse_pick(db, order, r_pend=r_pend)
+    awaiting_flags = order_has_waiting_customer_line(order) or order_has_waiting_for_stock_lines(
+        order
+    )
+    from .order_fulfillment_recompute import compute_line_missing_qty
+
+    has_operational_missing = False
+    for oi in order.items or []:
+        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
+            has_operational_missing = True
+            break
+    awaiting = awaiting_flags and (
+        needs_pick
+        or has_operational_missing
+        or int(u_short) > 0
+    )
     reloc_pending, reloc_partial, _reloc_done = _order_relocation_alloc_states(
         db,
         tenant_id=int(order.tenant_id),

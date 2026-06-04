@@ -498,6 +498,40 @@ def format_issue_queue_summary_line(unresolved: int, repl_pending: int) -> str:
     return " · ".join(parts) if parts else "Brak aktywnej pracy w kolejce"
 
 
+def format_braki_issue_summary_line(
+    workflow_status: str,
+    *,
+    unresolved: int,
+    repl_pending: int,
+    oms_waiting: bool = False,
+) -> str:
+    """Komunikat pod nagłówkiem kolejki — zgodny z ``braki_workflow_status``, nie generyczny."""
+    from .braki_workflow_service import (
+        BRAKI_FILTER_AWAITING,
+        BRAKI_FILTER_PICK,
+        BRAKI_FILTER_PICK_AND_RELOCATION,
+        BRAKI_FILTER_READY_PACK,
+        BRAKI_FILTER_RELOCATION,
+        BRAKI_FILTER_RELOCATION_PARTIAL,
+    )
+
+    ws = str(workflow_status or "").strip()
+    if ws == BRAKI_FILTER_READY_PACK:
+        return "Zamówienie gotowe do pakowania"
+    if ws == BRAKI_FILTER_AWAITING or (oms_waiting and repl_pending <= 0 and unresolved <= 0):
+        return "Oczekuje na decyzję OMS"
+    if ws == BRAKI_FILTER_PICK:
+        return format_issue_queue_summary_line(unresolved, repl_pending) or "Produkty do zebrania z magazynu"
+    if ws in (BRAKI_FILTER_RELOCATION, BRAKI_FILTER_RELOCATION_PARTIAL):
+        return "Wymagane rozlokowanie zebranych pozycji"
+    if ws == BRAKI_FILTER_PICK_AND_RELOCATION:
+        parts = [format_issue_queue_summary_line(unresolved, repl_pending)]
+        parts.append("oraz rozlokowanie")
+        return " · ".join(p for p in parts if p)
+    line = format_issue_queue_summary_line(unresolved, repl_pending)
+    return line if line else "Brak aktywnej pracy w kolejce"
+
+
 def format_issue_queue_status_label(unresolved: int, repl_pending: int) -> str:
     if unresolved > 0 and repl_pending > 0:
         return "Wymaga decyzji — do zebrania po zamianie"
