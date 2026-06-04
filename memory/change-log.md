@@ -1,3 +1,4 @@
+- 2026-06-04 — **WMS returns router mount:** `wms_returns` preload przed `order`; `_ensure_wms_returns_router_mounted()` + logi `IMPORTING WMS RETURNS ROUTER`; lazy import w `order`/`complaint`; startup dump tylko `/api/wms/returns/*`.
 - 2026-06-04 — **Railway backend Python build:** `nixpacks.toml` (`providers = ["python"]`), `.python-version`, `Dockerfile`, `docs/RAILWAY_BACKEND.md` — backend service Root Directory musi być repo root, nie `frontend` (Node build → `python: command not found`).
 - 2026-06-04 — **WMS returns order lookup (backend, produkcja):** `lookup_orders` + `@router.get("/orders/lookup")` + `router.add_api_route`; `main.py` mount + startup `[routes]` dump. Wymaga poprawnego deployu Python na Railway.
 

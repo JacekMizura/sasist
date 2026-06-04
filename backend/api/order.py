@@ -81,7 +81,6 @@ from ..services.bundle_explosion import (
     resolve_order_create_lines,
     vat_percent_from_product,
 )
-from .wms_returns import _customer_names_from_order
 from ..api.complaint_shipment import ensure_complaint_outbound_shipment
 from ..services.complaint_audit import append_complaint_audit_event
 from ..services.barcode_generation import next_internal_order_number, next_order_barcode
@@ -722,6 +721,8 @@ def get_orders(
     Filtry: tenant_id, warehouse_id (opcjonalne – bez nich zwracane są wszystkie zamówienia), status, order_type, volume_min, volume_max.
     Sortowanie: sort_by (id|status|total_volume|total_items), sort_dir lub sort_direction (asc|desc).
     """
+    from .wms_returns import _customer_names_from_order
+
     logger.info("ORDERS QUERY tenant_id=%s warehouse_id=%s", tenant_id, warehouse_id)
     # DB debug: total count and last 10 orders
     try:

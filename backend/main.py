@@ -205,6 +205,8 @@ from .api.planning import router as planning_router
 from .api.cart import router as cart_router
 from .api.import_api import router as import_router
 from .api.export_api import router as export_router
+# Load before order.py (order used to import helpers from wms_returns at module level).
+from .api.wms_returns import router as wms_returns_router
 from .api.order import router as order_router
 from .api.order_custom_fields import router as order_custom_fields_router
 from .api.returns_bulk import router as returns_bulk_router
@@ -249,7 +251,6 @@ from .api.system import router as system_router
 from .api.dev import router as dev_router
 from .api.reports import router as reports_router
 from .api.damage_reports import router as damage_reports_router
-from .api.wms_returns import router as wms_returns_router
 from .api.wms_receiving import router as wms_receiving_router
 from .api.wms_putaway import router as wms_putaway_router
 from .api.wms_relocation import router as wms_relocation_router
@@ -1268,6 +1269,42 @@ _API_ROUTERS = (
 for _r in _API_ROUTERS:
     app.include_router(_r, prefix=API_PREFIX)
 
+_WMS_RETURNS_API_PREFIX = f"{API_PREFIX}/wms/returns"
+
+
+def _ensure_wms_returns_router_mounted() -> None:
+    """Guarantee /api/wms/returns/* exists on the app (Railway startup verification)."""
+    router_route_count = len(wms_returns_router.routes)
+    app_paths = [
+        getattr(r, "path", None)
+        for r in app.routes
+        if getattr(r, "path", None) and str(getattr(r, "path")).startswith(_WMS_RETURNS_API_PREFIX)
+    ]
+    if not app_paths:
+        print(
+            f"[routes] wms_returns REMOUNT router_routes={router_route_count}",
+            flush=True,
+        )
+        app.include_router(wms_returns_router, prefix=API_PREFIX)
+        app_paths = [
+            getattr(r, "path", None)
+            for r in app.routes
+            if getattr(r, "path", None) and str(getattr(r, "path")).startswith(_WMS_RETURNS_API_PREFIX)
+        ]
+    print(
+        f"[routes] wms_returns router_routes={router_route_count} app_paths={len(app_paths)}",
+        flush=True,
+    )
+    for path in sorted(set(app_paths)):
+        print("[routes]", path, flush=True)
+    if WMS_RETURNS_ORDER_LOOKUP_PATH not in app_paths:
+        print("[routes] MISSING", WMS_RETURNS_ORDER_LOOKUP_PATH, flush=True)
+    if not app_paths:
+        print("[routes] CRITICAL: no /api/wms/returns/* mounted", flush=True)
+
+
+_ensure_wms_returns_router_mounted()
+
 
 _MSG_ADMIN = f"{API_PREFIX}/admin/message-templates"
 _MSG_LEGACY = f"{API_PREFIX}/message-templates"
@@ -1323,20 +1360,6 @@ def _mount_wms_returns_order_lookup_on_app() -> None:
 _mount_wms_returns_order_lookup_on_app()
 
 
-def _debug_dump_routes() -> None:
-    """Startup route dump — Railway logs must show /api/wms/returns/orders/lookup."""
-    found_lookup = False
-    for r in app.routes:
-        path = getattr(r, "path", None)
-        if not path:
-            continue
-        print("[routes]", path, flush=True)
-        if path == WMS_RETURNS_ORDER_LOOKUP_PATH:
-            found_lookup = True
-    if not found_lookup:
-        print("[routes] MISSING", WMS_RETURNS_ORDER_LOOKUP_PATH, flush=True)
-
-
 @app.on_event("startup")
 async def _log_backend_startup() -> None:
     from .serve import UVICORN_HOST
@@ -1346,8 +1369,8 @@ async def _log_backend_startup() -> None:
         f"bind_host={UVICORN_HOST} PORT env={os.getenv('PORT')!r}",
         flush=True,
     )
+    _ensure_wms_returns_router_mounted()
     _mount_wms_returns_order_lookup_on_app()
-    _debug_dump_routes()
     print("Backend started OK", flush=True)
 
 

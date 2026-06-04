@@ -42,10 +42,18 @@ pip install -r requirements.txt
 ## Expected runtime log
 
 ```text
-[startup] bind host=:: port=...
+IMPORTING WMS RETURNS ROUTER
+IMPORTING WMS RETURNS ROUTER done routes=18
+[routes] wms_returns router_routes=18 app_paths=18
 [routes] /api/wms/returns/orders/lookup
+...
+[startup] app ready routes=...
 Backend started OK
 ```
+
+If `IMPORTING WMS RETURNS ROUTER` is missing, `backend/api/wms_returns.py` was not deployed or import failed before that line.
+
+If `router_routes=0` or `CRITICAL: no /api/wms/returns/*`, the router did not register — check import errors in deploy logs.
 
 ## Files in this repo
 

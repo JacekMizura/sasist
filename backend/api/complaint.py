@@ -64,7 +64,6 @@ from ..services.complaint_documents_sync import (
     regenerate_complaint_documents as run_regenerate_complaint_documents,
 )
 from .order import build_order_read
-from .wms_returns import _shipping_cost_from_order
 from ..services.complaint_image_upload import (
     save_complaint_image,
     save_complaint_line_image,
@@ -721,6 +720,8 @@ def _customer_address_for_complaint_read(summary: Optional[ComplaintOrderSummary
 def _order_summary(db: Session, order: Optional[Order]) -> Optional[ComplaintOrderSummary]:
     if order is None:
         return None
+    from .wms_returns import _shipping_cost_from_order
+
     full = build_order_read(db, order)
     ship_raw = _shipping_cost_from_order(order)
     ship_out: Optional[float] = None

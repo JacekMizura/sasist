@@ -57,6 +57,7 @@ from ..utils.ui_status_color import normalize_stored_color
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/wms/returns", tags=["WMS Returns"])
+print("IMPORTING WMS RETURNS ROUTER", flush=True)
 
 
 def _wms_returns_wh_dep(
@@ -2449,3 +2450,12 @@ def archive_single_wms_return(
     else:
         db.commit()
     return entity_bulk_delete_result_from_service_dict(result)
+
+
+_WMS_RETURNS_ROUTE_COUNT = len(router.routes)
+print(
+    f"IMPORTING WMS RETURNS ROUTER done routes={_WMS_RETURNS_ROUTE_COUNT}",
+    flush=True,
+)
+if _WMS_RETURNS_ROUTE_COUNT == 0:
+    print("IMPORTING WMS RETURNS ROUTER WARNING: zero routes on router", flush=True)
