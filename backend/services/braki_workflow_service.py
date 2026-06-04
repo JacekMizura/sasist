@@ -149,8 +149,9 @@ def resolve_braki_workflow_status(
     else:
         status = BRAKI_FILTER_READY_PACK
 
-    logger.debug(
-        "[braki.status] order_id=%s status=%s u_short=%s r_pend=%s reloc_p=%s reloc_part=%s needs_pick=%s",
+    logger.info(
+        "[braki.workflow] order_id=%s workflow_status=%s reason=resolve u_short=%s r_pend=%s "
+        "reloc_p=%s reloc_part=%s needs_pick=%s awaiting=%s",
         getattr(order, "id", None),
         status,
         u_short,
@@ -158,6 +159,7 @@ def resolve_braki_workflow_status(
         reloc_pending,
         reloc_partial,
         needs_pick,
+        awaiting,
     )
     return status
 

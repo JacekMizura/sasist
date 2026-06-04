@@ -734,6 +734,7 @@ def post_picking_report_shortage(
             missing_qty=body.missing_qty,
             cart_id=body.cart_id,
             ui_order_ids=body.order_ids,
+            recovery_order_id=body.recovery_order_id,
             operator_user_id=int(current_user.id) if current_user is not None else None,
         )
         if current_user is not None and current_user.id is not None and body.cart_id is not None:
@@ -810,8 +811,17 @@ def post_picking_recovery_finalize(
             metadata={"order_id": int(body.order_id), "cart_id": int(body.cart_id)},
         )
         from ..services.order_fulfillment_recompute import recalculate_order_shortage_state
+        from ..services.wms_audit_service import emit_recovery_finished
 
         recalculate_order_shortage_state(db, int(body.order_id), commit=False)
+        emit_recovery_finished(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(body.order_id),
+            cart_id=int(body.cart_id),
+            operator_user_id=int(current_user.id),
+        )
         db.commit()
     except ValueError as e:
         db.rollback()

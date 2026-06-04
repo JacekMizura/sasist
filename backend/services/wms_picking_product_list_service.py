@@ -1329,6 +1329,7 @@ def report_wms_picking_product_shortage(
     missing_qty: float,
     cart_id: int,
     ui_order_ids: Optional[Sequence[int]] = None,
+    recovery_order_id: int | None = None,
     operator_user_id: int | None = None,
 ) -> dict:
     """
@@ -1389,6 +1390,19 @@ def report_wms_picking_product_shortage(
         allowed = set(session_scope_ids)
         session_scope_ids = list(dict.fromkeys([oid for oid in want if oid in allowed and oid in cohort_set]))
 
+    if recovery_order_id is not None and int(recovery_order_id) > 0:
+        roid = int(recovery_order_id)
+        o_rec = (
+            db.query(Order)
+            .filter(Order.id == roid, Order.tenant_id == int(tenant_id))
+            .first()
+        )
+        if o_rec is None:
+            raise ValueError("Zamówienie dogrywki nie znalezione.")
+        if o_rec.cart_id is not None and int(o_rec.cart_id) != cid:
+            raise ValueError("Zamówienie dogrywki jest na innym wózku — użyj właściwej sesji.")
+        session_scope_ids = list(dict.fromkeys([roid] + session_scope_ids))
+
     if not session_scope_ids:
         logger.info(
             "wms shortage: no orders in session context product_id=%s cart_id=%s cohort=%s",
@@ -1424,12 +1438,30 @@ def report_wms_picking_product_shortage(
 
     affected: list[int] = []
 
+    def _line_ok_for_shortage_report(oi: OrderItem) -> bool:
+        if order_item_is_replaced_line(oi):
+            return False
+        if float(oi.quantity or 0) <= 1e-9 and not (
+            getattr(oi, "replaced_from_order_item_id", None) is not None
+            and int(getattr(oi, "replaced_from_order_item_id", 0) or 0) > 0
+        ):
+            return False
+        return True
+
     for o in orders:
         for oi in sorted(o.items or [], key=lambda x: int(x.id)):
             if int(oi.product_id) != pid:
                 continue
-            if order_item_is_replaced_line(oi):
+            if not _line_ok_for_shortage_report(oi):
                 continue
+            rep_oid = getattr(oi, "replaced_from_order_item_id", None)
+            orig_oid = int(rep_oid) if rep_oid is not None and int(rep_oid) > 0 else None
+            logger.info(
+                "[replacement.shortage] replacement_line_id=%s original_line_id=%s allowed=%s reason=session_report",
+                int(oi.id),
+                orig_oid,
+                True,
+            )
             picked_sum = sum_pick_events_for_line_cart(db, int(oi.id), cid)
             declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
             gap = max(0.0, float(oi.quantity) - float(picked_sum or 0))
@@ -1457,7 +1489,7 @@ def report_wms_picking_product_shortage(
         for oi in sorted(o.items or [], key=lambda x: int(x.id)):
             if int(oi.product_id) != pid:
                 continue
-            if order_item_is_replaced_line(oi):
+            if not _line_ok_for_shortage_report(oi):
                 continue
             picked_sum_line = sum_pick_events_for_line_cart(db, int(oi.id), cid)
             miss_ln = float(oi.wms_picking_line_missing_qty or 0)
@@ -1478,7 +1510,7 @@ def report_wms_picking_product_shortage(
         for oi in sorted(o.items or [], key=lambda x: int(x.id)):
             if int(oi.product_id) != pid:
                 continue
-            if order_item_is_replaced_line(oi):
+            if not _line_ok_for_shortage_report(oi):
                 continue
             picked_sum_line = sum_pick_events_for_line_cart(db, int(oi.id), cid)
             declared_ln = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)

@@ -6,3 +6,12 @@
 - **Status workflow:** `braki_workflow_service` — jeden status na zamówienie (`awaiting`, `relocation`, `relocation_partial`, `pick`, `ready_pack`, `pick_and_relocation`); `filter_counts` w `GET /wms/order-issue-tasks`.
 - **Szczegół:** bogatsze `shortage_lines` (obraz, lokacja, SKU/EAN, `remaining_qty`, `pick_audit_summary`); front mapuje `location_code`, `image_url`.
 - **Dogrywka:** logi `[recovery.finalize]`; po finalize `recalculate_order_shortage_state`; 503 z kontekstem błędu (nie goły komunikat).
+
+## 2026-06-04 — WMS Braki: centralny workflow OMS/WMS (faza 2)
+
+- **`braki_order_state_service.py`:** jedno źródło prawdy — `order_braki_workflow_complete` (recovery pick ≠ koniec; po sygnałach braków wymagane pełne pakowanie), `order_requires_shortage_handling`, awaiting OMS w kolejce, `nearest_pick_location_for_product`, `ensure_relocation_for_order_item_picks`, `build_order_issue_customer_fields`, logi `[braki.workflow]` / `[braki.shortage_sync]`.
+- **Sync zamykania OPEN task:** `order_fulfillment_recompute.sync_shortage_workflow_for_order` używa `order_braki_workflow_complete`, nie zamyka po samym recovery.
+- **OMS akcje:** `order.py` — usunięcie/zamiana/czeka + relocation przy zebranych sztukach; audyt `ORDER_LINE_REMOVED`, `ORDER_LINE_REPLACED`, `OMS_DECISION_*`, `RECOVERY_FINISHED`.
+- **Zgłoszenie braku zamiennika:** `report-shortage` + `recovery_order_id`; `_line_ok_for_shortage_report`; log `[replacement.shortage]`.
+- **API detail:** `customer_name`, `delivery_name`, phone, email, address; `nearest_location_*` na liniach; etykieta `"Brak lokalizacji"`.
+- **Front:** filtry tylko `braki_workflow_status`; detail — klient i LOK z payloadu API.

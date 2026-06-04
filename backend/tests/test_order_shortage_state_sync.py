@@ -24,39 +24,51 @@ class OrderRequiresShortageHandlingTests(unittest.TestCase):
         self.assertTrue(order_has_waiting_for_stock_lines(order))
 
     def test_no_workload_when_all_clear(self):
-        order = SimpleNamespace(items=[SimpleNamespace(metadata_json=None)])
+        order = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            warehouse_id=1,
+            fulfillment_state="",
+            items=[SimpleNamespace(id=1, metadata_json=None)],
+        )
         db = MagicMock()
         with patch(
-            "backend.services.order_issue_task_service.count_issue_queue_operational_lines",
+            "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
             return_value=(0, 0),
+        ), patch(
+            "backend.services.braki_order_state_service.order_braki_workflow_complete",
+            return_value=True,
         ):
             self.assertFalse(order_requires_shortage_handling(db, order))
 
     def test_unresolved_shortage_requires_handling(self):
-        order = SimpleNamespace(items=[])
+        order = SimpleNamespace(id=1, tenant_id=1, warehouse_id=1, items=[])
         db = MagicMock()
         with patch(
-            "backend.services.order_issue_task_service.count_issue_queue_operational_lines",
+            "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
             return_value=(2, 0),
         ):
             self.assertTrue(order_requires_shortage_handling(db, order))
 
     def test_substitute_pick_pending_requires_handling(self):
-        order = SimpleNamespace(items=[])
+        order = SimpleNamespace(id=1, tenant_id=1, warehouse_id=1, items=[])
         db = MagicMock()
         with patch(
-            "backend.services.order_issue_task_service.count_issue_queue_operational_lines",
+            "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
             return_value=(0, 1),
         ):
             self.assertTrue(order_requires_shortage_handling(db, order))
 
     def test_waiting_requires_handling_even_without_operational_missing(self):
         order = SimpleNamespace(
-            items=[SimpleNamespace(metadata_json='{"oms_waiting_for_stock": true}')]
+            id=1,
+            tenant_id=1,
+            warehouse_id=1,
+            items=[SimpleNamespace(id=1, metadata_json='{"oms_waiting_for_stock": true}')],
         )
         db = MagicMock()
         with patch(
-            "backend.services.order_issue_task_service.count_issue_queue_operational_lines",
+            "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
             return_value=(0, 0),
         ):
             self.assertTrue(order_requires_shortage_handling(db, order))

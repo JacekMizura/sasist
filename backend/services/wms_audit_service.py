@@ -35,6 +35,12 @@ from ..models.wms_order_event import (
     EVT_PICKING_FINISHED,
     EVT_PICKING_STARTED,
     EVT_SHORTAGE_REPORTED,
+    EVT_ORDER_LINE_REMOVED,
+    EVT_ORDER_LINE_REPLACED,
+    EVT_OMS_DECISION_WAIT,
+    EVT_OMS_DECISION_ACCEPTED,
+    EVT_RECOVERY_STARTED,
+    EVT_RECOVERY_FINISHED,
     WmsOrderEvent,
 )
 from ..schemas.wms_packing import WmsOperationTimesOut, WmsOrderTimelineEvent
@@ -668,6 +674,185 @@ def emit_wms_shortage_reported(
     )
 
 
+def emit_order_line_removed(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    order_item_id: int,
+    product_id: int | None,
+    product_name: str,
+    quantity: float,
+    operator_user_id: int | None = None,
+    reason: str = "",
+) -> None:
+    meta = {"product_name": product_name[:512], "reason": reason[:256], "quantity": float(quantity)}
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_ORDER_LINE_REMOVED,
+        product_id=int(product_id) if product_id else None,
+        order_item_id=int(order_item_id),
+        quantity=float(quantity),
+        metadata=meta,
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        event_type=EVT_ORDER_LINE_REMOVED,
+        message=f"Usunięto linię: {product_name} ({_fmt_qty(quantity)} szt.)" + (f" — {reason}" if reason else ""),
+    )
+
+
+def emit_order_line_replaced(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    order_item_id: int,
+    old_product_name: str,
+    new_product_id: int,
+    new_product_name: str,
+    quantity: float,
+    operator_user_id: int | None = None,
+) -> None:
+    meta = {
+        "old_product_name": old_product_name[:512],
+        "new_product_id": int(new_product_id),
+        "new_product_name": new_product_name[:512],
+        "quantity": float(quantity),
+    }
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_ORDER_LINE_REPLACED,
+        product_id=int(new_product_id),
+        order_item_id=int(order_item_id),
+        quantity=float(quantity),
+        metadata=meta,
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        event_type=EVT_ORDER_LINE_REPLACED,
+        message=f"Zamiana produktu: {old_product_name} → {new_product_name} ({_fmt_qty(quantity)} szt.)",
+    )
+
+
+def emit_oms_decision_wait(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    order_item_id: int,
+    product_id: int | None,
+    quantity: float,
+    operator_user_id: int | None = None,
+) -> None:
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_OMS_DECISION_WAIT,
+        product_id=int(product_id) if product_id else None,
+        order_item_id=int(order_item_id),
+        quantity=float(quantity),
+        metadata={"quantity": float(quantity)},
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        event_type=EVT_OMS_DECISION_WAIT,
+        message=f"OMS: oznaczono „czeka na towar” ({_fmt_qty(quantity)} szt.)",
+    )
+
+
+def emit_oms_decision_accepted(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    order_item_id: int,
+    product_id: int | None,
+    product_name: str,
+    quantity: float,
+    action: str,
+    operator_user_id: int | None = None,
+) -> None:
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_OMS_DECISION_ACCEPTED,
+        product_id=int(product_id) if product_id else None,
+        order_item_id=int(order_item_id),
+        quantity=float(quantity),
+        metadata={"action": action[:128], "product_name": product_name[:512]},
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        event_type=EVT_OMS_DECISION_ACCEPTED,
+        message=f"OMS: {action} — {product_name} ({_fmt_qty(quantity)} szt.)",
+    )
+
+
+def emit_recovery_finished(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    cart_id: int,
+    operator_user_id: int | None = None,
+) -> None:
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_RECOVERY_FINISHED,
+        target_cart_id=int(cart_id),
+        metadata={"cart_id": int(cart_id)},
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        event_type=EVT_RECOVERY_FINISHED,
+        message="Zakończono dogrywkę zbierki",
+    )
+
+
 def record_picking_cart_finalize_session(
     db: Session,
     *,
@@ -1163,6 +1348,24 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
             body.append(f"czas: {meta['picking_duration_label']}")
         if meta.get("new_order_ui_status_name"):
             body.append(f"status: {meta['new_order_ui_status_name']}")
+    elif et == EVT_ORDER_LINE_REMOVED:
+        title = "Usunięto produkt z zamówienia"
+        if meta.get("product_name"):
+            body.append(str(meta["product_name"]))
+        if meta.get("reason"):
+            body.append(str(meta["reason"]))
+    elif et == EVT_ORDER_LINE_REPLACED:
+        title = "Zamiana produktu"
+        if meta.get("old_product_name") and meta.get("new_product_name"):
+            body.append(f"{meta['old_product_name']} → {meta['new_product_name']}")
+    elif et == EVT_OMS_DECISION_WAIT:
+        title = "OMS: czeka na towar"
+    elif et == EVT_OMS_DECISION_ACCEPTED:
+        title = meta.get("action") or "Decyzja OMS"
+        if meta.get("product_name"):
+            body.append(str(meta["product_name"]))
+    elif et == EVT_RECOVERY_FINISHED:
+        title = "Zakończono dogrywkę zbierki"
     elif et == EVT_SHORTAGE_REPORTED:
         title = "Zgłoszono brak"
         pq = meta.get("quantity")

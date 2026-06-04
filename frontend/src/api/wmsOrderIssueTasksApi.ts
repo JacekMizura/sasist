@@ -30,6 +30,9 @@ export type OrderIssueShortageLineApi = {
   picked_qty: number;
   missing_qty: number;
   location_code: string;
+  nearest_location_code?: string;
+  nearest_location_id?: number | null;
+  available_qty?: number;
   oms_action_summary?: string;
   remaining_qty?: number;
   sku?: string;
@@ -62,6 +65,10 @@ export type OrderIssueTaskListItemApi = {
   order_number: string;
   order_status: string;
   customer_name?: string;
+  delivery_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
+  customer_address?: string;
   unresolved_shortage_count?: number;
   replacement_pick_pending_count?: number;
   issue_queue_summary_line?: string;

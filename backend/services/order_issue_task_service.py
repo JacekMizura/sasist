@@ -447,31 +447,16 @@ def list_open_tasks_for_warehouse(
 def order_customer_display_name(order: Order | None) -> str:
     if order is None:
         return "—"
-    c = getattr(order, "customer", None)
-    if c is not None:
-        fn = (getattr(c, "first_name", None) or "").strip()
-        ln = (getattr(c, "last_name", None) or "").strip()
-        name = f"{fn} {ln}".strip()
-        if name:
-            return name
-        comp = (getattr(c, "company_name", None) or "").strip()
-        if comp:
-            return comp
-    return "—"
+    from .braki_order_state_service import build_order_issue_customer_fields
+
+    return build_order_issue_customer_fields(order).get("customer_name") or "—"
 
 
 def count_issue_queue_operational_lines(db: Session, order: Order) -> tuple[int, int]:
-    """(linie z dodatnim brakiem operacyjnym, linie zastępcze z niepełnym zbiorem — także po częściowym picku)."""
-    from .order_fulfillment_recompute import compute_line_missing_qty, order_item_needs_substitute_pick_completion
+    """Delegacja do ``braki_order_state_service`` (awaiting OMS + braki operacyjne)."""
+    from .braki_order_state_service import count_issue_queue_operational_lines as _central
 
-    unresolved = 0
-    repl_pending = 0
-    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
-        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
-            unresolved += 1
-        if order_item_needs_substitute_pick_completion(db, order, oi):
-            repl_pending += 1
-    return unresolved, repl_pending
+    return _central(db, order)
 
 
 def first_pending_substitute_product(db: Session, order: Order) -> tuple[int, str]:
@@ -700,13 +685,6 @@ def build_order_issue_detail_context(
         if pr:
             sku = str(getattr(pr, "symbol", None) or getattr(pr, "sku", None) or "").strip()
             ean = str(getattr(pr, "ean", None) or "").strip()
-        loc_s = _location_label_for_product(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            product_id=pid,
-            product=pr,
-        )
         picked_locs: list[dict[str, Any]] = []
         for lbl, qv, batch, exp_iso in picked_location_breakdown_for_order_line(db, order, int(oi.id)):
             picked_locs.append(
@@ -725,7 +703,7 @@ def build_order_issue_detail_context(
             "ordered_qty": round(ordered, 6),
             "picked_qty": round(picked, 6),
             "missing_qty": round(missing, 6),
-            "location_code": loc_s,
+            "location_code": "",
             "oms_action_summary": "",
             "sku": sku,
             "ean": ean,
@@ -738,6 +716,16 @@ def build_order_issue_detail_context(
             "substitute_for_product_name": substitute_for or None,
             "remaining_qty": remaining_qty,
         }
+        from .braki_order_state_service import enrich_shortage_line_location_fields
+
+        enrich_shortage_line_location_fields(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(order.id),
+            product_id=pid,
+            row=row,
+        )
         if section == "collected":
             collected.append(row)
         else:
@@ -768,47 +756,55 @@ def build_shortage_lines_for_order(
     items = sorted(order.items or [], key=lambda x: int(x.id))
     oi_ids = [int(it.id) for it in items]
     pick_summaries = last_pick_audit_summaries_for_order_lines(db, int(order.id), oi_ids)
+    from .braki_order_state_service import order_line_awaiting_oms_attention
+
     for oi in items:
         pid = int(oi.product_id)
         pr = db.query(Product).filter(Product.id == pid).first()
         ordered = float(oi.quantity or 0)
         pq = float(line_picked_sum_for_order(db, int(oi.id), order))
         missing = float(compute_line_missing_qty(db, order, oi))
-        if missing <= 1e-9:
+        if missing <= 1e-9 and not order_line_awaiting_oms_attention(db, order, oi):
             continue
+        display_missing = missing if missing > 1e-9 else max(
+            float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0), 1.0
+        )
         name = (pr.name if pr and pr.name else "") or f"Produkt #{pid}"
         img: str | None = None
         if pr and pr.image_url and str(pr.image_url).strip():
             img = str(pr.image_url).strip()
-        loc_s = _location_label_for_product(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            product_id=pid,
-            product=pr,
-        )
         sku = ""
         ean = ""
         if pr:
             sku = str(getattr(pr, "symbol", None) or getattr(pr, "sku", None) or "").strip()
             ean = str(getattr(pr, "ean", None) or "").strip()
+        row_out = {
+            "order_item_id": int(oi.id),
+            "product_id": pid,
+            "product_name": name,
+            "image_url": img,
+            "ordered_qty": round(ordered, 6),
+            "picked_qty": round(pq, 6),
+            "missing_qty": round(display_missing, 6),
+            "remaining_qty": round(display_missing, 6),
+            "location_code": "",
+            "sku": sku,
+            "ean": ean,
+            "line_kind": "shortage_unresolved",
+            "badge_label": "Oczekuje na decyzję OMS" if missing <= 1e-9 else "Brak do decyzji",
+            "pick_audit_summary": pick_summaries.get(int(oi.id)),
+        }
+        from .braki_order_state_service import enrich_shortage_line_location_fields
+
         out.append(
-            {
-                "order_item_id": int(oi.id),
-                "product_id": pid,
-                "product_name": name,
-                "image_url": img,
-                "ordered_qty": round(ordered, 6),
-                "picked_qty": round(pq, 6),
-                "missing_qty": round(missing, 6),
-                "remaining_qty": round(missing, 6),
-                "location_code": loc_s,
-                "sku": sku,
-                "ean": ean,
-                "line_kind": "shortage_unresolved",
-                "badge_label": "Brak do decyzji",
-                "pick_audit_summary": pick_summaries.get(int(oi.id)),
-            }
+            enrich_shortage_line_location_fields(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order_id=int(order.id),
+                product_id=pid,
+                row=row_out,
+            )
         )
     return out
 

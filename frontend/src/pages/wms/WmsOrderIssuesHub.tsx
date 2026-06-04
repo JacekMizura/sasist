@@ -33,9 +33,6 @@ const BRAKI_WORKFLOW_FILTERS: { id: BrakiWorkflowFilterId; label: string }[] = [
 function normalizeWorkflowStatus(t: OrderIssueTaskListItemApi): BrakiWorkflowFilterId {
   const s = (t.braki_workflow_status ?? "").trim() as BrakiWorkflowFilterId;
   if (BRAKI_WORKFLOW_FILTERS.some((f) => f.id === s)) return s;
-  const bucket = (t.braki_queue_bucket ?? "").trim();
-  if (bucket === "recovery_ready") return "pick";
-  if (bucket === "waiting_customer") return "awaiting";
   return "awaiting";
 }
 

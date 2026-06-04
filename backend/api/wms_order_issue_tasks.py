@@ -136,7 +136,10 @@ def serialize_order_issue_task_item(
     r_pend = 0
     sub_pid = 0
     sub_name = ""
-    cust_name = order_customer_display_name(o)
+    from ..services.braki_order_state_service import build_order_issue_customer_fields
+
+    cust_fields = build_order_issue_customer_fields(o)
+    cust_name = cust_fields.get("customer_name") or order_customer_display_name(o)
     summary_line = ""
     status_line = ""
     bucket = "awaiting_oms"
@@ -195,6 +198,10 @@ def serialize_order_issue_task_item(
         order_number=str(o.number or f"#{t.order_id}") if o else f"#{t.order_id}",
         order_status=str(o.status or "") if o else "",
         customer_name=cust_name,
+        delivery_name=cust_fields.get("delivery_name") or "—",
+        customer_phone=cust_fields.get("phone") or "—",
+        customer_email=cust_fields.get("email") or "—",
+        customer_address=cust_fields.get("address") or "—",
         unresolved_shortage_count=u_short,
         replacement_pick_pending_count=r_pend,
         issue_queue_summary_line=summary_line,

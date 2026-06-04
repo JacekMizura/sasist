@@ -244,6 +244,11 @@ class WmsPickingReportShortageBody(BaseModel):
         default=None,
         description="Opcjonalnie ID zamówień z widoku szczegółu produktu (przecięcie z kontekstem wózka)",
     )
+    recovery_order_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Dogrywka: wymuś zamówienie w kontekście zgłoszenia braku (linia zamiennika)",
+    )
 
 
 class WmsPickingReportShortageResponse(BaseModel):

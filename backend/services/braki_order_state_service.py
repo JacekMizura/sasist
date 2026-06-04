@@ -1,0 +1,440 @@
+"""Centralna logika workflow kolejki Braki (OMS ↔ WMS) — jedno źródło prawdy."""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any, Optional
+
+from sqlalchemy.orm import Session, joinedload
+
+from ..models.order import Order
+from ..models.order_item import OrderItem, order_item_is_replaced_line
+from ..models.order_issue_task import OrderIssueTask
+from ..models.pick import Pick
+from ..services.order_fulfillment_state import (
+    MISSING as FS_MISSING,
+    NEEDS_DECISION as FS_NEEDS_DECISION,
+    READY_TO_PACK as FS_READY_TO_PACK,
+)
+
+logger = logging.getLogger(__name__)
+
+NO_LOCATION_LABEL = "Brak lokalizacji"
+
+
+def _order_item_meta_dict(item: OrderItem) -> dict[str, Any]:
+    raw = getattr(item, "metadata_json", None)
+    if not raw or not str(raw).strip():
+        return {}
+    try:
+        m = json.loads(raw)
+        return m if isinstance(m, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def order_has_waiting_for_stock_lines(order: Order) -> bool:
+    from .order_fulfillment_recompute import order_has_waiting_for_stock_lines as _impl
+
+    return _impl(order)
+
+
+def order_line_awaiting_oms_attention(db: Session, order: Order, oi: OrderItem) -> bool:
+    """Linia wymaga decyzji OMS lub oczekuje — musi trzymać zamówienie w kolejce."""
+    from .order_fulfillment_recompute import compute_line_missing_qty, line_shortage_display_kind
+
+    missing = float(compute_line_missing_qty(db, order, oi))
+    if missing > 1e-9:
+        return True
+    meta = _order_item_meta_dict(oi)
+    if meta.get("oms_waiting_for_stock"):
+        return True
+    kind = line_shortage_display_kind(oi, missing)
+    if kind in ("shortage", "waiting"):
+        declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+        if declared > 1e-9 and missing <= 1e-9:
+            return True
+    return False
+
+
+def order_has_pending_relocation_work(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+) -> bool:
+    from .braki_workflow_service import _order_relocation_alloc_states
+
+    pending, partial, _done = _order_relocation_alloc_states(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+    )
+    return pending > 0 or partial > 0
+
+
+def order_has_active_braki_operations(db: Session, order: Order) -> bool:
+    """Operacyjna praca magazynowa / OMS — bez domykania po samym picku recovery."""
+    from .order_fulfillment_recompute import (
+        compute_line_missing_qty,
+        order_item_needs_substitute_pick_completion,
+    )
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+
+    tid = int(order.tenant_id)
+    wid = int(order.warehouse_id)
+    oid = int(order.id)
+
+    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
+        if order_line_awaiting_oms_attention(db, order, oi):
+            return True
+        if order_item_needs_substitute_pick_completion(db, order, oi):
+            return True
+
+    if get_open_recovery_task_for_order(db, tenant_id=tid, warehouse_id=wid, order_id=oid):
+        return True
+
+    if order_has_pending_relocation_work(db, tenant_id=tid, warehouse_id=wid, order_id=oid):
+        return True
+
+    return False
+
+
+def order_fully_packed(db: Session, order: Order) -> bool:
+    """Wszystkie aktywne linie mają packing_quantity_packed >= quantity."""
+    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
+        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+            continue
+        if order_item_is_replaced_line(oi) and float(oi.quantity or 0) <= 1e-9:
+            continue
+        qty = int(oi.quantity or 0)
+        if qty < 1:
+            continue
+        packed = int(getattr(oi, "packing_quantity_packed", 0) or 0)
+        if packed < qty:
+            return False
+    return True
+
+
+def order_had_braki_workflow_signals(db: Session, order: Order) -> bool:
+    """Czy zamówienie przeszło przez workflow braków (nie zamykać przed pakowaniem)."""
+    fs = (getattr(order, "fulfillment_state", None) or "").strip().upper()
+    if fs in (FS_NEEDS_DECISION, FS_MISSING):
+        return True
+    open_task = (
+        db.query(OrderIssueTask.id)
+        .filter(
+            OrderIssueTask.order_id == int(order.id),
+            OrderIssueTask.status == "OPEN",
+        )
+        .first()
+    )
+    if open_task is not None:
+        return True
+    for oi in order.items or []:
+        if float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0) > 1e-9:
+            return True
+        if getattr(oi, "replaced_from_order_item_id", None) is not None and int(oi.replaced_from_order_item_id) > 0:
+            return True
+        if _order_item_meta_dict(oi).get("oms_waiting_for_stock"):
+            return True
+    if order_has_pending_relocation_work(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    ):
+        return True
+    return False
+
+
+def order_braki_workflow_complete(db: Session, order: Order) -> bool:
+    """Prawdziwe zakończenie workflow braków — nie tylko recovery pick."""
+    if order_has_active_braki_operations(db, order):
+        return False
+    if order_had_braki_workflow_signals(db, order) and not order_fully_packed(db, order):
+        return False
+    return True
+
+
+def order_requires_shortage_handling(db: Session, order: Order) -> bool:
+    """Czy zamówienie pozostaje w kolejce Braki WMS."""
+    if order_has_waiting_for_stock_lines(order):
+        return True
+    u_short, repl_pending = count_issue_queue_operational_lines(db, order)
+    if u_short > 0 or repl_pending > 0:
+        return True
+    return not order_braki_workflow_complete(db, order)
+
+
+def log_braki_shortage_sync(
+    db: Session,
+    order: Order,
+    *,
+    reason: str = "",
+) -> None:
+    from .order_issue_task_service import count_issue_queue_operational_lines
+    from .braki_workflow_service import resolve_braki_workflow_status
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+
+    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    wf = resolve_braki_workflow_status(db, order, u_short=u_short, r_pend=r_pend)
+    rt = get_open_recovery_task_for_order(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    )
+    reloc = order_has_pending_relocation_work(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    )
+    logger.info(
+        "[braki.shortage_sync] order_id=%s workflow=%s remaining_shortages=%s recovery_open=%s "
+        "relocation=%s pack_ready=%s requires_queue=%s reason=%s",
+        order.id,
+        wf,
+        u_short,
+        rt is not None,
+        reloc,
+        order_fully_packed(db, order),
+        order_requires_shortage_handling(db, order),
+        reason or "—",
+    )
+
+
+def log_braki_workflow_resolution(
+    db: Session,
+    order: Order,
+    *,
+    reason: str = "",
+    workflow_status: str | None = None,
+) -> None:
+    from .braki_workflow_service import resolve_braki_workflow_status
+
+    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    status = workflow_status or resolve_braki_workflow_status(db, order, u_short=u_short, r_pend=r_pend)
+    logger.info(
+        "[braki.workflow] order_id=%s workflow_status=%s reason=%s u_short=%s r_pend=%s "
+        "requires_queue=%s pack_complete=%s",
+        order.id,
+        status,
+        reason or "—",
+        u_short,
+        r_pend,
+        order_requires_shortage_handling(db, order),
+        order_fully_packed(db, order),
+    )
+
+
+def build_order_issue_customer_fields(order: Order | None) -> dict[str, str]:
+    """Dane klienta z addresses_json + relacja Customer (jak zwroty / OMS)."""
+    from ..api.wms_returns import _customer_names_from_order
+
+    out: dict[str, str] = {
+        "customer_name": "—",
+        "delivery_name": "—",
+        "phone": "—",
+        "email": "—",
+        "address": "—",
+    }
+    if order is None:
+        return out
+
+    fn, ln = _customer_names_from_order(order)
+    parts = [p for p in (fn, ln) if p and str(p).strip()]
+    name = " ".join(parts).strip()
+    if not name:
+        c = getattr(order, "customer", None)
+        if c is not None:
+            cfn = (getattr(c, "first_name", None) or "").strip()
+            cln = (getattr(c, "last_name", None) or "").strip()
+            name = f"{cfn} {cln}".strip()
+            if not name:
+                comp = (getattr(c, "company_name", None) or "").strip()
+                name = comp
+    if name:
+        out["customer_name"] = name
+        out["delivery_name"] = name
+
+    raw = getattr(order, "addresses_json", None) or ""
+    ship: dict[str, Any] = {}
+    if str(raw).strip():
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                sh = data.get("shipping")
+                if isinstance(sh, dict):
+                    ship = sh
+                elif isinstance(data.get("delivery"), dict):
+                    ship = data.get("delivery")  # type: ignore[assignment]
+        except json.JSONDecodeError:
+            ship = {}
+
+    def _pick(block: dict[str, Any], *keys: str) -> str:
+        for k in keys:
+            v = block.get(k)
+            if v is not None and str(v).strip():
+                return str(v).strip()
+        return ""
+
+    phone = _pick(ship, "phone", "telefon", "Telefon", "mobile")
+    email = _pick(ship, "email", "Email", "e-mail")
+    street = _pick(ship, "street", "address", "ulica", "Ulica", "address1")
+    city = _pick(ship, "city", "miasto", "Miasto")
+    postal = _pick(ship, "postal_code", "zip", "postcode", "kod", "Kod pocztowy")
+    country = _pick(ship, "country", "kraj", "Kraj")
+    addr_parts = [p for p in (street, postal, city, country) if p]
+    if addr_parts:
+        out["address"] = ", ".join(addr_parts)
+    if phone:
+        out["phone"] = phone
+    if email:
+        out["email"] = email
+    ship_name = _pick(ship, "name", "full_name", "Imię i nazwisko", "company")
+    if ship_name:
+        out["delivery_name"] = ship_name
+
+    return out
+
+
+def nearest_pick_location_for_product(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    product_id: int,
+) -> tuple[Optional[int], str, float]:
+    """
+    Najbliższa lokalizacja wg trasy zbierania (PickingRoutingService), fallback: stan magazynowy.
+    """
+    from .picking_routing_service import PickingRoutingService
+    from .wms_packing_service import _primary_location_for_product
+
+    pid = int(product_id)
+    oid = int(order_id)
+    try:
+        routing = PickingRoutingService(db).build_location_pick_list([oid], tenant_id=int(tenant_id))
+        for row in routing.pick_list:
+            if int(row.product_id) == pid:
+                return (
+                    int(row.location_id),
+                    str(row.location_code or "").strip() or NO_LOCATION_LABEL,
+                    float(row.total_quantity or 0),
+                )
+    except Exception:
+        logger.debug("nearest_pick_location routing failed order=%s product=%s", oid, pid, exc_info=True)
+
+    label, qty, _hint = _primary_location_for_product(db, int(tenant_id), int(warehouse_id), pid)
+    loc_id: Optional[int] = None
+    if label and str(label).strip():
+        from ..models.location import Location
+
+        loc = (
+            db.query(Location.id)
+            .filter(
+                Location.warehouse_id == int(warehouse_id),
+                Location.name == str(label).strip(),
+            )
+            .first()
+        )
+        if loc:
+            loc_id = int(loc[0])
+        return loc_id, str(label).strip(), float(qty or 0)
+    return None, NO_LOCATION_LABEL, 0.0
+
+
+def enrich_shortage_line_location_fields(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    product_id: int,
+    row: dict[str, Any],
+) -> dict[str, Any]:
+    loc_id, loc_code, avail = nearest_pick_location_for_product(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        product_id=int(product_id),
+    )
+    existing = str(row.get("location_code") or "").strip()
+    code = existing or loc_code or NO_LOCATION_LABEL
+    row["nearest_location_id"] = loc_id
+    row["nearest_location_code"] = code
+    row["location_code"] = code
+    row["available_qty"] = round(float(avail), 6)
+    return row
+
+
+def ensure_relocation_for_order_item_picks(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order: Order,
+    order_item_id: int,
+    source_event_id: str,
+    picked_from_location: str | None = None,
+) -> None:
+    """Finalized picks na linii → zadanie rozlokowania (usunięcie / redukcja ilości OMS)."""
+    from .wms_operational_task_service import merge_relocation_from_picks
+
+    picks = (
+        db.query(Pick)
+        .filter(
+            Pick.tenant_id == int(tenant_id),
+            Pick.warehouse_id == int(warehouse_id),
+            Pick.order_id == int(order.id),
+            Pick.order_item_id == int(order_item_id),
+            Pick.picked_at.isnot(None),
+        )
+        .all()
+    )
+    if not picks:
+        return
+    cart_label = picked_from_location or ""
+    if not cart_label:
+        cid = getattr(order, "cart_id", None)
+        if cid:
+            from ..models.cart import Cart
+
+            cart = db.query(Cart).filter(Cart.id == int(cid)).first()
+            if cart:
+                cart_label = (getattr(cart, "code", None) or getattr(cart, "name", None) or "").strip()
+    merge_relocation_from_picks(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        picks=picks,
+        picked_from_location=cart_label or f"KOSZYK-{getattr(order, 'cart_id', 0)}",
+        source_event_id=source_event_id,
+        close_recollect_for_items=True,
+    )
+
+
+def count_issue_queue_operational_lines(db: Session, order: Order) -> tuple[int, int]:
+    """(linie OMS/brak, linie do zebrania) — rozszerzone o awaiting."""
+    from .order_fulfillment_recompute import (
+        compute_line_missing_qty,
+        order_item_needs_substitute_pick_completion,
+    )
+
+    unresolved = 0
+    repl_pending = 0
+    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
+        if order_line_awaiting_oms_attention(db, order, oi):
+            unresolved += 1
+        elif float(compute_line_missing_qty(db, order, oi)) > 1e-9:
+            unresolved += 1
+        if order_item_needs_substitute_pick_completion(db, order, oi):
+            repl_pending += 1
+    return unresolved, repl_pending

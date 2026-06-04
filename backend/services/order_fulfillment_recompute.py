@@ -188,19 +188,10 @@ def order_has_waiting_for_stock_lines(order: Order) -> bool:
 
 
 def order_requires_shortage_handling(db: Session, order: Order) -> bool:
-    """
-    Pochodny stan: czy zamówienie nadal wymaga obsługi w kolejce Braki / statusie braków.
+    """Delegacja do centralnego ``braki_order_state_service`` (pick ≠ koniec workflow)."""
+    from .braki_order_state_service import order_requires_shortage_handling as _central
 
-    Uwzględnia nierozwiązany brak operacyjny, zamiennik do zebrania oraz „czeka na towar”.
-    """
-    from .order_issue_task_service import count_issue_queue_operational_lines
-
-    u_short, r_pend = count_issue_queue_operational_lines(db, order)
-    if int(u_short) > 0 or int(r_pend) > 0:
-        return True
-    if order_has_waiting_for_stock_lines(order):
-        return True
-    return False
+    return _central(db, order)
 
 
 def _recompute_line_missing_columns(
@@ -289,6 +280,11 @@ def sync_shortage_workflow_for_order(db: Session, order: Order) -> None:
     """
     Utrzymuje spójność: kolejka WMS Braki (``OrderIssueTask``), status panelu OMS, ``fulfillment_state``.
     """
+    from .braki_order_state_service import (
+        log_braki_shortage_sync,
+        log_braki_workflow_resolution,
+        order_braki_workflow_complete,
+    )
     from .order_issue_task_service import ensure_open_issue_task_for_order
     from .wms_operational_task_service import (
         close_operational_tasks_for_order,
@@ -296,8 +292,10 @@ def sync_shortage_workflow_for_order(db: Session, order: Order) -> None:
         sync_operational_tasks_for_order,
     )
 
-    if order_requires_shortage_handling(db, order):
+    if not order_braki_workflow_complete(db, order):
         ensure_open_issue_task_for_order(db, order)
+        log_braki_shortage_sync(db, order, reason="sync_open")
+        log_braki_workflow_resolution(db, order, reason="sync_open")
         if dual_write_enabled():
             try:
                 sync_operational_tasks_for_order(db, order)
@@ -312,6 +310,8 @@ def sync_shortage_workflow_for_order(db: Session, order: Order) -> None:
         return
 
     _close_open_issue_tasks_if_no_shortage(db, order)
+    log_braki_shortage_sync(db, order, reason="sync_close")
+    log_braki_workflow_resolution(db, order, reason="sync_close")
     if dual_write_enabled():
         try:
             close_operational_tasks_for_order(db, order)
@@ -369,8 +369,10 @@ def recompute_order_fulfillment(
 
 
 def _close_open_issue_tasks_if_no_shortage(db: Session, order: Order) -> None:
-    """Zamyka OPEN ``order_issue_tasks`` gdy zamówienie nie wymaga już obsługi braków."""
-    if order_requires_shortage_handling(db, order):
+    """Zamyka OPEN ``order_issue_tasks`` gdy workflow braków jest faktycznie zakończony."""
+    from .braki_order_state_service import order_braki_workflow_complete
+
+    if not order_braki_workflow_complete(db, order):
         return
     tasks = (
         db.query(OrderIssueTask)

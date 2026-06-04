@@ -68,7 +68,8 @@ function IssueDetailSection({
           const name = line.product_name || "Nieznany produkt";
           const ean = line.ean || "—";
           const sku = line.sku || "—";
-          const location = (line.location_code || "").trim() || "—";
+          const location =
+            (line.nearest_location_code || line.location_code || "").trim() || "Brak lokalizacji";
           const imgSrc =
             (line.image_url || "").trim() ||
             (isCollected
@@ -357,12 +358,30 @@ export default function WmsOrderIssueDetailPage() {
             </div>
 
             <div className="space-y-1.5 text-sm md:text-base">
-              <div className="flex gap-2">
-                <span className="font-medium text-slate-500">Klient:</span>
+              <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
+                <span className="font-medium text-slate-500 shrink-0">Klient:</span>
                 <span className="font-semibold text-slate-800">
-                  {(task.customer_name ?? "—").trim() || "—"}
+                  {(task.customer_name ?? "").trim() || (task.delivery_name ?? "").trim() || "—"}
                 </span>
               </div>
+              {(task.customer_phone ?? "").trim() && (task.customer_phone ?? "").trim() !== "—" ? (
+                <div className="flex gap-2 text-sm text-slate-600">
+                  <span className="font-medium text-slate-500">Tel.:</span>
+                  <span>{task.customer_phone}</span>
+                </div>
+              ) : null}
+              {(task.customer_email ?? "").trim() && (task.customer_email ?? "").trim() !== "—" ? (
+                <div className="flex gap-2 text-sm text-slate-600">
+                  <span className="font-medium text-slate-500">E-mail:</span>
+                  <span className="break-all">{task.customer_email}</span>
+                </div>
+              ) : null}
+              {(task.customer_address ?? "").trim() && (task.customer_address ?? "").trim() !== "—" ? (
+                <div className="flex gap-2 text-sm text-slate-600">
+                  <span className="font-medium text-slate-500">Adres:</span>
+                  <span>{task.customer_address}</span>
+                </div>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-slate-500">Status:</span>
                 <span className="font-bold text-slate-800">BRAKI</span>

@@ -2484,6 +2484,28 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
             "line_total": round(rm_tot, 2),
         },
     )
+    from ..services.braki_order_state_service import ensure_relocation_for_order_item_picks
+    from ..services.wms_audit_service import emit_order_line_removed
+
+    ensure_relocation_for_order_item_picks(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order=order,
+        order_item_id=int(item.id),
+        source_event_id=f"order_line_removed:{int(item.id)}",
+    )
+    emit_order_line_removed(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+        order_item_id=int(item.id),
+        product_id=int(item.product_id) if item.product_id else None,
+        product_name=nm,
+        quantity=float(qty_line),
+        reason="usunięto linię z zamówienia (OMS)",
+    )
     db.delete(item)
     db.flush()
     _recompute_order_value_and_volume(order)
@@ -2627,6 +2649,19 @@ def patch_order_item_line(
         db.add(new_item)
         # Rekordy Pick dla nowej linii powstają przy zbieraniu (wózek + alokacja lokalizacji), nie tutaj.
         touch_picking_in_progress(order)
+        from ..services.wms_audit_service import emit_order_line_replaced
+
+        emit_order_line_replaced(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            order_item_id=int(item.id),
+            old_product_name=old_name,
+            new_product_id=int(product.id),
+            new_product_name=new_product_name,
+            quantity=float(qty_new),
+        )
 
     elif body.remove_missing is True:
         m = compute_line_missing_qty(db, order, item)
@@ -2692,6 +2727,29 @@ def patch_order_item_line(
             },
         )
         touch_picking_in_progress(order)
+        from ..services.braki_order_state_service import ensure_relocation_for_order_item_picks
+        from ..services.wms_audit_service import emit_oms_decision_accepted
+
+        if float(picked) > float(new_qty) + 1e-9:
+            ensure_relocation_for_order_item_picks(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order=order,
+                order_item_id=int(item.id),
+                source_event_id=f"remove_missing_reloc:{int(item.id)}",
+            )
+        emit_oms_decision_accepted(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            order_item_id=int(item.id),
+            product_id=int(item.product_id) if item.product_id else None,
+            product_name=rm_nm,
+            quantity=float(reduction),
+            action="Usunięto brakującą ilość z zamówienia",
+        )
 
     elif body.waiting_for_stock is not None:
         meta = _order_item_meta_dict(item)
@@ -2716,6 +2774,18 @@ def patch_order_item_line(
             meta.pop("oms_waiting_for_stock", None)
             meta.pop("oms_waiting_missing_qty", None)
         item.metadata_json = json.dumps(meta, ensure_ascii=False) if meta else None
+        if body.waiting_for_stock:
+            from ..services.wms_audit_service import emit_oms_decision_wait
+
+            emit_oms_decision_wait(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                order_item_id=int(item.id),
+                product_id=int(item.product_id) if item.product_id else None,
+                quantity=float(m),
+            )
 
     elif body.line_edit is not None:
         le = body.line_edit

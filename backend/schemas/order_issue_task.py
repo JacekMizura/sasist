@@ -36,7 +36,10 @@ class OrderIssueShortageLine(BaseModel):
     ordered_qty: float = Field(..., description="Zamówione na linii")
     picked_qty: float = Field(..., description="Suma Pick w magazynie")
     missing_qty: float = Field(..., description="Operacyjny brak linii (jak OMS / wms-fulfillment); > 0")
-    location_code: str = Field("", description="Pierwsza lokalizacja / etykieta magazynowa")
+    location_code: str = Field("", description="Etykieta lokalizacji (nearest)")
+    nearest_location_code: str = Field(default="", description="Najbliższa lokalizacja wg trasy zbierania")
+    nearest_location_id: Optional[int] = Field(default=None, description="ID lokalizacji magazynowej")
+    available_qty: float = Field(default=0.0, ge=0, description="Dostępna ilość w najbliższej lokalizacji")
     oms_action_summary: str = Field(
         "",
         description="Krótki opis decyzji OMS (np. zamiana / usunięcie) — uzupełniane gdy brak operacyjny = 0 a zadanie nadal otwarte.",
@@ -88,6 +91,10 @@ class OrderIssueTaskListItem(BaseModel):
     order_number: str
     order_status: str
     customer_name: str = Field(default="—", description="Imię i nazwisko lub firma — podgląd na karcie kolejki")
+    delivery_name: str = Field(default="—", description="Nazwa odbiorcy z adresu dostawy")
+    customer_phone: str = Field(default="—", description="Telefon klienta / dostawy")
+    customer_email: str = Field(default="—", description="E-mail klienta / dostawy")
+    customer_address: str = Field(default="—", description="Adres dostawy (skrót)")
     unresolved_shortage_count: int = Field(default=0, ge=0, description="Linie z dodatnim brakiem operacyjnym")
     replacement_pick_pending_count: int = Field(
         default=0,
