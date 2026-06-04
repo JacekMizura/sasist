@@ -1,3 +1,5 @@
+- 2026-06-04 — **WMS returns order lookup (backend):** `GET /api/wms/returns/orders/lookup` w `wms_returns.py` (`lookup_orders` + alias `/lookup`, `/orders/lookup/`). Startup log `[routes]` dla ścieżek `/wms/returns` + `[routes] OK|MISSING /api/wms/returns/orders/lookup`. 404 na Railway = stary deploy bez tego commita.
+
 - 2026-06-04 — **Frontend API + WMS lookup (prod):** `vite.config` przy buildzie podmienia `http://`→`https://` w `VITE_API_URL` (Railway); `resolveAxiosBaseURL()` z `import.meta.env.VITE_API_URL`; axios bez http w PROD. Backend: `@router.get("/orders/lookup")` + alias `/lookup`, startup log `[routes] GET /api/wms/returns/orders/lookup`. Wymaga redeploy obu serwisów.
 
 - 2026-06-04 — **WMS zwroty — lookup zamówienia (404):** `GET /api/wms/returns/orders/lookup` — przywrócony brakujący `@router.get` na `lookup_orders` oraz wydzielona `_normalize_wms_returns_lookup_query` (wcześniej kod był martwy w `_rmz_line_has_damage_photos`). Frontend `wms/returns/orders/lookup` bez zmian; `tenant_id` + `warehouse_id` w query.

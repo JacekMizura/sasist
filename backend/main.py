@@ -1295,15 +1295,26 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 app.middleware("http")(outer_request_logger_middleware)
 
 
-def _debug_dump_wms_returns_routes() -> None:
-    """Log WMS returns routes (incl. order lookup) — verify deploy matches frontend paths."""
-    needles = ("/wms/returns", "lookup")
+WMS_RETURNS_ORDER_LOOKUP_PATH = "/api/wms/returns/orders/lookup"
+
+
+def _debug_dump_routes() -> None:
+    """Startup route dump — verify production registers WMS returns order lookup."""
+    found_lookup = False
     for route in app.routes:
         path = getattr(route, "path", None)
-        if not path or not all(n in path for n in needles):
+        if not path:
             continue
-        methods = sorted(getattr(route, "methods", None) or [])
-        print(f"[routes] {','.join(methods)} {path}", flush=True)
+        if "/wms/returns" in path:
+            methods = ",".join(sorted(getattr(route, "methods", None) or []))
+            suffix = f" {methods}" if methods else ""
+            print(f"[routes]{suffix} {path}", flush=True)
+        if path == WMS_RETURNS_ORDER_LOOKUP_PATH:
+            found_lookup = True
+    if found_lookup:
+        print(f"[routes] OK {WMS_RETURNS_ORDER_LOOKUP_PATH}", flush=True)
+    else:
+        print(f"[routes] MISSING {WMS_RETURNS_ORDER_LOOKUP_PATH}", flush=True)
 
 
 @app.on_event("startup")
@@ -1315,7 +1326,7 @@ async def _log_backend_startup() -> None:
         f"bind_host={UVICORN_HOST} PORT env={os.getenv('PORT')!r}",
         flush=True,
     )
-    _debug_dump_wms_returns_routes()
+    _debug_dump_routes()
     print("Backend started OK", flush=True)
 
 

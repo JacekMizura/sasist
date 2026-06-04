@@ -1462,6 +1462,7 @@ def get_wms_return_queue_counts(
 
 
 @router.get("/orders/lookup", response_model=List[OrderLookupHit])
+@router.get("/orders/lookup/", response_model=List[OrderLookupHit], include_in_schema=False)
 @router.get("/lookup", response_model=List[OrderLookupHit], include_in_schema=False)
 def lookup_orders(
     tenant_id: int = Query(...),
