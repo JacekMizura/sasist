@@ -206,6 +206,7 @@ from .api.cart import router as cart_router
 from .api.import_api import router as import_router
 from .api.export_api import router as export_router
 # Load before order.py (order used to import helpers from wms_returns at module level).
+from .api.wms_returns import lookup_router as wms_returns_lookup_router
 from .api.wms_returns import returns_id_router as wms_returns_id_router
 from .api.wms_returns import router as wms_returns_router
 from .api.order import router as order_router
@@ -1183,6 +1184,12 @@ WMS_RETURNS_LOOKUP_PATHS = (
     f"{WMS_RETURNS_MOUNT_PREFIX}/lookup",
 )
 
+# WMS returns: lookup router MUST be registered before static/id routers (route match order).
+app.include_router(wms_returns_lookup_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
+app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
+app.include_router(wms_returns_id_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
+print(f"[routes] wms_returns mounted prefix={WMS_RETURNS_MOUNT_PREFIX}", flush=True)
+
 _API_ROUTERS = (
     auth_router,
     workforce_router,
@@ -1278,39 +1285,8 @@ for _r in _API_ROUTERS:
 def _log_returns_route_table() -> None:
     for r in app.routes:
         path = getattr(r, "path", None)
-        if path and "returns" in str(path):
+        if path and WMS_RETURNS_MOUNT_PREFIX in str(path):
             print("[ROUTE]", path, flush=True)
-
-
-def _mount_wms_returns_routers() -> None:
-    """Lookup/static on main router; RMZ-by-id on ``returns_id_router`` (prefix /id)."""
-    from .api.wms_returns import lookup_orders
-
-    existing = {getattr(r, "path", None) for r in app.routes}
-    for subpath in ("/orders/lookup", "/lookup"):
-        full = f"{WMS_RETURNS_MOUNT_PREFIX}{subpath}"
-        if full not in existing:
-            app.add_api_route(
-                full,
-                lookup_orders,
-                methods=["GET"],
-                tags=["WMS Returns"],
-                name=f"wms_returns_lookup_hard_{subpath.strip('/')}",
-            )
-            print(f"[routes] hard-mount {full}", flush=True)
-
-    existing = {getattr(r, "path", None) for r in app.routes}
-    if f"{WMS_RETURNS_MOUNT_PREFIX}/queue-counts" not in existing:
-        app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
-        app.include_router(wms_returns_id_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
-        print(
-            f"[routes] mounted wms_returns routers prefix={WMS_RETURNS_MOUNT_PREFIX}",
-            flush=True,
-        )
-    _log_returns_route_table()
-
-
-_mount_wms_returns_routers()
 
 
 def _ensure_wms_returns_router_mounted() -> None:
@@ -1320,16 +1296,19 @@ def _ensure_wms_returns_router_mounted() -> None:
         for r in app.routes
         if getattr(r, "path", None) and str(getattr(r, "path")).startswith(WMS_RETURNS_MOUNT_PREFIX)
     ]
-    if not app_paths:
+    if f"{WMS_RETURNS_MOUNT_PREFIX}/queue-counts" not in app_paths:
         print("[routes] wms_returns REMOUNT", flush=True)
-        _mount_wms_returns_routers()
+        app.include_router(wms_returns_lookup_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
+        app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
+        app.include_router(wms_returns_id_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
         app_paths = [
             getattr(r, "path", None)
             for r in app.routes
             if getattr(r, "path", None) and str(getattr(r, "path")).startswith(WMS_RETURNS_MOUNT_PREFIX)
         ]
     print(
-        f"[routes] wms_returns main_routes={len(wms_returns_router.routes)} "
+        f"[routes] wms_returns lookup_routes={len(wms_returns_lookup_router.routes)} "
+        f"static_routes={len(wms_returns_router.routes)} "
         f"id_routes={len(wms_returns_id_router.routes)} app_paths={len(app_paths)}",
         flush=True,
     )
@@ -1380,7 +1359,7 @@ async def _log_backend_startup() -> None:
 
     # Deploy fingerprint — compare with GitHub commit on Railway → Deployments.
     print(
-        "[startup] wms_returns_lookup_build=2026-06-04-returns-id-subrouter-v14",
+        "[startup] wms_returns_lookup_build=2026-06-04-lookup-router-final-v15",
         flush=True,
     )
     print(

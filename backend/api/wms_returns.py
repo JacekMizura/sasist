@@ -58,10 +58,11 @@ from ..utils.ui_status_color import normalize_stored_color
 
 logger = logging.getLogger(__name__)
 
+lookup_router = APIRouter(tags=["WMS Returns"])
 router = APIRouter(tags=["WMS Returns"])
 returns_id_router = APIRouter(prefix="/id", tags=["WMS Returns"])
 print("IMPORTING WMS RETURNS ROUTER", flush=True)
-print("[routes] returns dynamic routes moved under /id subrouter", flush=True)
+print("[routes] lookup_router + static router + returns_id_router (/id only)", flush=True)
 
 
 def _wms_returns_wh_dep(
@@ -1531,13 +1532,13 @@ def _wms_returns_orders_lookup_search(
     return [_order_lookup_hit_from_row(o, None) for o in partial]
 
 
-@router.get(
+@lookup_router.get(
     "/orders/lookup",
     status_code=200,
     summary="Wyszukiwanie zamówienia pod zwrot WMS",
     name="wms_returns_orders_lookup",
 )
-@router.get("/lookup", include_in_schema=False, name="wms_returns_lookup_alias")
+@lookup_router.get("/lookup", include_in_schema=False, name="wms_returns_lookup_alias")
 def lookup_orders(
     tenant_id: int = Query(...),
     warehouse_id: Optional[int] = Query(
@@ -2481,12 +2482,13 @@ def archive_single_wms_return(
     return entity_bulk_delete_result_from_service_dict(result)
 
 
+_WMS_RETURNS_LOOKUP_ROUTE_COUNT = len(lookup_router.routes)
 _WMS_RETURNS_ROUTE_COUNT = len(router.routes)
 _WMS_RETURNS_ID_ROUTE_COUNT = len(returns_id_router.routes)
 print(
-    f"IMPORTING WMS RETURNS ROUTER done routes={_WMS_RETURNS_ROUTE_COUNT} "
-    f"id_routes={_WMS_RETURNS_ID_ROUTE_COUNT}",
+    f"IMPORTING WMS RETURNS ROUTER done lookup_routes={_WMS_RETURNS_LOOKUP_ROUTE_COUNT} "
+    f"static_routes={_WMS_RETURNS_ROUTE_COUNT} id_routes={_WMS_RETURNS_ID_ROUTE_COUNT}",
     flush=True,
 )
-if _WMS_RETURNS_ROUTE_COUNT == 0:
-    print("IMPORTING WMS RETURNS ROUTER WARNING: zero routes on router", flush=True)
+if _WMS_RETURNS_LOOKUP_ROUTE_COUNT == 0:
+    print("IMPORTING WMS RETURNS ROUTER WARNING: zero lookup routes", flush=True)
