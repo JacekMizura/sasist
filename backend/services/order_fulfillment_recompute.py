@@ -16,7 +16,12 @@ from ..models.order_item import (
     order_item_is_replaced_line,
 )
 from ..models.order_issue_task import OrderIssueTask
-from ..services.fulfillment_event_service import line_picked_sum_for_order, sum_line_events, sum_pick_events_for_line_cart
+from ..services.fulfillment_event_service import (
+    line_picked_sum_for_order,
+    sum_line_events,
+    sum_missing_events_for_line_cart,
+    sum_pick_events_for_line_cart,
+)
 from ..services.order_fulfillment_state import (
     MISSING as FS_MISSING,
     NEEDS_DECISION as FS_NEEDS_DECISION,
@@ -125,7 +130,78 @@ def compute_line_missing_qty(
     return max(0.0, round(missing, 6))
 
 
-def order_item_needs_substitute_pick_completion(db: Session, order: Order, oi: OrderItem) -> bool:
+def line_shortage_qty_for_picking_finalize(
+    db: Session,
+    order: Order,
+    oi: OrderItem,
+    *,
+    session_cart_id: int,
+    picked: float | None = None,
+) -> float:
+    """
+    Brak aktywny dla domknięcia sesji zbierania (picker): zgłoszenia WMS + kolumny linii.
+
+    Nie odejmuje „czeka na towar” OMS — po zgłoszeniu braku picker może zakończyć zbieranie.
+    """
+    if order_item_is_replaced_line(oi):
+        return 0.0
+    ordered = float(oi.quantity or 0)
+    if ordered <= 1e-9:
+        return 0.0
+    cid = int(session_cart_id)
+    if picked is None:
+        picked_f = float(sum_pick_events_for_line_cart(db, int(oi.id), cid))
+    else:
+        picked_f = float(picked)
+    gap = max(0.0, ordered - picked_f)
+    if gap <= 1e-9:
+        return 0.0
+
+    miss_ev = float(sum_missing_events_for_line_cart(db, int(oi.id), cid))
+    declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+    col = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
+    line_st = (getattr(oi, "wms_picking_line_status", None) or "").strip().lower()
+    raw = max(miss_ev, declared, col)
+    if raw <= 1e-9 and line_st == "missing":
+        raw = gap
+    removed = float(getattr(oi, "oms_removed_qty", None) or 0.0)
+    replaced = float(getattr(oi, "oms_replaced_qty", None) or 0.0)
+    cover = max(0.0, raw - removed - replaced)
+    return min(gap, cover)
+
+
+def line_closed_for_picking_finalize(
+    db: Session,
+    order: Order,
+    oi: OrderItem,
+    *,
+    session_cart_id: int,
+    picked: float | None = None,
+) -> bool:
+    """``picked + shortage >= required`` — brak nie musi być rozwiązany przez OMS."""
+    if order_item_is_replaced_line(oi):
+        return True
+    ordered = float(oi.quantity or 0)
+    if ordered <= 1e-9:
+        return True
+    cid = int(session_cart_id)
+    if picked is None:
+        picked_f = float(sum_pick_events_for_line_cart(db, int(oi.id), cid))
+    else:
+        picked_f = float(picked)
+    shortage = line_shortage_qty_for_picking_finalize(
+        db, order, oi, session_cart_id=cid, picked=picked_f
+    )
+    return picked_f + shortage + 1e-5 >= ordered
+
+
+def order_item_needs_substitute_pick_completion(
+    db: Session,
+    order: Order,
+    oi: OrderItem,
+    *,
+    session_cart_id: int | None = None,
+) -> bool:
     """
     Linia zastępcza po zamianie: ``replaced_from_order_item_id`` lub nadal ``TO_PICK`` —
     dopóki suma PICK < ``quantity``, zadanie Braków i kompletacja muszą widzieć pracę magazynową.
@@ -139,11 +215,16 @@ def order_item_needs_substitute_pick_completion(db: Session, order: Order, oi: O
     ordered = float(oi.quantity or 0)
     if ordered <= 1e-9:
         return False
-    cid = getattr(order, "cart_id", None)
-    if cid is not None and int(cid) > 0:
-        picked = float(sum_pick_events_for_line_cart(db, int(oi.id), int(cid)))
-    else:
-        picked = float(line_picked_sum_for_order(db, int(oi.id), order))
+    cid: int | None = None
+    if session_cart_id is not None and int(session_cart_id) > 0:
+        cid = int(session_cart_id)
+    elif getattr(order, "cart_id", None) is not None and int(order.cart_id) > 0:
+        cid = int(order.cart_id)
+    if cid is not None:
+        if line_closed_for_picking_finalize(db, order, oi, session_cart_id=cid):
+            return False
+        return True
+    picked = float(line_picked_sum_for_order(db, int(oi.id), order))
     if picked + 1e-9 >= ordered:
         return False
     miss_ln = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)

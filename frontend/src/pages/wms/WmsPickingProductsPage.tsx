@@ -611,10 +611,22 @@ export default function WmsPickingProductsPage() {
         navigate(WMS_ROUTES.picking, { replace: true });
       }
     } catch (e: unknown) {
-      let msg = "Zakończenie zbiórki nie powiodło się.";
+      let msg = "Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.";
       if (axios.isAxiosError(e)) {
+        console.error("[picking.finalize]", e);
         const d = e.response?.data as { detail?: string } | undefined;
-        if (d?.detail) msg = String(d.detail);
+        if (d?.detail) {
+          const raw = String(d.detail).trim();
+          if (
+            raw.includes("domknięta") ||
+            raw.includes("zebrano + brak") ||
+            raw.includes("zebrane lub oznaczone jako brak")
+          ) {
+            msg = "Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.";
+          } else {
+            msg = raw;
+          }
+        }
       }
       setFinalizeErr(msg);
     } finally {

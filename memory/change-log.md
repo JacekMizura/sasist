@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Finalize zbierania: domknięcie linii pick + brak
+
+- ``line_shortage_qty_for_picking_finalize`` / ``line_closed_for_picking_finalize`` — ``picked + shortage >= required``; OMS „czeka na towar” nie blokuje pickera.
+- ``sum_missing_events_for_line_cart``; logi ``[picking.finalize] LINE_CHECK`` z ``effective_qty``.
+- Testy 4 scenariusze + frontend: komunikat „Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.”
+
 ## 2026-06-04 — DELETE order item: orphan shipping_method_id
 
 - `order_shipping_fk_service`: sanitize orphan `orders.shipping_method_id` before persist; startup SQL cleanup in `ensure_shipping_methods_table_and_order_fk`.

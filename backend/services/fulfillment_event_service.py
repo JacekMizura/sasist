@@ -56,6 +56,30 @@ def sum_line_events(db: Session, order_item_id: int, event_type: str) -> float:
     return float(v or 0.0)
 
 
+def sum_missing_events_for_line_cart(db: Session, order_item_id: int, cart_id: int) -> float:
+    """Suma zdarzeń MISSING dla linii w sesji wózka (``metadata.cart_id``; legacy bez cart_id też liczy)."""
+    rows = (
+        db.query(FulfillmentEvent)
+        .filter(
+            FulfillmentEvent.order_item_id == int(order_item_id),
+            FulfillmentEvent.type == FE_MISSING,
+        )
+        .all()
+    )
+    cid = int(cart_id)
+    s = 0.0
+    for ev in rows:
+        m = _meta(ev)
+        ev_cid = 0
+        try:
+            ev_cid = int(m.get("cart_id") or 0)
+        except (TypeError, ValueError):
+            ev_cid = 0
+        if ev_cid == 0 or ev_cid == cid:
+            s += float(ev.quantity or 0.0)
+    return float(s)
+
+
 def delete_line_events_of_type(db: Session, order_item_id: int, event_type: str) -> None:
     db.query(FulfillmentEvent).filter(
         FulfillmentEvent.order_item_id == int(order_item_id),

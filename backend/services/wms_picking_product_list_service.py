@@ -66,6 +66,8 @@ from .order_item_pick_allocation_service import (
 )
 from .order_fulfillment_recompute import (
     compute_line_missing_qty,
+    line_closed_for_picking_finalize,
+    line_shortage_qty_for_picking_finalize,
     order_item_needs_substitute_pick_completion,
     recompute_order_fulfillment,
 )
@@ -524,24 +526,6 @@ def _picked_qty_for_order_item_on_cart(
 OrderFinalizeKind = Literal["all_picked", "all_missing", "some_missing"]
 
 
-def _effective_shortage_qty_for_finalize(
-    db: Session,
-    order: Order,
-    oi: OrderItem,
-    *,
-    cart_id: int,
-    picked: float,
-) -> float:
-    """Operacyjny brak + zgłoszenie WMS — spójne z ``compute_line_missing_qty`` i ``wms_shortage_declared_qty``."""
-    qty = float(oi.quantity or 0)
-    miss = float(compute_line_missing_qty(db, order, oi, session_cart_id=int(cart_id)))
-    col = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
-    declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
-    gap = max(0.0, qty - picked)
-    from_declared = min(gap, max(0.0, declared)) if declared > 1e-9 else 0.0
-    return max(miss, col, from_declared)
-
-
 def _picking_line_resolved_for_finalize(
     db: Session,
     order: Order,
@@ -552,11 +536,13 @@ def _picking_line_resolved_for_finalize(
     cart_id: int,
 ) -> tuple[bool, str]:
     """
-    Linia domknięta na finalize wózka: pełny pick, pick+brak, zgłoszony brak (workflow Braki),
-    linia zarchiwizowana po zamianie, lub zastępcza z aktywnym brakiem.
+    Linia domknięta na finalize wózka gdy ``picked + shortage >= required``.
+
+    Brak nie musi być rozwiązany przez OMS (workflow Braki po finalize).
     """
     _ = tenant_id, warehouse_id
     eps = 1e-5
+    cid = int(cart_id)
     if order_item_is_replaced_line(oi):
         return True, "replaced_archive_skip"
     qty = float(oi.quantity or 0)
@@ -567,25 +553,22 @@ def _picking_line_resolved_for_finalize(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         order_item_id=int(oi.id),
-        cart_id=int(cart_id),
+        cart_id=cid,
     )
-    miss = _effective_shortage_qty_for_finalize(db, order, oi, cart_id=int(cart_id), picked=picked)
-    if picked + eps >= qty:
+    shortage = line_shortage_qty_for_picking_finalize(
+        db, order, oi, session_cart_id=cid, picked=picked
+    )
+    if line_closed_for_picking_finalize(db, order, oi, session_cart_id=cid, picked=picked):
+        if shortage > eps and picked + eps < qty:
+            return True, "picked_plus_shortage"
         return True, "fully_picked"
-    if picked + miss + eps >= qty:
-        return True, "picked_plus_shortage"
-    line_st = (getattr(oi, "wms_picking_line_status", None) or "").strip().lower()
-    declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
     rid = getattr(oi, "replaced_from_order_item_id", None)
     st = (getattr(oi, "oms_line_status", None) or "").strip().upper()
     is_substitute = (rid is not None and int(rid) > 0) or st == OMS_LINE_STATUS_TO_PICK
-    if is_substitute:
-        if miss > eps or declared > eps or line_st == "missing":
-            return True, "substitute_shortage_workflow"
-        if order_item_needs_substitute_pick_completion(db, order, oi):
-            return False, "substitute_pick_pending"
-    if miss > eps or declared > eps or line_st == "missing":
-        return True, "shortage_declared_workflow"
+    if is_substitute and order_item_needs_substitute_pick_completion(
+        db, order, oi, session_cart_id=cid
+    ):
+        return False, "substitute_pick_pending"
     return False, "incomplete"
 
 
@@ -596,7 +579,7 @@ def _missing_qty_by_product_for_finalize(
     tenant_id: int,
     cart_id: int,
 ) -> dict[int, float]:
-    """Suma braków per ``product_id`` po ``compute_line_missing_qty`` (sesja wózka)."""
+    """Suma braków per ``product_id`` dla domknięcia sesji (``line_shortage_qty_for_picking_finalize``)."""
     if not order_ids:
         return {}
     orders = (
@@ -605,6 +588,7 @@ def _missing_qty_by_product_for_finalize(
         .filter(Order.id.in_(list(order_ids)), Order.tenant_id == int(tenant_id))
         .all()
     )
+    cid = int(cart_id)
     out: dict[int, float] = defaultdict(float)
     for o in orders:
         for oi in o.items or []:
@@ -613,7 +597,18 @@ def _missing_qty_by_product_for_finalize(
             pid = getattr(oi, "product_id", None)
             if pid is None:
                 continue
-            mq = float(compute_line_missing_qty(db, o, oi, session_cart_id=int(cart_id)))
+            picked = _picked_qty_for_order_item_on_cart(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(o.warehouse_id),
+                order_item_id=int(oi.id),
+                cart_id=cid,
+            )
+            mq = float(
+                line_shortage_qty_for_picking_finalize(
+                    db, o, oi, session_cart_id=cid, picked=picked
+                )
+            )
             if mq > 1e-12:
                 out[int(pid)] = round(out[int(pid)] + mq, 6)
     return dict(out)
@@ -647,9 +642,11 @@ def _classify_order_after_picking_session(
             order_item_id=int(oi.id),
             cart_id=int(cart_id),
         )
-        miss = _effective_shortage_qty_for_finalize(
-            db, order, oi, cart_id=int(cart_id), picked=picked
+        miss = line_shortage_qty_for_picking_finalize(
+            db, order, oi, session_cart_id=int(cart_id), picked=picked
         )
+        declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+        effective = picked + miss
         resolved, reason = _picking_line_resolved_for_finalize(
             db,
             order,
@@ -660,13 +657,16 @@ def _classify_order_after_picking_session(
         )
         logger.info(
             "[picking.finalize] LINE_CHECK order_id=%s order_item_id=%s product_id=%s "
-            "required=%s picked=%s shortage=%s resolved=%s reason=%s cart_id=%s",
+            "required_qty=%s picked_qty=%s shortage_qty=%s resolved_shortage_qty=%s "
+            "effective_qty=%s resolved=%s reason=%s cart_id=%s",
             int(order.id),
             int(oi.id),
             int(oi.product_id or 0),
             qty,
             picked,
             miss,
+            declared,
+            effective,
             resolved,
             reason,
             int(cart_id),
@@ -674,14 +674,19 @@ def _classify_order_after_picking_session(
         if not resolved:
             num = str(order.number or order.id)
             logger.warning(
-                "[picking.finalize] BLOCKED order_id=%s order_item_id=%s product_id=%s reason=%s",
+                "[picking.finalize] BLOCKED order_id=%s order_item_id=%s product_id=%s "
+                "required=%s picked=%s shortage=%s effective=%s reason=%s",
                 int(order.id),
                 int(oi.id),
                 int(oi.product_id or 0),
+                qty,
+                picked,
+                miss,
+                effective,
                 reason,
             )
             raise ValueError(
-                f"Zamówienie #{num}: linia produktu #{oi.product_id} nie jest domknięta (zebrano + brak < wymagane)."
+                f"Zamówienie #{num}: nie wszystkie pozycje zostały zebrane lub oznaczone jako brak."
             )
         fully_missing.append(miss + eps >= qty)
         fully_picked.append(miss < eps and picked + eps >= qty)
@@ -2018,16 +2023,21 @@ def finalize_wms_picking_cart(
                 order_item_id=int(oi.id),
                 cart_id=cid,
             )
-            miss_dbg = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
+            miss_dbg = line_shortage_qty_for_picking_finalize(
+                db, o, oi, session_cart_id=cid, picked=picked_dbg
+            )
+            declared_dbg = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
             logger.info(
                 "wms finalize-cart line gate: order_id=%s order_item_id=%s product_id=%s "
-                "required_qty=%s picked_qty(cart)=%s shortage_qty=%s computed_total=%s cart_id=%s",
+                "required_qty=%s picked_qty=%s shortage_qty=%s resolved_shortage_qty=%s "
+                "effective_qty=%s cart_id=%s",
                 int(o.id),
                 int(oi.id),
                 int(oi.product_id or 0),
                 qty,
                 picked_dbg,
                 miss_dbg,
+                declared_dbg,
                 picked_dbg + miss_dbg,
                 cid,
             )
