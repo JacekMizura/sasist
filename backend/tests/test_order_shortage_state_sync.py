@@ -62,7 +62,8 @@ class OrderRequiresShortageHandlingTests(unittest.TestCase):
         ):
             self.assertTrue(order_requires_shortage_handling(db, order))
 
-    def test_waiting_requires_handling_even_without_operational_missing(self):
+    def test_stale_waiting_flag_without_operational_missing_not_in_queue(self):
+        """Legacy ``oms_waiting_for_stock`` bez ``mq > 0`` nie trzyma zamówienia w kolejce Braki."""
         order = SimpleNamespace(
             id=1,
             tenant_id=1,
@@ -73,6 +74,38 @@ class OrderRequiresShortageHandlingTests(unittest.TestCase):
         with patch(
             "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
             return_value=(0, 0),
+        ), patch(
+            "backend.services.order_fulfillment_recompute.compute_line_missing_qty",
+            return_value=0.0,
+        ), patch(
+            "backend.services.braki_order_state_service.order_braki_picking_resolved",
+            return_value=True,
+        ), patch(
+            "backend.services.braki_order_state_service.order_had_braki_workflow_signals",
+            return_value=False,
+        ):
+            self.assertFalse(order_requires_shortage_handling(db, order))
+
+    def test_waiting_with_operational_missing_requires_handling(self):
+        order = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            warehouse_id=1,
+            items=[
+                SimpleNamespace(
+                    id=1,
+                    quantity=1,
+                    metadata_json='{"oms_waiting_for_stock": true}',
+                )
+            ],
+        )
+        db = MagicMock()
+        with patch(
+            "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
+            return_value=(0, 0),
+        ), patch(
+            "backend.services.order_fulfillment_recompute.compute_line_missing_qty",
+            return_value=1.0,
         ):
             self.assertTrue(order_requires_shortage_handling(db, order))
 

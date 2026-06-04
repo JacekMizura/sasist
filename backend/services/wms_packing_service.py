@@ -731,7 +731,7 @@ def _build_packing_order_card(
             vehicle_out = _cart_basket_display_code(bsk)
     if vehicle_out is None and basket_code:
         vehicle_out = str(basket_code).strip() or None
-    wms_phase = compute_wms_workflow_phase(order)
+    wms_phase = compute_wms_workflow_phase(order, db=db)
     cid_out = int(order.cart_id) if getattr(order, "cart_id", None) is not None and int(order.cart_id) > 0 else None
     pfin = getattr(order, "picking_finished_at", None) or getattr(order, "picked_at", None)
     pks = getattr(order, "packing_started_at", None)
@@ -2427,6 +2427,8 @@ def get_oms_order_wms_fulfillment_card(db: Session, order_id: int) -> Optional[W
     from ..services.order_fulfillment_recompute import recompute_order_fulfillment
 
     recompute_order_fulfillment(db, int(order_id), commit=True)
+    from .braki_order_state_service import log_wms_order_status_compute
+
     order = (
         db.query(Order)
         .options(
@@ -2442,6 +2444,7 @@ def get_oms_order_wms_fulfillment_card(db: Session, order_id: int) -> Optional[W
     )
     if order is None:
         return None
+    log_wms_order_status_compute(db, order, source="get_oms_order_wms_fulfillment_card")
     return _build_packing_order_card(
         order,
         db=db,

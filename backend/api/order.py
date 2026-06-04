@@ -893,7 +893,7 @@ def get_orders(
                 priority_color=pc_norm,
                 wms_packed_at=getattr(o, "packed_at", None),
                 wms_packed_by_label=None,
-                wms_workflow_phase=compute_wms_workflow_phase(o),
+                wms_workflow_phase=compute_wms_workflow_phase(o, db=db),
                 has_internal_note=has_internal_note_row,
                 has_customer_comment=cf.has_customer_comment if cf else False,
                 latest_internal_note_preview=cf.latest_internal_note_preview if cf else None,

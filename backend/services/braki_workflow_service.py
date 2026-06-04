@@ -103,7 +103,7 @@ def resolve_braki_workflow_status(
 
     needs_pick = order_needs_warehouse_pick(db, order, r_pend=r_pend)
     awaiting_flags = order_has_waiting_customer_line(order) or order_has_waiting_for_stock_lines(
-        order
+        order, db=db
     )
     from .order_fulfillment_recompute import compute_line_missing_qty
 
@@ -126,9 +126,14 @@ def resolve_braki_workflow_status(
     needs_reloc = reloc_pending > 0
     needs_reloc_partial = reloc_partial > 0
 
-    from .braki_order_state_service import evaluate_order_braki_state, order_can_show_ready_pack
+    from .braki_order_state_service import (
+        evaluate_order_braki_state,
+        order_can_show_ready_pack,
+        order_has_pending_shortage_decision,
+    )
 
     pack_ready = order_can_show_ready_pack(db, order)
+    pending_decision = order_has_pending_shortage_decision(db, order)
     if pack_ready:
         status = BRAKI_FILTER_READY_PACK
     elif awaiting:
@@ -143,8 +148,12 @@ def resolve_braki_workflow_status(
         status = BRAKI_FILTER_RELOCATION
     elif needs_pick:
         status = BRAKI_FILTER_PICK
-    else:
+    elif pending_decision or has_operational_missing:
         status = BRAKI_FILTER_AWAITING
+    elif pack_ready:
+        status = BRAKI_FILTER_READY_PACK
+    else:
+        status = BRAKI_FILTER_READY_PACK
 
     eval_snap = evaluate_order_braki_state(db, order, workflow_status=status)
     if status == BRAKI_FILTER_READY_PACK and not eval_snap.get("resolved"):

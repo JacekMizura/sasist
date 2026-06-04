@@ -269,11 +269,19 @@ def oms_line_secondary_trace_text(db: Session, order: Order, oi: OrderItem) -> s
     return None
 
 
-def order_has_waiting_for_stock_lines(order: Order) -> bool:
-    """OMS oznaczył „czeka na towar” na którejkolwiek linii — zamówienie nadal w workflow braków."""
+def order_has_waiting_for_stock_lines(order: Order, *, db: Session | None = None) -> bool:
+    """
+    OMS oznaczył „czeka na towar” — tylko gdy nadal jest aktywny brak operacyjny (``db``),
+    lub legacy bez ``db`` (sama flaga w metadanych).
+    """
     for oi in order.items or []:
-        if _oms_waiting_for_stock(oi):
-            return True
+        if not _oms_waiting_for_stock(oi):
+            continue
+        if db is not None:
+            if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
+                return True
+            continue
+        return True
     return False
 
 
@@ -297,6 +305,11 @@ def _recompute_line_missing_columns(
             st = (getattr(oi, "wms_picking_line_status", None) or "").strip().lower()
             if st == "missing":
                 oi.wms_picking_line_status = None
+            meta = _order_item_meta_dict(oi)
+            if meta.pop("oms_waiting_for_stock", None) is not None or meta.pop(
+                "oms_waiting_missing_qty", None
+            ) is not None:
+                oi.metadata_json = json.dumps(meta, ensure_ascii=False) if meta else None
 
 
 def _resolve_panel_status_after_shortage_cleared(db: Session, order: Order) -> None:
@@ -399,6 +412,7 @@ def sync_shortage_workflow_for_order(db: Session, order: Order) -> None:
         sync_operational_tasks_for_order,
     )
 
+    _clear_fulfillment_shortage_state_if_resolved(db, order)
     _enforce_packing_queue_eligibility(db, order)
     if not order_braki_workflow_complete(db, order):
         ensure_open_issue_task_for_order(db, order)

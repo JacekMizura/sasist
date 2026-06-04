@@ -1,5 +1,7 @@
 # Current Context
 
+- **„Braki — decyzja” (2026-06-04):** Etykieta OMS z ``wms_workflow_phase`` — ``NEEDS_DECISION`` tylko przy ``order_has_pending_shortage_decision`` (``compute_line_missing_qty > 0``). Po decyzji OMS + rozliczeniu picku: ``READY_TO_PACK`` / pakowanie. Log: ``[wms.order.status.compute]``. Deploy backend + odświeżenie listy/karty zamówienia.
+
 - **Railway backend (2026-06-04):** Serwis API: **Root Directory = `/`** (repo root), **nie** `frontend`. Build: `nixpacks.toml` → `providers = ["python"]` (ignoruje root `package.json`). Start: `python run_server.py`. Log build OK: `setup │ python3`, nie `nodejs_18`. Instrukcja: `docs/RAILWAY_BACKEND.md`. Port: `PORT` env; `Procfile` / `railway.toml` / `Dockerfile` opcjonalnie.
 
 - **Migracja SQLite → PostgreSQL (2026-05-27):** `backend/scripts/migrate_sqlite_to_postgres.py` — domyślnie **dry-run** (live tylko z `--yes`). Flagi: `--table`, `--phase` (foundation|catalog|orders|stock|returns|rest), `--continue-on-error`. Po migracji: walidacja liczby wierszy SQLite vs PG + skan orphan FK. Przykład: `python -m backend.scripts.migrate_sqlite_to_postgres --table orders` (podgląd), potem `--table orders --yes` (zapis).

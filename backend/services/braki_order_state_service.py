@@ -34,10 +34,87 @@ def _order_item_meta_dict(item: OrderItem) -> dict[str, Any]:
         return {}
 
 
-def order_has_waiting_for_stock_lines(order: Order) -> bool:
+def order_has_waiting_for_stock_lines(order: Order, *, db: Session | None = None) -> bool:
     from .order_fulfillment_recompute import order_has_waiting_for_stock_lines as _impl
 
-    return _impl(order)
+    return _impl(order, db=db)
+
+
+def order_has_pending_shortage_decision(db: Session, order: Order) -> bool:
+    """
+    Aktywna decyzja OMS wymagana — nie historyczne zgłoszenie braku ani praca magazynowa (zamiennik / rozlokowanie).
+    """
+    from .order_fulfillment_recompute import compute_line_missing_qty
+
+    for oi in order.items or []:
+        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
+            return True
+    return False
+
+
+def log_wms_order_status_compute(db: Session, order: Order, *, source: str = "") -> dict[str, Any]:
+    """Diagnoza fazy UI — ``[wms.order.status.compute]``."""
+    from .order_fulfillment_recompute import compute_line_missing_qty
+    from .braki_workflow_service import resolve_braki_workflow_status
+    from .wms_relocation_workflow import relocation_alloc_counts_for_order
+
+    oid = int(order.id)
+    pending_decisions = 0
+    resolved_shortages = 0
+    for oi in order.items or []:
+        mq = float(compute_line_missing_qty(db, order, oi))
+        declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+        if mq > 1e-9:
+            pending_decisions += 1
+        elif declared > 1e-9:
+            resolved_shortages += 1
+    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    reloc_p, reloc_part, _ = relocation_alloc_counts_for_order(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=oid,
+        log_checks=False,
+    )
+    packing_ready = order_can_show_ready_pack(db, order)
+    pending_decision = order_has_pending_shortage_decision(db, order)
+    fs = (getattr(order, "fulfillment_state", None) or "").strip().upper()
+    wf = resolve_braki_workflow_status(db, order, u_short=u_short, r_pend=r_pend)
+    from .wms_workflow_phase import compute_wms_workflow_phase
+
+    phase = compute_wms_workflow_phase(order, db=db)
+    snap = {
+        "order_id": oid,
+        "source": source or "—",
+        "has_shortages": pending_decisions > 0 or int(u_short) > 0,
+        "pending_decisions_count": pending_decisions,
+        "resolved_shortages_count": resolved_shortages,
+        "relocation_required": reloc_p > 0 or reloc_part > 0,
+        "packing_ready": packing_ready,
+        "pending_decision": pending_decision,
+        "fulfillment_state": fs or None,
+        "braki_workflow_status": wf,
+        "final_status": phase,
+        "u_short": u_short,
+        "r_pend": r_pend,
+    }
+    logger.info(
+        "[wms.order.status.compute] order_id=%s source=%s has_shortages=%s pending_decisions=%s "
+        "resolved_shortages=%s relocation_required=%s packing_ready=%s pending_decision=%s "
+        "fulfillment_state=%s braki_workflow=%s final_status=%s",
+        oid,
+        snap["source"],
+        snap["has_shortages"],
+        pending_decisions,
+        resolved_shortages,
+        snap["relocation_required"],
+        packing_ready,
+        pending_decision,
+        fs or "—",
+        wf,
+        phase or "—",
+    )
+    return snap
 
 
 def order_line_awaiting_oms_attention(db: Session, order: Order, oi: OrderItem) -> bool:
@@ -185,7 +262,7 @@ def order_braki_workflow_complete(db: Session, order: Order) -> bool:
 
 def order_requires_shortage_handling(db: Session, order: Order) -> bool:
     """Czy zamówienie pozostaje w kolejce Braki WMS."""
-    if order_has_waiting_for_stock_lines(order):
+    if order_has_waiting_for_stock_lines(order, db=db):
         return True
     if not order_braki_picking_resolved(db, order):
         return True
@@ -232,7 +309,7 @@ def evaluate_order_braki_state(
         )
         is not None
     )
-    has_awaiting = order_has_waiting_for_stock_lines(order) or any(
+    has_awaiting = order_has_waiting_for_stock_lines(order, db=db) or any(
         order_line_awaiting_oms_attention(db, order, oi) for oi in (order.items or [])
     )
     resolved = order_can_show_ready_pack(db, order)

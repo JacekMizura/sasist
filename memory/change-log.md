@@ -1,5 +1,14 @@
 # Change Log
 
+## 2026-06-04 — „Braki — decyzja” tylko przy aktywnej decyzji OMS
+
+- ``order_has_pending_shortage_decision`` + log ``[wms.order.status.compute]`` (``braki_order_state_service``).
+- ``compute_wms_workflow_phase(order, db)`` — ``NEEDS_DECISION``/``MISSING`` tylko gdy ``pending_decision``; inaczej faza z timestampów (np. ``READY_TO_PACK``).
+- ``sync_shortage_workflow``: wczesne ``_clear_fulfillment_shortage_state_if_resolved``; ``order_has_waiting_for_stock_lines`` wymaga ``mq > 0`` z ``db``; czyszczenie starych flag ``oms_waiting_*`` przy ``mq=0``.
+- ``resolve_braki_workflow_status``: koniec łańcucha nie domyślnie ``awaiting``.
+- Lista OMS / karta WMS: ``compute_wms_workflow_phase(..., db=db)``.
+- Test: ``test_wms_workflow_phase_pending_decision.py``.
+
 ## 2026-06-04 — Fix React #310 (braki szczegół)
 
 - ``WmsOrderIssueDetailPage``: shell ładowania/skanu; UI + ``onArchiveShortage`` w ``WmsOrderIssueDetailContent`` (montowany tylko z ``task`` — brak zmiany liczby hooków przy przejściu loading→loaded).
