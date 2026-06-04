@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — DELETE order item: orphan shipping_method_id
+
+- `order_shipping_fk_service`: sanitize orphan `orders.shipping_method_id` before persist; startup SQL cleanup in `ensure_shipping_methods_table_and_order_fk`.
+- `_recompute_order_value_and_volume(order, db)` calls sanitize; DELETE item 500 → friendly PL message (no raw SQL in response).
+- Frontend: `extractApiErrorMessage` hides raw DB errors; OMS delete toast fallback.
+- Test: `test_order_delete_item_orphan_shipping.py`.
+
 ## 2026-06-04 — Braki: ready_pack po recovery pick
 
 - **`order_braki_picking_resolved`**: `ready_pack` gdy zbiórka/recovery domknięta (nie czeka na pełne pakowanie); naprawa `order_line_awaiting_oms_attention` (nie blokuje po historycznym braku).

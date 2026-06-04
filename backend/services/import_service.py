@@ -2180,7 +2180,7 @@ class ImportService:
                 .first()
             )
             if oo is not None:
-                _recompute_order_value_and_volume(oo)
+                _recompute_order_value_and_volume(oo, self.db)
 
         self.db.commit()
 

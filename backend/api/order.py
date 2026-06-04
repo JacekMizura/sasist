@@ -304,7 +304,11 @@ def _patch_order_shipping_address(order: Order, body: OrderPatchBody, fields_set
     order.addresses_json = json.dumps(full, ensure_ascii=False)
 
 
-def _recompute_order_value_and_volume(order: Order) -> None:
+def _recompute_order_value_and_volume(order: Order, db: Optional[Session] = None) -> None:
+    if db is not None:
+        from ..services.order_shipping_fk_service import sanitize_order_orphan_shipping_method_id
+
+        sanitize_order_orphan_shipping_method_id(db, order)
     goods = 0.0
     for it in order.items or []:
         qty = int(it.quantity or 0)
@@ -2346,7 +2350,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
             )
             db.add(oi)
         db.flush()
-        _recompute_order_value_and_volume(order)
+        _recompute_order_value_and_volume(order, db)
         db.commit()
     else:
         assert body.product_id is not None
@@ -2413,7 +2417,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
             )
             db.add(oi)
         db.flush()
-        _recompute_order_value_and_volume(order)
+        _recompute_order_value_and_volume(order, db)
         db.commit()
     order = (
         db.query(Order)
@@ -2578,7 +2582,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
             item,
             reason="usunięto linię z zamówienia (OMS)",
         )
-        _recompute_order_value_and_volume(order)
+        _recompute_order_value_and_volume(order, db)
         recalculate_order_shortage_state(db, int(order_id), commit=False)
         db.commit()
         order = (
@@ -2606,7 +2610,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Usunięcie pozycji nie powiodło się: {exc}",
+            detail="Nie udało się usunąć produktu z zamówienia.",
         ) from exc
 
 
@@ -2889,7 +2893,7 @@ def patch_order_item_line(
             item.total_price = round(float(up) * float(qn), 2)
         touch_picking_in_progress(order)
 
-    _recompute_order_value_and_volume(order)
+    _recompute_order_value_and_volume(order, db)
     db.flush()
     recalculate_order_shortage_state(db, int(order_id), commit=False)
     ord2 = (

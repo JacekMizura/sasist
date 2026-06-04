@@ -297,15 +297,43 @@ export async function changePassword(current_password: string, new_password: str
   await api.post("/auth/change-password", { current_password, new_password });
 }
 
+const RAW_DB_ERROR_MARKERS = [
+  "psycopg",
+  "sqlalchemy",
+  "foreignkeyviolation",
+  "integrityerror",
+  "[sql:",
+  "background on this error at:",
+];
+
+function looksLikeRawDbError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return RAW_DB_ERROR_MARKERS.some((m) => lower.includes(m));
+}
+
 /** Extract FastAPI / axios error message for toasts and console. */
 export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił błąd operacji."): string {
   if (err && typeof err === "object" && "response" in err) {
     const res = (err as { response?: { data?: unknown; status?: number } }).response;
     const data = res?.data;
-    if (typeof data === "string" && data.trim()) return data.trim();
+    if (typeof data === "string" && data.trim()) {
+      const msg = data.trim();
+      if (looksLikeRawDbError(msg)) {
+        console.error("[api] raw server error:", msg);
+        return fallback;
+      }
+      return msg;
+    }
     if (data && typeof data === "object" && "detail" in data) {
       const detail = (data as { detail?: unknown }).detail;
-      if (typeof detail === "string" && detail.trim()) return detail.trim();
+      if (typeof detail === "string" && detail.trim()) {
+        const msg = detail.trim();
+        if (looksLikeRawDbError(msg)) {
+          console.error("[api] raw server error:", msg);
+          return fallback;
+        }
+        return msg;
+      }
       if (detail && typeof detail === "object" && !Array.isArray(detail)) {
         const msg = (detail as { message?: unknown; step?: unknown }).message;
         const step = (detail as { step?: unknown }).step;

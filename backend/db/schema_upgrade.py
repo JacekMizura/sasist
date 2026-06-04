@@ -3728,6 +3728,14 @@ def ensure_shipping_methods_table_and_order_fk(engine: Engine) -> None:
         db.commit()
         purge_non_canonical_shipping_methods(db)
         db.commit()
+        from ..services.order_shipping_fk_service import clear_orphan_orders_shipping_method_ids
+
+        cleared = clear_orphan_orders_shipping_method_ids(engine)
+        if cleared:
+            logger.info(
+                "[schema] cleared %s orders with orphan shipping_method_id",
+                cleared,
+            )
     finally:
         db.close()
 
