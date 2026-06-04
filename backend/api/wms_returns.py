@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 #   lookup_router     -> GET /orders/lookup, GET /lookup  (no dynamic segments)
 #   router            -> list/create/queue-counts/...      (no /{return_id})
 #   returns_id_router -> prefix /id + /{return_id:int}/... (all RMZ-by-id)
-WMS_RETURNS_ROUTING_VERSION = "2026-06-04-lookup-never-404-v18"
+WMS_RETURNS_ROUTING_VERSION = "2026-06-04-lookup-route-order-v19"
 
 lookup_router = APIRouter(tags=["WMS Returns"])
 router = APIRouter(tags=["WMS Returns"])
@@ -73,6 +73,13 @@ print(
     "lookup_router + static router + returns_id_router (/id only)",
     flush=True,
 )
+
+
+def get_db_for_lookup():
+    """DB session for lookup only — logs to trace 404 before handler body."""
+    print("[returns.lookup] DEP get_db enter", flush=True)
+    yield from get_db()
+    print("[returns.lookup] DEP get_db exit", flush=True)
 
 
 def _wms_returns_wh_dep(
@@ -1569,13 +1576,14 @@ def lookup_orders(
         description="Magazyn z UI WMS; gdy brak — domyślny magazyn tenanta (jak wcześniej).",
     ),
     q: str = Query(..., min_length=1, description="Numer zamówienia, kod, #id, RET-id, id RMZ / zamówienia"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_lookup),
 ) -> List[OrderLookupHit]:
     """
     Wyszukiwanie zamówień pod zwrot WMS.
 
     Zawsze HTTP 200 + JSON array (pusta lista gdy brak trafień). Nigdy 404.
     """
+    print("[returns.lookup] HANDLER ENTER", flush=True)
     print(f"[returns.lookup] q={q}", flush=True)
     try:
         results = _wms_returns_orders_lookup_search(db, tenant_id, q, warehouse_id)
@@ -1677,35 +1685,6 @@ def get_wms_return_queue_counts(
     except SQLAlchemyError:
         logger.exception("get_wms_return_queue_counts: database error")
         return WmsReturnQueueCountsRead(counts={k: 0 for k in RETURN_QUEUE_TAB_KEYS})
-
-
-@router.get("/orders/{order_id:int}/returns", response_model=List[WmsReturnListItem])
-def list_returns_for_order(
-    order_id: int,
-    tenant_id: int = Query(...),
-    db: Session = Depends(get_db),
-):
-    """RMZ documents for a single order (newest first)."""
-    # Use the order's warehouse (not tenant default): lookup may surface orders from any linked warehouse.
-    order = (
-        db.query(Order)
-        .filter(
-            Order.id == order_id,
-            Order.tenant_id == tenant_id,
-        )
-        .first()
-    )
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    warehouse_id = int(order.warehouse_id)
-
-    q = (
-        _returns_query(db, tenant_id, warehouse_id, archive_scope="active")
-        .filter(WmsOrderReturn.order_id == order_id)
-        .order_by(nullslast(desc(WmsOrderReturn.created_at)), desc(WmsOrderReturn.id))
-    )
-    return [_list_item_from_row(db, r, o) for r, o in q.all()]
 
 
 @router.get("", response_model=List[WmsReturnListItem])
@@ -1952,6 +1931,36 @@ def wms_returns_bulk_archive(body: WmsReturnsBulkArchiveBody, db: Session = Depe
     else:
         db.commit()
     return entity_bulk_delete_result_from_service_dict(result)
+
+
+# Registered AFTER /orders/lookup (on lookup_router) — avoids Starlette matching conflicts.
+@router.get("/orders/{order_id:int}/returns", response_model=List[WmsReturnListItem])
+def list_returns_for_order(
+    order_id: int,
+    tenant_id: int = Query(...),
+    db: Session = Depends(get_db),
+):
+    """RMZ documents for a single order (newest first)."""
+    print(f"[returns.orders_returns] HANDLER ENTER order_id={order_id}", flush=True)
+    order = (
+        db.query(Order)
+        .filter(
+            Order.id == order_id,
+            Order.tenant_id == tenant_id,
+        )
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    warehouse_id = int(order.warehouse_id)
+
+    q = (
+        _returns_query(db, tenant_id, warehouse_id, archive_scope="active")
+        .filter(WmsOrderReturn.order_id == order_id)
+        .order_by(nullslast(desc(WmsOrderReturn.created_at)), desc(WmsOrderReturn.id))
+    )
+    return [_list_item_from_row(db, r, o) for r, o in q.all()]
 
 
 # --- RMZ by id: always under /id/{return_id:int} (registered after static + lookup routes) ---
@@ -2511,6 +2520,32 @@ def archive_single_wms_return(
         db.commit()
     return entity_bulk_delete_result_from_service_dict(result)
 
+
+def _finalize_wms_returns_route_order() -> None:
+    """Ensure /orders/lookup routes precede /orders/{order_id} on each router and app."""
+    order_dyn: list = []
+    kept: list = []
+    for route in list(router.routes):
+        path = str(getattr(route, "path", "") or "")
+        if "/orders/{order_id" in path:
+            order_dyn.append(route)
+        else:
+            kept.append(route)
+    if order_dyn:
+        router.routes = kept + order_dyn
+    print(
+        "[routes] static router order (first 6):",
+        [getattr(r, "path", None) for r in router.routes[:6]],
+        flush=True,
+    )
+    print(
+        "[routes] lookup_router order:",
+        [getattr(r, "path", None) for r in lookup_router.routes],
+        flush=True,
+    )
+
+
+_finalize_wms_returns_route_order()
 
 _WMS_RETURNS_LOOKUP_ROUTE_COUNT = len(lookup_router.routes)
 _WMS_RETURNS_ROUTE_COUNT = len(router.routes)

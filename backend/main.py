@@ -1185,6 +1185,26 @@ WMS_RETURNS_LOOKUP_PATHS = (
     f"{WMS_RETURNS_MOUNT_PREFIX}/lookup",
 )
 
+def _promote_wms_returns_lookup_routes_on_app() -> None:
+    """Hoist /orders/lookup to the front of app.routes (Starlette first-match wins)."""
+    lookup_paths = set(WMS_RETURNS_LOOKUP_PATHS)
+    promoted: list = []
+    rest: list = []
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        if path in lookup_paths:
+            promoted.append(route)
+        else:
+            rest.append(route)
+    if promoted:
+        app.router.routes = promoted + rest
+        print(
+            f"[routes] promoted wms lookup routes={len(promoted)} "
+            f"paths={[getattr(r, 'path', None) for r in promoted]}",
+            flush=True,
+        )
+
+
 # WMS returns: lookup router MUST be registered before static/id routers (route match order).
 app.include_router(wms_returns_lookup_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
 app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
@@ -1286,6 +1306,8 @@ _API_ROUTERS = (
 for _r in _API_ROUTERS:
     app.include_router(_r, prefix=API_PREFIX)
 
+_promote_wms_returns_lookup_routes_on_app()
+
 
 def _log_returns_route_table() -> None:
     for r in app.routes:
@@ -1306,6 +1328,7 @@ def _ensure_wms_returns_router_mounted() -> None:
         app.include_router(wms_returns_lookup_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
         app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
         app.include_router(wms_returns_id_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
+        _promote_wms_returns_lookup_routes_on_app()
         app_paths = [
             getattr(r, "path", None)
             for r in app.routes
@@ -1322,6 +1345,7 @@ def _ensure_wms_returns_router_mounted() -> None:
             print("[routes] MISSING", _lookup_path, flush=True)
     if not app_paths:
         print("[routes] CRITICAL: no /api/wms/returns/* mounted", flush=True)
+    _promote_wms_returns_lookup_routes_on_app()
     _log_returns_route_table()
 
 
