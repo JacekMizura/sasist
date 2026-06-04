@@ -1611,6 +1611,16 @@ def lookup_orders(
     return [_order_lookup_hit_from_row(o, None) for o in partial]
 
 
+# Explicit router registration (same handler as decorators above).
+router.add_api_route(
+    "/orders/lookup",
+    lookup_orders,
+    methods=["GET"],
+    response_model=List[OrderLookupHit],
+    name="wms_returns_orders_lookup_explicit",
+)
+
+
 @router.get("/orders/{order_id}/returns", response_model=List[WmsReturnListItem])
 def list_returns_for_order(
     order_id: int,
