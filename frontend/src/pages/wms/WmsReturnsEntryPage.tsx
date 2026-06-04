@@ -21,9 +21,506 @@ import { WMS_ROUTES } from "./wmsRoutes";
 import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
 import { formatWmsListDate } from "./wmsListFormatters";
 
-// ... (tutaj znajdują się wszystkie wcześniej zdefiniowane typy i funkcje pomocnicze, 
-// takie jak OrderItemRow, OrderDetail, wmsReturnListRibbon, WmsListCardTile itp. 
-// - pozostają one bez żadnych zmian) ...
+type OrderItemRow = {
+  id: number;
+  quantity: number;
+  product: {
+    id: number;
+    name?: string | null;
+    ean?: string | null;
+    sku?: string | null;
+    symbol?: string | null;
+    image_url?: string | null;
+  };
+};
+
+type OrderDetail = {
+  id: number;
+  tenant_id?: number;
+  warehouse_id?: number;
+  number?: string | null;
+  external_id?: string | null;
+  sales_document_number?: string | null;
+  status?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  source?: string | null;
+  order_date?: string | null;
+  created_at?: string | null;
+  addresses_json?: string | null;
+  items: OrderItemRow[];
+};
+
+type WmsReturnsQueueFilter = "all" | "returns" | "complaints";
+
+type MergedQueueEntry =
+  | { kind: "return"; sortTs: number; id: number; ret: WmsReturnListItem }
+  | { kind: "complaint"; sortTs: number; id: number; cmp: ComplaintListItem };
+
+function parseListSortTime(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function clipLine(s: string | null | undefined, max = 72): string {
+  const t = (s ?? "").trim().replace(/\s+/g, " ");
+  if (!t) return "";
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+function wmsReturnListUnitsAndLineCount(r: WmsReturnListItem): { lineCount: number; unitSum: number } {
+  const rows =
+    r.lines && Array.isArray(r.lines) && r.lines.length > 0
+      ? r.lines
+      : r.lines_preview && r.lines_preview.length > 0
+        ? r.lines_preview
+        : [];
+  let unitSum = 0;
+  for (const row of rows) {
+    const q = Number((row as { quantity?: unknown }).quantity);
+    if (Number.isFinite(q) && q > 0) unitSum += Math.floor(q);
+  }
+  const lineCount = rows.length;
+  if (lineCount > 0 && unitSum === 0) unitSum = lineCount;
+  return { lineCount, unitSum };
+}
+
+function returnQueueSummaryLine(r: WmsReturnListItem): string | null {
+  const { lineCount, unitSum } = wmsReturnListUnitsAndLineCount(r);
+  if (lineCount <= 0) return null;
+  const mod10 = lineCount % 10;
+  const mod100 = lineCount % 100;
+  const posWord =
+    lineCount === 1
+      ? "pozycja"
+      : mod100 >= 12 && mod100 <= 14
+        ? "pozycji"
+        : mod10 >= 2 && mod10 <= 4
+          ? "pozycje"
+          : "pozycji";
+  return `${lineCount} ${posWord} • ${unitSum} szt.`;
+}
+
+function complaintListLinesCount(c: ComplaintListItem): number {
+  if (c.lines_count != null && Number.isFinite(Number(c.lines_count))) {
+    return Math.max(0, Math.floor(Number(c.lines_count)));
+  }
+  return 1;
+}
+
+function complaintQueuePositionSummary(c: ComplaintListItem): string {
+  const n = complaintListLinesCount(c);
+  if (n === 0) return "0 pozycji reklamacyjnych";
+  if (n === 1) return "1 pozycja reklamacyjna";
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 12 && mod100 <= 14) return `${n} pozycji reklamacyjnych`;
+  if (mod10 >= 2 && mod10 <= 4) return `${n} pozycje reklamacyjne`;
+  return `${n} pozycji reklamacyjnych`;
+}
+
+function orderDocSubtitle(sales_document_number?: string | null): string | null {
+  const doc = (sales_document_number || "").trim();
+  return doc ? `Dok. sprz.: ${doc}` : null;
+}
+
+function headerCustomerFromOrder(o: OrderDetail): string {
+  const a = (o.first_name || "").trim();
+  const b = (o.last_name || "").trim();
+  if (a && b) return `${a} ${b}`;
+  if (a) return a;
+  if (b) return b;
+  return "Brak danych klienta";
+}
+
+function formatOrderNumberForSubline(
+  explicit: string | null | undefined,
+  fallbackId: number | null | undefined,
+): string | null {
+  const raw = (explicit ?? "").trim();
+  if (raw) {
+    const n = raw.replace(/^#/, "");
+    return n ? `#${n}` : null;
+  }
+  if (fallbackId != null && Number.isFinite(fallbackId) && fallbackId > 0) return `#${Math.floor(fallbackId)}`;
+  return null;
+}
+
+type WmsQueueRibbonTone = "green" | "gray" | "red";
+
+type WmsQueueCardLines = {
+  metaLines: string[];
+  bodyLine: string | null;
+  bodyExtra?: string | null;
+};
+
+function complaintQueueCardContent(c: ComplaintListItem, order: OrderDetail | null): WmsQueueCardLines {
+  const metaLines: string[] = [];
+  const ordLabel =
+    formatOrderNumberForSubline(c.order_number, c.order_id ?? order?.id) ??
+    (order ? formatOrderNumberForSubline(order.number ?? null, order.id) : null);
+  if (ordLabel) metaLines.push(`Zamówienie ${ordLabel}`);
+  const cn = (c.customer_name ?? "").trim();
+  if (cn) metaLines.push(clipLine(cn));
+  else if (order) metaLines.push(clipLine(headerCustomerFromOrder(order)));
+
+  const bodyLine = complaintQueuePositionSummary(c);
+  const cr = (c.customer_reason ?? "").trim();
+  const bodyExtra = cr ? `Powód: ${clipLine(cr, 96)}` : null;
+  return { metaLines: metaLines.filter(Boolean), bodyLine, bodyExtra };
+}
+
+function returnQueueCardContent(r: WmsReturnListItem, order: OrderDetail | null): WmsQueueCardLines {
+  const metaLines: string[] = [];
+  const ordLabel = formatOrderNumberForSubline(r.order_number, r.order_id ?? order?.id);
+  if (ordLabel) metaLines.push(`Zamówienie ${ordLabel}`);
+  const a = (r.first_name ?? "").trim();
+  const b = (r.last_name ?? "").trim();
+  const cust = `${a} ${b}`.trim();
+  if (cust) metaLines.push(clipLine(cust));
+  else if (order) metaLines.push(clipLine(headerCustomerFromOrder(order)));
+
+  const bodyLine = returnQueueSummaryLine(r);
+  return { metaLines: metaLines.filter(Boolean), bodyLine };
+}
+
+const RETURN_TERMINAL_KEYWORDS = new Set([
+  "success",
+  "done",
+  "accepted",
+  "closed",
+  "zrealizowany",
+  "zakonczony",
+  "completed",
+  "finished",
+]);
+
+function normStatusSearch(s: string | null | undefined): string {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[\s-]+/g, "_");
+}
+
+function wmsReturnListStatusMatchesTerminalKeywords(st: ReturnStatusBrief): boolean {
+  const k = normStatusSearch(st.transition_key);
+  const n = normStatusSearch(st.name).replace(/_/g, " ");
+  const nk = k.replace(/_/g, "");
+  const nn = n.replace(/_/g, "");
+  if (RETURN_TERMINAL_KEYWORDS.has(k) || RETURN_TERMINAL_KEYWORDS.has(n.replace(/\s+/g, "_"))) return true;
+  if (nn.includes("zrealizow") || nn.includes("zakoncz") || nn.includes("przyjet") || nn.includes("przyjety"))
+    return true;
+  if (nk.includes("zrealizow") || nk.includes("zakoncz")) return true;
+  return false;
+}
+
+function wmsReturnListItemIsCompleted(r: WmsReturnListItem): boolean {
+  const tp = (r.status?.type ?? "").toLowerCase();
+  if (tp === "done_success" || tp === "done_rejected") return true;
+  return wmsReturnListStatusMatchesTerminalKeywords(r.status);
+}
+
+function wmsReturnListRibbon(r: WmsReturnListItem): { text: string; tone: WmsQueueRibbonTone } | null {
+  if (!wmsReturnListItemIsCompleted(r)) return null;
+  const tp = (r.status?.type ?? "").toLowerCase();
+  const nn = normStatusSearch(r.status?.name).replace(/_/g, " ");
+  const nk = normStatusSearch(r.status?.transition_key).replace(/_/g, "");
+
+  const rejectish =
+    tp === "done_rejected" ||
+    nn.includes("odrzucon") ||
+    nn.includes("reject") ||
+    nk.includes("odrzucon") ||
+    nk.includes("reject");
+  if (rejectish) return { text: "ZAKOŃCZONY", tone: "red" };
+
+  const successish =
+    tp === "done_success" ||
+    nn.includes("zrealizow") ||
+    nn.includes("przyjet") ||
+    nn.includes("przyjety") ||
+    nn.includes("accepted") ||
+    nn.includes("success") ||
+    nk.includes("success") ||
+    nk.includes("accepted") ||
+    nk.includes("zrealizow");
+
+  if (successish) return { text: "ZREALIZOWANY", tone: "green" };
+
+  return { text: "ZAKOŃCZONY", tone: "gray" };
+}
+
+function complaintListItemIsCompleted(c: ComplaintListItem): boolean {
+  const code = normalizeComplaintStatus(c.status);
+  return code === "ZAAKCEPTOWANA" || code === "ODRZUCONA";
+}
+
+function complaintListRibbon(c: ComplaintListItem): { text: string; tone: WmsQueueRibbonTone } | null {
+  const code = normalizeComplaintStatus(c.status);
+  if (code === "ZAAKCEPTOWANA") return { text: "UZNANA", tone: "green" };
+  if (code === "ODRZUCONA") return { text: "ODRZUCONA", tone: "red" };
+  return null;
+}
+
+function WmsQueueDiagonalRibbon({ text, tone }: { text: string; tone: WmsQueueRibbonTone }) {
+  const band =
+    tone === "green"
+      ? "bg-emerald-600"
+      : tone === "red"
+        ? "bg-rose-700"
+        : "bg-slate-500";
+  return (
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute z-[4] flex items-center justify-center whitespace-nowrap uppercase tracking-wide text-white shadow-md ${band}`}
+      style={{
+        top: 28,
+        right: -90,
+        width: "min(520px, 175%)",
+        height: 44,
+        fontSize: 20,
+        fontWeight: 800,
+        textAlign: "center",
+        lineHeight: "44px",
+        transform: "rotate(35deg)",
+        transformOrigin: "center center",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+const RMZ_COLOR_BADGE: Record<string, string> = {
+  blue: "bg-blue-100 text-blue-700 ring-1 ring-blue-200/90",
+  green: "bg-green-100 text-green-700 ring-1 ring-green-200/90",
+  red: "bg-red-100 text-red-700 ring-1 ring-red-200/90",
+  slate: "bg-slate-50 text-slate-800 ring-1 ring-slate-200/90",
+  amber: "bg-amber-100 text-amber-900 ring-1 ring-amber-200/90",
+  emerald: "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/90",
+  rose: "bg-rose-100 text-rose-800 ring-1 ring-rose-200/90",
+  violet: "bg-violet-100 text-violet-800 ring-1 ring-violet-200/90",
+  orange: "bg-orange-100 text-orange-900 ring-1 ring-orange-200/90",
+  cyan: "bg-cyan-100 text-cyan-900 ring-1 ring-cyan-200/90",
+  lime: "bg-lime-100 text-lime-900 ring-1 ring-lime-200/90",
+  fuchsia: "bg-fuchsia-100 text-fuchsia-900 ring-1 ring-fuchsia-200/90",
+};
+
+function rmzCardClasses(status: ReturnStatusBrief): { badge: string; label: string } {
+  const key = (status.color || "blue").toLowerCase();
+  const badge = RMZ_COLOR_BADGE[key] ?? RMZ_COLOR_BADGE.slate;
+  return { badge, label: status.name };
+}
+
+const KNOWN_SOURCE_LABEL: Record<string, string> = {
+  allegro: "Allegro",
+  ebay: "eBay",
+  amazon: "Amazon",
+  empik: "Empik",
+  shoper: "Shoper",
+  woocommerce: "WooCommerce",
+  prestashop: "PrestaShop",
+  bricklink: "Bricklink",
+};
+
+// Funkcja dodana z powrotem - formator daty zamówienia
+function formatOrderTileDate(iso?: string | null): string {
+  if (!iso?.trim()) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pl-PL", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+function pickAddrStr(obj: Record<string, unknown> | undefined, keys: string[]): string | null {
+  if (!obj) return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+  }
+  return null;
+}
+
+function orderTileContactFromAddresses(raw: string | null | undefined): {
+  phone: string | null;
+  email: string | null;
+  login: string | null;
+} {
+  if (!raw?.trim()) return { phone: null, email: null, login: null };
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return { phone: null, email: null, login: null };
+  }
+  const shipping =
+    data.shipping && typeof data.shipping === "object" ? (data.shipping as Record<string, unknown>) : {};
+  const billing =
+    data.billing && typeof data.billing === "object" ? (data.billing as Record<string, unknown>) : {};
+  const phone =
+    pickAddrStr(shipping, ["Telefon", "phone", "mobile", "tel"]) ||
+    pickAddrStr(billing, ["Telefon", "phone", "mobile", "tel"]) ||
+    pickAddrStr(data, ["phone", "phone_number", "tel"]);
+  const email =
+    pickAddrStr(shipping, ["Email", "email"]) ||
+    pickAddrStr(billing, ["Email", "email"]) ||
+    pickAddrStr(data, ["email"]);
+  const login =
+    pickAddrStr(shipping, ["login", "Login", "username", "user_login"]) ||
+    pickAddrStr(billing, ["login", "Login", "username", "user_login"]) ||
+    pickAddrStr(data, ["login", "username", "customer_login"]);
+  return { phone, email, login };
+}
+
+const LIST_CARD_THEME = {
+  return: {
+    border: "border-blue-200/90 hover:border-blue-400",
+    bg: "bg-blue-50",
+    idText: "text-blue-950",
+    dateText: "text-blue-800",
+    footerText: "text-blue-700",
+    footerDivider: "border-t border-blue-200/70",
+    topBadge: "border-blue-200 bg-blue-100 text-blue-800",
+    ring: "focus-visible:ring-blue-400/60",
+  },
+  complaint: {
+    border: "border-purple-200/90 hover:border-purple-400",
+    bg: "bg-purple-50",
+    idText: "text-purple-950",
+    dateText: "text-purple-800",
+    footerText: "text-purple-700",
+    footerDivider: "border-t border-purple-200/70",
+    topBadge: "border-purple-200 bg-purple-100 text-purple-800",
+    ring: "focus-visible:ring-purple-400/60",
+  },
+} as const;
+
+type WmsListCardTileVariant = keyof typeof LIST_CARD_THEME;
+
+type WmsListCardTileProps = {
+  variant: WmsListCardTileVariant;
+  idLine: string;
+  statusLabel: string;
+  statusBadgeClassName: string;
+  freshIncoming?: boolean;
+  metaLines?: string[];
+  bodyLine?: string | null;
+  bodyExtra?: string | null;
+  isCompleted?: boolean;
+  ribbon?: { text: string; tone: WmsQueueRibbonTone } | null;
+  createdAtIso?: string | null;
+  onActivate: () => void;
+  tileRef?: Ref<HTMLButtonElement | null>;
+};
+
+function WmsListCardTile({
+  variant,
+  idLine,
+  statusLabel,
+  statusBadgeClassName,
+  freshIncoming,
+  metaLines,
+  bodyLine,
+  bodyExtra,
+  isCompleted,
+  ribbon,
+  createdAtIso,
+  onActivate,
+  tileRef,
+}: WmsListCardTileProps) {
+  const th = LIST_CARD_THEME[variant];
+  const topLabel = variant === "return" ? "ZWROT" : "REKLAMACJA";
+  const showRibbon = ribbon != null && ribbon.text.trim() !== "";
+  const surface = isCompleted
+    ? "border-[#d1d5db] !bg-[#f3f4f6] shadow-sm hover:shadow-md"
+    : `${th.border} ${th.bg} hover:shadow-lg`;
+  const idCls = isCompleted ? "text-slate-800" : th.idText;
+  const metaCls = "text-slate-600";
+  const bodyCls = isCompleted ? "text-slate-700" : "text-slate-800";
+  const dateCls = isCompleted ? "text-slate-600" : th.dateText;
+  const topBadgeCls = isCompleted ? "border-slate-200 bg-slate-200/90 text-slate-700" : th.topBadge;
+  const innerMuted = isCompleted ? "opacity-[0.78] saturate-[0.7] transition group-hover:opacity-100 group-hover:saturate-100" : "";
+  return (
+    <button
+      ref={tileRef}
+      type="button"
+      className={`group relative flex h-full min-h-[160px] w-full flex-col overflow-hidden rounded-xl border-2 p-4 pt-10 text-left shadow-md outline-none transition focus-visible:ring-2 focus-visible:ring-offset-2 ${surface} ${th.ring}`}
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onActivate();
+        }
+      }}
+    >
+      <div
+        className={`relative z-[1] flex min-h-0 w-full flex-1 flex-col space-y-2 ${innerMuted}`}
+      >
+        <span
+          className={`absolute left-0 top-0 z-[1] -translate-y-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${topBadgeCls}`}
+        >
+          {topLabel}
+        </span>
+        <span className={`pt-0.5 text-lg font-semibold tabular-nums ${idCls}`}>{idLine}</span>
+        {metaLines != null && metaLines.length > 0 ? (
+          <div className={`space-y-0.5 text-xs leading-snug ${metaCls}`}>
+            {metaLines.filter(Boolean).map((line, li) => (
+              <p key={li} className="line-clamp-2">
+                {line}
+              </p>
+            ))}
+          </div>
+        ) : null}
+        {bodyLine != null && bodyLine.trim() !== "" ? (
+          <p className={`text-sm font-semibold leading-snug ${bodyCls}`}>{bodyLine}</p>
+        ) : null}
+        {bodyExtra != null && bodyExtra.trim() !== "" ? (
+          <p className={`text-xs leading-snug ${metaCls} line-clamp-2`}>{bodyExtra}</p>
+        ) : null}
+        <div className="flex min-h-[4px] flex-1" aria-hidden />
+        <div className="flex flex-wrap items-center gap-2">
+          {variant === "return" && freshIncoming && !isCompleted ? (
+            <span className="inline-flex w-fit shrink-0 rounded-full border border-blue-200 bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-900 ring-1 ring-blue-200/90">
+              Nowy zwrot
+            </span>
+          ) : null}
+          <span className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-1 text-sm font-semibold ${statusBadgeClassName}`}>
+            {statusLabel}
+          </span>
+        </div>
+        <span className={`mt-auto text-sm tabular-nums ${dateCls}`}>{formatWmsListDate(createdAtIso)}</span>
+      </div>
+      {showRibbon && ribbon ? <WmsQueueDiagonalRibbon text={ribbon.text} tone={ribbon.tone} /> : null}
+    </button>
+  );
+}
+
+function normalizeOrderSourceDisplay(raw?: string | null): string {
+  const s = (raw ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!s) return "—";
+  const low = s.toLowerCase();
+  if (KNOWN_SOURCE_LABEL[low]) return KNOWN_SOURCE_LABEL[low];
+  const spaced = s.replace(/([a-z])([A-Z])/g, "$1 $2");
+  if (spaced !== s) {
+    return spaced
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  }
+  if (/[\s_\-]+/.test(s)) {
+    return s
+      .split(/[\s_\-]+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  }
+  return s.length > 1 ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s.toUpperCase();
+}
 
 export default function WmsReturnsEntryPage() {
   const navigate = useNavigate();
@@ -417,9 +914,6 @@ export default function WmsReturnsEntryPage() {
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-white text-slate-800 antialiased">
-      {/* Usunięto redundantny pasek nawigacyjny (<header>). 
-        Nadrzędny layout aplikacji już obsługuje tytuł, menu i awatar.
-      */}
 
       {/* Main Container */}
       <main className="flex w-full flex-1 flex-col overflow-y-auto bg-white custom-scrollbar">
