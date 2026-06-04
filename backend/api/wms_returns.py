@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 #   lookup_router     -> GET /orders/lookup, GET /lookup  (no dynamic segments)
 #   router            -> list/create/queue-counts/...      (no /{return_id})
 #   returns_id_router -> prefix /id + /{return_id:int}/... (all RMZ-by-id)
-WMS_RETURNS_ROUTING_VERSION = "2026-06-04-lookup-id-split-v17"
+WMS_RETURNS_ROUTING_VERSION = "2026-06-04-lookup-never-404-v18"
 
 lookup_router = APIRouter(tags=["WMS Returns"])
 router = APIRouter(tags=["WMS Returns"])
@@ -1411,8 +1411,9 @@ def _wms_returns_orders_lookup_search(
             if warehouse_id is not None and int(warehouse_id) > 0
             else resolve_tenant_default_warehouse_id(db, tenant_id)
         )
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
+    except ValueError as err:
+        logger.warning("[returns.lookup] warehouse resolve failed: %s", err)
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu") from err
 
     term_raw, num_token = _normalize_wms_returns_lookup_query(q)
     if not term_raw and num_token is None:
@@ -1542,13 +1543,24 @@ def _wms_returns_orders_lookup_search(
     return [_order_lookup_hit_from_row(o, None) for o in partial]
 
 
+def _lookup_orders_empty_response(*, reason: str) -> List[OrderLookupHit]:
+    print(f"[returns.lookup] returning empty list ({reason})", flush=True)
+    return []
+
+
 @lookup_router.get(
     "/orders/lookup",
+    response_model=List[OrderLookupHit],
     status_code=200,
     summary="Wyszukiwanie zamówienia pod zwrot WMS",
     name="wms_returns_orders_lookup",
 )
-@lookup_router.get("/lookup", include_in_schema=False, name="wms_returns_lookup_alias")
+@lookup_router.get(
+    "/lookup",
+    response_model=List[OrderLookupHit],
+    include_in_schema=False,
+    name="wms_returns_lookup_alias",
+)
 def lookup_orders(
     tenant_id: int = Query(...),
     warehouse_id: Optional[int] = Query(
@@ -1558,7 +1570,7 @@ def lookup_orders(
     ),
     q: str = Query(..., min_length=1, description="Numer zamówienia, kod, #id, RET-id, id RMZ / zamówienia"),
     db: Session = Depends(get_db),
-) -> JSONResponse:
+) -> List[OrderLookupHit]:
     """
     Wyszukiwanie zamówień pod zwrot WMS.
 
@@ -1568,16 +1580,24 @@ def lookup_orders(
     try:
         results = _wms_returns_orders_lookup_search(db, tenant_id, q, warehouse_id)
     except HTTPException as exc:
-        if exc.status_code == 404:
-            print("[returns.lookup] results=", 0, "(swallowed 404)", flush=True)
-            return JSONResponse(status_code=200, content=[])
+        status = int(getattr(exc, "status_code", 0) or 0)
+        detail = getattr(exc, "detail", "")
+        print(
+            f"[returns.lookup] http_exception status={status} detail={detail!r}",
+            flush=True,
+        )
+        if status == 404:
+            return _lookup_orders_empty_response(reason="swallowed http 404")
         raise
     except SQLAlchemyError:
         logger.exception("[returns.lookup] database error q=%r", q)
         raise HTTPException(status_code=500, detail="Błąd wyszukiwania zamówienia") from None
 
-    print("[returns.lookup] results=", len(results), flush=True)
-    return JSONResponse(status_code=200, content=jsonable_encoder(results))
+    found = len(results)
+    print(f"[returns.lookup] found={found}", flush=True)
+    if found == 0:
+        return _lookup_orders_empty_response(reason="no matches")
+    return results
 
 
 @router.get("/queue-counts", response_model=WmsReturnQueueCountsRead)
