@@ -285,6 +285,15 @@ def _order_fully_picked_for_fulfillment(db: Session, order: Order) -> bool:
     return True
 
 
+def _enforce_packing_queue_eligibility(db: Session, order: Order) -> None:
+    """Zamówienia z aktywnym workflow braków nie mogą mieć ``READY_TO_PACK`` (kolejka pakowania)."""
+    from .braki_order_state_service import order_can_show_ready_pack
+
+    cur = (getattr(order, "fulfillment_state", None) or "").strip().upper()
+    if cur == FS_READY_TO_PACK and not order_can_show_ready_pack(db, order):
+        order.fulfillment_state = FS_NEEDS_DECISION
+
+
 def sync_shortage_workflow_for_order(db: Session, order: Order) -> None:
     """
     Utrzymuje spójność: kolejka WMS Braki (``OrderIssueTask``), status panelu OMS, ``fulfillment_state``.
@@ -301,6 +310,7 @@ def sync_shortage_workflow_for_order(db: Session, order: Order) -> None:
         sync_operational_tasks_for_order,
     )
 
+    _enforce_packing_queue_eligibility(db, order)
     if not order_braki_workflow_complete(db, order):
         ensure_open_issue_task_for_order(db, order)
         log_braki_shortage_sync(db, order, reason="sync_open")
@@ -319,6 +329,7 @@ def sync_shortage_workflow_for_order(db: Session, order: Order) -> None:
         return
 
     _close_open_issue_tasks_if_no_shortage(db, order)
+    _enforce_packing_queue_eligibility(db, order)
     log_braki_shortage_sync(db, order, reason="sync_close")
     log_braki_workflow_resolution(db, order, reason="sync_close")
     if dual_write_enabled():

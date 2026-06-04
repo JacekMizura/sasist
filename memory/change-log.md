@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — Braki: ready_pack gate, soft-delete linii, pakowanie
+
+- **`order_can_show_ready_pack`**: brak `ready_pack` przy otwartych brakach / issue task / recovery; log `[braki.workflow] ORDER_STATE_EVAL`.
+- **Pakowanie**: `list_packing_orders` filtruje po `order_can_show_ready_pack`; `_enforce_packing_queue_eligibility` cofa `READY_TO_PACK`.
+- **Finalize wózka**: panel status „braki” gdy `all_picked` ale workflow nie domknięty; `recalculate_order_shortage_state` po finalize.
+- **DELETE linii OMS**: `soft_remove_order_item` zamiast hard-delete (FK `wms_order_events`).
+
 ## 2026-06-04 — WMS picking: scanner, shortage modal, finalize-cart
 
 - **Scanner:** `DevScannerPanel` auto-expand + focus on `mode=picking`; modal backdrop `onMouseDown`; refocus po zamknięciu modala braku.

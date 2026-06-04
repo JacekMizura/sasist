@@ -315,13 +315,11 @@ export default function WmsOrderIssueDetailPage() {
       (task.braki_queue_bucket ?? "") === "recovery_ready" ||
       (task.replacement_pick_pending_count ?? 0) > 0);
   const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
-  const statusHeadline = [
-    task.order_ui_status_name,
-    workflowLabel || brakiQueueBucketLabel(task.braki_queue_bucket),
-  ]
-    .map((s) => (typeof s === "string" ? s.trim() : ""))
-    .filter(Boolean)
-    .join(" · ");
+  const statusHeadline =
+    workflowLabel ||
+    brakiQueueBucketLabel(task.braki_queue_bucket) ||
+    (task.issue_queue_status_label ?? "").trim() ||
+    "—";
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-50 antialiased">

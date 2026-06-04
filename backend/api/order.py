@@ -2437,6 +2437,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
     from ..services.order_item_delete_service import (
         order_item_delete_audit_context,
         purge_order_item_wms_dependents,
+        soft_remove_order_item,
     )
     from ..services.wms_audit_service import (
         emit_order_item_removed,
@@ -2572,8 +2573,11 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
             quantity=float(qty_line),
             reason="usunięto linię z zamówienia (OMS)",
         )
-        db.delete(item)
-        db.flush()
+        soft_remove_order_item(
+            db,
+            item,
+            reason="usunięto linię z zamówienia (OMS)",
+        )
         _recompute_order_value_and_volume(order)
         recalculate_order_shortage_state(db, int(order_id), commit=False)
         db.commit()

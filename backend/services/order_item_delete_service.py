@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -40,6 +42,49 @@ def purge_order_item_wms_dependents(
         WmsOperationalTask.order_item_id == int(order_item_id),
     ).delete(synchronize_session=False)
     db.flush()
+
+
+def _order_item_meta_dict(item: OrderItem) -> dict:
+    raw = getattr(item, "metadata_json", None)
+    if not raw or not str(raw).strip():
+        return {}
+    try:
+        m = json.loads(raw)
+        return m if isinstance(m, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def soft_remove_order_item(
+    db: Session,
+    item: OrderItem,
+    *,
+    reason: str = "",
+) -> None:
+    """
+    Oznacza linię jako usuniętą (bez hard-delete) — zachowuje FK w ``wms_order_events`` i historię.
+    """
+    qty_before = int(item.quantity or 0)
+    meta = _order_item_meta_dict(item)
+    meta["oms_line_removed"] = True
+    meta["removed_at"] = datetime.utcnow().isoformat() + "Z"
+    if reason:
+        meta["removed_reason"] = str(reason)[:256]
+    item.metadata_json = json.dumps(meta, ensure_ascii=False)
+    item.quantity = 0
+    item.oms_removed_qty = float(qty_before)
+    item.wms_picking_line_missing_qty = 0.0
+    item.wms_shortage_declared_qty = 0.0
+    item.wms_picking_line_status = None
+    if getattr(item, "total_price", None) is not None:
+        item.total_price = 0.0
+    db.flush()
+    logger.info(
+        "[order.item.delete] soft_remove order_item_id=%s qty_before=%s reason=%s",
+        int(item.id),
+        qty_before,
+        reason or "—",
+    )
 
 
 def order_item_delete_audit_context(item: OrderItem) -> dict:

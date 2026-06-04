@@ -2039,9 +2039,15 @@ def finalize_wms_picking_cart(
             cart_id=cid,
         )
 
+    from .braki_order_state_service import order_can_show_ready_pack
+
     for o in orders:
         kind = order_kinds[int(o.id)]
-        if kind == "all_picked":
+        pack_ok = order_can_show_ready_pack(db, o)
+        panel_kind: OrderFinalizeKind = kind
+        if kind == "all_picked" and not pack_ok:
+            panel_kind = "some_missing"
+        if kind == "all_picked" and pack_ok:
             fs = FS_READY_TO_PACK
         elif kind == "all_missing":
             fs = FS_MISSING
@@ -2050,7 +2056,7 @@ def finalize_wms_picking_cart(
         o.order_ui_status_id = _panel_status_after_picking_finalize(
             shortage_reported_order_ui_status_id=rep_sid_i,
             pc=pc,
-            kind=kind,
+            kind=panel_kind,
         )
         apply_fulfillment_state(o, fs, clear_cart=True, clear_session=True)
         emit_wms_picking_finished(
@@ -2062,6 +2068,9 @@ def finalize_wms_picking_cart(
             operator_user_id=operator_user_id,
             new_order_ui_status_id=int(o.order_ui_status_id) if getattr(o, "order_ui_status_id", None) else None,
         )
+
+    for o in orders:
+        recalculate_order_shortage_state(db, int(o.id), commit=False)
 
     if bool(getattr(ss, "auto_enqueue_braki", True)):
         for o in orders:

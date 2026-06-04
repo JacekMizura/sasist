@@ -1887,8 +1887,12 @@ def list_packing_orders(
     )
     if not orders:
         return []
+    from .braki_order_state_service import order_can_show_ready_pack
+
     out: List[WmsPackingOrderCard] = []
     for o in orders:
+        if not order_can_show_ready_pack(db, o):
+            continue
         bc = _basket_code_for_order(o) if m == "baskets" else None
         out.append(_build_packing_order_card(o, basket_code=bc))
     return out

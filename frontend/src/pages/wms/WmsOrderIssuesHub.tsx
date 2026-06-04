@@ -360,15 +360,18 @@ export default function WmsOrderIssuesHub() {
 
               let qtyLine = "";
               let missingNumber = totalMissing;
+              const summaryFromApi = (t.issue_queue_summary_line ?? "").trim();
 
-              if (lineCount > 0) {
+              if (wf === "ready_pack") {
+                qtyLine = summaryFromApi || "Zamówienie gotowe do pakowania";
+              } else if (lineCount > 0) {
                 qtyLine = `${lineCount} ${plProduktyWord(lineCount)} · brak do zebrania`;
               } else if (r > 0) {
                 missingNumber = r;
-                qtyLine = `Gotowe do zebrania po zamianie`;
+                qtyLine = summaryFromApi || "Gotowe do zebrania po zamianie";
               } else {
-                missingNumber = 1;
-                qtyLine = (t.issue_queue_summary_line ?? "").trim() || "Wymaga uwagi";
+                missingNumber = Math.max(1, t.unresolved_shortage_count ?? 0);
+                qtyLine = summaryFromApi || (t.issue_queue_status_label ?? "").trim() || "Wymaga uwagi";
               }
 
               const statusLabel = cardStatusLabel(t);

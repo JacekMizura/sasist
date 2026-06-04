@@ -170,6 +170,95 @@ def order_requires_shortage_handling(db: Session, order: Order) -> bool:
     return not order_braki_workflow_complete(db, order)
 
 
+def order_has_open_issue_task(db: Session, order: Order) -> bool:
+    return (
+        db.query(OrderIssueTask.id)
+        .filter(
+            OrderIssueTask.order_id == int(order.id),
+            OrderIssueTask.status == "OPEN",
+        )
+        .first()
+        is not None
+    )
+
+
+def order_can_show_ready_pack(db: Session, order: Order) -> bool:
+    """
+    ``ready_pack`` tylko gdy brak aktywnego workflow braków, otwartego zadania Braki
+    i nierozwiązanych linii operacyjnych.
+    """
+    from .order_fulfillment_recompute import compute_line_missing_qty
+
+    if order_requires_shortage_handling(db, order):
+        return False
+    if order_has_open_issue_task(db, order):
+        return False
+    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    if int(u_short) > 0 or int(r_pend) > 0:
+        return False
+    for oi in order.items or []:
+        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
+            return False
+        if order_line_awaiting_oms_attention(db, order, oi):
+            return False
+    if order_has_active_braki_operations(db, order):
+        return False
+    return order_braki_workflow_complete(db, order)
+
+
+def evaluate_order_braki_state(
+    db: Session,
+    order: Order,
+    *,
+    workflow_status: str | None = None,
+) -> dict[str, Any]:
+    """Diagnoza stanu zamówienia — log ``[braki.workflow] ORDER_STATE_EVAL``."""
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+
+    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    has_open_shortages = int(u_short) > 0
+    has_open_issue_task = order_has_open_issue_task(db, order)
+    has_pending_recovery = (
+        get_open_recovery_task_for_order(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+        )
+        is not None
+    )
+    has_awaiting = order_has_waiting_for_stock_lines(order) or any(
+        order_line_awaiting_oms_attention(db, order, oi) for oi in (order.items or [])
+    )
+    resolved = order_can_show_ready_pack(db, order)
+    final_status = (workflow_status or "").strip() or ("ready_pack" if resolved else "awaiting")
+
+    logger.info(
+        "[braki.workflow] ORDER_STATE_EVAL order_id=%s has_open_shortages=%s "
+        "has_open_issue_task=%s has_pending_recovery=%s has_awaiting_decision=%s "
+        "resolved=%s final_status=%s u_short=%s r_pend=%s",
+        int(order.id),
+        has_open_shortages,
+        has_open_issue_task,
+        has_pending_recovery,
+        has_awaiting,
+        resolved,
+        final_status,
+        u_short,
+        r_pend,
+    )
+    return {
+        "has_open_shortages": has_open_shortages,
+        "has_open_issue_task": has_open_issue_task,
+        "has_pending_recovery": has_pending_recovery,
+        "has_awaiting_decision": has_awaiting,
+        "resolved": resolved,
+        "final_status": final_status,
+        "u_short": u_short,
+        "r_pend": r_pend,
+    }
+
+
 def log_braki_shortage_sync(
     db: Session,
     order: Order,

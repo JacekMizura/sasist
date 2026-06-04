@@ -59,7 +59,11 @@ def braki_queue_bucket(db: Session, order: Order, *, u_short: int, r_pend: int) 
 
     if order_has_waiting_customer_line(order) or order_has_waiting_for_stock_lines(order):
         return "awaiting_oms"
-    return "ready_pack"
+    from .braki_order_state_service import order_can_show_ready_pack
+
+    if order_can_show_ready_pack(db, order):
+        return "ready_pack"
+    return "awaiting_oms"
 
 
 def _needs_recovery_picking(db: Session, order: Order) -> bool:
