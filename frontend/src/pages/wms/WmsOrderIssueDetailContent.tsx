@@ -79,7 +79,10 @@ export function WmsOrderIssueDetailContent({
   const hasActiveShortageLines = shortageAsDetail.length > 0 || remainingLines.length > 0;
   const workflowStatus = parseBrakiWorkflowStatus(task);
   const readyForPacking = workflowStatus === "ready_pack";
-  const primaryCta = brakiPrimaryCta(task, navigate);
+  const primaryCta = brakiPrimaryCta(task, navigate, {
+    warehouseId,
+    onPackingError: (msg) => setRelocationToast(msg),
+  });
   const needsRelocationChoice =
     workflowStatus === "relocation" || workflowStatus === "relocation_partial";
   const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
@@ -222,7 +225,7 @@ export function WmsOrderIssueDetailContent({
                 if (needsRelocationChoice) {
                   setRelocationModalOpen(true);
                 } else {
-                  primaryCta.navigate();
+                  void Promise.resolve(primaryCta.navigate());
                 }
               }}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 active:scale-[0.98] sm:flex-1 md:text-base"

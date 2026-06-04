@@ -397,6 +397,7 @@ def list_order_issue_tasks(
             OrderIssueTask.tenant_id == int(tenant_id),
             OrderIssueTask.warehouse_id == int(warehouse_id),
             OrderIssueTask.status == "OPEN",
+            OrderIssueTask.archived_at.is_(None),
         )
         .order_by(OrderIssueTask.order_id.asc(), OrderIssueTask.id.desc())
         .all()
@@ -561,7 +562,7 @@ def post_order_issue_task_archive(
     if o is None:
         raise HTTPException(status_code=404, detail="Zamówienie nie znalezione.")
     try:
-        archive_order_issue_task(
+        result = archive_order_issue_task(
             db,
             t,
             o,
@@ -570,5 +571,17 @@ def post_order_issue_task_archive(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception(
+            "[wms.shortage.archive] failed task_id=%s order_id=%s",
+            task_id,
+            getattr(t, "order_id", None),
+        )
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Archive failed") from exc
     db.commit()
-    return {"ok": True}
+    return {
+        "success": True,
+        "archived": bool(result.get("archived")),
+        "already_archived": bool(result.get("already_archived")),
+    }

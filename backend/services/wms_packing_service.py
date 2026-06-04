@@ -7,7 +7,7 @@ import logging
 import time
 from datetime import datetime
 from collections import defaultdict
-from typing import List, Optional, Tuple, Type, TypeVar, cast
+from typing import List, Literal, Optional, Tuple, Type, TypeVar, cast
 
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_
@@ -2420,6 +2420,193 @@ def _run_wms_packing_post_pack_pipeline(
             out.append(WmsPackingPostPackStepResult(step="print_label", ok=False, message=str(e)[:500]))
 
     return out
+
+
+def _infer_packing_mode_for_order(order: Order) -> tuple[str, int | None]:
+    """Tryb kolejki pakowania + opcjonalny cart_id (etykieta UI)."""
+    cid = getattr(order, "cart_id", None)
+    if cid is None or int(cid) <= 0:
+        return "no_cart", None
+    cart = getattr(order, "cart", None)
+    if cart is None:
+        return "no_cart", None
+    raw = cart.type.value if hasattr(cart.type, "value") else str(cart.type)
+    t = raw.split(".")[-1].upper()
+    if t == "BULK":
+        return "bulk", int(cid)
+    if t in ("MULTI", "BASKETS"):
+        return "baskets", int(cid)
+    return "no_cart", None
+
+
+def resolve_packing_entry_for_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    operator_user_id: int | None = None,
+    source_workflow: str = "shortage",
+    redirected_from: str | None = None,
+) -> "WmsPackingEntryOut":
+    """
+    Wejście bezpośrednio na ekran pakowania zamówienia (bootstrap sesji frontend + DB).
+    """
+    from ..schemas.wms_packing import WmsPackingEntryOut
+    from .braki_order_state_service import order_can_show_ready_pack
+    from .wms_audit_service import ensure_wms_packing_session, get_open_wms_packing_session
+
+    order = (
+        db.query(Order)
+        .options(
+            joinedload(Order.order_ui_status),
+            joinedload(Order.cart),
+        )
+        .filter(
+            Order.id == int(order_id),
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+            Order.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if order is None:
+        raise ValueError("Zamówienie nie znalezione.")
+    if not order_can_show_ready_pack(db, order):
+        raise ValueError("Zamówienie nie jest gotowe do pakowania.")
+
+    mode, cart_id = _infer_packing_mode_for_order(order)
+    status_candidates: list[int] = []
+    if getattr(order, "order_ui_status_id", None) is not None and int(order.order_ui_status_id) > 0:
+        status_candidates.append(int(order.order_ui_status_id))
+    for row in list_packing_target_statuses(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)):
+        status_candidates.append(int(row.target_status_id))
+    seen: set[int] = set()
+    ordered_status_ids: list[int] = []
+    for sid in status_candidates:
+        if sid in seen:
+            continue
+        seen.add(sid)
+        ordered_status_ids.append(sid)
+
+    modes_to_try = [mode]
+    for alt in ("no_cart", "bulk", "baskets"):
+        if alt not in modes_to_try:
+            modes_to_try.append(alt)
+
+    chosen_status_id: int | None = None
+    chosen_mode: str | None = None
+    chosen_cart_id: int | None = None
+    for sid in ordered_status_ids:
+        for m in modes_to_try:
+            cid_try = cart_id if m in ("bulk", "baskets") else None
+            if m in ("bulk", "baskets") and (cid_try is None or int(cid_try) <= 0):
+                continue
+            detail = get_packing_order_detail_for_queue(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                status_id=int(sid),
+                mode=m,
+                cart_id=cid_try,
+                order_id=int(order_id),
+            )
+            if detail is not None:
+                chosen_status_id = int(sid)
+                chosen_mode = m
+                chosen_cart_id = cid_try
+                break
+        if chosen_status_id is not None:
+            break
+
+    if chosen_status_id is None or chosen_mode is None:
+        raise ValueError("Zamówienie poza kolejką pakowania (brak pasującego statusu).")
+
+    st = (
+        db.query(OrderUiStatus)
+        .filter(
+            OrderUiStatus.id == int(chosen_status_id),
+            OrderUiStatus.tenant_id == int(tenant_id),
+            OrderUiStatus.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if st is None and order.order_ui_status is not None:
+        st = order.order_ui_status
+    status_name = str(st.name or "").strip() if st is not None else ""
+    status_color = normalize_stored_color(st.color) if st is not None else "#94a3b8"
+    main_group = cast(OrderUiMainGroup, _norm_group(st.main_group) if st is not None else "NEW")
+
+    had_open = get_open_wms_packing_session(db, int(order.id)) is not None
+    sess = ensure_wms_packing_session(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order=order,
+        operator_user_id=operator_user_id,
+        queue_meta={
+            "source_workflow": source_workflow,
+            "redirected_from": redirected_from or source_workflow,
+            "mode": chosen_mode,
+            "status_id": int(chosen_status_id),
+            "cart_id": int(chosen_cart_id) if chosen_cart_id is not None else None,
+        },
+    )
+    if had_open:
+        logger.info(
+            "[wms.packing.session.resume] order_id=%s packing_session_id=%s source_workflow=%s "
+            "redirected_from=%s mode=%s status_id=%s",
+            int(order.id),
+            int(sess.id),
+            source_workflow,
+            redirected_from or "—",
+            chosen_mode,
+            chosen_status_id,
+        )
+    else:
+        logger.info(
+            "[wms.packing.session.create] order_id=%s packing_session_id=%s source_workflow=%s "
+            "redirected_from=%s mode=%s status_id=%s",
+            int(order.id),
+            int(sess.id),
+            source_workflow,
+            redirected_from or "—",
+            chosen_mode,
+            chosen_status_id,
+        )
+    logger.info(
+        "[wms.shortage.to_packing] order_id=%s packing_session_id=%s source_workflow=%s "
+        "redirected_from=%s mode=%s status_id=%s cart_id=%s",
+        int(order.id),
+        int(sess.id),
+        source_workflow,
+        redirected_from or "—",
+        chosen_mode,
+        chosen_status_id,
+        chosen_cart_id,
+    )
+
+    cart_code: str | None = None
+    cart_type: str | None = None
+    if chosen_cart_id is not None and getattr(order, "cart", None) is not None:
+        cart_code = cart_display_name_for_wms(order.cart)
+        raw = order.cart.type.value if hasattr(order.cart.type, "value") else str(order.cart.type)
+        cart_type = raw.split(".")[-1].upper()
+
+    return WmsPackingEntryOut(
+        order_id=int(order.id),
+        packing_session_id=int(sess.id),
+        packing_session_created=not had_open,
+        status_id=int(chosen_status_id),
+        status_name=status_name,
+        status_color=status_color,
+        main_group=main_group,
+        mode=cast(Literal["no_cart", "bulk", "baskets"], chosen_mode),
+        cart_id=int(chosen_cart_id) if chosen_cart_id is not None else None,
+        cart_code=cart_code,
+        cart_type=cart_type,
+        source_workflow=source_workflow,
+    )
 
 
 def get_oms_order_wms_fulfillment_card(db: Session, order_id: int) -> Optional[WmsPackingOrderCard]:

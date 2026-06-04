@@ -1,4 +1,5 @@
 import type { OrderIssueTaskListItemApi } from "../../api/wmsOrderIssueTasksApi";
+import { navigateBrakiToPacking } from "./brakiGoToPacking";
 import { WMS_ROUTES } from "./wmsRoutes";
 
 export type BrakiWorkflowStatusId =
@@ -12,7 +13,8 @@ export type BrakiWorkflowStatusId =
 
 export type BrakiPrimaryCta = {
   label: string;
-  navigate: () => void;
+  /** Sync lub async (np. bootstrap sesji pakowania). */
+  navigate: () => void | Promise<void>;
 };
 
 export function parseBrakiWorkflowStatus(task: OrderIssueTaskListItemApi): BrakiWorkflowStatusId {
@@ -33,15 +35,28 @@ export function parseBrakiWorkflowStatus(task: OrderIssueTaskListItemApi): Braki
 export function brakiPrimaryCta(
   task: OrderIssueTaskListItemApi,
   navigate: (path: string) => void,
+  opts?: { warehouseId?: number; onPackingError?: (message: string) => void },
 ): BrakiPrimaryCta {
   const wf = parseBrakiWorkflowStatus(task);
   const orderId = task.order_id;
+  const warehouseId = opts?.warehouseId;
 
   switch (wf) {
     case "ready_pack":
       return {
         label: "Przejdź do pakowania",
-        navigate: () => navigate(WMS_ROUTES.packingOrder(orderId)),
+        navigate: () => {
+          if (warehouseId == null || warehouseId < 1) {
+            navigate(WMS_ROUTES.packingOrder(orderId));
+            return;
+          }
+          return navigateBrakiToPacking(navigate, {
+            warehouseId,
+            orderId,
+            redirectedFrom: "braki_workflow_cta",
+            onError: opts?.onPackingError,
+          });
+        },
       };
     case "relocation":
       return {

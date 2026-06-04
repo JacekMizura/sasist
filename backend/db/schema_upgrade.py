@@ -4160,6 +4160,27 @@ def ensure_order_issue_tasks_table(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_order_issue_tasks_archive_columns(engine: Engine) -> None:
+    """Soft archive: ``archived_at``, ``archived_by_user_id``."""
+    with engine.connect() as conn:
+        ex = conn.execute(
+            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_issue_tasks' LIMIT 1")
+        ).fetchone()
+        if not ex:
+            return
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(order_issue_tasks)")).fetchall()}
+        if "archived_at" not in cols:
+            conn.execute(text("ALTER TABLE order_issue_tasks ADD COLUMN archived_at DATETIME"))
+        if "archived_by_user_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE order_issue_tasks ADD COLUMN archived_by_user_id INTEGER "
+                    "REFERENCES app_users(id) ON DELETE SET NULL"
+                )
+            )
+        conn.commit()
+
+
 def ensure_wms_operational_tasks_table(engine: Engine) -> None:
     """WMS operational tasks — product-centric work queue (source of truth)."""
     with engine.connect() as conn:

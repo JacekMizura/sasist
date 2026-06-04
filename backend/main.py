@@ -159,6 +159,7 @@ from .db.schema_upgrade import (
     ensure_sale_documents_table,
     ensure_orders_customer_id_column,
     ensure_order_issue_tasks_table,
+    ensure_order_issue_tasks_archive_columns,
     ensure_wms_operational_tasks_table,
     ensure_orders_fulfillment_state_columns,
     ensure_orders_priority_color_column,
@@ -1092,6 +1093,7 @@ def _upgrade_schema() -> None:
         ensure_sale_documents_table(engine)
         ensure_orders_customer_id_column(engine)
         ensure_order_issue_tasks_table(engine)
+        ensure_order_issue_tasks_archive_columns(engine)
         ensure_wms_operational_tasks_table(engine)
         ensure_orders_fulfillment_state_columns(engine)
         ensure_orders_priority_color_column(engine)
@@ -1155,6 +1157,7 @@ try:
     ensure_sale_documents_table(engine)
     ensure_orders_customer_id_column(engine)
     ensure_order_issue_tasks_table(engine)
+    ensure_order_issue_tasks_archive_columns(engine)
     ensure_wms_operational_tasks_table(engine)
     ensure_orders_fulfillment_state_columns(engine)
     ensure_orders_priority_color_column(engine)

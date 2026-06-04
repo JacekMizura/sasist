@@ -29,3 +29,5 @@ class OrderIssueTask(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    archived_at = Column(DateTime, nullable=True, index=True)
+    archived_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)

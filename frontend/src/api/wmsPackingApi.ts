@@ -265,6 +265,39 @@ export async function getWmsPackingModes(
   return res.data;
 }
 
+export type WmsPackingEntryOutApi = {
+  success: boolean;
+  order_id: number;
+  packing_session_id?: number | null;
+  packing_session_created?: boolean;
+  status_id: number;
+  status_name: string;
+  status_color: string;
+  main_group: string;
+  mode: WmsPackingModeParam;
+  cart_id?: number | null;
+  cart_code?: string | null;
+  cart_type?: string | null;
+  source_workflow?: string;
+};
+
+export async function postWmsPackingOrderEnter(
+  tenantId: number,
+  warehouseId: number,
+  orderId: number,
+  opts?: { sourceWorkflow?: string; redirectedFrom?: string },
+): Promise<WmsPackingEntryOutApi> {
+  const res = await api.post<WmsPackingEntryOutApi>(`/wms/packing/orders/${orderId}/enter`, null, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      source_workflow: opts?.sourceWorkflow ?? "shortage",
+      redirected_from: opts?.redirectedFrom,
+    },
+  });
+  return res.data;
+}
+
 /** Lista pakowania dla wózka po kodzie skanu (CART-…); ścieżka ``/carts/by-code/{code}/orders``. */
 export async function getWmsCartPackingOrdersByCode(
   tenantId: number,

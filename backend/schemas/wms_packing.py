@@ -361,6 +361,24 @@ class WmsPackingScanOut(BaseModel):
     )
 
 
+class WmsPackingEntryOut(BaseModel):
+    """Bootstrap sesji pakowania — bezpośrednie wejście z workflow braków."""
+
+    success: bool = True
+    order_id: int = Field(..., ge=1)
+    packing_session_id: Optional[int] = None
+    packing_session_created: bool = False
+    status_id: int = Field(..., ge=1)
+    status_name: str = ""
+    status_color: str = "#94a3b8"
+    main_group: OrderUiMainGroup = "NEW"
+    mode: Literal["no_cart", "bulk", "baskets"]
+    cart_id: Optional[int] = Field(default=None, ge=1)
+    cart_code: Optional[str] = None
+    cart_type: Optional[str] = None
+    source_workflow: str = Field(default="shortage", max_length=32)
+
+
 class WmsPackingScanBody(BaseModel):
     ean: str = Field(..., min_length=1, description="Zeskanowany kod (EAN / kod dodatkowy jak przy przyjęciu)")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any, Literal
 
@@ -15,6 +16,8 @@ from ..models.order_issue_task import OrderIssueTask
 from ..models.product import Product
 from ..services.fulfillment_event_service import line_picked_sum_for_order
 from ..services.wms_packing_service import _primary_location_for_product
+
+logger = logging.getLogger(__name__)
 
 
 def _location_label_for_product(
@@ -1130,6 +1133,12 @@ def mark_task_done(db: Session, task: OrderIssueTask, message: str | None = None
     )
 
 
+def _task_is_archived(task: OrderIssueTask) -> bool:
+    if getattr(task, "archived_at", None) is not None:
+        return True
+    return (getattr(task, "status", None) or "").strip().upper() == "ARCHIVED"
+
+
 def archive_order_issue_task(
     db: Session,
     task: OrderIssueTask,
@@ -1137,10 +1146,22 @@ def archive_order_issue_task(
     *,
     message: str | None = None,
     operator_user_id: int | None = None,
-) -> None:
-    """Ręczne zamknięcie z kolejki Braki (historia zostaje w logach)."""
+) -> dict[str, bool]:
+    """Ręczne zamknięcie z kolejki Braki (historia zostaje w logach). Idempotentne."""
     from .braki_order_state_service import order_can_show_ready_pack, order_has_pending_relocation_work
     from .wms_recovery_pick_service import get_open_recovery_task_for_order
+
+    prev_status = (getattr(task, "status", None) or "").strip().upper() or "OPEN"
+    if _task_is_archived(task):
+        logger.info(
+            "[wms.shortage.archive] task_id=%s order_id=%s archived_by=%s previous_status=%s "
+            "already_archived=true",
+            int(task.id),
+            int(order.id),
+            operator_user_id,
+            prev_status,
+        )
+        return {"archived": True, "already_archived": True}
 
     if order_has_pending_relocation_work(
         db,
@@ -1163,6 +1184,10 @@ def archive_order_issue_task(
 
     now = datetime.utcnow()
     task.status = "ARCHIVED"
+    task.archived_at = now
+    task.archived_by_user_id = (
+        int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    )
     task.updated_at = now
     note = message or "Zamknięto ręcznie z kolejki Braki"
     _append_log(task, note, "task_archived")
@@ -1171,13 +1196,24 @@ def archive_order_issue_task(
     _append_log(task, f"archived_at={now.isoformat()}Z", "task_archived")
     from .wms_operational_task_service import close_operational_tasks_for_order
 
-    close_operational_tasks_for_order(db, order)
+    try:
+        close_operational_tasks_for_order(db, order)
+    except Exception:
+        logger.warning(
+            "[wms.shortage.archive] close_operational_tasks failed order_id=%s task_id=%s",
+            int(order.id),
+            int(task.id),
+            exc_info=True,
+        )
     logger.info(
-        "[wms.shortage.archive] order_id=%s task_id=%s operator_user_id=%s",
-        int(order.id),
+        "[wms.shortage.archive] task_id=%s order_id=%s archived_by=%s previous_status=%s "
+        "already_archived=false",
         int(task.id),
+        int(order.id),
         operator_user_id,
+        prev_status,
     )
+    return {"archived": True, "already_archived": False}
 
 
 def log_operator_event(db: Session, task: OrderIssueTask, message: str, kind: str) -> None:

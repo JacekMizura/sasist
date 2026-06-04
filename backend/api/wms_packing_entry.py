@@ -14,6 +14,7 @@ from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.order import Order
 from ..schemas.wms_packing import (
+    WmsPackingEntryOut,
     WmsPackingFinishBody,
     WmsPackingLinePackBody,
     WmsPackingModeDistribution,
@@ -36,6 +37,7 @@ from ..services.wms_packing_service import (
     packing_mode_distribution,
     packing_pack_all_lines,
     packing_scan_increment,
+    resolve_packing_entry_for_order,
 )
 
 router = APIRouter(prefix="/wms", tags=["WMS packing"])
@@ -156,6 +158,38 @@ def get_packing_resolve_ean(
     if oid is None:
         raise HTTPException(status_code=404, detail={"code": "PRODUCT_NOT_FOUND"})
     return WmsPackingResolveEanOut(order_id=int(oid))
+
+
+@router.post("/packing/orders/{order_id}/enter", response_model=WmsPackingEntryOut)
+def post_packing_order_enter(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    source_workflow: str = Query(default="shortage", max_length=32),
+    redirected_from: str | None = Query(default=None, max_length=64),
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    """Bootstrap sesji pakowania — bezpośrednie wejście z braków / OMS (bez pulpitu pakowania)."""
+    try:
+        out = resolve_packing_entry_for_order(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(order_id),
+            operator_user_id=int(current_user.id) if current_user and current_user.id else None,
+            source_workflow=str(source_workflow or "shortage").strip() or "shortage",
+            redirected_from=redirected_from,
+        )
+        db.commit()
+        return out
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("post_packing_order_enter order_id=%s", order_id)
+        raise HTTPException(status_code=500, detail="Database error") from None
 
 
 @router.get("/packing/orders/{order_id}/detail", response_model=WmsPackingOrderDetailOut)

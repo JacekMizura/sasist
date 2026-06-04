@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Archive braków 500 + bezpośrednie pakowanie z braków
+
+- Archive: brakujący ``logger`` w ``order_issue_task_service`` (NameError → 500); idempotentność; ``archived_at`` / ``archived_by_user_id``; log ``[wms.shortage.archive]``.
+- ``close_operational_tasks_for_order``: pomija linie bez ``product_id`` (``int(None)``).
+- ``POST /wms/packing/orders/{id}/enter`` — bootstrap sesji; frontend ``navigateBrakiToPacking`` zapisuje ``wms_packing_session`` i idzie na ``/wms/packing/order/:id``.
+
 ## 2026-06-04 — „Braki — decyzja” tylko przy aktywnej decyzji OMS
 
 - ``order_has_pending_shortage_decision`` + log ``[wms.order.status.compute]`` (``braki_order_state_service``).

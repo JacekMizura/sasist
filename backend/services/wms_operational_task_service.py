@@ -1111,9 +1111,21 @@ def close_operational_tasks_for_order(db: Session, order: Order) -> None:
     for t in active:
         _close_task(db, t, reason="shortage_cleared")
 
-    product_ids = {int(oi.product_id) for oi in (order.items or [])}
+    product_ids = {
+        int(oi.product_id)
+        for oi in (order.items or [])
+        if getattr(oi, "product_id", None) is not None and int(oi.product_id) > 0
+    }
     for pid in product_ids:
-        recompute_waiting_supply_for_product(db, tenant_id=tid, warehouse_id=wid, product_id=pid)
+        try:
+            recompute_waiting_supply_for_product(db, tenant_id=tid, warehouse_id=wid, product_id=pid)
+        except Exception:
+            logger.warning(
+                "recompute_waiting_supply_for_product failed order_id=%s product_id=%s",
+                oid,
+                pid,
+                exc_info=True,
+            )
 
 
 def sync_operational_tasks_for_warehouse(db: Session, *, tenant_id: int, warehouse_id: int) -> None:
