@@ -31,12 +31,19 @@ export async function lookupOrdersForWms(
   tenantId: number,
   warehouseId?: number | null,
 ): Promise<OrderLookupHit[]> {
+  console.log("returns lookup start", q);
   const params: Record<string, string | number> = { tenant_id: tenantId, q };
   if (warehouseId != null && Number.isFinite(warehouseId) && warehouseId > 0) {
     params.warehouse_id = warehouseId;
   }
-  const res = await api.get<OrderLookupHit[]>("wms/returns/orders/lookup", { params });
-  return Array.isArray(res.data) ? res.data : [];
+  try {
+    const res = await api.get<OrderLookupHit[]>("wms/returns/orders/lookup", { params });
+    console.log("returns lookup response", res.data);
+    return Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error("returns lookup failed", error);
+    throw error;
+  }
 }
 
 export async function listWmsReturnsForOrder(orderId: number, tenantId: number): Promise<WmsReturnListItem[]> {

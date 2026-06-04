@@ -563,24 +563,28 @@ export default function WmsReturnsEntryPage() {
   const [savedReturnFlash, setSavedReturnFlash] = useState<string | null>(null);
   
   const preselectSig = useRef<string | null>(null);
+  const searchRef = useRef<(overrideQ?: string) => Promise<void>>(async () => {});
   const searchInputRef = useRef<HTMLInputElement>(null);
   const firstHitButtonRef = useRef<HTMLButtonElement | null>(null);
   const firstQueueTileRef = useRef<HTMLButtonElement | null>(null);
   const firstQtyInputRef = useRef<HTMLInputElement | null>(null);
   const createFormSectionRef = useRef<HTMLElement | null>(null);
 
-  const { registerScanHandler, setActiveDocument, showScannerToast } = useWmsScanner();
+  const { registerScanHandler, setActiveDocument } = useWmsScanner();
   
   useEffect(() => {
     setActiveDocument({ kind: "custom", label: "Zwroty WMS" });
     registerScanHandler((ean) => {
-      showScannerToast(`Zwroty: ${ean} — skan powiązany z zamówieniem wkrótce.`);
+      const code = ean.trim();
+      if (!code) return;
+      setQ(code);
+      void searchRef.current(code);
     });
     return () => {
       registerScanHandler(null);
       setActiveDocument(null);
     };
-  }, [registerScanHandler, setActiveDocument, showScannerToast]);
+  }, [registerScanHandler, setActiveDocument]);
 
   const loadReturnsForOrder = useCallback(async (orderId: number) => {
     setOrderReturnsLoading(true);
@@ -769,38 +773,64 @@ export default function WmsReturnsEntryPage() {
     firstReturnQtyRowIndex,
   ]);
 
-  const search = async () => {
-    if (!q.trim()) return;
-    setLoading(true);
-    setErr(null);
-    try {
-      const query = normalizeWmsReturnsSearchQuery(q);
-      if (!query) {
-        setHits([]);
-        setErr("Brak zamówienia dla podanego numeru lub kodu.");
-        return;
+  const search = useCallback(
+    async (overrideQ?: string) => {
+      const raw = (overrideQ ?? q).trim();
+      if (!raw) return;
+
+      console.log("returns lookup start", raw);
+      setLoading(true);
+      setErr(null);
+      setOrderLoadErr(null);
+
+      try {
+        const query = normalizeWmsReturnsSearchQuery(raw);
+        if (!query) {
+          setHits([]);
+          setSelectedOrder(null);
+          setErr("Brak zamówienia dla podanego numeru lub kodu.");
+          return;
+        }
+
+        const data = await lookupOrdersForWms(query, DAMAGE_TENANT_ID, warehouseId);
+        console.log("returns lookup response", data);
+
+        if (data.length === 0) {
+          setHits([]);
+          setSelectedOrder(null);
+          setErr("Brak zamówienia dla podanego numeru lub kodu.");
+          return;
+        }
+
+        setErr(null);
+
+        if (data.length === 1) {
+          setHits([]);
+          const hit = data[0];
+          const rid =
+            hit.matched_return_id != null && Number.isFinite(hit.matched_return_id)
+              ? hit.matched_return_id
+              : null;
+          await loadOrderById(hit.id, { highlightReturnId: rid });
+          return;
+        }
+
+        setHits(data);
+        setSelectedOrder(null);
+        window.requestAnimationFrame(() => firstHitButtonRef.current?.focus());
+      } catch (error) {
+        console.error("returns lookup failed", error);
+        setErr("Nie udało się wyszukać zamówienia.");
+      } finally {
+        setLoading(false);
       }
-      const data = await lookupOrdersForWms(query, DAMAGE_TENANT_ID, warehouseId);
-      if (data.length === 0) {
-        setHits([]);
-        setErr("Brak zamówienia dla podanego numeru lub kodu.");
-        return;
-      }
-      if (data.length === 1) {
-        setHits([]);
-        const hit = data[0];
-        const rid = hit.matched_return_id != null && Number.isFinite(hit.matched_return_id) ? hit.matched_return_id : null;
-        await loadOrderById(hit.id, { highlightReturnId: rid });
-        return;
-      }
-      setHits(data);
-      window.requestAnimationFrame(() => firstHitButtonRef.current?.focus());
-    } catch {
-      setErr("Nie udało się wyszukać zamówienia.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [q, warehouseId, loadOrderById],
+  );
+
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
 
   const linesForCreate = useMemo(() => {
     if (!selectedOrder) return [];
@@ -910,7 +940,7 @@ export default function WmsReturnsEntryPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showCreateForm, closeCreateFormPanel]);
 
-  const showScanIdle = !selectedOrder && hits.length === 0 && !loading && !err && !orderLoadErr;
+  const showScanIdle = !selectedOrder && hits.length === 0 && !loading && !orderLoadErr;
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-white text-slate-800 antialiased">
@@ -968,6 +998,7 @@ export default function WmsReturnsEntryPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void search();
                 }}
+                disabled={loading}
                 placeholder="Zeskanuj list przewozowy"
                 className={`w-full rounded-xl border-2 border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
                   showScanIdle ? "h-14 pl-12 pr-4" : "h-11 pl-11 pr-4"
@@ -978,21 +1009,23 @@ export default function WmsReturnsEntryPage() {
             </div>
 
             {showScanIdle && (
-              <button className="mx-auto flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-6 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/10 active:bg-slate-100">
+              <button
+                type="button"
+                className="mx-auto flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-6 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/10 active:bg-slate-100"
+                onClick={() => searchInputRef.current?.focus()}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" className="h-4 w-4 text-slate-400">
                   <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
                 </svg>
-                Zaawansowana wyszukiwarka
+                Wpisz numer i naciśnij Enter
               </button>
             )}
 
-            {!showScanIdle && (
-              <>
-                {err && <p className="mt-3 text-center text-sm text-rose-600">{err}</p>}
-                {orderLoadErr && <p className="mt-3 text-center text-sm text-rose-600">{orderLoadErr}</p>}
-                {loading && <p className="mt-6 text-center text-sm font-medium text-slate-500">Szukam…</p>}
-              </>
-            )}
+            {err ? <p className="mt-3 text-center text-sm text-rose-600">{err}</p> : null}
+            {!showScanIdle && orderLoadErr ? (
+              <p className="mt-3 text-center text-sm text-rose-600">{orderLoadErr}</p>
+            ) : null}
+            {loading ? <p className="mt-3 text-center text-sm font-medium text-slate-500">Szukam…</p> : null}
           </div>
 
           {!showScanIdle && (
