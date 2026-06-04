@@ -557,7 +557,14 @@ export const router = createBrowserRouter(
                     <Route path=":ruleId/edit" element={<RedirectLegacyAutomationRuleEdit />} />
                   </Route>
                   <Route path="complaints/:id" element={<ComplaintDetailPage />} />
-                  <Route path=":id" element={<OrderDetailPage />} />
+                  <Route
+                    path=":id"
+                    element={
+                      <ErrorBoundary>
+                        <OrderDetailPage />
+                      </ErrorBoundary>
+                    }
+                  />
                 </Route>
                 <Route path="returns" element={<ReturnsHubPage />} />
                 <Route path="carts" element={<CartsLayout />}>

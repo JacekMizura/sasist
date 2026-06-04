@@ -2,8 +2,10 @@
 
 ## 2026-06-04 — Fix React #310 (braki szczegół)
 
-- ``WmsOrderIssueDetailPage``: ``useCallback(onArchiveShortage)`` przeniesiony przed wczesne ``return`` (loading/error) — stabilna kolejność hooków.
-- ``App.tsx``: ``ErrorBoundary`` na trasach braki / issues/task / relocation.
+- ``WmsOrderIssueDetailPage``: shell ładowania/skanu; UI + ``onArchiveShortage`` w ``WmsOrderIssueDetailContent`` (montowany tylko z ``task`` — brak zmiany liczby hooków przy przejściu loading→loaded).
+- Wcześniej: ``useCallback(onArchiveShortage)`` był po ``return`` loading (v14); v16 przesunął hook — split jest trwałą ochroną.
+- ``App.tsx``: ``ErrorBoundary`` na braki / issues/task / relocation oraz ``/orders/:id`` (OMS).
+- DEV: ``console.log("render shortages detail", …)`` w ``WmsOrderIssueDetailContent``.
 
 ## 2026-06-04 — OMS: polskie etykiety zdarzeń zamówienia
 
