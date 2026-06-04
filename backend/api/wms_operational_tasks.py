@@ -103,8 +103,11 @@ def get_operational_tasks(
             sync_first=sync,
         )
     except Exception as exc:
-        logger.exception("list operational tasks failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("list operational tasks failed queue=%s", queue)
+        raise HTTPException(
+            status_code=500,
+            detail="Nie udało się załadować kolejki operacyjnej.",
+        ) from exc
 
 
 @router.get("/queues/summary")

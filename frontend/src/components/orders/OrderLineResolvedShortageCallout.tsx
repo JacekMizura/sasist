@@ -1,6 +1,6 @@
 import type { ResolvedShortageLineMeta } from "./orderLineResolvedShortage";
 import { fmtOmsQty } from "./omsFulfillmentLinePresentation";
-import { resolvedShortageBadgeLabel } from "./orderLineResolvedShortage";
+import { resolvedShortageBadgeLabel, resolvedShortageHeadline } from "./orderLineResolvedShortage";
 
 type Props = {
   meta: ResolvedShortageLineMeta;
@@ -21,7 +21,7 @@ export function OrderLineResolvedShortageCallout({ meta, formatDetailDate, compa
         {badge}
       </span>
       <p className={`mt-1.5 font-medium text-rose-950 ${compact ? "text-[11px]" : "text-xs"}`}>
-        Usunięto podczas obsługi braków.
+        {resolvedShortageHeadline(meta)}
       </p>
       <dl className={`mt-1 space-y-0.5 text-rose-900/90 ${compact ? "text-[10px]" : "text-[11px]"}`}>
         <div className="flex flex-wrap gap-x-1">

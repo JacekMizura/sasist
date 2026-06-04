@@ -183,3 +183,7 @@ class OrderIssueTaskLogBody(BaseModel):
 
 class OrderIssueTaskDoneBody(BaseModel):
     message: Optional[str] = None
+
+
+class OrderIssueTaskArchiveBody(BaseModel):
+    message: Optional[str] = None

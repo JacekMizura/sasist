@@ -478,24 +478,47 @@ def ensure_relocation_for_order_item_picks(
     order_item_id: int,
     source_event_id: str,
     picked_from_location: str | None = None,
-) -> None:
-    """Finalized picks na linii → zadanie rozlokowania (usunięcie / redukcja ilości OMS)."""
-    from .wms_operational_task_service import merge_relocation_from_picks
+    removal_type: str | None = None,
+) -> list[int]:
+    """
+    Zebrany fizycznie towar po usunięciu linii z OMS → zadanie RELOCATION.
 
+    Używa rekordów Pick (``picked_at`` lub ilość > 0) albo sumy zdarzeń PICK na linii.
+    """
+    from ..models.order_item import OrderItem
+    from .fulfillment_event_service import line_picked_sum_for_order
+    from .order_item_removal_service import REMOVAL_TYPE_MANUAL_OMS, normalize_removal_type
+    from .wms_operational_task_service import merge_relocation_from_picks, merge_relocation_task
+
+    oid = int(order.id)
+    oiid = int(order_item_id)
+    rt = normalize_removal_type(removal_type or REMOVAL_TYPE_MANUAL_OMS)
+
+    oi = db.query(OrderItem).filter(OrderItem.id == oiid, OrderItem.order_id == oid).first()
+    if oi is None:
+        logger.info(
+            "[wms.relocation.create] skip order_id=%s order_item_id=%s reason=no_line",
+            oid,
+            oiid,
+        )
+        return []
+
+    picked_qty = float(line_picked_sum_for_order(db, oiid, order))
     picks = (
         db.query(Pick)
         .filter(
             Pick.tenant_id == int(tenant_id),
             Pick.warehouse_id == int(warehouse_id),
-            Pick.order_id == int(order.id),
-            Pick.order_item_id == int(order_item_id),
-            Pick.picked_at.isnot(None),
+            Pick.order_id == oid,
+            Pick.order_item_id == oiid,
         )
         .all()
     )
-    if not picks:
-        return
-    cart_label = picked_from_location or ""
+    finalized = [p for p in picks if getattr(p, "picked_at", None) is not None]
+    if not finalized and picked_qty > 1e-9:
+        finalized = [p for p in picks if float(getattr(p, "quantity", 0) or 0) > 1e-9]
+
+    cart_label = (picked_from_location or "").strip()
     if not cart_label:
         cid = getattr(order, "cart_id", None)
         if cid:
@@ -504,15 +527,65 @@ def ensure_relocation_for_order_item_picks(
             cart = db.query(Cart).filter(Cart.id == int(cid)).first()
             if cart:
                 cart_label = (getattr(cart, "code", None) or getattr(cart, "name", None) or "").strip()
-    merge_relocation_from_picks(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        picks=picks,
-        picked_from_location=cart_label or f"KOSZYK-{getattr(order, 'cart_id', 0)}",
-        source_event_id=source_event_id,
-        close_recollect_for_items=True,
+    cart_label = cart_label or f"KOSZYK-{getattr(order, 'cart_id', 0)}"
+
+    task_ids: list[int] = []
+    if finalized:
+        tasks = merge_relocation_from_picks(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            picks=finalized,
+            picked_from_location=cart_label,
+            source_event_id=source_event_id,
+            close_recollect_for_items=True,
+        )
+        task_ids = [int(t.id) for t in tasks if getattr(t, "id", None)]
+    elif picked_qty > 1e-9 and oi.product_id:
+        from .wms_operational_task_service import _target_zone_for_order
+
+        zone = _target_zone_for_order(order)
+        task = merge_relocation_task(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=int(oi.product_id),
+            allocations=[
+                {
+                    "order_id": oid,
+                    "order_item_id": oiid,
+                    "qty": round(picked_qty, 6),
+                    "target_zone": zone or None,
+                }
+            ],
+            picked_from_location=cart_label,
+            source_event_id=source_event_id,
+        )
+        if task is not None:
+            task_ids = [int(task.id)]
+    else:
+        logger.info(
+            "[wms.relocation.create] skip order_id=%s order_item_id=%s picked_qty=%s "
+            "pick_rows=%s removal_type=%s reason=no_picked_stock",
+            oid,
+            oiid,
+            picked_qty,
+            len(picks),
+            rt,
+        )
+        return []
+
+    logger.info(
+        "[wms.relocation.create] order_id=%s order_item_id=%s picked_qty=%s "
+        "removal_type=%s relocation_task_id=%s source=%s",
+        oid,
+        oiid,
+        picked_qty,
+        rt,
+        task_ids[0] if task_ids else None,
+        source_event_id,
     )
+    return task_ids
 
 
 def count_issue_queue_operational_lines(db: Session, order: Order) -> tuple[int, int]:

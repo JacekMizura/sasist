@@ -13,7 +13,7 @@ import traceback
 
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.responses import JSONResponse
@@ -343,13 +343,29 @@ async def record_error(request: Request, exc: Exception):
     log_unhandled_exception(f"{request.method} {request.url.path} (exception_handler)", exc)
 
 
+def _cors_headers_for_request(request: Request) -> dict[str, str]:
+    if request.headers.get("origin"):
+        return {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    return {}
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    for k, v in _cors_headers_for_request(request).items():
+        response.headers[k] = v
+    return response
+
+
 @app.exception_handler(PdfGenerationUnavailable)
 async def pdf_generation_unavailable_handler(request: Request, exc: PdfGenerationUnavailable):
     response = JSONResponse(status_code=503, content={"detail": str(exc)})
-    if request.headers.get("origin"):
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+    for k, v in _cors_headers_for_request(request).items():
+        response.headers[k] = v
     return response
 
 
@@ -363,11 +379,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     try:
         await record_error(request, exc)
         response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
-        origin = request.headers.get("origin")
-        if origin:
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Methods"] = "*"
-            response.headers["Access-Control-Allow-Headers"] = "*"
+        for k, v in _cors_headers_for_request(request).items():
+            response.headers[k] = v
         return response
     except Exception as handler_exc:
         print("[exception_handler] handler itself failed", flush=True)

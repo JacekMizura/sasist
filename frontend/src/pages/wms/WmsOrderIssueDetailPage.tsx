@@ -5,6 +5,7 @@ import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import {
   getWmsOrderIssueTask,
+  postWmsOrderIssueTaskArchive,
   resolveWmsOrderIssueTaskScan,
   type OrderIssueDetailLineApi,
   type OrderIssueOrderContextApi,
@@ -209,6 +210,7 @@ export default function WmsOrderIssueDetailPage() {
   const [task, setTask] = useState<OrderIssueTaskListItemApi | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [archivePending, setArchivePending] = useState(false);
 
   const load = useCallback(() => {
     if (warehouseId == null || !Number.isFinite(taskId) || taskId < 1) {
@@ -312,6 +314,21 @@ export default function WmsOrderIssueDetailPage() {
   const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
   const statusHeadline = workflowLabel || "—";
   const showOmsLink = workflowStatus !== "awaiting";
+  const canArchive =
+    readyForPacking && !hasActiveShortageLines && task != null && warehouseId != null;
+
+  const onArchiveShortage = useCallback(async () => {
+    if (!task || warehouseId == null || !canArchive) return;
+    setArchivePending(true);
+    try {
+      await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
+      navigate(WMS_ROUTES.braki(), { replace: true });
+    } catch {
+      setErr("Nie udało się zamknąć braku w kolejce.");
+    } finally {
+      setArchivePending(false);
+    }
+  }, [canArchive, navigate, task, warehouseId]);
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-50 antialiased">
@@ -414,6 +431,16 @@ export default function WmsOrderIssueDetailPage() {
             >
               {primaryCta.label}
             </button>
+            {canArchive ? (
+              <button
+                type="button"
+                disabled={archivePending}
+                onClick={() => void onArchiveShortage()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-50 py-3.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-100 disabled:opacity-60 sm:flex-1 md:text-base"
+              >
+                {archivePending ? "Zamykanie…" : "Zamknij brak"}
+              </button>
+            ) : null}
             {showOmsLink ? (
               <Link
                 to={`/orders/${task.order_id}`}

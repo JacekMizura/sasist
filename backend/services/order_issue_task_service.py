@@ -1130,6 +1130,56 @@ def mark_task_done(db: Session, task: OrderIssueTask, message: str | None = None
     )
 
 
+def archive_order_issue_task(
+    db: Session,
+    task: OrderIssueTask,
+    order: Order,
+    *,
+    message: str | None = None,
+    operator_user_id: int | None = None,
+) -> None:
+    """Ręczne zamknięcie z kolejki Braki (historia zostaje w logach)."""
+    from .braki_order_state_service import order_can_show_ready_pack, order_has_pending_relocation_work
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+
+    if order_has_pending_relocation_work(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    ):
+        raise ValueError("Nie można zamknąć — trwa rozlokowanie zebranego towaru.")
+    if get_open_recovery_task_for_order(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    ):
+        raise ValueError("Nie można zamknąć — otwarta dogrywka zbierki.")
+    if not order_can_show_ready_pack(db, order):
+        raise ValueError(
+            "Nie można zamknąć — zamówienie nadal wymaga obsługi braków lub zbierania."
+        )
+
+    now = datetime.utcnow()
+    task.status = "ARCHIVED"
+    task.updated_at = now
+    note = message or "Zamknięto ręcznie z kolejki Braki"
+    _append_log(task, note, "task_archived")
+    if operator_user_id is not None:
+        _append_log(task, f"operator_user_id={int(operator_user_id)}", "task_archived")
+    _append_log(task, f"archived_at={now.isoformat()}Z", "task_archived")
+    from .wms_operational_task_service import close_operational_tasks_for_order
+
+    close_operational_tasks_for_order(db, order)
+    logger.info(
+        "[wms.shortage.archive] order_id=%s task_id=%s operator_user_id=%s",
+        int(order.id),
+        int(task.id),
+        operator_user_id,
+    )
+
+
 def log_operator_event(db: Session, task: OrderIssueTask, message: str, kind: str) -> None:
     _append_log(task, message, kind)
     task.updated_at = datetime.utcnow()

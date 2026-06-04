@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — Braki: OMS removal → relocation, etykiety, archiwizacja, CORS
+
+- Usunięcie zebranego produktu (OMS): ``ensure_relocation_for_order_item_picks`` z sumą PICK + fallback ``merge_relocation_task``; log ``[wms.relocation.create]``; purge nie kasuje TASK_RELOCATION.
+- ``removal_type`` (shortage / manual_oms / …) w metadanych linii + UI OMS (badge, callout, footer).
+- ``POST /wms/order-issue-tasks/{id}/archive`` — zamknięcie z kolejki gdy ``ready_pack``; status ARCHIVED.
+- ``sync_operational_tasks_for_warehouse`` — tylko zamówienia z OPEN issue / aktywnymi taskami (fix 502); CORS na HTTPException.
+
 ## 2026-06-04 — Braki: relocation tylko przy aktywnych alokacjach
 
 - ``relocation_alloc_counts_for_order`` / ``find_relocation_task_for_order`` — pending/partial tylko; auto-close zadania gdy wszystkie alokacje done; logi ``[braki.relocation.check]``.

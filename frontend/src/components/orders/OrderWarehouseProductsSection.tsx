@@ -19,6 +19,8 @@ import {
   findResolvedShortageForOrderLine,
   isResolvedShortageReducedLine,
   isResolvedShortageRemovedLine,
+  resolvedShortageBadgeLabel,
+  resolvedShortageFooter,
   type PanelFulfillmentHistoryEntryUi,
 } from "./orderLineResolvedShortage";
 
@@ -677,7 +679,7 @@ export function OrderWarehouseProductsSection({
                         )}
                         {resolvedRemoved && resolvedMeta ? (
                           <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-rose-800">
-                            USUNIĘTO PRZEZ BRAK MAGAZYNOWY
+                            {resolvedShortageBadgeLabel(resolvedMeta)}
                           </span>
                         ) : null}
                         {resolvedReduced && resolvedMeta && !resolvedRemoved ? (
@@ -1038,8 +1040,7 @@ export function OrderWarehouseProductsSection({
                       ) : (
                         <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4">
                           <p className="text-sm font-medium text-rose-800">
-                            Pozycja usunięta z kompletacji z powodu braków
-                            magazynowych.
+                            {resolvedShortageFooter(resolvedMeta)}
                           </p>
                         </div>
                       )}

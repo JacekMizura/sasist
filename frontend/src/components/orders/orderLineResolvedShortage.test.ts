@@ -53,6 +53,21 @@ describe("orderLineResolvedShortage", () => {
         resolvedBy: null,
         fullyRemovedFromOrder: true,
       }),
-    ).toBe("USUNIĘTO PRZEZ BRAK MAGAZYNOWY");
+    ).toBe("USUNIĘTO Z POWODU BRAKÓW MAGAZYNOWYCH");
+  });
+
+  it("uses manual OMS badge when removal_type is manual_oms", () => {
+    expect(
+      resolvedShortageBadgeLabel({
+        kind: "order_line_removed",
+        resolvedAt: "",
+        removedQty: 1,
+        quantityBefore: 1,
+        reason: "usunięto z zamówienia (OMS)",
+        resolvedBy: null,
+        fullyRemovedFromOrder: true,
+        removalType: "manual_oms",
+      }),
+    ).toBe("USUNIĘTO Z ZAMÓWIENIA (OMS)");
   });
 });

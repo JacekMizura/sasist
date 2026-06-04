@@ -2494,16 +2494,24 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
             nm = f"Produkt #{int(item.product_id)}"
         qty_line = int(item.quantity or 0)
         orig_name = (getattr(item, "replaced_from_product_name", None) or "").strip() or None
+        from ..services.order_item_removal_service import (
+            REMOVAL_TYPE_MANUAL_OMS,
+            REMOVAL_TYPE_SHORTAGE,
+            removal_ui_labels,
+        )
+
         had_shortage = float(getattr(item, "wms_picking_line_missing_qty", 0) or 0) > 1e-6
         if not had_shortage:
             try:
                 had_shortage = float(compute_line_missing_qty(db, order, item)) > 1e-6
             except Exception:
                 had_shortage = False
+        removal_type = REMOVAL_TYPE_SHORTAGE if had_shortage else REMOVAL_TYPE_MANUAL_OMS
+        ui = removal_ui_labels(removal_type)
         lines_hist = [
             "Usunięto produkt z zamówienia:",
             f"- {nm} ({qty_line} szt.)",
-            "Powód: usunięto linię z zamówienia (OMS).",
+            f"Powód: {ui['reason_default']}.",
         ]
         if had_shortage:
             lines_hist.append("Rozwiązano brak przez usunięcie produktu.")
@@ -2518,6 +2526,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
             lines_hist,
             snapshot={
                 "kind": "order_line_removed",
+                "removal_type": removal_type,
                 "product_name": nm[:512],
                 "quantity_ordered": float(qty_line),
                 "unit_price": round(rm_unit, 4) if rm_unit else None,
@@ -2533,6 +2542,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
             order=order,
             order_item_id=int(item.id),
             source_event_id=f"order_line_removed:{int(item.id)}",
+            removal_type=removal_type,
         )
         purge_order_item_wms_dependents(
             db,
@@ -2580,7 +2590,8 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
         soft_remove_order_item(
             db,
             item,
-            reason="usunięto linię z zamówienia (OMS)",
+            reason=ui["reason_default"],
+            removal_type=removal_type,
         )
         _recompute_order_value_and_volume(order, db)
         recalculate_order_shortage_state(db, int(order_id), commit=False)

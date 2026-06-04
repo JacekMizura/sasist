@@ -12,8 +12,14 @@ from ..models.fulfillment_event import FulfillmentEvent
 from ..models.order import Order
 from ..models.order_item import OrderItem, order_item_is_replaced_line
 from ..models.pick import Pick
-from ..models.wms_operational_task import WmsOperationalTask
+from ..models.wms_operational_task import TASK_RELOCATION, WmsOperationalTask
 from .fulfillment_event_service import delete_pick_events_for_pick_ids
+from .order_item_removal_service import (
+    REMOVAL_TYPE_MANUAL_OMS,
+    REMOVAL_TYPE_SHORTAGE,
+    normalize_removal_type,
+    order_item_meta_dict,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +46,9 @@ def purge_order_item_wms_dependents(
         WmsOperationalTask.tenant_id == int(tenant_id),
         WmsOperationalTask.warehouse_id == int(warehouse_id),
         WmsOperationalTask.order_item_id == int(order_item_id),
+        WmsOperationalTask.task_type != TASK_RELOCATION,
     ).delete(synchronize_session=False)
     db.flush()
-
-
-def _order_item_meta_dict(item: OrderItem) -> dict:
-    raw = getattr(item, "metadata_json", None)
-    if not raw or not str(raw).strip():
-        return {}
-    try:
-        m = json.loads(raw)
-        return m if isinstance(m, dict) else {}
-    except json.JSONDecodeError:
-        return {}
 
 
 def soft_remove_order_item(
@@ -60,16 +56,23 @@ def soft_remove_order_item(
     item: OrderItem,
     *,
     reason: str = "",
+    removal_type: str | None = None,
 ) -> None:
     """
     Oznacza linię jako usuniętą (bez hard-delete) — zachowuje FK w ``wms_order_events`` i historię.
     """
     qty_before = int(item.quantity or 0)
-    meta = _order_item_meta_dict(item)
+    meta = order_item_meta_dict(item)
     meta["oms_line_removed"] = True
     meta["removed_at"] = datetime.utcnow().isoformat() + "Z"
+    rt = normalize_removal_type(removal_type or REMOVAL_TYPE_MANUAL_OMS)
+    meta["removal_type"] = rt
     if reason:
         meta["removed_reason"] = str(reason)[:256]
+    elif rt == REMOVAL_TYPE_SHORTAGE:
+        meta["removed_reason"] = "brak magazynowy"
+    else:
+        meta["removed_reason"] = "usunięto z zamówienia (OMS)"
     item.metadata_json = json.dumps(meta, ensure_ascii=False)
     item.quantity = 0
     item.oms_removed_qty = float(qty_before)
@@ -80,10 +83,13 @@ def soft_remove_order_item(
         item.total_price = 0.0
     db.flush()
     logger.info(
-        "[order.item.delete] soft_remove order_item_id=%s qty_before=%s reason=%s",
+        "[wms.order_item.removed] order_item_id=%s order_id=%s qty_before=%s "
+        "removal_type=%s reason=%s",
         int(item.id),
+        int(item.order_id),
         qty_before,
-        reason or "—",
+        rt,
+        reason or meta.get("removed_reason") or "—",
     )
 
 

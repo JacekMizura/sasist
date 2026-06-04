@@ -20,6 +20,7 @@ from ..schemas.order_issue_task import (
     OrderIssueDetailLine,
     OrderIssueOrderContext,
     OrderIssueShortageLine,
+    OrderIssueTaskArchiveBody,
     OrderIssueTaskDoneBody,
     OrderIssueTaskListItem,
     OrderIssueTaskListResponse,
@@ -46,6 +47,7 @@ from ..services.order_issue_task_service import (
     format_issue_queue_summary_line,
     log_operator_event,
     mark_task_done,
+    archive_order_issue_task,
     order_customer_display_name,
     sync_open_issue_tasks_for_warehouse,
 )
@@ -526,5 +528,47 @@ def post_order_issue_task_done(
             completed_reason="finished",
             metadata=_shortage_session_metadata(t),
         )
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/order-issue-tasks/{task_id}/archive")
+def post_order_issue_task_archive(
+    task_id: int,
+    body: OrderIssueTaskArchiveBody | None = None,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser | None = Depends(get_optional_current_user),
+):
+    t = (
+        db.query(OrderIssueTask)
+        .filter(
+            OrderIssueTask.id == int(task_id),
+            OrderIssueTask.tenant_id == int(tenant_id),
+            OrderIssueTask.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if not t:
+        raise HTTPException(status_code=404, detail="Zadanie nie znalezione.")
+    o = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(Order.id == int(t.order_id))
+        .first()
+    )
+    if o is None:
+        raise HTTPException(status_code=404, detail="Zamówienie nie znalezione.")
+    try:
+        archive_order_issue_task(
+            db,
+            t,
+            o,
+            message=body.message if body else None,
+            operator_user_id=int(current_user.id) if current_user and current_user.id else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     return {"ok": True}

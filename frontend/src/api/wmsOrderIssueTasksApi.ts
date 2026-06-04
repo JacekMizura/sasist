@@ -158,6 +158,19 @@ export async function postWmsOrderIssueTaskLog(
   });
 }
 
+export async function postWmsOrderIssueTaskArchive(
+  tenantId: number,
+  warehouseId: number,
+  taskId: number,
+  message?: string,
+): Promise<void> {
+  await api.post(
+    `/wms/order-issue-tasks/${taskId}/archive`,
+    message ? { message } : {},
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
+  );
+}
+
 export async function postWmsOrderIssueTaskDone(
   tenantId: number,
   warehouseId: number,

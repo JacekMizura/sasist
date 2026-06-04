@@ -1066,15 +1066,47 @@ def close_operational_tasks_for_order(db: Session, order: Order) -> None:
 
 
 def sync_operational_tasks_for_warehouse(db: Session, *, tenant_id: int, warehouse_id: int) -> None:
-    """Full warehouse resync — used by list endpoint pre-hook."""
+    """Resync operacyjnych zadań — tylko zamówienia z otwartymi brakami / zadaniami (nie cały magazyn)."""
+    from ..models.order_issue_task import OrderIssueTask
     from .order_fulfillment_recompute import order_requires_shortage_handling
 
+    tid = int(tenant_id)
+    wid = int(warehouse_id)
+    candidate_ids: set[int] = set()
+    for (oid,) in (
+        db.query(OrderIssueTask.order_id)
+        .filter(
+            OrderIssueTask.tenant_id == tid,
+            OrderIssueTask.warehouse_id == wid,
+            OrderIssueTask.status == "OPEN",
+        )
+        .distinct()
+        .all()
+    ):
+        if oid is not None:
+            candidate_ids.add(int(oid))
+    for (oid,) in (
+        db.query(WmsOperationalTask.order_id)
+        .filter(
+            WmsOperationalTask.tenant_id == tid,
+            WmsOperationalTask.warehouse_id == wid,
+            WmsOperationalTask.status.in_(list(ACTIVE_STATUSES)),
+            WmsOperationalTask.order_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    ):
+        if oid is not None:
+            candidate_ids.add(int(oid))
+    if not candidate_ids:
+        return
     orders = (
         db.query(Order)
         .options(joinedload(Order.items))
         .filter(
-            Order.tenant_id == int(tenant_id),
-            Order.warehouse_id == int(warehouse_id),
+            Order.id.in_(list(candidate_ids)),
+            Order.tenant_id == tid,
+            Order.warehouse_id == wid,
             Order.deleted_at.is_(None),
         )
         .all()
@@ -1189,7 +1221,14 @@ def list_operational_tasks(
     sync_first: bool = True,
 ) -> WmsOperationalTaskListResponse:
     if sync_first:
-        sync_operational_tasks_for_warehouse(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+        try:
+            sync_operational_tasks_for_warehouse(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+        except Exception:
+            logger.exception(
+                "sync_operational_tasks_for_warehouse failed tenant=%s wh=%s",
+                tenant_id,
+                warehouse_id,
+            )
 
     q = db.query(WmsOperationalTask).filter(
         WmsOperationalTask.tenant_id == int(tenant_id),
