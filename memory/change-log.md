@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — Braki: relocation tylko przy aktywnych alokacjach
+
+- ``relocation_alloc_counts_for_order`` / ``find_relocation_task_for_order`` — pending/partial tylko; auto-close zadania gdy wszystkie alokacje done; logi ``[braki.relocation.check]``.
+- Pominięcie ghost alokacji (linia qty=0 / archiwum REPLACED bez przeniesienia).
+- ``_order_fully_picked_for_fulfillment`` — ``line_closed_for_picking_finalize`` gdy jest ``cart_id``.
+- Test: ``test_braki_relocation_active_gate.py``.
+
 ## 2026-06-04 — Finalize zbierania: domknięcie linii pick + brak
 
 - ``line_shortage_qty_for_picking_finalize`` / ``line_closed_for_picking_finalize`` — ``picked + shortage >= required``; OMS „czeka na towar” nie blokuje pickera.

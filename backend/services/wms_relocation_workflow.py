@@ -450,13 +450,127 @@ def paginate_relocation_allocations(
     return page, total
 
 
-def find_relocation_task_for_order(
+def relocation_alloc_counts_for_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    task: WmsOperationalTask | None = None,
+    log_checks: bool = False,
+) -> tuple[int, int, int]:
+    """
+    Liczy tylko **aktywne** alokacje rozlokowania (pending / partial, qty > 0).
+
+    Alokacje ``done`` lub z qty=0 nie blokują ``ready_pack``.
+    """
+    from ..models.order_item import OrderItem, order_item_is_replaced_line
+    from .wms_operational_task_service import (
+        _allocation_row_status,
+        _normalize_relocation_allocation_row,
+        _try_auto_complete_relocation_task,
+    )
+
+    oid = int(order_id)
+    if task is None:
+        task = _find_relocation_task_with_any_alloc_for_order(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=oid,
+        )
+    if task is None:
+        return 0, 0, 0
+
+    payload = _json_loads(getattr(task, "payload_json", None), {})
+    if not isinstance(payload, dict):
+        return 0, 0, 0
+
+    pending = partial = done = 0
+    for raw in payload.get("allocations") or []:
+        if not isinstance(raw, dict) or int(raw.get("order_id") or 0) != oid:
+            continue
+        row = _normalize_relocation_allocation_row(raw)
+        qty = float(row.get("qty") or 0)
+        oiid = int(row.get("order_item_id") or 0)
+        if oiid > 0:
+            oi = db.query(OrderItem).filter(OrderItem.id == oiid).first()
+            if oi is not None:
+                line_qty = float(oi.quantity or 0)
+                if line_qty <= 1e-9 and float(row.get("relocated_qty") or 0) <= 1e-9:
+                    if log_checks:
+                        logger.info(
+                            "[braki.relocation.check] order_id=%s relocation_task_id=%s "
+                            "order_item_id=%s allocation_status=skipped_removed_line",
+                            oid,
+                            int(task.id),
+                            oiid,
+                        )
+                    continue
+                if order_item_is_replaced_line(oi) and float(row.get("relocated_qty") or 0) <= 1e-9:
+                    if log_checks:
+                        logger.info(
+                            "[braki.relocation.check] order_id=%s relocation_task_id=%s "
+                            "order_item_id=%s allocation_status=skipped_replaced_archive",
+                            oid,
+                            int(task.id),
+                            oiid,
+                        )
+                    continue
+        if qty <= 1e-9:
+            if log_checks:
+                logger.info(
+                    "[braki.relocation.check] order_id=%s relocation_task_id=%s "
+                    "status=%s is_completed=%s is_cancelled=%s relocation_qty=0 "
+                    "source=%s allocation_status=skipped_zero_qty",
+                    oid,
+                    int(task.id),
+                    str(getattr(task, "status", "") or ""),
+                    str(getattr(task, "status", "")).lower() == "done",
+                    str(getattr(task, "status", "")).lower() == "cancelled",
+                    str(row.get("source_event_id") or ""),
+                )
+            continue
+        st = _allocation_row_status(row)
+        relocated = float(row.get("relocated_qty") or 0)
+        is_done_flag = bool(row.get("done"))
+        if log_checks:
+            logger.info(
+                "[braki.relocation.check] order_id=%s relocation_task_id=%s "
+                "order_item_id=%s status=%s is_completed=%s is_cancelled=%s "
+                "relocation_qty=%s relocated_qty=%s source=%s allocation_status=%s",
+                oid,
+                int(task.id),
+                int(row.get("order_item_id") or 0),
+                str(getattr(task, "status", "") or ""),
+                is_done_flag or st == "done",
+                str(getattr(task, "status", "")).lower() == "cancelled",
+                qty,
+                relocated,
+                str(row.get("source_event_id") or ""),
+                st,
+            )
+        if st == "pending":
+            pending += 1
+        elif st == "partial":
+            partial += 1
+        else:
+            done += 1
+
+    if pending == 0 and partial == 0:
+        _try_auto_complete_relocation_task(db, task)
+
+    return pending, partial, done
+
+
+def _find_relocation_task_with_any_alloc_for_order(
     db: Session,
     *,
     tenant_id: int,
     warehouse_id: int,
     order_id: int,
 ) -> WmsOperationalTask | None:
+    """Zadanie RELOCATION z dowolną alokacją dla zamówienia (do inspekcji / auto-close)."""
     rows = (
         db.query(WmsOperationalTask)
         .filter(
@@ -477,6 +591,53 @@ def find_relocation_task_for_order(
         for a in payload.get("allocations") or []:
             if isinstance(a, dict) and int(a.get("order_id") or 0) == oid:
                 return t
+    return None
+
+
+def order_has_active_relocation_work(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    log_checks: bool = False,
+) -> bool:
+    pending, partial, _ = relocation_alloc_counts_for_order(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        log_checks=log_checks,
+    )
+    return pending > 0 or partial > 0
+
+
+def find_relocation_task_for_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+) -> WmsOperationalTask | None:
+    """Zwraca zadanie tylko gdy istnieje co najmniej jedna aktywna alokacja (pending/partial)."""
+    task = _find_relocation_task_with_any_alloc_for_order(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+    )
+    if task is None:
+        return None
+    pending, partial, _ = relocation_alloc_counts_for_order(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        task=task,
+        log_checks=True,
+    )
+    if pending > 0 or partial > 0:
+        return task
     return None
 
 

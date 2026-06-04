@@ -401,6 +401,9 @@ def _recompute_relocation_task_progress(task: WmsOperationalTask) -> None:
     if task.status in (STATUS_DONE, STATUS_CANCELLED):
         return
     if _all_allocations_relocated(allocs):
+        task.status = STATUS_DONE
+        task.completed_at = _now()
+        task.updated_at = _now()
         return
     if relocated_total > EPS:
         task.status = STATUS_IN_PROGRESS
@@ -743,6 +746,28 @@ def _find_active_by_group_key(db: Session, group_key: str) -> WmsOperationalTask
         .with_for_update(of=WmsOperationalTask)
         .first()
     )
+
+
+def _try_auto_complete_relocation_task(db: Session, task: WmsOperationalTask) -> None:
+    """Domknij zadanie RELOCATION gdy wszystkie alokacje są już przeniesione."""
+    if task.task_type != TASK_RELOCATION:
+        return
+    if task.status in (STATUS_DONE, STATUS_CANCELLED):
+        return
+    payload = _json_loads(task.payload_json, {})
+    if not isinstance(payload, dict):
+        return
+    allocs = _normalize_payload_allocations(list(payload.get("allocations") or []))
+    if not allocs:
+        return
+    if not _all_allocations_relocated(allocs):
+        return
+    _recompute_relocation_task_progress(task)
+    if task.status == STATUS_DONE:
+        logger.info(
+            "[braki.relocation.check] relocation_task_id=%s auto_completed reason=all_allocations_done",
+            int(task.id),
+        )
 
 
 def _close_task(db: Session, task: WmsOperationalTask, *, reason: str = "") -> None:

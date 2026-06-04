@@ -57,34 +57,16 @@ def _order_relocation_alloc_states(
     warehouse_id: int,
     order_id: int,
 ) -> tuple[int, int, int]:
-    """(pending, partial, done) alokacji rozlokowania dla zamówienia."""
-    from .wms_relocation_workflow import find_relocation_task_for_order
-    from .wms_operational_task_service import _allocation_row_status, _json_loads
+    """(pending, partial, done) — tylko aktywne alokacje rozlokowania (nie historia ``done``)."""
+    from .wms_relocation_workflow import relocation_alloc_counts_for_order
 
-    task = find_relocation_task_for_order(
+    return relocation_alloc_counts_for_order(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         order_id=int(order_id),
+        log_checks=True,
     )
-    if task is None:
-        return 0, 0, 0
-    payload = _json_loads(getattr(task, "payload_json", None), {})
-    if not isinstance(payload, dict):
-        return 0, 0, 0
-    pending = partial = done = 0
-    oid = int(order_id)
-    for raw in payload.get("allocations") or []:
-        if not isinstance(raw, dict) or int(raw.get("order_id") or 0) != oid:
-            continue
-        st = _allocation_row_status(raw)
-        if st == "pending":
-            pending += 1
-        elif st == "partial":
-            partial += 1
-        else:
-            done += 1
-    return pending, partial, done
 
 
 def order_needs_warehouse_pick(db: Session, order: Order, *, r_pend: int) -> bool:

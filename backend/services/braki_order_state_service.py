@@ -60,15 +60,15 @@ def order_has_pending_relocation_work(
     warehouse_id: int,
     order_id: int,
 ) -> bool:
-    from .braki_workflow_service import _order_relocation_alloc_states
+    from .wms_relocation_workflow import order_has_active_relocation_work
 
-    pending, partial, _done = _order_relocation_alloc_states(
+    return order_has_active_relocation_work(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         order_id=int(order_id),
+        log_checks=False,
     )
-    return pending > 0 or partial > 0
 
 
 def order_has_active_braki_operations(db: Session, order: Order) -> bool:

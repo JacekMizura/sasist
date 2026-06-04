@@ -344,8 +344,10 @@ def _resolve_panel_status_after_shortage_cleared(db: Session, order: Order) -> N
 
 
 def _order_fully_picked_for_fulfillment(db: Session, order: Order) -> bool:
-    """Czy wszystkie aktywne linie mają zebraną pełną ilość (bez operacyjnego braku)."""
+    """Czy wszystkie aktywne linie są domknięte: zebrano + brak >= wymagane."""
     eps = 1e-5
+    cid = getattr(order, "cart_id", None)
+    session_cart_id = int(cid) if cid is not None and int(cid) > 0 else None
     for oi in order.items or []:
         if (getattr(oi, "oms_line_status", None) or "").strip().upper() == OMS_LINE_STATUS_REPLACED:
             qty = float(oi.quantity or 0)
@@ -357,6 +359,12 @@ def _order_fully_picked_for_fulfillment(db: Session, order: Order) -> bool:
             continue
         qty = float(oi.quantity or 0)
         if qty <= eps:
+            continue
+        if session_cart_id is not None:
+            if not line_closed_for_picking_finalize(
+                db, order, oi, session_cart_id=session_cart_id
+            ):
+                return False
             continue
         if float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0) > eps:
             return False

@@ -62,7 +62,7 @@ export function brakiPrimaryCta(
     case "awaiting":
     default:
       return {
-        label: "Otwórz zamówienie OMS",
+        label: "Otwórz OMS",
         navigate: () => navigate(`/orders/${orderId}`),
       };
   }
