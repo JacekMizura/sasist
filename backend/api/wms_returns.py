@@ -58,11 +58,21 @@ from ..utils.ui_status_color import normalize_stored_color
 
 logger = logging.getLogger(__name__)
 
+# Routing layout (must match main.py mount order):
+#   lookup_router     -> GET /orders/lookup, GET /lookup  (no dynamic segments)
+#   router            -> list/create/queue-counts/...      (no /{return_id})
+#   returns_id_router -> prefix /id + /{return_id:int}/... (all RMZ-by-id)
+WMS_RETURNS_ROUTING_VERSION = "2026-06-04-lookup-id-split-v17"
+
 lookup_router = APIRouter(tags=["WMS Returns"])
 router = APIRouter(tags=["WMS Returns"])
 returns_id_router = APIRouter(prefix="/id", tags=["WMS Returns"])
 print("IMPORTING WMS RETURNS ROUTER", flush=True)
-print("[routes] lookup_router + static router + returns_id_router (/id only)", flush=True)
+print(
+    f"[routes] wms_returns routing={WMS_RETURNS_ROUTING_VERSION} "
+    "lookup_router + static router + returns_id_router (/id only)",
+    flush=True,
+)
 
 
 def _wms_returns_wh_dep(

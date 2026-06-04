@@ -206,6 +206,7 @@ from .api.cart import router as cart_router
 from .api.import_api import router as import_router
 from .api.export_api import router as export_router
 # Load before order.py (order used to import helpers from wms_returns at module level).
+from .api.wms_returns import WMS_RETURNS_ROUTING_VERSION
 from .api.wms_returns import lookup_router as wms_returns_lookup_router
 from .api.wms_returns import returns_id_router as wms_returns_id_router
 from .api.wms_returns import router as wms_returns_router
@@ -1188,7 +1189,11 @@ WMS_RETURNS_LOOKUP_PATHS = (
 app.include_router(wms_returns_lookup_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
 app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
 app.include_router(wms_returns_id_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
-print(f"[routes] wms_returns mounted prefix={WMS_RETURNS_MOUNT_PREFIX}", flush=True)
+print(
+    f"[routes] wms_returns mounted prefix={WMS_RETURNS_MOUNT_PREFIX} "
+    f"version={WMS_RETURNS_ROUTING_VERSION}",
+    flush=True,
+)
 
 _API_ROUTERS = (
     auth_router,
@@ -1359,7 +1364,7 @@ async def _log_backend_startup() -> None:
 
     # Deploy fingerprint — compare with GitHub commit on Railway → Deployments.
     print(
-        "[startup] wms_returns_lookup_build=2026-06-04-lookup-router-final-v15",
+        f"[startup] wms_returns_lookup_build={WMS_RETURNS_ROUTING_VERSION}",
         flush=True,
     )
     print(

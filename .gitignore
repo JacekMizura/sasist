@@ -5,7 +5,9 @@ npm-debug.log
 # Python
 venv/
 __pycache__/
+backend/**/__pycache__/
 *.pyc
+backend/test.db
 
 # Environment
 .env
