@@ -1,7 +1,7 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
-import { getApiBaseUrl } from "../config/apiBase";
+import { coerceHttpsUrl, getApiBaseUrl } from "../config/apiBase";
 import {
   clearStoredTokens,
   getStoredAccessToken,
@@ -9,7 +9,7 @@ import {
   setStoredTokens,
 } from "../auth/tokenStorage";
 
-const apiBase = (getApiBaseUrl() || "").replace(/\/+$/, "");
+const apiBase = getApiBaseUrl().replace(/\/+$/, "") || "/api";
 
 /**
  * Production:
@@ -18,7 +18,7 @@ const apiBase = (getApiBaseUrl() || "").replace(/\/+$/, "");
  * Dev with Vite proxy:
  *   /api
  */
-const resolvedBaseUrl = apiBase || "/api";
+const resolvedBaseUrl = coerceHttpsUrl(apiBase);
 
 const api = axios.create({
   baseURL: `${resolvedBaseUrl}/`,
@@ -91,22 +91,22 @@ type RetryConfig = InternalAxiosRequestConfig & {
   _retryAfterRefresh?: boolean;
 };
 
+function secureRequestUrl(url: string | undefined): string | undefined {
+  if (typeof url !== "string") return url;
+  if (url.startsWith("http://")) return coerceHttpsUrl(url);
+  if (url.startsWith("/") && !/^https?:\/\//i.test(url)) {
+    return url.replace(/^\/+/, "");
+  }
+  return url;
+}
+
 api.interceptors.request.use(
   (config) => {
-    const u = config.url;
-
-    /**
-     * Prevent accidental absolute http:// urls
-     */
-    if (typeof u === "string") {
-      if (u.startsWith("http://")) {
-        config.url = u.replace("http://", "https://");
-      }
-
-      if (u.startsWith("/") && !/^https?:\/\//i.test(u)) {
-        config.url = u.replace(/^\/+/, "");
-      }
+    if (typeof config.baseURL === "string" && config.baseURL.startsWith("http://")) {
+      config.baseURL = coerceHttpsUrl(config.baseURL);
     }
+
+    config.url = secureRequestUrl(config.url);
 
     const token = getStoredAccessToken();
 

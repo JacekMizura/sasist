@@ -1,6 +1,3 @@
-import axios from "axios";
-
-import { buildApiUrl, getApiBaseUrl } from "../config/apiBase";
 import api from "./axios";
 
 import type { CatModTreeNode } from "../components/admin/PermissionTreePanel";
@@ -126,19 +123,9 @@ export type AuditLogItem = {
 
 /** Same contract as Swagger: POST /api/auth/login, application/json, body { login, password }. */
 export async function loginRequest(login: string, password: string) {
-  if (!getApiBaseUrl()) {
-    throw new Error("VITE_API_URL is not configured");
-  }
-
-  const res = await axios.post<{ access_token: string; refresh_token: string; token_type: string }>(
-    buildApiUrl("auth/login"),
+  const res = await api.post<{ access_token: string; refresh_token: string; token_type: string }>(
+    "auth/login",
     { login, password },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-    },
   );
   return res.data;
 }

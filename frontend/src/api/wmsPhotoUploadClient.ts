@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { getWmsPhotoUploadOrigin } from "../config/apiBase";
+import { coerceHttpsUrl, getWmsPhotoUploadOrigin } from "../config/apiBase";
 
 /**
  * Calls `/wms/photo-upload/...` on the FastAPI host without the `/api` prefix.
@@ -12,7 +12,7 @@ wmsPhotoUploadClient.interceptors.request.use((config) => {
   if (!origin) {
     return Promise.reject(new Error("[wmsPhotoUpload] missing origin — set VITE_API_URL or use dev proxy."));
   }
-  config.baseURL = origin.replace(/\/+$/, "");
+  config.baseURL = coerceHttpsUrl(origin.replace(/\/+$/, ""));
   return config;
 });
 

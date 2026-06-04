@@ -1,11 +1,29 @@
 /**
  * FastAPI axios `baseURL` must include the **`/api` path**, e.g.:
  * - Dev (recommended): relative `/api` — Vite proxies to the backend (LAN + HTTPS safe).
- * - Explicit: `http://192.168.x.x:8010/api` — only if the page is also served over HTTP, or
- *   you accept mixed-content rules in the browser.
+ * - Production: `https://your-backend.example.com/api` or relative `/api` on same host.
  *
  * Static files: `/uploads/...` — use same host as the page when using the dev proxy.
  */
+
+/** Upgrade `http://` API bases when the app runs on HTTPS (avoids mixed-content blocks). */
+export function coerceHttpsUrl(url: string): string {
+  if (!url.startsWith("http://")) return url;
+
+  if (import.meta.env.DEV && typeof window !== "undefined" && window.location.protocol === "http:") {
+    return url;
+  }
+
+  if (import.meta.env.PROD || (typeof window !== "undefined" && window.location.protocol === "https:")) {
+    const upgraded = `https://${url.slice("http://".length)}`;
+    if (import.meta.env.DEV) {
+      console.warn("[api] Upgraded API URL from http to https:", upgraded);
+    }
+    return upgraded;
+  }
+
+  return url;
+}
 
 function warnIfApiPointsToViteDev(base: string) {
   if (!import.meta.env.DEV || !base || base.startsWith("/")) return;
@@ -14,7 +32,7 @@ function warnIfApiPointsToViteDev(base: string) {
     if (u.port === "5173") {
       console.error(
         "[api] VITE_API_URL must point to FastAPI (e.g. :8010/api), not the Vite dev server (:5173). " +
-          "Leave VITE_API_URL empty to use the dev proxy, or set http://<host>:8010/api and restart Vite."
+          "Leave VITE_API_URL empty to use the dev proxy, or set https://<host>:8010/api and restart Vite."
       );
     }
   } catch {
@@ -40,7 +58,7 @@ function warnIfApiPointsToFrontendHost(base: string) {
 }
 
 function normalizeApiBaseFromEnv(value: string): string {
-  const base = value.trim().replace(/\/+$/, "");
+  let base = value.trim().replace(/\/+$/, "");
   if (!base) return "";
   if (base.startsWith("/")) return base;
 
@@ -48,13 +66,13 @@ function normalizeApiBaseFromEnv(value: string): string {
     const u = new URL(base);
     if (u.pathname === "" || u.pathname === "/") {
       u.pathname = "/api";
-      return u.toString().replace(/\/+$/, "");
+      base = u.toString().replace(/\/+$/, "");
     }
   } catch {
     /* keep original value */
   }
 
-  return base;
+  return coerceHttpsUrl(base);
 }
 
 export function getApiBaseUrl(): string {
@@ -67,11 +85,7 @@ export function getApiBaseUrl(): string {
     return fromEnv;
   }
 
-  if (import.meta.env.DEV) {
-    return "/api";
-  }
-
-  return "";
+  return "/api";
 }
 
 /**
@@ -97,13 +111,13 @@ export function getBackendPublicOrigin(): string {
   if (!base) return "";
   if (typeof window === "undefined") {
     try {
-      return new URL(base).origin;
+      return coerceHttpsUrl(new URL(base).origin);
     } catch {
       return "";
     }
   }
   try {
-    return new URL(base, window.location.origin).origin;
+    return coerceHttpsUrl(new URL(base, window.location.origin).origin);
   } catch {
     return "";
   }
@@ -112,19 +126,16 @@ export function getBackendPublicOrigin(): string {
 /**
  * Origin for `GET/POST /wms/photo-upload/...` (FastAPI mounts this outside `/api`).
  * In dev with `baseURL` `/api`, use the SPA origin so Vite proxies `/wms/photo-upload`.
- * With `VITE_API_URL=http://host:8010/api`, use `http://host:8010`.
+ * With `VITE_API_URL=https://host/api`, use `https://host`.
  */
 export function getWmsPhotoUploadOrigin(): string {
   const base = getApiBaseUrl().replace(/\/+$/, "");
-  if (!base) {
-    return typeof window !== "undefined" ? window.location.origin : "";
-  }
-  if (base === "/api") {
+  if (!base || base === "/api") {
     return typeof window !== "undefined" ? window.location.origin : "";
   }
   if (base.startsWith("http://") || base.startsWith("https://")) {
     const root = base.endsWith("/api") ? base.slice(0, -4) : base;
-    return root.replace(/\/+$/, "");
+    return coerceHttpsUrl(root.replace(/\/+$/, ""));
   }
   return typeof window !== "undefined" ? window.location.origin : "";
 }
