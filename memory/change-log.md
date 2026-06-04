@@ -1,4 +1,4 @@
-- 2026-06-04 — **Frontend API — mixed content (HTTP→HTTPS):** `apiBase.coerceHttpsUrl` wymusza `https://` dla `VITE_API_URL` i absolutnych URL-i gdy strona jest na HTTPS lub build PROD; `getApiBaseUrl()` domyślnie `/api`; axios/login/wmsPhotoUpload używają tej samej bazy. `.env.production` już ma `https://sasist-production.up.railway.app/api` — w Railway ustaw tę samą wartość (nie `http://`).
+- 2026-06-04 — **Frontend API + WMS lookup (prod):** `vite.config` przy buildzie podmienia `http://`→`https://` w `VITE_API_URL` (Railway); `resolveAxiosBaseURL()` z `import.meta.env.VITE_API_URL`; axios bez http w PROD. Backend: `@router.get("/orders/lookup")` + alias `/lookup`, startup log `[routes] GET /api/wms/returns/orders/lookup`. Wymaga redeploy obu serwisów.
 
 - 2026-06-04 — **WMS zwroty — lookup zamówienia (404):** `GET /api/wms/returns/orders/lookup` — przywrócony brakujący `@router.get` na `lookup_orders` oraz wydzielona `_normalize_wms_returns_lookup_query` (wcześniej kod był martwy w `_rmz_line_has_damage_photos`). Frontend `wms/returns/orders/lookup` bez zmian; `tenant_id` + `warehouse_id` w query.
 

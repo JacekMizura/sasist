@@ -1291,6 +1291,17 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 app.middleware("http")(outer_request_logger_middleware)
 
 
+def _debug_dump_wms_returns_routes() -> None:
+    """Log WMS returns routes (incl. order lookup) — verify deploy matches frontend paths."""
+    needles = ("/wms/returns", "lookup")
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        if not path or not all(n in path for n in needles):
+            continue
+        methods = sorted(getattr(route, "methods", None) or [])
+        print(f"[routes] {','.join(methods)} {path}", flush=True)
+
+
 @app.on_event("startup")
 async def _log_backend_startup() -> None:
     from .serve import UVICORN_HOST
@@ -1300,6 +1311,7 @@ async def _log_backend_startup() -> None:
         f"bind_host={UVICORN_HOST} PORT env={os.getenv('PORT')!r}",
         flush=True,
     )
+    _debug_dump_wms_returns_routes()
     print("Backend started OK", flush=True)
 
 

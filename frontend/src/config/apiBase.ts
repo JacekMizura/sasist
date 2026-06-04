@@ -1,28 +1,25 @@
 /**
- * FastAPI axios `baseURL` must include the **`/api` path**, e.g.:
- * - Dev (recommended): relative `/api` — Vite proxies to the backend (LAN + HTTPS safe).
- * - Production: `https://your-backend.example.com/api` or relative `/api` on same host.
- *
- * Static files: `/uploads/...` — use same host as the page when using the dev proxy.
+ * Axios `baseURL` = `import.meta.env.VITE_API_URL` (normalized, HTTPS-only in prod).
+ * Dev: empty env → relative `/api` (Vite proxy).
  */
 
-/** Upgrade `http://` API bases when the app runs on HTTPS (avoids mixed-content blocks). */
+const LOCAL_API_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Never expose `http://` to the browser for public/production API hosts. */
 export function coerceHttpsUrl(url: string): string {
   if (!url.startsWith("http://")) return url;
 
-  if (import.meta.env.DEV && typeof window !== "undefined" && window.location.protocol === "http:") {
-    return url;
-  }
-
-  if (import.meta.env.PROD || (typeof window !== "undefined" && window.location.protocol === "https:")) {
-    const upgraded = `https://${url.slice("http://".length)}`;
-    if (import.meta.env.DEV) {
-      console.warn("[api] Upgraded API URL from http to https:", upgraded);
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    const isLocal = LOCAL_API_HOSTS.has(host) || host.endsWith(".local");
+    if (import.meta.env.DEV && isLocal && typeof window !== "undefined" && window.location.protocol === "http:") {
+      return url;
     }
-    return upgraded;
+  } catch {
+    /* upgrade below */
   }
 
-  return url;
+  return `https://${url.slice("http://".length)}`;
 }
 
 function warnIfApiPointsToViteDev(base: string) {
@@ -32,7 +29,7 @@ function warnIfApiPointsToViteDev(base: string) {
     if (u.port === "5173") {
       console.error(
         "[api] VITE_API_URL must point to FastAPI (e.g. :8010/api), not the Vite dev server (:5173). " +
-          "Leave VITE_API_URL empty to use the dev proxy, or set https://<host>:8010/api and restart Vite."
+          "Leave VITE_API_URL empty to use the dev proxy."
       );
     }
   } catch {
@@ -44,12 +41,9 @@ function warnIfApiPointsToFrontendHost(base: string) {
   if (!base.startsWith("http://") && !base.startsWith("https://")) return;
   if (typeof window === "undefined") return;
   try {
-    const apiHost = new URL(base).host;
-    const pageHost = window.location.host;
-    if (apiHost === pageHost) {
+    if (new URL(base).host === window.location.host) {
       console.error(
-        "[api] VITE_API_URL must point to the Railway backend (e.g. https://your-app.up.railway.app/api), " +
-          "not the frontend host. POST /api/* on the SPA host returns 405."
+        "[api] VITE_API_URL must point to the backend (e.g. https://your-app.up.railway.app/api), not the SPA host."
       );
     }
   } catch {
@@ -69,15 +63,18 @@ function normalizeApiBaseFromEnv(value: string): string {
       base = u.toString().replace(/\/+$/, "");
     }
   } catch {
-    /* keep original value */
+    /* keep */
   }
 
   return coerceHttpsUrl(base);
 }
 
-export function getApiBaseUrl(): string {
-  const v = import.meta.env.VITE_API_URL;
-  const fromEnv = typeof v === "string" ? normalizeApiBaseFromEnv(v) : "";
+/**
+ * Single source for axios `baseURL` (from `VITE_API_URL`, no http fallbacks in production).
+ */
+export function resolveAxiosBaseURL(): string {
+  const raw = import.meta.env.VITE_API_URL;
+  const fromEnv = typeof raw === "string" ? normalizeApiBaseFromEnv(raw) : "";
 
   if (fromEnv) {
     warnIfApiPointsToViteDev(fromEnv);
@@ -88,26 +85,19 @@ export function getApiBaseUrl(): string {
   return "/api";
 }
 
-/**
- * Absolute or root-relative URL for a path under the API prefix (e.g. ``auth/login`` → ``/api/auth/login``).
- * Matches Swagger: POST {base}/auth/login with JSON body.
- */
+/** @deprecated use resolveAxiosBaseURL */
+export function getApiBaseUrl(): string {
+  return resolveAxiosBaseURL();
+}
+
 export function buildApiUrl(path: string): string {
-  const base = getApiBaseUrl().replace(/\/+$/, "");
+  const base = resolveAxiosBaseURL().replace(/\/+$/, "");
   const segment = path.replace(/^\/+/, "");
-  if (!base) return `/${segment}`;
-  if (base.startsWith("http://") || base.startsWith("https://")) {
-    return `${base}/${segment}`;
-  }
   return `${base}/${segment}`;
 }
 
-/**
- * Origin for resolving `/uploads/...` paths to absolute URLs in the browser.
- * With dev proxy, matches the Vite dev server (same origin as the app).
- */
 export function getBackendPublicOrigin(): string {
-  const base = getApiBaseUrl().replace(/\/+$/, "");
+  const base = resolveAxiosBaseURL().replace(/\/+$/, "");
   if (!base) return "";
   if (typeof window === "undefined") {
     try {
@@ -123,13 +113,8 @@ export function getBackendPublicOrigin(): string {
   }
 }
 
-/**
- * Origin for `GET/POST /wms/photo-upload/...` (FastAPI mounts this outside `/api`).
- * In dev with `baseURL` `/api`, use the SPA origin so Vite proxies `/wms/photo-upload`.
- * With `VITE_API_URL=https://host/api`, use `https://host`.
- */
 export function getWmsPhotoUploadOrigin(): string {
-  const base = getApiBaseUrl().replace(/\/+$/, "");
+  const base = resolveAxiosBaseURL().replace(/\/+$/, "");
   if (!base || base === "/api") {
     return typeof window !== "undefined" ? window.location.origin : "";
   }

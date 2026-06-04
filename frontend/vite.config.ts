@@ -6,27 +6,66 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+/** Dev-only: Vite proxy target (not exposed to the browser bundle). */
 const DEFAULT_PROXY_TARGET = 'http://localhost:8010'
 
-// HTTPS in dev so getUserMedia works on phones (secure context).
+/**
+ * Bake a safe `import.meta.env.VITE_API_URL` at build time.
+ * Railway sometimes sets http:// — upgrade to https:// before the client bundle is emitted.
+ */
+function normalizeBuildApiUrl(raw: string | undefined, mode: string): string | undefined {
+  const v = (raw ?? '').trim().replace(/\/+$/, '')
+  if (!v) return undefined
+
+  let base = v
+  if (base.startsWith('http://') && (mode === 'production' || base.includes('railway.app'))) {
+    base = `https://${base.slice('http://'.length)}`
+    console.warn(`[vite] VITE_API_URL upgraded to HTTPS for ${mode} build:`, base)
+  }
+
+  if (base.startsWith('/')) return base
+
+  try {
+    const u = new URL(base)
+    if (u.pathname === '' || u.pathname === '/') {
+      u.pathname = '/api'
+      base = u.toString().replace(/\/+$/, '')
+    }
+  } catch {
+    /* keep */
+  }
+
+  return base
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode, command }) => {
-  const env = loadEnv(mode, process.cwd(), '')
-  const raw = (env.VITE_API_PROXY_TARGET ?? '').trim()
-  const proxyTarget = raw.replace(/\/+$/, '') || DEFAULT_PROXY_TARGET
+  const fileEnv = loadEnv(mode, process.cwd(), '')
+  const viteApiRaw = (process.env.VITE_API_URL ?? fileEnv.VITE_API_URL ?? '').trim()
+  const normalizedApiUrl = normalizeBuildApiUrl(viteApiRaw || undefined, mode)
+
+  const rawProxy = (process.env.VITE_API_PROXY_TARGET ?? fileEnv.VITE_API_PROXY_TARGET ?? '').trim()
+  const proxyTarget = rawProxy.replace(/\/+$/, '') || DEFAULT_PROXY_TARGET
 
   if (command === 'serve') {
     console.log(`[VITE] Proxy target: ${proxyTarget}`)
+    if (normalizedApiUrl) {
+      console.log(`[VITE] VITE_API_URL (client): ${normalizedApiUrl}`)
+    }
+  }
+
+  if (command === 'build' && normalizedApiUrl) {
+    console.log(`[VITE] build VITE_API_URL=${normalizedApiUrl}`)
   }
 
   return {
     plugins: [react(), basicSsl()],
+    define: normalizedApiUrl
+      ? { 'import.meta.env.VITE_API_URL': JSON.stringify(normalizedApiUrl) }
+      : {},
     server: {
-      // Listen on 0.0.0.0 so phones/other PCs can open https://<LAN-IP>:5173 (or http if SSL is off).
-      // Allow inbound TCP 5173 in Windows Firewall if the device cannot connect.
       host: true,
       port: 5173,
-      // Same-origin /api, /uploads, /wms/photo-upload: browser → https://<host>:5173/... → FastAPI on proxy target.
       proxy: {
         '/api': {
           target: proxyTarget,
@@ -49,7 +88,6 @@ export default defineConfig(({ mode, command }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
       },
-      // Prefer .tsx over .ts so reserveLocationStyle resolves to .tsx
       extensions: ['.tsx', '.ts', '.jsx', '.js', '.json', '.mjs'],
     },
   }

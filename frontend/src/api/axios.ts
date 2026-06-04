@@ -1,7 +1,7 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
-import { coerceHttpsUrl, getApiBaseUrl } from "../config/apiBase";
+import { coerceHttpsUrl, resolveAxiosBaseURL } from "../config/apiBase";
 import {
   clearStoredTokens,
   getStoredAccessToken,
@@ -9,16 +9,8 @@ import {
   setStoredTokens,
 } from "../auth/tokenStorage";
 
-const apiBase = getApiBaseUrl().replace(/\/+$/, "") || "/api";
-
-/**
- * Production:
- *   https://domain/api
- *
- * Dev with Vite proxy:
- *   /api
- */
-const resolvedBaseUrl = coerceHttpsUrl(apiBase);
+/** From `import.meta.env.VITE_API_URL` (see vite.config build-time HTTPS normalization). */
+const resolvedBaseUrl = resolveAxiosBaseURL().replace(/\/+$/, "") || "/api";
 
 const api = axios.create({
   baseURL: `${resolvedBaseUrl}/`,
@@ -28,7 +20,6 @@ const api = axios.create({
   },
 });
 
-/** Client without interceptors (refresh only). */
 const refreshClient = axios.create({
   baseURL: `${resolvedBaseUrl}/`,
   headers: {
@@ -36,6 +27,10 @@ const refreshClient = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+if (import.meta.env.PROD && resolvedBaseUrl.startsWith("http://")) {
+  console.error("[api] Refusing insecure API baseURL in production:", resolvedBaseUrl);
+}
 
 let refreshInFlight: Promise<string | null> | null = null;
 
