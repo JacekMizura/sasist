@@ -1173,6 +1173,7 @@ except Exception:
 # ==================================================
 
 API_PREFIX = "/api"
+WMS_RETURNS_ORDER_LOOKUP_PATH = f"{API_PREFIX}/wms/returns/orders/lookup"
 _API_ROUTERS = (
     auth_router,
     workforce_router,
@@ -1265,6 +1266,26 @@ _API_ROUTERS = (
 for _r in _API_ROUTERS:
     app.include_router(_r, prefix=API_PREFIX)
 
+
+def _ensure_wms_returns_order_lookup_route() -> None:
+    """Guarantee frontend contract GET /api/wms/returns/orders/lookup (also if router lacked decorator)."""
+    paths = {getattr(r, "path", None) for r in app.routes}
+    if WMS_RETURNS_ORDER_LOOKUP_PATH in paths:
+        return
+    from .api.wms_returns import lookup_orders
+
+    app.add_api_route(
+        WMS_RETURNS_ORDER_LOOKUP_PATH,
+        lookup_orders,
+        methods=["GET"],
+        tags=["WMS Returns"],
+        name="wms_returns_orders_lookup_fallback",
+    )
+    print(f"[routes] registered fallback {WMS_RETURNS_ORDER_LOOKUP_PATH}", flush=True)
+
+
+_ensure_wms_returns_order_lookup_route()
+
 _MSG_ADMIN = f"{API_PREFIX}/admin/message-templates"
 _MSG_LEGACY = f"{API_PREFIX}/message-templates"
 app.include_router(message_templates_router, prefix=_MSG_ADMIN)
@@ -1295,26 +1316,21 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 app.middleware("http")(outer_request_logger_middleware)
 
 
-WMS_RETURNS_ORDER_LOOKUP_PATH = "/api/wms/returns/orders/lookup"
-
-
 def _debug_dump_routes() -> None:
-    """Startup route dump — verify production registers WMS returns order lookup."""
+    """Startup route dump — Railway logs must show /api/wms/returns/orders/lookup."""
     found_lookup = False
-    for route in app.routes:
-        path = getattr(route, "path", None)
+    for r in app.routes:
+        path = getattr(r, "path", None)
         if not path:
             continue
         if "/wms/returns" in path:
-            methods = ",".join(sorted(getattr(route, "methods", None) or []))
-            suffix = f" {methods}" if methods else ""
-            print(f"[routes]{suffix} {path}", flush=True)
+            print("[routes]", path, flush=True)
         if path == WMS_RETURNS_ORDER_LOOKUP_PATH:
             found_lookup = True
     if found_lookup:
-        print(f"[routes] OK {WMS_RETURNS_ORDER_LOOKUP_PATH}", flush=True)
+        print("[routes]", WMS_RETURNS_ORDER_LOOKUP_PATH, flush=True)
     else:
-        print(f"[routes] MISSING {WMS_RETURNS_ORDER_LOOKUP_PATH}", flush=True)
+        print("[routes] MISSING", WMS_RETURNS_ORDER_LOOKUP_PATH, flush=True)
 
 
 @app.on_event("startup")
@@ -1326,6 +1342,7 @@ async def _log_backend_startup() -> None:
         f"bind_host={UVICORN_HOST} PORT env={os.getenv('PORT')!r}",
         flush=True,
     )
+    _ensure_wms_returns_order_lookup_route()
     _debug_dump_routes()
     print("Backend started OK", flush=True)
 
