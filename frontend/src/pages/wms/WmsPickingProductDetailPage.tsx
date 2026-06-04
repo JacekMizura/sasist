@@ -331,6 +331,8 @@ export default function WmsPickingProductDetailPage() {
 
   const submitShortage = async () => {
     if (!pickingSession || warehouseId == null || !detail || reportShortageBlocked || shortageQtyInput <= 0) return;
+    const fifoOrder =
+      detail.orders.find((o) => o.order_id === detail.active_fifo_order_id) ?? detail.orders[0] ?? null;
     setShortageBusy(true);
     setShortageErr(null);
     try {
@@ -339,6 +341,11 @@ export default function WmsPickingProductDetailPage() {
         location_id: selectedLocation?.location_id ?? activeLocationId ?? null,
         missing_qty: shortageQtyInput,
         cart_id: pickingSession.cartId!,
+        order_ids: detail.orders.map((o) => o.order_id),
+        ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
+        ...(fifoOrder?.order_item_id != null && fifoOrder.order_item_id > 0
+          ? { order_item_id: fifoOrder.order_item_id }
+          : {}),
       });
       const optimistic = applyWmsPickingShortageToDetail(detail, shortageQtyInput);
       applyDetailToState(optimistic);

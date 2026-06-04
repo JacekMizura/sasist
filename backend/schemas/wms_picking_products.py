@@ -90,6 +90,11 @@ class WmsPickingProductLocationRow(BaseModel):
 
 class WmsPickingProductOrderRow(BaseModel):
     order_id: int
+    order_item_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="ID linii OrderItem dla tego produktu w zamówieniu (zgłoszenie braku)",
+    )
     order_number: str
     quantity: float = Field(..., ge=0, description="Ilość tego produktu w zamówieniu")
     picked_quantity: float = Field(
@@ -248,6 +253,11 @@ class WmsPickingReportShortageBody(BaseModel):
         default=None,
         ge=1,
         description="Dogrywka: wymuś zamówienie w kontekście zgłoszenia braku (linia zamiennika)",
+    )
+    order_item_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Konkretna linia zamówienia (zamiennik / recovery) — bez zgadywania po product_id",
     )
 
 

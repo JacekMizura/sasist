@@ -35,6 +35,9 @@ from ..models.wms_order_event import (
     EVT_PICKING_FINISHED,
     EVT_PICKING_STARTED,
     EVT_SHORTAGE_REPORTED,
+    EVT_ORDER_LINE_SHORTAGE_REPORTED,
+    EVT_REPLACEMENT_SHORTAGE_REPORTED,
+    EVT_RECOVERY_SHORTAGE_REPORTED,
     EVT_ORDER_LINE_REMOVED,
     EVT_ORDER_LINE_REPLACED,
     EVT_OMS_DECISION_WAIT,
@@ -625,6 +628,84 @@ def emit_wms_picking_finished(
         warehouse_id=warehouse_id,
         event_type=EVT_PICKING_FINISHED,
         message=msg,
+    )
+
+
+def emit_line_shortage_reported(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    order_item_id: int,
+    product_id: int,
+    product_name: str,
+    location_id: Optional[int],
+    cart_id: int,
+    shortage_qty: float,
+    operator_user_id: Optional[int],
+    is_replacement: bool = False,
+    is_recovery: bool = False,
+    original_order_item_id: Optional[int] = None,
+    original_product_name: Optional[str] = None,
+    reason: str = "",
+) -> None:
+    """Audyt braku na konkretnej linii (zwykła / zamiennik / dogrywka)."""
+    if is_recovery:
+        event_type = EVT_RECOVERY_SHORTAGE_REPORTED
+        title = "Brak na dogrywce (recovery)"
+    elif is_replacement:
+        event_type = EVT_REPLACEMENT_SHORTAGE_REPORTED
+        title = "Brak na zamienniku"
+    else:
+        event_type = EVT_ORDER_LINE_SHORTAGE_REPORTED
+        title = "Zgłoszono brak na linii"
+    loc_label = location_display_label(db, int(location_id)) if location_id is not None else None
+    cart_row = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+    cart_label = cart_display_name_for_wms(cart_row) if cart_row is not None else f"#{cart_id}"
+    meta: dict[str, Any] = {
+        "product_id": int(product_id),
+        "product_name": product_name[:512],
+        "quantity": float(shortage_qty),
+        "source_location": loc_label,
+        "target_cart": cart_label,
+        "cart_id": int(cart_id),
+        "order_item_id": int(order_item_id),
+        "reason": reason[:256] if reason else None,
+    }
+    if original_order_item_id is not None and int(original_order_item_id) > 0:
+        meta["original_order_item_id"] = int(original_order_item_id)
+    if original_product_name:
+        meta["original_product_name"] = original_product_name[:512]
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    insert_wms_order_event(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=event_type,
+        product_id=int(product_id),
+        order_item_id=int(order_item_id),
+        source_location_id=int(location_id) if location_id is not None else None,
+        target_cart_id=int(cart_id),
+        quantity=float(shortage_qty),
+        metadata=meta,
+    )
+    msg_parts = [title, f"{product_name} ({_fmt_qty(float(shortage_qty))} szt.)"]
+    if is_replacement and original_product_name:
+        msg_parts.append(f"zamiast: {original_product_name}")
+    if loc_label:
+        msg_parts.append(f"lokalizacja: {loc_label}")
+    if cart_label:
+        msg_parts.append(cart_label)
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        event_type=event_type,
+        message=" — ".join(msg_parts),
     )
 
 
@@ -1366,8 +1447,21 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
             body.append(str(meta["product_name"]))
     elif et == EVT_RECOVERY_FINISHED:
         title = "Zakończono dogrywkę zbierki"
-    elif et == EVT_SHORTAGE_REPORTED:
-        title = "Zgłoszono brak"
+    elif et in (
+        EVT_SHORTAGE_REPORTED,
+        EVT_ORDER_LINE_SHORTAGE_REPORTED,
+        EVT_REPLACEMENT_SHORTAGE_REPORTED,
+        EVT_RECOVERY_SHORTAGE_REPORTED,
+    ):
+        title = {
+            EVT_RECOVERY_SHORTAGE_REPORTED: "Brak na dogrywce",
+            EVT_REPLACEMENT_SHORTAGE_REPORTED: "Brak na zamienniku",
+            EVT_ORDER_LINE_SHORTAGE_REPORTED: "Brak na linii",
+        }.get(et, "Zgłoszono brak")
+        if meta.get("product_name"):
+            body.append(str(meta["product_name"]))
+        if meta.get("original_product_name"):
+            body.append(f"zamiast: {meta['original_product_name']}")
         pq = meta.get("quantity")
         if pq is not None:
             body.append(f"ilość: {_fmt_qty(float(pq))}")

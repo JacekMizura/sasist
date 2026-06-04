@@ -15,3 +15,9 @@
 - **Zgłoszenie braku zamiennika:** `report-shortage` + `recovery_order_id`; `_line_ok_for_shortage_report`; log `[replacement.shortage]`.
 - **API detail:** `customer_name`, `delivery_name`, phone, email, address; `nearest_location_*` na liniach; etykieta `"Brak lokalizacji"`.
 - **Front:** filtry tylko `braki_workflow_status`; detail — klient i LOK z payloadu API.
+
+## 2026-06-04 — report-shortage: zamiennik / recovery (400)
+
+- **Przyczyna 400:** `report-shortage` wymagał kohorty statusu zbierania; zamówienia w dogrywce (BRAKI) nie przechodziły walidacji sesji.
+- **Backend:** `recovery_order_id` + `order_item_id` → `forced_scope_ids` (jak `fixed_order_ids` na liście recovery); `_line_eligible_for_shortage_report`; logi `[report_shortage] ENTER/REJECT/line`; audyt `ORDER_LINE_SHORTAGE_REPORTED` / `REPLACEMENT_SHORTAGE_REPORTED` / `RECOVERY_SHORTAGE_REPORTED`.
+- **API detail:** `order_item_id` na wierszu zamówienia w szczególe produktu; front przekazuje `recovery_order_id`, `order_ids`, `order_item_id` w POST.

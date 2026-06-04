@@ -1031,6 +1031,7 @@ def build_wms_picking_product_detail(
                 order_rows.append(
                     WmsPickingProductOrderRow(
                         order_id=int(o.id),
+                        order_item_id=int(oi.id),
                         order_number=str(o.number or f"#{o.id}"),
                         quantity=qty,
                         picked_quantity=round(picked_row, 6),
@@ -1087,6 +1088,7 @@ def build_wms_picking_product_detail(
                     refreshed_rows.append(
                         WmsPickingProductOrderRow(
                             order_id=orow.order_id,
+                            order_item_id=orow.order_item_id,
                             order_number=orow.order_number,
                             quantity=orow.quantity,
                             picked_quantity=orow.picked_quantity,
@@ -1317,6 +1319,56 @@ def record_wms_quick_pick(
     return last_oid, last_oiid
 
 
+def _report_shortage_reject(reason: str, *, payload: dict, **ctx: object) -> None:
+    logger.warning(
+        "[report_shortage] REJECT reason=%s payload=%s ctx=%s",
+        reason,
+        payload,
+        ctx,
+    )
+    raise ValueError(reason)
+
+
+def _line_eligible_for_shortage_report(oi: OrderItem) -> tuple[bool, str]:
+    """Czy można zgłosić brak na tej linii (zamiennik / TO_PICK / aktywna — nie archiwum REPLACED)."""
+    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+        return False, "bundle_component_line"
+    if order_item_is_replaced_line(oi):
+        return False, "archived_replaced_line"
+    qty = float(oi.quantity or 0)
+    if qty > 1e-9:
+        return True, "active_line"
+    rep_from = int(getattr(oi, "replaced_from_order_item_id", 0) or 0)
+    if rep_from > 0:
+        return True, "substitute_line"
+    st = (getattr(oi, "oms_line_status", None) or "").strip().upper()
+    if st == OMS_LINE_STATUS_TO_PICK:
+        return True, "to_pick_line"
+    return False, "no_eligible_quantity"
+
+
+def _shortage_line_report_context(
+    db: Session,
+    oi: OrderItem,
+    *,
+    is_recovery: bool,
+) -> dict:
+    rep_from = int(getattr(oi, "replaced_from_order_item_id", 0) or 0)
+    is_replacement = rep_from > 0
+    orig_name = (getattr(oi, "replaced_from_product_name", None) or "").strip() or None
+    pr = oi.product if getattr(oi, "product", None) is not None else None
+    if pr is None and oi.product_id:
+        pr = db.query(Product).filter(Product.id == int(oi.product_id)).first()
+    pname = (pr.name if pr and pr.name else "") or f"Produkt #{int(oi.product_id)}"
+    return {
+        "is_replacement": bool(is_replacement),
+        "is_recovery": bool(is_recovery),
+        "original_order_item_id": rep_from if rep_from > 0 else None,
+        "original_product_name": orig_name,
+        "product_name": pname,
+    }
+
+
 def report_wms_picking_product_shortage(
     db: Session,
     *,
@@ -1330,12 +1382,38 @@ def report_wms_picking_product_shortage(
     cart_id: int,
     ui_order_ids: Optional[Sequence[int]] = None,
     recovery_order_id: int | None = None,
+    order_item_id: int | None = None,
     operator_user_id: int | None = None,
 ) -> dict:
     """
-    Zgłoszenie braku w kontekście sesji zbierania (wózek): tylko zamówienia przypisane do wózka
-    lub jeszcze bez wózka w tej samej kohortcie; zsumowanie zebranych ilości po ``Pick.cart_id`` sesji.
+    Zgłoszenie braku w kontekście sesji zbierania (wózek).
+
+    ``recovery_order_id`` / ``order_item_id`` — dogrywka i zamienniki bez kohorty statusu źródłowego
+    (jak ``fixed_order_ids`` na liście produktów recovery).
     """
+    payload_log = {
+        "product_id": int(product_id),
+        "location_id": int(location_id) if location_id is not None else None,
+        "missing_qty": float(missing_qty),
+        "cart_id": int(cart_id),
+        "order_ids": list(ui_order_ids) if ui_order_ids is not None else None,
+        "recovery_order_id": int(recovery_order_id) if recovery_order_id is not None else None,
+        "order_item_id": int(order_item_id) if order_item_id is not None else None,
+    }
+    target_item_id = int(order_item_id) if order_item_id is not None and int(order_item_id) > 0 else None
+    is_recovery = recovery_order_id is not None and int(recovery_order_id) > 0
+    roid = int(recovery_order_id) if is_recovery else None
+
+    logger.info(
+        "[report_shortage] ENTER payload=%s order_id=%s order_item_id=%s "
+        "replacement_line_id=%s is_recovery=%s",
+        payload_log,
+        roid,
+        target_item_id,
+        target_item_id,
+        is_recovery,
+    )
+
     pc = (
         db.query(PickingConfig)
         .filter(
@@ -1346,7 +1424,10 @@ def report_wms_picking_product_shortage(
         .first()
     )
     if not pc:
-        raise ValueError("Brak konfiguracji zbierania dla tego statusu źródłowego.")
+        _report_shortage_reject(
+            "Brak konfiguracji zbierania dla tego statusu źródłowego.",
+            payload=payload_log,
+        )
 
     pid = int(product_id)
     cid = int(cart_id)
@@ -1360,210 +1441,279 @@ def report_wms_picking_product_shortage(
         .first()
     )
     if not cart_row:
-        raise ValueError("Nie znaleziono wózka sesji (cart_id) dla tego magazynu.")
-
-    ot = _order_type_filter(order_type)
-    order_ids_all = _query_order_ids_for_status(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        source_status_id=source_status_id,
-        order_type=ot,
-    )
-    if not order_ids_all:
-        raise ValueError("Brak zamówień w tym statusie zbierania.")
-
-    cohort_set = set(int(x) for x in order_ids_all)
-    # Ta sama logika co lista zamówień na szczególe produktu: wózek sesji lub brak przypisania.
-    scoped_rows = (
-        db.query(Order.id)
-        .filter(
-            Order.id.in_(list(order_ids_all)),
-            or_(Order.cart_id == cid, Order.cart_id.is_(None)),
+        _report_shortage_reject(
+            "Nie znaleziono wózka sesji (cart_id) dla tego magazynu.",
+            payload=payload_log,
         )
-        .all()
-    )
-    session_scope_ids: list[int] = [int(r[0]) for r in scoped_rows]
 
-    if ui_order_ids is not None and len(list(ui_order_ids)) > 0:
-        want = [int(x) for x in ui_order_ids if int(x) > 0]
-        allowed = set(session_scope_ids)
-        session_scope_ids = list(dict.fromkeys([oid for oid in want if oid in allowed and oid in cohort_set]))
+    forced_scope_ids: list[int] | None = None
+    if target_item_id is not None:
+        oi_target = (
+            db.query(OrderItem)
+            .options(joinedload(OrderItem.product))
+            .filter(OrderItem.id == int(target_item_id))
+            .first()
+        )
+        if oi_target is None:
+            _report_shortage_reject(
+                "Nie znaleziono linii zamówienia (order_item_id).",
+                payload=payload_log,
+                order_item_id=target_item_id,
+            )
+        if int(oi_target.product_id) != pid:
+            _report_shortage_reject(
+                "product_id nie odpowiada wskazanej linii zamówienia.",
+                payload=payload_log,
+                order_item_id=target_item_id,
+                line_product_id=int(oi_target.product_id),
+            )
+        ok_ln, why_ln = _line_eligible_for_shortage_report(oi_target)
+        if not ok_ln:
+            _report_shortage_reject(
+                f"Linia nie kwalifikuje się do zgłoszenia braku ({why_ln}).",
+                payload=payload_log,
+                order_item_id=target_item_id,
+                is_replacement=bool(getattr(oi_target, "replaced_from_order_item_id", None)),
+            )
+        forced_scope_ids = [int(oi_target.order_id)]
 
-    if recovery_order_id is not None and int(recovery_order_id) > 0:
-        roid = int(recovery_order_id)
+    if is_recovery and roid is not None:
+        from .wms_recovery_pick_service import get_open_recovery_task_for_order
+
+        if get_open_recovery_task_for_order(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(roid),
+        ) is None:
+            _report_shortage_reject(
+                "Brak otwartego zadania dogrywki (recovery) dla tego zamówienia.",
+                payload=payload_log,
+                order_id=roid,
+            )
         o_rec = (
             db.query(Order)
-            .filter(Order.id == roid, Order.tenant_id == int(tenant_id))
+            .filter(Order.id == int(roid), Order.tenant_id == int(tenant_id))
             .first()
         )
         if o_rec is None:
-            raise ValueError("Zamówienie dogrywki nie znalezione.")
-        if o_rec.cart_id is not None and int(o_rec.cart_id) != cid:
-            raise ValueError("Zamówienie dogrywki jest na innym wózku — użyj właściwej sesji.")
-        session_scope_ids = list(dict.fromkeys([roid] + session_scope_ids))
+            _report_shortage_reject(
+                "Zamówienie dogrywki nie znalezione.",
+                payload=payload_log,
+                order_id=roid,
+            )
+        forced_scope_ids = list(dict.fromkeys([int(roid)] + (forced_scope_ids or [])))
 
-    if not session_scope_ids:
-        logger.info(
-            "wms shortage: no orders in session context product_id=%s cart_id=%s cohort=%s",
-            pid,
-            cid,
-            len(order_ids_all),
+    if forced_scope_ids is not None:
+        session_scope_ids = list(dict.fromkeys(int(x) for x in forced_scope_ids if int(x) > 0))
+        orders = (
+            db.query(Order)
+            .options(joinedload(Order.items).joinedload(OrderItem.product))
+            .filter(Order.id.in_(session_scope_ids))
+            .all()
         )
-        raise ValueError("Brak zamówień w bieżącej sesji zbierania (wózek).")
+    else:
+        ot = _order_type_filter(order_type)
+        order_ids_all = _query_order_ids_for_status(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            source_status_id=source_status_id,
+            order_type=ot,
+        )
+        if not order_ids_all:
+            _report_shortage_reject(
+                "Brak zamówień w tym statusie zbierania.",
+                payload=payload_log,
+            )
+
+        cohort_set = set(int(x) for x in order_ids_all)
+        scoped_rows = (
+            db.query(Order.id)
+            .filter(
+                Order.id.in_(list(order_ids_all)),
+                or_(Order.cart_id == cid, Order.cart_id.is_(None)),
+            )
+            .all()
+        )
+        session_scope_ids = [int(r[0]) for r in scoped_rows]
+
+        if ui_order_ids is not None and len(list(ui_order_ids)) > 0:
+            want = [int(x) for x in ui_order_ids if int(x) > 0]
+            allowed = set(session_scope_ids)
+            session_scope_ids = list(dict.fromkeys([oid for oid in want if oid in allowed and oid in cohort_set]))
+
+        if not session_scope_ids:
+            _report_shortage_reject(
+                "Brak zamówień w bieżącej sesji zbierania (wózek).",
+                payload=payload_log,
+                cohort_size=len(order_ids_all),
+            )
+
+        orders = (
+            db.query(Order)
+            .options(joinedload(Order.items).joinedload(OrderItem.product))
+            .filter(Order.id.in_(session_scope_ids))
+            .all()
+        )
 
     if location_id is not None:
         allowed_locs = _allowed_pick_location_ids_for_product(
             db, tenant_id=tenant_id, order_ids=session_scope_ids, product_id=pid
         )
-        if int(location_id) not in allowed_locs:
-            raise ValueError("Lokalizacja nie należy do trasy zbiórki tego produktu.")
+        if allowed_locs and int(location_id) not in allowed_locs:
+            if is_recovery or target_item_id is not None:
+                logger.info(
+                    "[report_shortage] location_soft_skip order_ids=%s location_id=%s allowed=%s",
+                    session_scope_ids,
+                    int(location_id),
+                    sorted(allowed_locs)[:16],
+                )
+            else:
+                _report_shortage_reject(
+                    "Lokalizacja nie należy do trasy zbiórki tego produktu.",
+                    payload=payload_log,
+                    location_id=int(location_id),
+                    allowed_count=len(allowed_locs),
+                )
 
-    logger.info(
-        "wms shortage: product_id=%s cart_id=%s cohort_orders=%s session_scope_order_ids=%s session_scope_count=%s ui_filter_count=%s",
-        pid,
-        cid,
-        len(order_ids_all),
-        session_scope_ids[:32],
-        len(session_scope_ids),
-        len(list(ui_order_ids)) if ui_order_ids is not None else None,
-    )
-
-    orders = (
-        db.query(Order)
-        .options(joinedload(Order.items))
-        .filter(Order.id.in_(session_scope_ids))
-        .all()
-    )
-
-    affected: list[int] = []
-
-    def _line_ok_for_shortage_report(oi: OrderItem) -> bool:
-        if order_item_is_replaced_line(oi):
-            return False
-        if float(oi.quantity or 0) <= 1e-9 and not (
-            getattr(oi, "replaced_from_order_item_id", None) is not None
-            and int(getattr(oi, "replaced_from_order_item_id", 0) or 0) > 0
-        ):
-            return False
-        return True
-
-    for o in orders:
+    def _iter_report_lines(o: Order):
         for oi in sorted(o.items or [], key=lambda x: int(x.id)):
+            if target_item_id is not None and int(oi.id) != int(target_item_id):
+                continue
             if int(oi.product_id) != pid:
                 continue
-            if not _line_ok_for_shortage_report(oi):
-                continue
+            ok, reason = _line_eligible_for_shortage_report(oi)
             rep_oid = getattr(oi, "replaced_from_order_item_id", None)
             orig_oid = int(rep_oid) if rep_oid is not None and int(rep_oid) > 0 else None
-            logger.info(
-                "[replacement.shortage] replacement_line_id=%s original_line_id=%s allowed=%s reason=session_report",
-                int(oi.id),
-                orig_oid,
-                True,
-            )
             picked_sum = sum_pick_events_for_line_cart(db, int(oi.id), cid)
             declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
-            gap = max(0.0, float(oi.quantity) - float(picked_sum or 0))
+            gap = max(0.0, float(oi.quantity or 0) - float(picked_sum or 0))
             rem = gap - declared
+            logger.info(
+                "[report_shortage] line order_id=%s order_item_id=%s replacement_line_id=%s "
+                "source_line_id=%s is_replacement=%s is_recovery=%s picked_qty=%s remaining_qty=%s allowed=%s reason=%s",
+                int(o.id),
+                int(oi.id),
+                int(oi.id) if orig_oid is not None else None,
+                orig_oid,
+                orig_oid is not None,
+                is_recovery,
+                picked_sum,
+                rem,
+                ok,
+                reason,
+            )
+            if not ok:
+                continue
+            yield oi, picked_sum, declared, gap, rem
+
+    affected: list[int] = []
+    for o in orders:
+        for oi, _ps, _dec, _gap, rem in _iter_report_lines(o):
             if rem > 1e-9:
                 affected.append(int(o.id))
                 break
 
-    logger.info(
-        "wms shortage: product_id=%s cart_id=%s affected_count=%s affected_ids=%s",
-        pid,
-        cid,
-        len(affected),
-        affected[:24],
-    )
-
     if not affected:
-        raise ValueError("Brak zamówień z niewypełnioną linią tego produktu w tej sesji (wózek).")
+        _report_shortage_reject(
+            "Brak zamówień z niewypełnioną linią tego produktu w tej sesji (wózek).",
+            payload=payload_log,
+            session_scope_ids=session_scope_ids,
+            is_recovery=is_recovery,
+        )
 
     aff_set = list(dict.fromkeys(affected))
     max_declarable = 0.0
     for o in orders:
         if int(o.id) not in aff_set:
             continue
-        for oi in sorted(o.items or [], key=lambda x: int(x.id)):
-            if int(oi.product_id) != pid:
-                continue
-            if not _line_ok_for_shortage_report(oi):
-                continue
-            picked_sum_line = sum_pick_events_for_line_cart(db, int(oi.id), cid)
-            miss_ln = float(oi.wms_picking_line_missing_qty or 0)
-            max_declarable += max(0.0, float(oi.quantity) - float(picked_sum_line or 0) - miss_ln)
+        for _oi, _ps, declared_ln, gap_ln, rem_line in _iter_report_lines(o):
+            max_declarable += max(0.0, rem_line)
     max_declarable = round(max_declarable, 6)
     if float(missing_qty) > max_declarable + 1e-6:
-        raise ValueError(
+        _report_shortage_reject(
             f"Nie można zgłosić więcej niż {max_declarable:g} szt. braku "
-            f"(zebrano + brak nie może przekroczyć zamówionej ilości)."
+            f"(zebrano + brak nie może przekroczyć zamówionej ilości).",
+            payload=payload_log,
+            max_declarable=max_declarable,
         )
+
+    from .wms_audit_service import emit_line_shortage_reported
 
     remaining_budget = max(0.0, float(missing_qty))
     shortage_by_order: dict[int, float] = defaultdict(float)
+    line_audit_rows: list[tuple[Order, OrderItem, float]] = []
+
     for o in orders:
         if int(o.id) not in aff_set:
             continue
         touch_picking_in_progress(o)
-        for oi in sorted(o.items or [], key=lambda x: int(x.id)):
-            if int(oi.product_id) != pid:
+        for oi, picked_sum_line, declared_ln, gap_ln, rem_line in _iter_report_lines(o):
+            if rem_line <= 1e-9:
                 continue
-            if not _line_ok_for_shortage_report(oi):
+            take = min(rem_line, remaining_budget)
+            if take <= 1e-9:
                 continue
-            picked_sum_line = sum_pick_events_for_line_cart(db, int(oi.id), cid)
-            declared_ln = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
-            gap_ln = max(0.0, float(oi.quantity) - float(picked_sum_line or 0))
-            rem_line = gap_ln - declared_ln
-            if rem_line > 1e-9:
-                take = min(rem_line, remaining_budget)
-                if take <= 1e-9:
-                    continue
-                remaining_budget = max(0.0, remaining_budget - take)
-                shortage_by_order[int(o.id)] += float(take)
-                oi.wms_shortage_declared_qty = round(declared_ln + take, 6)
-                oi.wms_picking_line_status = "missing"
-                pending_pick_rows = (
-                    db.query(Pick.id)
-                    .filter(
-                        Pick.order_item_id == int(oi.id),
-                        Pick.cart_id == cid,
-                        Pick.picked_at.is_(None),
-                    )
-                    .all()
-                )
-                delete_pick_events_for_pick_ids(db, [int(r[0]) for r in pending_pick_rows])
-                db.query(Pick).filter(
+            remaining_budget = max(0.0, remaining_budget - take)
+            shortage_by_order[int(o.id)] += float(take)
+            oi.wms_shortage_declared_qty = round(declared_ln + take, 6)
+            oi.wms_picking_line_status = "missing"
+            pending_pick_rows = (
+                db.query(Pick.id)
+                .filter(
                     Pick.order_item_id == int(oi.id),
                     Pick.cart_id == cid,
                     Pick.picked_at.is_(None),
-                ).delete(synchronize_session=False)
-                append_event(
-                    db,
-                    order_item_id=int(oi.id),
-                    event_type=FE_MISSING,
-                    quantity=float(take),
-                    metadata={"cart_id": cid, "source": "wms_report_shortage"},
                 )
-                sync_declared_shortage_column_from_missing_events(db, int(oi.id))
+                .all()
+            )
+            delete_pick_events_for_pick_ids(db, [int(r[0]) for r in pending_pick_rows])
+            db.query(Pick).filter(
+                Pick.order_item_id == int(oi.id),
+                Pick.cart_id == cid,
+                Pick.picked_at.is_(None),
+            ).delete(synchronize_session=False)
+            append_event(
+                db,
+                order_item_id=int(oi.id),
+                event_type=FE_MISSING,
+                quantity=float(take),
+                metadata={
+                    "cart_id": cid,
+                    "source": "wms_report_shortage",
+                    "recovery": is_recovery,
+                    "replacement": bool(getattr(oi, "replaced_from_order_item_id", None)),
+                },
+            )
+            sync_declared_shortage_column_from_missing_events(db, int(oi.id))
+            line_audit_rows.append((o, oi, float(take)))
 
     for oid in aff_set:
         recompute_order_fulfillment(db, int(oid), commit=False, session_cart_id=cid)
 
-    for oid_s, amt in shortage_by_order.items():
-        if float(amt) > 1e-9:
-            emit_wms_shortage_reported(
-                db,
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                order_id=int(oid_s),
-                product_id=int(pid),
-                location_id=int(location_id) if location_id is not None else None,
-                cart_id=int(cid),
-                shortage_qty=float(amt),
-                operator_user_id=operator_user_id,
-            )
+    for o, oi, take in line_audit_rows:
+        if take <= 1e-9:
+            continue
+        ctx = _shortage_line_report_context(db, oi, is_recovery=is_recovery)
+        emit_line_shortage_reported(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(o.id),
+            order_item_id=int(oi.id),
+            product_id=int(pid),
+            product_name=str(ctx["product_name"]),
+            location_id=int(location_id) if location_id is not None else None,
+            cart_id=int(cid),
+            shortage_qty=float(take),
+            operator_user_id=operator_user_id,
+            is_replacement=bool(ctx["is_replacement"]),
+            is_recovery=bool(ctx["is_recovery"]),
+            original_order_item_id=ctx.get("original_order_item_id"),
+            original_product_name=ctx.get("original_product_name"),
+            reason="wms_report_shortage",
+        )
 
     rep = WmsPickingShortageReport(
         tenant_id=int(tenant_id),

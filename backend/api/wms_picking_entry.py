@@ -722,6 +722,16 @@ def post_picking_report_shortage(
     Zgłoszenie braku w trakcie sesji: zapis na linii (brak / status linii), bez zmiany statusu panelu zamówienia
     i bez kolejki Braki — to następuje dopiero przy ``POST /wms/picking/finalize-cart``.
     """
+    import traceback
+
+    payload_dump = body.model_dump()
+    logger.info(
+        "[report_shortage] ENTER endpoint payload=%s tenant_id=%s warehouse_id=%s user=%s",
+        payload_dump,
+        tenant_id,
+        warehouse_id,
+        getattr(current_user, "id", None),
+    )
     try:
         out = report_wms_picking_product_shortage(
             db,
@@ -735,6 +745,7 @@ def post_picking_report_shortage(
             cart_id=body.cart_id,
             ui_order_ids=body.order_ids,
             recovery_order_id=body.recovery_order_id,
+            order_item_id=body.order_item_id,
             operator_user_id=int(current_user.id) if current_user is not None else None,
         )
         if current_user is not None and current_user.id is not None and body.cart_id is not None:
@@ -758,10 +769,20 @@ def post_picking_report_shortage(
         db.commit()
     except ValueError as e:
         db.rollback()
+        logger.warning(
+            "[report_shortage] REJECT endpoint reason=%s payload=%s traceback=%s",
+            str(e),
+            payload_dump,
+            traceback.format_exc(),
+        )
         raise HTTPException(status_code=400, detail=str(e)) from e
     except SQLAlchemyError:
         db.rollback()
-        logger.exception("post_picking_report_shortage")
+        logger.error(
+            "[report_shortage] ERROR payload=%s traceback=%s",
+            payload_dump,
+            traceback.format_exc(),
+        )
         raise HTTPException(status_code=503, detail="Zgłoszenie braku nie powiodło się.") from None
     return WmsPickingReportShortageResponse(**out)
 

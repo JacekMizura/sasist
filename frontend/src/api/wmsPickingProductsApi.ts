@@ -61,6 +61,7 @@ export type WmsPickingProductLocationRowApi = {
 
 export type WmsPickingProductOrderRowApi = {
   order_id: number;
+  order_item_id?: number | null;
   order_number: string;
   quantity: number;
   picked_quantity: number;
@@ -262,9 +263,20 @@ export async function postWmsPickingReportShortage(
     cart_id: number;
     /** Zamówienia z widoku szczegółu (opcjonalnie — przecięcie z sesją wózka po stronie API) */
     order_ids?: number[] | null;
+    recovery_order_id?: number | null;
+    order_item_id?: number | null;
   },
 ): Promise<WmsPickingReportShortageResponseApi> {
-  const res = await api.post<WmsPickingReportShortageResponseApi>("/wms/picking/report-shortage", body, {
+  const payload = { ...body };
+  const rid = body.recovery_order_id;
+  if (rid != null && Number.isFinite(Number(rid)) && Number(rid) > 0) {
+    payload.recovery_order_id = Math.floor(Number(rid));
+  }
+  const oiid = body.order_item_id;
+  if (oiid != null && Number.isFinite(Number(oiid)) && Number(oiid) > 0) {
+    payload.order_item_id = Math.floor(Number(oiid));
+  }
+  const res = await api.post<WmsPickingReportShortageResponseApi>("/wms/picking/report-shortage", payload, {
     params: {
       tenant_id: tenantId,
       warehouse_id: warehouseId,
