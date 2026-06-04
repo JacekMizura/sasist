@@ -58,10 +58,10 @@ from ..utils.ui_status_color import normalize_stored_color
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/wms/returns", tags=["WMS Returns"])
-lookup_router = APIRouter(prefix="/wms/returns", tags=["WMS Returns"])
+router = APIRouter(tags=["WMS Returns"])
+returns_id_router = APIRouter(prefix="/id", tags=["WMS Returns"])
 print("IMPORTING WMS RETURNS ROUTER", flush=True)
-print("[routes] returns dynamic routes moved under /id", flush=True)
+print("[routes] returns dynamic routes moved under /id subrouter", flush=True)
 
 
 def _wms_returns_wh_dep(
@@ -1531,6 +1531,13 @@ def _wms_returns_orders_lookup_search(
     return [_order_lookup_hit_from_row(o, None) for o in partial]
 
 
+@router.get(
+    "/orders/lookup",
+    status_code=200,
+    summary="Wyszukiwanie zamówienia pod zwrot WMS",
+    name="wms_returns_orders_lookup",
+)
+@router.get("/lookup", include_in_schema=False, name="wms_returns_lookup_alias")
 def lookup_orders(
     tenant_id: int = Query(...),
     warehouse_id: Optional[int] = Query(
@@ -1919,7 +1926,7 @@ def wms_returns_bulk_archive(body: WmsReturnsBulkArchiveBody, db: Session = Depe
 # --- RMZ by id: always under /id/{return_id:int} (registered after static + lookup routes) ---
 
 
-@router.post("/id/{return_id:int}/lines/{order_item_id}/split-process", response_model=WmsReturnRead)
+@returns_id_router.post("/{return_id:int}/lines/{order_item_id}/split-process", response_model=WmsReturnRead)
 def process_rmz_line_split(
     return_id: int,
     order_item_id: int,
@@ -2159,7 +2166,7 @@ def process_rmz_line_split(
     return _serialize_return_read(db, row)
 
 
-@router.post("/id/{return_id:int}/lines/{order_item_id}/process", response_model=WmsReturnRead)
+@returns_id_router.post("/{return_id:int}/lines/{order_item_id}/process", response_model=WmsReturnRead)
 def process_rmz_line(
     return_id: int,
     order_item_id: int,
@@ -2267,7 +2274,7 @@ def process_rmz_line(
     return _serialize_return_read(db, row)
 
 
-@router.post("/id/{return_id:int}/refund", response_model=WmsReturnRead)
+@returns_id_router.post("/{return_id:int}/refund", response_model=WmsReturnRead)
 def process_rmz_refund(
     return_id: int,
     body: WmsRefundCreate,
@@ -2387,7 +2394,7 @@ def process_rmz_refund(
     return _serialize_return_read(db, row)
 
 
-@router.patch("/id/{return_id:int}/status", response_model=WmsReturnRead)
+@returns_id_router.patch("/{return_id:int}/status", response_model=WmsReturnRead)
 def patch_wms_return_workflow_status(
     return_id: int,
     body: WmsReturnWorkflowStatusPatch,
@@ -2423,7 +2430,7 @@ def patch_wms_return_workflow_status(
     return _serialize_return_read(db, row)
 
 
-@router.get("/id/{return_id:int}", response_model=WmsReturnRead)
+@returns_id_router.get("/{return_id:int}", response_model=WmsReturnRead)
 def get_wms_return(
     return_id: int,
     tenant_id: int = Query(...),
@@ -2453,7 +2460,7 @@ def get_wms_return(
     return _serialize_return_read(db, row)
 
 
-@router.delete("/id/{return_id:int}", response_model=EntityBulkDeleteResult)
+@returns_id_router.delete("/{return_id:int}", response_model=EntityBulkDeleteResult)
 def archive_single_wms_return(
     return_id: int,
     tenant_id: int = Query(...),
@@ -2474,26 +2481,11 @@ def archive_single_wms_return(
     return entity_bulk_delete_result_from_service_dict(result)
 
 
-# Lookup routes on a dedicated router (mounted before ``router`` in main.py).
-lookup_router.add_api_route(
-    "/orders/lookup",
-    lookup_orders,
-    methods=["GET"],
-    status_code=200,
-    summary="Wyszukiwanie zamówienia pod zwrot WMS",
-    name="wms_returns_orders_lookup",
-)
-lookup_router.add_api_route(
-    "/lookup",
-    lookup_orders,
-    methods=["GET"],
-    include_in_schema=False,
-    name="wms_returns_lookup_alias",
-)
-
 _WMS_RETURNS_ROUTE_COUNT = len(router.routes)
+_WMS_RETURNS_ID_ROUTE_COUNT = len(returns_id_router.routes)
 print(
-    f"IMPORTING WMS RETURNS ROUTER done routes={_WMS_RETURNS_ROUTE_COUNT}",
+    f"IMPORTING WMS RETURNS ROUTER done routes={_WMS_RETURNS_ROUTE_COUNT} "
+    f"id_routes={_WMS_RETURNS_ID_ROUTE_COUNT}",
     flush=True,
 )
 if _WMS_RETURNS_ROUTE_COUNT == 0:

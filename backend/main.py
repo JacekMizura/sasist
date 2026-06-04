@@ -206,7 +206,7 @@ from .api.cart import router as cart_router
 from .api.import_api import router as import_router
 from .api.export_api import router as export_router
 # Load before order.py (order used to import helpers from wms_returns at module level).
-from .api.wms_returns import lookup_router as wms_returns_lookup_router
+from .api.wms_returns import returns_id_router as wms_returns_id_router
 from .api.wms_returns import router as wms_returns_router
 from .api.order import router as order_router
 from .api.order_custom_fields import router as order_custom_fields_router
@@ -1177,14 +1177,14 @@ except Exception:
 # ==================================================
 
 API_PREFIX = "/api"
+WMS_RETURNS_MOUNT_PREFIX = f"{API_PREFIX}/wms/returns"
 WMS_RETURNS_LOOKUP_PATHS = (
-    f"{API_PREFIX}/wms/returns/orders/lookup",
-    f"{API_PREFIX}/wms/returns/lookup",
+    f"{WMS_RETURNS_MOUNT_PREFIX}/orders/lookup",
+    f"{WMS_RETURNS_MOUNT_PREFIX}/lookup",
 )
 
 _API_ROUTERS = (
     auth_router,
-    wms_returns_lookup_router,
     workforce_router,
     company_profile_router,
     admin_users_router,
@@ -1254,7 +1254,6 @@ _API_ROUTERS = (
     packaging_intelligence_router,
     wms_products_router,
     return_statuses_router,
-    wms_returns_router,
     wms_receiving_router,
     wms_putaway_router,
     wms_relocation_router,
@@ -1275,41 +1274,71 @@ _API_ROUTERS = (
 for _r in _API_ROUTERS:
     app.include_router(_r, prefix=API_PREFIX)
 
-_WMS_RETURNS_API_PREFIX = f"{API_PREFIX}/wms/returns"
+
+def _log_returns_route_table() -> None:
+    for r in app.routes:
+        path = getattr(r, "path", None)
+        if path and "returns" in str(path):
+            print("[ROUTE]", path, flush=True)
+
+
+def _mount_wms_returns_routers() -> None:
+    """Lookup/static on main router; RMZ-by-id on ``returns_id_router`` (prefix /id)."""
+    from .api.wms_returns import lookup_orders
+
+    existing = {getattr(r, "path", None) for r in app.routes}
+    for subpath in ("/orders/lookup", "/lookup"):
+        full = f"{WMS_RETURNS_MOUNT_PREFIX}{subpath}"
+        if full not in existing:
+            app.add_api_route(
+                full,
+                lookup_orders,
+                methods=["GET"],
+                tags=["WMS Returns"],
+                name=f"wms_returns_lookup_hard_{subpath.strip('/')}",
+            )
+            print(f"[routes] hard-mount {full}", flush=True)
+
+    existing = {getattr(r, "path", None) for r in app.routes}
+    if f"{WMS_RETURNS_MOUNT_PREFIX}/queue-counts" not in existing:
+        app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
+        app.include_router(wms_returns_id_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
+        print(
+            f"[routes] mounted wms_returns routers prefix={WMS_RETURNS_MOUNT_PREFIX}",
+            flush=True,
+        )
+    _log_returns_route_table()
+
+
+_mount_wms_returns_routers()
 
 
 def _ensure_wms_returns_router_mounted() -> None:
     """Guarantee /api/wms/returns/* exists on the app (Railway startup verification)."""
-    router_route_count = len(wms_returns_router.routes)
     app_paths = [
         getattr(r, "path", None)
         for r in app.routes
-        if getattr(r, "path", None) and str(getattr(r, "path")).startswith(_WMS_RETURNS_API_PREFIX)
+        if getattr(r, "path", None) and str(getattr(r, "path")).startswith(WMS_RETURNS_MOUNT_PREFIX)
     ]
     if not app_paths:
-        print(
-            f"[routes] wms_returns REMOUNT router_routes={router_route_count}",
-            flush=True,
-        )
-        app.include_router(wms_returns_router, prefix=API_PREFIX)
+        print("[routes] wms_returns REMOUNT", flush=True)
+        _mount_wms_returns_routers()
         app_paths = [
             getattr(r, "path", None)
             for r in app.routes
-            if getattr(r, "path", None) and str(getattr(r, "path")).startswith(_WMS_RETURNS_API_PREFIX)
+            if getattr(r, "path", None) and str(getattr(r, "path")).startswith(WMS_RETURNS_MOUNT_PREFIX)
         ]
     print(
-        f"[routes] wms_returns router_routes={router_route_count} app_paths={len(app_paths)}",
+        f"[routes] wms_returns main_routes={len(wms_returns_router.routes)} "
+        f"id_routes={len(wms_returns_id_router.routes)} app_paths={len(app_paths)}",
         flush=True,
     )
-    for path in sorted(set(app_paths)):
-        print("[routes]", path, flush=True)
     for _lookup_path in WMS_RETURNS_LOOKUP_PATHS:
-        if _lookup_path in app_paths:
-            print(f"[routes] early-mount {_lookup_path}", flush=True)
-        else:
+        if _lookup_path not in app_paths:
             print("[routes] MISSING", _lookup_path, flush=True)
     if not app_paths:
         print("[routes] CRITICAL: no /api/wms/returns/* mounted", flush=True)
+    _log_returns_route_table()
 
 
 _ensure_wms_returns_router_mounted()
@@ -1351,7 +1380,7 @@ async def _log_backend_startup() -> None:
 
     # Deploy fingerprint — compare with GitHub commit on Railway → Deployments.
     print(
-        "[startup] wms_returns_lookup_build=2026-06-04-returns-lookup-router-v13",
+        "[startup] wms_returns_lookup_build=2026-06-04-returns-id-subrouter-v14",
         flush=True,
     )
     print(
