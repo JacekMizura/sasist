@@ -65,6 +65,16 @@ logger = logging.getLogger(__name__)
 WMS_RETURNS_ROUTING_VERSION = "2026-06-04-lookup-route-order-v19"
 
 lookup_router = APIRouter(tags=["WMS Returns"])
+
+
+@lookup_router.get("/orders/lookup-test")
+def lookup_test():
+    print("[LOOKUP TEST HIT]")
+    return [{"ok": True}]
+
+
+print("[LOOKUP TEST ROUTE REGISTERED]", flush=True)
+
 router = APIRouter(tags=["WMS Returns"])
 returns_id_router = APIRouter(prefix="/id", tags=["WMS Returns"])
 print("IMPORTING WMS RETURNS ROUTER", flush=True)
