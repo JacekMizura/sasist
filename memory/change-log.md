@@ -1,3 +1,5 @@
+- 2026-06-04 — **WMS returns `/id/` prefix (v12):** wszystkie trasy RMZ po id pod `/api/wms/returns/id/{return_id}` (GET/PATCH/POST/DELETE); brak `/{return_id}` na routerze — eliminuje konflikt z `/orders/lookup`. Frontend `wmsReturnsApi` zaktualizowany. Startup: `returns-id-prefix-v12`.
+
 - 2026-06-04 — **WMS lookup routing (prod 404):** `GET /api/wms/returns/orders/lookup` early-mount w `main.py`; usunięty alias `/lookup` (kolidował z `/{return_id}`); handler zawsze `200` + `[]`; logi `[returns.lookup]`.
 
 - 2026-06-04 — **WMS zwroty frontend lookup:** skaner wywołuje `lookupOrdersForWms` (wcześniej tylko toast); logi debug; pusty `[]` → komunikat bez blokady idle; Enter + skan.

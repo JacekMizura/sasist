@@ -240,7 +240,7 @@ export async function processWmsReturnLine(
   tenantId: number,
   payload: WmsReturnLineProcess,
 ): Promise<WmsReturnRead> {
-  const res = await api.post<WmsReturnRead>(`wms/returns/${returnId}/lines/${orderItemId}/process`, payload, {
+  const res = await api.post<WmsReturnRead>(`wms/returns/id/${returnId}/lines/${orderItemId}/process`, payload, {
     params: tenantOnly(tenantId),
   });
   return res.data;
@@ -252,7 +252,7 @@ export async function processWmsReturnLineSplit(
   tenantId: number,
   payload: WmsReturnLineSplitProcess,
 ): Promise<WmsReturnRead> {
-  const res = await api.post<WmsReturnRead>(`wms/returns/${returnId}/lines/${orderItemId}/split-process`, payload, {
+  const res = await api.post<WmsReturnRead>(`wms/returns/id/${returnId}/lines/${orderItemId}/split-process`, payload, {
     params: tenantOnly(tenantId),
   });
   return res.data;
@@ -268,7 +268,7 @@ export async function processWmsReturnRefund(
   if (warehouseId != null && Number.isFinite(Number(warehouseId)) && Number(warehouseId) > 0) {
     params.warehouse_id = Number(warehouseId);
   }
-  const res = await api.post<WmsReturnRead>(`wms/returns/${returnId}/refund`, payload, {
+  const res = await api.post<WmsReturnRead>(`wms/returns/id/${returnId}/refund`, payload, {
     params,
   });
   return res.data;
@@ -296,7 +296,7 @@ export async function patchWmsReturnWorkflowStatus(
     params.warehouse_id = Number(warehouseId);
   }
   const res = await api.patch<WmsReturnRead>(
-    `wms/returns/${returnId}/status`,
+    `wms/returns/id/${returnId}/status`,
     { status_id: statusId },
     { params },
   );
@@ -304,7 +304,7 @@ export async function patchWmsReturnWorkflowStatus(
 }
 
 export async function getWmsReturn(returnId: number, tenantId: number): Promise<WmsReturnRead> {
-  const res = await api.get<WmsReturnRead>(`wms/returns/${returnId}`, {
+  const res = await api.get<WmsReturnRead>(`wms/returns/id/${returnId}`, {
     params: tenantOnly(tenantId),
   });
   return res.data;

@@ -1181,7 +1181,7 @@ WMS_RETURNS_ORDER_LOOKUP_PATH = f"{API_PREFIX}/wms/returns/orders/lookup"
 
 def _register_wms_returns_orders_lookup_route() -> None:
     """
-    Mount lookup before other /api/wms/returns/* routes so ``/{return_id}`` cannot shadow it.
+    Mount lookup before other /api/wms/returns/* routes (RMZ by id lives under ``/id/{return_id}``).
     Production symptom: GET .../orders/lookup → 404, GET .../lookup → 422 (return_id='lookup').
     """
     from .api.wms_returns import lookup_orders
@@ -1372,7 +1372,7 @@ async def _log_backend_startup() -> None:
 
     # Deploy fingerprint — compare with GitHub commit on Railway → Deployments.
     print(
-        "[startup] wms_returns_lookup_build=2026-06-04-returns-lookup-v11",
+        "[startup] wms_returns_lookup_build=2026-06-04-returns-id-prefix-v12",
         flush=True,
     )
     print(

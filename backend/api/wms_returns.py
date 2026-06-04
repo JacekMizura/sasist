@@ -940,7 +940,7 @@ def _warehouse_id_for_return_mutation(
     tenant_id: int,
     warehouse_id: Optional[int] = None,
 ) -> int:
-    """Resolve RMZ warehouse from the document row (same idea as GET /wms/returns/{id}).
+    """Resolve RMZ warehouse from the document row (same idea as GET /wms/returns/id/{id}).
 
     Do not use only the tenant default warehouse: POST would 404 while GET succeeds for
     returns stored on the order's warehouse.
@@ -1868,7 +1868,7 @@ def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
     return _serialize_return_read(db, row)
 
 
-@router.post("/{return_id:int}/lines/{order_item_id}/split-process", response_model=WmsReturnRead)
+@router.post("/id/{return_id:int}/lines/{order_item_id}/split-process", response_model=WmsReturnRead)
 def process_rmz_line_split(
     return_id: int,
     order_item_id: int,
@@ -1877,7 +1877,7 @@ def process_rmz_line_split(
     warehouse_id: Optional[int] = Query(
         None,
         ge=1,
-        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/{id}).",
+        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
 ):
@@ -2108,7 +2108,7 @@ def process_rmz_line_split(
     return _serialize_return_read(db, row)
 
 
-@router.post("/{return_id:int}/lines/{order_item_id}/process", response_model=WmsReturnRead)
+@router.post("/id/{return_id:int}/lines/{order_item_id}/process", response_model=WmsReturnRead)
 def process_rmz_line(
     return_id: int,
     order_item_id: int,
@@ -2117,7 +2117,7 @@ def process_rmz_line(
     warehouse_id: Optional[int] = Query(
         None,
         ge=1,
-        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/{id}).",
+        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
 ):
@@ -2216,7 +2216,7 @@ def process_rmz_line(
     return _serialize_return_read(db, row)
 
 
-@router.post("/{return_id:int}/refund", response_model=WmsReturnRead)
+@router.post("/id/{return_id:int}/refund", response_model=WmsReturnRead)
 def process_rmz_refund(
     return_id: int,
     body: WmsRefundCreate,
@@ -2224,7 +2224,7 @@ def process_rmz_refund(
     warehouse_id: Optional[int] = Query(
         None,
         ge=1,
-        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/{id}).",
+        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
 ):
@@ -2336,7 +2336,7 @@ def process_rmz_refund(
     return _serialize_return_read(db, row)
 
 
-@router.patch("/{return_id:int}/status", response_model=WmsReturnRead)
+@router.patch("/id/{return_id:int}/status", response_model=WmsReturnRead)
 def patch_wms_return_workflow_status(
     return_id: int,
     body: WmsReturnWorkflowStatusPatch,
@@ -2344,7 +2344,7 @@ def patch_wms_return_workflow_status(
     warehouse_id: Optional[int] = Query(
         None,
         ge=1,
-        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/{id}).",
+        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
 ):
@@ -2413,7 +2413,7 @@ def get_customer_insights(
     )
 
 
-@router.get("/{return_id:int}", response_model=WmsReturnRead)
+@router.get("/id/{return_id:int}", response_model=WmsReturnRead)
 def get_wms_return(
     return_id: int,
     tenant_id: int = Query(...),
@@ -2454,7 +2454,7 @@ def wms_returns_bulk_archive(body: WmsReturnsBulkArchiveBody, db: Session = Depe
     return entity_bulk_delete_result_from_service_dict(result)
 
 
-@router.delete("/{return_id:int}", response_model=EntityBulkDeleteResult)
+@router.delete("/id/{return_id:int}", response_model=EntityBulkDeleteResult)
 def archive_single_wms_return(
     return_id: int,
     tenant_id: int = Query(...),

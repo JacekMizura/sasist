@@ -85,7 +85,7 @@ Procfile
 After a successful backend deploy, **Deploy logs → Runtime / startup** must include:
 
 ```text
-[startup] wms_returns_lookup_build=2026-06-04-returns-lookup-v11
+[startup] wms_returns_lookup_build=2026-06-04-returns-id-prefix-v12
 [routes] early-mount /api/wms/returns/orders/lookup
 ```
 
@@ -103,7 +103,7 @@ If you see `[routes] /api/wms/returns/orders/lookup` in a manual route list but 
 
 ```bash
 git log -1 --oneline
-# must include commit with: returns.lookup, early-mount, {return_id:int}
+# must include commit with: returns.lookup, early-mount, /id/{return_id}
 
 git status
 # main should match origin/main after git push
