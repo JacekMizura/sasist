@@ -213,6 +213,7 @@ def _parse_yyyy_mm_dd_customer(raw: Optional[str]) -> Optional[datetime]:
 
 
 @router.get("", response_model=List[CustomerListOut])
+@router.get("/", response_model=List[CustomerListOut], include_in_schema=False)
 def list_customers(
     tenant_id: int = Query(..., ge=1),
     search: Optional[str] = Query(None, description="Name, email, phone, company, NIP"),
@@ -304,6 +305,7 @@ def list_customers(
 
 
 @router.post("", response_model=CustomerDetailOut, status_code=201)
+@router.post("/", response_model=CustomerDetailOut, status_code=201, include_in_schema=False)
 def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
     _assert_shipping_method_for_tenant(db, tenant_id=body.tenant_id, method_id=body.preferred_shipping_method_id)
     row = Customer(

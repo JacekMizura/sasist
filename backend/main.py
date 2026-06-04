@@ -13,6 +13,7 @@ import traceback
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
@@ -294,6 +295,9 @@ UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 # ==================================================
 
 app = FastAPI(title="WMS Backend V2")
+
+# Railway / reverse proxy: respect X-Forwarded-Proto so slash redirects use https://, not http://.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 
 @app.get("/")

@@ -18,9 +18,13 @@ function normalizeBuildApiUrl(raw: string | undefined, mode: string): string | u
   if (!v) return undefined
 
   let base = v
-  if (base.startsWith('http://') && (mode === 'production' || base.includes('railway.app'))) {
+  if (base.startsWith('http://') && (mode === 'production' || base.includes('railway.app') || base.includes('vercel.app'))) {
     base = `https://${base.slice('http://'.length)}`
     console.warn(`[vite] VITE_API_URL upgraded to HTTPS for ${mode} build:`, base)
+  }
+
+  if (!base.startsWith('/') && !base.startsWith('https://') && !base.startsWith('http://')) {
+    base = `https://${base}`
   }
 
   if (base.startsWith('/')) return base

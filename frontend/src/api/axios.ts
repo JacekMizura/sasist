@@ -1,7 +1,12 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
-import { coerceHttpsUrl, resolveAxiosBaseURL } from "../config/apiBase";
+import {
+  applySecureApiBaseToConfig,
+  getAxiosRequestDebugUrl,
+  logApiBaseDebug,
+  resolveAxiosBaseURL,
+} from "../config/apiBase";
 import {
   clearStoredTokens,
   getStoredAccessToken,
@@ -9,7 +14,6 @@ import {
   setStoredTokens,
 } from "../auth/tokenStorage";
 
-/** From `import.meta.env.VITE_API_URL` (see vite.config build-time HTTPS normalization). */
 const resolvedBaseUrl = resolveAxiosBaseURL().replace(/\/+$/, "") || "/api";
 
 const api = axios.create({
@@ -28,8 +32,11 @@ const refreshClient = axios.create({
   },
 });
 
-if (import.meta.env.PROD && resolvedBaseUrl.startsWith("http://")) {
-  console.error("[api] Refusing insecure API baseURL in production:", resolvedBaseUrl);
+logApiBaseDebug("axios module init");
+console.log("API BASE URL", api.defaults.baseURL);
+
+if (import.meta.env.PROD && String(api.defaults.baseURL).startsWith("http://")) {
+  console.error("[api] INSECURE baseURL in production bundle:", api.defaults.baseURL);
 }
 
 let refreshInFlight: Promise<string | null> | null = null;
@@ -86,22 +93,28 @@ type RetryConfig = InternalAxiosRequestConfig & {
   _retryAfterRefresh?: boolean;
 };
 
-function secureRequestUrl(url: string | undefined): string | undefined {
-  if (typeof url !== "string") return url;
-  if (url.startsWith("http://")) return coerceHttpsUrl(url);
-  if (url.startsWith("/") && !/^https?:\/\//i.test(url)) {
-    return url.replace(/^\/+/, "");
-  }
-  return url;
+function isCustomersApiRequest(config: InternalAxiosRequestConfig): boolean {
+  const path = String(config.url ?? "");
+  return path === "customers" || path.startsWith("customers/") || path.startsWith("/customers");
 }
 
 api.interceptors.request.use(
   (config) => {
-    if (typeof config.baseURL === "string" && config.baseURL.startsWith("http://")) {
-      config.baseURL = coerceHttpsUrl(config.baseURL);
-    }
+    applySecureApiBaseToConfig(config);
 
-    config.url = secureRequestUrl(config.url);
+    const finalUrl = getAxiosRequestDebugUrl(config);
+    if (isCustomersApiRequest(config)) {
+      console.trace("CUSTOMERS REQUEST (axios)", finalUrl);
+      console.log("FULL REQUEST CONFIG", config);
+    }
+    if (finalUrl.startsWith("http://")) {
+      console.error("[api] BLOCKED insecure request URL:", finalUrl, {
+        viteApiUrlEnv: import.meta.env.VITE_API_URL,
+        baseURL: config.baseURL,
+        path: config.url,
+      });
+      throw new Error(`[api] Refusing HTTP API request: ${finalUrl}`);
+    }
 
     const token = getStoredAccessToken();
 
@@ -116,14 +129,28 @@ api.interceptors.request.use(
 );
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const cfg = response.config;
+    if (cfg && isCustomersApiRequest(cfg)) {
+      const responseUrl =
+        typeof response.request?.responseURL === "string" ? response.request.responseURL : null;
+      if (response.status >= 300 && response.status < 400) {
+        console.warn("[api] customers redirect response", {
+          status: response.status,
+          location: response.headers?.location,
+          responseURL: responseUrl,
+        });
+      }
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const status = error.response?.status;
     const original = error.config as RetryConfig | undefined;
 
     console.error(
       "[API] Request failed:",
-      original?.url,
+      original ? getAxiosRequestDebugUrl(original) : original?.url,
       status,
       error.message,
     );
