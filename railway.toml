@@ -1,8 +1,17 @@
-# Railway deploy config — overrides Nixpacks/Railpack auto-detected uvicorn commands.
-# Clear any custom Start Command in the Railway dashboard that hardcodes --port 8080.
+# SASIST backend API — Railway config (path from repo root: /railway.toml).
+# Backend service Root Directory MUST be / (repo root), NOT frontend/.
+# See docs/RAILWAY_BACKEND.md
 
 [build]
 builder = "nixpacks"
+watchPatterns = [
+  "backend/**",
+  "requirements.txt",
+  "run_server.py",
+  "nixpacks.toml",
+  "railway.toml",
+  "Procfile",
+]
 
 [deploy]
 startCommand = "python run_server.py"

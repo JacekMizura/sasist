@@ -1,0 +1,13 @@
+# Railway / Nixpacks — SASIST backend API (FastAPI).
+# Repo root also has a minimal package.json (legacy tooling); force Python only.
+providers = ["python"]
+
+[variables]
+NIXPACKS_PYTHON_VERSION = "3.12"
+NIXPACKS_PYTHON_PACKAGE_MANAGER = "requirements"
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python run_server.py"

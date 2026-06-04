@@ -1,6 +1,6 @@
 # Current Context
 
-- **Railway backend port (2026-05-27):** Single entrypoint `backend/serve.py` via `python run_server.py` (also `python -m backend`). `PORT` env default 8000; logs `[startup] binding uvicorn to 0.0.0.0:{port}`. Repo pins start via `Procfile`, `railway.toml`, `railway.json`, `nixpacks.toml`. Clear Railway dashboard Start Command if it hardcodes `--port 8080`.
+- **Railway backend (2026-06-04):** Serwis API: **Root Directory = `/`** (repo root), **nie** `frontend`. Build: `nixpacks.toml` → `providers = ["python"]` (ignoruje root `package.json`). Start: `python run_server.py`. Log build OK: `setup │ python3`, nie `nodejs_18`. Instrukcja: `docs/RAILWAY_BACKEND.md`. Port: `PORT` env; `Procfile` / `railway.toml` / `Dockerfile` opcjonalnie.
 
 - **Migracja SQLite → PostgreSQL (2026-05-27):** `backend/scripts/migrate_sqlite_to_postgres.py` — domyślnie **dry-run** (live tylko z `--yes`). Flagi: `--table`, `--phase` (foundation|catalog|orders|stock|returns|rest), `--continue-on-error`. Po migracji: walidacja liczby wierszy SQLite vs PG + skan orphan FK. Przykład: `python -m backend.scripts.migrate_sqlite_to_postgres --table orders` (podgląd), potem `--table orders --yes` (zapis).
 

@@ -1,4 +1,5 @@
-- 2026-06-04 — **WMS returns order lookup (backend, produkcja):** `lookup_orders` + `@router.get("/orders/lookup")` + `router.add_api_route`; `main.py` mount na `app` (`_mount_wms_returns_order_lookup_on_app`) + startup `[routes] {path}` dump. Live 404 na Railway = deploy backend bez tego commita.
+- 2026-06-04 — **Railway backend Python build:** `nixpacks.toml` (`providers = ["python"]`), `.python-version`, `Dockerfile`, `docs/RAILWAY_BACKEND.md` — backend service Root Directory musi być repo root, nie `frontend` (Node build → `python: command not found`).
+- 2026-06-04 — **WMS returns order lookup (backend, produkcja):** `lookup_orders` + `@router.get("/orders/lookup")` + `router.add_api_route`; `main.py` mount + startup `[routes]` dump. Wymaga poprawnego deployu Python na Railway.
 
 - 2026-06-04 — **Frontend API + WMS lookup (prod):** `vite.config` przy buildzie podmienia `http://`→`https://` w `VITE_API_URL` (Railway); `resolveAxiosBaseURL()` z `import.meta.env.VITE_API_URL`; axios bez http w PROD. Backend: `@router.get("/orders/lookup")` + alias `/lookup`, startup log `[routes] GET /api/wms/returns/orders/lookup`. Wymaga redeploy obu serwisów.
 

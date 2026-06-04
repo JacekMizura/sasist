@@ -1,7 +1,16 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "NIXPACKS",
+    "watchPatterns": [
+      "backend/**",
+      "requirements.txt",
+      "run_server.py",
+      "nixpacks.toml",
+      "railway.toml",
+      "railway.json",
+      "Procfile"
+    ]
   },
   "deploy": {
     "startCommand": "python run_server.py",

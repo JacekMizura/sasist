@@ -1,0 +1,12 @@
+frontend/
+node_modules/
+.git/
+.cursor/
+memory/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+backend/test.db
+*.db
+.env
+.env.*

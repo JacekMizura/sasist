@@ -1,0 +1,10 @@
+# Frontend on Railway only (Vite). Do NOT use this config for the backend API service.
+# Backend API: repo root + docs/RAILWAY_BACKEND.md
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm run build && npx vite preview --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/"
+restartPolicyType = "on_failure"
