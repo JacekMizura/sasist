@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -158,8 +159,17 @@ export default function WmsOrderIssuesHub() {
         setFilterCounts(res.filter_counts ?? {});
         setSkippedTasks(res.skipped_tasks ?? []);
       })
-      .catch(() => {
-        setErr("Nie udało się wczytać kolejki.");
+      .catch((e: unknown) => {
+        const detail = axios.isAxiosError(e) ? e.response?.data?.detail : null;
+        let msg = "Nie udało się wczytać kolejki.";
+        if (typeof detail === "string" && detail.trim()) {
+          msg = detail.trim();
+        } else if (detail && typeof detail === "object" && "message" in detail) {
+          const m = (detail as { message?: unknown }).message;
+          if (typeof m === "string" && m.trim()) msg = m.trim();
+        }
+        setErr(msg);
+        setTasks([]);
         setSkippedTasks([]);
         setFilterCounts({});
       })
@@ -304,7 +314,18 @@ export default function WmsOrderIssuesHub() {
       </div>
 
       <div className="px-3 pt-3 md:px-6 md:pt-4 bg-white">
-        {err ? <p className="text-center text-sm font-medium text-amber-800">{err}</p> : null}
+        {err ? (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950">
+            <p className="font-semibold">{err}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="mt-2 text-xs font-bold uppercase tracking-wide text-amber-900 underline"
+            >
+              Spróbuj ponownie
+            </button>
+          </div>
+        ) : null}
         {deeplinkMiss ? (
           <p className="text-center text-sm font-medium text-amber-900">{deeplinkMiss}</p>
         ) : null}

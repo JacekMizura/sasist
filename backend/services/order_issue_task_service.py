@@ -1121,6 +1121,71 @@ def sync_open_issue_tasks_for_warehouse(
     db.flush()
 
 
+def ensure_order_issue_task_table_schema(db: Session) -> None:
+    """Upewnij się, że kolumny archiwizacji istnieją (starsze DB bez migracji przy starcie)."""
+    from ..db.schema_upgrade import ensure_order_issue_tasks_archive_columns
+
+    ensure_order_issue_tasks_archive_columns(db.get_bind())
+
+
+def list_open_order_issue_tasks_for_warehouse(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> list[OrderIssueTask]:
+    """OPEN zadania braków — po deduplikacji po stronie API."""
+    ensure_order_issue_task_table_schema(db)
+    return (
+        db.query(OrderIssueTask)
+        .filter(
+            OrderIssueTask.tenant_id == int(tenant_id),
+            OrderIssueTask.warehouse_id == int(warehouse_id),
+            OrderIssueTask.status == "OPEN",
+        )
+        .order_by(OrderIssueTask.order_id.asc(), OrderIssueTask.id.desc())
+        .all()
+    )
+
+
+def order_issue_task_debug_snapshot(
+    db: Session,
+    task: OrderIssueTask,
+    order: Order | None,
+    *,
+    workflow_status: str | None = None,
+) -> dict[str, object]:
+    """Pola diagnostyczne do logów kolejki braków."""
+    oid = int(getattr(task, "order_id", 0) or 0)
+    tid = int(getattr(task, "id", 0) or 0)
+    u_short, r_pend = (0, 0)
+    reloc = False
+    if order is not None:
+        try:
+            u_short, r_pend = count_issue_queue_operational_lines(db, order)
+            from .braki_order_state_service import order_has_pending_relocation_work
+
+            reloc = order_has_pending_relocation_work(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=oid,
+            )
+        except Exception:
+            pass
+    archived = _task_is_archived(task) if hasattr(task, "status") else False
+    return {
+        "task_id": tid,
+        "order_id": oid,
+        "workflow_status": workflow_status or "—",
+        "relocation_required": reloc,
+        "archived": archived,
+        "closed_at": getattr(task, "archived_at", None),
+        "u_short": u_short,
+        "r_pend": r_pend,
+    }
+
+
 def mark_task_done(db: Session, task: OrderIssueTask, message: str | None = None) -> None:
     now = datetime.utcnow()
     task.status = "DONE"
@@ -1151,6 +1216,7 @@ def archive_order_issue_task(
     from .braki_order_state_service import order_can_show_ready_pack, order_has_pending_relocation_work
     from .wms_recovery_pick_service import get_open_recovery_task_for_order
 
+    ensure_order_issue_task_table_schema(db)
     prev_status = (getattr(task, "status", None) or "").strip().upper() or "OPEN"
     if _task_is_archived(task):
         logger.info(

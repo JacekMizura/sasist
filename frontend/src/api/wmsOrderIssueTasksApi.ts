@@ -106,6 +106,7 @@ export type OrderIssueTaskSkippedItemApi = {
 };
 
 export type OrderIssueTaskListResult = {
+  success?: boolean;
   tasks: OrderIssueTaskListItemApi[];
   skipped_tasks: OrderIssueTaskSkippedItemApi[];
   filter_counts?: Record<string, number>;
@@ -119,6 +120,7 @@ export async function listWmsOrderIssueTasks(
     params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
   return {
+    success: res.data?.success ?? true,
     tasks: res.data?.tasks ?? [],
     skipped_tasks: res.data?.skipped_tasks ?? [],
     filter_counts: res.data?.filter_counts ?? {},

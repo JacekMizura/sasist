@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Kolejka braków GET /order-issue-tasks (500)
+
+- Przyczyna: brak kolumn `archived_at` / `archived_by_user_id` w DB przy filtrze ORM → `no such column`.
+- `ensure_order_issue_task_table_schema()` przed każdym odczytem `OrderIssueTask` (lista, szczegół, skan, archiwizacja).
+- Lista: per-task try/except → `skipped_tasks`; logi `[wms.order_issue_tasks.fetch|serialize_failed|invalid_state]`.
+- Całkowita awaria DB: JSON `detail: { success, error, message }` zamiast HTML 500.
+- Frontend hub: komunikat z API + „Spróbuj ponownie”; test `test_order_issue_tasks_list_schema.py`.
+
 ## 2026-06-04 — Zgłoszenie braku przy częściowym zbieraniu (1/2)
 
 - ``_line_shortage_report_quantities`` — ``remaining = ordered − picked − missing`` (jak karta produktu); nie ``picked > 0 ⇒ zamknięte``.

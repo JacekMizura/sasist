@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from ..auth.deps import get_optional_current_user
@@ -29,10 +30,7 @@ from ..schemas.order_issue_task import (
     OrderIssueTaskSkippedItem,
 )
 logger = logging.getLogger(__name__)
-from ..services.order_fulfillment_recompute import (
-    order_has_waiting_for_stock_lines,
-    order_requires_shortage_handling,
-)
+from ..services.order_fulfillment_recompute import order_requires_shortage_handling
 from ..services.order_issue_task_service import (
     build_fallback_shortage_lines_from_task_snapshot,
     build_order_issue_detail_context,
@@ -50,6 +48,9 @@ from ..services.order_issue_task_service import (
     archive_order_issue_task,
     order_customer_display_name,
     sync_open_issue_tasks_for_warehouse,
+    ensure_order_issue_task_table_schema,
+    list_open_order_issue_tasks_for_warehouse,
+    order_issue_task_debug_snapshot,
 )
 from ..services.braki_workflow_service import (
     BRAKI_FILTER_ALL,
@@ -158,7 +159,9 @@ def serialize_order_issue_task_item(
         workflow_label = braki_workflow_status_label(workflow_status)
         from ..services.wms_recovery_pick_service import order_has_waiting_customer_line
 
-        oms_wait = order_has_waiting_customer_line(o) or order_has_waiting_for_stock_lines(o)
+        from ..services.braki_order_state_service import order_has_waiting_for_stock_lines as braki_waiting_stock
+
+        oms_wait = order_has_waiting_customer_line(o) or braki_waiting_stock(order, db=db)
         summary_line = format_braki_issue_summary_line(
             workflow_status,
             unresolved=u_short,
@@ -250,6 +253,7 @@ def resolve_order_issue_task_scan(
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
+    ensure_order_issue_task_table_schema(db)
     try:
         sync_open_issue_tasks_for_warehouse(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     except Exception:
@@ -321,6 +325,7 @@ def get_order_issue_task(
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
+    ensure_order_issue_task_table_schema(db)
     t = (
         db.query(OrderIssueTask)
         .filter(
@@ -380,28 +385,33 @@ def get_order_issue_task(
     return item
 
 
-@router.get("/order-issue-tasks", response_model=OrderIssueTaskListResponse)
-def list_order_issue_tasks(
-    tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
-    db: Session = Depends(get_db),
-):
+def _build_order_issue_tasks_list(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> OrderIssueTaskListResponse:
+    ensure_order_issue_task_table_schema(db)
     try:
         sync_open_issue_tasks_for_warehouse(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     except Exception:
-        logger.exception("sync_open_issue_tasks_for_warehouse failed tenant=%s wh=%s", tenant_id, warehouse_id)
-    db.commit()
-    rows = (
-        db.query(OrderIssueTask)
-        .filter(
-            OrderIssueTask.tenant_id == int(tenant_id),
-            OrderIssueTask.warehouse_id == int(warehouse_id),
-            OrderIssueTask.status == "OPEN",
-            OrderIssueTask.archived_at.is_(None),
+        logger.exception(
+            "[wms.order_issue_tasks.fetch] sync_open_failed tenant_id=%s warehouse_id=%s",
+            tenant_id,
+            warehouse_id,
         )
-        .order_by(OrderIssueTask.order_id.asc(), OrderIssueTask.id.desc())
-        .all()
+    db.commit()
+
+    rows = list_open_order_issue_tasks_for_warehouse(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )
+    logger.info(
+        "[wms.order_issue_tasks.fetch] tenant_id=%s warehouse_id=%s open_tasks=%s",
+        tenant_id,
+        warehouse_id,
+        len(rows),
+    )
+
     deduped_rows: list[OrderIssueTask] = []
     seen_orders: set[int] = set()
     for t in rows:
@@ -419,10 +429,12 @@ def list_order_issue_tasks(
             len(rows),
             len(deduped_rows),
         )
+
     out: list[OrderIssueTaskListItem] = []
     skipped: list[OrderIssueTaskSkippedItem] = []
     for t in deduped_rows:
         o: Order | None = None
+        wf_status: str | None = None
         try:
             o = (
                 db.query(Order)
@@ -437,17 +449,34 @@ def list_order_issue_tasks(
             if o is None or getattr(o, "deleted_at", None) is not None:
                 mark_task_done(db, t, "Zamówienie usunięte — zamknięto zadanie braków")
                 continue
+            try:
+                u_short, r_pend = count_issue_queue_operational_lines(db, o)
+                wf_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
+            except Exception as wf_exc:
+                logger.warning(
+                    "[wms.order_issue_tasks.invalid_state] task_id=%s order_id=%s err=%s",
+                    getattr(t, "id", None),
+                    getattr(t, "order_id", None),
+                    wf_exc,
+                )
+                wf_status = "awaiting"
             item = serialize_order_issue_task_item(db, t, o)
             if not order_requires_shortage_handling(db, o):
-                mark_task_done(db, t, "Braki rozwiązane — usunięto z kolejki WMS")
+                mark_task_done(db, t, "Braki rozliczone — usunięto z kolejki WMS")
                 continue
             out.append(item)
         except Exception as exc:
             err_msg = str(exc).strip() or exc.__class__.__name__
+            snap = order_issue_task_debug_snapshot(db, t, o, workflow_status=wf_status)
             logger.exception(
-                "order_issue_tasks: serialize failed task_id=%s order_id=%s: %s",
-                getattr(t, "id", None),
-                getattr(t, "order_id", None),
+                "[wms.order_issue_tasks.serialize_failed] task_id=%s order_id=%s workflow_status=%s "
+                "relocation_required=%s archived=%s closed_at=%s err=%s",
+                snap.get("task_id"),
+                snap.get("order_id"),
+                snap.get("workflow_status"),
+                snap.get("relocation_required"),
+                snap.get("archived"),
+                snap.get("closed_at"),
                 err_msg,
             )
             skipped.append(
@@ -459,18 +488,83 @@ def list_order_issue_tasks(
                 )
             )
             continue
-    db.commit()
-    if skipped:
-        logger.warning(
-            "order_issue_tasks: %s OPEN task(s) skipped during serialization (tenant=%s wh=%s)",
-            len(skipped),
+    try:
+        db.commit()
+    except Exception:
+        logger.exception(
+            "[wms.order_issue_tasks.fetch] commit_after_list_failed tenant_id=%s warehouse_id=%s",
             tenant_id,
             warehouse_id,
         )
-    filter_counts = compute_braki_filter_counts(out)
+        db.rollback()
+
+    if skipped:
+        logger.warning(
+            "[wms.order_issue_tasks.fetch] skipped_count=%s tenant_id=%s warehouse_id=%s returned=%s",
+            len(skipped),
+            tenant_id,
+            warehouse_id,
+            len(out),
+        )
+    try:
+        filter_counts = compute_braki_filter_counts(out)
+    except Exception:
+        logger.exception(
+            "[wms.order_issue_tasks.fetch] filter_counts_failed tenant_id=%s warehouse_id=%s",
+            tenant_id,
+            warehouse_id,
+        )
+        filter_counts = {BRAKI_FILTER_ALL: len(out)}
     if BRAKI_FILTER_ALL not in filter_counts:
         filter_counts[BRAKI_FILTER_ALL] = len(out)
-    return OrderIssueTaskListResponse(tasks=out, skipped_tasks=skipped, filter_counts=filter_counts)
+    return OrderIssueTaskListResponse(
+        success=True,
+        tasks=out,
+        skipped_tasks=skipped,
+        filter_counts=filter_counts,
+    )
+
+
+@router.get("/order-issue-tasks", response_model=OrderIssueTaskListResponse)
+def list_order_issue_tasks(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return _build_order_issue_tasks_list(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+        )
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception(
+            "[wms.order_issue_tasks.fetch] db_failed tenant_id=%s warehouse_id=%s",
+            tenant_id,
+            warehouse_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "order_issue_tasks_fetch_failed",
+                "message": str(exc)[:500],
+            },
+        ) from exc
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "[wms.order_issue_tasks.fetch] failed tenant_id=%s warehouse_id=%s",
+            tenant_id,
+            warehouse_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "order_issue_tasks_fetch_failed",
+                "message": str(exc)[:500],
+            },
+        ) from exc
 
 
 @router.post("/order-issue-tasks/{task_id}/log")
@@ -481,6 +575,7 @@ def post_order_issue_task_log(
     warehouse_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
+    ensure_order_issue_task_table_schema(db)
     t = (
         db.query(OrderIssueTask)
         .filter(
@@ -506,6 +601,7 @@ def post_order_issue_task_done(
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
+    ensure_order_issue_task_table_schema(db)
     t = (
         db.query(OrderIssueTask)
         .filter(
@@ -542,6 +638,7 @@ def post_order_issue_task_archive(
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
+    ensure_order_issue_task_table_schema(db)
     t = (
         db.query(OrderIssueTask)
         .filter(

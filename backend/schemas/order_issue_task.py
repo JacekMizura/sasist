@@ -162,6 +162,7 @@ class OrderIssueTaskSkippedItem(BaseModel):
 
 
 class OrderIssueTaskListResponse(BaseModel):
+    success: bool = True
     tasks: list[OrderIssueTaskListItem]
     skipped_tasks: list[OrderIssueTaskSkippedItem] = Field(
         default_factory=list,
