@@ -11,19 +11,33 @@ import {
 import { WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wmsRoutes";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 
-type BrakiBucketId = "awaiting_oms" | "recovery_ready" | "waiting_customer";
+type BrakiWorkflowFilterId =
+  | "all"
+  | "awaiting"
+  | "relocation"
+  | "relocation_partial"
+  | "pick"
+  | "ready_pack"
+  | "pick_and_relocation";
 
-function normalizeBrakiBucket(t: OrderIssueTaskListItemApi): BrakiBucketId {
-  const b = (t.braki_queue_bucket ?? "").trim();
-  if (b === "recovery_ready" || b === "waiting_customer" || b === "awaiting_oms") return b;
-  return "awaiting_oms";
+const BRAKI_WORKFLOW_FILTERS: { id: BrakiWorkflowFilterId; label: string }[] = [
+  { id: "all", label: "Wszystkie statusy" },
+  { id: "awaiting", label: "Oczekujące" },
+  { id: "relocation", label: "Do rozlokowania" },
+  { id: "relocation_partial", label: "Do częściowego rozlokowania" },
+  { id: "pick", label: "Produkty do zebrania z magazynu" },
+  { id: "ready_pack", label: "Gotowe do pakowania" },
+  { id: "pick_and_relocation", label: "Produkty do zebrania oraz rozlokowania" },
+];
+
+function normalizeWorkflowStatus(t: OrderIssueTaskListItemApi): BrakiWorkflowFilterId {
+  const s = (t.braki_workflow_status ?? "").trim() as BrakiWorkflowFilterId;
+  if (BRAKI_WORKFLOW_FILTERS.some((f) => f.id === s)) return s;
+  const bucket = (t.braki_queue_bucket ?? "").trim();
+  if (bucket === "recovery_ready") return "pick";
+  if (bucket === "waiting_customer") return "awaiting";
+  return "awaiting";
 }
-
-const BRAKI_BUCKET_SECTION: Record<BrakiBucketId, string> = {
-  awaiting_oms: "Oczekuje na decyzję OMS",
-  recovery_ready: "Gotowe do dogrywki zbierki",
-  waiting_customer: "Oczekuje na klienta",
-};
 
 function displayOrderNumber(raw: string): string {
   const s = (raw || "").trim();
@@ -45,20 +59,57 @@ function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(Number(n) || 0);
 }
 
-function formatShortageClock(iso: string | undefined): string {
-  const s = (iso ?? "").trim();
-  if (!s) return "—";
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
-}
-
 function shortageLinesForCard(t: OrderIssueTaskListItemApi) {
   return (t.shortage_lines ?? []).filter((l) => l.missing_qty > 1e-9);
 }
 
 function openIssueTask(navigate: ReturnType<typeof useNavigate>, t: OrderIssueTaskListItemApi) {
   navigate(WMS_ROUTES.issueTask(t.id));
+}
+
+function cardStatusLabel(t: OrderIssueTaskListItemApi): string {
+  const custom = (t.braki_workflow_status_label ?? "").trim();
+  if (custom) return custom;
+  const wf = normalizeWorkflowStatus(t);
+  return BRAKI_WORKFLOW_FILTERS.find((f) => f.id === wf)?.label ?? "—";
+}
+
+function cardAccentForWorkflow(wf: BrakiWorkflowFilterId): {
+  accent: string;
+  badge: string;
+  status: string;
+  icon: string;
+} {
+  if (wf === "awaiting") {
+    return {
+      accent: "bg-red-500",
+      badge: "bg-red-50 border-red-200 text-red-700",
+      status: "bg-red-500",
+      icon: "fa-triangle-exclamation",
+    };
+  }
+  if (wf === "relocation_partial" || wf === "relocation" || wf === "pick_and_relocation") {
+    return {
+      accent: "bg-amber-500",
+      badge: "bg-amber-50 border-amber-200 text-amber-700",
+      status: "bg-amber-500",
+      icon: "fa-clock",
+    };
+  }
+  if (wf === "ready_pack") {
+    return {
+      accent: "bg-blue-500",
+      badge: "bg-blue-50 border-blue-200 text-blue-700",
+      status: "bg-blue-500",
+      icon: "fa-box",
+    };
+  }
+  return {
+    accent: "bg-emerald-500",
+    badge: "bg-emerald-50 border-emerald-200 text-emerald-700",
+    status: "bg-emerald-500",
+    icon: "fa-check",
+  };
 }
 
 export default function WmsOrderIssuesHub() {
@@ -76,6 +127,7 @@ export default function WmsOrderIssuesHub() {
   } = useWmsScanner();
 
   const [tasks, setTasks] = useState<OrderIssueTaskListItemApi[]>([]);
+  const [filterCounts, setFilterCounts] = useState<Record<string, number>>({});
   const [skippedTasks, setSkippedTasks] = useState<
     { task_id: number; order_id: number; order_number: string; error_message: string }[]
   >([]);
@@ -83,26 +135,21 @@ export default function WmsOrderIssuesHub() {
   const [err, setErr] = useState<string | null>(null);
   const [deeplinkMiss, setDeeplinkMiss] = useState<string | null>(null);
 
-  // Stany dla UI modala filtrów
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState("Wszystkie statusy");
+  const [activeFilterId, setActiveFilterId] = useState<BrakiWorkflowFilterId>("all");
 
-  const taskGroups = useMemo(() => {
-    const order: BrakiBucketId[] = ["awaiting_oms", "recovery_ready", "waiting_customer"];
-    const m = new Map<BrakiBucketId, OrderIssueTaskListItemApi[]>();
-    for (const id of order) m.set(id, []);
-    for (const t of tasks) {
-      const b = normalizeBrakiBucket(t);
-      m.get(b)!.push(t);
-    }
-    return order
-      .map((id) => ({ id, label: BRAKI_BUCKET_SECTION[id], items: m.get(id) ?? [] }))
-      .filter((g) => g.items.length > 0);
-  }, [tasks]);
+  const activeFilterLabel =
+    BRAKI_WORKFLOW_FILTERS.find((f) => f.id === activeFilterId)?.label ?? "Wszystkie statusy";
+
+  const filteredTasks = useMemo(() => {
+    if (activeFilterId === "all") return tasks;
+    return tasks.filter((t) => normalizeWorkflowStatus(t) === activeFilterId);
+  }, [tasks, activeFilterId]);
 
   const load = useCallback(() => {
     if (warehouseId == null) {
       setTasks([]);
+      setFilterCounts({});
       setLoading(false);
       return;
     }
@@ -111,11 +158,13 @@ export default function WmsOrderIssuesHub() {
     listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId)
       .then((res) => {
         setTasks(res.tasks);
+        setFilterCounts(res.filter_counts ?? {});
         setSkippedTasks(res.skipped_tasks ?? []);
       })
       .catch(() => {
         setErr("Nie udało się wczytać kolejki.");
         setSkippedTasks([]);
+        setFilterCounts({});
       })
       .finally(() => setLoading(false));
   }, [warehouseId]);
@@ -180,10 +229,10 @@ export default function WmsOrderIssuesHub() {
     return () => registerScanHandler(null);
   }, [registerScanHandler, resolveScan]);
 
-  const filteredGroups = useMemo(() => {
-    if (activeFilter === "Wszystkie statusy") return taskGroups;
-    return taskGroups.filter((g) => g.label === activeFilter);
-  }, [taskGroups, activeFilter]);
+  const countForFilter = (id: BrakiWorkflowFilterId): number => {
+    if (id === "all") return filterCounts.all ?? tasks.length;
+    return filterCounts[id] ?? tasks.filter((t) => normalizeWorkflowStatus(t) === id).length;
+  };
 
   if (warehouseId == null) {
     return (
@@ -195,7 +244,6 @@ export default function WmsOrderIssuesHub() {
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white antialiased">
-      {/* Top Bar */}
       <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 md:h-16 md:px-6">
         <div className="flex items-center gap-3 md:gap-4">
           <button
@@ -219,9 +267,7 @@ export default function WmsOrderIssuesHub() {
         </div>
       </header>
 
-      {/* Sekcja Filtrów - Czyste białe tło, ikony w formacie SVG */}
       <div className="z-10 flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:gap-4 md:px-6 md:py-4">
-        {/* Przycisk Filtru Statusu */}
         <button
           onClick={() => setIsFilterModalOpen(true)}
           className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 active:bg-slate-100 sm:w-72"
@@ -236,12 +282,11 @@ export default function WmsOrderIssuesHub() {
               <span className="mb-0.5 text-[10px] font-bold uppercase leading-none tracking-wider text-slate-400">
                 Filtruj po statusie
               </span>
-              <span className="truncate text-sm font-semibold leading-tight text-slate-900">{activeFilter}</span>
+              <span className="truncate text-sm font-semibold leading-tight text-slate-900">{activeFilterLabel}</span>
             </div>
           </div>
         </button>
 
-        {/* Przycisk Aktywnego Dokumentu */}
         <button className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500 active:bg-slate-100 sm:w-80">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -261,7 +306,6 @@ export default function WmsOrderIssuesHub() {
         </button>
       </div>
 
-      {/* Komunikaty błędów */}
       <div className="px-3 pt-3 md:px-6 md:pt-4 bg-white">
         {err ? <p className="text-center text-sm font-medium text-amber-800">{err}</p> : null}
         {deeplinkMiss ? (
@@ -284,7 +328,6 @@ export default function WmsOrderIssuesHub() {
         ) : null}
       </div>
 
-      {/* Lista Zamówień - Tło główne zmienione na białe */}
       <main className="custom-scrollbar flex-1 overflow-y-auto p-3 pb-8 md:p-6 bg-white">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
@@ -302,101 +345,92 @@ export default function WmsOrderIssuesHub() {
                 : "Po zgłoszeniu braku przy zbieraniu zamówienie pojawi się tutaj."}
             </p>
           </div>
+        ) : filteredTasks.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
+            <p className="text-base font-semibold text-slate-800">Brak zamówień dla wybranego filtra</p>
+            <p className="mt-2 text-sm text-slate-600">Zmień filtr statusu lub odśwież kolejkę.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredGroups.flatMap((g) =>
-              g.items.map((t) => {
-                const sl = shortageLinesForCard(t);
-                const lineCount = sl.length;
-                const totalMissing = sl.reduce((s, l) => s + (Number(l.missing_qty) || 0), 0);
-                const r = t.replacement_pick_pending_count ?? 0;
-                const num = displayOrderNumber(t.order_number).replace("#", "");
+            {filteredTasks.map((t) => {
+              const sl = shortageLinesForCard(t);
+              const lineCount = sl.length;
+              const totalMissing = sl.reduce((s, l) => s + (Number(l.missing_qty) || 0), 0);
+              const r = t.replacement_pick_pending_count ?? 0;
+              const num = displayOrderNumber(t.order_number).replace("#", "");
+              const wf = normalizeWorkflowStatus(t);
+              const { accent, badge, status, icon } = cardAccentForWorkflow(wf);
 
-                const bucketId = normalizeBrakiBucket(t);
-                const isDanger = bucketId === "awaiting_oms";
-                const isWarning = bucketId === "waiting_customer";
-                
-                const accentColor = isDanger ? "bg-red-500" : isWarning ? "bg-amber-500" : "bg-emerald-500";
-                const badgeColor = isDanger
-                  ? "bg-red-50 border-red-200 text-red-700"
-                  : isWarning
-                  ? "bg-amber-50 border-amber-200 text-amber-700"
-                  : "bg-emerald-50 border-emerald-200 text-emerald-700";
-                const statusColor = isDanger ? "bg-red-500" : isWarning ? "bg-amber-500" : "bg-emerald-500";
-                const iconClass = isDanger ? "fa-triangle-exclamation" : isWarning ? "fa-clock" : "fa-check";
+              let qtyLine = "";
+              let missingNumber = totalMissing;
 
-                let qtyLine = "";
-                let missingNumber = totalMissing;
-                
-                if (lineCount > 0) {
-                  qtyLine = `${lineCount} ${plProduktyWord(lineCount)} · brak do zebrania`;
-                } else if (r > 0) {
-                  missingNumber = r;
-                  qtyLine = `Gotowe do zebrania po zamianie`;
-                } else {
-                  missingNumber = 1;
-                  qtyLine = (t.issue_queue_summary_line ?? "").trim() || "Wymaga uwagi";
-                }
+              if (lineCount > 0) {
+                qtyLine = `${lineCount} ${plProduktyWord(lineCount)} · brak do zebrania`;
+              } else if (r > 0) {
+                missingNumber = r;
+                qtyLine = `Gotowe do zebrania po zamianie`;
+              } else {
+                missingNumber = 1;
+                qtyLine = (t.issue_queue_summary_line ?? "").trim() || "Wymaga uwagi";
+              }
 
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => openIssueTask(navigate, t)}
-                    className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all hover:border-slate-300 hover:shadow-md active:scale-[0.99] md:p-5"
-                  >
-                    <div className={`absolute bottom-0 left-0 top-0 w-1.5 ${accentColor}`}></div>
+              const statusLabel = cardStatusLabel(t);
 
-                    <div className="pl-2">
-                      <div className="mb-4 flex items-start justify-between">
-                        <div>
-                          <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 md:text-xs">
-                            Zamówienie nr
-                          </div>
-                          <div className="text-xl font-black tracking-tight text-slate-900 transition-colors group-hover:text-blue-600 md:text-2xl">
-                            {num}
-                          </div>
+              return (
+                <div
+                  key={`${t.order_id}-${t.id}`}
+                  onClick={() => openIssueTask(navigate, t)}
+                  className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all hover:border-slate-300 hover:shadow-md active:scale-[0.99] md:p-5"
+                >
+                  <div className={`absolute bottom-0 left-0 top-0 w-1.5 ${accent}`}></div>
+
+                  <div className="pl-2">
+                    <div className="mb-4 flex items-start justify-between">
+                      <div>
+                        <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 md:text-xs">
+                          Zamówienie nr
                         </div>
-                        <div
-                          className={`rounded-lg border px-2.5 py-1.5 text-center shadow-sm ${badgeColor}`}
-                        >
-                          <div className="mb-0.5 text-[9px] font-black uppercase">Braki</div>
-                          <div className="text-lg font-black leading-none md:text-xl">
-                            {fmtQty(missingNumber)}
-                            <span className="ml-0.5 text-[10px] md:text-xs">szt</span>
-                          </div>
+                        <div className="text-xl font-black tracking-tight text-slate-900 transition-colors group-hover:text-blue-600 md:text-2xl">
+                          {num}
                         </div>
                       </div>
-
-                      <div className="space-y-2.5 md:space-y-3">
-                        <div className="flex items-start gap-2">
-                          <div className="mt-0.5 w-14 shrink-0 text-[11px] font-semibold text-slate-500 md:text-xs">
-                            Status:
-                          </div>
-                          <div
-                            className={`inline-flex items-center gap-1.5 rounded px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm ${statusColor}`}
-                          >
-                            <i className={`fa-solid ${iconClass} text-[9px]`}></i> {g.label}
-                          </div>
+                      <div className={`rounded-lg border px-2.5 py-1.5 text-center shadow-sm ${badge}`}>
+                        <div className="mb-0.5 text-[9px] font-black uppercase">Braki</div>
+                        <div className="text-lg font-black leading-none md:text-xl">
+                          {fmtQty(missingNumber)}
+                          <span className="ml-0.5 text-[10px] md:text-xs">szt</span>
                         </div>
-                        <div className="flex items-start gap-2">
-                          <div className="mt-0.5 w-14 shrink-0 text-[11px] font-semibold text-slate-500 md:text-xs">
-                            Typ:
-                          </div>
-                          <div className="rounded border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold leading-tight text-blue-700 md:text-sm">
-                            {qtyLine}
-                          </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5 md:space-y-3">
+                      <div className="flex items-start gap-2">
+                        <div className="mt-0.5 w-14 shrink-0 text-[11px] font-semibold text-slate-500 md:text-xs">
+                          Status:
+                        </div>
+                        <div
+                          className={`inline-flex items-center gap-1.5 rounded px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm ${status}`}
+                        >
+                          <i className={`fa-solid ${icon} text-[9px]`}></i> {statusLabel}
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <div className="mt-0.5 w-14 shrink-0 text-[11px] font-semibold text-slate-500 md:text-xs">
+                          Typ:
+                        </div>
+                        <div className="rounded border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold leading-tight text-blue-700 md:text-sm">
+                          {qtyLine}
                         </div>
                       </div>
                     </div>
                   </div>
-                );
-              })
-            )}
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
 
-      {/* Modal: Filtruj zamówienia po statusie */}
       {isFilterModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
           <div
@@ -416,39 +450,26 @@ export default function WmsOrderIssuesHub() {
             </div>
 
             <div className="custom-scrollbar space-y-1.5 overflow-y-auto p-3 pb-6 md:p-4">
-              <button
-                onClick={() => {
-                  setActiveFilter("Wszystkie statusy");
-                  setIsFilterModalOpen(false);
-                }}
-                className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all active:scale-[0.98] md:py-3.5 ${
-                  activeFilter === "Wszystkie statusy"
-                    ? "border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                    : "border-transparent bg-slate-50 text-slate-700 hover:bg-slate-100"
-                }`}
-              >
-                <span className="text-sm font-bold md:text-base">Wszystkie statusy</span>
-                <span className="rounded-md bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-800 shrink-0">
-                  {tasks.length}
-                </span>
-              </button>
-
-              {taskGroups.map((g) => (
+              {BRAKI_WORKFLOW_FILTERS.map((f) => (
                 <button
-                  key={g.id}
+                  key={f.id}
                   onClick={() => {
-                    setActiveFilter(g.label);
+                    setActiveFilterId(f.id);
                     setIsFilterModalOpen(false);
                   }}
                   className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all active:scale-[0.98] md:py-3.5 ${
-                    activeFilter === g.label
+                    activeFilterId === f.id
                       ? "border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                      : "border-slate-200 bg-white text-slate-800 shadow-sm hover:bg-slate-50"
+                      : "border-transparent bg-slate-50 text-slate-700 hover:bg-slate-100"
                   }`}
                 >
-                  <span className="text-sm font-semibold md:text-base pr-2 text-left">{g.label}</span>
-                  <span className="rounded-md bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-700 shrink-0">
-                    {g.items.length}
+                  <span className="text-sm font-bold md:text-base pr-2 text-left">{f.label}</span>
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-xs font-bold shrink-0 ${
+                      activeFilterId === f.id ? "bg-blue-100 text-blue-800" : "bg-slate-200 text-slate-700"
+                    }`}
+                  >
+                    {countForFilter(f.id)}
                   </span>
                 </button>
               ))}

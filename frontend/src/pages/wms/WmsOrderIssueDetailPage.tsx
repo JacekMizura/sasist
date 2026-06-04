@@ -8,6 +8,7 @@ import {
   resolveWmsOrderIssueTaskScan,
   type OrderIssueDetailLineApi,
   type OrderIssueOrderContextApi,
+  type OrderIssueShortageLineApi,
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
@@ -26,6 +27,17 @@ function emptyContext(ctx: OrderIssueOrderContextApi | undefined): OrderIssueOrd
 
 function totalContextLines(ctx: OrderIssueOrderContextApi): number {
   return (ctx.collected_lines?.length ?? 0) + (ctx.remaining_pick_lines?.length ?? 0);
+}
+
+function shortageLineToDetailLine(sl: OrderIssueShortageLineApi): OrderIssueDetailLineApi {
+  return {
+    ...sl,
+    line_kind: "shortage_unresolved",
+    badge_label: "Brak do decyzji",
+    remaining_qty: sl.remaining_qty ?? sl.missing_qty,
+    sku: sl.sku ?? "",
+    ean: sl.ean ?? "",
+  };
 }
 
 // Nowy, zoptymalizowany pod Zebrę komponent renderujący sekcje produktów
@@ -52,19 +64,25 @@ function IssueDetailSection({
 
       <div className="space-y-4">
         {lines.map((line, idx) => {
-          // Bezpieczne mapowanie danych (dostosuj pola do swojego typu OrderIssueDetailLineApi)
-          const key = `${(line as any).order_item_id ?? idx}-${(line as any).product_id ?? idx}`;
-          const name = (line as any).product_name || (line as any).name || "Nieznany produkt";
-          const ean = (line as any).product_ean || (line as any).ean || "—";
-          const sku = (line as any).product_sku || (line as any).sku || "—";
-          const location = (line as any).location_name || (line as any).location || "—";
-          
-          const missingQty = Number((line as any).missing_qty) || 0;
-          const collectedQty = Number((line as any).collected_qty) || 0;
-          const orderedQty = Number((line as any).ordered_qty) || 0;
-          
-          const pickedBy = (line as any).last_picked_by || (line as any).picked_by || "—";
-          const pickedAt = (line as any).last_picked_at || (line as any).picked_at || "—";
+          const key = `${line.order_item_id ?? idx}-${line.product_id ?? idx}`;
+          const name = line.product_name || "Nieznany produkt";
+          const ean = line.ean || "—";
+          const sku = line.sku || "—";
+          const location = (line.location_code || "").trim() || "—";
+          const imgSrc =
+            (line.image_url || "").trim() ||
+            (isCollected
+              ? "https://placehold.co/100x100/ecfdf5/059669?text=OK"
+              : "https://placehold.co/100x100/fffbeb/d97706?text=Brak");
+
+          const remainingQty =
+            Number(line.remaining_qty) > 0
+              ? Number(line.remaining_qty)
+              : Number(line.missing_qty) || 0;
+          const collectedQty = Number(line.picked_qty) || 0;
+          const orderedQty = Number(line.ordered_qty) || 0;
+
+          const lastAction = (line.pick_audit_summary || "").trim() || "—";
 
           if (isCollected) {
             return (
@@ -75,7 +93,7 @@ function IssueDetailSection({
                 <div className="flex gap-4">
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-emerald-100 bg-white p-1.5 shadow-sm md:h-20 md:w-20">
                     <img
-                      src="https://placehold.co/100x100/ecfdf5/059669?text=OK"
+                      src={imgSrc}
                       alt="Produkt"
                       className="h-full w-full object-contain opacity-60 mix-blend-multiply"
                     />
@@ -103,7 +121,7 @@ function IssueDetailSection({
                       </span>
                     </div>
                     <div className="mt-3 border-t border-emerald-100 pt-3 text-[11px] leading-relaxed text-slate-500">
-                      <strong className="text-slate-700">Akcja:</strong> {pickedBy} • {pickedAt}
+                      <strong className="text-slate-700">Ostatnia akcja:</strong> {lastAction}
                     </div>
                   </div>
                 </div>
@@ -121,8 +139,8 @@ function IssueDetailSection({
               <div className="flex gap-4">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-white p-1.5 shadow-sm md:h-20 md:w-20">
                   <img
-                    src="https://placehold.co/100x100/fffbeb/d97706?text=Brak"
-                    alt="Brak"
+                    src={imgSrc}
+                    alt="Produkt"
                     className="h-full w-full object-contain opacity-80 mix-blend-multiply"
                   />
                 </div>
@@ -150,7 +168,7 @@ function IssueDetailSection({
 
                   <div className="mb-4 flex flex-wrap items-center gap-2 text-xs md:gap-3">
                     <span className="rounded-md border border-amber-300 bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
-                      Pozostało: {missingQty} szt.
+                      Pozostało: {remainingQty} szt.
                     </span>
                     <span className="rounded-md border border-slate-300 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 shadow-sm">
                       Do zebrania
@@ -158,7 +176,7 @@ function IssueDetailSection({
                   </div>
 
                   <div className="mt-4 border-t border-amber-200 pt-3 text-[11px] leading-relaxed text-slate-600">
-                    <strong className="text-slate-800">Ostatnia akcja:</strong> {pickedBy} • {pickedAt}
+                    <strong className="text-slate-800">Ostatnia akcja:</strong> {lastAction}
                   </div>
                 </div>
               </div>
@@ -277,10 +295,22 @@ export default function WmsOrderIssueDetailPage() {
   }
 
   const ctx = emptyContext(task.order_context);
-  const hasAnyLines = totalContextLines(ctx) > 0;
+  const shortageAsDetail = (task.shortage_lines ?? [])
+    .filter((l) => l.missing_qty > 1e-9)
+    .map(shortageLineToDetailLine);
+  const remainingLines =
+    (ctx.remaining_pick_lines?.length ?? 0) > 0
+      ? (ctx.remaining_pick_lines ?? [])
+      : shortageAsDetail;
+  const hasAnyLines =
+    totalContextLines(ctx) > 0 || remainingLines.length > 0 || (ctx.collected_lines?.length ?? 0) > 0;
   const recoveryReady =
     (task.braki_queue_bucket ?? "") === "recovery_ready" || (task.replacement_pick_pending_count ?? 0) > 0;
-  const statusHeadline = [task.order_ui_status_name, brakiQueueBucketLabel(task.braki_queue_bucket)]
+  const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
+  const statusHeadline = [
+    task.order_ui_status_name,
+    workflowLabel || brakiQueueBucketLabel(task.braki_queue_bucket),
+  ]
     .map((s) => (typeof s === "string" ? s.trim() : ""))
     .filter(Boolean)
     .join(" · ");
@@ -361,8 +391,8 @@ export default function WmsOrderIssueDetailPage() {
                 variant="collected"
               />
               <IssueDetailSection
-                title="Pozostałe do zebrania"
-                lines={ctx.remaining_pick_lines ?? []}
+                title={remainingLines === shortageAsDetail ? "Braki do decyzji" : "Pozostałe do zebrania"}
+                lines={remainingLines}
                 variant="remaining"
               />
             </>

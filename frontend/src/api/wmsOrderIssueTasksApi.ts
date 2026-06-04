@@ -31,6 +31,10 @@ export type OrderIssueShortageLineApi = {
   missing_qty: number;
   location_code: string;
   oms_action_summary?: string;
+  remaining_qty?: number;
+  sku?: string;
+  ean?: string;
+  pick_audit_summary?: string | null;
 };
 
 export type OrderIssueDetailLineApi = OrderIssueShortageLineApi & {
@@ -75,6 +79,9 @@ export type OrderIssueTaskListItemApi = {
   status: string;
   /** awaiting_oms | recovery_ready | waiting_customer */
   braki_queue_bucket?: string;
+  /** awaiting | relocation | relocation_partial | pick | ready_pack | pick_and_relocation */
+  braki_workflow_status?: string;
+  braki_workflow_status_label?: string;
   missing_items: Record<string, unknown>[];
   picked_items: Record<string, unknown>[];
   missing_skus_label: string;
@@ -94,6 +101,7 @@ export type OrderIssueTaskSkippedItemApi = {
 export type OrderIssueTaskListResult = {
   tasks: OrderIssueTaskListItemApi[];
   skipped_tasks: OrderIssueTaskSkippedItemApi[];
+  filter_counts?: Record<string, number>;
 };
 
 export async function listWmsOrderIssueTasks(
@@ -106,6 +114,7 @@ export async function listWmsOrderIssueTasks(
   return {
     tasks: res.data?.tasks ?? [],
     skipped_tasks: res.data?.skipped_tasks ?? [],
+    filter_counts: res.data?.filter_counts ?? {},
   };
 }
 

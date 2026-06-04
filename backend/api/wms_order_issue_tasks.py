@@ -45,6 +45,12 @@ from ..services.order_issue_task_service import (
     order_customer_display_name,
     sync_open_issue_tasks_for_warehouse,
 )
+from ..services.braki_workflow_service import (
+    BRAKI_FILTER_ALL,
+    compute_braki_filter_counts,
+    resolve_braki_workflow_status,
+    braki_workflow_status_label,
+)
 from ..services.wms_recovery_pick_service import braki_queue_bucket
 from ..services.wms_audit_service import complete_wms_operation_session, touch_wms_operation_session
 
@@ -134,9 +140,13 @@ def serialize_order_issue_task_item(
     summary_line = ""
     status_line = ""
     bucket = "awaiting_oms"
+    workflow_status = "awaiting"
+    workflow_label = braki_workflow_status_label(workflow_status)
     if o is not None:
         u_short, r_pend = count_issue_queue_operational_lines(db, o)
         bucket = braki_queue_bucket(db, o, u_short=u_short, r_pend=r_pend)
+        workflow_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
+        workflow_label = braki_workflow_status_label(workflow_status)
         summary_line = format_issue_queue_summary_line(u_short, r_pend)
         status_line = format_issue_queue_status_label(u_short, r_pend)
         sub_pid, sub_name = first_pending_substitute_product(db, o)
@@ -206,6 +216,8 @@ def serialize_order_issue_task_item(
         created_at=created,
         last_shortage_at=last_shortage_at,
         braki_queue_bucket=bucket,
+        braki_workflow_status=workflow_status,
+        braki_workflow_status_label=workflow_label,
     )
 
 
@@ -320,6 +332,15 @@ def get_order_issue_task(
     except Exception as exc:
         logger.exception("get_order_issue_task serialize failed task_id=%s", t.id)
         raise HTTPException(status_code=500, detail="Nie udało się wczytać zadania braków.") from exc
+    logger.info(
+        "[braki.detail] task_id=%s order_id=%s workflow=%s customer=%s remaining_lines=%s shortage_lines=%s",
+        t.id,
+        t.order_id,
+        item.braki_workflow_status,
+        (item.customer_name or "")[:80],
+        len(item.order_context.remaining_pick_lines or []),
+        len(item.shortage_lines or []),
+    )
     if not order_requires_shortage_handling(db, o):
         mark_task_done(db, t, "Braki rozwiązane — usunięto z kolejki WMS")
         db.commit()
@@ -356,12 +377,29 @@ def list_order_issue_tasks(
             OrderIssueTask.warehouse_id == int(warehouse_id),
             OrderIssueTask.status == "OPEN",
         )
-        .order_by(OrderIssueTask.created_at.desc())
+        .order_by(OrderIssueTask.order_id.asc(), OrderIssueTask.id.desc())
         .all()
     )
+    deduped_rows: list[OrderIssueTask] = []
+    seen_orders: set[int] = set()
+    for t in rows:
+        oid = int(t.order_id)
+        if oid in seen_orders:
+            logger.debug("[braki.dedupe] skip duplicate task_id=%s order_id=%s", t.id, oid)
+            continue
+        seen_orders.add(oid)
+        deduped_rows.append(t)
+    if len(deduped_rows) < len(rows):
+        logger.info(
+            "[braki.dedupe] list tenant=%s wh=%s tasks %s -> %s unique orders",
+            tenant_id,
+            warehouse_id,
+            len(rows),
+            len(deduped_rows),
+        )
     out: list[OrderIssueTaskListItem] = []
     skipped: list[OrderIssueTaskSkippedItem] = []
-    for t in rows:
+    for t in deduped_rows:
         o: Order | None = None
         try:
             o = (
@@ -407,7 +445,10 @@ def list_order_issue_tasks(
             tenant_id,
             warehouse_id,
         )
-    return OrderIssueTaskListResponse(tasks=out, skipped_tasks=skipped)
+    filter_counts = compute_braki_filter_counts(out)
+    if BRAKI_FILTER_ALL not in filter_counts:
+        filter_counts[BRAKI_FILTER_ALL] = len(out)
+    return OrderIssueTaskListResponse(tasks=out, skipped_tasks=skipped, filter_counts=filter_counts)
 
 
 @router.post("/order-issue-tasks/{task_id}/log")

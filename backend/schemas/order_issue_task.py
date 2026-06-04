@@ -137,6 +137,14 @@ class OrderIssueTaskListItem(BaseModel):
         default="awaiting_oms",
         description="Stan operacyjny kolejki: awaiting_oms | recovery_ready | waiting_customer",
     )
+    braki_workflow_status: str = Field(
+        default="awaiting",
+        description="Główny status workflow (filtr listy): awaiting | relocation | relocation_partial | pick | ready_pack | pick_and_relocation",
+    )
+    braki_workflow_status_label: str = Field(
+        default="",
+        description="Etykieta PL statusu workflow",
+    )
 
 
 class OrderIssueTaskSkippedItem(BaseModel):
@@ -151,6 +159,10 @@ class OrderIssueTaskListResponse(BaseModel):
     skipped_tasks: list[OrderIssueTaskSkippedItem] = Field(
         default_factory=list,
         description="OPEN zadania pominięte z powodu błędu serializacji — kolejka nie jest pusta, ale karta nie mogła zostać zbudowana",
+    )
+    filter_counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="Liczniki filtrów workflow (all, awaiting, relocation, …)",
     )
 
 

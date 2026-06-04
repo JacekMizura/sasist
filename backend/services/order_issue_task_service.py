@@ -685,7 +685,12 @@ def build_order_issue_detail_context(
         rep_oid = getattr(oi, "replaced_from_order_item_id", None)
         if rep_oid is not None and int(rep_oid) > 0:
             substitute_for = (getattr(oi, "replaced_from_product_name", None) or "").strip()
-        remaining_qty = max(0.0, round(ordered - picked, 6)) if section == "remaining" else 0.0
+        if section == "remaining":
+            from .wms_operational_task_service import _line_remaining_qty
+
+            remaining_qty = float(_line_remaining_qty(db, order, oi))
+        else:
+            remaining_qty = 0.0
         name = (pr.name if pr and pr.name else "") or f"Produkt #{pid}"
         img: str | None = None
         if pr and pr.image_url and str(pr.image_url).strip():
@@ -757,9 +762,13 @@ def build_shortage_lines_for_order(
     ``image_url`` z produktu; lokalizacja — pierwsza wg stanu w magazynie.
     """
     from ..services.order_fulfillment_recompute import compute_line_missing_qty
+    from ..services.wms_audit_service import last_pick_audit_summaries_for_order_lines
 
     out: list[dict[str, Any]] = []
-    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
+    items = sorted(order.items or [], key=lambda x: int(x.id))
+    oi_ids = [int(it.id) for it in items]
+    pick_summaries = last_pick_audit_summaries_for_order_lines(db, int(order.id), oi_ids)
+    for oi in items:
         pid = int(oi.product_id)
         pr = db.query(Product).filter(Product.id == pid).first()
         ordered = float(oi.quantity or 0)
@@ -778,6 +787,11 @@ def build_shortage_lines_for_order(
             product_id=pid,
             product=pr,
         )
+        sku = ""
+        ean = ""
+        if pr:
+            sku = str(getattr(pr, "symbol", None) or getattr(pr, "sku", None) or "").strip()
+            ean = str(getattr(pr, "ean", None) or "").strip()
         out.append(
             {
                 "order_item_id": int(oi.id),
@@ -787,7 +801,13 @@ def build_shortage_lines_for_order(
                 "ordered_qty": round(ordered, 6),
                 "picked_qty": round(pq, 6),
                 "missing_qty": round(missing, 6),
+                "remaining_qty": round(missing, 6),
                 "location_code": loc_s,
+                "sku": sku,
+                "ean": ean,
+                "line_kind": "shortage_unresolved",
+                "badge_label": "Brak do decyzji",
+                "pick_audit_summary": pick_summaries.get(int(oi.id)),
             }
         )
     return out
@@ -995,6 +1015,48 @@ def collect_shortage_queue_candidate_order_ids(
     return cand_ids
 
 
+def consolidate_duplicate_open_issue_tasks(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> int:
+    """
+    Zamyka nadmiarowe OPEN zadania dla tego samego ``order_id`` (zostawia najnowsze ``id``).
+    """
+    import logging
+
+    log = logging.getLogger(__name__)
+    rows = (
+        db.query(OrderIssueTask)
+        .filter(
+            OrderIssueTask.tenant_id == int(tenant_id),
+            OrderIssueTask.warehouse_id == int(warehouse_id),
+            OrderIssueTask.status == "OPEN",
+        )
+        .order_by(OrderIssueTask.order_id.asc(), OrderIssueTask.id.desc())
+        .all()
+    )
+    keep_by_order: dict[int, OrderIssueTask] = {}
+    to_close: list[OrderIssueTask] = []
+    for t in rows:
+        oid = int(t.order_id)
+        if oid not in keep_by_order:
+            keep_by_order[oid] = t
+        else:
+            to_close.append(t)
+    for dup in to_close:
+        mark_task_done(db, dup, "Duplikat zadania braków — scalono w kolejce")
+    if to_close:
+        log.info(
+            "[braki.dedupe] closed %s duplicate OPEN task(s) tenant=%s wh=%s",
+            len(to_close),
+            tenant_id,
+            warehouse_id,
+        )
+    return len(to_close)
+
+
 def sync_open_issue_tasks_for_warehouse(
     db: Session,
     *,
@@ -1008,6 +1070,7 @@ def sync_open_issue_tasks_for_warehouse(
     from ..services.order_fulfillment_recompute import recalculate_order_shortage_state
 
     purge_stale_open_order_issue_tasks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    consolidate_duplicate_open_issue_tasks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     cand_ids = collect_shortage_queue_candidate_order_ids(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )

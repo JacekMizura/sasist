@@ -774,6 +774,15 @@ def post_picking_recovery_finalize(
     current_user: AppUser = Depends(get_current_user),
 ):
     """Domknięcie dogrywki zbierki: Picki na wózku dla jednego zamówienia + status OMS wg ustawień braków / pakowania."""
+    logger.info(
+        "[recovery.finalize] ENTER tenant=%s wh=%s order_id=%s cart_id=%s user=%s",
+        tenant_id,
+        warehouse_id,
+        body.order_id,
+        body.cart_id,
+        getattr(current_user, "id", None),
+    )
+    logger.info("[recovery.finalize] payload=%s", body.model_dump())
     try:
         out = finalize_wms_recovery_picking_cart(
             db,
@@ -783,6 +792,11 @@ def post_picking_recovery_finalize(
             cart_id=int(body.cart_id),
             operator_user_id=int(current_user.id),
             performed_by=current_user,
+        )
+        logger.info(
+            "[recovery.finalize] recovery_id=order:%s lines_finalize=%s",
+            int(body.order_id),
+            out,
         )
         complete_wms_operation_session(
             db,
@@ -795,14 +809,37 @@ def post_picking_recovery_finalize(
             completed_reason="finished",
             metadata={"order_id": int(body.order_id), "cart_id": int(body.cart_id)},
         )
+        from ..services.order_fulfillment_recompute import recalculate_order_shortage_state
+
+        recalculate_order_shortage_state(db, int(body.order_id), commit=False)
         db.commit()
     except ValueError as e:
         db.rollback()
+        logger.warning("[recovery.finalize] validation order_id=%s: %s", body.order_id, e)
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
-        logger.exception("post_picking_recovery_finalize")
-        raise HTTPException(status_code=503, detail="Zakończenie dogrywki nie powiodło się.") from None
+        logger.exception(
+            "[recovery.finalize] ERROR traceback order_id=%s cart_id=%s",
+            body.order_id,
+            body.cart_id,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=f"Zakończenie dogrywki nie powiodło się (baza danych): {e.__class__.__name__}",
+        ) from e
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "[recovery.finalize] ERROR traceback order_id=%s cart_id=%s",
+            body.order_id,
+            body.cart_id,
+        )
+        msg = str(e).strip() or e.__class__.__name__
+        raise HTTPException(
+            status_code=503,
+            detail=f"Zakończenie dogrywki nie powiodło się: {msg}",
+        ) from e
     return WmsPickingRecoveryFinalizeResponse(**out)
 
 
