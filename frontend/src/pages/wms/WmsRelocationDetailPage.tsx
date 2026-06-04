@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { Box, Check, Loader2, MapPin, Package, ScanLine } from "lucide-react";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Box, Check, Loader2, MapPin, Package, ScanLine } from "lucide-react";
 import {
   acquireWmsRelocationSession,
   assignWmsRelocationAllocation,
@@ -65,6 +65,8 @@ export default function WmsRelocationDetailPage() {
   const { taskId: taskIdParam } = useParams();
   const taskId = Number(taskIdParam);
   const navigate = useNavigate();
+  const routerLocation = useLocation();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
@@ -150,19 +152,38 @@ export default function WmsRelocationDetailPage() {
     [applyDetail, loadAllocationsPage, taskId],
   );
 
+  const shouldAcquireSessionOnLoad = useMemo(() => {
+    const fromState = Boolean(
+      (routerLocation.state as { startRelocationSession?: boolean } | null)?.startRelocationSession,
+    );
+    const fromQuery = searchParams.get("autostart") === "1";
+    return fromState || fromQuery;
+  }, [routerLocation.state, searchParams]);
+
   const load = useCallback(async () => {
     if (!Number.isFinite(taskId) || taskId < 1) return;
     setLoading(true);
     setErr(null);
+    setSessionLock(null);
+    setReadOnly(false);
     try {
-      await openSession(false);
+      const preview = await getWmsOperationalTaskDetail(DAMAGE_TENANT_ID, taskId);
+      applyDetail(preview);
+      if (preview.relocation_allocations_total && (preview.relocation_allocations?.length ?? 0) < preview.relocation_allocations_total) {
+        await loadAllocationsPage(0, false);
+      }
+      if (shouldAcquireSessionOnLoad) {
+        await openSession(false);
+      } else if (!preview.can_edit_relocation && preview.relocation_session?.locked_by_operator_id) {
+        setReadOnly(true);
+      }
     } catch {
       setDetail(null);
       setErr("Nie udało się wczytać zadania rozlokowania.");
     } finally {
       setLoading(false);
     }
-  }, [openSession, taskId]);
+  }, [applyDetail, loadAllocationsPage, openSession, shouldAcquireSessionOnLoad, taskId]);
 
   useEffect(() => {
     void load();
@@ -416,6 +437,20 @@ export default function WmsRelocationDetailPage() {
 
       <main className="mx-auto max-w-3xl space-y-4 px-4 py-4 sm:px-6">
         {detail ? <CrossdockFlowBanner detail={detail} /> : null}
+        {!loading && detail && !canEdit && !readOnly && !sessionLock && detail.status !== "done" ? (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+            <p className="text-sm font-medium text-indigo-950">
+              To zadanie jest w trybie podglądu. Rozpocznij sesję, aby skanować nośniki i rozkładać produkty.
+            </p>
+            <button
+              type="button"
+              className="mt-3 w-full rounded-xl bg-indigo-600 py-3 text-sm font-black text-white sm:w-auto sm:px-6"
+              onClick={() => void openSession(false)}
+            >
+              Rozpocznij rozlokowanie
+            </button>
+          </div>
+        ) : null}
         {readOnly && !sessionLock ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
             Tryb podglądu — edycja wyłączona

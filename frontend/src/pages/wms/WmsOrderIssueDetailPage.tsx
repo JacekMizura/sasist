@@ -13,7 +13,8 @@ import {
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
-import { WMS_ROUTES } from "./wmsRoutes";
+import { RelocationBatchChoiceModal } from "../../components/wms/relocation/RelocationBatchChoiceModal";
+import { WMS_ROUTES, dispatchWmsShortagesUpdated } from "./wmsRoutes";
 import { brakiPrimaryCta, parseBrakiWorkflowStatus } from "./brakiWorkflowCta";
 
 function brakiQueueBucketLabel(bucket: string | undefined): string {
@@ -211,6 +212,8 @@ export default function WmsOrderIssueDetailPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [archivePending, setArchivePending] = useState(false);
+  const [relocationModalOpen, setRelocationModalOpen] = useState(false);
+  const [relocationToast, setRelocationToast] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (warehouseId == null || !Number.isFinite(taskId) || taskId < 1) {
@@ -311,6 +314,8 @@ export default function WmsOrderIssueDetailPage() {
   const workflowStatus = parseBrakiWorkflowStatus(task);
   const readyForPacking = workflowStatus === "ready_pack";
   const primaryCta = brakiPrimaryCta(task, navigate);
+  const needsRelocationChoice =
+    workflowStatus === "relocation" || workflowStatus === "relocation_partial";
   const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
   const statusHeadline = workflowLabel || "—";
   const showOmsLink = workflowStatus !== "awaiting";
@@ -394,6 +399,12 @@ export default function WmsOrderIssueDetailPage() {
             </div>
           </div>
 
+          {relocationToast ? (
+            <div className="mx-4 mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 md:mx-6">
+              {relocationToast}
+            </div>
+          ) : null}
+
           {readyForPacking && !hasActiveShortageLines ? (
             <div className="mx-4 mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-5 text-center md:mx-6">
               <p className="text-sm font-bold text-blue-900">Zamówienie gotowe do pakowania</p>
@@ -426,10 +437,16 @@ export default function WmsOrderIssueDetailPage() {
           <div className="flex w-full flex-col gap-3 sm:flex-row-reverse">
             <button
               type="button"
-              onClick={() => primaryCta.navigate()}
+              onClick={() => {
+                if (needsRelocationChoice) {
+                  setRelocationModalOpen(true);
+                } else {
+                  primaryCta.navigate();
+                }
+              }}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 active:scale-[0.98] sm:flex-1 md:text-base"
             >
-              {primaryCta.label}
+              {needsRelocationChoice ? "Rozlokuj produkty" : primaryCta.label}
             </button>
             {canArchive ? (
               <button
@@ -455,6 +472,28 @@ export default function WmsOrderIssueDetailPage() {
         </div>
 
       </div>
+
+      {warehouseId != null && needsRelocationChoice ? (
+        <RelocationBatchChoiceModal
+          open={relocationModalOpen}
+          tenantId={DAMAGE_TENANT_ID}
+          warehouseId={warehouseId}
+          orderId={task.order_id}
+          onClose={() => setRelocationModalOpen(false)}
+          onAddOnly={({ document_label, lines_added }) => {
+            setRelocationToast(
+              `Dodano ${lines_added} poz. do dokumentu ${document_label}. Możesz kontynuować pracę tutaj.`,
+            );
+            dispatchWmsShortagesUpdated();
+            void load();
+          }}
+          onAddAndGo={({ task_id }) => {
+            navigate(WMS_ROUTES.operationalRelocationTask(task_id), {
+              state: { startRelocationSession: true },
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

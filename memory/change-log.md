@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Rozlokowanie: batch ZWK vs sesja operatora
+
+- API: ``GET /wms/relocation/batch-context``, ``POST /wms/relocation/add-items``, ``POST /wms/relocation/start-session``; serwis ``wms_relocation_batch_service`` (dokument ``ZWK`` draft, dedupe ``OI:{order_item_id}``).
+- Logi: ``[wms.relocation.document.add]``, ``[wms.relocation.session.start]``.
+- Braki szczegół: modal ``RelocationBatchChoiceModal`` — „Tylko dodaj do dokumentu” (bez redirect) / „Dodaj i przejdź do rozlokowania”.
+- ``WmsRelocationDetailPage``: sesja tylko przy ``state.startRelocationSession`` lub ``?autostart=1``; przycisk „Rozpocznij rozlokowanie” w podglądzie.
+- Testy: ``test_wms_relocation_batch.py``.
+
 ## 2026-06-04 — Braki: fałszywe „Do rozlokowania” (order 1206)
 
 - Usunięto auto-``merge_relocation_from_picks`` z ``finalize_wms_recovery_picking_cart`` (udany recovery pick → ``ready_pack``).
