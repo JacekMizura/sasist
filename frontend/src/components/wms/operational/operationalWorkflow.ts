@@ -3,6 +3,7 @@ import type {
   WmsOperationalTaskDetailApi,
 } from "../../../api/wmsOperationalTasksApi";
 import { formatOperationalDuration } from "../../../utils/formatOperationalDuration";
+import { formatOrderEventKeyFallback } from "../../../utils/orderEventLabels";
 
 export type WorkflowStepState = "done" | "current" | "upcoming" | "skipped";
 
@@ -71,7 +72,7 @@ function eventLabel(action: string): string {
     session_release: "Zwolnienie sesji",
     session_resume: "Wznowienie pracy",
   };
-  return map[action] ?? action.replace(/_/g, " ");
+  return map[action] ?? formatOrderEventKeyFallback(action);
 }
 
 function isCrossdockInbound(detail: WmsOperationalTaskDetailApi): boolean {

@@ -1,5 +1,10 @@
 # Change Log
 
+## 2026-06-04 — OMS: polskie etykiety zdarzeń zamówienia
+
+- ``frontend/src/utils/orderEventLabels.ts`` — mapa kodów WMS/OMS → PL, kategorie, ikony/kolory, fallback title-case.
+- ``OrderEventTypeLabel`` w logach zamówienia (Podsumowanie / Dziennik); historia WMS w ``orderHistoryTimelineModel``.
+
 ## 2026-06-04 — Rozlokowanie: batch ZWK vs sesja operatora
 
 - API: ``GET /wms/relocation/batch-context``, ``POST /wms/relocation/add-items``, ``POST /wms/relocation/start-session``; serwis ``wms_relocation_batch_service`` (dokument ``ZWK`` draft, dedupe ``OI:{order_item_id}``).

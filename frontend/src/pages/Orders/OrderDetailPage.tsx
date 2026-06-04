@@ -74,6 +74,8 @@ import { EditBuyerModal } from "../../components/orders/EditBuyerModal";
 import { OrderPriorityFlamePicker } from "../../components/orders/OrderPriorityFlame";
 import { OrderHistoryTimeline } from "../../components/orders/OrderHistoryTimeline";
 import { buildOrderHistoryTimelineEvents } from "../../components/orders/orderHistoryTimelineModel";
+import { OrderEventTypeLabel } from "../../components/orders/OrderEventTypeLabel";
+import { getOrderEventLabel } from "../../utils/orderEventLabels";
 import { getShippingMethods } from "../../api/shippingMethodsApi";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary, patchOrderUiStatus } from "../../api/orderUiStatusApi";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -1449,7 +1451,10 @@ export default function OrderDetailPage() {
   type SummaryPanelLogRow = {
     id: string | number;
     at: string;
-    kind: string;
+    /** Machine-readable code (search / dev only). */
+    eventKey: string;
+    /** Localized label for UI. */
+    eventLabel: string;
     msg: string;
     severity: "info" | "warn" | "error";
   };
@@ -1460,14 +1465,16 @@ export default function OrderDetailPage() {
       {
         id: "sys-created",
         at: formatDetailDate(order.created_at),
-        kind: "SYSTEM",
+        eventKey: "SYSTEM",
+        eventLabel: getOrderEventLabel("SYSTEM"),
         msg: `Utworzono zamówienie (ID ${order.id})`,
         severity: "info",
       },
       {
         id: "sys-source",
         at: "—",
-        kind: "SOURCE",
+        eventKey: "SOURCE",
+        eventLabel: getOrderEventLabel("SOURCE"),
         msg: `Źródło: ${(order.source ?? "").trim() || "—"}`,
         severity: "info",
       },
@@ -1477,10 +1484,12 @@ export default function OrderDetailPage() {
       let severity: SummaryPanelLogRow["severity"] = "info";
       if (/^(błąd|error)/i.test(msg)) severity = "error";
       else if (/^(ważne|warn)/i.test(msg)) severity = "warn";
+      const eventKey = (log.event_type ?? "").trim() || "—";
       rows.push({
         id: log.id,
         at: formatDetailDate(log.created_at ?? null),
-        kind: (log.event_type ?? "").trim() || "—",
+        eventKey,
+        eventLabel: getOrderEventLabel(eventKey),
         msg,
         severity,
       });
@@ -1490,7 +1499,8 @@ export default function OrderDetailPage() {
     return rows.filter(
       (r) =>
         r.msg.toLowerCase().includes(q) ||
-        r.kind.toLowerCase().includes(q) ||
+        r.eventLabel.toLowerCase().includes(q) ||
+        r.eventKey.toLowerCase().includes(q) ||
         r.at.toLowerCase().includes(q),
     );
   }, [order, summaryLogSearch]);
@@ -2172,7 +2182,9 @@ export default function OrderDetailPage() {
                         {summaryPanelLogs.map((row) => (
                           <tr key={String(row.id)} className={row.severity === "error" ? "bg-red-50 text-red-900" : row.severity === "warn" ? "bg-amber-50 text-amber-900" : ""}>
                             <td className="py-2 text-slate-500 font-mono text-xs w-48">{row.at}</td>
-                            <td className="py-2 font-bold text-xs uppercase text-slate-600">{row.kind}</td>
+                            <td className="py-2">
+                              <OrderEventTypeLabel eventType={row.eventKey} />
+                            </td>
                             <td className="py-2">{row.msg}</td>
                           </tr>
                         ))}
@@ -2324,7 +2336,9 @@ export default function OrderDetailPage() {
                      {summaryPanelLogs.map((row) => (
                        <tr key={String(row.id)} className={row.severity === "error" ? "bg-red-50 text-red-900" : row.severity === "warn" ? "bg-amber-50 text-amber-900" : ""}>
                          <td className="py-3 text-slate-500 font-mono text-xs">{row.at}</td>
-                         <td className="py-3 font-bold text-[10px] uppercase">{row.kind}</td>
+                         <td className="py-3">
+                           <OrderEventTypeLabel eventType={row.eventKey} />
+                         </td>
                          <td className="py-3">{row.msg}</td>
                        </tr>
                      ))}

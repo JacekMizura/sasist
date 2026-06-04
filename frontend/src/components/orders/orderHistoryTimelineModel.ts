@@ -1,4 +1,5 @@
 import type { WmsPackingOrderCardApi } from "../../api/wmsPackingApi";
+import { getOrderEventLabel } from "../../utils/orderEventLabels";
 
 export type OrderHistoryBadgeTone = "muted" | "dark" | "blue";
 
@@ -175,7 +176,7 @@ export function buildOrderHistoryTimelineEvents(
       key: `oal-${log.id}`,
       at: at || new Date(0).toISOString(),
       variant: "panel_change",
-      title: (log.event_type ?? "Zdarzenie").replace(/_/g, " "),
+      title: getOrderEventLabel(log.event_type),
       description: msg || null,
     });
   }
