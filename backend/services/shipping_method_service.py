@@ -188,12 +188,12 @@ def _rewire_carton_shipping_links(db: Session, old_sm_id: str, new_sm_id: str) -
     """Move carton M2M links from a removed method to the replacement (keeps carton rules)."""
     if str(old_sm_id) == str(new_sm_id):
         return
-    chk = db.execute(
-        text(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='carton_shipping_method_links' LIMIT 1"
-        )
-    ).fetchone()
-    if not chk:
+    bind = db.get_bind()
+    if bind is None:
+        return
+    from ..db.schema_introspection import has_table
+
+    if not has_table(bind, "carton_shipping_method_links"):
         return
     rows = db.execute(
         text("SELECT carton_id FROM carton_shipping_method_links WHERE shipping_method_id = :o"),

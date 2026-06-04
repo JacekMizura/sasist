@@ -9,7 +9,7 @@ import unittest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from backend.db.schema_upgrade import ensure_order_issue_tasks_archive_columns
+from backend.db.schema_introspection import ensure_order_issue_tasks_archive_columns
 from backend.services.order_issue_task_service import list_open_order_issue_tasks_for_warehouse
 
 

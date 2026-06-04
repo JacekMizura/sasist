@@ -102,14 +102,14 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
   switch (id) {
     case "return_status":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <p className="mt-1 text-[11px] text-gray-500">Widoczna nazwa na liście zwrotów i w tym widoku.</p>
-          <p className="mt-2 text-[11px] text-gray-600">
-            Stan dokumentu: <span className="font-medium text-gray-900">{data.status?.name ?? "—"}</span>
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <p className="mb-2 text-xs text-slate-500">Widoczna nazwa na liście zwrotów i w tym widoku.</p>
+          <p className="mb-6 text-sm text-slate-900">
+            Stan dokumentu: <span className="font-semibold">{data.status?.name ?? "—"}</span>
           </p>
-          <label className="mt-2 block">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Etykieta na liście</span>
+          <label className="block">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Etykieta na liście</span>
             <select
               value={data.ui_status?.id ?? ""}
               disabled={patchingUi || panelSummary == null || terminal}
@@ -131,7 +131,7 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                   }
                 })();
               }}
-              className={`${listSellasistInputClass} mt-1 max-w-full`}
+              className={`${listSellasistInputClass} mt-2 w-full !border-0 !border-b !border-slate-200 !bg-transparent !px-0 !py-2 text-sm text-slate-900 !shadow-none !ring-0 focus:!border-slate-900`}
             >
               <option value="">— bez etykiety</option>
               {(panelSummary?.groups ?? []).map((block) => (
@@ -150,18 +150,17 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
     case "progress_bar":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <p className="mt-2 text-sm text-gray-800">
-            Rozliczono{" "}
-            <span className="font-semibold tabular-nums">
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <div className="mb-2 flex items-end justify-between">
+            <span className="text-sm text-slate-600">Rozliczono pozycje</span>
+            <span className="font-semibold tabular-nums text-slate-900">
               {resolvedCount}/{totalLines || 1}
-            </span>{" "}
-            pozycji
-          </p>
-          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+            </span>
+          </div>
+          <div className="h-1 w-full overflow-hidden bg-slate-100">
             <div
-              className="h-full rounded-full bg-slate-700 transition-[width]"
+              className="h-full bg-slate-900 transition-all duration-300"
               style={{
                 width: `${totalLines > 0 ? Math.min(100, Math.round((resolvedCount / totalLines) * 100)) : 0}%`,
               }}
@@ -175,48 +174,37 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
     case "wms_view":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white">
-          <div className="border-b border-gray-200 px-3 py-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          </div>
-          <div className="px-3 py-2">
-            <p className="text-xs text-gray-600">
-              Zdjęcia i dokumentacja z terminala —{" "}
-              <Link to={WMS_ROUTES.returnsProcess(data.id)} className="font-medium text-blue-700 hover:underline">
-                otwórz terminal WMS
-              </Link>
-              .
-            </p>
-          </div>
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <p className="text-sm text-slate-600">
+            Zdjęcia i dokumentacja z terminala —{" "}
+            <Link to={WMS_ROUTES.returnsProcess(data.id)} className="font-medium text-slate-900 underline underline-offset-4 hover:text-slate-600">
+              otwórz terminal WMS
+            </Link>
+          </p>
         </div>
       );
 
     case "damage_photos":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white">
-          <div className="border-b border-gray-200 px-3 py-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          </div>
-          <div className="px-3 py-2">
-            <p className="text-xs text-gray-500">Podgląd zdjęć z RMZ — wkrótce.</p>
-          </div>
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <p className="text-sm text-slate-500">Podgląd zdjęć z RMZ — wkrótce.</p>
         </div>
       );
 
     case "decision_history":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white">
-          <div className="border-b border-gray-200 px-3 py-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          </div>
-          <ul className="max-h-52 overflow-y-auto px-3 py-2 text-sm">
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <ul className="max-h-52 overflow-y-auto text-sm">
             {activityEntries.length === 0 ? (
-              <li className="text-gray-500">Brak wpisów (pełna historia w WMS).</li>
+              <li className="text-slate-500">Brak wpisów (pełna historia w WMS).</li>
             ) : (
               activityEntries.map((e, i) => (
-                <li key={i} className="flex gap-3 border-b border-gray-100 py-1.5 last:border-0">
-                  <span className="shrink-0 tabular-nums text-xs text-gray-400">{formatWhen(e.at)}</span>
-                  <span className="text-gray-800">{e.msg}</span>
+                <li key={i} className="flex gap-4 border-b border-slate-50 py-3 last:border-0">
+                  <span className="shrink-0 tabular-nums text-xs text-slate-400">{formatWhen(e.at)}</span>
+                  <span className="text-slate-800">{e.msg}</span>
                 </li>
               ))
             )}
@@ -226,20 +214,20 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
     case "customer_data":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <dl className="mt-2 space-y-1.5 text-xs leading-snug">
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <dl className="space-y-4 text-sm">
             <div>
-              <dt className="text-[10px] font-medium uppercase text-gray-400">Nazwa</dt>
-              <dd className="font-medium text-gray-900">{cust}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Nazwa</dt>
+              <dd className="mt-0.5 font-medium text-slate-900">{cust}</dd>
             </div>
             <div>
-              <dt className="text-[10px] font-medium uppercase text-gray-400">Telefon</dt>
-              <dd className="break-all text-gray-800">{data.phone?.trim() || data.customer_phone?.trim() || "—"}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Telefon</dt>
+              <dd className="mt-0.5 break-all text-slate-800">{data.phone?.trim() || data.customer_phone?.trim() || "—"}</dd>
             </div>
             <div>
-              <dt className="text-[10px] font-medium uppercase text-gray-400">E-mail</dt>
-              <dd className="break-all text-gray-800">{data.email?.trim() || data.customer_email?.trim() || "—"}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">E-mail</dt>
+              <dd className="mt-0.5 break-all text-slate-800">{data.email?.trim() || data.customer_email?.trim() || "—"}</dd>
             </div>
           </dl>
         </div>
@@ -247,17 +235,17 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
     case "notes":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <p className="mt-1 text-[10px] text-gray-500">Zapis lokalnie w tej przeglądarce.</p>
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <p className="mb-3 text-[10px] text-slate-400">Zapis lokalnie w tej przeglądarce.</p>
           <textarea
             value={notesDraft}
             onChange={(e) => setNotesDraft(e.target.value)}
             rows={3}
             placeholder="Notatka dla zespołu…"
-            className="mt-1.5 w-full resize-y rounded-md border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+            className="w-full resize-y border-0 border-b border-slate-200 bg-transparent px-0 py-2 text-sm text-slate-900 placeholder:text-slate-300 focus:border-slate-900 focus:ring-0"
           />
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <div className="mt-4 flex items-center gap-4">
             <button
               type="button"
               onClick={() => {
@@ -268,12 +256,12 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                   setErr("Nie udało się zapisać notatek.");
                 }
               }}
-              className="rounded-md bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-gray-800"
+              className="bg-slate-900 px-5 py-2 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-slate-800"
             >
               Zapisz
             </button>
             {notesSavedAt != null ? (
-              <span className="text-[10px] text-gray-500">{formatWhen(new Date(notesSavedAt).toISOString())}</span>
+              <span className="text-[10px] text-slate-400">Zapisano: {formatWhen(new Date(notesSavedAt).toISOString())}</span>
             ) : null}
           </div>
         </div>
@@ -281,34 +269,36 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
     case "correspondence":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <p className="mt-1 text-[10px] text-gray-500">Wpisy zapisane lokalnie na tym urządzeniu.</p>
-          <ul className="mt-1.5 max-h-32 space-y-1 overflow-y-auto text-sm">
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <p className="mb-4 text-[10px] text-slate-400">Wpisy zapisane lokalnie na tym urządzeniu.</p>
+          
+          <ul className="mb-6 max-h-40 space-y-4 overflow-y-auto text-sm">
             {commEntries.length === 0 ? (
-              <li className="text-gray-500">Brak wiadomości.</li>
+              <li className="text-slate-500">Brak wiadomości.</li>
             ) : (
               [...commEntries]
                 .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
                 .map((c, i) => (
-                  <li key={i} className="border-b border-gray-100 px-0.5 py-1 last:border-0">
-                    <div className="flex flex-wrap items-baseline justify-between gap-1 text-[10px] text-gray-500">
-                      <span className="font-medium text-gray-700">{c.who}</span>
-                      <span className="tabular-nums">{formatWhen(c.at)}</span>
+                  <li key={i} className="border-l-2 border-slate-200 pl-3">
+                    <div className="mb-1 flex items-baseline gap-2 text-[10px]">
+                      <span className="font-semibold uppercase tracking-wider text-slate-900">{c.who}</span>
+                      <span className="text-slate-400 tabular-nums">{formatWhen(c.at)}</span>
                     </div>
-                    <p className="whitespace-pre-wrap text-xs text-gray-800">{c.body}</p>
+                    <p className="whitespace-pre-wrap text-sm text-slate-800">{c.body}</p>
                   </li>
                 ))
             )}
           </ul>
-          <div className="mt-1.5 flex flex-col gap-1.5 sm:flex-row sm:items-end">
-            <label className="min-w-0 flex-1 text-xs">
-              <span className="text-gray-600">Wiadomość</span>
+          
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Nowa wiadomość</span>
               <textarea
                 value={commDraft}
                 onChange={(e) => setCommDraft(e.target.value)}
                 rows={2}
-                className="mt-0.5 w-full resize-none rounded-md border border-gray-200 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+                className="w-full resize-none border-0 border-b border-slate-200 bg-transparent px-0 py-2 text-sm text-slate-900 focus:border-slate-900 focus:ring-0"
               />
             </label>
             <button
@@ -326,7 +316,7 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                   setErr("Nie udało się zapisać wiadomości.");
                 }
               }}
-              className="shrink-0 rounded-md bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+              className="shrink-0 bg-slate-900 px-5 py-2 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-slate-800 disabled:opacity-30"
             >
               Dodaj
             </button>
@@ -336,14 +326,16 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
     case "attachments":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <div className="mt-2 space-y-2 text-xs">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="font-medium text-gray-700">Sprzedaż</span>
-              <span className="min-w-0 flex-1 truncate text-gray-900" title={salesDocRaw || undefined}>
-                {salesDocRaw || "—"}
-              </span>
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <div className="space-y-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sprzedaż</span>
+                <span className="block truncate text-slate-900" title={salesDocRaw || undefined}>
+                  {salesDocRaw || "—"}
+                </span>
+              </div>
               <button
                 type="button"
                 disabled={!salesDocRaw}
@@ -355,44 +347,49 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
                     `Dokument sprzedaży (referencja z panelu)\nNumer: ${salesDocRaw}\nZamówienie: #${data.order_id}\nRMZ: ${data.rmz_number}\n`,
                   );
                 }}
-                className="shrink-0 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+                className="shrink-0 border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-900 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
               >
                 Pobierz
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 pt-2">
-              <span className="font-medium text-gray-700">Korekta</span>
-              <Link
-                to={`/orders/${data.order_id}`}
-                className="shrink-0 rounded-md bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-gray-800"
-              >
-                Utwórz
-              </Link>
-              {panelCorrectionFileRaw ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      const raw = panelCorrectionFileRaw;
-                      let fileName = "korekta";
-                      let body = raw;
-                      try {
-                        const parsed = JSON.parse(raw) as { name?: string; content?: string };
-                        if (typeof parsed.content === "string") body = parsed.content;
-                        if (typeof parsed.name === "string" && parsed.name.trim()) fileName = parsed.name.trim();
-                      } catch {
-                        /* raw text */
-                      }
-                      triggerTextDownload(`${fileName.replace(/[^\w.-]+/g, "_")}.txt`, body);
-                    } catch {
-                      setErr("Nie udało się odczytać pliku korekty.");
-                    }
-                  }}
-                  className="shrink-0 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-800 hover:bg-gray-50"
+            
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-4">
+              <div>
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Korekta</span>
+              </div>
+              <div className="flex gap-2">
+                <Link
+                  to={`/orders/${data.order_id}`}
+                  className="bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-slate-800"
                 >
-                  Pobierz
-                </button>
-              ) : null}
+                  Utwórz
+                </Link>
+                {panelCorrectionFileRaw ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const raw = panelCorrectionFileRaw;
+                        let fileName = "korekta";
+                        let body = raw;
+                        try {
+                          const parsed = JSON.parse(raw) as { name?: string; content?: string };
+                          if (typeof parsed.content === "string") body = parsed.content;
+                          if (typeof parsed.name === "string" && parsed.name.trim()) fileName = parsed.name.trim();
+                        } catch {
+                          // raw text
+                        }
+                        triggerTextDownload(`${fileName.replace(/[^\w.-]+/g, "_")}.txt`, body);
+                      } catch {
+                        setErr("Nie udało się odczytać pliku korekty.");
+                      }
+                    }}
+                    className="border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-900 transition-colors hover:bg-slate-50"
+                  >
+                    Pobierz
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -400,21 +397,21 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
     case "payment_data":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <p className="mt-0.5 text-[10px] text-gray-500">Z adresu zamówienia (import).</p>
-          <dl className="mt-1.5 space-y-1 text-xs leading-snug">
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-1 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <p className="mb-4 text-[10px] text-slate-400">Z adresu zamówienia (import).</p>
+          <dl className="space-y-4 text-sm">
             <div>
-              <dt className="text-[10px] font-medium uppercase text-gray-400">Nazwa</dt>
-              <dd className="text-gray-900">{bankRecipient}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Nazwa</dt>
+              <dd className="mt-0.5 text-slate-900">{bankRecipient}</dd>
             </div>
             <div>
-              <dt className="text-[10px] font-medium uppercase text-gray-400">Rachunek</dt>
-              <dd className="break-all font-mono text-[11px] text-gray-800">{bankTransfer.bankAccount ?? "—"}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Rachunek</dt>
+              <dd className="mt-0.5 break-all font-mono text-sm text-slate-900">{bankTransfer.bankAccount ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-[10px] font-medium uppercase text-gray-400">Adres</dt>
-              <dd className="text-gray-800">{bankTransfer.address ?? "—"}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Adres</dt>
+              <dd className="mt-0.5 text-slate-800">{bankTransfer.address ?? "—"}</dd>
             </div>
           </dl>
         </div>
@@ -422,69 +419,70 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
 
     case "refund":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Suma</p>
-          <p className="text-2xl font-bold tabular-nums leading-none text-gray-900">{formatMoneyPln(fi?.total ?? 0)}</p>
-          <p className="mt-0.5 text-[10px] text-gray-500">Łączny zwrot</p>
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          
+          <div className="mb-6">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Łączny zwrot</p>
+            <p className="text-3xl font-light tracking-tight tabular-nums text-slate-900">{formatMoneyPln(fi?.total ?? 0)}</p>
+          </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 border-t border-gray-100 pt-2 text-xs leading-tight">
-            <div className="min-w-0 space-y-0.5">
-              <div className="flex justify-between gap-2">
-                <span className="text-gray-600">Produkty</span>
-                <span className="shrink-0 font-medium tabular-nums text-gray-900">{formatMoneyPln(fi?.products ?? 0)}</span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-gray-600">Dostawa</span>
-                <span className="shrink-0 font-medium tabular-nums text-gray-900">{formatMoneyPln(fi?.shipping ?? 0)}</span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-gray-600">Korekty</span>
-                <span className="shrink-0 font-medium tabular-nums text-gray-700">
-                  {fi?.adjustments != null && fi.adjustments !== 0 ? formatMoneyPln(fi.adjustments) : "—"}
-                </span>
-              </div>
+          <div className="mb-6 space-y-2 border-t border-slate-100 pt-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Produkty</span>
+              <span className="font-medium tabular-nums text-slate-900">{formatMoneyPln(fi?.products ?? 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Dostawa</span>
+              <span className="font-medium tabular-nums text-slate-900">{formatMoneyPln(fi?.shipping ?? 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Korekty</span>
+              <span className="font-medium tabular-nums text-slate-700">
+                {fi?.adjustments != null && fi.adjustments !== 0 ? formatMoneyPln(fi.adjustments) : "—"}
+              </span>
             </div>
           </div>
 
           {wmsSettings?.enable_refund === false ? (
-            <p className="mt-2 text-xs leading-snug text-gray-600">Zwrot środków rozliczany w panelu biura.</p>
+            <p className="text-sm text-slate-500">Zwrot środków rozliczany w panelu biura.</p>
           ) : (
-            <>
+            <div className="pt-2">
               {refund ? (
-                <p className="mt-1.5 text-[10px] text-gray-500">
-                  Typ zwrotu: <span className="font-medium text-gray-800">{refundTypeLabelPl(refund.refund_type)}</span>
+                <p className="mb-4 text-sm text-slate-800">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">Typ zwrotu</span>
+                  {refundTypeLabelPl(refund.refund_type)}
                 </p>
               ) : (
-                <p className="mt-1.5 text-[10px] text-gray-500">Brak zapisanego zwrotu.</p>
+                <p className="mb-4 text-[10px] text-slate-400">Brak zapisanego zwrotu.</p>
               )}
 
               <button
                 type="button"
                 disabled={terminal}
                 onClick={() => openRefundModal()}
-                className="mt-2 w-full rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full bg-slate-900 py-3 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-30"
               >
-                Zapisz zwrot
+                ZAPISZ ZWROT
               </button>
-            </>
+            </div>
           )}
         </div>
       );
 
     case "customer_stats":
       return (
-        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/80 p-3 text-xs text-gray-600">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <p className="mt-2 leading-relaxed">Dodatkowe informacje o kliencie pojawią się tutaj po podłączeniu analityki.</p>
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <p className="text-sm text-slate-500">Dodatkowe informacje o kliencie pojawią się tutaj po podłączeniu analityki.</p>
         </div>
       );
 
     case "prior_returns_history":
       return (
-        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/80 p-3 text-xs text-gray-600">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h2>
-          <p className="mt-2 leading-relaxed">Historia wcześniejszych zwrotów dla tego klienta — w przygotowaniu.</p>
+        <div className="border-b border-slate-100 py-6 last:border-0">
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{label}</h2>
+          <p className="text-sm text-slate-500">Historia wcześniejszych zwrotów dla tego klienta — w przygotowaniu.</p>
         </div>
       );
 

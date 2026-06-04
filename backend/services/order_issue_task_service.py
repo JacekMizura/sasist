@@ -1123,9 +1123,16 @@ def sync_open_issue_tasks_for_warehouse(
 
 def ensure_order_issue_task_table_schema(db: Session) -> None:
     """Upewnij się, że kolumny archiwizacji istnieją (starsze DB bez migracji przy starcie)."""
-    from ..db.schema_upgrade import ensure_order_issue_tasks_archive_columns
+    from ..db.schema_introspection import ensure_order_issue_tasks_archive_columns, get_engine
 
-    ensure_order_issue_tasks_archive_columns(db.get_bind())
+    bind = db.get_bind()
+    if bind is None:
+        return
+    try:
+        get_engine(bind)
+    except TypeError:
+        return
+    ensure_order_issue_tasks_archive_columns(bind)
 
 
 def list_open_order_issue_tasks_for_warehouse(

@@ -427,11 +427,16 @@ def _sqlite_only_schema_helper(fn):
     return _wrapped
 
 
-# Legacy schema helpers in backend.db.schema_upgrade use sqlite_master / PRAGMA /
-# SQLite ALTER-workarounds. PostgreSQL schema is managed via ORM metadata and the
-# one-time migration path, so those helpers must be no-ops outside SQLite.
+# Legacy schema helpers in backend.db.schema_upgrade use PRAGMA / SQLite ALTER-workarounds.
+# PostgreSQL schema is managed via ORM metadata; most helpers are no-ops outside SQLite.
+# Exceptions: dialect-agnostic runtime patches (see schema_introspection).
+_POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
+    "ensure_order_issue_tasks_archive_columns",
+})
 if not _is_sqlite_engine():
     for _name, _fn in list(globals().items()):
+        if _name in _POSTGRES_SAFE_SCHEMA_FUNCS:
+            continue
         if (
             callable(_fn)
             and getattr(_fn, "__module__", "").endswith(".db.schema_upgrade")

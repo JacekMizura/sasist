@@ -36,37 +36,33 @@ def _get_db_path():
 
 @router.get("/db-size")
 def database_size(db: Session = Depends(get_db)):
-    db_path = _get_db_path()
+    from ..db.schema_introspection import list_user_tables
 
-    if not os.path.exists(db_path):
-        size_mb = 0
-        tables_count = 0
-        total_rows = 0
-        logger.info("Database path: %s (file not found)", db_path)
-        logger.info("Database size MB: 0")
-    else:
+    db_path = _get_db_path()
+    dialect = engine.dialect.name
+    size_mb = 0.0
+    tables_count = 0
+    total_rows = 0
+
+    if dialect == "sqlite" and os.path.exists(db_path):
         size_bytes = os.path.getsize(db_path)
         size_mb = round(size_bytes / (1024 * 1024), 2)
         logger.info("Database path: %s", db_path)
         logger.info("Database size MB: %s", size_mb)
+    elif dialect != "sqlite":
+        logger.info("Database dialect: %s (remote; file size N/A)", dialect)
+    else:
+        logger.info("Database path: %s (file not found)", db_path)
 
-        # Number of tables (exclude sqlite_sequence)
-        try:
-            r = db.execute(text("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")).fetchone()
-            tables_count = r[0] if r else 0
-        except Exception:
-            tables_count = 0
-
-        # Total rows across all user tables
-        total_rows = 0
-        try:
-            tables = db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")).fetchall()
-            for (tname,) in tables:
-                safe_name = str(tname).replace('"', '""')
-                row = db.execute(text(f'SELECT COUNT(*) FROM "{safe_name}"')).fetchone()
-                total_rows += row[0] if row else 0
-        except Exception:
-            pass
+    try:
+        table_names = list_user_tables(db.get_bind() or engine)
+        tables_count = len(table_names)
+        for tname in table_names:
+            safe_name = str(tname).replace('"', '""')
+            row = db.execute(text(f'SELECT COUNT(*) FROM "{safe_name}"')).fetchone()
+            total_rows += int(row[0]) if row else 0
+    except Exception:
+        logger.exception("database_size table scan failed dialect=%s", dialect)
 
     return {
         "database_size_mb": size_mb,

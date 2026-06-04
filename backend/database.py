@@ -62,6 +62,13 @@ engine = create_engine(
     **engine_kwargs
 )
 
+try:
+    from .db.schema_introspection import log_db_engine
+
+    log_db_engine(engine)
+except Exception:
+    pass
+
 # =========================
 # SQLITE FOREIGN KEYS
 # =========================

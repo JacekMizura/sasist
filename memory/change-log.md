@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — PostgreSQL: usunięcie sqlite_master z runtime
+
+- `backend/db/schema_introspection.py` — `has_table`, `get_table_column_names`, `has_index`, `ensure_order_issue_tasks_archive_columns` (Inspector zamiast `sqlite_master`).
+- `schema_upgrade.py` — ~128 probe’ów tabel zamienionych na `_table_exists` / `_table_column_names`; archiwizacja braków deleguje do introspection.
+- `order_issue_task_service` importuje introspection (bezpośredni import omijał no-op wrapper z `main.py`).
+- `main.py` — `ensure_order_issue_tasks_archive_columns` wyjątek z no-op na Postgres; log `[db.engine]` przy starcie w `database.py`.
+- `inventory_serial_service`, `shipping_method_service`, `system.py` — Inspector zamiast `sqlite_master`.
+
 ## 2026-06-04 — Kolejka braków GET /order-issue-tasks (500)
 
 - Przyczyna: brak kolumn `archived_at` / `archived_by_user_id` w DB przy filtrze ORM → `no such column`.

@@ -15,6 +15,13 @@ from ..utils.ui_status_color import normalize_stored_color
 
 logger = logging.getLogger(__name__)
 
+from .schema_introspection import (
+    get_table_column_names as _table_column_names,
+    has_index as _has_index,
+    has_table as _table_exists,
+)
+
+
 
 def _migrate_panel_ui_status_colors_to_hex(conn, table: str) -> None:
     """Convert legacy color names to #RRGGBB on panel UI status tables."""
@@ -226,9 +233,7 @@ def ensure_products_carton_stacking_columns(engine: Engine) -> None:
 def ensure_orders_deleted_at_column(engine: Engine) -> None:
     """Archiwizacja zamówienia — ukrycie z listy przy zachowaniu FK (np. zarchiwizowany RMZ)."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='orders' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "orders")
         if not exists:
             conn.commit()
             return
@@ -242,9 +247,7 @@ def ensure_orders_deleted_at_column(engine: Engine) -> None:
 def ensure_products_deleted_at_column(engine: Engine) -> None:
     """Soft delete asortymentu — ukrycie z listy przy zachowaniu historii."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='products' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "products")
         if not exists:
             conn.commit()
             return
@@ -258,9 +261,7 @@ def ensure_products_deleted_at_column(engine: Engine) -> None:
 def ensure_wms_order_returns_deleted_at_column(engine: Engine) -> None:
     """Archiwizacja RMZ — nagłówek ze znacznikiem; linie operacyjne kasowane w serwisie."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_order_returns' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "wms_order_returns")
         if not exists:
             conn.commit()
             return
@@ -276,9 +277,7 @@ def ensure_wms_order_returns_deleted_at_column(engine: Engine) -> None:
 def ensure_customers_deleted_at_column(engine: Engine) -> None:
     """Archiwizacja klienta — lista ukrywa deleted_at; zamówienia zachowują customer_id."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='customers' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "customers")
         if not exists:
             conn.commit()
             return
@@ -292,9 +291,7 @@ def ensure_customers_deleted_at_column(engine: Engine) -> None:
 def ensure_bundles_deleted_at_column(engine: Engine) -> None:
     """Archiwizacja zestawu (bundle) — ukrycie z listy."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bundles' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "bundles")
         if not exists:
             conn.commit()
             return
@@ -585,9 +582,7 @@ def ensure_return_statuses_and_rmz(engine: Engine) -> None:
         except Exception:
             pass
 
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_order_returns' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "wms_order_returns")
         if not exists:
             return
 
@@ -737,11 +732,7 @@ def ensure_wms_order_returns_columns(engine: Engine) -> None:
     Without this, older SQLite files raise OperationalError on INSERT/SELECT vs ORM.
     """
     with engine.connect() as conn:
-        exists = conn.execute(
-            text(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_order_returns' LIMIT 1"
-            )
-        ).fetchone()
+        exists = _table_exists(conn, "wms_order_returns")
         if not exists:
             conn.commit()
             return
@@ -805,9 +796,7 @@ def ensure_return_ui_statuses_and_column(engine: Engine) -> None:
         )
 
         # Legacy DBs: add main_group BEFORE any index on main_group (old tables lack the column).
-        r_tab = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='return_ui_statuses' LIMIT 1")
-        ).fetchone()
+        r_tab = _table_exists(conn, "return_ui_statuses")
         if r_tab:
             r = conn.execute(text("PRAGMA table_info(return_ui_statuses)"))
             cols = {row[1] for row in r}
@@ -844,11 +833,7 @@ def ensure_return_ui_statuses_and_column(engine: Engine) -> None:
                 )
             )
 
-        exists = conn.execute(
-            text(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_order_returns' LIMIT 1"
-            )
-        ).fetchone()
+        exists = _table_exists(conn, "wms_order_returns")
         if exists:
             r = conn.execute(text("PRAGMA table_info(wms_order_returns)"))
             cols = {row[1] for row in r}
@@ -895,11 +880,7 @@ def ensure_order_ui_statuses_and_column(engine: Engine) -> None:
             text("CREATE INDEX IF NOT EXISTS ix_order_ui_statuses_wh ON order_ui_statuses(warehouse_id)")
         )
 
-        r_tab = conn.execute(
-            text(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_ui_statuses' LIMIT 1"
-            )
-        ).fetchone()
+        r_tab = _table_exists(conn, "order_ui_statuses")
         if r_tab:
             r = conn.execute(text("PRAGMA table_info(order_ui_statuses)"))
             cols = {row[1] for row in r}
@@ -928,9 +909,7 @@ def ensure_order_ui_statuses_and_column(engine: Engine) -> None:
                 )
             )
 
-        oexists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='orders' LIMIT 1")
-        ).fetchone()
+        oexists = _table_exists(conn, "orders")
         if oexists:
             r = conn.execute(text("PRAGMA table_info(orders)"))
             cols = {row[1] for row in r}
@@ -953,13 +932,11 @@ def ensure_order_ui_statuses_and_column(engine: Engine) -> None:
 def ensure_order_ui_statuses_is_system_column(engine: Engine) -> None:
     """Panel order sub-status: built-in rows cannot be reordered/deleted via panel APIs."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_ui_statuses' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "order_ui_statuses")
         if not exists:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(order_ui_statuses)")).fetchall()}
+        cols = _table_column_names(conn, "order_ui_statuses")
         if "is_system" not in cols:
             conn.execute(
                 text("ALTER TABLE order_ui_statuses ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0")
@@ -987,12 +964,9 @@ def ensure_panel_ui_statuses_advanced_columns(engine: Engine) -> None:
         ]
 
         def upgrade_table(table: str) -> None:
-            exists = conn.execute(
-                text(f"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{table}' LIMIT 1")
-            ).fetchone()
-            if not exists:
+            if not _table_exists(conn, table):
                 return
-            cols = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+            cols = _table_column_names(conn, table)
             had_sort_status = "sort_status" in cols
             had_badge_color = "badge_color" in cols
             for col, typ in adds:
@@ -1013,9 +987,7 @@ def ensure_panel_ui_statuses_advanced_columns(engine: Engine) -> None:
 def ensure_orders_complaint_origin_columns(engine: Engine) -> None:
     """Powiązanie zamówienia z reklamacją (wymiana — nowe zamówienie z panelu reklamacji)."""
     with engine.connect() as conn:
-        oexists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='orders' LIMIT 1")
-        ).fetchone()
+        oexists = _table_exists(conn, "orders")
         if not oexists:
             conn.commit()
             return
@@ -1122,9 +1094,13 @@ def _complaint_shipments_single_column_unique_on_complaint_id(conn) -> bool:
         cols = [str(r[2]) for r in info if r[2]]
         if cols == ["complaint_id"]:
             return True
-    create_sql = conn.execute(
-        text("SELECT sql FROM sqlite_master WHERE type='table' AND name='complaint_shipments'")
-    ).fetchone()
+    from .schema_introspection import get_engine as _get_engine
+
+    create_sql = None
+    if _get_engine(conn).dialect.name == "sqlite":
+        create_sql = conn.execute(
+            text("SELECT sql FROM sqlite_master WHERE type='table' AND name='complaint_shipments'")
+        ).fetchone()
     if create_sql and create_sql[0]:
         norm = create_sql[0].replace(" ", "").upper()
         if "COMPLAINT_IDINTEGERNOTNULLUNIQUE" in norm:
@@ -1296,7 +1272,7 @@ def ensure_complaint_order_and_lines(engine: Engine) -> None:
         )
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_complaint_lines_complaint ON complaint_lines(complaint_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_complaint_lines_order_item ON complaint_lines(order_item_id)"))
-        line_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(complaint_lines)")).fetchall()}
+        line_cols = _table_column_names(conn, "complaint_lines")
         if "line_status" not in line_cols:
             conn.execute(
                 text(
@@ -1307,24 +1283,24 @@ def ensure_complaint_order_and_lines(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN line_decision VARCHAR(32)"))
         if "operation_status" not in line_cols:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN operation_status VARCHAR(32)"))
-        line_cols2 = {row[1] for row in conn.execute(text("PRAGMA table_info(complaint_lines)")).fetchall()}
+        line_cols2 = _table_column_names(conn, "complaint_lines")
         if "exchange_kind" not in line_cols2:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN exchange_kind VARCHAR(16)"))
-        line_cols3 = {row[1] for row in conn.execute(text("PRAGMA table_info(complaint_lines)")).fetchall()}
+        line_cols3 = _table_column_names(conn, "complaint_lines")
         if "photo_urls_json" not in line_cols3:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN photo_urls_json TEXT"))
         if "note_warehouse" not in line_cols3:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN note_warehouse TEXT"))
         if "defect_ids_json" not in line_cols3:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN defect_ids_json TEXT"))
-        line_cols4 = {row[1] for row in conn.execute(text("PRAGMA table_info(complaint_lines)")).fetchall()}
+        line_cols4 = _table_column_names(conn, "complaint_lines")
         if "settlement_type" not in line_cols4:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN settlement_type VARCHAR(24)"))
         if "settlement_amount" not in line_cols4:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN settlement_amount FLOAT"))
         if "settlement_currency" not in line_cols4:
             conn.execute(text("ALTER TABLE complaint_lines ADD COLUMN settlement_currency VARCHAR(8)"))
-        if "warehouse_note" in line_cols3 and "note_warehouse" in {row[1] for row in conn.execute(text("PRAGMA table_info(complaint_lines)")).fetchall()}:
+        if "warehouse_note" in line_cols3 and "note_warehouse" in _table_column_names(conn, "complaint_lines"):
             conn.execute(
                 text(
                     "UPDATE complaint_lines SET note_warehouse = warehouse_note "
@@ -1472,9 +1448,7 @@ def ensure_complaint_resolution_columns(engine: Engine) -> None:
 def ensure_complaint_documents_table(engine: Engine) -> None:
     """PDF-y reklamacji: decyzja, korekta, RMA."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='complaint_documents' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "complaint_documents")
         if exists:
             conn.commit()
             return
@@ -1562,9 +1536,7 @@ def ensure_complaint_production_columns(engine: Engine) -> None:
 def ensure_complaint_events_table(engine: Engine) -> None:
     """Structured complaint event log: complaint_id + payload JSON, indexed for large datasets."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='complaint_events' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "complaint_events")
         if not exists:
             conn.execute(
                 text(
@@ -1597,9 +1569,7 @@ def ensure_complaint_events_table(engine: Engine) -> None:
 def ensure_bundles_tables_and_order_item_bundle_columns(engine: Engine) -> None:
     """Product bundles (virtual SKUs) and traceability columns on order_items."""
     with engine.connect() as conn:
-        b = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bundles' LIMIT 1")
-        ).fetchone()
+        b = _table_exists(conn, "bundles")
         if not b:
             conn.execute(
                 text(
@@ -1619,9 +1589,7 @@ def ensure_bundles_tables_and_order_item_bundle_columns(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bundles_tenant_id ON bundles(tenant_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bundles_sku ON bundles(sku)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bundles_ean ON bundles(ean)"))
-        bi = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bundle_items' LIMIT 1")
-        ).fetchone()
+        bi = _table_exists(conn, "bundle_items")
         if not bi:
             conn.execute(
                 text(
@@ -1651,10 +1619,10 @@ def ensure_bundles_tables_and_order_item_bundle_columns(engine: Engine) -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_items_source_bundle_id ON order_items(source_bundle_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_items_bundle_instance_id ON order_items(bundle_instance_id)"))
         # Optional image URL for bundle list / parity with products
-        b_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(bundles)")).fetchall()}
+        b_cols = _table_column_names(conn, "bundles")
         if "image_url" not in b_cols:
             conn.execute(text("ALTER TABLE bundles ADD COLUMN image_url VARCHAR"))
-        bi_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(bundle_items)")).fetchall()}
+        bi_cols = _table_column_names(conn, "bundle_items")
         if bi_cols and "metadata_json" not in bi_cols:
             conn.execute(text("ALTER TABLE bundle_items ADD COLUMN metadata_json VARCHAR"))
         conn.commit()
@@ -1675,9 +1643,7 @@ def ensure_order_items_packing_quantity_packed_column(engine: Engine) -> None:
 def ensure_wms_packing_settings_table(engine: Engine) -> None:
     """WMS packing automation + panel status bindings per tenant + warehouse."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_packing_settings' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "wms_packing_settings")
         if not exists:
             conn.execute(
                 text(
@@ -1707,11 +1673,9 @@ def ensure_wms_packing_settings_table(engine: Engine) -> None:
             conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_wms_packing_settings_wh ON wms_packing_settings(warehouse_id)")
             )
-        tbl = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_packing_settings' LIMIT 1")
-        ).fetchone()
+        tbl = _table_exists(conn, "wms_packing_settings")
         if tbl:
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(wms_packing_settings)")).fetchall()}
+            cols = _table_column_names(conn, "wms_packing_settings")
             if "packing_after_finish_action" not in cols:
                 conn.execute(
                     text(
@@ -1728,9 +1692,7 @@ def ensure_wms_packing_settings_table(engine: Engine) -> None:
 def ensure_manufacturers_table_and_product_manufacturer_id(engine: Engine) -> None:
     """Manufacturers catalog + optional FK on products."""
     with engine.connect() as conn:
-        m = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='manufacturers' LIMIT 1")
-        ).fetchone()
+        m = _table_exists(conn, "manufacturers")
         if not m:
             conn.execute(
                 text(
@@ -1753,7 +1715,7 @@ def ensure_manufacturers_table_and_product_manufacturer_id(engine: Engine) -> No
             )
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_manufacturers_tenant_id ON manufacturers(tenant_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_manufacturers_name ON manufacturers(name)"))
-        pcols = {row[1] for row in conn.execute(text("PRAGMA table_info(products)")).fetchall()}
+        pcols = _table_column_names(conn, "products")
         if "manufacturer_id" not in pcols:
             conn.execute(
                 text(
@@ -1767,9 +1729,7 @@ def ensure_manufacturers_table_and_product_manufacturer_id(engine: Engine) -> No
 def ensure_rmz_line_split_columns(engine: Engine) -> None:
     """Add split-quantity columns for RMZ line processing on existing DBs."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='rmz_lines' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "rmz_lines")
         if not exists:
             conn.commit()
             return
@@ -1807,9 +1767,7 @@ def ensure_rmz_line_split_columns(engine: Engine) -> None:
 def ensure_rmz_line_damage_entries_json(engine: Engine) -> None:
     """Persist independent damage entry list per RMZ line (WMS split-process)."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='rmz_lines' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "rmz_lines")
         if not exists:
             conn.commit()
             return
@@ -1824,9 +1782,7 @@ def ensure_rmz_line_damage_entries_json(engine: Engine) -> None:
 def ensure_suppliers_and_inbound_deliveries_tables(engine: Engine) -> None:
     """Suppliers + inbound deliveries (WMS); delivery_items link products without touching assigned_locations."""
     with engine.connect() as conn:
-        s = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='suppliers' LIMIT 1")
-        ).fetchone()
+        s = _table_exists(conn, "suppliers")
         if not s:
             conn.execute(
                 text(
@@ -1851,9 +1807,7 @@ def ensure_suppliers_and_inbound_deliveries_tables(engine: Engine) -> None:
             )
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_suppliers_tenant_id ON suppliers(tenant_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_suppliers_name ON suppliers(name)"))
-        d = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='deliveries' LIMIT 1")
-        ).fetchone()
+        d = _table_exists(conn, "deliveries")
         if not d:
             conn.execute(
                 text(
@@ -1876,9 +1830,7 @@ def ensure_suppliers_and_inbound_deliveries_tables(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_deliveries_tenant_id ON deliveries(tenant_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_deliveries_supplier_id ON deliveries(supplier_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_deliveries_status ON deliveries(status)"))
-        di = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='delivery_items' LIMIT 1")
-        ).fetchone()
+        di = _table_exists(conn, "delivery_items")
         if not di:
             conn.execute(
                 text(
@@ -1902,13 +1854,11 @@ def ensure_suppliers_and_inbound_deliveries_tables(engine: Engine) -> None:
 def ensure_deliveries_name_column(engine: Engine) -> None:
     """Purchase orders: optional display name on deliveries."""
     with engine.connect() as conn:
-        d = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='deliveries' LIMIT 1")
-        ).fetchone()
+        d = _table_exists(conn, "deliveries")
         if not d:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(deliveries)")).fetchall()}
+        cols = _table_column_names(conn, "deliveries")
         if "name" not in cols:
             conn.execute(text("ALTER TABLE deliveries ADD COLUMN name VARCHAR(512)"))
         conn.commit()
@@ -1917,20 +1867,16 @@ def ensure_deliveries_name_column(engine: Engine) -> None:
 def ensure_supplier_assortment_columns_and_product_default_supplier(engine: Engine) -> None:
     """Assortment: supplier currency/min order; product.default_supplier_id."""
     with engine.connect() as conn:
-        s = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='suppliers' LIMIT 1")
-        ).fetchone()
+        s = _table_exists(conn, "suppliers")
         if s:
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(suppliers)")).fetchall()}
+            cols = _table_column_names(conn, "suppliers")
             if "default_currency" not in cols:
                 conn.execute(text("ALTER TABLE suppliers ADD COLUMN default_currency VARCHAR(8)"))
             if "minimum_order_value" not in cols:
                 conn.execute(text("ALTER TABLE suppliers ADD COLUMN minimum_order_value NUMERIC(12, 2)"))
-        p = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='products' LIMIT 1")
-        ).fetchone()
+        p = _table_exists(conn, "products")
         if p:
-            pcols = {row[1] for row in conn.execute(text("PRAGMA table_info(products)")).fetchall()}
+            pcols = _table_column_names(conn, "products")
             if "default_supplier_id" not in pcols:
                 conn.execute(
                     text(
@@ -1944,11 +1890,11 @@ def ensure_supplier_assortment_columns_and_product_default_supplier(engine: Engi
 
 def ensure_tenant_default_warehouse_column(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tenants' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "tenants")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(tenants)")).fetchall()}
+        cols = _table_column_names(conn, "tenants")
         if "default_warehouse_id" not in cols:
             conn.execute(text("ALTER TABLE tenants ADD COLUMN default_warehouse_id INTEGER"))
         conn.commit()
@@ -1957,12 +1903,10 @@ def ensure_tenant_default_warehouse_column(engine: Engine) -> None:
 def ensure_tenant_business_profile_columns(engine: Engine) -> None:
     """Nullable buyer / company fields on tenants (PDFs, future settings UI)."""
     with engine.connect() as conn:
-        t = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tenants' LIMIT 1")
-        ).fetchone()
+        t = _table_exists(conn, "tenants")
         if not t:
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(tenants)")).fetchall()}
+        cols = _table_column_names(conn, "tenants")
         for col, typ in [
             ("company_name", "TEXT"),
             ("tax_id", "TEXT"),
@@ -1982,11 +1926,9 @@ def ensure_tenant_business_profile_columns(engine: Engine) -> None:
 def ensure_manufacturer_supplier_business_entity_columns(engine: Engine) -> None:
     """Nullable company_name, tax_id, structured address (city, postal_code, street) on manufacturers and suppliers."""
     with engine.connect() as conn:
-        m = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='manufacturers' LIMIT 1")
-        ).fetchone()
+        m = _table_exists(conn, "manufacturers")
         if m:
-            mcols = {row[1] for row in conn.execute(text("PRAGMA table_info(manufacturers)")).fetchall()}
+            mcols = _table_column_names(conn, "manufacturers")
             for col, typ in [
                 ("company_name", "TEXT"),
                 ("tax_id", "TEXT"),
@@ -1996,11 +1938,9 @@ def ensure_manufacturer_supplier_business_entity_columns(engine: Engine) -> None
             ]:
                 if col not in mcols:
                     conn.execute(text(f"ALTER TABLE manufacturers ADD COLUMN {col} {typ}"))
-        s = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='suppliers' LIMIT 1")
-        ).fetchone()
+        s = _table_exists(conn, "suppliers")
         if s:
-            scols = {row[1] for row in conn.execute(text("PRAGMA table_info(suppliers)")).fetchall()}
+            scols = _table_column_names(conn, "suppliers")
             for col, typ in [
                 ("company_name", "TEXT"),
                 ("tax_id", "TEXT"),
@@ -2016,9 +1956,7 @@ def ensure_manufacturer_supplier_business_entity_columns(engine: Engine) -> None
 def ensure_supplier_products_table(engine: Engine) -> None:
     """Many-to-many supplier catalog: supplier_products + tenant_id + backfill from products.default_supplier_id."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='supplier_products' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "supplier_products")
         if not r:
             conn.execute(
                 text(
@@ -2042,7 +1980,7 @@ def ensure_supplier_products_table(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_supplier_products_supplier_id ON supplier_products(supplier_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_supplier_products_product_id ON supplier_products(product_id)"))
         else:
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(supplier_products)")).fetchall()}
+            cols = _table_column_names(conn, "supplier_products")
             if "tenant_id" not in cols:
                 conn.execute(
                     text(
@@ -2070,7 +2008,7 @@ def ensure_supplier_products_table(engine: Engine) -> None:
                 """
             )
         )
-        cols2 = {row[1] for row in conn.execute(text("PRAGMA table_info(supplier_products)")).fetchall()}
+        cols2 = _table_column_names(conn, "supplier_products")
         for col, typ in (("pack_qty", "NUMERIC(12,3)"), ("carton_qty", "NUMERIC(12,3)")):
             if col not in cols2:
                 conn.execute(text(f"ALTER TABLE supplier_products ADD COLUMN {col} {typ}"))
@@ -2085,13 +2023,11 @@ def ensure_supplier_purchasing_columns(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='suppliers' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "suppliers")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(suppliers)")).fetchall()}
+        cols = _table_column_names(conn, "suppliers")
         if "minimum_order_qty" not in cols:
             conn.execute(text("ALTER TABLE suppliers ADD COLUMN minimum_order_qty INTEGER"))
         if "free_shipping_threshold" not in cols:
@@ -2129,9 +2065,7 @@ def ensure_purchase_orders_tables(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        po = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purchase_orders' LIMIT 1")
-        ).fetchone()
+        po = _table_exists(conn, "purchase_orders")
         if not po:
             conn.execute(
                 text(
@@ -2167,9 +2101,7 @@ def ensure_purchase_orders_tables(engine: Engine) -> None:
                     "ON purchase_orders(tenant_id, order_number)"
                 )
             )
-        poi = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purchase_order_items' LIMIT 1")
-        ).fetchone()
+        poi = _table_exists(conn, "purchase_order_items")
         if not poi:
             conn.execute(
                 text(
@@ -2203,13 +2135,11 @@ def ensure_deliveries_purchase_order_id_column(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        d = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='deliveries' LIMIT 1")
-        ).fetchone()
+        d = _table_exists(conn, "deliveries")
         if not d:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(deliveries)")).fetchall()}
+        cols = _table_column_names(conn, "deliveries")
         if "purchase_order_id" not in cols:
             conn.execute(text("ALTER TABLE deliveries ADD COLUMN purchase_order_id INTEGER"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_deliveries_purchase_order_id ON deliveries(purchase_order_id)"))
@@ -2221,9 +2151,7 @@ def ensure_purchasing_alert_tables(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        rt = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purchasing_alert_rules' LIMIT 1")
-        ).fetchone()
+        rt = _table_exists(conn, "purchasing_alert_rules")
         if not rt:
             conn.execute(
                 text(
@@ -2245,9 +2173,7 @@ def ensure_purchasing_alert_tables(engine: Engine) -> None:
                 text("CREATE INDEX IF NOT EXISTS ix_purch_alert_rules_tenant ON purchasing_alert_rules(tenant_id)")
             )
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purch_alert_rules_type ON purchasing_alert_rules(type)"))
-        ev = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purchasing_alert_events' LIMIT 1")
-        ).fetchone()
+        ev = _table_exists(conn, "purchasing_alert_events")
         if not ev:
             conn.execute(
                 text(
@@ -2286,9 +2212,7 @@ def ensure_purchasing_alert_tables(engine: Engine) -> None:
                     "ON purchasing_alert_events(tenant_id, rule_id, dedupe_key, status)"
                 )
             )
-        ad = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purchasing_auto_drafts' LIMIT 1")
-        ).fetchone()
+        ad = _table_exists(conn, "purchasing_auto_drafts")
         if not ad:
             conn.execute(
                 text(
@@ -2312,9 +2236,7 @@ def ensure_purchase_auto_reorder_tables(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        rt = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purchase_auto_rules' LIMIT 1")
-        ).fetchone()
+        rt = _table_exists(conn, "purchase_auto_rules")
         if not rt:
             conn.execute(
                 text(
@@ -2333,9 +2255,7 @@ def ensure_purchase_auto_reorder_tables(engine: Engine) -> None:
                 )
             )
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchase_auto_rules_tenant ON purchase_auto_rules(tenant_id)"))
-        rn = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purchase_auto_runs' LIMIT 1")
-        ).fetchone()
+        rn = _table_exists(conn, "purchase_auto_runs")
         if not rn:
             conn.execute(
                 text(
@@ -2361,9 +2281,7 @@ def ensure_purchase_auto_reorder_tables(engine: Engine) -> None:
 def ensure_stock_documents_tables(engine: Engine) -> None:
     """PZ (and future) stock documents + lines; links deliveries to inventory receipts."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.execute(
                 text(
@@ -2391,9 +2309,7 @@ def ensure_stock_documents_tables(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stock_documents_supplier_id ON stock_documents(supplier_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stock_documents_document_type ON stock_documents(document_type)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stock_documents_rmz_id ON stock_documents(rmz_id)"))
-        it = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        it = _table_exists(conn, "stock_document_items")
         if not it:
             conn.execute(
                 text(
@@ -2424,20 +2340,16 @@ def ensure_stock_documents_tables(engine: Engine) -> None:
 def ensure_wms_ad_hoc_receiving_schema(engine: Engine) -> None:
     """WMS „Nowa dostawa”: suppliers.is_incomplete + stock_documents.creation_source."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='suppliers' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "suppliers")
         if r:
-            scols = {row[1] for row in conn.execute(text("PRAGMA table_info(suppliers)")).fetchall()}
+            scols = _table_column_names(conn, "suppliers")
             if "is_incomplete" not in scols:
                 conn.execute(
                     text("ALTER TABLE suppliers ADD COLUMN is_incomplete BOOLEAN NOT NULL DEFAULT false")
                 )
-        r2 = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r2 = _table_exists(conn, "stock_documents")
         if r2:
-            dcols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_documents)")).fetchall()}
+            dcols = _table_column_names(conn, "stock_documents")
             if "creation_source" not in dcols:
                 conn.execute(
                     text(
@@ -2457,13 +2369,11 @@ def ensure_wms_ad_hoc_receiving_schema(engine: Engine) -> None:
 def ensure_stock_documents_created_by_columns(engine: Engine) -> None:
     """PZ / stock document creator (WMS + panel)."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_documents)")).fetchall()}
+        cols = _table_column_names(conn, "stock_documents")
         if "created_by_user_id" not in cols:
             conn.execute(
                 text(
@@ -2487,13 +2397,11 @@ def ensure_stock_documents_receiving_status_column(engine: Engine) -> None:
     # Must run before ORM touches StockDocument (migrate_wms_pz_workflow_statuses): adds rmz_id + nullable supplier/delivery.
     ensure_stock_documents_return_receipt_schema(engine)
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_documents)")).fetchall()}
+        cols = _table_column_names(conn, "stock_documents")
         if "receiving_status" not in cols:
             conn.execute(
                 text(
@@ -2506,13 +2414,11 @@ def ensure_stock_documents_receiving_status_column(engine: Engine) -> None:
 
 def ensure_stock_documents_updated_at_column(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_documents)")).fetchall()}
+        cols = _table_column_names(conn, "stock_documents")
         if "updated_at" not in cols:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN updated_at DATETIME"))
             conn.execute(text("UPDATE stock_documents SET updated_at = created_at WHERE updated_at IS NULL"))
@@ -2522,13 +2428,11 @@ def ensure_stock_documents_updated_at_column(engine: Engine) -> None:
 def ensure_stock_documents_financial_columns(engine: Engine) -> None:
     """currency, total_net, total_gross for warehouse documents list / PDF."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_documents)")).fetchall()}
+        cols = _table_column_names(conn, "stock_documents")
         if "currency" not in cols:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN currency VARCHAR(8) NOT NULL DEFAULT 'PLN'"))
         if "total_net" not in cols:
@@ -2541,13 +2445,11 @@ def ensure_stock_documents_financial_columns(engine: Engine) -> None:
 def ensure_stock_documents_relocation_status_column(engine: Engine) -> None:
     """WMS: OPEN | DONE — zamknięcie procesu rozlokowania (bez zmiany stanów)."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_documents)")).fetchall()}
+        cols = _table_column_names(conn, "stock_documents")
         if "relocation_status" not in cols:
             conn.execute(
                 text("ALTER TABLE stock_documents ADD COLUMN relocation_status VARCHAR(32) NOT NULL DEFAULT 'OPEN'")
@@ -2564,13 +2466,11 @@ def ensure_stock_documents_relocation_status_column(engine: Engine) -> None:
 def ensure_stock_documents_mm_location_columns(engine: Engine) -> None:
     """MM transfer: optional from/to location ids on stock_documents header."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_documents)")).fetchall()}
+        cols = _table_column_names(conn, "stock_documents")
         if "mm_from_location_id" not in cols:
             conn.execute(
                 text(
@@ -2591,13 +2491,11 @@ def ensure_stock_documents_mm_location_columns(engine: Engine) -> None:
 def ensure_stock_operations_unit_price_net_column(engine: Engine) -> None:
     """unit_price_net on stock_operations for RECEIPT weighted average pricing."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_operations' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_operations")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_operations)")).fetchall()}
+        cols = _table_column_names(conn, "stock_operations")
         if "unit_price_net" not in cols:
             conn.execute(text("ALTER TABLE stock_operations ADD COLUMN unit_price_net REAL"))
         conn.commit()
@@ -2607,9 +2505,7 @@ def migrate_stock_documents_nullable_warehouse_location(engine: Engine) -> None:
     """PZ header may exist without warehouse/location until WMS receiving (SQLite cannot DROP NOT NULL in place)."""
     ensure_stock_documents_updated_at_column(engine)
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
@@ -2708,9 +2604,7 @@ def migrate_stock_documents_nullable_warehouse_location(engine: Engine) -> None:
 def ensure_product_barcodes_table(engine: Engine) -> None:
     """Multipack / alternate EANs linked to products (WMS receiving scan)."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='product_barcodes' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "product_barcodes")
         if not exists:
             conn.execute(
                 text(
@@ -2744,13 +2638,11 @@ def migrate_wms_pz_workflow_statuses(engine: Engine) -> None:
     from ..services.stock_document_service import recompute_putaway_status_for_document
 
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_documents)")).fetchall()}
+        cols = _table_column_names(conn, "stock_documents")
         if "putaway_status" not in cols:
             conn.execute(
                 text(
@@ -2801,12 +2693,10 @@ def migrate_wms_pz_workflow_statuses(engine: Engine) -> None:
 def ensure_stock_document_item_ordered_received_columns(engine: Engine) -> None:
     """Add ordered_quantity / received_quantity; backfill from legacy quantity."""
     with engine.connect() as conn:
-        it = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        it = _table_exists(conn, "stock_document_items")
         if not it:
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+        cols = _table_column_names(conn, "stock_document_items")
         if "ordered_quantity" not in cols:
             conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN ordered_quantity REAL NOT NULL DEFAULT 0"))
         if "received_quantity" not in cols:
@@ -2826,11 +2716,11 @@ def ensure_stock_document_item_ordered_received_columns(engine: Engine) -> None:
 
 def ensure_product_track_batch_expiry_columns(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='products' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "products")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(products)")).fetchall()}
+        cols = _table_column_names(conn, "products")
         if "track_batch" not in cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN track_batch BOOLEAN NOT NULL DEFAULT false"))
         if "track_expiry" not in cols:
@@ -2843,9 +2733,7 @@ def ensure_product_track_batch_expiry_columns(engine: Engine) -> None:
 def ensure_inventory_serials_table(engine: Engine) -> None:
     """Per-unit serial registry + extended scan/operation columns."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory_serials' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "inventory_serials")
         if not r:
             conn.execute(
                 text(
@@ -2877,11 +2765,9 @@ def ensure_inventory_serials_table(engine: Engine) -> None:
             conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_inventory_serials_serial_number ON inventory_serials(serial_number)")
             )
-        rlog = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='receiving_scan_logs' LIMIT 1")
-        ).fetchone()
+        rlog = _table_exists(conn, "receiving_scan_logs")
         if rlog:
-            lcols = {row[1] for row in conn.execute(text("PRAGMA table_info(receiving_scan_logs)")).fetchall()}
+            lcols = _table_column_names(conn, "receiving_scan_logs")
             if "serial_number" not in lcols:
                 conn.execute(text("ALTER TABLE receiving_scan_logs ADD COLUMN serial_number VARCHAR(128)"))
             if "batch_number" not in lcols:
@@ -2892,11 +2778,9 @@ def ensure_inventory_serials_table(engine: Engine) -> None:
                 conn.execute(text("ALTER TABLE receiving_scan_logs ADD COLUMN raw_scan VARCHAR(512)"))
             if "scan_kind" not in lcols:
                 conn.execute(text("ALTER TABLE receiving_scan_logs ADD COLUMN scan_kind VARCHAR(32)"))
-        rop = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_operations' LIMIT 1")
-        ).fetchone()
+        rop = _table_exists(conn, "stock_operations")
         if rop:
-            ocols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_operations)")).fetchall()}
+            ocols = _table_column_names(conn, "stock_operations")
             if "serial_number" not in ocols:
                 conn.execute(text("ALTER TABLE stock_operations ADD COLUMN serial_number VARCHAR(128)"))
         conn.commit()
@@ -2904,13 +2788,11 @@ def ensure_inventory_serials_table(engine: Engine) -> None:
 
 def ensure_stock_document_item_lot_columns(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_document_items")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+        cols = _table_column_names(conn, "stock_document_items")
         if "batch_number" not in cols:
             conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN batch_number VARCHAR(128) NOT NULL DEFAULT ''"))
         if "expiry_date" not in cols:
@@ -2920,13 +2802,11 @@ def ensure_stock_document_item_lot_columns(engine: Engine) -> None:
 
 def ensure_stock_document_item_quantity_putaway_column(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_document_items")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+        cols = _table_column_names(conn, "stock_document_items")
         if "quantity_putaway" not in cols:
             conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN quantity_putaway REAL NOT NULL DEFAULT 0"))
         conn.commit()
@@ -2935,13 +2815,11 @@ def ensure_stock_document_item_quantity_putaway_column(engine: Engine) -> None:
 def ensure_stock_document_item_putaway_meta_columns(engine: Engine) -> None:
     """putaway_updated_at, putaway_last_location_name for WMS ordering / UX."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_document_items")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+        cols = _table_column_names(conn, "stock_document_items")
         if "putaway_updated_at" not in cols:
             conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN putaway_updated_at DATETIME"))
         if "putaway_last_location_name" not in cols:
@@ -2958,13 +2836,11 @@ def ensure_stock_document_item_putaway_meta_columns(engine: Engine) -> None:
 def ensure_stock_document_item_mm_line_from_location_column(engine: Engine) -> None:
     """MM draft lines: source bin before rozlokowanie (putaway assigns destination)."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_document_items")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+        cols = _table_column_names(conn, "stock_document_items")
         if "mm_line_from_location_id" not in cols:
             conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN mm_line_from_location_id INTEGER"))
         conn.commit()
@@ -2973,13 +2849,11 @@ def ensure_stock_document_item_mm_line_from_location_column(engine: Engine) -> N
 def ensure_stock_document_item_wms_line_source_column(engine: Engine) -> None:
     """WMS PZ: linie dodane spoza dokumentu (WMS_SCAN / WMS_MANUAL)."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_document_items")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+        cols = _table_column_names(conn, "stock_document_items")
         if "wms_line_source" not in cols:
             conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN wms_line_source VARCHAR(32)"))
         conn.commit()
@@ -2988,9 +2862,7 @@ def ensure_stock_document_item_wms_line_source_column(engine: Engine) -> None:
 def ensure_stock_item_locations_table(engine: Engine) -> None:
     """WMS putaway: per PZ line, per bin quantity (UNIQUE item + location); accumulates on repeat save."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_item_locations' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_item_locations")
         if r:
             conn.commit()
             return
@@ -3019,11 +2891,11 @@ def ensure_stock_item_locations_table(engine: Engine) -> None:
 def migrate_inventory_lot_unique_sqlite(engine: Engine) -> None:
     """Replace flat inventory unique key with lot-aware unique (SQLite)."""
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "inventory")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(inventory)")).fetchall()}
+        cols = _table_column_names(conn, "inventory")
         if "batch_number" in cols and "expiry_date" in cols:
             conn.commit()
             return
@@ -3082,13 +2954,11 @@ def ensure_stock_document_items_stock_disposition_column(engine: Engine) -> None
     dialect = engine.dialect.name
     if dialect == "sqlite":
         with engine.connect() as conn:
-            t = conn.execute(
-                text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-            ).fetchone()
+            t = _table_exists(conn, "stock_document_items")
             if not t:
                 conn.commit()
                 return
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+            cols = _table_column_names(conn, "stock_document_items")
             if "stock_disposition" not in cols:
                 conn.execute(
                     text(
@@ -3144,13 +3014,11 @@ def ensure_stock_operations_stock_disposition_column(engine: Engine) -> None:
     dialect = engine.dialect.name
     if dialect == "sqlite":
         with engine.connect() as conn:
-            t = conn.execute(
-                text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_operations' LIMIT 1")
-            ).fetchone()
+            t = _table_exists(conn, "stock_operations")
             if not t:
                 conn.commit()
                 return
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_operations)")).fetchall()}
+            cols = _table_column_names(conn, "stock_operations")
             if "stock_disposition" not in cols:
                 conn.execute(
                     text(
@@ -3195,11 +3063,11 @@ def migrate_inventory_stock_disposition_sqlite(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "inventory")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(inventory)")).fetchall()}
+        cols = _table_column_names(conn, "inventory")
         if "stock_disposition" in cols:
             conn.commit()
             return
@@ -3305,13 +3173,11 @@ def ensure_inventory_stock_disposition_columns(engine: Engine) -> None:
 
 def ensure_stock_reservation_lot_columns(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_reservations' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_reservations")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_reservations)")).fetchall()}
+        cols = _table_column_names(conn, "stock_reservations")
         if "batch_number" not in cols:
             conn.execute(text("ALTER TABLE stock_reservations ADD COLUMN batch_number VARCHAR(128) NOT NULL DEFAULT ''"))
         if "expiry_date" not in cols:
@@ -3321,11 +3187,11 @@ def ensure_stock_reservation_lot_columns(engine: Engine) -> None:
 
 def ensure_pick_task_lot_columns(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pick_tasks' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "pick_tasks")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(pick_tasks)")).fetchall()}
+        cols = _table_column_names(conn, "pick_tasks")
         if "batch_number" not in cols:
             conn.execute(text("ALTER TABLE pick_tasks ADD COLUMN batch_number VARCHAR(128) NOT NULL DEFAULT ''"))
         if "expiry_date" not in cols:
@@ -3335,11 +3201,11 @@ def ensure_pick_task_lot_columns(engine: Engine) -> None:
 
 def ensure_pick_lot_columns(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='picks' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "picks")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(picks)")).fetchall()}
+        cols = _table_column_names(conn, "picks")
         if "batch_number" not in cols:
             conn.execute(text("ALTER TABLE picks ADD COLUMN batch_number VARCHAR(128) NOT NULL DEFAULT ''"))
         if "expiry_date" not in cols:
@@ -3350,11 +3216,11 @@ def ensure_pick_lot_columns(engine: Engine) -> None:
 def ensure_picks_cart_id_column(engine: Engine) -> None:
     """Nullable ``cart_id`` → ``carts.id`` (WMS zbieranie, statystyki wózków)."""
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='picks' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "picks")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(picks)")).fetchall()}
+        cols = _table_column_names(conn, "picks")
         if "cart_id" not in cols:
             conn.execute(
                 text("ALTER TABLE picks ADD COLUMN cart_id INTEGER REFERENCES carts(id) ON DELETE SET NULL")
@@ -3366,11 +3232,11 @@ def ensure_picks_cart_id_column(engine: Engine) -> None:
 def ensure_picking_config_workflow_columns(engine: Engine) -> None:
     """``pick_unit`` (orders|products) i ``order_sort`` (date|location|courier) — rozróżnienie trybu zbierania."""
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='picking_config' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "picking_config")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(picking_config)")).fetchall()}
+        cols = _table_column_names(conn, "picking_config")
         if "pick_unit" not in cols:
             conn.execute(text("ALTER TABLE picking_config ADD COLUMN pick_unit VARCHAR(32) NOT NULL DEFAULT 'products'"))
         if "order_sort" not in cols:
@@ -3405,9 +3271,9 @@ def ensure_picking_config_workflow_columns(engine: Engine) -> None:
 def ensure_picking_shortage_support(engine: Engine) -> None:
     """Kolumna ``status_on_shortage_id`` w ``picking_config`` + tabela audytu braków WMS."""
     with engine.connect() as conn:
-        r = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='picking_config' LIMIT 1")).fetchone()
+        r = _table_exists(conn, "picking_config")
         if r:
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(picking_config)")).fetchall()}
+            cols = _table_column_names(conn, "picking_config")
             if "status_on_shortage_id" not in cols:
                 conn.execute(
                     text(
@@ -3417,9 +3283,7 @@ def ensure_picking_shortage_support(engine: Engine) -> None:
                 )
         conn.commit()
     with engine.connect() as conn:
-        ex = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_picking_shortage_reports' LIMIT 1")
-        ).fetchone()
+        ex = _table_exists(conn, "wms_picking_shortage_reports")
         if not ex:
             conn.execute(
                 text(
@@ -3453,10 +3317,10 @@ def ensure_carts_code_column(engine: Engine) -> None:
     (SELECT zawierałby ``carts.scan_code`` i wywaliłby starą bazę bez kolumny).
     """
     with engine.connect() as conn:
-        if not conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='carts' LIMIT 1")).fetchone():
+        if not _table_exists(conn, "carts"):
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(carts)")).fetchall()}
+        cols = _table_column_names(conn, "carts")
         if "code" not in cols:
             conn.execute(text("ALTER TABLE carts ADD COLUMN code VARCHAR(64)"))
         # Usuń wyłącznie jednokolumnowy indeks UNIQUE na barcode (blokuje ten sam kod w dwóch magazynach).
@@ -3476,7 +3340,7 @@ def ensure_carts_code_column(engine: Engine) -> None:
                 conn.execute(text(f'DROP INDEX IF EXISTS "{idx_name}"'))
         # Cart ORM declares ``scan_code``; SQLite must have the column before any SELECT.
         # (``ensure_esp_scan_code_columns`` runs later and would add it, but this function uses ORM first.)
-        cart_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(carts)")).fetchall()}
+        cart_cols = _table_column_names(conn, "carts")
         if "scan_code" not in cart_cols:
             conn.execute(text("ALTER TABLE carts ADD COLUMN scan_code TEXT"))
         # Canonical prefixes match ``backend.services.esp_scan_codes`` (ESP:shpcart: / ESP:brck:).
@@ -3549,12 +3413,9 @@ def ensure_esp_scan_code_columns(engine: Engine) -> None:
     scan_tables = ("carts", "cart_baskets", "warehouse_bins", "orders")
     with engine.connect() as conn:
         for tbl in scan_tables:
-            if not conn.execute(
-                text("SELECT 1 FROM sqlite_master WHERE type='table' AND name=:t LIMIT 1"),
-                {"t": tbl},
-            ).fetchone():
+            if not _table_exists(conn, tbl):
                 continue
-            cols = {row[1] for row in conn.execute(text(f"PRAGMA table_info({tbl})")).fetchall()}
+            cols = _table_column_names(conn, tbl)
             if "scan_code" not in cols:
                 conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN scan_code VARCHAR(80)"))
         conn.commit()
@@ -3619,9 +3480,7 @@ def ensure_shipping_methods_table_and_order_fk(engine: Engine) -> None:
     )
 
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='shipping_methods' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "shipping_methods")
         if not r:
             conn.execute(
                 text(
@@ -3646,7 +3505,7 @@ def ensure_shipping_methods_table_and_order_fk(engine: Engine) -> None:
                 text("CREATE INDEX IF NOT EXISTS ix_shipping_methods_tenant_wh ON shipping_methods(tenant_id, warehouse_id)")
             )
         else:
-            smcols = {row[1] for row in conn.execute(text("PRAGMA table_info(shipping_methods)")).fetchall()}
+            smcols = _table_column_names(conn, "shipping_methods")
             if "code" not in smcols:
                 conn.execute(
                     text(
@@ -3655,7 +3514,7 @@ def ensure_shipping_methods_table_and_order_fk(engine: Engine) -> None:
                 )
             if "aliases_json" not in smcols:
                 conn.execute(text("ALTER TABLE shipping_methods ADD COLUMN aliases_json TEXT"))
-        ocols = {row[1] for row in conn.execute(text("PRAGMA table_info(orders)")).fetchall()}
+        ocols = _table_column_names(conn, "orders")
         if "shipping_method_id" not in ocols:
             conn.execute(
                 text(
@@ -3740,13 +3599,7 @@ def ensure_shipping_methods_table_and_order_fk(engine: Engine) -> None:
         db.close()
 
     with engine.connect() as conn:
-        idx = conn.execute(
-            text(
-                "SELECT 1 FROM sqlite_master WHERE type='index' "
-                "AND name='uq_shipping_method_tenant_wh_code' LIMIT 1"
-            )
-        ).fetchone()
-        if not idx:
+        if not _has_index(conn, "uq_shipping_method_tenant_wh_code", table_name="shipping_methods"):
             conn.execute(
                 text(
                     "CREATE UNIQUE INDEX uq_shipping_method_tenant_wh_code "
@@ -3759,9 +3612,7 @@ def ensure_shipping_methods_table_and_order_fk(engine: Engine) -> None:
 def ensure_warehouse_materials_tables(engine: Engine) -> None:
     """Cartons (M2M shipping methods) + packaging consumables per tenant + warehouse."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cartons' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "cartons")
         if not r:
             conn.execute(
                 text(
@@ -3796,11 +3647,7 @@ def ensure_warehouse_materials_tables(engine: Engine) -> None:
             conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_cartons_tenant_wh ON cartons(tenant_id, warehouse_id)")
             )
-        r2 = conn.execute(
-            text(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='carton_shipping_method_links' LIMIT 1"
-            )
-        ).fetchone()
+        r2 = _table_exists(conn, "carton_shipping_method_links")
         if not r2:
             conn.execute(
                 text(
@@ -3813,9 +3660,7 @@ def ensure_warehouse_materials_tables(engine: Engine) -> None:
                     """
                 )
             )
-        r3 = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='packaging_materials' LIMIT 1")
-        ).fetchone()
+        r3 = _table_exists(conn, "packaging_materials")
         if not r3:
             conn.execute(
                 text(
@@ -3847,7 +3692,7 @@ def ensure_warehouse_materials_tables(engine: Engine) -> None:
                     "ON packaging_materials(tenant_id, warehouse_id, material_type)"
                 )
             )
-        cart_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(cartons)")).fetchall()}
+        cart_cols = _table_column_names(conn, "cartons")
         if cart_cols:
             if "supplier_id" not in cart_cols:
                 conn.execute(
@@ -3887,11 +3732,9 @@ def ensure_warehouse_materials_bdo_columns(engine: Engine) -> None:
         ("metal_kg_per_unit", "REAL NOT NULL DEFAULT 0"),
     ]
     with engine.connect() as conn:
-        pm = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='packaging_materials' LIMIT 1")
-        ).fetchone()
+        pm = _table_exists(conn, "packaging_materials")
         if pm:
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(packaging_materials)")).fetchall()}
+            cols = _table_column_names(conn, "packaging_materials")
             for col, typ in float_bdo:
                 if col not in cols:
                     conn.execute(text(f"ALTER TABLE packaging_materials ADD COLUMN {col} {typ}"))
@@ -3901,11 +3744,9 @@ def ensure_warehouse_materials_bdo_columns(engine: Engine) -> None:
                 conn.execute(
                     text("ALTER TABLE packaging_materials ADD COLUMN include_in_bdo INTEGER NOT NULL DEFAULT 0")
                 )
-        ct = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cartons' LIMIT 1")
-        ).fetchone()
+        ct = _table_exists(conn, "cartons")
         if ct:
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(cartons)")).fetchall()}
+            cols = _table_column_names(conn, "cartons")
             for col, typ in float_bdo:
                 if col not in cols:
                     conn.execute(text(f"ALTER TABLE cartons ADD COLUMN {col} {typ}"))
@@ -3919,9 +3760,7 @@ def ensure_warehouse_materials_bdo_columns(engine: Engine) -> None:
 def ensure_warehouse_materials_master_data(engine: Engine) -> None:
     """Master data: pricing columns, tiers table, packaging attributes, thresholds."""
     with engine.connect() as conn:
-        t_tiers = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wm_price_tiers' LIMIT 1")
-        ).fetchone()
+        t_tiers = _table_exists(conn, "wm_price_tiers")
         if not t_tiers:
             conn.execute(
                 text(
@@ -3957,11 +3796,9 @@ def ensure_warehouse_materials_master_data(engine: Engine) -> None:
                 )
             )
 
-        ct = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cartons' LIMIT 1")
-        ).fetchone()
+        ct = _table_exists(conn, "cartons")
         if ct:
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(cartons)")).fetchall()}
+            cols = _table_column_names(conn, "cartons")
             for col, typ in [
                 ("material_type", "VARCHAR(128)"),
                 ("vat_rate_pct", "REAL NOT NULL DEFAULT 23"),
@@ -3974,11 +3811,9 @@ def ensure_warehouse_materials_master_data(engine: Engine) -> None:
                 if col not in cols:
                     conn.execute(text(f"ALTER TABLE cartons ADD COLUMN {col} {typ}"))
 
-        pm = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='packaging_materials' LIMIT 1")
-        ).fetchone()
+        pm = _table_exists(conn, "packaging_materials")
         if pm:
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(packaging_materials)")).fetchall()}
+            cols = _table_column_names(conn, "packaging_materials")
             for col, typ in [
                 ("image_url", "VARCHAR(512)"),
                 ("sku", "VARCHAR(128)"),
@@ -4025,12 +3860,10 @@ def ensure_bdo_packaging_wm_ref_migration(engine: Engine) -> None:
     from ..models.bdo_packaging import BdoCorrection, BdoPackagingPurchase, BdoStockCountLine, BdoStockCountSession
 
     with engine.connect() as conn:
-        t = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bdo_packaging_purchases' LIMIT 1")
-        ).fetchone()
+        t = _table_exists(conn, "bdo_packaging_purchases")
         if not t:
             return
-        names = {row[1] for row in conn.execute(text("PRAGMA table_info(bdo_packaging_purchases)")).fetchall()}
+        names = _table_column_names(conn, "bdo_packaging_purchases")
         if "wm_kind" in names:
             return
         for tbl in (
@@ -4051,12 +3884,10 @@ def ensure_bdo_packaging_wm_ref_migration(engine: Engine) -> None:
 def ensure_document_series_extended_columns(engine: Engine) -> None:
     """Print template id, VAT line calc modes, structured company address on document_series."""
     with engine.connect() as conn:
-        t = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='document_series' LIMIT 1")
-        ).fetchone()
+        t = _table_exists(conn, "document_series")
         if not t:
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(document_series)")).fetchall()}
+        cols = _table_column_names(conn, "document_series")
         for col, typ in [
             ("print_template_id", "INTEGER"),
             ("vat_calc_shipping", "VARCHAR(32) NOT NULL DEFAULT 'DEFAULT'"),
@@ -4075,9 +3906,7 @@ def ensure_document_series_extended_columns(engine: Engine) -> None:
 def ensure_sale_documents_table(engine: Engine) -> None:
     """WMS packing: wystawione dokumenty sprzedaży (powiązanie order + seria + numer)."""
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sale_documents' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "sale_documents")
         if exists:
             conn.commit()
             return
@@ -4129,9 +3958,7 @@ def ensure_orders_customer_id_column(engine: Engine) -> None:
 def ensure_order_issue_tasks_table(engine: Engine) -> None:
     """WMS: zadania operacyjne przy brakach (Order Issues)."""
     with engine.connect() as conn:
-        ex = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_issue_tasks' LIMIT 1")
-        ).fetchone()
+        ex = _table_exists(conn, "order_issue_tasks")
         if ex:
             return
         conn.execute(
@@ -4161,32 +3988,17 @@ def ensure_order_issue_tasks_table(engine: Engine) -> None:
 
 
 def ensure_order_issue_tasks_archive_columns(engine: Engine) -> None:
-    """Soft archive: ``archived_at``, ``archived_by_user_id``."""
-    with engine.connect() as conn:
-        ex = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_issue_tasks' LIMIT 1")
-        ).fetchone()
-        if not ex:
-            return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(order_issue_tasks)")).fetchall()}
-        if "archived_at" not in cols:
-            conn.execute(text("ALTER TABLE order_issue_tasks ADD COLUMN archived_at DATETIME"))
-        if "archived_by_user_id" not in cols:
-            conn.execute(
-                text(
-                    "ALTER TABLE order_issue_tasks ADD COLUMN archived_by_user_id INTEGER "
-                    "REFERENCES app_users(id) ON DELETE SET NULL"
-                )
-            )
-        conn.commit()
+    """Soft archive: ``archived_at``, ``archived_by_user_id`` (SQLite + PostgreSQL)."""
+    from .schema_introspection import ensure_order_issue_tasks_archive_columns as _impl
+
+    _impl(engine)
+
 
 
 def ensure_wms_operational_tasks_table(engine: Engine) -> None:
     """WMS operational tasks — product-centric work queue (source of truth)."""
     with engine.connect() as conn:
-        ex = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_operational_tasks' LIMIT 1")
-        ).fetchone()
+        ex = _table_exists(conn, "wms_operational_tasks")
         if not ex:
             conn.execute(
                 text(
@@ -4318,13 +4130,11 @@ def ensure_orders_wms_packing_automation_finished_at_column(engine: Engine) -> N
 def ensure_wms_packing_sessions_automation_finished_at_column(engine: Engine) -> None:
     """Sesja pakowania: znacznik zakończenia automatyki."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_packing_sessions' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "wms_packing_sessions")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(wms_packing_sessions)")).fetchall()}
+        cols = _table_column_names(conn, "wms_packing_sessions")
         if "automation_finished_at" not in cols:
             conn.execute(text("ALTER TABLE wms_packing_sessions ADD COLUMN automation_finished_at DATETIME"))
         conn.commit()
@@ -4415,10 +4225,7 @@ def ensure_order_items_oms_line_status(engine: Engine) -> None:
 def ensure_fulfillment_events_table(engine: Engine) -> None:
     """Ledger: PICK / MISSING / REPLACED / REMOVED / WAITING quantities per order line."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT name FROM sqlite_master WHERE type='table' AND name='fulfillment_events'")
-        )
-        if r.fetchone() is None:
+        if not _table_exists(conn, "fulfillment_events"):
             conn.execute(
                 text(
                     """
@@ -4443,10 +4250,7 @@ def ensure_fulfillment_events_table(engine: Engine) -> None:
 def ensure_export_templates_table(engine: Engine) -> None:
     """Tabela szablonów eksportu CSV (Settings → Eksporty)."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT name FROM sqlite_master WHERE type='table' AND name='export_templates'")
-        )
-        if r.fetchone() is None:
+        if not _table_exists(conn, "export_templates"):
             conn.execute(
                 text(
                     """
@@ -4481,12 +4285,9 @@ def ensure_warehouse_materials_purchasing_columns(engine: Engine) -> None:
     ]
     with engine.connect() as conn:
         for tbl in ("cartons", "packaging_materials"):
-            t = conn.execute(
-                text(f"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{tbl}' LIMIT 1")
-            ).fetchone()
-            if not t:
+            if not _table_exists(conn, tbl):
                 continue
-            cols = {row[1] for row in conn.execute(text(f"PRAGMA table_info({tbl})")).fetchall()}
+            cols = _table_column_names(conn, tbl)
             for col, typ in wm_cols:
                 if col not in cols:
                     conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col} {typ}"))
@@ -4501,12 +4302,10 @@ def ensure_delivery_items_warehouse_material_lines(engine: Engine) -> None:
     Preserves primary keys for ``stock_document_items.delivery_item_id`` FK integrity.
     """
     with engine.begin() as conn:
-        t = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='delivery_items' LIMIT 1")
-        ).fetchone()
+        t = _table_exists(conn, "delivery_items")
         if not t:
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(delivery_items)")).fetchall()}
+        cols = _table_column_names(conn, "delivery_items")
         if "wm_kind" in cols:
             return
         conn.execute(text("PRAGMA foreign_keys=OFF"))
@@ -4564,12 +4363,10 @@ def ensure_supplier_product_tiers_and_delivery_price_manual_columns(engine: Engi
 def ensure_delivery_item_catalog_snapshot_columns(engine: Engine) -> None:
     """Snapshot + polymorphic hints on delivery_items for PDF / history (SQLite)."""
     with engine.connect() as conn:
-        t = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='delivery_items' LIMIT 1")
-        ).fetchone()
+        t = _table_exists(conn, "delivery_items")
         if not t:
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(delivery_items)")).fetchall()}
+        cols = _table_column_names(conn, "delivery_items")
         for col, typ in [
             ("line_item_type", "VARCHAR(32)"),
             ("line_item_ref_id", "VARCHAR(64)"),
@@ -4714,20 +4511,14 @@ def ensure_stock_document_items_wm_receipt_columns(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        orphan = conn.execute(
-            text(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items__wmrecv' LIMIT 1"
-            )
-        ).fetchone()
+        orphan = _table_exists(conn, "stock_document_items__wmrecv")
         if orphan:
             conn.execute(text("DROP TABLE stock_document_items__wmrecv"))
-        t = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        t = _table_exists(conn, "stock_document_items")
         if not t:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+        cols = _table_column_names(conn, "stock_document_items")
         if "wm_kind" not in cols:
             conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN wm_kind VARCHAR(16)"))
         if "wm_id" not in cols:
@@ -4802,9 +4593,7 @@ def ensure_stock_document_items_wm_receipt_columns(engine: Engine) -> None:
         conn.execute(
             text("CREATE INDEX IF NOT EXISTS ix_stock_document_items_product_id ON stock_document_items(product_id)")
         )
-        seq_tbl = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sqlite_sequence' LIMIT 1")
-        ).fetchone()
+        seq_tbl = _table_exists(conn, "sqlite_sequence")
         if seq_tbl:
             conn.execute(text("DELETE FROM sqlite_sequence WHERE name = 'stock_document_items'"))
             conn.execute(
@@ -4823,20 +4612,15 @@ def ensure_wm_last_purchase_extension_columns(engine: Engine) -> None:
     ]
     with engine.connect() as conn:
         for tbl in ("cartons", "packaging_materials"):
-            t = conn.execute(
-                text(f"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{tbl}' LIMIT 1")
-            ).fetchone()
-            if not t:
+            if not _table_exists(conn, tbl):
                 continue
-            cols = {row[1] for row in conn.execute(text(f"PRAGMA table_info({tbl})")).fetchall()}
+            cols = _table_column_names(conn, tbl)
             for col, typ in wm_cols:
                 if col not in cols:
                     conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col} {typ}"))
-        pt = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='products' LIMIT 1")
-        ).fetchone()
+        pt = _table_exists(conn, "products")
         if pt:
-            pcols = {row[1] for row in conn.execute(text("PRAGMA table_info(products)")).fetchall()}
+            pcols = _table_column_names(conn, "products")
             if "last_purchased_at" not in pcols:
                 conn.execute(text("ALTER TABLE products ADD COLUMN last_purchased_at DATETIME"))
         conn.commit()
@@ -4847,9 +4631,7 @@ def ensure_currency_exchange_rates_table(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        t = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='currency_exchange_rates' LIMIT 1")
-        ).fetchone()
+        t = _table_exists(conn, "currency_exchange_rates")
         if not t:
             conn.execute(
                 text(
@@ -4891,13 +4673,11 @@ def ensure_purchase_order_tax_invoice_columns(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        po = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='purchase_orders' LIMIT 1")
-        ).fetchone()
+        po = _table_exists(conn, "purchase_orders")
         if not po:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(purchase_orders)")).fetchall()}
+        cols = _table_column_names(conn, "purchase_orders")
         if "tax_mode" not in cols:
             conn.execute(
                 text("ALTER TABLE purchase_orders ADD COLUMN tax_mode VARCHAR(48) NOT NULL DEFAULT 'domestic_vat'")
@@ -4912,13 +4692,11 @@ def ensure_products_purchase_snapshot_columns(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        pt = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='products' LIMIT 1")
-        ).fetchone()
+        pt = _table_exists(conn, "products")
         if not pt:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(products)")).fetchall()}
+        cols = _table_column_names(conn, "products")
         if "previous_purchase_price" not in cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN previous_purchase_price NUMERIC(10, 2)"))
         if "purchase_price_original" not in cols:
@@ -4941,13 +4719,11 @@ def ensure_products_extra_cost_columns(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     with engine.connect() as conn:
-        pt = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='products' LIMIT 1")
-        ).fetchone()
+        pt = _table_exists(conn, "products")
         if not pt:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(products)")).fetchall()}
+        cols = _table_column_names(conn, "products")
         if "extra_cost_packaging_net" not in cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN extra_cost_packaging_net NUMERIC(12, 2) NOT NULL DEFAULT 0"))
         if "extra_cost_commission_percent" not in cols:
@@ -4962,9 +4738,7 @@ def ensure_products_extra_cost_columns(engine: Engine) -> None:
 def ensure_order_documents_and_activity_logs_tables(engine: Engine) -> None:
     """Tabele: dokumenty zamówienia (upload) oraz log aktywności panelu."""
     with engine.connect() as conn:
-        ex_od = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_documents' LIMIT 1")
-        ).fetchone()
+        ex_od = _table_exists(conn, "order_documents")
         if not ex_od:
             conn.execute(
                 text(
@@ -4988,9 +4762,7 @@ def ensure_order_documents_and_activity_logs_tables(engine: Engine) -> None:
             )
             conn.execute(text("CREATE INDEX ix_order_documents_order_id ON order_documents(order_id)"))
             conn.execute(text("CREATE INDEX ix_order_documents_document_type ON order_documents(document_type)"))
-        ex_al = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_activity_logs' LIMIT 1")
-        ).fetchone()
+        ex_al = _table_exists(conn, "order_activity_logs")
         if not ex_al:
             conn.execute(
                 text(
@@ -5012,9 +4784,7 @@ def ensure_order_documents_and_activity_logs_tables(engine: Engine) -> None:
             )
             conn.execute(text("CREATE INDEX ix_order_activity_logs_order_id ON order_activity_logs(order_id)"))
             conn.execute(text("CREATE INDEX ix_order_activity_logs_event_type ON order_activity_logs(event_type)"))
-        ex_ord = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_refund_drafts' LIMIT 1")
-        ).fetchone()
+        ex_ord = _table_exists(conn, "order_refund_drafts")
         if not ex_ord:
             conn.execute(
                 text(
@@ -5063,9 +4833,7 @@ def ensure_order_documents_and_activity_logs_tables(engine: Engine) -> None:
 def ensure_order_notes_table(engine: Engine) -> None:
     """Single source of truth for order notes (details + bulk)."""
     with engine.connect() as conn:
-        ex = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_notes' LIMIT 1")
-        ).fetchone()
+        ex = _table_exists(conn, "order_notes")
         if not ex:
             conn.execute(
                 text(
@@ -5094,9 +4862,7 @@ def ensure_order_notes_table(engine: Engine) -> None:
 def ensure_order_operational_notes_table(engine: Engine) -> None:
     """Internal warehouse / WMS workflow notes (visibility per module)."""
     with engine.connect() as conn:
-        ex = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_operational_notes' LIMIT 1")
-        ).fetchone()
+        ex = _table_exists(conn, "order_operational_notes")
         if not ex:
             conn.execute(
                 text(
@@ -5130,9 +4896,7 @@ def ensure_order_operational_notes_table(engine: Engine) -> None:
 def ensure_app_users_bootstrap_columns(engine: Engine) -> None:
     """Add is_system_seed and password_must_change for bootstrap / forced password change UX."""
     with engine.connect() as conn:
-        ex = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_users' LIMIT 1")
-        ).fetchone()
+        ex = _table_exists(conn, "app_users")
         if not ex:
             conn.commit()
             return
@@ -5165,9 +4929,7 @@ def ensure_app_users_bootstrap_columns(engine: Engine) -> None:
         except Exception:
             pass
 
-        tw = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_user_warehouses' LIMIT 1")
-        ).fetchone()
+        tw = _table_exists(conn, "app_user_warehouses")
         if not tw:
             conn.execute(
                 text(
@@ -5194,12 +4956,10 @@ def _sqlite_ensure_user_wms_profiles_operational_columns(conn) -> None:
 
     Avoids bootstrap INSERT failures when a column was added to the ORM without ALTER + DEFAULT on live DBs.
     """
-    t = conn.execute(
-        text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_wms_profiles' LIMIT 1")
-    ).fetchone()
+    t = _table_exists(conn, "user_wms_profiles")
     if not t:
         return
-    cols = {row[1] for row in conn.execute(text("PRAGMA table_info(user_wms_profiles)")).fetchall()}
+    cols = _table_column_names(conn, "user_wms_profiles")
     # BOOLEAN stored as INTEGER in SQLite
     if "require_scan_every_product" not in cols:
         conn.execute(
@@ -5224,16 +4984,12 @@ def _sqlite_ensure_user_wms_profiles_operational_columns(conn) -> None:
 def ensure_user_wms_profiles_table(engine: Engine) -> None:
     """Separate WMS workstation profile rows; migrate legacy columns from app_users when present."""
     with engine.connect() as conn:
-        base = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_users' LIMIT 1")
-        ).fetchone()
+        base = _table_exists(conn, "app_users")
         if not base:
             conn.commit()
             return
 
-        tex = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_wms_profiles' LIMIT 1")
-        ).fetchone()
+        tex = _table_exists(conn, "user_wms_profiles")
         if not tex:
             conn.execute(
                 text(
@@ -5576,12 +5332,8 @@ def repair_stock_document_items_and_stock_operations_sqlite(conn) -> None:
     Needed after ``CREATE TABLE AS SELECT … WHERE 0`` (loses PK) — SQLite then reports
     ``foreign key mismatch`` on INSERT into ``stock_operations``.
     """
-    ops_exist = conn.execute(
-        text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_operations' LIMIT 1")
-    ).fetchone()
-    items_exist = conn.execute(
-        text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-    ).fetchone()
+    ops_exist = _table_exists(conn, "stock_operations")
+    items_exist = _table_exists(conn, "stock_document_items")
     if not items_exist:
         return
 
@@ -5621,9 +5373,7 @@ def repair_stock_document_items_and_stock_operations_sqlite(conn) -> None:
         text("CREATE INDEX IF NOT EXISTS ix_stock_document_items_rmz_damage_entry ON stock_document_items(rmz_damage_entry_id)")
     )
 
-    seq_tbl = conn.execute(
-        text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sqlite_sequence' LIMIT 1")
-    ).fetchone()
+    seq_tbl = _table_exists(conn, "sqlite_sequence")
     if seq_tbl:
         conn.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('stock_document_items', 'stock_operations')"))
         conn.execute(
@@ -5688,9 +5438,7 @@ def _ensure_stock_documents_return_receipt_schema_sqlite(engine: Engine) -> None
     )
 
     with engine.begin() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_documents' LIMIT 1")
-        ).fetchone()
+        exists = _table_exists(conn, "stock_documents")
         if not exists:
             return
 
@@ -5718,9 +5466,7 @@ def _ensure_stock_documents_return_receipt_schema_sqlite(engine: Engine) -> None
                 logger.info("SQLite: added stock_documents.rmz_id (ALTER)")
             return
 
-        items_exist = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        items_exist = _table_exists(conn, "stock_document_items")
         if not items_exist:
             return
 
@@ -5855,13 +5601,11 @@ def ensure_stock_documents_rmz_id_column(engine: Engine) -> None:
 def ensure_stock_document_items_return_receipt_columns(engine: Engine) -> None:
     """PZ_RT line metadata: disposition bucket + RMZ damage entry key."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "stock_document_items")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+        cols = _table_column_names(conn, "stock_document_items")
         if "return_disposition" not in cols:
             conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN return_disposition VARCHAR(32)"))
         if "rmz_damage_entry_id" not in cols:
@@ -5950,7 +5694,7 @@ def ensure_wms_audit_tables(engine: Engine) -> None:
         )
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_operation_sessions_cart ON wms_operation_sessions(cart_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_operation_sessions_order ON wms_operation_sessions(order_id)"))
-        op_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(wms_operation_sessions)")).fetchall()}
+        op_cols = _table_column_names(conn, "wms_operation_sessions")
         if "last_activity_at" not in op_cols:
             conn.execute(text("ALTER TABLE wms_operation_sessions ADD COLUMN last_activity_at DATETIME"))
         if "completed_reason" not in op_cols:
@@ -5985,7 +5729,7 @@ def ensure_wms_audit_tables(engine: Engine) -> None:
         )
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_packing_sessions_order ON wms_packing_sessions(order_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_packing_sessions_open ON wms_packing_sessions(order_id, completed_at)"))
-        pack_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(wms_packing_sessions)")).fetchall()}
+        pack_cols = _table_column_names(conn, "wms_packing_sessions")
         if "last_activity_at" not in pack_cols:
             conn.execute(text("ALTER TABLE wms_packing_sessions ADD COLUMN last_activity_at DATETIME"))
         if "completed_reason" not in pack_cols:
@@ -6238,13 +5982,11 @@ def ensure_workforce_user_groups_schema(engine: Engine) -> None:
 def ensure_return_product_decisions_creates_stock_document_column(engine: Engine) -> None:
     """REJECTED reasons: optional inbound stock line on PZ_RT."""
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='return_product_decisions' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "return_product_decisions")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(return_product_decisions)")).fetchall()}
+        cols = _table_column_names(conn, "return_product_decisions")
         if "creates_stock_document" not in cols:
             conn.execute(
                 text(
@@ -6295,13 +6037,11 @@ def ensure_stock_document_item_receiving_split_columns(engine: Engine) -> None:
     dialect = engine.dialect.name
     if dialect == "sqlite":
         with engine.connect() as conn:
-            t = conn.execute(
-                text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-            ).fetchone()
+            t = _table_exists(conn, "stock_document_items")
             if not t:
                 conn.commit()
                 return
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+            cols = _table_column_names(conn, "stock_document_items")
             if "cartons_count" not in cols:
                 conn.execute(
                     text("ALTER TABLE stock_document_items ADD COLUMN cartons_count INTEGER NOT NULL DEFAULT 0")
@@ -6774,11 +6514,11 @@ def ensure_inventory_carrier_id_column(engine: Engine) -> None:
     dialect = engine.dialect.name
     if dialect == "sqlite":
         with engine.connect() as conn:
-            t = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory' LIMIT 1")).fetchone()
+            t = _table_exists(conn, "inventory")
             if not t:
                 conn.commit()
                 return
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(inventory)")).fetchall()}
+            cols = _table_column_names(conn, "inventory")
             if "carrier_id" not in cols:
                 conn.execute(
                     text(
@@ -6806,7 +6546,7 @@ def ensure_inventory_carrier_unique_indexes(engine: Engine) -> None:
     dialect = engine.dialect.name
     if dialect == "sqlite":
         with engine.connect() as conn:
-            t = conn.execute(text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory' LIMIT 1")).fetchone()
+            t = _table_exists(conn, "inventory")
             if not t:
                 conn.commit()
                 return
@@ -6864,13 +6604,11 @@ def ensure_stock_document_item_suggested_carrier_column(engine: Engine) -> None:
     dialect = engine.dialect.name
     if dialect == "sqlite":
         with engine.connect() as conn:
-            t = conn.execute(
-                text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-            ).fetchone()
+            t = _table_exists(conn, "stock_document_items")
             if not t:
                 conn.commit()
                 return
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+            cols = _table_column_names(conn, "stock_document_items")
             if "suggested_warehouse_carrier_id" not in cols:
                 conn.execute(
                     text(
@@ -6959,13 +6697,11 @@ def ensure_stock_document_item_line_warehouse_carrier_column(engine: Engine) -> 
     dialect = engine.dialect.name
     if dialect == "sqlite":
         with engine.connect() as conn:
-            t = conn.execute(
-                text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_document_items' LIMIT 1")
-            ).fetchone()
+            t = _table_exists(conn, "stock_document_items")
             if not t:
                 conn.commit()
                 return
-            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()}
+            cols = _table_column_names(conn, "stock_document_items")
             if "warehouse_carrier_id" not in cols:
                 conn.execute(
                     text(
@@ -7100,13 +6836,11 @@ def ensure_order_item_pick_allocations_table(engine: Engine) -> None:
 
 def ensure_wms_product_warehouse_operations_traceability_columns(engine: Engine) -> None:
     with engine.connect() as conn:
-        r = conn.execute(
-            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wms_product_warehouse_operations' LIMIT 1")
-        ).fetchone()
+        r = _table_exists(conn, "wms_product_warehouse_operations")
         if not r:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(wms_product_warehouse_operations)")).fetchall()}
+        cols = _table_column_names(conn, "wms_product_warehouse_operations")
         if "batch_number" not in cols:
             conn.execute(text("ALTER TABLE wms_product_warehouse_operations ADD COLUMN batch_number VARCHAR(128)"))
         if "expiry_date" not in cols:

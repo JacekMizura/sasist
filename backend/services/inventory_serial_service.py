@@ -126,16 +126,11 @@ def inventory_serials_table_exists(db: Session) -> bool:
     """True when ``inventory_serials`` exists (schema upgrade may not have run yet)."""
     try:
         bind = db.get_bind()
-        if bind is not None and bind.dialect.name == "sqlite":
-            hit = db.execute(
-                text(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory_serials' LIMIT 1"
-                )
-            ).fetchone()
-            return hit is not None
-        # Postgres / others: probe table
-        db.execute(text("SELECT 1 FROM inventory_serials LIMIT 1"))
-        return True
+        if bind is None:
+            return False
+        from ..db.schema_introspection import has_table
+
+        return has_table(bind, "inventory_serials")
     except Exception:
         return False
 
