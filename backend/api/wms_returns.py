@@ -1462,7 +1462,12 @@ def get_wms_return_queue_counts(
         return WmsReturnQueueCountsRead(counts={k: 0 for k in RETURN_QUEUE_TAB_KEYS})
 
 
-@router.get("/orders/lookup", response_model=List[OrderLookupHit])
+@router.get(
+    "/orders/lookup",
+    response_model=List[OrderLookupHit],
+    status_code=200,
+    summary="Wyszukiwanie zamówienia pod zwrot WMS",
+)
 @router.get("/orders/lookup/", response_model=List[OrderLookupHit], include_in_schema=False)
 @router.get("/lookup", response_model=List[OrderLookupHit], include_in_schema=False)
 def lookup_orders(
@@ -1474,18 +1479,25 @@ def lookup_orders(
     ),
     q: str = Query(..., min_length=1, description="Numer zamówienia, kod, #id, RET-id, id RMZ / zamówienia"),
     db: Session = Depends(get_db),
-):
+) -> List[OrderLookupHit]:
     """
     Wyszukiwanie zamówień pod zwrot WMS: id zamówienia, id RMZ, numer / kod kreskowy / prefiks ORD- / RET-.
     Dla samego numeru id szuka także po całym tenancie (inny magazyn niż domyślny), żeby skan „13” znalazł #13.
+
+    Zawsze HTTP 200 — brak trafień zwraca ``[]`` (nigdy 404).
     """
     try:
-        wh_id = int(warehouse_id) if warehouse_id is not None and int(warehouse_id) > 0 else resolve_tenant_default_warehouse_id(db, tenant_id)
+        wh_id = (
+            int(warehouse_id)
+            if warehouse_id is not None and int(warehouse_id) > 0
+            else resolve_tenant_default_warehouse_id(db, tenant_id)
+        )
     except ValueError:
         raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
 
     term_raw, num_token = _normalize_wms_returns_lookup_query(q)
     if not term_raw and num_token is None:
+        print(f"[lookup_orders] q={q!r} -> [] (empty query)", flush=True)
         return []
 
     base_wh = db.query(Order).filter(Order.tenant_id == tenant_id, Order.warehouse_id == wh_id)
@@ -1591,9 +1603,12 @@ def lookup_orders(
                 merge_hit(o, int(ret_row.id))
 
     if hits:
-        return sorted(hits.values(), key=lambda h: h.id)
+        out = sorted(hits.values(), key=lambda h: h.id)
+        print(f"[lookup_orders] q={q!r} tenant={tenant_id} wh={wh_id} -> {len(out)} hit(s)", flush=True)
+        return out
 
     if not term:
+        print(f"[lookup_orders] q={q!r} -> [] (numeric-only miss)", flush=True)
         return []
 
     like_term = f"%{term}%"
@@ -1609,17 +1624,9 @@ def lookup_orders(
         .limit(15)
         .all()
     )
-    return [_order_lookup_hit_from_row(o, None) for o in partial]
-
-
-# Explicit router registration (same handler as decorators above).
-router.add_api_route(
-    "/orders/lookup",
-    lookup_orders,
-    methods=["GET"],
-    response_model=List[OrderLookupHit],
-    name="wms_returns_orders_lookup_explicit",
-)
+    out = [_order_lookup_hit_from_row(o, None) for o in partial]
+    print(f"[lookup_orders] q={q!r} tenant={tenant_id} wh={wh_id} -> {len(out)} partial", flush=True)
+    return out
 
 
 @router.get("/orders/{order_id}/returns", response_model=List[WmsReturnListItem])
@@ -2390,7 +2397,7 @@ def get_customer_insights(
     )
 
 
-@router.get("/{return_id}", response_model=WmsReturnRead)
+@router.get("/{return_id:int}", response_model=WmsReturnRead)
 def get_wms_return(
     return_id: int,
     tenant_id: int = Query(...),
