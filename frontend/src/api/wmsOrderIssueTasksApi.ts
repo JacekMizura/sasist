@@ -102,6 +102,7 @@ export type OrderIssueTaskSkippedItemApi = {
   task_id: number;
   order_id: number;
   order_number: string;
+  error_code?: string;
   error_message: string;
 };
 

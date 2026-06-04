@@ -63,6 +63,22 @@ from ..services.wms_audit_service import complete_wms_operation_session, touch_w
 
 router = APIRouter(prefix="/wms", tags=["WMS order issues"])
 
+_SERIALIZE_ERROR_CODE = "TASK_SERIALIZATION_FAILED"
+
+
+def _public_serialize_error_message(exc: Exception) -> str:
+    """Never expose raw Python tracebacks / NameError text to API clients."""
+    if isinstance(exc, NameError):
+        return "Nie udało się zbudować karty zadania (błąd wewnętrzny mapowania)."
+    if isinstance(exc, (KeyError, AttributeError, TypeError)):
+        return "Nie udało się zbudować karty zadania (niekompletne dane zamówienia)."
+    msg = str(exc).strip()
+    if not msg or msg.startswith("name ") and " is not defined" in msg:
+        return "Nie udało się zbudować karty zadania braków."
+    if len(msg) > 200 or "Traceback" in msg or "File \"" in msg:
+        return "Nie udało się zbudować karty zadania braków."
+    return msg[:200]
+
 
 def _missing_skus_label(missing: list[dict]) -> str:
     parts: list[str] = []
@@ -161,7 +177,7 @@ def serialize_order_issue_task_item(
 
         from ..services.braki_order_state_service import order_has_waiting_for_stock_lines as braki_waiting_stock
 
-        oms_wait = order_has_waiting_customer_line(o) or braki_waiting_stock(order, db=db)
+        oms_wait = order_has_waiting_customer_line(o) or braki_waiting_stock(o, db=db)
         summary_line = format_braki_issue_summary_line(
             workflow_status,
             unresolved=u_short,
@@ -466,25 +482,27 @@ def _build_order_issue_tasks_list(
                 continue
             out.append(item)
         except Exception as exc:
-            err_msg = str(exc).strip() or exc.__class__.__name__
+            err_public = _public_serialize_error_message(exc)
             snap = order_issue_task_debug_snapshot(db, t, o, workflow_status=wf_status)
             logger.exception(
-                "[wms.order_issue_tasks.serialize_failed] task_id=%s order_id=%s workflow_status=%s "
-                "relocation_required=%s archived=%s closed_at=%s err=%s",
+                "[wms.order_issue.serialize] task_id=%s order_id=%s workflow_status=%s "
+                "relocation_required=%s archived=%s closed_at=%s error_code=%s err=%s",
                 snap.get("task_id"),
                 snap.get("order_id"),
                 snap.get("workflow_status"),
                 snap.get("relocation_required"),
                 snap.get("archived"),
                 snap.get("closed_at"),
-                err_msg,
+                _SERIALIZE_ERROR_CODE,
+                exc,
             )
             skipped.append(
                 OrderIssueTaskSkippedItem(
                     task_id=int(t.id),
                     order_id=int(t.order_id),
                     order_number=str((o.number if o is not None else None) or f"#{t.order_id}"),
-                    error_message=err_msg[:512],
+                    error_code=_SERIALIZE_ERROR_CODE,
+                    error_message=err_public,
                 )
             )
             continue

@@ -158,7 +158,11 @@ class OrderIssueTaskSkippedItem(BaseModel):
     task_id: int
     order_id: int
     order_number: str = ""
-    error_message: str = Field(..., description="Powód pominięcia przy serializacji (np. błąd backendu)")
+    error_code: str = Field(
+        default="TASK_SERIALIZATION_FAILED",
+        description="Kod błędu serializacji (np. TASK_SERIALIZATION_FAILED)",
+    )
+    error_message: str = Field(..., description="Powód pominięcia przy serializacji (czytelny, bez surowych wyjątków Python)")
 
 
 class OrderIssueTaskListResponse(BaseModel):

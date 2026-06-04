@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Kolejka braków: `name 'order' is not defined`
+
+- `serialize_order_issue_task_item`: `braki_waiting_stock(o, …)` zamiast niezdefiniowanego `order`.
+- `skipped_tasks`: `error_code=TASK_SERIALIZATION_FAILED`, komunikat bez surowych wyjątków Python; log `[wms.order_issue.serialize]`.
+- Test: `test_order_issue_task_serialize.py`.
+
 ## 2026-06-04 — PostgreSQL: usunięcie sqlite_master z runtime
 
 - `backend/db/schema_introspection.py` — `has_table`, `get_table_column_names`, `has_index`, `ensure_order_issue_tasks_archive_columns` (Inspector zamiast `sqlite_master`).
