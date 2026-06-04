@@ -6,12 +6,12 @@ import os
 
 import uvicorn
 
-# Dual-stack bind (Railway / container networking).
-UVICORN_HOST = "::"
+# Railway health probes use IPv4 — bind all interfaces (not import-time DB work).
+UVICORN_HOST = os.getenv("UVICORN_HOST", "0.0.0.0")
 
 
 def resolve_port() -> int:
-    raw = os.getenv("PORT", "8000")
+    raw = os.getenv("PORT", "8080")
     try:
         return int(raw)
     except ValueError as exc:

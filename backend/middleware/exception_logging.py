@@ -29,10 +29,16 @@ CallNext = Callable[[Request], Awaitable[Response]]
 
 
 async def outer_request_logger_middleware(request: Request, call_next: CallNext) -> Response:
-    if request.url.path in _PASS_THROUGH_PATHS:
+    path = request.url.path
+    if path == "/healthz":
+        print("[healthz] request enter", flush=True)
+        response = await call_next(request)
+        print(f"[healthz] request exit status={response.status_code}", flush=True)
+        return response
+    if path in _PASS_THROUGH_PATHS:
         return await call_next(request)
 
-    print(f"[req] {request.method} {request.url.path}", flush=True)
+    print(f"[req] {request.method} {path}", flush=True)
     response = await call_next(request)
     print(f"[req] done {response.status_code} {request.url.path}", flush=True)
     return response

@@ -312,8 +312,12 @@ async def root() -> dict[str, bool]:
 
 
 @app.get("/healthz")
-async def healthz() -> dict[str, bool]:
+def healthz() -> dict[str, bool]:
+    print("[HEALTHZ HIT]", flush=True)
     return {"ok": True}
+
+
+print("[healthz] route registered on app", flush=True)
 
 
 # ==================================================
@@ -391,7 +395,8 @@ def ensure_sqlite_tables(*, announce: bool = False) -> None:
     create_all_tables()
 
 
-ensure_sqlite_tables()
+# Do not run create_all at import — blocks Railway healthcheck until DB + migrations finish.
+# Tables are created in startup upgrade_schema (background thread).
 
 
 def _is_sqlite_engine() -> bool:
@@ -1384,8 +1389,13 @@ app.middleware("http")(outer_request_logger_middleware)
 
 @app.on_event("startup")
 async def _log_backend_startup() -> None:
-    from .serve import UVICORN_HOST
+    from .serve import UVICORN_HOST, resolve_port
 
+    print(
+        f"[startup] healthz ready bind_host={UVICORN_HOST} port={resolve_port()} "
+        f"PORT env={os.getenv('PORT')!r}",
+        flush=True,
+    )
     # Deploy fingerprint — compare with GitHub commit on Railway → Deployments.
     print(
         f"[startup] wms_returns_lookup_build={WMS_RETURNS_ROUTING_VERSION}",
@@ -1401,7 +1411,10 @@ async def _log_backend_startup() -> None:
         f"bind_host={UVICORN_HOST} PORT env={os.getenv('PORT')!r}",
         flush=True,
     )
-    _ensure_wms_returns_router_mounted()
+    try:
+        _ensure_wms_returns_router_mounted()
+    except Exception as exc:
+        log_unhandled_exception("startup _ensure_wms_returns_router_mounted", exc)
     print("Backend started OK", flush=True)
 
 
