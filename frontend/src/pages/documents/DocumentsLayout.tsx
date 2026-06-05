@@ -10,6 +10,7 @@ import {
 } from "./OperationalDocumentSeriesContext";
 import { isNavPathActive } from "../../layout/navActive";
 import {
+  clearDocumentsSeriesListContext,
   parseDocumentsPathForSeriesContext,
   rememberDocumentsSeriesListContext,
 } from "./documentSeriesContext";
@@ -51,7 +52,10 @@ function DocumentsLayoutInner() {
 
   useEffect(() => {
     if (!pathname.startsWith("/documents")) return;
-    if (pathname.startsWith("/documents/series")) return;
+    if (pathname.startsWith("/documents/series")) {
+      clearDocumentsSeriesListContext();
+      return;
+    }
     const ctx = parseDocumentsPathForSeriesContext(pathname);
     if (ctx) rememberDocumentsSeriesListContext(ctx);
   }, [pathname]);

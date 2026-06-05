@@ -73,6 +73,16 @@ export function rememberDocumentsSeriesListContext(ctx: DocumentSeriesListContex
 /** Gdy brak zapisu — lista serii nie filtruje po typie w API, żeby po F5 widać było wszystkie serie. */
 const DEFAULT_CONTEXT: DocumentSeriesListContext = { type: null, subtype: null };
 
+/** Clear persisted sidebar filter (e.g. after opening master series list). */
+export function clearDocumentsSeriesListContext(): void {
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function readDocumentsSeriesListContext(): DocumentSeriesListContext {
   const tryParse = (raw: string | null): DocumentSeriesListContext | null => {
     if (!raw?.trim()) return null;

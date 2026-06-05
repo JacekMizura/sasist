@@ -9,7 +9,7 @@ import {
 } from "../../api/documentSeriesApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { readDocumentsSeriesListContext } from "./documentSeriesContext";
+import { clearDocumentsSeriesListContext } from "./documentSeriesContext";
 import {
   deleteModeLabelPl,
   documentSeriesSubtypeLabelPl,
@@ -34,8 +34,6 @@ export default function DocumentSeriesListPage() {
   const warehouseId = warehouse?.id ?? null;
   const tenantId = DAMAGE_TENANT_ID;
 
-  const listContext = useMemo(() => readDocumentsSeriesListContext(), [location.pathname, location.key]);
-
   const [rows, setRows] = useState<DocumentSeriesDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -43,26 +41,25 @@ export default function DocumentSeriesListPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const visibleRows = useMemo(() => {
-    return rows.filter((r) => {
-      if (listContext.type != null && r.type !== listContext.type) return false;
-      if (listContext.subtype && r.subtype !== listContext.subtype) return false;
-      return true;
-    });
-  }, [rows, listContext.type, listContext.subtype]);
+  /** Master list — always all series for the warehouse (not sidebar tab context). */
+  const visibleRows = rows;
 
   const seriesKpi = useMemo(
     () => [
-      { label: "Serie (widok)", value: visibleRows.length },
-      { label: "W magazynie", value: rows.length },
-      { label: "Zaznaczono", value: selected.size, tone: "blue" as const },
+      { label: "Serie w magazynie", value: rows.length },
+      {
+        label: "Magazynowe",
+        value: rows.filter((r) => r.type === "WAREHOUSE").length,
+        tone: "blue" as const,
+      },
+      { label: "Zaznaczono", value: selected.size, tone: "slate" as const },
       {
         label: "Magazyn",
         value: (warehouse?.name || "").trim() || "—",
         tone: "slate" as const,
       },
     ],
-    [visibleRows.length, rows.length, selected.size, warehouse?.name],
+    [rows, selected.size, warehouse?.name],
   );
 
   useEffect(() => {
@@ -99,6 +96,7 @@ export default function DocumentSeriesListPage() {
   }, [tenantId, warehouseId]);
 
   useEffect(() => {
+    clearDocumentsSeriesListContext();
     void load();
   }, [load]);
 
@@ -202,7 +200,9 @@ export default function DocumentSeriesListPage() {
             {loading ? (
               <span className="ml-auto text-xs font-medium text-slate-500">Ładowanie…</span>
             ) : (
-              <span className="ml-auto hidden text-xs text-slate-400 sm:inline">Wybór z lewego menu filtruje kontekst.</span>
+              <span className="ml-auto hidden text-xs text-slate-400 sm:inline">
+                Wszystkie serie operacyjne dla wybranego magazynu.
+              </span>
             )}
           </DocumentsFiltersToolbar>
         }
@@ -235,8 +235,8 @@ export default function DocumentSeriesListPage() {
                   <td colSpan={11} className="p-0">
                     <DocumentsEmptyState
                       icon={Layers}
-                      title="Brak serii w tym kontekście"
-                      description="Dodaj pierwszą serię numeracyjną dla tego magazynu — zdefiniuj prefiks, typ dokumentu i powiązanie z szablonem druku."
+                      title="Brak serii w magazynie"
+                      description="Dodaj serie numeracyjne (FV, PA, KOR, PZ, WZ, MM, RW, PW) — zdefiniuj prefiks, typ dokumentu i powiązanie z szablonem druku."
                       action={
                         <button
                           type="button"
