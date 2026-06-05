@@ -1,4 +1,8 @@
 import api from "./axios";
+import { createRequestDeduper } from "../utils/wmsRefresh";
+
+const orderIssueTasksListDeduper = createRequestDeduper();
+const orderIssueTaskDetailDeduper = createRequestDeduper();
 
 export type OrderIssueTaskLogEntryApi = {
   at: string;
@@ -131,19 +135,21 @@ export async function listWmsOrderIssueTasks(
   warehouseId: number,
   options?: ListWmsOrderIssueTasksOptions,
 ): Promise<OrderIssueTaskListResult> {
-  const res = await api.get<OrderIssueTaskListResult>("/wms/order-issue-tasks", {
-    params: {
-      tenant_id: tenantId,
-      warehouse_id: warehouseId,
-      sync: options?.sync ? true : undefined,
-    },
-  });
-  return {
-    success: res.data?.success ?? true,
-    tasks: res.data?.tasks ?? [],
-    skipped_tasks: res.data?.skipped_tasks ?? [],
-    filter_counts: res.data?.filter_counts ?? {},
+  const params = {
+    tenant_id: tenantId,
+    warehouse_id: warehouseId,
+    sync: options?.sync ? true : undefined,
   };
+  const key = JSON.stringify(params);
+  return orderIssueTasksListDeduper(key, async () => {
+    const res = await api.get<OrderIssueTaskListResult>("/wms/order-issue-tasks", { params });
+    return {
+      success: res.data?.success ?? true,
+      tasks: res.data?.tasks ?? [],
+      skipped_tasks: res.data?.skipped_tasks ?? [],
+      filter_counts: res.data?.filter_counts ?? {},
+    };
+  });
 }
 
 export async function getWmsOrderIssueTask(
@@ -151,10 +157,13 @@ export async function getWmsOrderIssueTask(
   warehouseId: number,
   taskId: number,
 ): Promise<OrderIssueTaskListItemApi> {
-  const res = await api.get<OrderIssueTaskListItemApi>(`/wms/order-issue-tasks/${taskId}`, {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  const key = `${tenantId}:${warehouseId}:${taskId}`;
+  return orderIssueTaskDetailDeduper(key, async () => {
+    const res = await api.get<OrderIssueTaskListItemApi>(`/wms/order-issue-tasks/${taskId}`, {
+      params: { tenant_id: tenantId, warehouse_id: warehouseId },
+    });
+    return res.data;
   });
-  return res.data;
 }
 
 export async function resolveWmsOrderIssueTaskScan(

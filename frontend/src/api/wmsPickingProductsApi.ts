@@ -1,6 +1,10 @@
 import axios from "axios";
 
 import api from "./axios";
+import { createRequestDeduper } from "../utils/wmsRefresh";
+
+const pickingProductLinesDeduper = createRequestDeduper();
+const pickingProductDetailDeduper = createRequestDeduper();
 
 /** Zgodne z ``WmsPickingOrderTypeChoice`` w flow WMS. */
 export type WmsPickingOrderTypeQuery = "single" | "multi" | "all";
@@ -126,8 +130,11 @@ export async function getWmsPickingProductLines(
   if (orderIds?.length) {
     params.order_ids_csv = orderIds.join(",");
   }
-  const res = await api.get<WmsPickingProductLinesResponseApi>("/wms/picking/product-lines", { params });
-  return res.data;
+  const key = JSON.stringify(params);
+  return pickingProductLinesDeduper(key, async () => {
+    const res = await api.get<WmsPickingProductLinesResponseApi>("/wms/picking/product-lines", { params });
+    return res.data;
+  });
 }
 
 export async function getWmsPickingProductDetail(
@@ -157,8 +164,11 @@ export async function getWmsPickingProductDetail(
   if (orderIds?.length) {
     params.order_ids_csv = orderIds.join(",");
   }
-  const res = await api.get<WmsPickingProductDetailApi>("/wms/picking/product-lines/detail", { params });
-  return res.data;
+  const key = JSON.stringify(params);
+  return pickingProductDetailDeduper(key, async () => {
+    const res = await api.get<WmsPickingProductDetailApi>("/wms/picking/product-lines/detail", { params });
+    return res.data;
+  });
 }
 
 export type WmsPickingFinalizeCartResponseApi = {

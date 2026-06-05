@@ -15,7 +15,8 @@ import { ScanExecutionShell } from "../../components/wms/execution/ScanExecution
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useWmsScanResolveNavigate } from "../../components/wms/execution/useWmsScanResolveNavigate";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wmsRoutes";
+import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
+import { WMS_ROUTES } from "./wmsRoutes";
 
 /** Product-centric WMS operational queues — route-first, scan-first. */
 export default function WmsOperationalQueuesHub() {
@@ -59,11 +60,7 @@ export default function WmsOperationalQueuesHub() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const onUpd = () => void load();
-    window.addEventListener(WMS_SHORTAGES_UPDATED_EVENT, onUpd);
-    return () => window.removeEventListener(WMS_SHORTAGES_UPDATED_EVENT, onUpd);
-  }, [load]);
+  useWmsShortagesRefresh(() => void load(), { debounceMs: 800 });
 
   useEffect(() => {
     setActiveContext({

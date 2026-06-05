@@ -17,7 +17,7 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
-import { WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wmsRoutes";
+import { dispatchWmsShortagesUpdated, WMS_ROUTES } from "./wmsRoutes";
 import { CrossdockFlowBanner } from "../../components/wms/operational/CrossdockFlowBanner";
 import { OperationalWorkflowTimeline } from "../../components/wms/operational/OperationalWorkflowTimeline";
 import { nextOperationalAction } from "../../components/wms/operational/operationalWorkflow";
@@ -227,7 +227,7 @@ export default function WmsRelocationDetailPage() {
         setPendingAssign(null);
         if (updated.status === "done") {
           scanFx.success("Rozlokowanie zakończone");
-          window.dispatchEvent(new Event(WMS_SHORTAGES_UPDATED_EVENT));
+          dispatchWmsShortagesUpdated();
           navigate(WMS_ROUTES.operationalQueues);
           return;
         }
@@ -255,7 +255,7 @@ export default function WmsRelocationDetailPage() {
       applyDetail(updated);
       if (updated.status === "done") {
         scanFx.success("Wszystko rozłożone — zadanie zamknięte");
-        window.dispatchEvent(new Event(WMS_SHORTAGES_UPDATED_EVENT));
+        dispatchWmsShortagesUpdated();
         navigate(WMS_ROUTES.operationalQueues);
         return;
       }

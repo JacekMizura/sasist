@@ -36,7 +36,8 @@ import {
   wmsPickingRowScanEligible,
 } from "./wmsPickingUiGates";
 import { WmsPickingSessionTopBar } from "./WmsPickingSessionTopBar";
-import { dispatchWmsShortagesUpdated, WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wmsRoutes";
+import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
+import { dispatchWmsShortagesUpdated, WMS_ROUTES } from "./wmsRoutes";
 import { Image as ImageIcon, MapPin, AlertTriangle, Check, Loader2 } from "lucide-react";
 
 function fmtQty(n: number): string {
@@ -128,10 +129,12 @@ export default function WmsPickingProductsPage() {
   );
 
   const bootstrapAttemptedRef = useRef<string | null>(null);
-  const pickingListRefreshHandledRef = useRef<number | null>(null);
   const productLinesLoadSeqRef = useRef(0);
+  const productLinesLoadKeyRef = useRef("");
+  const pickingListRefreshHandledRef = useRef<number | null>(null);
   useEffect(() => {
     bootstrapAttemptedRef.current = null;
+    productLinesLoadKeyRef.current = "";
     pickingListRefreshHandledRef.current = null;
   }, [sessionFingerprint]);
 
@@ -162,6 +165,17 @@ export default function WmsPickingProductsPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const activePriorityOrderIds = useMemo(() => priorityTaskOrderIds(activePriorityTask), [activePriorityTask]);
+  const productLinesLoadKey = useMemo(() => {
+    if (warehouseId == null || !pickingSession) return "";
+    return [
+      warehouseId,
+      pickingSession.orderUiStatusId,
+      orderType,
+      mergedSession?.cartId ?? "",
+      recoveryOrderId ?? "",
+      activePriorityOrderIds.join(","),
+    ].join("|");
+  }, [warehouseId, pickingSession, orderType, mergedSession?.cartId, recoveryOrderId, activePriorityOrderIds]);
 
   useEffect(() => {
     const sync = () => {
@@ -372,19 +386,44 @@ export default function WmsPickingProductsPage() {
     }
   }, [warehouseId, pickingSession, orderType, mergedSession?.cartId, recoveryOrderId, activePriorityOrderIds]);
 
-  useEffect(() => {
-    const onUpd = () => void load();
-    window.addEventListener(WMS_SHORTAGES_UPDATED_EVENT, onUpd);
-    return () => window.removeEventListener(WMS_SHORTAGES_UPDATED_EVENT, onUpd);
-  }, [load]);
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useEffect(() => {
     if (!pickingSession) {
       navigate(WMS_ROUTES.picking, { replace: true });
       return;
     }
-    void load();
-  }, [pickingSession, navigate, load]);
+    if (!productLinesLoadKey || productLinesLoadKeyRef.current === productLinesLoadKey) {
+      return;
+    }
+    productLinesLoadKeyRef.current = productLinesLoadKey;
+    void loadRef.current();
+  }, [pickingSession, navigate, productLinesLoadKey]);
+
+  useEffect(() => {
+    const st = routerLocation.state as WmsPickingProductsNavState | null;
+    const at = st?.pickingListRefreshAt;
+    if (at == null || !Number.isFinite(at) || pickingSession == null) return;
+    if (pickingListRefreshHandledRef.current === at) return;
+    const nextSession = st?.pickingSession;
+    if (!nextSession) return;
+    pickingListRefreshHandledRef.current = at;
+    void loadRef.current();
+    navigate(routerLocation.pathname, {
+      replace: true,
+      state: { pickingSession: nextSession } satisfies WmsPickingProductsNavState,
+    });
+  }, [routerLocation.state, routerLocation.pathname, pickingSession, navigate]);
+
+  useWmsShortagesRefresh(
+    () => {
+      if (recoveryOrderId != null && recoveryOrderId > 0) return;
+      productLinesLoadKeyRef.current = "";
+      void loadRef.current();
+    },
+    { enabled: recoveryOrderId == null || recoveryOrderId <= 0, debounceMs: 700 },
+  );
 
   useEffect(() => {
     setActiveDocument({
@@ -398,29 +437,6 @@ export default function WmsPickingProductsPage() {
     setScannerInputPlaceholder("Skanuj EAN lub id produktu");
     refocusScannerInput();
   }, [setScannerInputPlaceholder, refocusScannerInput, rows.length]);
-
-  useEffect(() => {
-    const st = routerLocation.state as WmsPickingProductsNavState | null;
-    const at = st?.pickingListRefreshAt;
-    if (at == null || !Number.isFinite(at) || pickingSession == null) {
-      return;
-    }
-    if (pickingListRefreshHandledRef.current === at) {
-      return;
-    }
-    const nextSession = st?.pickingSession;
-    if (!nextSession) return;
-    pickingListRefreshHandledRef.current = at;
-    (async () => {
-      await load();
-      navigate(routerLocation.pathname, {
-        replace: true,
-        state: { pickingSession: nextSession } satisfies WmsPickingProductsNavState,
-      });
-    })().catch(() => {
-      /* load() already surfaced err */
-    });
-  }, [routerLocation.state, routerLocation.pathname, pickingSession, navigate, load]);
 
   const shortageProductIds = useMemo(
     () => new Set((cohortMissingLines ?? []).map((l) => l.product_id)),
@@ -631,14 +647,14 @@ export default function WmsPickingProductsPage() {
       playScanBeep();
       clearPickingCart();
       if (pickingFinalizeHasShortageSignals(fin)) {
-        dispatchWmsShortagesUpdated();
         setFinalizeShortageModal({
           products: fin.cohort_shortage_product_count ?? 0,
           units: fin.cohort_shortage_unit_total ?? 0,
           orderIds: fin.cohort_shortage_order_ids ?? [],
           missingLines: data.cohort_missing_lines ?? [],
         });
-        void load();
+        productLinesLoadKeyRef.current = "";
+        dispatchWmsShortagesUpdated();
       } else {
         showScannerToast("Zbieranie zakończone");
         navigate(WMS_ROUTES.picking, { replace: true });

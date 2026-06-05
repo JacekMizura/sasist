@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, Menu, Minimize2, ScanLine, ArrowLeft } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 
@@ -20,6 +20,9 @@ import {
   formatOperationalDuration,
   formatOperationalDurationSince,
 } from "../utils/formatOperationalDuration";
+import { useVisibilityPolling } from "../hooks/useVisibilityPolling";
+
+const PRIORITY_TASKS_POLL_MS = 30_000;
 
 // Zdefiniowane zwarte, czyste style dla przycisków ikon i menu
 const iconBtn =
@@ -51,8 +54,10 @@ export default function WmsTopBar() {
     return () => document.removeEventListener("fullscreenchange", syncFs);
   }, [syncFs]);
 
+  const priorityInflightRef = useRef(false);
   const loadPriorityTasks = useCallback(async () => {
-    if (!warehouse?.id) return;
+    if (!warehouse?.id || priorityInflightRef.current) return;
+    priorityInflightRef.current = true;
     setPriorityLoading(true);
     try {
       const rows = await listWarehousePriorityTasks({ tenantId: 1, warehouseId: warehouse.id, scope: "assigned" });
@@ -60,16 +65,16 @@ export default function WmsTopBar() {
     } catch {
       setPriorityTasks([]);
     } finally {
+      priorityInflightRef.current = false;
       setPriorityLoading(false);
     }
   }, [warehouse?.id]);
 
-  useEffect(() => {
-    void loadPriorityTasks();
-    if (!warehouse?.id) return undefined;
-    const interval = window.setInterval(() => void loadPriorityTasks(), 20000);
-    return () => window.clearInterval(interval);
-  }, [loadPriorityTasks, warehouse?.id]);
+  useVisibilityPolling(() => void loadPriorityTasks(), {
+    enabled: warehouse?.id != null,
+    intervalMs: PRIORITY_TASKS_POLL_MS,
+    runImmediately: true,
+  });
 
   useEffect(() => {
     if (!priorityTasks.some((task) => task.status === "NOWE" || task.status === "ESKALOWANE")) return;

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -9,7 +9,8 @@ import {
   resolveWmsOrderIssueTaskScan,
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
-import { WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wmsRoutes";
+import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
+import { WMS_ROUTES } from "./wmsRoutes";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 
 type BrakiWorkflowFilterId =
@@ -126,6 +127,7 @@ export default function WmsOrderIssuesHub() {
     refocusScannerInput,
   } = useWmsScanner();
 
+  const issueTasksInflightRef = useRef(false);
   const [tasks, setTasks] = useState<OrderIssueTaskListItemApi[]>([]);
   const [filterCounts, setFilterCounts] = useState<Record<string, number>>({});
   const [skippedTasks, setSkippedTasks] = useState<
@@ -153,6 +155,8 @@ export default function WmsOrderIssuesHub() {
       setLoading(false);
       return;
     }
+    if (issueTasksInflightRef.current && !options?.sync) return;
+    issueTasksInflightRef.current = true;
     setLoading(true);
     setErr(null);
     listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId, { sync: options?.sync })
@@ -175,18 +179,17 @@ export default function WmsOrderIssuesHub() {
         setSkippedTasks([]);
         setFilterCounts({});
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        issueTasksInflightRef.current = false;
+        setLoading(false);
+      });
   }, [warehouseId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const onUpd = () => void load();
-    window.addEventListener(WMS_SHORTAGES_UPDATED_EVENT, onUpd);
-    return () => window.removeEventListener(WMS_SHORTAGES_UPDATED_EVENT, onUpd);
-  }, [load]);
+  useWmsShortagesRefresh(() => void load(), { debounceMs: 600 });
 
   useEffect(() => {
     if (!orderIdFromUrl || loading || tasks.length === 0) {

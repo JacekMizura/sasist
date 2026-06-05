@@ -1,4 +1,7 @@
 import api from "./axios";
+import { createRequestDeduper } from "../utils/wmsRefresh";
+
+const priorityTasksDeduper = createRequestDeduper();
 
 export type WarehouseOperationsMainMode = "KOMPLETACJA" | "PAKOWANIE" | "OPERACJE MAGAZYNOWE" | "BRAKI";
 export type WarehouseOperationsStatusColor = "green" | "gray" | "red";
@@ -398,10 +401,16 @@ export async function createWarehousePriorityTask(
 export async function listWarehousePriorityTasks(
   query: Pick<WarehouseOperationsSnapshotQuery, "tenantId" | "warehouseId"> & { scope?: "assigned" | "all" },
 ): Promise<WarehousePriorityTask[]> {
-  const res = await api.get<WarehousePriorityTask[]>("/wms/warehouse-operations/priority-tasks", {
-    params: { tenant_id: query.tenantId, warehouse_id: query.warehouseId, scope: query.scope || "assigned" },
+  const params = {
+    tenant_id: query.tenantId,
+    warehouse_id: query.warehouseId,
+    scope: query.scope || "assigned",
+  };
+  const key = JSON.stringify(params);
+  return priorityTasksDeduper(key, async () => {
+    const res = await api.get<WarehousePriorityTask[]>("/wms/warehouse-operations/priority-tasks", { params });
+    return res.data;
   });
-  return res.data;
 }
 
 export async function updateWarehousePriorityTask(

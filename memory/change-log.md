@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — WMS frontend: stop request storms
+
+- ``wmsRefresh.ts`` — debounced ``dispatchWmsShortagesUpdated``, in-flight request dedupe, visibility-aware polling.
+- Priority tasks: 30s poll, paused when tab hidden; in-flight guard in ``WmsTopBar``.
+- API dedupe: ``product-lines``, ``order-issue-tasks``, ``priority-tasks``.
+- Picking/recovery: single ``productLinesLoadKey`` load pipeline; recovery uses ``pickingListRefreshAt`` not global shortages fan-out.
+- Braki/queues/detail: ``useWmsShortagesRefresh`` (debounced) zamiast surowych listenerów.
+
 ## 2026-06-04 — Resolver consistency: packing / queue / relocation
 
 - Agregaty zamówienia w resolverze: ``has_recovery_pick_work``, ``has_pending_relocation``, ``has_unresolved_lines``, ``packing_allowed``, ``relocation_alloc_pending/partial``.

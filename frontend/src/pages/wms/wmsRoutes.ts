@@ -77,9 +77,7 @@ export const WMS_RELOCATION_FINALIZED_EVENT = "wms:relocation-finalized";
 /** Po akcjach braków (OMS/WMS) — odświeżenie zamówienia, kolejki braków, sesji zbierania. */
 export const WMS_SHORTAGES_UPDATED_EVENT = "wms:shortages-updated";
 
-export function dispatchWmsShortagesUpdated(): void {
-  window.dispatchEvent(new Event(WMS_SHORTAGES_UPDATED_EVENT));
-}
+export { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 
 /** Po usunięciu / archiwizacji zamówień — odświeżenie pulpitu i innych widoków liczących zamówienia. */
 export const ORDERS_OPERATIONS_UPDATED_EVENT = "orders:operations-updated";

@@ -10,6 +10,7 @@ import {
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
+import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { WmsOrderIssueDetailContent } from "./WmsOrderIssueDetailContent";
 
@@ -198,6 +199,8 @@ export default function WmsOrderIssueDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useWmsShortagesRefresh(() => void load(), { debounceMs: 600 });
 
   useEffect(() => {
     setScannerInputPlaceholder("Inne zamówienie — zeskanuj kod");

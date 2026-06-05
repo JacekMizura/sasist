@@ -5,7 +5,8 @@ import { getWmsDashboardSummary, type WmsDashboardSummary } from "../../api/wmsD
 import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { DAMAGE_TENANT_ID } from "../../pages/damage/damageShared";
-import { ORDERS_OPERATIONS_UPDATED_EVENT, WMS_SHORTAGES_UPDATED_EVENT } from "../../pages/wms/wmsRoutes";
+import { ORDERS_OPERATIONS_UPDATED_EVENT } from "../../pages/wms/wmsRoutes";
+import { subscribeWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 
 function aggregateOrderBuckets(summary: OrderUiStatusPanelSummary | null): { nowe: number; wRealizacji: number } {
@@ -65,13 +66,13 @@ export function usePanelOrderKpis(opts?: UsePanelOrderKpisOpts) {
   }, [load]);
 
   useEffect(() => {
-    if (!enabled) return;
-    const on = () => void load();
-    window.addEventListener(WMS_SHORTAGES_UPDATED_EVENT, on);
-    window.addEventListener(ORDERS_OPERATIONS_UPDATED_EVENT, on);
+    if (!enabled) return undefined;
+    const unsubShortages = subscribeWmsShortagesUpdated(() => void load(), { debounceMs: 1200 });
+    const onOrders = () => void load();
+    window.addEventListener(ORDERS_OPERATIONS_UPDATED_EVENT, onOrders);
     return () => {
-      window.removeEventListener(WMS_SHORTAGES_UPDATED_EVENT, on);
-      window.removeEventListener(ORDERS_OPERATIONS_UPDATED_EVENT, on);
+      unsubShortages();
+      window.removeEventListener(ORDERS_OPERATIONS_UPDATED_EVENT, onOrders);
     };
   }, [enabled, load]);
 

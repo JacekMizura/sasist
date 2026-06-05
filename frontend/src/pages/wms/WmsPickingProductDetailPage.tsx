@@ -285,15 +285,21 @@ export default function WmsPickingProductDetailPage() {
     return () => registerScanHandler(null);
   }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation]);
 
-  const goBackToList = useCallback(() => {
-    if (!pickingSession) return;
-    const rid = pickingSession.recoveryOrderId;
-    if (rid != null && rid > 0) {
-      navigate(WMS_ROUTES.pickingRecovery(rid), { state: { pickingSession } satisfies WmsPickingProductsNavState });
-      return;
-    }
-    navigate(WMS_ROUTES.pickingProducts, { state: { pickingSession } satisfies WmsPickingProductsNavState });
-  }, [navigate, pickingSession]);
+  const goBackToList = useCallback(
+    (refreshList = false) => {
+      if (!pickingSession) return;
+      const state: WmsPickingProductsNavState = refreshList
+        ? { pickingSession, pickingListRefreshAt: Date.now() }
+        : { pickingSession };
+      const rid = pickingSession.recoveryOrderId;
+      if (rid != null && rid > 0) {
+        navigate(WMS_ROUTES.pickingRecovery(rid), { state });
+        return;
+      }
+      navigate(WMS_ROUTES.pickingProducts, { state });
+    },
+    [navigate, pickingSession],
+  );
 
   async function confirm_pick(qty: number, locationId: number) {
     if (!pickingSession || warehouseId == null || !detail || qty <= 0 || remaining <= 0) return;
@@ -315,7 +321,7 @@ export default function WmsPickingProductDetailPage() {
       playScanBeep();
       const nextRem = remaining - Math.min(qty, remaining);
       if (nextRem <= 1e-9) {
-        goBackToList();
+        goBackToList(true);
       } else {
         await load();
         setManualOpen(false);
