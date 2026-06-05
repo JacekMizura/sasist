@@ -1017,6 +1017,9 @@ export default function WmsReturnsPage() {
   const saveSplitForLineRef = useRef<
     (lineId: string, rowsOverride?: UnitDecision[] | null, opts?: SaveSplitForLineOpts) => Promise<boolean>
   >(() => Promise.resolve(false));
+  const confirmPickAcceptSaveRef = useRef<
+    (lineId: string, pickCountOverride?: number) => Promise<void>
+  >(() => Promise.resolve());
 
   /** Po „EDYTUJ” na zapisanej karcie — odblokowuje przyciski decyzji do ponownej edycji (wymaga ponownego Zapisz). */
   const [gridUnlockEditByLineId, setGridUnlockEditByLineId] = useState<Record<string, boolean>>({});
@@ -1896,7 +1899,30 @@ export default function WmsReturnsPage() {
         Math.max(1, Math.floor(gridQtyPickDraftByLineId[lineId] ?? 1)),
       );
 
+      const returnId =
+        wmsReturn?.id != null && Number.isFinite(Number(wmsReturn.id)) && Number(wmsReturn.id) > 0
+          ? Math.floor(Number(wmsReturn.id))
+          : Number.isFinite(rid) && rid > 0
+            ? rid
+            : null;
+      console.log("[returns.report.click]", {
+        return_id: returnId,
+        line_id: lineId,
+        click_timestamp: Date.now(),
+        decision,
+        selected_state_before: {
+          gridLineMode: gridLineModeByLineId[lineId] ?? "idle",
+          pickDraft: gridQtyPickDraftByLineId[lineId] ?? null,
+        },
+        pending_null: pendingNull,
+        qty,
+      });
+
       if (decision === "ACCEPTED") {
+        if (pendingNull === 1) {
+          void confirmPickAcceptSaveRef.current(lineId, 1);
+          return;
+        }
         setGridLineModeByLineId((prev) => ({ ...prev, [lineId]: "pick_accept" }));
         setGridQtyPickDraftByLineId((prev) => ({ ...prev, [lineId]: pickDefault }));
         return;
@@ -1905,14 +1931,30 @@ export default function WmsReturnsPage() {
         openDamagedEditorForLine(lineId, 1);
         return;
       }
+      if (pendingNull === 1) {
+        setPendingRejectBatchByLineId((prev) => ({ ...prev, [lineId]: 1 }));
+        openRejectEditorForLine(lineId);
+        return;
+      }
       setGridLineModeByLineId((prev) => ({ ...prev, [lineId]: "pick_reject_qty" }));
       setGridQtyPickDraftByLineId((prev) => ({ ...prev, [lineId]: pickDefault }));
     },
-    [gridQtyPickDraftByLineId, dmgReasons, isFinished, lineSeedByLineId, openDamagedEditorForLine, unitRowsByLineId],
+    [
+      gridLineModeByLineId,
+      gridQtyPickDraftByLineId,
+      dmgReasons,
+      isFinished,
+      lineSeedByLineId,
+      openDamagedEditorForLine,
+      openRejectEditorForLine,
+      rid,
+      unitRowsByLineId,
+      wmsReturn?.id,
+    ],
   );
 
   const confirmPickAcceptSave = useCallback(
-    async (lineId: string) => {
+    async (lineId: string, pickCountOverride?: number) => {
       if (isFinished) return;
       const seed = lineSeedByLineId.get(lineId);
       const qty = Math.max(0, Math.floor(seed?.candidate.availableQuantity ?? 0));
@@ -1926,8 +1968,25 @@ export default function WmsReturnsPage() {
         rows = [...built];
       }
       const pendingNull = rows.filter((r) => r.decision === null).length;
-      const pick = gridQtyPickDraftByLineId[lineId] ?? 1;
+      const pick =
+        pickCountOverride != null && Number.isFinite(pickCountOverride)
+          ? pickCountOverride
+          : (gridQtyPickDraftByLineId[lineId] ?? 1);
       const k = Math.max(1, Math.min(pendingNull, Math.floor(pick)));
+      const returnId =
+        wmsReturn?.id != null && Number.isFinite(Number(wmsReturn.id)) && Number(wmsReturn.id) > 0
+          ? Math.floor(Number(wmsReturn.id))
+          : Number.isFinite(rid) && rid > 0
+            ? rid
+            : null;
+      console.log("[returns.report.submit]", {
+        return_id: returnId,
+        line_id: lineId,
+        click_timestamp: Date.now(),
+        pick_count: k,
+        pending_null: pendingNull,
+        immediate: pickCountOverride != null,
+      });
       const rowsAfter = applyFirstNNullUnitsDecisionToRows(rows, "ACCEPTED", k);
       const willCompleteLine =
         qty > 0 && rowsAfter.length === qty && rowsAfter.every((r) => r.decision === "ACCEPTED");
@@ -1962,6 +2021,13 @@ export default function WmsReturnsPage() {
         });
         return;
       }
+      console.log("[returns.report.success]", {
+        return_id: returnId,
+        line_id: lineId,
+        click_timestamp: Date.now(),
+        will_complete_line: willCompleteLine,
+        pick_count: k,
+      });
       setInlineSaveToast(willCompleteLine ? "Zapisano" : "Częściowo zapisano");
       window.setTimeout(() => setInlineSaveToast(null), 2200);
     },
@@ -1971,10 +2037,13 @@ export default function WmsReturnsPage() {
       gridQtyPickDraftByLineId,
       isFinished,
       lineSeedByLineId,
+      rid,
       unitRowsByLineId,
       setFirstNNullUnitsDecision,
+      wmsReturn?.id,
     ],
   );
+  confirmPickAcceptSaveRef.current = confirmPickAcceptSave;
 
   const confirmPickRejectQtyContinue = useCallback(
     (lineId: string) => {
@@ -2421,7 +2490,15 @@ export default function WmsReturnsPage() {
       opts?: SaveSplitForLineOpts,
     ): Promise<boolean> => {
       if (isFinished) return false;
-      if (selectedReturnDbId == null) {
+      const effectiveReturnDbId =
+        wmsReturn?.id != null && Number.isFinite(Number(wmsReturn.id)) && Number(wmsReturn.id) > 0
+          ? Math.floor(Number(wmsReturn.id))
+          : selectedReturnDbId != null
+            ? selectedReturnDbId
+            : Number.isFinite(rid) && rid > 0
+              ? rid
+              : null;
+      if (effectiveReturnDbId == null) {
         setDamageSaveError("Brak identyfikatora zwrotu — odśwież stronę lub otwórz dokument ponownie.");
         return false;
       }
@@ -2573,13 +2650,13 @@ export default function WmsReturnsPage() {
             setDamageSaveError("Uzupełnij uzasadnienie (wymagane przy „Inny powód”).");
             return false;
           }
-          ret = await processWmsReturnLine(selectedReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, {
+          ret = await processWmsReturnLine(effectiveReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, {
             decision: "REJECTED",
             damage_type: rk,
             ...(rk === WMS_REJECT_OTHER_ID ? { note: noteTrim } : {}),
           });
         } else if (allOkLine) {
-          ret = await processWmsReturnLine(selectedReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, {
+          ret = await processWmsReturnLine(effectiveReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, {
             decision: "OK",
             condition: "A",
           });
@@ -2633,14 +2710,14 @@ export default function WmsReturnsPage() {
             return false;
           }
           console.log("[WMS RMZ] split-process submit", {
-            returnId: selectedReturnDbId,
+            returnId: effectiveReturnDbId,
             orderItemId: seed.orderItemId,
             lineId,
             aggregated,
             damageEntries: damage_entries,
             splitPayload: payload,
           });
-          ret = await processWmsReturnLineSplit(selectedReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, payload);
+          ret = await processWmsReturnLineSplit(effectiveReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, payload);
         }
 
         const lineAfterSave =
@@ -2686,6 +2763,7 @@ export default function WmsReturnsPage() {
     [
       isFinished,
       selectedReturnDbId,
+      wmsReturn?.id,
       lineSeedByLineId,
       wmsReturn?.warehouse_id,
       wmsReturn?.status,
@@ -4766,7 +4844,10 @@ export default function WmsReturnsPage() {
                                       className="min-h-[52px] w-full rounded-xl bg-[#41546a] py-3 text-base font-extrabold uppercase tracking-wide text-white shadow-md hover:bg-[#364556] disabled:cursor-not-allowed disabled:opacity-50"
                                       onClick={() => {
                                         if (cardMode === "pick_accept") {
-                                          void confirmPickAcceptSave(ln.lineId);
+                                          void confirmPickAcceptSave(
+                                            ln.lineId,
+                                            gridQtyPickDraftByLineId[ln.lineId] ?? 1,
+                                          );
                                           return;
                                         }
                                         if (cardMode === "pick_damage_qty") {

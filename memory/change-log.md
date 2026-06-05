@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — RMZ: zapis „Przyjęty” jednym klikiem
+
+- ``WmsReturnsPage``: przy ``pendingNull === 1`` klik **PRZYJĘTY** od razu wywołuje zapis (bez kroku wyboru ilości); odrzucenie z 1 szt. przechodzi prosto do edytora powodu.
+- ``confirmPickAcceptSave(lineId, pickCount)`` — liczba sztuk przekazywana w argumencie (nie ze stale state); ref ``confirmPickAcceptSaveRef`` dla ``beginGridDecision``.
+- ``saveSplitForLine``: ``effectiveReturnDbId`` z ``wmsReturn.id`` / route ``rid`` (bez race na ``selectedReturnDbId``).
+- Logi debug: ``[returns.report.click]``, ``[returns.report.submit]``, ``[returns.report.success]``.
+
 ## 2026-06-04 — Dogrywka zbierki z kolejki Braki (recovery_order_id)
 
 - ``prepare_recovery_picking_for_order`` — auto ``WmsRecoveryPickTask`` gdy ``r_pend > 0``; logi ``[wms.recovery.open]`` / ``[wms.recovery.lines.fetch]``.
