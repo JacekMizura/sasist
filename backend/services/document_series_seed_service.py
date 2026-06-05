@@ -1,4 +1,4 @@
-"""Default document series per tenant/warehouse — idempotent bootstrap."""
+"""Default document series per tenant/warehouse — idempotent bootstrap and repair."""
 
 from __future__ import annotations
 
@@ -10,85 +10,9 @@ from sqlalchemy.orm import Session
 
 from ..models.document_series import DocumentSeries
 from ..models.tenant_warehouse import TenantWarehouse
+from .document_series_catalog import ALL_OPERATIONAL_SERIES, DEFAULT_NUMBERING_FORMAT, normalize_series_spec
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_WAREHOUSE_SERIES: list[dict] = [
-    {
-        "name": "PZ — przyjęcia",
-        "subtype": "PZ",
-        "prefix": "PZ/",
-        "numbering_format": "{PREFIX}{YEAR}/{NUMBER}",
-        "padding_length": 6,
-        "is_default": True,
-    },
-    {
-        "name": "WZ — wydania",
-        "subtype": "WZ",
-        "prefix": "WZ/",
-        "numbering_format": "{PREFIX}{WAREHOUSE}/{YEAR}/{NUMBER}",
-        "padding_length": 6,
-        "code": "MAG1",
-        "is_default": True,
-    },
-    {
-        "name": "MM — przesunięcia magazynowe",
-        "subtype": "MM",
-        "prefix": "MM/",
-        "numbering_format": "{PREFIX}{YEAR}/{NUMBER}",
-        "padding_length": 6,
-        "is_default": True,
-        "yearly_reset": True,
-    },
-    {
-        "name": "RW — rozchód wewnętrzny",
-        "subtype": "RW",
-        "prefix": "RW/",
-        "numbering_format": "{PREFIX}{YEAR}/{NUMBER}",
-        "padding_length": 6,
-        "is_default": True,
-    },
-    {
-        "name": "PW — przychód wewnętrzny",
-        "subtype": "PW",
-        "prefix": "PW/",
-        "numbering_format": "{PREFIX}{YEAR}/{NUMBER}",
-        "padding_length": 6,
-        "is_default": True,
-    },
-]
-
-_DEFAULT_SALE_SERIES: list[dict] = [
-    {
-        "name": "FV — faktura VAT",
-        "subtype": "INVOICE",
-        "prefix": "FV/",
-        "numbering_format": "{PREFIX}{MONTH}/{YEAR}/{NUMBER}",
-        "padding_length": 6,
-        "is_default": True,
-        "monthly_reset": True,
-    },
-    {
-        "name": "PA — paragon",
-        "subtype": "RECEIPT",
-        "prefix": "PA/",
-        "numbering_format": "{PREFIX}{MONTH}/{YEAR}/{NUMBER}",
-        "padding_length": 6,
-        "is_default": True,
-        "monthly_reset": True,
-    },
-]
-
-_DEFAULT_CORRECTION_SERIES: list[dict] = [
-    {
-        "name": "KOR — korekta",
-        "subtype": "CORRECTION",
-        "prefix": "KOR/",
-        "numbering_format": "{PREFIX}{YEAR}/{NUMBER}",
-        "padding_length": 6,
-        "is_default": True,
-    },
-]
 
 
 def _tenant_warehouse_pairs(db: Session) -> list[tuple[int, int]]:
@@ -96,55 +20,86 @@ def _tenant_warehouse_pairs(db: Session) -> list[tuple[int, int]]:
     return [(int(t), int(w)) for t, w in rows]
 
 
-def _ensure_series_row(
+def _query_subtype_rows(
     db: Session,
     *,
     tenant_id: int,
     warehouse_id: int,
     series_type: str,
-    spec: dict,
-) -> DocumentSeries | None:
-    subtype = str(spec["subtype"]).strip().upper()
-    existing = (
+    subtype: str,
+) -> list[DocumentSeries]:
+    return (
         db.query(DocumentSeries)
         .filter(
             DocumentSeries.tenant_id == int(tenant_id),
             DocumentSeries.warehouse_id == int(warehouse_id),
-            DocumentSeries.series_type == series_type,
-            DocumentSeries.subtype == subtype,
-            DocumentSeries.is_default == True,  # noqa: E712
+            DocumentSeries.series_type == str(series_type).strip().upper(),
+            DocumentSeries.subtype == str(subtype).strip().upper(),
         )
-        .first()
+        .order_by(DocumentSeries.created_at.asc())
+        .all()
     )
-    if existing is not None:
-        return existing
-    any_exists = (
-        db.query(DocumentSeries)
-        .filter(
-            DocumentSeries.tenant_id == int(tenant_id),
-            DocumentSeries.warehouse_id == int(warehouse_id),
-            DocumentSeries.series_type == series_type,
-            DocumentSeries.subtype == subtype,
-        )
-        .first()
-    )
-    if any_exists is not None:
-        return any_exists
 
-    now = datetime.utcnow()
-    row = DocumentSeries(
-        id=str(uuid.uuid4()),
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        name=str(spec["name"]),
-        prefix=str(spec.get("prefix") or ""),
-        suffix=str(spec.get("suffix") or ""),
-        series_type=series_type,
-        subtype=subtype,
-        numbering_start=1,
-        numbering_format=str(spec.get("numbering_format") or "{PREFIX}{NUMBER}"),
-        reset_each_period=bool(spec.get("yearly_reset")),
-    )
+
+def _promote_default_row(row: DocumentSeries) -> None:
+    if hasattr(row, "is_default"):
+        row.is_default = True
+    if hasattr(row, "is_active"):
+        row.is_active = True
+
+
+def _normalize_prefix(raw: object, fallback: str) -> str:
+    s = str(raw or fallback).strip().upper().rstrip("/")
+    return s or str(fallback).strip().upper()
+
+
+def _repair_operational_series_row(row: DocumentSeries, spec: dict) -> bool:
+    """Align legacy default rows with catalog — no duplicate rows."""
+    changed = False
+    want_prefix = _normalize_prefix(spec.get("prefix"), str(spec["subtype"]))
+    stored_prefix = str(row.prefix or "").strip()
+    if stored_prefix.upper().rstrip("/") != want_prefix or stored_prefix != want_prefix:
+        row.prefix = want_prefix
+        changed = True
+    want_fmt = str(spec.get("numbering_format") or DEFAULT_NUMBERING_FORMAT)
+    if str(row.numbering_format or "").strip() != want_fmt:
+        row.numbering_format = want_fmt
+        changed = True
+    if hasattr(row, "monthly_reset") and bool(getattr(row, "monthly_reset", False)) is not bool(spec.get("monthly_reset", True)):
+        row.monthly_reset = bool(spec.get("monthly_reset", True))
+        changed = True
+    if hasattr(row, "yearly_reset") and bool(getattr(row, "yearly_reset", False)) is not bool(spec.get("yearly_reset", False)):
+        row.yearly_reset = bool(spec.get("yearly_reset", False))
+        changed = True
+    if bool(getattr(row, "reset_each_period", False)) is not bool(spec.get("monthly_reset", True)):
+        row.reset_each_period = bool(spec.get("monthly_reset", True))
+        changed = True
+    if hasattr(row, "padding_length"):
+        want_pad = int(spec.get("padding_length") or 6)
+        if int(getattr(row, "padding_length", None) or 0) != want_pad:
+            row.padding_length = want_pad
+            changed = True
+    if changed:
+        row.updated_at = datetime.utcnow()
+        logger.info(
+            "[document_series.repair] normalized legacy row tenant_id=%s warehouse_id=%s subtype=%s id=%s",
+            row.tenant_id,
+            row.warehouse_id,
+            getattr(row, "subtype", ""),
+            row.id,
+        )
+    return changed
+
+
+def _apply_spec_to_new_row(row: DocumentSeries, spec: dict) -> None:
+    row.name = str(spec["name"])
+    row.prefix = str(spec.get("prefix") or "")
+    row.suffix = str(spec.get("suffix") or "")
+    row.series_type = str(spec["series_type"])
+    row.subtype = str(spec["subtype"])
+    row.numbering_start = 1
+    row.numbering_format = str(spec.get("numbering_format") or "{PREFIX}/{NUMBER}")
+    row.reset_each_period = bool(spec.get("monthly_reset"))
     for attr in ("code", "padding_length", "yearly_reset", "monthly_reset", "is_default", "is_active"):
         if attr in spec and hasattr(DocumentSeries, attr):
             setattr(row, attr, spec[attr])
@@ -154,14 +109,76 @@ def _ensure_series_row(
         row.is_default = bool(spec.get("is_default", True))
     if hasattr(DocumentSeries, "padding_length"):
         row.padding_length = int(spec.get("padding_length") or 6)
-    if hasattr(DocumentSeries, "yearly_reset"):
-        row.yearly_reset = bool(spec.get("yearly_reset"))
-    if hasattr(DocumentSeries, "monthly_reset"):
-        row.monthly_reset = bool(spec.get("monthly_reset"))
-    if hasattr(DocumentSeries, "code"):
-        row.code = str(spec.get("code") or "")
-    row.created_at = now
-    row.updated_at = now
+
+
+def _ensure_series_row(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    spec: dict,
+) -> tuple[DocumentSeries, bool]:
+    """Return (row, created). Never duplicates subtype when a row already exists."""
+    series_type = str(spec["series_type"]).strip().upper()
+    subtype = str(spec["subtype"]).strip().upper()
+    rows = _query_subtype_rows(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        series_type=series_type,
+        subtype=subtype,
+    )
+
+    defaults = [r for r in rows if bool(getattr(r, "is_default", False))]
+    if defaults:
+        hit = defaults[0]
+        if hasattr(hit, "is_active") and hit.is_active is False:
+            hit.is_active = True
+        _repair_operational_series_row(hit, spec)
+        db.flush()
+        return hit, False
+
+    if len(rows) == 1:
+        hit = rows[0]
+        _promote_default_row(hit)
+        _repair_operational_series_row(hit, spec)
+        db.flush()
+        logger.info(
+            "[document_series.repair] promoted legacy default tenant_id=%s warehouse_id=%s type=%s subtype=%s id=%s",
+            tenant_id,
+            warehouse_id,
+            series_type,
+            subtype,
+            hit.id,
+        )
+        return hit, False
+
+    if len(rows) > 1:
+        active = [r for r in rows if getattr(r, "is_active", True) is not False]
+        hit = active[0] if active else rows[0]
+        _promote_default_row(hit)
+        _repair_operational_series_row(hit, spec)
+        db.flush()
+        logger.warning(
+            "[document_series.repair] multiple rows for subtype — promoted first tenant_id=%s warehouse_id=%s type=%s subtype=%s id=%s count=%s",
+            tenant_id,
+            warehouse_id,
+            series_type,
+            subtype,
+            hit.id,
+            len(rows),
+        )
+        return hit, False
+
+    now = datetime.utcnow()
+    row = DocumentSeries(
+        id=str(uuid.uuid4()),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        created_at=now,
+        updated_at=now,
+    )
+    _apply_spec_to_new_row(row, spec)
     db.add(row)
     db.flush()
     logger.info(
@@ -172,54 +189,48 @@ def _ensure_series_row(
         subtype,
         row.id,
     )
-    return row
+    return row, True
 
 
 def ensure_default_document_series(db: Session, tenant_id: int, warehouse_id: int) -> int:
-    """Idempotent defaults for one tenant/warehouse — PZ,WZ,MM,RW,PW,FV,PA,KOR."""
+    """Idempotent defaults for one tenant/warehouse — PZ,WZ,MM,RW,PW,FV,PA,KOR. Returns rows created."""
     created = 0
     tid, wid = int(tenant_id), int(warehouse_id)
 
-    def _maybe_create(series_type: str, spec: dict) -> None:
-        nonlocal created
-        before = (
-            db.query(DocumentSeries)
-            .filter(
-                DocumentSeries.tenant_id == tid,
-                DocumentSeries.warehouse_id == wid,
-                DocumentSeries.series_type == series_type,
-                DocumentSeries.subtype == str(spec["subtype"]).strip().upper(),
-            )
-            .count()
-        )
-        _ensure_series_row(db, tenant_id=tid, warehouse_id=wid, series_type=series_type, spec=spec)
-        after = (
-            db.query(DocumentSeries)
-            .filter(
-                DocumentSeries.tenant_id == tid,
-                DocumentSeries.warehouse_id == wid,
-                DocumentSeries.series_type == series_type,
-                DocumentSeries.subtype == str(spec["subtype"]).strip().upper(),
-            )
-            .count()
-        )
-        if after > before:
+    for raw in ALL_OPERATIONAL_SERIES:
+        spec = normalize_series_spec(raw)
+        _, was_created = _ensure_series_row(db, tenant_id=tid, warehouse_id=wid, spec=spec)
+        if was_created:
             created += 1
 
-    for spec in _DEFAULT_WAREHOUSE_SERIES:
-        _maybe_create("WAREHOUSE", spec)
-    for spec in _DEFAULT_SALE_SERIES:
-        _maybe_create("SALE", spec)
-    for spec in _DEFAULT_CORRECTION_SERIES:
-        _maybe_create("CORRECTION", spec)
-
-    if created:
-        db.commit()
+    db.commit()
     return created
 
 
+def missing_operational_subtypes(db: Session, tenant_id: int, warehouse_id: int) -> list[str]:
+    """Subtype codes still without any series row after ensure (diagnostics)."""
+    missing: list[str] = []
+    for raw in ALL_OPERATIONAL_SERIES:
+        spec = normalize_series_spec(raw)
+        st = spec["series_type"]
+        sub = spec["subtype"]
+        count = (
+            db.query(DocumentSeries)
+            .filter(
+                DocumentSeries.tenant_id == int(tenant_id),
+                DocumentSeries.warehouse_id == int(warehouse_id),
+                DocumentSeries.series_type == st,
+                DocumentSeries.subtype == sub,
+            )
+            .count()
+        )
+        if count < 1:
+            missing.append(sub)
+    return missing
+
+
 def seed_default_document_series(db: Session) -> int:
-    """Create default series for every tenant↔warehouse link. Returns rows created (approx)."""
+    """Create default series for every tenant↔warehouse link. Returns rows created."""
     total = 0
     for tenant_id, warehouse_id in _tenant_warehouse_pairs(db):
         total += ensure_default_document_series(db, tenant_id, warehouse_id)

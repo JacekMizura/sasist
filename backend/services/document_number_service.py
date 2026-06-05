@@ -86,24 +86,21 @@ def format_document_number(
 
 
 def _should_reset_counter(series: DocumentSeries, now: datetime) -> bool:
-    if bool(getattr(series, "yearly_reset", False)) or bool(getattr(series, "reset_each_period", False)):
-        last = getattr(series, "last_number_period", None)
-        if last is None:
-            return False
-        try:
-            last_y = int(str(last).split("-")[0])
-            return last_y != int(now.year)
-        except (TypeError, ValueError):
-            return False
+    last = getattr(series, "last_number_period", None)
+    if last is None:
+        return False
     if bool(getattr(series, "monthly_reset", False)):
-        last = getattr(series, "last_number_period", None)
-        if last is None:
-            return False
         try:
             parts = str(last).split("-")
             last_y, last_m = int(parts[0]), int(parts[1])
             return last_y != int(now.year) or last_m != int(now.month)
         except (TypeError, ValueError, IndexError):
+            return False
+    if bool(getattr(series, "yearly_reset", False)) or bool(getattr(series, "reset_each_period", False)):
+        try:
+            last_y = int(str(last).split("-")[0])
+            return last_y != int(now.year)
+        except (TypeError, ValueError):
             return False
     return False
 

@@ -44,6 +44,7 @@ from ..services.stock_document_service import (
     patch_stock_document_metadata,
     set_stock_document_receiving_target,
 )
+from ..services.document_series_seed_service import ensure_default_document_series
 from ..services.wms_audit_service import touch_wms_operation_session
 
 router = APIRouter(prefix="/stock-documents", tags=["Stock documents"])
@@ -58,6 +59,16 @@ def list_stock_documents(
     warehouse_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
+    if warehouse_id is not None:
+        try:
+            ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
+        except Exception:
+            _logger.exception(
+                "ensure_default_document_series failed in list_stock_documents tenant=%s warehouse=%s",
+                tenant_id,
+                warehouse_id,
+            )
+            db.rollback()
     q = db.query(StockDocument).filter(StockDocument.tenant_id == tenant_id)
     if document_type and document_type.strip():
         q = q.filter(StockDocument.document_type == document_type.strip().upper())

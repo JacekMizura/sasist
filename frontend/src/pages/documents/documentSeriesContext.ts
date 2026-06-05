@@ -31,6 +31,7 @@ export function parseDocumentsPathForSeriesContext(pathname: string): DocumentSe
     const map: Record<string, DocumentSeriesSubtype> = {
       pz: "PZ",
       wz: "WZ",
+      mm: "MM",
       rw: "RW",
       pw: "PW",
     };

@@ -11,7 +11,10 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import engine, get_db
 from ..db.schema_upgrade import ensure_document_series_extended_columns
 from ..models.document_series import DocumentSeries
-from ..services.document_series_seed_service import ensure_default_document_series
+from ..services.document_series_seed_service import (
+    ensure_default_document_series,
+    missing_operational_subtypes,
+)
 from ..models.order_ui_status import OrderUiStatus
 from ..schemas.document_series import (
     DocumentSeriesBase,
@@ -63,6 +66,22 @@ def _coerce_delete_mode(raw: object) -> str:
     return s if s in _VALID_DELETE_MODES else "ASK"
 
 
+def _coerce_color(raw: object) -> str:
+    s = str(raw or "#64748b").strip()
+    if s.startswith("#") and len(s) in (4, 7):
+        return s
+    return "#64748b"
+
+
+def _coerce_vat_rate(raw: object) -> Optional[int]:
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _mini_status(row: Optional[OrderUiStatus]) -> Optional[OrderUiStatusMiniOut]:
     if row is None:
         return None
@@ -79,7 +98,7 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         name=str(row.name or ""),
         prefix=str(row.prefix or ""),
         suffix=str(row.suffix or ""),
-        color=str(row.color or "#64748b"),
+        color=_coerce_color(row.color),
         type=series_type,  # type: ignore[arg-type]
         subtype=_coerce_subtype(row.subtype, series_type),  # type: ignore[arg-type]
         correction_series_id=str(row.correction_series_id).strip() if row.correction_series_id else None,
@@ -90,9 +109,7 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         vat_source=str(row.vat_source).strip().upper() if row.vat_source else None,  # type: ignore[arg-type]
         vat_calc_shipping=str(getattr(row, "vat_calc_shipping", None) or "DEFAULT").strip().upper(),  # type: ignore[arg-type]
         vat_calc_payment=str(getattr(row, "vat_calc_payment", None) or "DEFAULT").strip().upper(),  # type: ignore[arg-type]
-        vat_rate_percent=int(row.vat_rate_percent)
-        if getattr(row, "vat_rate_percent", None) is not None
-        else None,
+        vat_rate_percent=_coerce_vat_rate(getattr(row, "vat_rate_percent", None)),
         sale_date_source=str(row.sale_date_source or "ORDER_DATE").upper(),  # type: ignore[arg-type]
         count_shipping_cost_always=bool(row.count_shipping_cost_always),
         shipping_cost_name=str(row.shipping_cost_name or "Koszt wysyłki"),
@@ -265,6 +282,19 @@ def document_series_bulk_delete(body: DocumentSeriesBulkDeleteBody, db: Session 
     return DocumentSeriesBulkDeleteOut(deleted=int(n))
 
 
+def _safe_series_to_read(row: DocumentSeries) -> Optional[DocumentSeriesRead]:
+    try:
+        return _series_to_read(row)
+    except Exception:
+        logger.exception(
+            "document_series row serialization failed id=%s tenant=%s warehouse=%s",
+            getattr(row, "id", "?"),
+            getattr(row, "tenant_id", "?"),
+            getattr(row, "warehouse_id", "?"),
+        )
+        return None
+
+
 def _list_document_series_impl(
     db: Session,
     *,
@@ -277,7 +307,14 @@ def _list_document_series_impl(
     except Exception:
         logger.exception("ensure_document_series_extended_columns failed in list_document_series")
     try:
-        ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
+        created = ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
+        if created:
+            logger.info(
+                "document_series auto-seeded tenant=%s warehouse=%s created=%s",
+                tenant_id,
+                warehouse_id,
+                created,
+            )
     except Exception:
         logger.exception(
             "ensure_default_document_series failed tenant=%s warehouse=%s",
@@ -285,6 +322,14 @@ def _list_document_series_impl(
             warehouse_id,
         )
         db.rollback()
+    missing = missing_operational_subtypes(db, int(tenant_id), int(warehouse_id))
+    if missing:
+        logger.warning(
+            "document_series missing subtypes after ensure tenant=%s warehouse=%s missing=%s",
+            tenant_id,
+            warehouse_id,
+            missing,
+        )
     q = (
         db.query(DocumentSeries)
         .options(
@@ -302,7 +347,12 @@ def _list_document_series_impl(
     if series_type and str(series_type).strip():
         q = q.filter(DocumentSeries.series_type == str(series_type).strip().upper())
     rows = q.all()
-    return [_series_to_read(r) for r in rows]
+    out: list[DocumentSeriesRead] = []
+    for r in rows:
+        item = _safe_series_to_read(r)
+        if item is not None:
+            out.append(item)
+    return out
 
 
 @router.get("", response_model=List[DocumentSeriesRead])
@@ -313,12 +363,29 @@ def list_document_series(
     series_type: Optional[str] = Query(None, alias="type", description="Filter: SALE | WAREHOUSE | CORRECTION"),
     db: Session = Depends(get_db),
 ):
-    return _list_document_series_impl(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        series_type=series_type,
-    )
+    try:
+        return _list_document_series_impl(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            series_type=series_type,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "list_document_series failed tenant=%s warehouse=%s type=%s",
+            tenant_id,
+            warehouse_id,
+            series_type,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Nie udało się wczytać serii dokumentów. Spróbuj ponownie za chwilę.",
+                "code": "DOCUMENT_SERIES_LIST_FAILED",
+            },
+        )
 
 
 @router.post("", response_model=DocumentSeriesRead, status_code=201)
