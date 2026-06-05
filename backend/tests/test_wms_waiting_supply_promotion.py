@@ -81,7 +81,7 @@ class FullPromotionTests(unittest.TestCase):
                 return_value=5.0,
             ) as consume,
             patch(
-                "backend.services.wms_waiting_supply_promotion.recalculate_order_shortage_state"
+                "backend.services.wms_waiting_supply_promotion.apply_fulfillment_state_from_resolver"
             ),
             patch(
                 "backend.services.wms_waiting_supply_promotion.recompute_waiting_supply_for_product"
@@ -127,7 +127,7 @@ class FullPromotionTests(unittest.TestCase):
                 return_value=3.0,
             ),
             patch(
-                "backend.services.wms_waiting_supply_promotion.recalculate_order_shortage_state"
+                "backend.services.wms_waiting_supply_promotion.apply_fulfillment_state_from_resolver"
             ),
             patch(
                 "backend.services.wms_waiting_supply_promotion.recompute_waiting_supply_for_product"
@@ -174,7 +174,7 @@ class FullPromotionTests(unittest.TestCase):
                 return_value=20.0,
             ),
             patch(
-                "backend.services.wms_waiting_supply_promotion.recalculate_order_shortage_state"
+                "backend.services.wms_waiting_supply_promotion.apply_fulfillment_state_from_resolver"
             ),
             patch(
                 "backend.services.wms_waiting_supply_promotion.recompute_waiting_supply_for_product"

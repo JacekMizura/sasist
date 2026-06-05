@@ -137,6 +137,8 @@ def _compute_state_hash(payload: dict[str, Any]) -> str:
 
 
 def log_recovery_state_snapshot(state: OrderRecoveryState, *, tag: str = "recovery.snapshot") -> None:
+    if not hasattr(state, "order_id"):
+        return
     logger.info(
         "[%s] order_id=%s state_version=%s state_hash=%s resolved_at=%s "
         "recovery_status=%s packing_allowed=%s finalize_allowed=%s "
@@ -639,3 +641,52 @@ def validate_order_finalize_allowed(
         order_id=int(state.order_id),
         order_item_id=int(first.order_line_id) if first is not None else None,
     )
+
+
+def apply_fulfillment_state_from_resolver(
+    db: Session,
+    order: Order,
+    *,
+    session_cart_id: int | None = None,
+    log: bool = True,
+) -> OrderRecoveryState:
+    """
+    Minimalna persystencja ``fulfillment_state`` / statusu panelu — wyłącznie z resolvera.
+    Bez drugiej warstwy przeliczania braków ani synchronizacji kolejki.
+    """
+    from ..services.order_fulfillment_state import (
+        MISSING as FS_MISSING,
+        NEEDS_DECISION as FS_NEEDS_DECISION,
+        PICKING as FS_PICKING,
+        READY_TO_PACK as FS_READY_TO_PACK,
+    )
+    from ..services.order_fulfillment_recompute import _resolve_panel_status_after_shortage_cleared
+
+    state = resolve_order_recovery_state(db, order, session_cart_id=session_cart_id, log=log)
+    cur = (getattr(order, "fulfillment_state", None) or "").strip().upper()
+
+    if state.packing_allowed:
+        if cur in (FS_MISSING, FS_NEEDS_DECISION, FS_PICKING, ""):
+            order.fulfillment_state = FS_READY_TO_PACK
+        _resolve_panel_status_after_shortage_cleared(db, order)
+    elif (
+        state.totals.oms_decision_lines > 0
+        or state.has_recovery_work
+        or state.has_relocation_work
+    ):
+        if cur in (FS_READY_TO_PACK, FS_PICKING, ""):
+            order.fulfillment_state = FS_NEEDS_DECISION
+    elif cur == FS_READY_TO_PACK:
+        order.fulfillment_state = FS_NEEDS_DECISION
+
+    if log:
+        logger.info(
+            "[recovery.state.apply] order_id=%s packing_allowed=%s recovery_status=%s "
+            "fulfillment_state=%s state_hash=%s",
+            int(order.id),
+            state.packing_allowed,
+            state.recovery_status,
+            (getattr(order, "fulfillment_state", None) or "").strip() or None,
+            state.state_hash,
+        )
+    return state

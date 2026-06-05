@@ -48,8 +48,8 @@ class OrderRequiresShortageHandlingTests(unittest.TestCase):
         order = SimpleNamespace(id=1, tenant_id=1, warehouse_id=1, items=[])
         db = MagicMock()
         with patch(
-            "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
-            return_value=(2, 0),
+            "backend.services.braki_order_state_service.order_braki_picking_resolved",
+            return_value=False,
         ):
             self.assertTrue(order_requires_shortage_handling(db, order))
 
@@ -57,8 +57,8 @@ class OrderRequiresShortageHandlingTests(unittest.TestCase):
         order = SimpleNamespace(id=1, tenant_id=1, warehouse_id=1, items=[])
         db = MagicMock()
         with patch(
-            "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
-            return_value=(0, 1),
+            "backend.services.braki_order_state_service.order_braki_picking_resolved",
+            return_value=False,
         ):
             self.assertTrue(order_requires_shortage_handling(db, order))
 

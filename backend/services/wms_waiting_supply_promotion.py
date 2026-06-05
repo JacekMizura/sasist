@@ -28,8 +28,8 @@ from .order_fulfillment_recompute import (
     _oms_waiting_for_stock,
     _oms_waiting_missing_cover_qty,
     _order_item_meta_dict,
-    recalculate_order_shortage_state,
 )
+from .recovery_workflow_service import apply_fulfillment_state_from_resolver
 from .wms_operational_task_service import (
     EPS,
     _close_task,
@@ -325,9 +325,16 @@ def promote_waiting_supply_for_product(
 
     for oid in orders_to_sync:
         try:
-            recalculate_order_shortage_state(db, int(oid), commit=False)
+            o_sync = (
+                db.query(Order)
+                .options(joinedload(Order.items))
+                .filter(Order.id == int(oid))
+                .first()
+            )
+            if o_sync is not None:
+                apply_fulfillment_state_from_resolver(db, o_sync, log=False)
         except Exception:
-            logger.warning("promote waiting: shortage recompute failed order_id=%s", oid, exc_info=True)
+            logger.warning("promote waiting: resolver apply failed order_id=%s", oid, exc_info=True)
 
     now = _now()
     _append_waiting_audit(

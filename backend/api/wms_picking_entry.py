@@ -892,10 +892,22 @@ def post_picking_recovery_finalize(
             completed_reason="finished",
             metadata={"order_id": int(body.order_id), "cart_id": int(body.cart_id)},
         )
-        from ..services.order_fulfillment_recompute import recalculate_order_shortage_state
+        from ..services.recovery_workflow_service import apply_fulfillment_state_from_resolver
         from ..services.wms_audit_service import emit_recovery_finished
 
-        recalculate_order_shortage_state(db, int(body.order_id), commit=False)
+        _rec_order = (
+            db.query(Order)
+            .options(joinedload(Order.items))
+            .filter(Order.id == int(body.order_id), Order.tenant_id == int(tenant_id))
+            .first()
+        )
+        if _rec_order is not None:
+            apply_fulfillment_state_from_resolver(
+                db,
+                _rec_order,
+                session_cart_id=int(body.cart_id),
+                log=True,
+            )
         emit_recovery_finished(
             db,
             tenant_id=int(tenant_id),

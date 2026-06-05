@@ -67,7 +67,8 @@ class TestRecoveryFinalizeNoRelocation(unittest.TestCase):
                 "backend.services.wms_recovery_pick_service.mark_recovery_task_done",
             ),
             patch(
-                "backend.services.order_fulfillment_recompute.recalculate_order_shortage_state",
+                "backend.services.recovery_workflow_service.apply_fulfillment_state_from_resolver",
+                return_value=SimpleNamespace(packing_allowed=True),
             ),
             patch(
                 "backend.services.wms_picking_product_list_service.emit_wms_picking_finished",

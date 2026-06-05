@@ -1110,31 +1110,11 @@ def sync_open_issue_tasks_for_warehouse(
     """
     Przed listą braków: deduplikacja OPEN zadań; opcjonalnie pełne przeliczenie stanów braków.
 
-    ``full_recalc=False`` (domyślnie przy GET listy) — szybka ścieżka bez ``recalculate_order_shortage_state``.
-    ``full_recalc=True`` — ręczne odświeżenie / skan (wszystkie kandydatury).
+    ``full_recalc`` zachowany dla kompatybilności API — stan workflow pochodzi z resolvera (bez mutacji).
     """
     purge_stale_open_order_issue_tasks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     consolidate_duplicate_open_issue_tasks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
-    if not full_recalc:
-        return
-
-    from ..services.order_fulfillment_recompute import recalculate_order_shortage_state
-
-    cand_ids = collect_shortage_queue_candidate_order_ids(
-        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
-    )
-    if not cand_ids:
-        return
-
-    orders = (
-        db.query(Order)
-        .options(joinedload(Order.items))
-        .filter(Order.id.in_(list(cand_ids)), Order.deleted_at.is_(None))
-        .all()
-    )
-    for order in orders:
-        recalculate_order_shortage_state(db, int(order.id), commit=False)
-    db.flush()
+    _ = full_recalc
 
 
 def ensure_order_issue_task_table_schema(db: Session) -> None:

@@ -71,7 +71,7 @@ from .order_fulfillment_recompute import (
     order_item_needs_substitute_pick_completion,
     recompute_order_fulfillment,
 )
-from .order_issue_task_service import count_issue_queue_operational_lines, upsert_order_issue_tasks_from_shortage
+from .order_issue_task_service import count_issue_queue_operational_lines
 from .wms_picking_shortage_settings_service import get_or_create_wms_picking_shortage_settings
 from ..schemas.picking_routing import PickListRow
 from ..schemas.wms_picking_products import (
@@ -2697,23 +2697,6 @@ def finalize_wms_picking_cart(
         )
 
     try:
-        for o in orders:
-            recalculate_order_shortage_state(db, int(o.id), commit=False)
-
-        if bool(getattr(ss, "auto_enqueue_braki", True)):
-            for o in orders:
-                if order_kinds[int(o.id)] == "all_picked":
-                    continue
-                spid = _first_shortage_product_id_for_order_issue(db, o)
-                if spid is not None:
-                    upsert_order_issue_tasks_from_shortage(
-                        db,
-                        tenant_id=int(tenant_id),
-                        warehouse_id=int(warehouse_id),
-                        order_ids=[int(o.id)],
-                        shortage_product_id=int(spid),
-                    )
-
         cart.status = CartStatus.FULL
 
         record_picking_cart_finalize_session(
@@ -2878,42 +2861,14 @@ def finalize_wms_recovery_picking_cart(
             finalized_ids.append(int(row.id))
     mark_pick_events_finalized_for_pick_ids(db, finalized_ids)
 
-    kind = _classify_order_after_picking_session(
-        o,
-        db=db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        cart_id=cid,
-    )
-    if kind == "all_picked":
-        fs = FS_READY_TO_PACK
-    elif kind == "all_missing":
-        fs = FS_MISSING
-    else:
-        fs = FS_NEEDS_DECISION
-    apply_fulfillment_state(o, fs, clear_cart=True, clear_session=True)
+    from .recovery_workflow_service import apply_fulfillment_state_from_resolver
 
-    ss = get_or_create_wms_picking_shortage_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
-    next_sid = getattr(ss, "recovery_completed_order_ui_status_id", None)
-    if next_sid is None or int(next_sid) <= 0:
-        pack = (
-            db.query(WmsPackingSettings)
-            .filter(
-                WmsPackingSettings.tenant_id == int(tenant_id),
-                WmsPackingSettings.warehouse_id == int(warehouse_id),
-            )
-            .first()
-        )
-        if pack is not None and getattr(pack, "start_status_id", None) is not None:
-            next_sid = int(pack.start_status_id)
-    if next_sid is not None and int(next_sid) > 0:
-        o.order_ui_status_id = int(next_sid)
+    post_state = apply_fulfillment_state_from_resolver(db, o, session_cart_id=cid, log=True)
+    fs = FS_READY_TO_PACK if post_state.packing_allowed else FS_NEEDS_DECISION
+    apply_fulfillment_state(o, fs, clear_cart=True, clear_session=True)
 
     mark_recovery_task_done(db, rt)
     recompute_order_fulfillment(db, int(order_id), commit=False, session_cart_id=cid)
-    from .order_fulfillment_recompute import recalculate_order_shortage_state
-
-    recalculate_order_shortage_state(db, int(order_id), commit=False)
     emit_wms_picking_finished(
         db,
         tenant_id=int(tenant_id),

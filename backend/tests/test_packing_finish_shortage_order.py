@@ -76,7 +76,13 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
                 return_value=SimpleNamespace(
                     totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=0),
                     packing_allowed=True,
+                    has_recovery_work=False,
+                    has_relocation_work=False,
                 ),
+            ),
+            patch(
+                "backend.services.recovery_workflow_service.can_order_be_packed",
+                return_value=True,
             ),
         ):
             snap = _packing_finish_validation_snapshot(db, order, log=False)
@@ -99,9 +105,15 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
             patch(
                 "backend.services.recovery_workflow_service.resolve_order_recovery_state",
                 return_value=SimpleNamespace(
-                    totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=0),
+                    totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=1),
                     packing_allowed=False,
+                    has_recovery_work=True,
+                    has_relocation_work=False,
                 ),
+            ),
+            patch(
+                "backend.services.recovery_workflow_service.can_order_be_packed",
+                return_value=False,
             ),
         ):
             snap = _packing_finish_validation_snapshot(db, order, log=False)

@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Usunięcie legacy shortage mutation layer
+
+- Usunięto ``recalculate_order_shortage_state`` / ``sync_shortage_workflow_for_order`` — stan wyłącznie z resolvera.
+- ``recompute_order_fulfillment`` — tylko kolumny ``wms_picking_line_missing_qty`` (bez mutacji workflow).
+- ``apply_fulfillment_state_from_resolver`` — minimalna persystencja ``fulfillment_state`` + status panelu.
+- finalize-cart: usunięto pętlę ``recalculate_order_shortage_state`` i ``upsert_order_issue_tasks`` po domknięciu.
+- packing enter / finish: ``packing_allowed`` z resolvera; bez starych filtrów ``unresolved_shortage``.
+
 ## 2026-06-04 — Workflow unification (finalize / relocation / packing SSOT)
 
 - ``RecoveryWorkflowService`` — ``can_order_be_packed``, ``validate_order_finalize_allowed``, ``sync_relocation_tasks_from_recovery_state``, ``state_hash`` / ``state_version`` / ``resolved_at``.

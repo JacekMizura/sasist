@@ -15,21 +15,12 @@ from ..models.order_item import (
     OrderItem,
     order_item_is_replaced_line,
 )
-from ..models.order_issue_task import OrderIssueTask
 from ..services.fulfillment_event_service import (
     line_picked_sum_for_order,
     sum_line_events,
     sum_missing_events_for_line_cart,
     sum_pick_events_for_line_cart,
 )
-from ..services.order_fulfillment_state import (
-    MISSING as FS_MISSING,
-    NEEDS_DECISION as FS_NEEDS_DECISION,
-    PICKING as FS_PICKING,
-    READY_TO_PACK as FS_READY_TO_PACK,
-)
-from ..services.order_issue_task_service import mark_task_done
-
 if TYPE_CHECKING:
     pass
 
@@ -387,80 +378,14 @@ def _order_fully_picked_for_fulfillment(db: Session, order: Order) -> bool:
     return True
 
 
-def _enforce_packing_queue_eligibility(db: Session, order: Order) -> None:
-    """Zamówienia z aktywnym workflow braków nie mogą mieć ``READY_TO_PACK`` (kolejka pakowania)."""
-    from .braki_order_state_service import order_can_show_ready_pack
-
-    cur = (getattr(order, "fulfillment_state", None) or "").strip().upper()
-    if cur == FS_READY_TO_PACK and not order_can_show_ready_pack(db, order):
-        order.fulfillment_state = FS_NEEDS_DECISION
-
-
-def sync_shortage_workflow_for_order(db: Session, order: Order) -> None:
-    """
-    Utrzymuje spójność: kolejka WMS Braki (``OrderIssueTask``), status panelu OMS, ``fulfillment_state``.
-    """
-    from .braki_order_state_service import (
-        log_braki_shortage_sync,
-        log_braki_workflow_resolution,
-        order_braki_workflow_complete,
-    )
-    from .order_issue_task_service import ensure_open_issue_task_for_order
-    from .wms_operational_task_service import (
-        close_operational_tasks_for_order,
-        dual_write_enabled,
-        sync_operational_tasks_for_order,
-    )
-
-    _clear_fulfillment_shortage_state_if_resolved(db, order)
-    _enforce_packing_queue_eligibility(db, order)
-    if not order_braki_workflow_complete(db, order):
-        ensure_open_issue_task_for_order(db, order)
-        log_braki_shortage_sync(db, order, reason="sync_open")
-        log_braki_workflow_resolution(db, order, reason="sync_open")
-        if dual_write_enabled():
-            try:
-                sync_operational_tasks_for_order(db, order)
-            except Exception:
-                import logging
-
-                logging.getLogger(__name__).warning(
-                    "wms_operational_task sync failed order_id=%s",
-                    getattr(order, "id", None),
-                    exc_info=True,
-                )
-        return
-
-    _close_open_issue_tasks_if_no_shortage(db, order)
-    _enforce_packing_queue_eligibility(db, order)
-    log_braki_shortage_sync(db, order, reason="sync_close")
-    log_braki_workflow_resolution(db, order, reason="sync_close")
-    if dual_write_enabled():
-        try:
-            close_operational_tasks_for_order(db, order)
-        except Exception:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "wms_operational_task close failed order_id=%s",
-                getattr(order, "id", None),
-                exc_info=True,
-            )
-    _resolve_panel_status_after_shortage_cleared(db, order)
-    _clear_fulfillment_shortage_state_if_resolved(db, order)
-
-
-def recalculate_order_shortage_state(
+def recompute_order_fulfillment(
     db: Session,
     order_id: int,
     *,
     commit: bool = True,
     session_cart_id: int | None = None,
 ) -> None:
-    """
-    Jednolite przeliczenie po każdej akcji braku (OMS / WMS):
-    ilości braków na liniach + kolejka Braki + status zamówienia + fulfillment_state.
-    """
+    """Aktualizuje kolumny ``wms_picking_line_missing_qty`` na liniach — bez mutacji workflow."""
     order = (
         db.query(Order)
         .options(joinedload(Order.items))
@@ -470,52 +395,5 @@ def recalculate_order_shortage_state(
     if order is None:
         return
     _recompute_line_missing_columns(db, order, session_cart_id=session_cart_id)
-    sync_shortage_workflow_for_order(db, order)
     if commit:
         db.commit()
-
-
-def recompute_order_fulfillment(
-    db: Session,
-    order_id: int,
-    *,
-    commit: bool = True,
-    session_cart_id: int | None = None,
-) -> None:
-    """Przelicza braki na liniach i synchronizuje workflow braków (alias: ``recalculate_order_shortage_state``)."""
-    recalculate_order_shortage_state(
-        db,
-        int(order_id),
-        commit=commit,
-        session_cart_id=session_cart_id,
-    )
-
-
-def _close_open_issue_tasks_if_no_shortage(db: Session, order: Order) -> None:
-    """Zamyka OPEN ``order_issue_tasks`` gdy workflow braków jest faktycznie zakończony."""
-    from .braki_order_state_service import order_braki_workflow_complete
-
-    if not order_braki_workflow_complete(db, order):
-        return
-    tasks = (
-        db.query(OrderIssueTask)
-        .filter(
-            OrderIssueTask.order_id == int(order.id),
-            OrderIssueTask.status == "OPEN",
-        )
-        .all()
-    )
-    for t in tasks:
-        mark_task_done(db, t, "Braki wyzerowane — zamknięto z kolejki (OMS/recompute)")
-
-
-def _clear_fulfillment_shortage_state_if_resolved(db: Session, order: Order) -> None:
-    """Po rozliczeniu braków magazynowo — ustaw ``READY_TO_PACK`` (nie czekaj na pełne pakowanie)."""
-    from .braki_order_state_service import order_braki_picking_resolved
-
-    if not order_braki_picking_resolved(db, order):
-        return
-    cur = (getattr(order, "fulfillment_state", None) or "").strip().upper()
-    if cur not in (FS_MISSING, FS_NEEDS_DECISION, FS_PICKING):
-        return
-    order.fulfillment_state = FS_READY_TO_PACK

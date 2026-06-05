@@ -257,31 +257,25 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
 
 
 def _assert_order_packable_for_finish(db: Session, order: Order) -> None:
-    from .recovery_workflow_service import can_order_be_packed
+    from .recovery_workflow_service import (
+        can_order_be_packed,
+        log_recovery_state_snapshot,
+        resolve_order_recovery_state,
+    )
 
-    snap = _packing_finish_validation_snapshot(db, order, log=True)
-    if snap["packable"] and can_order_be_packed(db, order, require_physical_pack=True):
+    state = resolve_order_recovery_state(db, order, log=False)
+    log_recovery_state_snapshot(state, tag="wms.packing.finish.validation")
+    if can_order_be_packed(db, order, require_physical_pack=True):
         return
-    if int(snap["issue_queue_oms"]) > 0:
+    if state.totals.oms_decision_lines > 0 or state.has_recovery_work:
         raise PackingScanError(
             "UNRESOLVED_SHORTAGES",
-            message="Zamówienie nadal ma nierozwiązane braki wymagające decyzji OMS",
+            message="Zamówienie nadal ma nierozwiązane braki lub dogrywkę zbierki",
         )
-    if any(u["reason"] == "unresolved_shortage" for u in snap["unresolved_lines"]):
+    if state.has_relocation_work:
         raise PackingScanError(
             "UNRESOLVED_SHORTAGES",
-            message="Zamówienie ma nierozwiązane aktywne braki magazynowe",
-        )
-    unresolved = snap["unresolved_lines"]
-    if unresolved:
-        first = unresolved[0]
-        raise PackingScanError(
-            "LINE_NOT_FULLY_PACKED",
-            message=(
-                f"Nie można domknąć pakowania — linia {first['order_item_id']} "
-                f"wymaga {first['required']} szt., spakowano {first['packed']}"
-            ),
-            order_item_id=int(first["order_item_id"]),
+            message="Zamówienie wymaga dokończenia rozlokowania przed pakowaniem",
         )
     raise PackingScanError(
         "ORDER_NOT_FULLY_PACKED",
@@ -2639,7 +2633,7 @@ def resolve_packing_entry_for_order(
     Wejście bezpośrednio na ekran pakowania zamówienia (bootstrap sesji frontend + DB).
     """
     from ..schemas.wms_packing import WmsPackingEntryOut
-    from .braki_order_state_service import order_can_show_ready_pack
+    from .recovery_workflow_service import apply_fulfillment_state_from_resolver
     from .wms_audit_service import ensure_wms_packing_session, get_open_wms_packing_session
 
     order = (
@@ -2658,7 +2652,8 @@ def resolve_packing_entry_for_order(
     )
     if order is None:
         raise ValueError("Zamówienie nie znalezione.")
-    if not order_can_show_ready_pack(db, order):
+    state = apply_fulfillment_state_from_resolver(db, order, log=True)
+    if not state.packing_allowed:
         raise ValueError("Zamówienie nie jest gotowe do pakowania.")
 
     mode, cart_id = _infer_packing_mode_for_order(order)
@@ -2798,9 +2793,9 @@ def resolve_packing_entry_for_order(
 def get_oms_order_wms_fulfillment_card(db: Session, order_id: int) -> Optional[WmsPackingOrderCard]:
     """Karta linii magazynowych dla panelu OMS (bez kolejki pakowania WMS): lokalizacja, stany, kompletacja."""
     from ..services.order_fulfillment_recompute import recompute_order_fulfillment
+    from ..services.recovery_workflow_service import apply_fulfillment_state_from_resolver
 
-    recompute_order_fulfillment(db, int(order_id), commit=True)
-    from .braki_order_state_service import log_wms_order_status_compute
+    recompute_order_fulfillment(db, int(order_id), commit=False)
 
     order = (
         db.query(Order)
@@ -2817,6 +2812,9 @@ def get_oms_order_wms_fulfillment_card(db: Session, order_id: int) -> Optional[W
     )
     if order is None:
         return None
+    apply_fulfillment_state_from_resolver(db, order, log=False)
+    from .braki_order_state_service import log_wms_order_status_compute
+
     log_wms_order_status_compute(db, order, source="get_oms_order_wms_fulfillment_card")
     return _build_packing_order_card(
         order,

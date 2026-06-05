@@ -65,11 +65,8 @@ from ..schemas.customer import CustomerBriefOut
 from ..schemas.wms_packing import OrderSelectCartonBody, OrderSelectCartonResponse, WmsPackingOrderCard
 from ..models.fulfillment_event import FE_PICK, FE_REPLACED, FE_WAITING
 from ..services.fulfillment_event_service import append_event, delete_line_events_of_type, sum_line_events
-from ..services.order_fulfillment_recompute import (
-    compute_line_missing_qty,
-    recalculate_order_shortage_state,
-    recompute_order_fulfillment,
-)
+from ..services.order_fulfillment_recompute import compute_line_missing_qty, recompute_order_fulfillment
+from ..services.recovery_workflow_service import apply_fulfillment_state_from_resolver
 from ..services.wms_recovery_pick_service import ensure_recovery_pick_task
 from ..services.order_fulfillment_state import touch_picking_in_progress
 from ..services.wms_packing_service import apply_order_selected_carton, get_oms_order_wms_fulfillment_card
@@ -2598,7 +2595,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
             removal_type=removal_type,
         )
         _recompute_order_value_and_volume(order, db)
-        recalculate_order_shortage_state(db, int(order_id), commit=False)
+        apply_fulfillment_state_from_resolver(db, order, log=True)
         db.commit()
         order = (
             db.query(Order)
@@ -2914,7 +2911,7 @@ def patch_order_item_line(
 
     _recompute_order_value_and_volume(order, db)
     db.flush()
-    recalculate_order_shortage_state(db, int(order_id), commit=False)
+    apply_fulfillment_state_from_resolver(db, order, log=True)
     ord2 = (
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.product))
