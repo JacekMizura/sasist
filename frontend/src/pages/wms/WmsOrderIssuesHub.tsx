@@ -373,17 +373,20 @@ export default function WmsOrderIssuesHub() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
             {filteredTasks.map((t) => {
-              const sl = shortageLinesForCard(t);
-              const uShort = t.unresolved_shortage_count ?? 0;
-              const r = t.replacement_pick_pending_count ?? 0;
-              const activeLineCount = Math.max(0, uShort + r);
-              const lineCount = sl.length > 0 ? sl.length : activeLineCount;
-              const totalMissing =
-                sl.length > 0
-                  ? sl.reduce((s, l) => s + (Number(l.missing_qty) || 0), 0)
-                  : activeLineCount;
-              const num = displayOrderNumber(t.order_number).replace("#", "");
               const wf = normalizeWorkflowStatus(t);
+              const uShort = t.unresolved_shortage_count ?? 0;
+              const recoveryLineCount =
+                t.recovery_active_lines != null && t.recovery_active_lines >= 0
+                  ? t.recovery_active_lines
+                  : (t.replacement_pick_pending_count ?? 0);
+              const lineCount =
+                wf === "awaiting"
+                  ? Math.max(0, uShort)
+                  : wf === "pick" || wf === "pick_and_relocation"
+                    ? Math.max(0, recoveryLineCount)
+                    : Math.max(0, recoveryLineCount || uShort);
+              const totalMissing = lineCount;
+              const num = displayOrderNumber(t.order_number).replace("#", "");
               const { accent, badge, status, icon } = cardAccentForWorkflow(wf);
 
               let qtyLine = "";
@@ -395,11 +398,13 @@ export default function WmsOrderIssuesHub() {
               } else if (wf === "awaiting") {
                 missingNumber = Math.max(1, uShort);
                 qtyLine = summaryFromApi || "Oczekuje na decyzję OMS";
-              } else if (lineCount > 0 || r > 0) {
-                missingNumber = activeLineCount || lineCount;
+              } else if (lineCount > 0 || recoveryLineCount > 0) {
+                missingNumber = lineCount;
                 qtyLine =
                   summaryFromApi ||
-                  (r > 0 ? "Oczekujące produkty do zebrania" : `${lineCount} ${plProduktyWord(lineCount)} · brak do zebrania`);
+                  (recoveryLineCount > 0
+                    ? "Oczekujące produkty do zebrania"
+                    : `${lineCount} ${plProduktyWord(lineCount)} · brak do zebrania`);
               } else {
                 missingNumber = Math.max(1, uShort);
                 qtyLine = summaryFromApi || (t.issue_queue_status_label ?? "").trim() || "Wymaga uwagi";

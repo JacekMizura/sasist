@@ -1234,9 +1234,9 @@ def archive_order_issue_task(
 
     rec_state = resolve_order_recovery_state(db, order, log=False)
     if not can_close_braki_shortage(db, order, state=rec_state):
-        if rec_state.has_relocation_work:
+        if rec_state.has_pending_relocation:
             raise ValueError("Nie można zamknąć — trwa rozlokowanie zebranego towaru.")
-        if rec_state.has_recovery_work or rec_state.totals.recovery_lines > 0:
+        if rec_state.has_recovery_pick_work or rec_state.totals.recovery_lines > 0:
             raise ValueError("Nie można zamknąć — otwarta dogrywka zbierki.")
         if rec_state.totals.oms_decision_lines > 0:
             raise ValueError("Nie można zamknąć — wymagana decyzja OMS.")

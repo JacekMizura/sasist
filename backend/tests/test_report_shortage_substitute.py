@@ -384,6 +384,7 @@ class RelocationOnPickedReplacementRemovalTests(unittest.TestCase):
                     visible_in_queue=False,
                     visible_in_recovery_pick=False,
                     visible_in_relocation=True,
+                    visible_in_recovery_pick=False,
                     visible_in_finalize=True,
                     packing_eligible=True,
                     finalize_allowed=True,

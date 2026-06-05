@@ -108,7 +108,15 @@ class TestRelocationResolverGate:
 
         mock_state.return_value = _state(
             has_relocation_work=False,
-            lines=[_line(relocation_required=False, picked_qty=0.0, active_recovery=True)],
+            lines=[
+                _line(
+                    relocation_required=False,
+                    visible_in_relocation=False,
+                    picked_qty=0.0,
+                    active_recovery=True,
+                    visible_in_recovery_pick=True,
+                )
+            ],
         )
         order = SimpleNamespace(id=500, tenant_id=1, warehouse_id=1, cart_id=9)
         db = MagicMock()

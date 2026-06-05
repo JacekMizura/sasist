@@ -613,7 +613,7 @@ def ensure_relocation_for_order_item_picks(
 
     rec_state = resolve_order_recovery_state(db, order, log=False)
     line_state = next((ln for ln in rec_state.lines if int(ln.order_line_id) == oiid), None)
-    if line_state is None or not line_state.relocation_required:
+    if line_state is None or not line_state.visible_in_relocation:
         logger.info(
             "[wms.relocation.create] skip order_id=%s order_item_id=%s picked_qty=%s "
             "reason=resolver_relocation_not_required relocation_required=%s source=%s",

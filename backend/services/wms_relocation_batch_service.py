@@ -95,9 +95,22 @@ def _collect_pending_relocation_rows_for_order(
     warehouse_id: int,
     order_id: int,
     order_item_ids: set[int] | None = None,
+    sync_from_resolver: bool = True,
 ) -> list[dict[str, Any]]:
     """Aktywne alokacje RELOCATION (pending/partial) dla zamówienia."""
     oid = int(order_id)
+    if sync_from_resolver:
+        order = db.query(Order).filter(Order.id == oid).first()
+        if order is not None:
+            from .recovery_workflow_service import ensure_relocation_tasks_synced_for_order
+
+            ensure_relocation_tasks_synced_for_order(
+                db,
+                order,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                source_event_id=f"relocation_ui_sync:{oid}",
+            )
     rows: list[dict[str, Any]] = []
     tasks = (
         db.query(WmsOperationalTask)

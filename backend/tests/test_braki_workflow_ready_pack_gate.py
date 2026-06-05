@@ -21,10 +21,18 @@ def _order(**kwargs):
     return SimpleNamespace(**defaults)
 
 
-def _rec_state(*, packing_allowed: bool):
+def _rec_state(*, packing_allowed: bool, oms_decision_lines: int = 0):
     return SimpleNamespace(
         packing_allowed=packing_allowed,
-        totals=SimpleNamespace(recovery_lines=0, oms_decision_lines=0, unresolved_lines=0),
+        has_recovery_pick_work=False,
+        has_pending_relocation=False,
+        relocation_alloc_pending=0,
+        relocation_alloc_partial=0,
+        totals=SimpleNamespace(
+            recovery_lines=0,
+            oms_decision_lines=oms_decision_lines,
+            unresolved_lines=0,
+        ),
     )
 
 
@@ -34,19 +42,10 @@ class TestBrakiReadyPackGate(unittest.TestCase):
         db = MagicMock()
         with patch(
             "backend.services.recovery_workflow_service.resolve_order_recovery_state",
-            return_value=_rec_state(packing_allowed=False),
+            return_value=_rec_state(packing_allowed=False, oms_decision_lines=1),
         ), patch(
             "backend.services.braki_workflow_service.count_issue_queue_operational_lines",
             return_value=(0, 0),
-        ), patch(
-            "backend.services.braki_workflow_service.order_needs_warehouse_pick",
-            return_value=False,
-        ), patch(
-            "backend.services.braki_workflow_service._order_relocation_alloc_states",
-            return_value=(0, 0, 0),
-        ), patch(
-            "backend.services.braki_order_state_service.order_has_pending_shortage_decision",
-            return_value=True,
         ):
             status = resolve_braki_workflow_status(db, order)
         self.assertEqual(status, BRAKI_FILTER_AWAITING)
@@ -60,15 +59,6 @@ class TestBrakiReadyPackGate(unittest.TestCase):
         ), patch(
             "backend.services.braki_workflow_service.count_issue_queue_operational_lines",
             return_value=(0, 0),
-        ), patch(
-            "backend.services.braki_workflow_service.order_needs_warehouse_pick",
-            return_value=False,
-        ), patch(
-            "backend.services.braki_workflow_service._order_relocation_alloc_states",
-            return_value=(0, 0, 0),
-        ), patch(
-            "backend.services.braki_order_state_service.order_has_pending_shortage_decision",
-            return_value=False,
         ):
             status = resolve_braki_workflow_status(db, order)
         self.assertEqual(status, BRAKI_FILTER_READY_PACK)

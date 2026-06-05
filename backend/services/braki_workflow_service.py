@@ -70,18 +70,12 @@ def _order_relocation_alloc_states(
 
 
 def order_needs_warehouse_pick(db: Session, order: Order, *, r_pend: int) -> bool:
-    if int(r_pend) > 0:
-        return True
-    if get_open_recovery_task_for_order(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order_id=int(order.id),
-    ):
-        return True
+    """Delegacja do ``has_recovery_pick_work`` — bez dodatkowych filtrów."""
     from .recovery_workflow_service import resolve_order_recovery_state
 
-    return resolve_order_recovery_state(db, order, log=False).has_recovery_work
+    if int(r_pend) > 0:
+        return True
+    return resolve_order_recovery_state(db, order, log=False).has_recovery_pick_work
 
 
 def resolve_braki_workflow_status(
@@ -101,23 +95,15 @@ def resolve_braki_workflow_status(
     u_short = int(u_short)
     r_pend = int(r_pend)
 
-    needs_pick = order_needs_warehouse_pick(db, order, r_pend=r_pend)
-    reloc_pending, reloc_partial, _reloc_done = _order_relocation_alloc_states(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order_id=int(order.id),
-    )
-    needs_reloc = reloc_pending > 0
-    needs_reloc_partial = reloc_partial > 0
-
-    from .braki_order_state_service import order_has_pending_shortage_decision
     from .recovery_workflow_service import resolve_order_recovery_state
 
     rec_state = resolve_order_recovery_state(db, order, log=False)
+    needs_pick = rec_state.has_recovery_pick_work
+    needs_reloc_partial = rec_state.relocation_alloc_partial > 0
+    needs_reloc = rec_state.has_pending_relocation and not needs_reloc_partial
     pack_ready = rec_state.packing_allowed
-    pending_oms = order_has_pending_shortage_decision(db, order)
-    recovery_possible = bool(needs_pick or int(r_pend) > 0)
+    pending_oms = rec_state.totals.oms_decision_lines > 0
+    recovery_possible = needs_pick
 
     if pack_ready and not pending_oms:
         status = BRAKI_FILTER_READY_PACK
@@ -135,8 +121,12 @@ def resolve_braki_workflow_status(
         status = BRAKI_FILTER_AWAITING
     elif pack_ready:
         status = BRAKI_FILTER_READY_PACK
+    elif rec_state.has_recovery_pick_work:
+        status = BRAKI_FILTER_PICK
+    elif rec_state.has_pending_relocation:
+        status = BRAKI_FILTER_RELOCATION
     else:
-        status = BRAKI_FILTER_READY_PACK
+        status = BRAKI_FILTER_AWAITING
 
     if status == BRAKI_FILTER_READY_PACK and not rec_state.packing_allowed:
         if pending_oms:
@@ -170,8 +160,8 @@ def resolve_braki_workflow_status(
         status,
         u_short,
         r_pend,
-        reloc_pending,
-        reloc_partial,
+        rec_state.relocation_alloc_pending,
+        rec_state.relocation_alloc_partial,
         needs_pick,
         pending_oms,
         rec_state.packing_allowed,

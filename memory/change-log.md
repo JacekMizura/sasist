@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Resolver consistency: packing / queue / relocation
+
+- Agregaty zamówienia w resolverze: ``has_recovery_pick_work``, ``has_pending_relocation``, ``has_unresolved_lines``, ``packing_allowed``, ``relocation_alloc_pending/partial``.
+- ``get_recovery_pick_lines`` — wyłącznie ``visible_in_recovery_pick``; test spójności z ``count_recovery_operational_lines``.
+- ``sync_relocation_tasks_from_recovery_state`` — bez globalnego skip przy aktywnym zadaniu; ``ensure_relocation_tasks_synced_for_order`` dla UI ZWK.
+- ``braki_workflow_service`` — status filtrów tylko z agregatów resolvera (bez ``_order_relocation_alloc_states`` / ``order_has_pending_shortage_decision``).
+- Frontend ``WmsOrderIssuesHub`` — licznik kart z ``recovery_active_lines`` (nie ``shortage_lines.length``).
+
 ## 2026-06-04 — Braki: przywrócono CTA „Zamknij brak” (resolver)
 
 - ``can_close_braki_shortage`` + ``recovery_state_for_braki_task`` — pola API: ``can_close_shortage``, ``recovery_packing_allowed``.

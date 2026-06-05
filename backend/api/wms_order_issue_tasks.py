@@ -61,7 +61,12 @@ from ..services.braki_workflow_service import (
     resolve_braki_workflow_status,
     braki_workflow_status_label,
 )
-from ..services.recovery_workflow_service import recovery_state_for_braki_task
+from ..services.recovery_workflow_service import (
+    build_braki_remaining_pick_lines_from_state,
+    build_braki_shortage_lines_from_state,
+    recovery_state_for_braki_task,
+    resolve_order_recovery_state,
+)
 from ..services.wms_recovery_pick_service import braki_queue_bucket
 from ..services.wms_audit_service import complete_wms_operation_session, touch_wms_operation_session
 
@@ -235,20 +240,29 @@ def serialize_order_issue_task_item(
             warehouse_id=int(t.warehouse_id),
             order=o,
         )
+        rec_st = resolve_order_recovery_state(db, o, log=False)
+        resolver_rows = build_braki_shortage_lines_from_state(
+            db,
+            o,
+            rec_st,
+            tenant_id=int(t.tenant_id),
+            warehouse_id=int(t.warehouse_id),
+        )
+        for row in resolver_rows:
+            shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
         order_context_model = OrderIssueOrderContext(
             collected_lines=[OrderIssueDetailLine.model_validate(r) for r in ctx.get("collected_lines", [])],
             shortage_decision_lines=[
-                OrderIssueDetailLine.model_validate(r) for r in ctx.get("shortage_decision_lines", [])
+                OrderIssueDetailLine.model_validate(r)
+                for r in resolver_rows
+                if (r.get("line_kind") or "") == "shortage_unresolved"
             ],
-            remaining_pick_lines=[OrderIssueDetailLine.model_validate(r) for r in ctx.get("remaining_pick_lines", [])],
+            remaining_pick_lines=[
+                OrderIssueDetailLine.model_validate(r)
+                for r in resolver_rows
+                if (r.get("line_kind") or "") == "remaining"
+            ],
         )
-        for row in build_shortage_lines_for_order(
-            db,
-            tenant_id=int(t.tenant_id),
-            warehouse_id=int(t.warehouse_id),
-            order=o,
-        ):
-            shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
         if u_short > 0 and not shortage_line_models and missing:
             for row in build_fallback_shortage_lines_from_task_snapshot(
                 db,

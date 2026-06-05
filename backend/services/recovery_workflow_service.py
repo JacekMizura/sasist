@@ -107,8 +107,13 @@ class OrderRecoveryState:
     recovery_status: RecoveryStatus
     lines: list[RecoveryLineState] = field(default_factory=list)
     totals: RecoveryTotals = field(default_factory=RecoveryTotals)
+    has_recovery_pick_work: bool = False
+    has_pending_relocation: bool = False
+    has_unresolved_lines: bool = False
     has_recovery_work: bool = False
     has_relocation_work: bool = False
+    relocation_alloc_pending: int = 0
+    relocation_alloc_partial: int = 0
     packing_allowed: bool = False
     finalize_allowed: bool = False
     state_version: int = STATE_VERSION
@@ -121,8 +126,13 @@ class OrderRecoveryState:
             "recovery_status": self.recovery_status,
             "lines": [ln.to_dict() for ln in self.lines],
             "totals": self.totals.to_dict(),
+            "has_recovery_pick_work": self.has_recovery_pick_work,
+            "has_pending_relocation": self.has_pending_relocation,
+            "has_unresolved_lines": self.has_unresolved_lines,
             "has_recovery_work": self.has_recovery_work,
             "has_relocation_work": self.has_relocation_work,
+            "relocation_alloc_pending": self.relocation_alloc_pending,
+            "relocation_alloc_partial": self.relocation_alloc_partial,
             "packing_allowed": self.packing_allowed,
             "finalize_allowed": self.finalize_allowed,
             "state_version": self.state_version,
@@ -274,7 +284,9 @@ def resolve_order_recovery_state(
         order_id=oid,
         log_checks=False,
     )
-    has_active_relocation_task = int(reloc_pending) + int(reloc_partial) > 0
+    reloc_pending_i = int(reloc_pending)
+    reloc_partial_i = int(reloc_partial)
+    has_active_relocation_task = reloc_pending_i + reloc_partial_i > 0
 
     line_states: list[RecoveryLineState] = []
     totals = RecoveryTotals()
@@ -360,11 +372,18 @@ def resolve_order_recovery_state(
         blocks_finalize = not line_resolved and not active_recovery and requires_oms
         visible_in_finalize = not _line_skipped(oi)
 
-        visible_in_recovery_pick = active_recovery
-        visible_in_queue = requires_oms or active_recovery
-        visible_in_relocation = relocation_required or has_active_relocation_task
+        visible_in_recovery_pick = active_recovery and recovery_qty > _EPS
+        visible_in_queue = requires_oms or visible_in_recovery_pick
+        visible_in_relocation = relocation_required and picked > _EPS
 
-        packing_eligible = line_resolved and not active_recovery and not requires_oms
+        packing_eligible = (
+            line_resolved
+            and not visible_in_recovery_pick
+            and not active_recovery
+            and not requires_oms
+            and unresolved_qty <= _EPS
+            and not visible_in_relocation
+        )
         finalize_allowed = (
             packing_eligible
             or active_recovery
@@ -374,10 +393,11 @@ def resolve_order_recovery_state(
 
         if requires_oms:
             totals.oms_decision_lines += 1
-        if active_recovery:
+        if visible_in_recovery_pick:
             totals.recovery_lines += 1
+        if unresolved_qty > _EPS or active_recovery:
             totals.unresolved_lines += 1
-        if relocation_required:
+        if visible_in_relocation:
             totals.relocation_lines += 1
         if not packing_eligible:
             totals.packing_blocked_lines += 1
@@ -428,21 +448,30 @@ def resolve_order_recovery_state(
                 row.reason,
             )
 
-    has_recovery_work = totals.recovery_lines > 0 and totals.oms_decision_lines == 0
-    has_relocation_work = has_active_relocation_task or totals.relocation_lines > 0
+    has_recovery_pick_work = any(ln.visible_in_recovery_pick for ln in line_states)
+    has_unresolved_lines = any(
+        ln.unresolved_qty > _EPS or ln.active_recovery or ln.visible_in_recovery_pick
+        for ln in line_states
+    )
+    has_pending_relocation = has_active_relocation_task or any(
+        ln.visible_in_relocation for ln in line_states
+    )
+    has_recovery_work = has_recovery_pick_work and totals.oms_decision_lines == 0
+    has_relocation_work = has_pending_relocation
     packing_allowed = (
-        totals.packing_blocked_lines == 0
-        and totals.oms_decision_lines == 0
-        and totals.recovery_lines == 0
-        and not has_active_relocation_task
+        totals.oms_decision_lines == 0
+        and not has_recovery_pick_work
+        and not has_unresolved_lines
+        and not has_pending_relocation
+        and all(ln.packing_eligible for ln in line_states)
     )
     finalize_allowed = all(ln.finalize_allowed for ln in line_states) if line_states else True
 
     if totals.oms_decision_lines > 0:
         recovery_status: RecoveryStatus = "awaiting_oms"
-    elif has_recovery_work:
+    elif has_recovery_pick_work:
         recovery_status = "recovery_pending"
-    elif has_relocation_work:
+    elif has_pending_relocation:
         recovery_status = "relocation_pending"
     elif packing_allowed:
         recovery_status = "ready_pack"
@@ -455,8 +484,13 @@ def resolve_order_recovery_state(
         recovery_status=recovery_status,
         lines=line_states,
         totals=totals,
+        has_recovery_pick_work=has_recovery_pick_work,
+        has_pending_relocation=has_pending_relocation,
+        has_unresolved_lines=has_unresolved_lines,
         has_recovery_work=has_recovery_work,
         has_relocation_work=has_relocation_work,
+        relocation_alloc_pending=reloc_pending_i,
+        relocation_alloc_partial=reloc_partial_i,
         packing_allowed=packing_allowed,
         finalize_allowed=finalize_allowed,
         state_version=STATE_VERSION,
@@ -486,8 +520,9 @@ def get_recovery_pick_lines(
     state = resolve_order_recovery_state(db, order, session_cart_id=session_cart_id, log=log)
     out: list[dict[str, Any]] = []
     for ln in state.lines:
-        if not ln.visible_in_recovery_pick or ln.recovery_qty <= _EPS:
+        if not ln.visible_in_recovery_pick:
             continue
+        qty = ln.recovery_qty if ln.recovery_qty > _EPS else ln.unresolved_qty
         out.append(
             {
                 "order_id": int(state.order_id),
@@ -500,17 +535,110 @@ def get_recovery_pick_lines(
                 "replacement_qty": ln.replacement_qty,
                 "shortage_cart_qty": 0.0,
                 "missing_operational_qty": ln.unresolved_qty,
-                "unresolved_qty": ln.recovery_qty,
+                "unresolved_qty": round(qty, 6),
                 "recovery_eligible": True,
             }
+        )
+    if log:
+        logger.info(
+            "[recovery.pick.lines] order_id=%s visible_count=%s line_ids=%s",
+            state.order_id,
+            len(out),
+            [int(r["order_item_id"]) for r in out],
         )
     return out
 
 
 def count_recovery_operational_lines(db: Session, order: Order) -> tuple[int, int]:
-    """(linie OMS, linie dogrywki) — delegacja do resolvera."""
+    """(linie OMS, linie dogrywki) — wyłącznie flagi resolvera."""
     state = resolve_order_recovery_state(db, order, log=False)
-    return state.totals.oms_decision_lines, state.totals.recovery_lines
+    oms_lines = sum(
+        1
+        for ln in state.lines
+        if ln.visible_in_queue and not ln.visible_in_recovery_pick and ln.reason == "awaiting_oms"
+    )
+    pick_lines = sum(1 for ln in state.lines if ln.visible_in_recovery_pick)
+    return int(oms_lines), int(pick_lines)
+
+
+def build_braki_shortage_lines_from_state(
+    db: Session,
+    order: Order,
+    state: OrderRecoveryState,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> list[dict[str, Any]]:
+    """Linie operacyjne kolejki Braki — tylko ``visible_in_queue`` z resolvera."""
+    from ..models.product import Product
+    from .braki_order_state_service import enrich_shortage_line_location_fields
+    from .wms_audit_service import last_pick_audit_summaries_for_order_lines
+
+    oi_ids = [int(ln.order_line_id) for ln in state.lines if ln.visible_in_queue]
+    pick_summaries = last_pick_audit_summaries_for_order_lines(db, int(order.id), oi_ids)
+    oi_by_id = {int(oi.id): oi for oi in (order.items or [])}
+    out: list[dict[str, Any]] = []
+
+    for ln in state.lines:
+        if not ln.visible_in_queue:
+            continue
+        oi = oi_by_id.get(int(ln.order_line_id))
+        if oi is None:
+            continue
+        pid = int(ln.product_id)
+        pr = db.query(Product).filter(Product.id == pid).first()
+        name = (pr.name if pr and pr.name else "") or f"Produkt #{pid}"
+        img = str(pr.image_url).strip() if pr and getattr(pr, "image_url", None) else None
+        sku = str(getattr(pr, "symbol", None) or getattr(pr, "sku", None) or "").strip() if pr else ""
+        ean = str(getattr(pr, "ean", None) or "").strip() if pr else ""
+        missing = ln.recovery_qty if ln.visible_in_recovery_pick else ln.unresolved_qty
+        if ln.reason == "awaiting_oms" and missing <= _EPS:
+            missing = max(0.0, ln.ordered_qty - ln.picked_qty)
+        if missing <= _EPS and not ln.visible_in_recovery_pick:
+            missing = 1.0
+        badge = "Oczekuje na decyzję OMS" if ln.reason == "awaiting_oms" else "Do zebrania"
+        row_out = {
+            "order_item_id": int(ln.order_line_id),
+            "product_id": pid,
+            "product_name": name,
+            "image_url": img,
+            "ordered_qty": ln.ordered_qty,
+            "picked_qty": ln.picked_qty,
+            "missing_qty": round(missing, 6),
+            "remaining_qty": round(missing, 6),
+            "location_code": "",
+            "sku": sku,
+            "ean": ean,
+            "line_kind": "shortage_unresolved" if ln.reason == "awaiting_oms" else "remaining",
+            "badge_label": badge,
+            "pick_audit_summary": pick_summaries.get(int(ln.order_line_id)),
+        }
+        out.append(
+            enrich_shortage_line_location_fields(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order_id=int(order.id),
+                product_id=pid,
+                row=row_out,
+            )
+        )
+    return out
+
+
+def build_braki_remaining_pick_lines_from_state(
+    db: Session,
+    order: Order,
+    state: OrderRecoveryState,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> list[dict[str, Any]]:
+    """``remaining_pick_lines`` — tylko ``visible_in_recovery_pick``."""
+    rows = build_braki_shortage_lines_from_state(
+        db, order, state, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    return [r for r in rows if (r.get("line_kind") or "") == "remaining"]
 
 
 def can_order_be_packed(
@@ -552,7 +680,37 @@ def order_has_relocation_work(
         warehouse_id=warehouse_id,
         log=False,
     )
-    return bool(state.has_relocation_work)
+    return bool(state.has_pending_relocation)
+
+
+def ensure_relocation_tasks_synced_for_order(
+    db: Session,
+    order: Order,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_event_id: str,
+    picked_from_location: str | None = None,
+) -> OrderRecoveryState:
+    """Resolver + utworzenie brakujących zadań RELOCATION dla ``visible_in_relocation``."""
+    state = resolve_order_recovery_state(
+        db,
+        order,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        log=False,
+    )
+    if any(ln.visible_in_relocation for ln in state.lines):
+        sync_relocation_tasks_from_recovery_state(
+            db,
+            order,
+            state,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_event_id=source_event_id,
+            picked_from_location=picked_from_location,
+        )
+    return state
 
 
 def sync_relocation_tasks_from_recovery_state(
@@ -570,26 +728,11 @@ def sync_relocation_tasks_from_recovery_state(
     Nigdy dla zwykłych braków bez zebranego towaru.
     """
     from .braki_order_state_service import ensure_relocation_for_order_item_picks
-    from .wms_relocation_workflow import order_has_active_relocation_work
 
     oid = int(order.id)
-    if order_has_active_relocation_work(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        order_id=oid,
-        log_checks=False,
-    ):
-        logger.info(
-            "[recovery.relocation.sync] order_id=%s skip=active_task_exists source=%s",
-            oid,
-            source_event_id,
-        )
-        return []
-
     task_ids: list[int] = []
     for ln in state.lines:
-        if not ln.relocation_required or ln.picked_qty <= _EPS:
+        if not ln.visible_in_relocation:
             continue
         ids = ensure_relocation_for_order_item_picks(
             db,
@@ -660,9 +803,9 @@ def can_close_braki_shortage(
         return False
     if st.totals.oms_decision_lines > 0:
         return False
-    if st.has_relocation_work:
+    if st.has_pending_relocation:
         return False
-    if st.has_recovery_work:
+    if st.has_recovery_pick_work:
         return False
     if st.packing_allowed:
         return True
@@ -676,9 +819,9 @@ def recovery_state_for_braki_task(db: Session, order: Order) -> dict[str, Any]:
     st = resolve_order_recovery_state(db, order, log=False)
     return {
         "recovery_packing_allowed": bool(st.packing_allowed),
-        "recovery_active_lines": int(st.totals.recovery_lines),
+        "recovery_active_lines": sum(1 for ln in st.lines if ln.visible_in_recovery_pick),
         "recovery_unresolved_lines": int(st.totals.unresolved_lines),
-        "recovery_has_relocation_work": bool(st.has_relocation_work),
+        "recovery_has_relocation_work": bool(st.has_pending_relocation),
         "can_close_shortage": can_close_braki_shortage(db, order, state=st),
         "recovery_state_hash": st.state_hash,
     }
@@ -712,8 +855,8 @@ def apply_fulfillment_state_from_resolver(
         _resolve_panel_status_after_shortage_cleared(db, order)
     elif (
         state.totals.oms_decision_lines > 0
-        or state.has_recovery_work
-        or state.has_relocation_work
+        or state.has_recovery_pick_work
+        or state.has_pending_relocation
     ):
         if cur in (FS_READY_TO_PACK, FS_PICKING, ""):
             order.fulfillment_state = FS_NEEDS_DECISION

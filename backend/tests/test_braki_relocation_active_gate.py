@@ -210,30 +210,20 @@ class TestBrakiWorkflowRelocationGate(unittest.TestCase):
     def test_relocation_when_pending_alloc(self):
         order = _order()
         db = MagicMock()
+        rec = SimpleNamespace(
+            packing_allowed=False,
+            has_recovery_pick_work=False,
+            has_pending_relocation=True,
+            relocation_alloc_pending=1,
+            relocation_alloc_partial=0,
+            totals=SimpleNamespace(recovery_lines=0, oms_decision_lines=0, unresolved_lines=0),
+        )
         with patch(
-            "backend.services.braki_order_state_service.order_can_show_ready_pack",
-            return_value=False,
-        ), patch(
-            "backend.services.braki_order_state_service.evaluate_order_braki_state",
-            return_value={"resolved": False, "final_status": "relocation"},
-        ), patch(
-            "backend.services.braki_workflow_service._order_relocation_alloc_states",
-            return_value=(1, 0, 0),
+            "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+            return_value=rec,
         ), patch(
             "backend.services.braki_workflow_service.count_issue_queue_operational_lines",
             return_value=(0, 0),
-        ), patch(
-            "backend.services.braki_workflow_service.order_needs_warehouse_pick",
-            return_value=False,
-        ), patch(
-            "backend.services.braki_workflow_service.order_has_waiting_customer_line",
-            return_value=False,
-        ), patch(
-            "backend.services.braki_workflow_service.order_has_waiting_for_stock_lines",
-            return_value=False,
-        ), patch(
-            "backend.services.order_fulfillment_recompute.compute_line_missing_qty",
-            return_value=0.0,
         ):
             status = resolve_braki_workflow_status(db, order)
         self.assertEqual(status, BRAKI_FILTER_RELOCATION)

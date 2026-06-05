@@ -208,7 +208,8 @@ def order_has_recovery_pick_work(db: Session, order: Order) -> bool:
     """Czy zamówienie ma jeszcze pracę magazynową (dogrywka), bez oczekującej decyzji OMS."""
     from .recovery_workflow_service import resolve_order_recovery_state
 
-    return resolve_order_recovery_state(db, order, log=False).has_recovery_work
+    st = resolve_order_recovery_state(db, order, log=False)
+    return bool(st.has_recovery_pick_work)
 
 
 def _recovery_line_stats(db: Session, order: Order) -> dict[str, int]:
