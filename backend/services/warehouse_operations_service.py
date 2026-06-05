@@ -303,12 +303,16 @@ def _submode_for_activity(module: str, action_type: str, metadata: dict[str, Any
         return MODE_PICKING, "Kompletacja", "kompletacja"
     if mod == "WMS_RECEIVING" or "receiv" in text or "/wms/receiving" in text or "przyj" in text:
         return MODE_OPERATIONS, "Przyjęcie", "pracował przy przyjęciu"
-    if mod == "WMS_PUTAWAY" or "putaway" in text or "rozlok" in text:
-        return MODE_OPERATIONS, "Rozlokowanie", "rozlokował towar"
+    if mod == "WMS_PUTAWAY" or "putaway" in text:
+        return MODE_OPERATIONS, "Rozlokowanie PZ", "rozlokował towar z PZ"
+    if "relocation" in text and "putaway" not in text:
+        return MODE_OPERATIONS, "Rozlokowanie produktów", "rozlokował produkty na nośniki"
+    if "rozlok" in text:
+        return MODE_OPERATIONS, "Rozlokowanie PZ", "rozlokował towar z PZ"
     if mod == "WMS_MOVEMENTS" or "movement" in text or "transfer" in text or "mm" in text:
         return MODE_OPERATIONS, "Przesunięcia MM", "wykonał przesunięcie"
     if mod == "WMS_CARRIERS":
-        return MODE_OPERATIONS, "Nośniki / dystrybucja", "obsłużył nośnik"
+        return MODE_OPERATIONS, "Nośniki", "obsłużył nośnik"
     if mod in {"WMS_RETURNS", "WMS_RETURN_MODULE"} or "return" in text or "rmz" in text or "complaint" in text or "reklamac" in text:
         return MODE_OPERATIONS, "Zwroty", "obsłużył zwrot"
     sub = str(metadata.get("operation_type") or metadata.get("operation") or "Operacja magazynowa")
@@ -325,8 +329,10 @@ def _mode_for_operation_session_kind(session_kind: str) -> tuple[str, str, str]:
         return MODE_SHORTAGES, "Obsługa braków", "aktywna obsługa braków"
     if "receiv" in kind or "pz" in kind:
         return MODE_OPERATIONS, "Przyjęcie", "aktywna sesja przyjęcia"
-    if "putaway" in kind or "relocation" in kind or "rozlok" in kind:
-        return MODE_OPERATIONS, "Rozlokowanie", "aktywna sesja rozlokowania"
+    if "putaway" in kind or "rozlok" in kind:
+        return MODE_OPERATIONS, "Rozlokowanie PZ", "aktywna sesja rozlokowania PZ"
+    if "relocation" in kind:
+        return MODE_OPERATIONS, "Rozlokowanie produktów", "aktywna sesja rozlokowania produktów"
     if "mm" in kind or "transfer" in kind or "move" in kind:
         return MODE_OPERATIONS, "Przesunięcia MM", "aktywna sesja MM"
     if "return" in kind or "rmz" in kind or "complaint" in kind:
@@ -344,9 +350,11 @@ def _submode_for_product_operation(movement_type: str, wms_mode: str | None = No
         return MODE_PACKING, "Pakowanie", "operacja pakowania"
     if "RECEIPT" in text or "RECEIVING" in text or "PZ" in text:
         return MODE_OPERATIONS, "Przyjęcie", "operacja przyjęcia"
-    if "PUTAWAY" in text or "ROZLOK" in text:
-        return MODE_OPERATIONS, "Rozlokowanie", "operacja rozlokowania"
-    if "MOVE" in text or "MM" in text or "TRANSFER" in text or "RELOCATION" in text:
+    if "PUTAWAY" in text or ("ROZLOK" in text and "RELOCATION" not in text):
+        return MODE_OPERATIONS, "Rozlokowanie PZ", "operacja rozlokowania PZ"
+    if "RELOCATION" in text:
+        return MODE_OPERATIONS, "Rozlokowanie produktów", "operacja rozlokowania produktów"
+    if "MOVE" in text or "MM" in text or "TRANSFER" in text:
         return MODE_OPERATIONS, "Przesunięcia MM", "operacja przesunięcia"
     if "RETURN" in text or "RMZ" in text or "COMPLAINT" in text:
         return MODE_OPERATIONS, "Zwroty / reklamacje", "operacja zwrotu"
@@ -572,7 +580,9 @@ def _collect_inventory_movement_events(
         if "RECEIPT" in movement_type:
             submode = "Przyjęcie"
         elif "PUTAWAY" in movement_type:
-            submode = "Rozlokowanie"
+            submode = "Rozlokowanie PZ"
+        elif "RELOCATION" in movement_type:
+            submode = "Rozlokowanie produktów"
         elif "RETURN" in movement_type:
             submode = "Zwroty"
         else:

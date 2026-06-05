@@ -49,7 +49,7 @@ function mapMovementTypeLabel(type: string | null | undefined): string {
   const m: Record<string, string> = {
     receive: "Przyjęcie",
     receiving: "Przyjęcie",
-    putaway: "Rozlokowanie",
+    putaway: "Rozlokowanie PZ",
     picking: "Kompletacja",
     pick: "Kompletacja",
     move: "Przesunięcie",

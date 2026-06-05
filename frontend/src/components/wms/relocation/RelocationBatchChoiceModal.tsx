@@ -126,10 +126,10 @@ export function RelocationBatchChoiceModal({
             </div>
             <div>
               <h3 id={titleId} className="text-lg font-bold text-slate-900">
-                Produkty wymagają rozlokowania
+                Produkty wymagają rozlokowania na nośniki
               </h3>
               <p className="mt-1 text-sm text-slate-600">
-                Możesz dodać produkty do dokumentu rozlokowania teraz i wykonać rozlokowanie później.
+                Możesz dodać produkty do dokumentu ZWK teraz i wykonać rozlokowanie produktów później.
               </p>
             </div>
           </div>
@@ -153,7 +153,7 @@ export function RelocationBatchChoiceModal({
           <div className="mt-4 space-y-3 text-sm text-slate-700">
             {ctx && ctx.pending_lines > 0 ? (
               <p>
-                Do rozlokowania: <strong>{ctx.pending_lines}</strong>{" "}
+                Do rozlokowania produktów: <strong>{ctx.pending_lines}</strong>{" "}
                 {ctx.pending_lines === 1 ? "pozycja" : "pozycji"}.
               </p>
             ) : null}

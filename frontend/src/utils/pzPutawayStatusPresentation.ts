@@ -9,8 +9,8 @@ function normalizePutawayStatusKey(status: string | undefined): string {
 
 export function pzPutawayStatusLabelPl(status: string | undefined): string {
   const s = normalizePutawayStatusKey(status);
-  if (s === "NOT_STARTED") return "Przyjęto / Czeka na rozlokowanie";
-  if (s === "IN_PROGRESS") return "W trakcie rozlokowania";
+  if (s === "NOT_STARTED") return "Przyjęto / Czeka na rozlokowanie PZ";
+  if (s === "IN_PROGRESS") return "W trakcie rozlokowania PZ";
   if (s === "DONE") return "Rozlokowano";
   return (status || "").trim() || "—";
 }

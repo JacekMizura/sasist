@@ -42,11 +42,11 @@ BRAKI_FILTER_IDS: tuple[str, ...] = (
 BRAKI_FILTER_LABELS_PL: dict[str, str] = {
     BRAKI_FILTER_ALL: "Wszystkie statusy",
     BRAKI_FILTER_AWAITING: "Oczekujące",
-    BRAKI_FILTER_RELOCATION: "Do rozlokowania",
-    BRAKI_FILTER_RELOCATION_PARTIAL: "Do częściowego rozlokowania",
+    BRAKI_FILTER_RELOCATION: "Rozlokowanie produktów",
+    BRAKI_FILTER_RELOCATION_PARTIAL: "Częściowe rozlokowanie produktów",
     BRAKI_FILTER_PICK: "Produkty do zebrania z magazynu",
     BRAKI_FILTER_READY_PACK: "Gotowe do pakowania",
-    BRAKI_FILTER_PICK_AND_RELOCATION: "Produkty do zebrania oraz rozlokowania",
+    BRAKI_FILTER_PICK_AND_RELOCATION: "Zbieranie i rozlokowanie produktów",
 }
 
 

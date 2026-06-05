@@ -13,7 +13,7 @@ export function CrossdockFlowBanner({ detail }: Props) {
       <div className="flex gap-3">
         <Truck className="mt-0.5 shrink-0 text-sky-700" size={22} />
         <div>
-          <p className="text-sm font-black text-sky-950">Crossdock — towar czeka na dystrybucję</p>
+          <p className="text-sm font-black text-sky-950">Crossdock — towar czeka na rozlokowanie produktów</p>
           <p className="mt-1 text-xs font-medium text-sky-900">
             Produkt właśnie przyjechał na nośnik inbound. Rozłóż go do nośników docelowych (strefy
             zamówień) bez odkładania na regał.

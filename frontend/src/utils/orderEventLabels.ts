@@ -18,7 +18,7 @@ export const ORDER_EVENT_CATEGORY_LABELS: Record<OrderEventCategory, string> = {
   shortage: "Braki",
   order_change: "Zmiany zamówienia",
   recovery: "Dogrywka zbierki",
-  relocation: "Rozlokowanie",
+  relocation: "Rozlokowanie produktów",
   packing: "Pakowanie",
 };
 
@@ -47,9 +47,9 @@ export const ORDER_EVENT_LABELS: Record<string, string> = {
   RECOVERY_STARTED: "Rozpoczęto dogrywkę",
   RECOVERY_FINISHED: "Zakończono dogrywkę",
 
-  RELOCATION_CREATED: "Utworzono rozlokowanie",
-  RELOCATION_FINISHED: "Zakończono rozlokowanie",
-  RELOCATION_STARTED: "Rozpoczęto rozlokowanie",
+  RELOCATION_CREATED: "Utworzono rozlokowanie produktów",
+  RELOCATION_FINISHED: "Zakończono rozlokowanie produktów",
+  RELOCATION_STARTED: "Rozpoczęto rozlokowanie produktów",
 
   PACKING_STARTED: "Rozpoczęto pakowanie",
   PACKING_FINISHED: "Zakończono pakowanie",

@@ -193,7 +193,7 @@ function PutawayLineCard({
 
       <div className={`p-4 border-t ${done ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50/50 border-slate-100'}`}>
         <div className="flex items-end justify-between mb-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rozlokowanie</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rozlokowanie PZ</span>
           <div className="flex items-baseline gap-1">
             <span className={`text-xl font-black leading-none ${done ? 'text-emerald-600' : 'text-slate-900'}`}>{fmtQty(put)}</span>
             <span className="text-xs font-bold text-slate-400">/ {fmtQty(denom)} szt.</span>

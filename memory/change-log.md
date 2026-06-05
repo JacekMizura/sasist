@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — WMS terminology UI normalization
+
+- Rozdzielono „Rozlokowanie” na **Rozlokowanie PZ** (putaway/inbound) i **Rozlokowanie produktów** (RELOCATION / nośniki po zbieraniu).
+- Frontend: tab putaway, relocation detail, Braki filtry/CTA, kolejki operacyjne, timeline, event labels, workforce labels.
+- Backend (tylko etykiety API/UI): ``BRAKI_FILTER_LABELS_PL``, queue label, task summary, centrum operacyjne (putaway alerts).
+- ``frontend/src/pages/wms/wmsTerminology.ts`` — słownik UI (bez zmiany encji backendowych).
+- Dogrywka — bez zmiany nazwy.
+
 ## 2026-06-04 — Operator vs supervisor UX split
 
 - ``/wms/operational-queues`` → redirect na ``/wms/braki`` (operator home).

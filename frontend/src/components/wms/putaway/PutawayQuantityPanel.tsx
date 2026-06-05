@@ -124,7 +124,7 @@ export default function PutawayQuantityPanel({
         {/* Panel Informacyjny: DO ROZLOKOWANIA / SUMA */}
         <div className="border border-slate-200 rounded-2xl p-4 bg-white flex justify-between items-center mb-6">
           <div className="text-left bg-white">
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Do rozlokowania</p>
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Do rozlokowania PZ</p>
             <p className="text-sm font-semibold text-slate-500 mt-0.5">Pozostało {fmtQty(rem)} szt.</p>
           </div>
           <div className="h-8 w-px bg-slate-200" />

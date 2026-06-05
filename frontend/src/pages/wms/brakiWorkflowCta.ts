@@ -89,7 +89,7 @@ export function shortageLifecycleHeadline(phase: ShortageLifecyclePhase): string
     case "RECOVERY_PICK":
       return "Wymagana dogrywka zbierki";
     case "RELOCATION_REQUIRED":
-      return "Wymagane rozlokowanie zebranych pozycji";
+      return "Wymagane rozlokowanie produktów";
     case "READY_TO_PACK":
       return "Gotowe do pakowania";
     case "DONE":
@@ -128,7 +128,7 @@ async function executeRelocation(
       state: { startRelocationSession: true },
     });
   } catch (e: unknown) {
-    opts.onError?.(extractApiErrorMessage(e, "Nie udało się rozpocząć rozlokowania."));
+    opts.onError?.(extractApiErrorMessage(e, "Nie udało się rozpocząć rozlokowania produktów."));
   }
 }
 

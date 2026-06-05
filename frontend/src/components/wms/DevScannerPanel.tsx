@@ -46,7 +46,7 @@ function modeHint(mode: string): string {
     case "picking":
       return "Zbieranie — skan przypisze linię.";
     case "putaway":
-      return "Rozlokowanie — EAN, lokalizacja, nośnik.";
+      return "Rozlokowanie PZ — EAN, lokalizacja, nośnik.";
     case "product_preview":
       return "Podgląd produktu — skan EAN/SKU.";
     case "operational":

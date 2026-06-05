@@ -9,7 +9,7 @@ const CARRIER_OP_LABELS: Record<string, string> = {
   ITEMS_REMOVED: "Usunięcie towaru",
   BULK_CREATED: "Masowe utworzenie",
   RECEIVING_ON_CARRIER: "Przyjęcie na nośnik",
-  PUTAWAY_MOVE: "Rozlokowanie",
+  PUTAWAY_MOVE: "Rozlokowanie PZ",
 };
 
 export function carrierOperationLabel(operationType: string, apiLabel?: string | null): string {

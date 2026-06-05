@@ -552,8 +552,8 @@ def build_bottlenecks(
         out.append(
             WarehouseBottleneckOut(
                 id="putaway-load",
-                area="Rozlokowanie",
-                message=f"{putaway.products_waiting} produktów czeka na rozlokowanie",
+                area="Rozlokowanie PZ",
+                message=f"{putaway.products_waiting} produktów czeka na rozlokowanie PZ",
                 level="critical" if putaway.products_waiting >= 50 else "warning",
                 oldest_waiting_minutes=putaway.oldest_unprocessed_carrier_minutes,
                 queue_growth=putaway.queue_growth_trend,
@@ -807,12 +807,12 @@ def extend_alerts(
             _alert(
                 alert_id="putaway-delayed",
                 level=level,
-                title=f"Rozlokowanie opóźnione{f' — Strefa {top_zone.zone}' if top_zone else ''}",
-                category="Rozlokowanie",
+                title=f"Rozlokowanie PZ opóźnione{f' — Strefa {top_zone.zone}' if top_zone else ''}",
+                category="Rozlokowanie PZ",
                 priority_group="critical_now" if level == "critical" else "requires_action",
-                description="Towar po przyjęciu czeka na rozlokowanie i może blokować uzupełnienia pick-face.",
-                responsible_area="Rozlokowanie",
-                recommended_action="Otwórz kolejkę rozlokowania i przypisz operatora do najbardziej obciążonej strefy.",
+                description="Towar po przyjęciu czeka na rozlokowanie PZ i może blokować uzupełnienia pick-face.",
+                responsible_area="Rozlokowanie PZ",
+                recommended_action="Otwórz kolejkę rozlokowania PZ i przypisz operatora do najbardziej obciążonej strefy.",
                 now=now,
                 impact=[
                     {"label": "Produkty oczekujące", "value": str(putaway.products_waiting), "tone": "amber"},

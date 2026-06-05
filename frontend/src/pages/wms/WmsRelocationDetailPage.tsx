@@ -191,7 +191,7 @@ export default function WmsRelocationDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    setActiveDocument({ kind: "custom", label: "Rozlokowanie — skan nośnika" });
+    setActiveDocument({ kind: "custom", label: "Rozlokowanie produktów — skan nośnika" });
     setScannerInputPlaceholder("Skanuj nośnik (koszyk / tote / wózek)");
     return () => setActiveDocument(null);
   }, [setActiveDocument, setScannerInputPlaceholder]);
@@ -227,7 +227,7 @@ export default function WmsRelocationDetailPage() {
         applyDetail(updated);
         setPendingAssign(null);
         if (updated.status === "done") {
-          scanFx.success("Rozlokowanie zakończone");
+          scanFx.success("Rozlokowanie produktów zakończone");
           dispatchWmsShortagesUpdated();
           navigate(WMS_ROUTES.operatorHome);
           return;
@@ -333,7 +333,7 @@ export default function WmsRelocationDetailPage() {
             <ArrowLeft size={16} />
             Braki
           </Link>
-          <h1 className="text-lg font-black text-slate-900">Rozkład do nośników</h1>
+          <h1 className="text-lg font-black text-slate-900">Rozlokowanie produktów</h1>
         </div>
       </header>
 
@@ -448,7 +448,7 @@ export default function WmsRelocationDetailPage() {
               className="mt-3 w-full rounded-xl bg-indigo-600 py-3 text-sm font-black text-white sm:w-auto sm:px-6"
               onClick={() => void openSession(false)}
             >
-              Rozpocznij rozlokowanie
+              Rozpocznij rozlokowanie produktów
             </button>
           </div>
         ) : null}
@@ -644,7 +644,7 @@ export default function WmsRelocationDetailPage() {
 
             {allDone || detail.status === "done" ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-                <p className="font-bold text-emerald-900">Rozlokowanie zakończone</p>
+                <p className="font-bold text-emerald-900">Rozlokowanie produktów zakończone</p>
                 <Link
                   to={WMS_ROUTES.operatorHome}
                   className="mt-2 inline-block text-sm font-semibold text-emerald-800 underline"

@@ -38,7 +38,7 @@ export type WmsTabConfigItem = {
 export const WMS_TAB_ITEMS: WmsTabConfigItem[] = [
   { id: "returns", path: "/wms/returns", label: "Zwroty / Reklamacje", icon: Undo2 },
   { id: "receiving", path: "/wms/receiving", label: "Przyjęcie", icon: Inbox },
-  { id: "putaway", path: "/wms/putaway", label: "Rozlokowanie", icon: Warehouse },
+  { id: "putaway", path: "/wms/putaway", label: "Rozlokowanie PZ", icon: Warehouse },
   { id: "mm", path: "/wms/mm", label: "Przesunięcia magazynowe", icon: ArrowLeftRight },
   { id: "picking", path: "/wms/picking", label: "Zbieranie", icon: ClipboardList },
   { id: "issues", path: "/wms/braki", label: "Braki", icon: AlertTriangle },

@@ -275,7 +275,7 @@ export default function WmsPutawayItemDetailPage() {
               <div className="mt-10 flex justify-between items-end">
                 <div>
                   <span className="text-[9px] font-black text-slate-400 block uppercase tracking-widest mb-1.5">
-                    Do rozlokowania
+                    Do rozlokowania PZ
                   </span>
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-[#5a4fcf]">{fmtQty(remaining)}</span>

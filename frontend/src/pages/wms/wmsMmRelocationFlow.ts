@@ -82,13 +82,13 @@ export async function fetchWmsRelocationHubDocument(
 export const PZ_PUTAWAY_UI = {
   listTitle: "Rozlokowanie PZ",
   docKind: "PZ",
-  flowName: "Rozlokowanie",
+  flowName: "Rozlokowanie PZ",
   progressDone: "Rozlokowano",
-  finalize: "Zakończ rozlokowanie",
-  emptyLines: "Brak pozycji z przyjętą ilością do rozlokowania.",
+  finalize: "Zakończ rozlokowanie PZ",
+  emptyLines: "Brak pozycji z przyjętą ilością do rozlokowania PZ.",
   backToHub: "Wróć do listy PZ",
   invalidDoc: "Nieprawidłowy numer PZ.",
   loadFailed: "Nie udało się wczytać dokumentu.",
-  alreadyDone: "Rozlokowanie dla tej PZ zostało zakończone.",
-  notAllowed: "Rozlokowanie niedostępne dla bieżącego statusu dokumentu.",
+  alreadyDone: "Rozlokowanie PZ dla tego dokumentu zostało zakończone.",
+  notAllowed: "Rozlokowanie PZ niedostępne dla bieżącego statusu dokumentu.",
 } as const;

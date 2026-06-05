@@ -820,7 +820,7 @@ export default function WarehouseOperationsPage() {
   }, [snapshot?.operators]);
 
   const groupedAlerts = useMemo(() => {
-    const order = ["Braki", "Kompletacja", "Pakowanie", "Rozlokowanie", "Dostawy", "Przewoźnicy", "Operatorzy", "System"];
+    const order = ["Braki", "Kompletacja", "Pakowanie", "Rozlokowanie PZ", "Rozlokowanie produktów", "Dostawy", "Przewoźnicy", "Operatorzy", "System"];
     const groups = new Map<string, WarehouseOperationsAlert[]>();
     for (const alert of snapshot?.alerts ?? []) {
       const key = alert.category || alert.area || "System";
@@ -969,7 +969,7 @@ export default function WarehouseOperationsPage() {
         <KpiCard label="Aktywni" value={snapshot?.summary.active_operators ?? 0} tone="border-emerald-200 bg-emerald-50 text-emerald-900" />
         <KpiCard label="Zakończone dziś" value={snapshot?.summary.orders_completed_today ?? 0} tone="border-blue-200 bg-blue-50 text-blue-900" />
         <KpiCard label="Efektywność" value={snapshot?.summary.warehouse_efficiency_percent ?? 0} tone="border-slate-200 bg-slate-50 text-slate-900" />
-        <KpiCard label="Do rozlokowania" value={snapshot?.summary.products_waiting_putaway ?? 0} tone="border-amber-200 bg-amber-50 text-amber-900" />
+        <KpiCard label="Do rozlokowania PZ" value={snapshot?.summary.products_waiting_putaway ?? 0} tone="border-amber-200 bg-amber-50 text-amber-900" />
         <KpiCard label="Dostawy oczekujące" value={snapshot?.summary.inbound_deliveries_waiting ?? 0} tone="border-indigo-200 bg-indigo-50 text-indigo-900" />
         <KpiCard label="Ryzyko SLA" value={snapshot?.summary.sla_risk_percent ?? 0} tone="border-red-200 bg-red-50 text-red-900" />
         <KpiCard label="Kompletacja" value={snapshot?.summary.picking ?? 0} tone="border-blue-200 bg-white text-blue-800" />
@@ -1325,7 +1325,7 @@ export default function WarehouseOperationsPage() {
         <KpiCard label="Aktywne dostawy" value={snapshot?.inbound_summary.active_deliveries ?? 0} tone="border-emerald-200 bg-emerald-50 text-emerald-900" />
         <KpiCard label="Opóźnione" value={snapshot?.inbound_summary.delayed_deliveries ?? 0} tone="border-orange-200 bg-orange-50 text-orange-900" />
         <KpiCard label="Do przyjęcia" value={snapshot?.inbound_summary.products_waiting_receiving ?? 0} tone="border-blue-200 bg-blue-50 text-blue-900" />
-        <KpiCard label="Do rozlokowania" value={snapshot?.inbound_summary.products_waiting_putaway ?? 0} tone="border-amber-200 bg-amber-50 text-amber-900" />
+        <KpiCard label="Do rozlokowania PZ" value={snapshot?.inbound_summary.products_waiting_putaway ?? 0} tone="border-amber-200 bg-amber-50 text-amber-900" />
         <KpiCard label="Najstarsze oczekiwanie" value={formatOperationalDuration(snapshot?.inbound_summary.oldest_waiting_minutes)} tone="border-slate-200 bg-slate-50 text-slate-900" />
       </div>
       <div className="grid gap-3 xl:grid-cols-2">

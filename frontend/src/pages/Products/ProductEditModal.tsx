@@ -2030,7 +2030,7 @@ export function ProductEditModal({
                                   </tr>
                                   <tr>
                                     <td className="px-5 py-4 whitespace-nowrap">20.05.2026, 18:57:30</td>
-                                    <td className="px-5 py-4"><span className="rounded bg-indigo-50 text-indigo-700 px-2.5 py-1 font-medium">Rozlokowanie</span></td>
+                                    <td className="px-5 py-4"><span className="rounded bg-indigo-50 text-indigo-700 px-2.5 py-1 font-medium">Rozlokowanie PZ</span></td>
                                     <td className="px-5 py-4 text-slate-900">PZ-3</td>
                                     <td className="px-5 py-4">Super Admin</td>
                                     <td className="px-5 py-4">A10-A-1</td>

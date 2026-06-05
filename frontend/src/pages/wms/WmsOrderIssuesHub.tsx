@@ -25,8 +25,8 @@ type BrakiWorkflowFilterId =
 const BRAKI_WORKFLOW_FILTERS: { id: BrakiWorkflowFilterId; label: string }[] = [
   { id: "all", label: "Wszystkie statusy" },
   { id: "awaiting", label: "Oczekujące" },
-  { id: "relocation", label: "Do rozlokowania" },
-  { id: "relocation_partial", label: "Do częściowego rozlokowania" },
+  { id: "relocation", label: "Rozlokowanie produktów" },
+  { id: "relocation_partial", label: "Częściowe rozlokowanie produktów" },
   { id: "pick", label: "Produkty do zebrania z magazynu" },
   { id: "ready_pack", label: "Gotowe do pakowania" },
   { id: "pick_and_relocation", label: "Produkty do zebrania oraz rozlokowania" },
@@ -71,7 +71,7 @@ function cardStatusLabel(t: OrderIssueTaskListItemApi): string {
   if (wf === "awaiting") return "Oczekujące";
   if (wf === "ready_pack") return "Gotowe do pakowania";
   if (wf === "pick" || wf === "pick_and_relocation") return "Braki";
-  if (wf === "relocation" || wf === "relocation_partial") return "Rozlokowanie";
+  if (wf === "relocation" || wf === "relocation_partial") return "Rozlokowanie produktów";
   return (t.braki_workflow_status_label ?? "").trim() || "Braki";
 }
 

@@ -1200,7 +1200,7 @@ def _summary_line(task: WmsOperationalTask, product_name: str) -> str:
     if task.task_type == TASK_WAITING_SUPPLY:
         return f"Oczekuje na dostawę: {rem:g} szt."
     if task.task_type == TASK_RELOCATION:
-        return f"Do rozlokowania: {rem:g} szt."
+        return f"Do rozlokowania produktów: {rem:g} szt."
     if task.task_type == TASK_SHORTAGE_DECISION:
         return f"Brak do decyzji: {rem:g} szt."
     return f"Pozostało: {rem:g} szt."
@@ -1336,7 +1336,7 @@ def queue_summary(db: Session, *, tenant_id: int, warehouse_id: int) -> list[Wms
         QUEUE_DO_DECYZJI: "Do decyzji",
         QUEUE_DO_DOGRYWKI: "Do dogrywki",
         QUEUE_OCZEKUJE_NA_DOSTAWE: "Oczekuje na dostawę",
-        QUEUE_DO_ROZLOKOWANIA: "Rozlokowanie (nośniki)",
+        QUEUE_DO_ROZLOKOWANIA: "Rozlokowanie produktów",
     }
     rows = (
         db.query(WmsOperationalTask.queue, func.count(WmsOperationalTask.id))

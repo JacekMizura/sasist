@@ -54,12 +54,12 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
               isReturn ? 'bg-rose-50 text-rose-700 border-rose-200/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
             }`}>
-              {isReturn ? "Zwrot" : "Do rozlokowania"}
+              {isReturn ? "Zwrot" : "Do rozlokowania PZ"}
             </span>
             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
               receivingInProgress ? 'bg-amber-50 text-amber-700 border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
             }`}>
-              {receivingInProgress ? "W trakcie przyjęcia" : "Gotowe do rozlokowania"}
+              {receivingInProgress ? "W trakcie przyjęcia" : "Gotowe do rozlokowania PZ"}
             </span>
           </div>
         </div>
@@ -128,10 +128,10 @@ export default function WmsPutawayPage() {
   const scanFx = useScanFeedback();
 
   useEffect(() => {
-    setActiveDocument({ kind: "custom", label: "Lista PZ — rozlokowanie" });
+    setActiveDocument({ kind: "custom", label: "Lista PZ — rozlokowanie PZ" });
     setScannerInputPlaceholder("Skanuj PZ lub EAN produktu");
     setActiveContext({
-      taskLabel: "Rozlokowanie",
+      taskLabel: "Rozlokowanie PZ",
       stepLabel: "Wybierz PZ do rozlokowania",
       scanHint: "W linii: lokalizacja → EAN",
     });
