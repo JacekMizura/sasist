@@ -2,16 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   postWmsOrderIssueTaskArchive,
+  postWmsOrderIssueTaskForceRemove,
   type OrderIssueOrderContextApi,
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { ACTIVE_OPERATION_CONTEXT_BAR_OFFSET } from "../../components/wms/execution/activeOperationContext";
+import { executionContextFromBrakiTask } from "../../components/wms/execution/syncExecutionContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
-import { BrakiOperationalHeader } from "./BrakiOperationalHeader";
+import { BrakiForceRemoveModal, type BrakiForceRemoveMode } from "./BrakiForceRemoveModal";
 import {
-  brakiMixedStateSummary,
   brakiOperationalActions,
   deriveBrakiWorkstreams,
   type BrakiOperationalAction,
@@ -66,6 +67,7 @@ export function WmsOrderIssueDetailContent({
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [forceRemoveOpen, setForceRemoveOpen] = useState(false);
 
   const ctx = emptyContext(task.order_context);
   const ws = useMemo(() => deriveBrakiWorkstreams(task), [task]);
@@ -95,39 +97,37 @@ export function WmsOrderIssueDetailContent({
     (ctx.packing_ready_lines?.length ?? 0) > 0;
 
   useEffect(() => {
-    setActiveContext({
-      operationType: "BRAKI WMS",
-      orderNumber: task.order_number,
-      currentStep: brakiMixedStateSummary(task),
-      scanHint: "Zeskanuj inne zamówienie, aby przełączyć kartę",
-    });
+    setActiveContext(
+      executionContextFromBrakiTask(task, {
+        scanHint: "Zeskanuj inne zamówienie, aby przełączyć kartę",
+      }),
+    );
     return () => setActiveContext(null);
   }, [setActiveContext, task]);
 
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    console.log("braki detail", {
-      taskId: task.id,
-      orderId: task.order_id,
-      workstreams: ws,
-      actions: actions.map((a) => a.id),
-    });
-  }, [actions, task.id, task.order_id, ws]);
-
-  const onArchiveShortage = useCallback(async () => {
-    if (task.can_close_shortage !== true) return;
-    setActionPending("archive");
-    setActionError(null);
-    try {
-      await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
-      dispatchWmsShortagesUpdated();
-      navigate(WMS_ROUTES.braki(), { replace: true });
-    } catch (e: unknown) {
-      onArchiveError(extractApiErrorMessage(e, "Nie udało się usunąć zamówienia z kolejki Braki."));
-    } finally {
-      setActionPending(null);
-    }
-  }, [navigate, onArchiveError, task.can_close_shortage, task.id, warehouseId]);
+  const onArchiveShortage = useCallback(
+    async (mode?: BrakiForceRemoveMode) => {
+      setActionPending("archive");
+      setActionError(null);
+      try {
+        if (task.can_close_shortage === true && (mode == null || mode === "full")) {
+          await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
+        } else if (mode != null) {
+          await postWmsOrderIssueTaskForceRemove(DAMAGE_TENANT_ID, warehouseId, task.id, mode);
+        } else {
+          return;
+        }
+        dispatchWmsShortagesUpdated();
+        navigate(WMS_ROUTES.braki(), { replace: true });
+      } catch (e: unknown) {
+        onArchiveError(extractApiErrorMessage(e, "Nie udało się usunąć zamówienia z kolejki Braki."));
+      } finally {
+        setActionPending(null);
+        setForceRemoveOpen(false);
+      }
+    },
+    [navigate, onArchiveError, task.can_close_shortage, task.id, warehouseId],
+  );
 
   const runAction = useCallback(
     async (action: BrakiOperationalAction) => {
@@ -135,7 +135,7 @@ export function WmsOrderIssueDetailContent({
       setActionError(null);
       setSuccessMsg(null);
       if (action.id === "archive") {
-        await onArchiveShortage();
+        setForceRemoveOpen(true);
         return;
       }
       setActionPending(action.id);
@@ -165,8 +165,6 @@ export function WmsOrderIssueDetailContent({
             <span>Kolejka braków</span>
           </Link>
         </header>
-
-        <BrakiOperationalHeader task={task} />
 
         <main className="custom-scrollbar flex-1 overflow-y-auto pb-48 md:pb-52">
           <div className="border-b border-slate-100 px-4 py-3 text-sm text-slate-600 md:px-6">
@@ -247,8 +245,8 @@ export function WmsOrderIssueDetailContent({
             {archiveAction ? (
               <button
                 type="button"
-                disabled={archiveAction.disabled || actionPending != null}
-                title={archiveAction.disabled ? archiveAction.disabledReason : "Usuń zamówienie z kolejki Braki WMS"}
+                disabled={actionPending != null}
+                title="Usuń zamówienie z kolejki Braki WMS"
                 onClick={() => void runAction(archiveAction)}
                 className={actionButtonClass(archiveAction)}
               >
@@ -257,6 +255,14 @@ export function WmsOrderIssueDetailContent({
             ) : null}
           </div>
         </div>
+
+        <BrakiForceRemoveModal
+          task={task}
+          open={forceRemoveOpen}
+          pending={actionPending === "archive"}
+          onClose={() => setForceRemoveOpen(false)}
+          onConfirm={(mode) => void onArchiveShortage(mode)}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,8 @@
 import { ScanLine, User } from "lucide-react";
-import type { ExecutionActiveContext } from "../../../context/WarehouseExecutionContext";
+import type {
+  BrakiWorkstreamContext,
+  ExecutionActiveContext,
+} from "../../../context/WarehouseExecutionContext";
 import { WMS_UI, relocationTargetRowLabel } from "../../../pages/wms/wmsTerminology";
 import { normalizeOperationContext } from "./activeOperationContext";
 
@@ -11,6 +14,18 @@ type Props = {
   context: ExecutionActiveContext | null | undefined;
   className?: string;
 };
+
+function BrakiQtyPill({ label, count, tone }: { label: string; count: number; tone: string }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tone}`}
+    >
+      {label}
+      <span className="font-black">{fmtQty(count)}</span>
+    </span>
+  );
+}
 
 /**
  * Unified sticky context for all WMS operational execution screens.
@@ -43,6 +58,12 @@ export function ActiveOperationContextBar({ context, className = "" }: Props) {
   if (ctx.remainingQty != null && Number.isFinite(ctx.remainingQty)) {
     rows.push({ label: "Pozostało", value: `${fmtQty(ctx.remainingQty)} szt.` });
   }
+  if (ctx.brakiStageLabel) {
+    rows.push({ label: "Etap braków", value: ctx.brakiStageLabel });
+  }
+
+  const ws = ctx.brakiWorkstreams;
+  const isBraki = (ctx.operationType ?? "").toUpperCase().includes("BRAKI");
 
   return (
     <div
@@ -50,9 +71,16 @@ export function ActiveOperationContextBar({ context, className = "" }: Props) {
       data-wms-active-operation-context
     >
       <div className="mx-auto max-w-3xl px-4 py-3 sm:px-6">
-        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-300">
-          {ctx.operationType}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-300">
+            {ctx.operationType}
+          </p>
+          {ctx.priorityLabel ? (
+            <span className="rounded-md border border-amber-400/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-100">
+              {ctx.priorityLabel}
+            </span>
+          ) : null}
+        </div>
 
         <div className="mt-2 space-y-1">
           {rows.map((row) => (
@@ -63,11 +91,47 @@ export function ActiveOperationContextBar({ context, className = "" }: Props) {
           ))}
         </div>
 
+        {isBraki && ws ? (
+          <div className="mt-2 flex flex-wrap gap-1.5 border-t border-indigo-800/80 pt-2">
+            <BrakiQtyPill
+              label="Zebrane"
+              count={ws.collected_line_count ?? 0}
+              tone="border-emerald-400/40 bg-emerald-500/20 text-emerald-100"
+            />
+            <BrakiQtyPill
+              label="Dogrywka"
+              count={ws.pick_line_count ?? 0}
+              tone="border-amber-400/40 bg-amber-500/20 text-amber-100"
+            />
+            <BrakiQtyPill
+              label="Rozlokowanie"
+              count={ws.relocation_line_count ?? 0}
+              tone="border-indigo-400/40 bg-indigo-500/30 text-indigo-100"
+            />
+            <BrakiQtyPill
+              label="Do pakowania"
+              count={ws.packing_ready_line_count ?? 0}
+              tone="border-sky-400/40 bg-sky-500/20 text-sky-100"
+            />
+          </div>
+        ) : null}
+
+        {isBraki && ws?.has_oms_pending ? (
+          <div className="mt-2">
+            <span className="inline-flex items-center gap-1 rounded-md border border-red-400/40 bg-red-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-100">
+              Decyzja OMS
+              {(ws.oms_line_count ?? 0) > 0 ? (
+                <span className="font-black">({ws.oms_line_count})</span>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
+
         {(ctx.currentStep || ctx.operatorName) && (
           <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-indigo-800/80 pt-2">
             {ctx.currentStep ? (
               <span className="rounded-lg bg-indigo-800 px-2.5 py-1 text-xs font-bold text-indigo-100">
-                Krok: {ctx.currentStep}
+                {isBraki ? ctx.currentStep : `Krok: ${ctx.currentStep}`}
               </span>
             ) : null}
             {ctx.operatorName ? (

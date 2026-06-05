@@ -1,5 +1,14 @@
 # Change Log
 
+## 2026-06-04 — Braki global bar + force remove
+
+- Przywrócono globalny pasek operacyjny na hubie i detalu Braki (`executionContextFromBrakiTask/Hub`); wzbogacony `ActiveOperationContextBar` (etap, priorytet, liczniki zebrane/dogrywka/rozlokowanie/pakowanie, badge OMS).
+- Usunięto duplikat `BrakiOperationalHeader` z widoku detalu.
+- `RecoveryWorkflowService`: `force_remove_braki_order`, `close_braki_operational_workflows_for_order`, `snapshot_braki_active_operations`.
+- API: `POST /wms/order-issue-tasks/{id}/force-remove` (full / wms_only / oms_review).
+- UI: `BrakiForceRemoveModal` — operator zawsze może usunąć zamówienie z kolejki Braki.
+- Testy: `test_braki_force_remove.py`.
+
 ## 2026-06-04 — Recovery intelligence (priority + batch + soft reserve)
 
 - `recovery_intelligence.py` — scoring priorytetu braków (CRITICAL/HIGH/NORMAL/LOW), batch dogrywki, soft reservation.

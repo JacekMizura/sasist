@@ -1,5 +1,13 @@
 import type { WmsOperationalTaskDetailApi } from "../../../api/wmsOperationalTasksApi";
+import type { OrderIssueTaskListItemApi } from "../../../api/wmsOrderIssueTasksApi";
 import type { ExecutionActiveContext } from "../../../context/WarehouseExecutionContext";
+import {
+  brakiMixedStateSummary,
+  deriveBrakiWorkstreams,
+  resolveShortageLifecyclePhase,
+  shortageLifecycleHeadline,
+} from "../../../pages/wms/brakiWorkflowCta";
+import { priorityLabelForTask } from "../../../pages/wms/brakiPriority";
 import {
   mapRelocationModeToTargetType,
   WMS_UI,
@@ -112,6 +120,42 @@ export function executionContextFromPutaway(opts: {
     scanHint: opts.scanHint ?? "Lokalizacja docelowa lub nośnik logistyczny (PAL, BOX…)",
     taskLabel: WMS_UI.putawayPz,
     stepLabel: opts.currentStep,
+  };
+}
+
+export function executionContextFromBrakiTask(
+  task: OrderIssueTaskListItemApi,
+  extras?: Partial<ExecutionActiveContext>,
+): ExecutionActiveContext {
+  const ws = deriveBrakiWorkstreams(task);
+  const phase = resolveShortageLifecyclePhase(task);
+  const stageLabel =
+    (task.braki_workflow_status_label ?? "").trim() || shortageLifecycleHeadline(phase);
+
+  return {
+    operationType: "BRAKI WMS",
+    orderNumber: formatOrderNumberLabel(task.order_number, task.order_id),
+    brakiStageLabel: stageLabel,
+    brakiWorkstreams: ws,
+    shortageLifecyclePhase: phase,
+    priorityLabel: priorityLabelForTask(task),
+    currentStep: brakiMixedStateSummary(task),
+    scanHint: "Zeskanuj zamówienie lub wybierz akcję poniżej",
+    ...extras,
+  };
+}
+
+export function executionContextFromBrakiHub(opts: {
+  queueCount?: number;
+  scanHint?: string;
+}): ExecutionActiveContext {
+  const count = opts.queueCount ?? 0;
+  return {
+    operationType: "BRAKI WMS",
+    orderNumber: null,
+    brakiStageLabel: "Kolejka braków",
+    currentStep: count > 0 ? `${count} zamówień w kolejce` : "Brak otwartych zgłoszeń",
+    scanHint: opts.scanHint ?? "Zeskanuj EAN lub numer zamówienia",
   };
 }
 

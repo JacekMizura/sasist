@@ -305,15 +305,10 @@ export function brakiOperationalActions(
     });
   }
 
-  const canArchive = task.can_close_shortage === true;
   actions.push({
     id: "archive",
     label: "Usuń z Braki WMS",
     variant: "danger",
-    disabled: !canArchive,
-    disabledReason: canArchive
-      ? undefined
-      : "Zamknij otwarte operacje (dogrywka, rozlokowanie, OMS) przed usunięciem z kolejki.",
     execute: () => {},
   });
 

@@ -25,6 +25,7 @@ from ..schemas.order_issue_task import (
     OrderIssueOrderContext,
     OrderIssueShortageLine,
     OrderIssueTaskArchiveBody,
+    OrderIssueTaskForceRemoveBody,
     OrderIssueTaskDoneBody,
     OrderIssueTaskListItem,
     OrderIssueTaskListResponse,
@@ -951,4 +952,83 @@ def post_order_issue_task_archive(
         "success": True,
         "archived": bool(result.get("archived")),
         "already_archived": bool(result.get("already_archived")),
+    }
+
+
+@router.post("/order-issue-tasks/{task_id}/force-remove")
+def post_order_issue_task_force_remove(
+    task_id: int,
+    body: OrderIssueTaskForceRemoveBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser | None = Depends(get_optional_current_user),
+):
+    """Wymuszone usunięcie z kolejki Braki — zamyka operacje workflow i archiwizuje zadanie."""
+    from ..services.recovery_workflow_service import force_remove_braki_order
+
+    ensure_order_issue_task_table_schema(db)
+    t = (
+        db.query(OrderIssueTask)
+        .filter(
+            OrderIssueTask.id == int(task_id),
+            OrderIssueTask.tenant_id == int(tenant_id),
+            OrderIssueTask.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if not t:
+        raise HTTPException(status_code=404, detail="Zadanie nie znalezione.")
+    o = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(Order.id == int(t.order_id))
+        .first()
+    )
+    if o is None:
+        raise HTTPException(status_code=404, detail="Zamówienie nie znalezione.")
+    try:
+        result = force_remove_braki_order(
+            db,
+            o,
+            t,
+            mode=body.mode,
+            message=body.message,
+            operator_user_id=int(current_user.id) if current_user and current_user.id else None,
+        )
+    except ValueError as exc:
+        msg = str(exc).strip() or "Nie można wymusić usunięcia z kolejki Braki."
+        raise HTTPException(status_code=400, detail={"message": msg}) from exc
+    except Exception as exc:
+        logger.exception(
+            "[braki.force_remove] failed task_id=%s order_id=%s mode=%s",
+            task_id,
+            getattr(t, "order_id", None),
+            body.mode,
+        )
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Nie udało się wymusić usunięcia z kolejki Braki."},
+        ) from exc
+    if current_user is not None and current_user.id is not None:
+        complete_wms_operation_session(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            session_kind="shortage_active",
+            operator_user_id=int(current_user.id),
+            order_id=int(t.order_id),
+            completed_reason="force_removed",
+            metadata=_shortage_session_metadata(t),
+        )
+    db.commit()
+    return {
+        "success": True,
+        "archived": bool(result.get("archived")),
+        "already_archived": bool(result.get("already_archived")),
+        "mode": result.get("mode"),
+        "active_operations_before": result.get("active_operations_before"),
+        "active_operations_after": result.get("active_operations_after"),
+        "recovery_state_hash": result.get("recovery_state_hash"),
     }

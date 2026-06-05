@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -264,4 +264,12 @@ class OrderIssueTaskDoneBody(BaseModel):
 
 
 class OrderIssueTaskArchiveBody(BaseModel):
+    message: Optional[str] = None
+
+
+class OrderIssueTaskForceRemoveBody(BaseModel):
+    mode: Literal["full", "wms_only", "oms_review"] = Field(
+        ...,
+        description="full — zamknij wszystko; wms_only — tylko workflow magazynowy; oms_review — zwrot do OMS",
+    )
     message: Optional[str] = None

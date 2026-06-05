@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { executionContextFromBrakiHub } from "../../components/wms/execution/syncExecutionContext";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import {
@@ -136,6 +138,7 @@ export default function WmsOrderIssuesHub() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const navigate = useNavigate();
+  const { setActiveContext } = useWarehouseExecution();
   const [searchParams] = useSearchParams();
   const orderIdFromUrl = searchParams.get("order_id");
   const {
@@ -218,6 +221,16 @@ export default function WmsOrderIssuesHub() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setActiveContext(
+      executionContextFromBrakiHub({
+        queueCount: tasks.length,
+        scanHint: "Zeskanuj EAN lub numer zamówienia — otworzy kartę braków",
+      }),
+    );
+    return () => setActiveContext(null);
+  }, [setActiveContext, tasks.length]);
 
   useWmsShortagesRefresh(() => void load(), { debounceMs: 600 });
 

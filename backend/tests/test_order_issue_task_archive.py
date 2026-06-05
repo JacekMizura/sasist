@@ -67,10 +67,7 @@ class TestOrderIssueTaskArchive(unittest.TestCase):
                 totals=SimpleNamespace(recovery_lines=0, oms_decision_lines=0),
             ),
         ), patch(
-            "backend.services.wms_recovery_pick_service.get_open_recovery_task_for_order",
-            return_value=None,
-        ), patch(
-            "backend.services.wms_operational_task_service.close_operational_tasks_for_order",
+            "backend.services.recovery_workflow_service.close_braki_operational_workflows_for_order",
         ) as close_mock:
             result = archive_order_issue_task(db, task, order, operator_user_id=5)
         close_mock.assert_called_once()

@@ -233,6 +233,22 @@ export async function postWmsOrderIssueTaskArchive(
   );
 }
 
+export type BrakiForceRemoveMode = "full" | "wms_only" | "oms_review";
+
+export async function postWmsOrderIssueTaskForceRemove(
+  tenantId: number,
+  warehouseId: number,
+  taskId: number,
+  mode: BrakiForceRemoveMode,
+  message?: string,
+): Promise<void> {
+  await api.post(
+    `/wms/order-issue-tasks/${taskId}/force-remove`,
+    { mode, ...(message ? { message } : {}) },
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
+  );
+}
+
 export async function postWmsOrderIssueTaskDone(
   tenantId: number,
   warehouseId: number,

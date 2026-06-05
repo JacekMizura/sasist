@@ -1,8 +1,8 @@
 import type { ExecutionActiveContext, RelocationTargetType } from "../../../context/WarehouseExecutionContext";
 import { relocationTargetRowLabel } from "../../../pages/wms/wmsTerminology";
 
-/** Sticky offset for page headers when the global context bar is visible (~5.75rem). */
-export const ACTIVE_OPERATION_CONTEXT_BAR_OFFSET = "5.75rem";
+/** Sticky offset for page headers when the global context bar is visible (~7rem with Braki badges). */
+export const ACTIVE_OPERATION_CONTEXT_BAR_OFFSET = "7rem";
 
 export type NormalizedOperationContext = {
   operationType: string;
@@ -16,6 +16,9 @@ export type NormalizedOperationContext = {
   currentStep?: string | null;
   operatorName?: string | null;
   scanHint?: string | null;
+  brakiStageLabel?: string | null;
+  brakiWorkstreams?: import("../../../context/WarehouseExecutionContext").BrakiWorkstreamContext | null;
+  priorityLabel?: string | null;
 };
 
 export function normalizeOperationContext(
@@ -50,6 +53,9 @@ export function normalizeOperationContext(
     currentStep: ctx.currentStep ?? ctx.stepLabel ?? null,
     operatorName: ctx.operatorName ?? null,
     scanHint: ctx.scanHint ?? null,
+    brakiStageLabel: (ctx.brakiStageLabel ?? "").trim() || null,
+    brakiWorkstreams: ctx.brakiWorkstreams ?? null,
+    priorityLabel: (ctx.priorityLabel ?? "").trim() || null,
   };
 }
 

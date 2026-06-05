@@ -1148,6 +1148,167 @@ def validate_order_finalize_allowed(
     )
 
 
+ForceRemoveMode = Literal["full", "wms_only", "oms_review"]
+
+
+def snapshot_braki_active_operations(
+    db: Session,
+    order: Order,
+    *,
+    state: OrderRecoveryState | None = None,
+) -> dict[str, bool]:
+    """Aktywne operacje blokujące zwykłe zamknięcie — do UI force-remove."""
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+
+    st = state if state is not None else resolve_order_recovery_state(db, order, log=False)
+    open_recovery = get_open_recovery_task_for_order(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    )
+    has_reloc = bool(st.has_pending_relocation) or any(
+        ln.visible_in_relocation for ln in st.lines
+    )
+    return {
+        "recovery_task": open_recovery is not None or bool(st.has_recovery_pick_work),
+        "relocation_task": has_reloc,
+        "oms_decision": int(st.totals.oms_decision_lines) > 0,
+        "packing_transition": bool(st.packing_allowed) and (
+            has_reloc or bool(st.has_recovery_pick_work) or int(st.totals.oms_decision_lines) > 0
+        ),
+    }
+
+
+def close_braki_operational_workflows_for_order(db: Session, order: Order) -> None:
+    """
+    Zamyka wyłącznie stan operacyjny WMS (dogrywka, zadania operacyjne).
+    Bez mutacji picków, dokumentów, stanów magazynowych.
+    """
+    from .wms_operational_task_service import close_operational_tasks_for_order
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order, mark_recovery_task_done
+
+    open_recovery = get_open_recovery_task_for_order(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    )
+    if open_recovery is not None:
+        mark_recovery_task_done(db, open_recovery)
+    try:
+        close_operational_tasks_for_order(db, order)
+    except Exception:
+        logger.warning(
+            "[braki.force_close] close_operational_tasks failed order_id=%s",
+            int(order.id),
+            exc_info=True,
+        )
+
+
+def force_remove_braki_order(
+    db: Session,
+    order: Order,
+    task: "OrderIssueTask",
+    *,
+    mode: ForceRemoveMode,
+    operator_user_id: int | None = None,
+    message: str | None = None,
+) -> dict[str, Any]:
+    """
+    Wymuszone usunięcie z kolejki Braki — operator zawsze może wyjść z deadlocku.
+    Przechodzi przez resolver; nie tworzy drugiej warstwy workflow.
+    """
+    from ..models.order_issue_task import OrderIssueTask
+    from .order_issue_task_service import archive_issue_task_record
+    from .order_fulfillment_state import NEEDS_DECISION as FS_NEEDS_DECISION
+
+    _ = OrderIssueTask  # typing import guard
+    before = snapshot_braki_active_operations(db, order)
+    logger.info(
+        "[braki.force_close] task_id=%s order_id=%s mode=%s operator=%s active_ops=%s",
+        int(task.id),
+        int(order.id),
+        mode,
+        operator_user_id,
+        before,
+    )
+
+    close_braki_operational_workflows_for_order(db, order)
+
+    if mode == "oms_review":
+        order.fulfillment_state = FS_NEEDS_DECISION
+
+    state_after_close = apply_fulfillment_state_from_resolver(db, order, log=False)
+    after = snapshot_braki_active_operations(db, order, state=state_after_close)
+    logger.info(
+        "[resolver.recompute.after_force_remove] task_id=%s order_id=%s mode=%s "
+        "packing_allowed=%s recovery_status=%s has_recovery=%s has_relocation=%s "
+        "oms_lines=%s active_ops_after=%s state_hash=%s",
+        int(task.id),
+        int(order.id),
+        mode,
+        state_after_close.packing_allowed,
+        state_after_close.recovery_status,
+        state_after_close.has_recovery_pick_work,
+        state_after_close.has_pending_relocation,
+        state_after_close.totals.oms_decision_lines,
+        after,
+        state_after_close.state_hash,
+    )
+
+    mode_notes = {
+        "full": "Wymuszone zamknięcie wszystkich operacji i usunięcie z Braki WMS",
+        "wms_only": "Anulowano workflow magazynowy — stan OMS zachowany",
+        "oms_review": "Zwrócono do przeglądu OMS — usunięto z kolejki Braki WMS",
+    }
+    note = message or mode_notes.get(mode, "Wymuszone usunięcie z Braki WMS")
+    archive_result = archive_issue_task_record(
+        db,
+        task,
+        order,
+        message=note,
+        operator_user_id=operator_user_id,
+        log_kind="force_remove",
+    )
+    _append_force_remove_log(task, mode=mode, before=before, after=after)
+
+    logger.info(
+        "[braki.force_remove] task_id=%s order_id=%s mode=%s operator=%s "
+        "archived=%s already_archived=%s",
+        int(task.id),
+        int(order.id),
+        mode,
+        operator_user_id,
+        archive_result.get("archived"),
+        archive_result.get("already_archived"),
+    )
+    return {
+        **archive_result,
+        "mode": mode,
+        "active_operations_before": before,
+        "active_operations_after": after,
+        "recovery_state_hash": state_after_close.state_hash,
+    }
+
+
+def _append_force_remove_log(
+    task: "OrderIssueTask",
+    *,
+    mode: ForceRemoveMode,
+    before: dict[str, bool],
+    after: dict[str, bool],
+) -> None:
+    from .order_issue_task_service import _append_log
+
+    _append_log(
+        task,
+        f"force_remove mode={mode} before={json.dumps(before, ensure_ascii=False)} "
+        f"after={json.dumps(after, ensure_ascii=False)}",
+        "force_remove",
+    )
+
+
 def can_close_braki_shortage(
     db: Session,
     order_or_id: Order | int | None = None,

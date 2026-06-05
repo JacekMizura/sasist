@@ -19,10 +19,27 @@ export type ScanFeedbackKind = "success" | "error" | "conflict" | "warning";
 
 export type RelocationTargetType = "LOCATION" | "CARRIER_UNIT";
 
+export type BrakiWorkstreamContext = {
+  has_oms_pending?: boolean;
+  has_pick_work?: boolean;
+  has_relocation_work?: boolean;
+  has_packing_ready?: boolean;
+  pick_line_count?: number;
+  relocation_line_count?: number;
+  packing_ready_line_count?: number;
+  oms_line_count?: number;
+  collected_line_count?: number;
+};
+
 export type ExecutionActiveContext = {
   /** Primary operation label, e.g. DOGRYWKA BRAKÓW, ROZLOKOWANIE PRODUKTÓW */
   operationType?: string;
   orderNumber?: string | null;
+  /** Braki WMS — etap i liczniki z resolvera (globalny pasek operacyjny). */
+  brakiStageLabel?: string | null;
+  brakiWorkstreams?: BrakiWorkstreamContext | null;
+  shortageLifecyclePhase?: string | null;
+  priorityLabel?: string | null;
   /** Wózek / koszyk / tote — tylko sesja zbierania (nie nośnik logistyczny). */
   pickingToolLabel?: string | null;
   sourceLocation?: string | null;
