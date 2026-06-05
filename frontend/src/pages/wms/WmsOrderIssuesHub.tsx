@@ -24,7 +24,7 @@ import {
   sortTasksByPriority,
 } from "./brakiPriority";
 import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
-import { mergeQueueCards, type NormalizedShortageQueueCard } from "./normalizeShortageQueueCard";
+import { mergeQueueCards, type NormalizedShortageQueueCard } from "./brakiQueueMerge";
 import { readBrakiQueueStage } from "./readBrakiOperationalState";
 import { brakiQueueCardAccent, type BrakiQueueWorkflowId } from "./brakiWorkstreamUi";
 

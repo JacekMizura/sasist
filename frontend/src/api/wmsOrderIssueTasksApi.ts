@@ -1,6 +1,6 @@
 import api from "./axios";
-import { mergeQueueCards } from "../pages/wms/normalizeShortageQueueCard";
-import { createRequestDeduper } from "../utils/wmsRefresh";
+import { mergeQueueCards } from "../pages/wms/brakiQueueMerge";
+import { createRequestDeduper } from "../utils/wmsRequestDeduper";
 
 const orderIssueTasksListDeduper = createRequestDeduper();
 const orderIssueTaskDetailDeduper = createRequestDeduper();

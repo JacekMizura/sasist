@@ -5,9 +5,12 @@ import {
 } from "../../api/wmsRelocationBatchApi";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { navigateBrakiToPacking } from "./brakiGoToPacking";
+import type { BrakiWorkstreams } from "./brakiWorkstreamTypes";
 import { readBrakiOperationalState, readBrakiWorkstreams } from "./readBrakiOperationalState";
 import { WMS_UI } from "./wmsTerminology";
 import { WMS_ROUTES } from "./wmsRoutes";
+
+export type { BrakiWorkstreams } from "./brakiWorkstreamTypes";
 
 export type BrakiWorkflowStatusId =
   | "awaiting"
@@ -35,18 +38,6 @@ export type BrakiActionId =
   | "packing"
   | "archive"
   | "waiting_supply";
-
-export type BrakiWorkstreams = {
-  has_pick_work: boolean;
-  has_relocation_work: boolean;
-  has_packing_ready: boolean;
-  has_oms_pending: boolean;
-  pick_line_count: number;
-  relocation_line_count: number;
-  packing_ready_line_count: number;
-  oms_line_count: number;
-  collected_line_count: number;
-};
 
 export type BrakiOperationalAction = {
   id: BrakiActionId;

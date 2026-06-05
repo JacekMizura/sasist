@@ -1,7 +1,7 @@
 import axios from "axios";
 
 import api from "./axios";
-import { createRequestDeduper } from "../utils/wmsRefresh";
+import { createRequestDeduper } from "../utils/wmsRequestDeduper";
 
 const pickingProductLinesDeduper = createRequestDeduper();
 const pickingProductDetailDeduper = createRequestDeduper();

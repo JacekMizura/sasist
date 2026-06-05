@@ -1,3 +1,5 @@
+import { ORDERS_OPERATIONS_UPDATED_EVENT } from "../../constants/wmsEvents";
+
 /** Brak tras `/wms/carriers*` — nośniki obsługuje przyjęcie PZ (`receivingPz`) i inne flow operacyjne. */
 export const WMS_ROUTES = {
   root: "/wms",
@@ -72,22 +74,15 @@ export const WMS_ROUTES = {
     `/wms/putaway/${pzId}/item/${itemId}/execute`,
 } as const;
 
-/** `CustomEvent` name — after receiving PATCH/finish; putaway screens refetch the same PZ. */
-export const WMS_RECEIVING_UPDATED_EVENT = "wms:receiving-updated";
-
-/** After MM draft line append — MM relocation screens only (not receiving queues). */
-export const WMS_MM_UPDATED_EVENT = "wms:mm-updated";
-
-/** After relocation finalize — putaway list removes tile / refetches. */
-export const WMS_RELOCATION_FINALIZED_EVENT = "wms:relocation-finalized";
-
-/** Po akcjach braków (OMS/WMS) — odświeżenie zamówienia, kolejki braków, sesji zbierania. */
-export const WMS_SHORTAGES_UPDATED_EVENT = "wms:shortages-updated";
+export {
+  ORDERS_OPERATIONS_UPDATED_EVENT,
+  WMS_MM_UPDATED_EVENT,
+  WMS_RECEIVING_UPDATED_EVENT,
+  WMS_RELOCATION_FINALIZED_EVENT,
+  WMS_SHORTAGES_UPDATED_EVENT,
+} from "../../constants/wmsEvents";
 
 export { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
-
-/** Po usunięciu / archiwizacji zamówień — odświeżenie pulpitu i innych widoków liczących zamówienia. */
-export const ORDERS_OPERATIONS_UPDATED_EVENT = "orders:operations-updated";
 
 export function dispatchOrdersOperationsUpdated(): void {
   window.dispatchEvent(new Event(ORDERS_OPERATIONS_UPDATED_EVENT));

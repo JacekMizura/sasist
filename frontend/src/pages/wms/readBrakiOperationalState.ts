@@ -4,7 +4,7 @@ import type {
   BrakiWorkstreamsApi,
   OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
-import type { BrakiWorkstreams } from "./brakiWorkflowCta";
+import type { BrakiWorkstreams } from "./brakiWorkstreamTypes";
 
 const EMPTY_WORKSTREAMS: BrakiWorkstreams = {
   has_pick_work: false,

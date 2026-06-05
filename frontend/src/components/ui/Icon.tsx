@@ -21,6 +21,29 @@ import AisleIcon from "../../icons/AisleIcon";
 import BinLocationIcon from "../../icons/BinLocationIcon";
 import BasketIcon from "../../icons/BasketIcon";
 
+export type IconName =
+  | "warehouse"
+  | "racks"
+  | "zones"
+  | "cart"
+  | "packing"
+  | "replenishment"
+  | "slotting"
+  | "routeOptimization"
+  | "heatmap"
+  | "forecast"
+  | "simulation"
+  | "worker"
+  | "inventory"
+  | "orders"
+  | "picking"
+  | "analytics"
+  | "pallet"
+  | "carton"
+  | "aisle"
+  | "binLocation"
+  | "basket";
+
 type IconComponent = React.ComponentType<IconProps>;
 
 const iconMap: Record<IconName, IconComponent> = {
@@ -46,29 +69,6 @@ const iconMap: Record<IconName, IconComponent> = {
   binLocation: BinLocationIcon,
   basket: BasketIcon,
 };
-
-export type IconName =
-  | "warehouse"
-  | "racks"
-  | "zones"
-  | "cart"
-  | "packing"
-  | "replenishment"
-  | "slotting"
-  | "routeOptimization"
-  | "heatmap"
-  | "forecast"
-  | "simulation"
-  | "worker"
-  | "inventory"
-  | "orders"
-  | "picking"
-  | "analytics"
-  | "pallet"
-  | "carton"
-  | "aisle"
-  | "binLocation"
-  | "basket";
 
 export type IconComponentProps = {
   name: IconName;
