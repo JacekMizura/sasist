@@ -722,6 +722,11 @@ def post_picking_quick_pick(
             operator_user_id=int(current_user.id),
         )
         if body.cart_id is not None:
+            recovery_oid = (
+                int(body.recovery_order_id)
+                if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
+                else None
+            )
             resp = build_wms_picking_product_lines(
                 db,
                 tenant_id=tid,
@@ -729,9 +734,8 @@ def post_picking_quick_pick(
                 source_status_id=source_status_id,
                 order_type=order_type,
                 cart_id=body.cart_id,
-                fixed_order_ids=[int(body.recovery_order_id)]
-                if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
-                else None,
+                fixed_order_ids=[recovery_oid] if recovery_oid is not None else None,
+                recovery_mode=recovery_oid is not None,
             )
             touch_wms_operation_session(
                 db,

@@ -354,9 +354,12 @@ export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił bł�
         if (parts.length) return parts.join("; ");
       }
     }
-    if (data && typeof data === "object" && "error" in data) {
-      const er = String((data as { error?: unknown }).error ?? "").trim();
-      if (er) return er;
+    if (data && typeof data === "object") {
+      const top = data as { error?: unknown; message?: unknown };
+      const topMsg = String(top.message ?? "").trim();
+      if (topMsg && topMsg !== "[object Object]") return topMsg;
+      const er = String(top.error ?? "").trim();
+      if (er && er !== "[object Object]") return er;
     }
     return fallback;
   }

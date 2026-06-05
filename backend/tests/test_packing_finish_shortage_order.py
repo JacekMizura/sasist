@@ -72,8 +72,11 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
                 return_value=0.0,
             ),
             patch(
-                "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
-                return_value=(0, 0),
+                "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+                return_value=SimpleNamespace(
+                    totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=0),
+                    packing_allowed=True,
+                ),
             ),
         ):
             snap = _packing_finish_validation_snapshot(db, order, log=False)
@@ -94,8 +97,11 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
                 return_value=1.0,
             ),
             patch(
-                "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
-                return_value=(0, 0),
+                "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+                return_value=SimpleNamespace(
+                    totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=0),
+                    packing_allowed=False,
+                ),
             ),
         ):
             snap = _packing_finish_validation_snapshot(db, order, log=False)
@@ -122,8 +128,11 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
                 return_value=0.0,
             ),
             patch(
-                "backend.services.braki_order_state_service.count_issue_queue_operational_lines",
-                return_value=(0, 0),
+                "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+                return_value=SimpleNamespace(
+                    totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=0),
+                    packing_allowed=True,
+                ),
             ),
         ):
             snap = _packing_finish_validation_snapshot(db, order, log=False)

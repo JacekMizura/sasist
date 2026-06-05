@@ -48,12 +48,11 @@ class TestRecoveryPickingOpen(unittest.TestCase):
         db = MagicMock()
         with (
             patch(
-                "backend.services.wms_recovery_pick_service.count_issue_queue_operational_lines",
-                return_value=(0, 2),
-            ),
-            patch(
-                "backend.services.wms_recovery_pick_service.order_has_pending_replacement_picking",
-                return_value=False,
+                "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+                return_value=SimpleNamespace(
+                    has_recovery_work=True,
+                    totals=SimpleNamespace(oms_decision_lines=0, recovery_lines=2),
+                ),
             ),
         ):
             self.assertTrue(order_has_recovery_pick_work(db, order))

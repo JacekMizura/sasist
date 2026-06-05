@@ -721,14 +721,7 @@ def ensure_relocation_for_order_item_picks(
 
 
 def count_issue_queue_operational_lines(db: Session, order: Order) -> tuple[int, int]:
-    """(linie wymagające decyzji OMS, linie do zebrania / dogrywki)."""
-    from .wms_recovery_pick_service import get_unresolved_recovery_lines
+    """(linie wymagające decyzji OMS, linie do zebrania / dogrywki) — ``RecoveryWorkflowService``."""
+    from .recovery_workflow_service import count_recovery_operational_lines
 
-    unresolved = 0
-    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
-        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
-            continue
-        if order_line_requires_oms_decision(db, order, oi):
-            unresolved += 1
-    repl_pending = len(get_unresolved_recovery_lines(db, order, log=False))
-    return unresolved, repl_pending
+    return count_recovery_operational_lines(db, order)

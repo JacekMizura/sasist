@@ -95,88 +95,11 @@ def get_unresolved_recovery_lines(
     log: bool = True,
 ) -> list[dict[str, Any]]:
     """
-    Jedno źródło prawdy: linie z pozostałą pracą zbierkową (dogrywka).
-    Używane przez kolejkę Braki, finalize-cart, listę recovery i liczniki.
+    Linie dogrywki — delegacja do ``RecoveryWorkflowService`` (jedno źródło prawdy).
     """
-    from .braki_order_state_service import order_line_pick_still_possible, order_line_requires_oms_decision
-    from .order_fulfillment_recompute import line_closed_for_picking_finalize, line_shortage_qty_for_picking_finalize
-    from .fulfillment_event_service import sum_pick_events_for_line_cart
+    from .recovery_workflow_service import get_recovery_pick_lines
 
-    oid = int(order.id)
-    cid = int(session_cart_id) if session_cart_id is not None and int(session_cart_id) > 0 else None
-    out: list[dict[str, Any]] = []
-
-    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
-        if _line_skipped_for_recovery(oi):
-            continue
-
-        ordered = float(oi.quantity or 0)
-        picked = float(line_picked_sum_for_order(db, int(oi.id), order))
-        picked_cart = (
-            float(sum_pick_events_for_line_cart(db, int(oi.id), cid))
-            if cid is not None
-            else picked
-        )
-        removed = float(getattr(oi, "oms_removed_qty", None) or 0.0)
-        replaced = float(getattr(oi, "oms_replaced_qty", None) or 0.0)
-        missing_op = float(compute_line_missing_qty(db, order, oi, session_cart_id=cid))
-        shortage_cart = (
-            float(line_shortage_qty_for_picking_finalize(db, order, oi, session_cart_id=cid, picked=picked_cart))
-            if cid is not None
-            else float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
-        )
-
-        recovery_eligible = False
-        unresolved_qty = 0.0
-
-        if order_line_requires_oms_decision(db, order, oi):
-            recovery_eligible = False
-        elif cid is not None and line_closed_for_picking_finalize(
-            db, order, oi, session_cart_id=cid, picked=picked_cart
-        ):
-            recovery_eligible = False
-        elif order_item_needs_substitute_pick_completion(db, order, oi, session_cart_id=cid):
-            recovery_eligible = True
-            unresolved_qty = max(0.0, round(ordered - picked, 6))
-        elif order_line_pick_still_possible(db, order, oi):
-            recovery_eligible = True
-            gap = max(0.0, ordered - picked)
-            uncovered = max(0.0, gap - shortage_cart)
-            unresolved_qty = round(uncovered, 6)
-
-        row = {
-            "order_id": oid,
-            "order_item_id": int(oi.id),
-            "product_id": int(oi.product_id),
-            "ordered_qty": round(ordered, 6),
-            "picked_qty": round(picked, 6),
-            "picked_cart_qty": round(picked_cart, 6),
-            "removed_qty": round(removed, 6),
-            "replacement_qty": round(replaced, 6),
-            "shortage_cart_qty": round(shortage_cart, 6),
-            "missing_operational_qty": round(missing_op, 6),
-            "unresolved_qty": unresolved_qty,
-            "recovery_eligible": recovery_eligible,
-        }
-        if log:
-            logger.info(
-                "[wms.recovery.lines] order_id=%s line_id=%s product_id=%s "
-                "ordered_qty=%s picked_qty=%s removed_qty=%s replacement_qty=%s "
-                "unresolved_qty=%s recovery_eligible=%s",
-                oid,
-                int(oi.id),
-                int(oi.product_id),
-                row["ordered_qty"],
-                row["picked_qty"],
-                row["removed_qty"],
-                row["replacement_qty"],
-                row["unresolved_qty"],
-                recovery_eligible,
-            )
-        if recovery_eligible and unresolved_qty > 1e-9:
-            out.append(row)
-
-    return out
+    return get_recovery_pick_lines(db, order, session_cart_id=session_cart_id, log=log)
 
 
 def log_recovery_lines_for_order(
@@ -190,11 +113,13 @@ def log_recovery_lines_for_order(
 
 
 def _needs_recovery_picking(db: Session, order: Order) -> bool:
-    """Pozostała praca magazynowa (zamiennik / TO_PICK) przy braku nierozwiązanych braków OMS na liniach."""
-    u, _r = count_issue_queue_operational_lines(db, order)
-    if int(u) > 0:
+    """Pozostała praca magazynowa — kanoniczny stan z ``resolve_order_recovery_state``."""
+    from .recovery_workflow_service import resolve_order_recovery_state
+
+    state = resolve_order_recovery_state(db, order, log=False)
+    if state.totals.oms_decision_lines > 0:
         return False
-    if len(get_unresolved_recovery_lines(db, order, log=False)) > 0:
+    if state.has_recovery_work:
         return True
     if order_has_pending_replacement_picking(db, order):
         return True
@@ -281,10 +206,9 @@ def mark_recovery_task_done(db: Session, task: WmsRecoveryPickTask) -> None:
 
 def order_has_recovery_pick_work(db: Session, order: Order) -> bool:
     """Czy zamówienie ma jeszcze pracę magazynową (dogrywka), bez oczekującej decyzji OMS."""
-    u, _r = count_issue_queue_operational_lines(db, order)
-    if int(u) > 0:
-        return False
-    return len(get_unresolved_recovery_lines(db, order, log=False)) > 0
+    from .recovery_workflow_service import resolve_order_recovery_state
+
+    return resolve_order_recovery_state(db, order, log=False).has_recovery_work
 
 
 def _recovery_line_stats(db: Session, order: Order) -> dict[str, int]:

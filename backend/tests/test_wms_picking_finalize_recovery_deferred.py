@@ -32,7 +32,7 @@ def _oi(**kwargs):
 
 
 def _order(items, **kwargs):
-    defaults = {"id": 1196, "number": "1196", "warehouse_id": 1, "items": items, "cart_id": 1}
+    defaults = {"id": 1196, "number": "1196", "tenant_id": 1, "warehouse_id": 1, "items": items, "cart_id": 1}
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
@@ -64,6 +64,9 @@ class TestRecoveryDeferredFinalize:
         ), patch(
             "backend.services.order_fulfillment_recompute.order_item_needs_substitute_pick_completion",
             return_value=False,
+        ), patch(
+            "backend.services.wms_relocation_workflow.relocation_alloc_counts_for_order",
+            return_value=(0, 0, 0),
         ):
             ok, reason = _picking_line_resolved_for_finalize(
                 db, order, oi, tenant_id=1, warehouse_id=1, cart_id=9
@@ -95,6 +98,9 @@ class TestRecoveryDeferredFinalize:
         ), patch(
             "backend.services.order_fulfillment_recompute.order_item_needs_substitute_pick_completion",
             return_value=False,
+        ), patch(
+            "backend.services.wms_relocation_workflow.relocation_alloc_counts_for_order",
+            return_value=(0, 0, 0),
         ):
             rows = get_unresolved_recovery_lines(db, order, log=False)
 

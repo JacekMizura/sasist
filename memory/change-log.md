@@ -1,5 +1,16 @@
 # Change Log
 
+## 2026-06-04 — RecoveryWorkflowService (jedno źródło prawdy)
+
+- ``recovery_workflow_service.py`` — ``resolve_order_recovery_state()`` z pełnym stanem linii + ``[recovery.state]`` logi.
+- Kolejka Braki, dogrywka, finalize-cart, quick-pick recovery, pakowanie — delegacja do resolvera.
+- ``get_unresolved_recovery_lines`` → ``get_recovery_pick_lines`` (kompatybilność wsteczna).
+- ``count_issue_queue_operational_lines`` → ``count_recovery_operational_lines``.
+- Quick-pick po recovery zwraca listę z ``recovery_mode=True``.
+- ``GET /orders/{id}/notes`` — koniec 404 w OMS szczegół zamówienia.
+- Frontend: ``extractApiErrorMessage`` + WmsPickingProductsPage (finalize / quick-pick).
+- Test: ``test_recovery_workflow_service.py``.
+
 ## 2026-06-04 — Finalize-cart: częściowa zbiórka + dogrywka (recovery deferred)
 
 - ``get_unresolved_recovery_lines`` — jedno źródło prawdy dla linii dogrywki; log ``[wms.recovery.lines]`` per linia.

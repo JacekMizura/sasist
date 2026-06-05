@@ -47,6 +47,7 @@ from ..schemas.order import (
     OrderActivityLogRead,
     OrderListRead,
     OrderListItemPreview,
+    OrderNoteRead,
     OrderItemRead,
     OrderUiStatusBrief,
     PanelFulfillmentHistoryEntry,
@@ -2994,6 +2995,29 @@ def _serialize_operational_note_row(n: OrderOperationalNote) -> OrderOperational
         created_at=getattr(n, "created_at", None),
         updated_at=getattr(n, "updated_at", None),
     )
+
+
+@router.get("/{order_id}/notes", response_model=List[OrderNoteRead])
+def list_order_notes(order_id: int, db: Session = Depends(get_db)):
+    """Notatki zamówienia (``order_notes``) — używane przez OMS szczegół zamówienia."""
+    order = db.query(Order).filter(Order.id == int(order_id)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    rows = (
+        db.query(OrderNote)
+        .filter(OrderNote.order_id == int(order_id))
+        .order_by(OrderNote.created_at.desc(), OrderNote.id.desc())
+        .all()
+    )
+    return [
+        OrderNoteRead(
+            id=int(n.id),
+            type=str(n.type or "internal"),
+            content=str(n.content or ""),
+            created_at=getattr(n, "created_at", None),
+        )
+        for n in rows
+    ]
 
 
 @router.get("/{order_id}/operational-notes", response_model=List[OrderOperationalNoteRead])

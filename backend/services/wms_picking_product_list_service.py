@@ -638,20 +638,19 @@ def _picking_line_resolved_for_finalize(
             return True, "picked_plus_shortage"
         return True, "fully_picked"
 
-    from .braki_order_state_service import order_line_pick_still_possible, order_line_requires_oms_decision
-    from .wms_recovery_pick_service import get_unresolved_recovery_lines
+    from .recovery_workflow_service import resolve_order_recovery_state
 
-    if order_line_requires_oms_decision(db, order, oi):
-        return False, "oms_decision_required"
-
-    for row in get_unresolved_recovery_lines(db, order, session_cart_id=cid, log=False):
-        if int(row["order_item_id"]) == int(oi.id):
-            return True, "recovery_deferred"
-
-    if order_item_needs_substitute_pick_completion(db, order, oi, session_cart_id=cid):
-        return True, "recovery_deferred_substitute"
-    if order_line_pick_still_possible(db, order, oi):
-        return True, "recovery_deferred"
+    state = resolve_order_recovery_state(db, order, session_cart_id=cid, log=False)
+    for ln in state.lines:
+        if int(ln.order_line_id) != int(oi.id):
+            continue
+        if ln.reason == "awaiting_oms":
+            return False, "oms_decision_required"
+        if ln.active_recovery:
+            return True, "recovery_deferred_substitute" if ln.replacement_applied else "recovery_deferred"
+        if ln.packing_eligible or ln.recovery_completed:
+            return True, "fully_picked"
+        break
 
     return False, "incomplete"
 
@@ -1404,18 +1403,20 @@ def record_wms_quick_pick(
             raise ValueError("Zamówienie nie należy do tego magazynu / tenanta.")
         from .wms_recovery_pick_service import get_open_recovery_task_for_order
 
-        from .wms_recovery_pick_service import prepare_recovery_picking_for_order
+        from .recovery_workflow_service import RecoveryWorkflowError, resolve_order_recovery_state
 
-        prep = prepare_recovery_picking_for_order(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            order_id=oid,
-            cart_id=int(cart_id),
-        )
-        if not prep.get("ok"):
-            raise ValueError("Zamówienie dogrywki nie znalezione.")
-        if prep.get("completed"):
+        try:
+            rec_state = resolve_order_recovery_state(
+                db,
+                oid,
+                session_cart_id=int(cart_id),
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                log=False,
+            )
+        except RecoveryWorkflowError as exc:
+            raise ValueError(exc.message) from exc
+        if not rec_state.has_recovery_work:
             raise ValueError("Brak linii do dogrywki — braki zostały już rozwiązane.")
         order_ids = [oid]
     else:
@@ -2405,14 +2406,11 @@ def finalize_wms_picking_cart(
             pack_ok,
         )
 
-    from .wms_recovery_pick_service import (
-        ensure_recovery_pick_task,
-        log_recovery_lines_for_order,
-        order_has_recovery_pick_work,
-    )
+    from .recovery_workflow_service import resolve_order_recovery_state
+    from .wms_recovery_pick_service import ensure_recovery_pick_task, order_has_recovery_pick_work
 
     for o in orders:
-        log_recovery_lines_for_order(db, o, session_cart_id=cid)
+        resolve_order_recovery_state(db, o, session_cart_id=cid, log=True)
         if order_has_recovery_pick_work(db, o):
             ensure_recovery_pick_task(
                 db,

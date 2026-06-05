@@ -152,7 +152,6 @@ def order_item_required_pack_qty(db: Session, order: Order, it: OrderItem) -> in
 
 def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool = False) -> dict:
     """Diagnoza gotowości do domknięcia pakowania."""
-    from .braki_order_state_service import count_issue_queue_operational_lines
 
     items = order.items or []
     active_lines = 0
@@ -211,9 +210,12 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
                 }
             )
 
-    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    from .recovery_workflow_service import resolve_order_recovery_state
+
+    rec_state = resolve_order_recovery_state(db, order, log=False)
+    u_short, r_pend = rec_state.totals.oms_decision_lines, rec_state.totals.recovery_lines
     lines_packed_complete = len(unresolved_lines) == 0
-    packable = lines_packed_complete and int(u_short) == 0
+    packable = lines_packed_complete and rec_state.packing_allowed
 
     snap = {
         "order_id": int(order.id),

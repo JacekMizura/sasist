@@ -1,5 +1,5 @@
-import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { extractApiErrorMessage } from "../../api/authApi";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { updateWarehousePriorityTask } from "../../api/warehouseOperationsApi";
 import {
@@ -481,8 +481,10 @@ export default function WmsPickingProductsPage() {
             appendScanToHistory(scan);
             showScannerToast(`Zebrano: ${hit.name}`);
             void load();
-          } catch {
-            showScannerToast("Zapis szybkiego pobrania nie powiódł się — otwarcie detalu.");
+          } catch (e: unknown) {
+            showScannerToast(
+              extractApiErrorMessage(e, "Zapis szybkiego pobrania nie powiódł się — otwarcie detalu."),
+            );
             goDetail(hit.product_id);
           }
         } 
@@ -642,27 +644,11 @@ export default function WmsPickingProductsPage() {
         navigate(WMS_ROUTES.picking, { replace: true });
       }
     } catch (e: unknown) {
-      let msg = "Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.";
-      if (axios.isAxiosError(e)) {
-        console.error("[picking.finalize]", e);
-        const d = e.response?.data as { detail?: string | { error?: string; reason?: string } } | undefined;
-        const detail = d?.detail;
-        if (detail != null) {
-          const raw =
-            typeof detail === "object" && detail !== null && typeof detail.error === "string"
-              ? detail.error.trim()
-              : String(detail).trim();
-          if (
-            raw.includes("domknięta") ||
-            raw.includes("zebrano + brak") ||
-            raw.includes("zebrane lub oznaczone jako brak")
-          ) {
-            msg = "Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.";
-          } else if (raw) {
-            msg = raw;
-          }
-        }
-      }
+      console.error("[picking.finalize]", e);
+      const msg = extractApiErrorMessage(
+        e,
+        "Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.",
+      );
       setFinalizeErr(msg);
     } finally {
       setFinalizeBusy(false);
