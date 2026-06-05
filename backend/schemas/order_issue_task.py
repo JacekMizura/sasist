@@ -152,6 +152,32 @@ class OrderIssueTaskListItem(BaseModel):
         default="",
         description="Etykieta PL statusu workflow",
     )
+    recovery_packing_allowed: bool = Field(
+        default=False,
+        description="Resolver: zamówienie może wejść do pakowania",
+    )
+    recovery_active_lines: int = Field(
+        default=0,
+        ge=0,
+        description="Resolver: linie z aktywną dogrywką",
+    )
+    recovery_unresolved_lines: int = Field(
+        default=0,
+        ge=0,
+        description="Resolver: nierozwiązane linie recovery",
+    )
+    recovery_has_relocation_work: bool = Field(
+        default=False,
+        description="Resolver: wymagane / trwające rozlokowanie",
+    )
+    can_close_shortage: bool = Field(
+        default=False,
+        description="Resolver: operator może zamknąć kartę Braki (Usuń z Braków)",
+    )
+    recovery_state_hash: str = Field(
+        default="",
+        description="Skrót stanu resolvera (debug)",
+    )
 
 
 class OrderIssueTaskSkippedItem(BaseModel):

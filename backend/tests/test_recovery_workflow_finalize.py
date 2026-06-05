@@ -79,6 +79,28 @@ class TestValidateOrderFinalizeAllowed:
         assert exc.value.code == "oms_decision_required"
 
 
+class TestCanCloseBrakiShortage:
+    def test_packing_allowed_can_close(self):
+        from backend.services.recovery_workflow_service import can_close_braki_shortage
+
+        assert can_close_braki_shortage(
+            MagicMock(),
+            state=_state(packing_allowed=True, has_recovery_work=False),
+        )
+
+    def test_active_recovery_blocks_close(self):
+        from backend.services.recovery_workflow_service import can_close_braki_shortage
+
+        assert not can_close_braki_shortage(
+            MagicMock(),
+            state=_state(
+                packing_allowed=False,
+                has_recovery_work=True,
+                lines=[_line(active_recovery=True, visible_in_recovery_pick=True)],
+            ),
+        )
+
+
 class TestRelocationResolverGate:
     @patch("backend.services.recovery_workflow_service.resolve_order_recovery_state")
     def test_ordinary_shortage_skips_relocation(self, mock_state):

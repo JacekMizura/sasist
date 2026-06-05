@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Braki: przywrócono CTA „Zamknij brak” (resolver)
+
+- ``can_close_braki_shortage`` + ``recovery_state_for_braki_task`` — pola API: ``can_close_shortage``, ``recovery_packing_allowed``.
+- Frontend ``WmsOrderIssueDetailContent`` — widoczność przycisku z ``task.can_close_shortage`` (nie legacy linii UI).
+- ``archive_order_issue_task`` — walidacja z resolvera; zamyka stale recovery task przy archiwum.
+
 ## 2026-06-04 — Usunięcie legacy shortage mutation layer
 
 - Usunięto ``recalculate_order_shortage_state`` / ``sync_shortage_workflow_for_order`` — stan wyłącznie z resolvera.

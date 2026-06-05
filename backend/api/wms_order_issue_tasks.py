@@ -61,6 +61,7 @@ from ..services.braki_workflow_service import (
     resolve_braki_workflow_status,
     braki_workflow_status_label,
 )
+from ..services.recovery_workflow_service import recovery_state_for_braki_task
 from ..services.wms_recovery_pick_service import braki_queue_bucket
 from ..services.wms_audit_service import complete_wms_operation_session, touch_wms_operation_session
 
@@ -261,6 +262,10 @@ def serialize_order_issue_task_item(
             for dl in order_context_model.shortage_decision_lines:
                 if float(dl.missing_qty or 0) > 1e-6:
                     shortage_line_models.append(OrderIssueShortageLine.model_validate(dl.model_dump()))
+    recovery_fields: dict = {}
+    if o is not None:
+        recovery_fields = recovery_state_for_braki_task(db, o)
+
     created = t.created_at.isoformat() + "Z" if isinstance(t.created_at, datetime) else str(t.created_at)
     last_shortage_at = created
     for e in reversed(logs):
@@ -300,6 +305,7 @@ def serialize_order_issue_task_item(
         braki_queue_bucket=bucket,
         braki_workflow_status=workflow_status,
         braki_workflow_status_label=workflow_label,
+        **recovery_fields,
     )
 
 
@@ -342,6 +348,7 @@ def serialize_order_issue_task_list_card(
         )
 
     _missing, _picked, logs = _parse_task_json_lists(t)
+    recovery_fields: dict = recovery_state_for_braki_task(db, o) if o is not None else {}
     created = t.created_at.isoformat() + "Z" if isinstance(t.created_at, datetime) else str(t.created_at)
     last_shortage_at = created
     for e in reversed(logs):
@@ -382,6 +389,7 @@ def serialize_order_issue_task_list_card(
         braki_queue_bucket=bucket,
         braki_workflow_status=workflow_status,
         braki_workflow_status_label=workflow_label,
+        **recovery_fields,
     )
 
 

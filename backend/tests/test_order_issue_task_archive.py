@@ -56,14 +56,19 @@ class TestOrderIssueTaskArchive(unittest.TestCase):
         order = _order(items=[SimpleNamespace(id=1, product_id=None)])
         db = MagicMock()
         with patch(
-            "backend.services.braki_order_state_service.order_has_pending_relocation_work",
-            return_value=False,
+            "backend.services.recovery_workflow_service.can_close_braki_shortage",
+            return_value=True,
+        ), patch(
+            "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+            return_value=SimpleNamespace(
+                packing_allowed=True,
+                has_relocation_work=False,
+                has_recovery_work=False,
+                totals=SimpleNamespace(recovery_lines=0, oms_decision_lines=0),
+            ),
         ), patch(
             "backend.services.wms_recovery_pick_service.get_open_recovery_task_for_order",
             return_value=None,
-        ), patch(
-            "backend.services.braki_order_state_service.order_can_show_ready_pack",
-            return_value=True,
         ), patch(
             "backend.services.wms_operational_task_service.close_operational_tasks_for_order",
         ) as close_mock:

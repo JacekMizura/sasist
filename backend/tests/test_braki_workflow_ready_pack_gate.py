@@ -21,16 +21,20 @@ def _order(**kwargs):
     return SimpleNamespace(**defaults)
 
 
+def _rec_state(*, packing_allowed: bool):
+    return SimpleNamespace(
+        packing_allowed=packing_allowed,
+        totals=SimpleNamespace(recovery_lines=0, oms_decision_lines=0, unresolved_lines=0),
+    )
+
+
 class TestBrakiReadyPackGate(unittest.TestCase):
     def test_resolve_not_ready_pack_when_gate_closed(self):
         order = _order()
         db = MagicMock()
         with patch(
-            "backend.services.braki_order_state_service.order_can_show_ready_pack",
-            return_value=False,
-        ), patch(
-            "backend.services.braki_order_state_service.evaluate_order_braki_state",
-            return_value={"resolved": False, "final_status": "awaiting"},
+            "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+            return_value=_rec_state(packing_allowed=False),
         ), patch(
             "backend.services.braki_workflow_service.count_issue_queue_operational_lines",
             return_value=(0, 0),
@@ -38,14 +42,11 @@ class TestBrakiReadyPackGate(unittest.TestCase):
             "backend.services.braki_workflow_service.order_needs_warehouse_pick",
             return_value=False,
         ), patch(
-            "backend.services.braki_workflow_service.order_has_waiting_customer_line",
-            return_value=False,
+            "backend.services.braki_workflow_service._order_relocation_alloc_states",
+            return_value=(0, 0, 0),
         ), patch(
-            "backend.services.braki_workflow_service.order_has_waiting_for_stock_lines",
-            return_value=False,
-        ), patch(
-            "backend.services.order_fulfillment_recompute.compute_line_missing_qty",
-            return_value=0.0,
+            "backend.services.braki_order_state_service.order_has_pending_shortage_decision",
+            return_value=True,
         ):
             status = resolve_braki_workflow_status(db, order)
         self.assertEqual(status, BRAKI_FILTER_AWAITING)
@@ -54,11 +55,8 @@ class TestBrakiReadyPackGate(unittest.TestCase):
         order = _order()
         db = MagicMock()
         with patch(
-            "backend.services.braki_order_state_service.order_can_show_ready_pack",
-            return_value=True,
-        ), patch(
-            "backend.services.braki_order_state_service.evaluate_order_braki_state",
-            return_value={"resolved": True, "final_status": "ready_pack"},
+            "backend.services.recovery_workflow_service.resolve_order_recovery_state",
+            return_value=_rec_state(packing_allowed=True),
         ), patch(
             "backend.services.braki_workflow_service.count_issue_queue_operational_lines",
             return_value=(0, 0),
@@ -66,14 +64,11 @@ class TestBrakiReadyPackGate(unittest.TestCase):
             "backend.services.braki_workflow_service.order_needs_warehouse_pick",
             return_value=False,
         ), patch(
-            "backend.services.braki_workflow_service.order_has_waiting_customer_line",
-            return_value=False,
+            "backend.services.braki_workflow_service._order_relocation_alloc_states",
+            return_value=(0, 0, 0),
         ), patch(
-            "backend.services.braki_workflow_service.order_has_waiting_for_stock_lines",
+            "backend.services.braki_order_state_service.order_has_pending_shortage_decision",
             return_value=False,
-        ), patch(
-            "backend.services.order_fulfillment_recompute.compute_line_missing_qty",
-            return_value=0.0,
         ):
             status = resolve_braki_workflow_status(db, order)
         self.assertEqual(status, BRAKI_FILTER_READY_PACK)

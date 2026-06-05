@@ -1216,8 +1216,8 @@ def archive_order_issue_task(
     operator_user_id: int | None = None,
 ) -> dict[str, bool]:
     """Ręczne zamknięcie z kolejki Braki (historia zostaje w logach). Idempotentne."""
-    from .braki_order_state_service import order_can_show_ready_pack, order_has_pending_relocation_work
-    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+    from .recovery_workflow_service import can_close_braki_shortage, resolve_order_recovery_state
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order, mark_recovery_task_done
 
     ensure_order_issue_task_table_schema(db)
     prev_status = (getattr(task, "status", None) or "").strip().upper() or "OPEN"
@@ -1232,24 +1232,26 @@ def archive_order_issue_task(
         )
         return {"archived": True, "already_archived": True}
 
-    if order_has_pending_relocation_work(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order_id=int(order.id),
-    ):
-        raise ValueError("Nie można zamknąć — trwa rozlokowanie zebranego towaru.")
-    if get_open_recovery_task_for_order(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order_id=int(order.id),
-    ):
-        raise ValueError("Nie można zamknąć — otwarta dogrywka zbierki.")
-    if not order_can_show_ready_pack(db, order):
+    rec_state = resolve_order_recovery_state(db, order, log=False)
+    if not can_close_braki_shortage(db, order, state=rec_state):
+        if rec_state.has_relocation_work:
+            raise ValueError("Nie można zamknąć — trwa rozlokowanie zebranego towaru.")
+        if rec_state.has_recovery_work or rec_state.totals.recovery_lines > 0:
+            raise ValueError("Nie można zamknąć — otwarta dogrywka zbierki.")
+        if rec_state.totals.oms_decision_lines > 0:
+            raise ValueError("Nie można zamknąć — wymagana decyzja OMS.")
         raise ValueError(
             "Nie można zamknąć — zamówienie nadal wymaga obsługi braków lub zbierania."
         )
+
+    open_recovery = get_open_recovery_task_for_order(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    )
+    if open_recovery is not None:
+        mark_recovery_task_done(db, open_recovery)
 
     now = datetime.utcnow()
     task.status = "ARCHIVED"

@@ -96,6 +96,14 @@ export type OrderIssueTaskListItemApi = {
   created_at: string;
   /** Ostatnie zgłoszenie braku (log) lub utworzenie zadania — ISO. */
   last_shortage_at?: string;
+  /** Resolver: zamówienie gotowe do pakowania */
+  recovery_packing_allowed?: boolean;
+  recovery_active_lines?: number;
+  recovery_unresolved_lines?: number;
+  recovery_has_relocation_work?: boolean;
+  /** Resolver: pokaż „Zamknij brak” / „Usuń z Braków” */
+  can_close_shortage?: boolean;
+  recovery_state_hash?: string;
 };
 
 export type OrderIssueTaskSkippedItemApi = {

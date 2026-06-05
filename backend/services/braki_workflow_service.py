@@ -111,11 +111,7 @@ def resolve_braki_workflow_status(
     needs_reloc = reloc_pending > 0
     needs_reloc_partial = reloc_partial > 0
 
-    from .braki_order_state_service import (
-        evaluate_order_braki_state,
-        order_can_show_ready_pack,
-        order_has_pending_shortage_decision,
-    )
+    from .braki_order_state_service import order_has_pending_shortage_decision
     from .recovery_workflow_service import resolve_order_recovery_state
 
     rec_state = resolve_order_recovery_state(db, order, log=False)
@@ -142,8 +138,7 @@ def resolve_braki_workflow_status(
     else:
         status = BRAKI_FILTER_READY_PACK
 
-    eval_snap = evaluate_order_braki_state(db, order, workflow_status=status)
-    if status == BRAKI_FILTER_READY_PACK and not eval_snap.get("resolved"):
+    if status == BRAKI_FILTER_READY_PACK and not rec_state.packing_allowed:
         if pending_oms:
             status = BRAKI_FILTER_AWAITING
         elif needs_pick:
@@ -179,7 +174,7 @@ def resolve_braki_workflow_status(
         reloc_partial,
         needs_pick,
         pending_oms,
-        eval_snap.get("resolved"),
+        rec_state.packing_allowed,
     )
     return status
 

@@ -643,6 +643,47 @@ def validate_order_finalize_allowed(
     )
 
 
+def can_close_braki_shortage(
+    db: Session,
+    order_or_id: Order | int | None = None,
+    *,
+    state: OrderRecoveryState | None = None,
+) -> bool:
+    """
+    Czy operator może zamknąć kartę Braki — wyłącznie z resolvera (bez legacy shortage_state).
+    """
+    if state is not None:
+        st = state
+    elif order_or_id is not None:
+        st = resolve_order_recovery_state(db, order_or_id, log=False)
+    else:
+        return False
+    if st.totals.oms_decision_lines > 0:
+        return False
+    if st.has_relocation_work:
+        return False
+    if st.has_recovery_work:
+        return False
+    if st.packing_allowed:
+        return True
+    if st.totals.recovery_lines > 0 or st.totals.unresolved_lines > 0:
+        return False
+    return not any(ln.active_recovery and ln.visible_in_recovery_pick for ln in st.lines)
+
+
+def recovery_state_for_braki_task(db: Session, order: Order) -> dict[str, Any]:
+    """Pola resolvera dla kart kolejki Braki (serializacja API)."""
+    st = resolve_order_recovery_state(db, order, log=False)
+    return {
+        "recovery_packing_allowed": bool(st.packing_allowed),
+        "recovery_active_lines": int(st.totals.recovery_lines),
+        "recovery_unresolved_lines": int(st.totals.unresolved_lines),
+        "recovery_has_relocation_work": bool(st.has_relocation_work),
+        "can_close_shortage": can_close_braki_shortage(db, order, state=st),
+        "recovery_state_hash": st.state_hash,
+    }
+
+
 def apply_fulfillment_state_from_resolver(
     db: Session,
     order: Order,

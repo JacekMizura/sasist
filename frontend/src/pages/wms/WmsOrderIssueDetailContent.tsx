@@ -87,7 +87,9 @@ export function WmsOrderIssueDetailContent({
   );
   const collectedLines = ctx.collected_lines ?? [];
   const hasActiveShortageLines = shortageAsDetail.length > 0 || remainingLines.length > 0;
-  const readyForPacking = workflowStatus === "ready_pack";
+  const readyForPacking =
+    task.recovery_packing_allowed === true || workflowStatus === "ready_pack";
+  const canArchive = task.can_close_shortage === true;
   const primaryCta = brakiPrimaryCta(task, navigate, {
     warehouseId,
     onPackingError: (msg) => setRelocationToast(msg),
@@ -100,7 +102,6 @@ export function WmsOrderIssueDetailContent({
       ? workflowLabel || "Oczekuje na decyzję OMS"
       : (task.issue_queue_summary_line ?? "").trim() || workflowLabel || "—";
   const showOmsLink = workflowStatus !== "awaiting";
-  const canArchive = readyForPacking && !hasActiveShortageLines;
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -131,6 +132,7 @@ export function WmsOrderIssueDetailContent({
     setArchivePending(true);
     try {
       await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
+      dispatchWmsShortagesUpdated();
       navigate(WMS_ROUTES.braki(), { replace: true });
     } catch {
       onArchiveError("Nie udało się zamknąć braku w kolejce.");
@@ -202,7 +204,7 @@ export function WmsOrderIssueDetailContent({
             </div>
           ) : null}
 
-          {readyForPacking && !hasActiveShortageLines ? (
+          {readyForPacking && canArchive ? (
             <div className="mx-4 mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-5 text-center md:mx-6">
               <p className="text-sm font-bold text-blue-900">Zamówienie gotowe do pakowania</p>
               <p className="mt-1 text-xs text-blue-700">
@@ -253,7 +255,7 @@ export function WmsOrderIssueDetailContent({
                 onClick={() => void onArchiveShortage()}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-50 py-3.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-100 disabled:opacity-60 sm:flex-1 md:text-base"
               >
-                {archivePending ? "Zamykanie…" : "Zamknij brak"}
+                {archivePending ? "Zamykanie…" : task.recovery_packing_allowed ? "Usuń z Braków" : "Zamknij brak"}
               </button>
             ) : null}
             {showOmsLink ? (
