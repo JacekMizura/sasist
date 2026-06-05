@@ -1,5 +1,4 @@
 import api from "./axios";
-import { mergeQueueCards } from "../pages/wms/brakiQueueMerge";
 import { createRequestDeduper } from "../utils/wmsRequestDeduper";
 
 const orderIssueTasksListDeduper = createRequestDeduper();
@@ -206,19 +205,10 @@ export async function listWmsOrderIssueTasks(
   const key = JSON.stringify(params);
   return orderIssueTasksListDeduper(key, async () => {
     const res = await api.get<OrderIssueTaskListResult>("/wms/order-issue-tasks", { params });
-    const tasks = (res.data?.tasks ?? []).map((t) => {
-      try {
-        return mergeQueueCards([t], [])[0]?.raw ?? t;
-      } catch {
-        return t;
-      }
-    });
-    const skipped = res.data?.skipped_tasks ?? [];
-    const merged = mergeQueueCards(tasks, skipped);
     return {
       success: res.data?.success ?? true,
-      tasks: merged.map((c) => c.raw),
-      skipped_tasks: skipped.filter((s) => !merged.some((c) => c.task_id === s.task_id)),
+      tasks: res.data?.tasks ?? [],
+      skipped_tasks: res.data?.skipped_tasks ?? [],
       filter_counts: res.data?.filter_counts ?? {},
     };
   });

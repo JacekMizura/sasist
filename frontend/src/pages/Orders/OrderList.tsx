@@ -47,7 +47,8 @@ import {
 import { buildOrderBulkListFiltersPayload } from "../../utils/orderListBulkFilters";
 import type { OrderListBulkSelectionArg } from "../../components/orders/orderList/executeOrderBulkActions";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { dispatchOrdersOperationsUpdated, dispatchWmsShortagesUpdated } from "../wms/wmsRoutes";
+import { dispatchOrdersOperationsUpdated } from "../wms/wmsRoutes";
+import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { OrderStatusSidebar, type OrderPanelFilter } from "../../components/orders/OrderStatusSidebar";
 import { deriveOrderListPaymentBadgeRow } from "../../utils/orderListPaymentBadge";
 import ExportModal from "../../components/exports/ExportModal";

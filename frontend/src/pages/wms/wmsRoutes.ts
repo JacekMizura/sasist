@@ -82,8 +82,6 @@ export {
   WMS_SHORTAGES_UPDATED_EVENT,
 } from "../../constants/wmsEvents";
 
-export { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
-
 export function dispatchOrdersOperationsUpdated(): void {
   window.dispatchEvent(new Event(ORDERS_OPERATIONS_UPDATED_EVENT));
 }

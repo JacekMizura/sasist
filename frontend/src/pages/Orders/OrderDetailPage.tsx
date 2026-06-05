@@ -108,7 +108,8 @@ import {
 } from "../../components/orders/orderLineMenuAction";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import type { PanelConfigurableUiStatusBrief } from "../../utils/panelListStatusBriefMappers";
-import { dispatchWmsShortagesUpdated, WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "../wms/wmsRoutes";
+import { WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "../wms/wmsRoutes";
+import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 
 type SourceBundleBrief = { id: number; name: string; sku?: string | null };
 

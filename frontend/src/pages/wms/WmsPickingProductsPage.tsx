@@ -16,7 +16,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
-import { executionContextFromPicking } from "../../components/wms/execution/syncExecutionContext";
+import { executionContextFromPicking } from "../../components/wms/execution/pickingExecutionContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
@@ -41,7 +41,8 @@ import {
 import { formatOperatorDisplayName } from "../../components/wms/execution/activeOperationContext";
 import { WmsPickingSessionTopBar } from "./WmsPickingSessionTopBar";
 import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
-import { dispatchWmsShortagesUpdated, WMS_ROUTES } from "./wmsRoutes";
+import { WMS_ROUTES } from "./wmsRoutes";
+import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { Image as ImageIcon, MapPin, AlertTriangle, Check, Loader2 } from "lucide-react";
 
 function fmtQty(n: number): string {

@@ -1,7 +1,7 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
-import { extractApiErrorMessage } from "./authApi";
+import { extractApiErrorMessage } from "./apiErrorMessage";
 
 import {
   applySecureApiBaseToConfig,

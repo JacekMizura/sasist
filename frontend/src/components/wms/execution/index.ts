@@ -27,8 +27,8 @@ export { useOfflineActionQueue } from "./useOfflineActionQueue";
 export { formatOperationalError } from "./formatOperationalError";
 export {
   executionContextFromOperationalDetail,
-  executionContextFromPicking,
   executionContextFromPacking,
   executionContextFromPutaway,
 } from "./syncExecutionContext";
+export { executionContextFromPicking } from "./pickingExecutionContext";
 export { isWarehouseExecutionRoute } from "./executionRoutes";

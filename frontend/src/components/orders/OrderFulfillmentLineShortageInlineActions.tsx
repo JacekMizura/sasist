@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { patchOrderItemLine } from "../../api/ordersApi";
-import { dispatchWmsShortagesUpdated } from "../../pages/wms/wmsRoutes";
+import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { fmtOmsQty } from "./omsFulfillmentLinePresentation";
 import { ConfirmModal } from "../ui/ConfirmModal";
 

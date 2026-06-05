@@ -17,7 +17,8 @@ import { BrakiForceRemoveModal, type BrakiForceRemoveMode } from "./BrakiForceRe
 import { brakiOperationalActions, type BrakiOperationalAction } from "./brakiWorkflowCta";
 import { readBrakiOperationalState } from "./readBrakiOperationalState";
 import { WMS_UI } from "./wmsTerminology";
-import { WMS_ROUTES, dispatchWmsShortagesUpdated } from "./wmsRoutes";
+import { WMS_ROUTES } from "./wmsRoutes";
+import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { IssueDetailSection } from "./WmsOrderIssueDetailPage";
 
 function emptyContext(ctx: OrderIssueOrderContextApi | undefined): OrderIssueOrderContextApi {

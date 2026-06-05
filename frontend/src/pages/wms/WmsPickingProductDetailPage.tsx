@@ -15,7 +15,7 @@ import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPic
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { formatOperatorDisplayName } from "../../components/wms/execution/activeOperationContext";
-import { executionContextFromPicking } from "../../components/wms/execution/syncExecutionContext";
+import { executionContextFromPicking } from "../../components/wms/execution/pickingExecutionContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
@@ -234,6 +234,12 @@ export default function WmsPickingProductDetailPage() {
   const toPickTotal = remaining;
   const pickQueueDone = detail != null && remaining <= 1e-9;
 
+  const shortageLocationLabel = useMemo(() => {
+    if (!detail?.locations?.length) return "—";
+    const code = selectedLocation?.location_code ?? detail.locations[0]?.location_code;
+    return (code && String(code).trim()) || "—";
+  }, [detail, selectedLocation]);
+
   useEffect(() => {
     if (!pickingSession || !detail) {
       setActiveContext(null);
@@ -277,12 +283,6 @@ export default function WmsPickingProductDetailPage() {
   ]);
 
   const fullyPickedNoMissing = pickQueueDone && missingTotal <= 1e-9;
-
-  const shortageLocationLabel = useMemo(() => {
-    if (!detail?.locations?.length) return "—";
-    const code = selectedLocation?.location_code ?? detail.locations[0]?.location_code;
-    return (code && String(code).trim()) || "—";
-  }, [detail, selectedLocation]);
 
   const reportShortageBlocked = useMemo(() => cannotReportPickingShortage({ remaining, cartId: pickingSession?.cartId }), [remaining, pickingSession?.cartId]);
   const ordersWithShortageCount = useMemo(() => {
