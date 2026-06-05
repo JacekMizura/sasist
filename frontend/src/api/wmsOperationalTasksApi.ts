@@ -144,7 +144,7 @@ export const OPERATIONAL_QUEUES = [
   { id: "DO_DECYZJI", label: "Do decyzji", icon: "decision", routeHint: "Strefa decyzji OMS" },
   { id: "DO_DOGRYWKI", label: "Dogrywka", icon: "recollect", routeHint: "Trasa zbierania — domknięcie braków" },
   { id: "OCZEKUJE_NA_DOSTAWE", label: "Na dostawę", icon: "waiting", routeHint: "Inbound → auto promote" },
-  { id: "DO_ROZLOKOWANIA", label: "Dystrybucja", icon: "relocation", routeHint: "Batch → nośniki docelowe" },
+  { id: "DO_ROZLOKOWANIA", label: "Rozlokowanie", icon: "relocation", routeHint: "RELOCATION — przypisanie do nośników" },
 ] as const;
 
 export type OperationalQueueId = (typeof OPERATIONAL_QUEUES)[number]["id"];

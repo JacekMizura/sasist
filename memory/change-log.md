@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — WMS stabilization lock
+
+- Reguła Cursor: `.cursor/rules/wms-stabilization.mdc` — SSOT, zakazane warstwy, kanoniczny lifecycle.
+- `memory/wms-stabilization.md` — mapa architektury.
+- `canonical_shortage_lifecycle_phase()`, `RELOCATION_MODE_*`, API `shortage_lifecycle_phase` / `relocation_mode`.
+- UI: „Dystrybucja” → „Rozlokowanie (nośniki)”; payload RELOCATION: `relocation_mode=CARRIER`.
+
 ## 2026-06-04 — Relocation: series gate + UI crash fix
 
 - ``relocation_document_series_service`` — walidacja serii WAREHOUSE (RW/PW/ZWK) przed utworzeniem ZWK; auto-wybór gdy jedna seria RW.

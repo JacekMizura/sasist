@@ -24,7 +24,7 @@ const QUEUE_ROUTE_LABEL: Record<string, string> = {
   DO_DECYZJI: "Strefa decyzji",
   DO_DOGRYWKI: "Trasa dogrywki",
   OCZEKUJE_NA_DOSTAWE: "Oczekiwanie na dostawę",
-  DO_ROZLOKOWANIA: "Dystrybucja batch",
+  DO_ROZLOKOWANIA: "Rozlokowanie (nośniki)",
 };
 
 export function queueRouteLabel(queue: string): string {
@@ -38,7 +38,7 @@ export function taskTypeLabel(taskType: string): string {
     case "SHORTAGE_RECOLLECT":
       return "Dogrywka zbierki";
     case "RELOCATION":
-      return "Rozłożenie batch";
+      return "Rozlokowanie zamówienia";
     case "SHORTAGE_DECISION":
       return "Decyzja braku";
     default:
@@ -150,7 +150,7 @@ export function buildWorkflowTimeline(
         : mark("inbound", "Towar gotowy", src, "done"),
       mark(
         "relocate",
-        "Dystrybucja do nośników",
+        "Przypisanie do nośnika",
         `${detail.relocation_allocation_count ?? 0} alokacji`,
         done ? "done" : inProgress ? "current" : "upcoming",
       ),

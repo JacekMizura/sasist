@@ -107,6 +107,17 @@ export type OrderIssueTaskListItemApi = {
   recovery_has_relocation_work?: boolean;
   /** Aktywne zadanie RELOCATION (po self-heal resolvera). */
   relocation_task_id?: number | null;
+  /** Canonical lifecycle phase — RecoveryWorkflowService SSOT. */
+  shortage_lifecycle_phase?:
+    | "SHORTAGE_DETECTED"
+    | "AWAITING_OMS"
+    | "WAITING_SUPPLY"
+    | "RECOVERY_PICK"
+    | "RELOCATION_REQUIRED"
+    | "READY_TO_PACK"
+    | "DONE";
+  /** RELOCATION execution mode (CARRIER = nośniki); not a separate workflow. */
+  relocation_mode?: "CARRIER" | "LOCATION" | null;
   /** Resolver: pokaż „Zamknij brak” / „Usuń z Braków” */
   can_close_shortage?: boolean;
   recovery_state_hash?: string;

@@ -29,6 +29,22 @@ RecoveryStatus = Literal[
     "ready_pack",
 ]
 
+# Canonical shortage lifecycle (stabilization SSOT vocabulary).
+ShortageLifecyclePhase = Literal[
+    "SHORTAGE_DETECTED",
+    "AWAITING_OMS",
+    "WAITING_SUPPLY",
+    "RECOVERY_PICK",
+    "RELOCATION_REQUIRED",
+    "READY_TO_PACK",
+    "DONE",
+]
+
+# RELOCATION execution metadata — not a separate workflow.
+RELOCATION_MODE_CARRIER = "CARRIER"
+RELOCATION_MODE_LOCATION = "LOCATION"
+RelocationMode = Literal["CARRIER", "LOCATION"]
+
 _EPS = 1e-9
 STATE_VERSION = 1
 
@@ -526,6 +542,31 @@ def resolve_order_recovery_state(
     return state
 
 
+def canonical_shortage_lifecycle_phase(
+    state: OrderRecoveryState,
+    *,
+    archived: bool = False,
+) -> ShortageLifecyclePhase:
+    """
+    Jedna kanoniczna faza lifecycle zamówienia — wyłącznie z ``OrderRecoveryState``.
+
+    UI badges, kolejki i CTA muszą projekcję budować z tej funkcji (lub równoważnych pól resolvera).
+    """
+    if archived:
+        return "DONE"
+    if state.recovery_status == "awaiting_oms":
+        return "AWAITING_OMS"
+    if state.has_recovery_pick_work:
+        return "RECOVERY_PICK"
+    if state.has_pending_relocation or any(ln.visible_in_relocation for ln in state.lines):
+        return "RELOCATION_REQUIRED"
+    if state.packing_allowed or state.recovery_status == "ready_pack":
+        return "READY_TO_PACK"
+    if state.has_unresolved_lines or state.totals.unresolved_lines > 0:
+        return "SHORTAGE_DETECTED"
+    return "SHORTAGE_DETECTED"
+
+
 def get_recovery_pick_lines(
     db: Session,
     order: Order,
@@ -975,6 +1016,8 @@ def recovery_state_for_braki_task(db: Session, order: Order) -> dict[str, Any]:
         "relocation_task_id": int(rel_task.id) if rel_task is not None else None,
         "can_close_shortage": can_close_braki_shortage(db, order, repair_relocation=False),
         "recovery_state_hash": st.state_hash,
+        "shortage_lifecycle_phase": canonical_shortage_lifecycle_phase(st),
+        "relocation_mode": RELOCATION_MODE_CARRIER if needs_reloc_ui else None,
     }
 
 

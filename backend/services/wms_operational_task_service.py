@@ -128,14 +128,19 @@ def rebuild_relocation_payload(
     *,
     product_id: int,
     picked_from_location: str | None,
+    relocation_mode: str | None = None,
 ) -> dict[str, Any]:
+    from .recovery_workflow_service import RELOCATION_MODE_CARRIER
+
     total = round(sum(float(a.get("qty") or 0) for a in allocations), 6)
     order_ids = {int(a["order_id"]) for a in allocations if int(a.get("order_id") or 0) > 0}
     zones = sorted({str(a.get("target_zone") or "").strip() for a in allocations if str(a.get("target_zone") or "").strip()})
+    mode = (relocation_mode or RELOCATION_MODE_CARRIER).strip().upper()
     return {
         "product_id": int(product_id),
         "total_qty": total,
         "picked_from_location": (picked_from_location or "").strip() or None,
+        "relocation_mode": mode,
         "allocations": allocations,
         "order_count": len(order_ids),
         "target_zones": zones,
@@ -1331,7 +1336,7 @@ def queue_summary(db: Session, *, tenant_id: int, warehouse_id: int) -> list[Wms
         QUEUE_DO_DECYZJI: "Do decyzji",
         QUEUE_DO_DOGRYWKI: "Do dogrywki",
         QUEUE_OCZEKUJE_NA_DOSTAWE: "Oczekuje na dostawę",
-        QUEUE_DO_ROZLOKOWANIA: "Do rozlokowania",
+        QUEUE_DO_ROZLOKOWANIA: "Rozlokowanie (nośniki)",
     }
     rows = (
         db.query(WmsOperationalTask.queue, func.count(WmsOperationalTask.id))

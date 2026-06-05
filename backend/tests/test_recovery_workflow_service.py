@@ -8,6 +8,11 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from backend.services.recovery_workflow_service import (
+    OrderRecoveryState,
+    RecoveryLineState,
+    RecoveryTotals,
+    STATE_VERSION,
+    canonical_shortage_lifecycle_phase,
     count_recovery_operational_lines,
     get_recovery_pick_lines,
     resolve_order_recovery_state,
@@ -232,3 +237,35 @@ class TestRecoveryWorkflowService:
         assert line.relocation_required is True
         assert line.visible_in_relocation is False
         assert state.has_pending_relocation is False
+
+
+class TestCanonicalShortageLifecycle:
+    def _state(self, **kwargs) -> OrderRecoveryState:
+        defaults = {
+            "order_id": 1,
+            "recovery_status": "none",
+            "lines": [],
+            "totals": RecoveryTotals(),
+            "state_version": STATE_VERSION,
+        }
+        defaults.update(kwargs)
+        return OrderRecoveryState(**defaults)
+
+    def test_ready_to_pack(self):
+        st = self._state(recovery_status="ready_pack", packing_allowed=True)
+        assert canonical_shortage_lifecycle_phase(st) == "READY_TO_PACK"
+
+    def test_relocation_required(self):
+        st = self._state(
+            recovery_status="relocation_pending",
+            has_pending_relocation=True,
+        )
+        assert canonical_shortage_lifecycle_phase(st) == "RELOCATION_REQUIRED"
+
+    def test_recovery_pick(self):
+        st = self._state(recovery_status="recovery_pending", has_recovery_pick_work=True)
+        assert canonical_shortage_lifecycle_phase(st) == "RECOVERY_PICK"
+
+    def test_done_when_archived(self):
+        st = self._state(packing_allowed=True)
+        assert canonical_shortage_lifecycle_phase(st, archived=True) == "DONE"
