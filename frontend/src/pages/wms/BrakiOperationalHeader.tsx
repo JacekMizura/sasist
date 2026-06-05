@@ -1,7 +1,8 @@
 import type { OrderIssueTaskListItemApi } from "../../api/wmsOrderIssueTasksApi";
 import { WMS_UI } from "./wmsTerminology";
 import { priorityBadgeClass, priorityLabelForTask, priorityLevelFromTask } from "./brakiPriority";
-import { brakiMixedStateSummary, deriveBrakiWorkstreams } from "./brakiWorkflowCta";
+import { brakiMixedStateSummary } from "./brakiWorkflowCta";
+import { readBrakiOperationalState } from "./readBrakiOperationalState";
 
 type Props = {
   task: OrderIssueTaskListItemApi;
@@ -35,9 +36,9 @@ function WorkstreamPill({
 
 /** Górny pasek kontekstu operacyjnego Braki — mieszane stany zamówienia. */
 export function BrakiOperationalHeader({ task }: Props) {
-  const ws = deriveBrakiWorkstreams(task);
-  const workflowLabel =
-    (task.braki_workflow_status_label ?? "").trim() || brakiMixedStateSummary(task);
+  const op = readBrakiOperationalState(task);
+  const ws = op.workstreams;
+  const workflowLabel = op.workflow_stage || (task.braki_workflow_status_label ?? "").trim() || brakiMixedStateSummary(task);
   const summary = brakiMixedStateSummary(task);
   const prLevel = priorityLevelFromTask(task);
   const prLabel = priorityLabelForTask(task);

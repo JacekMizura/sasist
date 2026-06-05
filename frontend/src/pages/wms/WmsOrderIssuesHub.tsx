@@ -22,6 +22,7 @@ import {
   sortTasksByPriority,
 } from "./brakiPriority";
 import { mergeQueueCards, type NormalizedShortageQueueCard } from "./normalizeShortageQueueCard";
+import { readBrakiQueueStage } from "./readBrakiOperationalState";
 
 type BrakiWorkflowFilterId =
   | "all"
@@ -42,20 +43,8 @@ const BRAKI_WORKFLOW_FILTERS: { id: BrakiWorkflowFilterId; label: string }[] = [
   { id: "pick_and_relocation", label: "Produkty do zebrania oraz rozlokowania" },
 ];
 
-function phaseToWorkflowFilter(phase: string | null | undefined): BrakiWorkflowFilterId {
-  const p = (phase ?? "").trim().toUpperCase();
-  if (p === "AWAITING_OMS" || p === "WAITING_SUPPLY" || p === "SHORTAGE_DETECTED") return "awaiting";
-  if (p === "RECOVERY_PICK") return "pick";
-  if (p === "RELOCATION_REQUIRED") return "relocation";
-  if (p === "READY_TO_PACK") return "ready_pack";
-  if (p === "DONE") return "ready_pack";
-  return "awaiting";
-}
-
 function normalizeWorkflowStatus(t: OrderIssueTaskListItemApi): BrakiWorkflowFilterId {
-  const fromPhase = (t.shortage_lifecycle_phase ?? "").trim();
-  if (fromPhase) return phaseToWorkflowFilter(fromPhase);
-  const s = (t.braki_workflow_status ?? "").trim() as BrakiWorkflowFilterId;
+  const s = readBrakiQueueStage(t) as BrakiWorkflowFilterId;
   if (BRAKI_WORKFLOW_FILTERS.some((f) => f.id === s)) return s;
   return "awaiting";
 }
@@ -66,35 +55,16 @@ function displayOrderNumber(raw: string): string {
   return s.startsWith("#") ? s : `#${s}`;
 }
 
-function plProduktyWord(n: number): string {
-  const abs = Math.abs(Math.floor(n));
-  if (abs === 1) return "produkt";
-  const mod100 = abs % 100;
-  if (mod100 >= 12 && mod100 <= 14) return "produktów";
-  const mod10 = abs % 10;
-  if (mod10 >= 2 && mod10 <= 4) return "produkty";
-  return "produktów";
-}
-
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(Number(n) || 0);
-}
-
-function shortageLinesForCard(t: OrderIssueTaskListItemApi) {
-  return (t.shortage_lines ?? []).filter((l) => l.missing_qty > 1e-9);
 }
 
 function openIssueTask(navigate: ReturnType<typeof useNavigate>, t: OrderIssueTaskListItemApi) {
   navigate(WMS_ROUTES.issueTask(t.id));
 }
 
-function cardStatusLabel(t: OrderIssueTaskListItemApi): string {
-  const wf = normalizeWorkflowStatus(t);
-  if (wf === "awaiting") return "Oczekujące";
-  if (wf === "ready_pack") return "Gotowe do pakowania";
-  if (wf === "pick" || wf === "pick_and_relocation") return "Braki";
-  if (wf === "relocation" || wf === "relocation_partial") return "Rozlokowanie produktów";
-  return (t.braki_workflow_status_label ?? "").trim() || "Braki";
+function cardStatusLabel(card: NormalizedShortageQueueCard): string {
+  return card.workflow_stage || (card.raw.braki_workflow_status_label ?? "").trim() || "Braki w realizacji";
 }
 
 function cardAccentForWorkflow(wf: BrakiWorkflowFilterId): {
@@ -424,45 +394,25 @@ export default function WmsOrderIssuesHub() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
             {filteredCards.map((card: NormalizedShortageQueueCard) => {
               const t = card.raw;
-              const wf = normalizeWorkflowStatus(t);
-              const uShort = card.missing_count || (t.unresolved_shortage_count ?? 0);
-              const recoveryLineCount = card.recovery_count || (
-                t.recovery_active_lines != null && t.recovery_active_lines >= 0
-                  ? t.recovery_active_lines
-                  : (t.replacement_pick_pending_count ?? 0)
-              );
-              const lineCount =
-                wf === "awaiting"
-                  ? Math.max(0, uShort)
-                  : wf === "pick" || wf === "pick_and_relocation"
-                    ? Math.max(0, recoveryLineCount)
-                    : Math.max(0, recoveryLineCount || uShort);
-              const totalMissing = lineCount;
+              const wf = card.queue_stage as BrakiWorkflowFilterId;
+              const badgeCount =
+                card.recovery_count +
+                card.relocation_count +
+                card.ready_to_pack_count +
+                card.missing_count;
+              const missingNumber = Math.max(1, badgeCount);
               const num = displayOrderNumber(t.order_number).replace("#", "");
-              const { accent, badge, status, icon } = cardAccentForWorkflow(wf);
+              const { accent, badge, status, icon } = cardAccentForWorkflow(
+                BRAKI_WORKFLOW_FILTERS.some((f) => f.id === wf) ? wf : "awaiting",
+              );
 
-              let qtyLine = "";
-              let missingNumber = totalMissing;
-              const summaryFromApi = (t.issue_queue_summary_line ?? "").trim();
+              const qtyLine =
+                (t.issue_queue_summary_line ?? "").trim() ||
+                card.workflow_stage ||
+                (t.issue_queue_status_label ?? "").trim() ||
+                "Braki w realizacji";
 
-              if (wf === "ready_pack") {
-                qtyLine = summaryFromApi || "Zamówienie gotowe do pakowania";
-              } else if (wf === "awaiting") {
-                missingNumber = Math.max(1, uShort);
-                qtyLine = summaryFromApi || "Oczekuje na decyzję OMS";
-              } else if (lineCount > 0 || recoveryLineCount > 0) {
-                missingNumber = lineCount;
-                qtyLine =
-                  summaryFromApi ||
-                  (recoveryLineCount > 0
-                    ? "Oczekujące produkty do zebrania"
-                    : `${lineCount} ${plProduktyWord(lineCount)} · brak do zebrania`);
-              } else {
-                missingNumber = Math.max(1, uShort);
-                qtyLine = summaryFromApi || (t.issue_queue_status_label ?? "").trim() || "Wymaga uwagi";
-              }
-
-              const statusLabel = cardStatusLabel(t);
+              const statusLabel = cardStatusLabel(card);
               const prLevel = priorityLevelFromTask(t);
               const prLabel = priorityLabelForTask(t);
               const prBadge = priorityBadgeClass(prLevel);

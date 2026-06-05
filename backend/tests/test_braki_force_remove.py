@@ -50,7 +50,12 @@ def _state(**kwargs):
         "has_pending_relocation": True,
         "state_hash": "abc",
         "totals": SimpleNamespace(oms_decision_lines=1, recovery_lines=1, unresolved_lines=1),
-        "lines": [SimpleNamespace(visible_in_relocation=True)],
+        "lines": [
+            SimpleNamespace(
+                visible_in_relocation=True,
+                visible_in_recovery_pick=True,
+            )
+        ],
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -60,17 +65,21 @@ class TestBrakiForceRemove(unittest.TestCase):
     def test_snapshot_detects_active_operations(self):
         order = _order()
         db = MagicMock()
+        locks = {
+            "recovery_session": True,
+            "relocation_session": True,
+            "packing_session": False,
+            "oms_locked": True,
+        }
         with patch(
-            "backend.services.recovery_workflow_service.resolve_order_recovery_state",
-            return_value=_state(),
-        ), patch(
-            "backend.services.wms_recovery_pick_service.get_open_recovery_task_for_order",
-            return_value=SimpleNamespace(id=9),
+            "backend.services.recovery_workflow_service.detect_active_braki_locks",
+            return_value=locks,
         ):
             snap = snapshot_braki_active_operations(db, order)
         self.assertTrue(snap["recovery_task"])
         self.assertTrue(snap["relocation_task"])
         self.assertTrue(snap["oms_decision"])
+        self.assertFalse(snap["packing_transition"])
 
     def test_force_remove_closes_ops_and_archives(self):
         task = _task()

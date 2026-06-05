@@ -5,6 +5,7 @@ import {
 } from "../../api/wmsRelocationBatchApi";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { navigateBrakiToPacking } from "./brakiGoToPacking";
+import { readBrakiOperationalState, readBrakiWorkstreams } from "./readBrakiOperationalState";
 import { WMS_UI } from "./wmsTerminology";
 import { WMS_ROUTES } from "./wmsRoutes";
 
@@ -71,9 +72,11 @@ export function parseBrakiWorkflowStatus(task: OrderIssueTaskListItemApi): Braki
   return "";
 }
 
-/** SSOT phase from API — sugerowana kolejność akcji, nie jedyny stan zamówienia. */
+/** Faza lifecycle — wyłącznie z resolvera (braki_operational_state lub shortage_lifecycle_phase). */
 export function resolveShortageLifecyclePhase(task: OrderIssueTaskListItemApi): ShortageLifecyclePhase {
+  const fromOp = readBrakiOperationalState(task).shortage_lifecycle_phase.toUpperCase();
   const fromApi = (task.shortage_lifecycle_phase ?? "").trim().toUpperCase();
+  const phase = fromOp || fromApi;
   const allowed: ShortageLifecyclePhase[] = [
     "SHORTAGE_DETECTED",
     "AWAITING_OMS",
@@ -83,15 +86,9 @@ export function resolveShortageLifecyclePhase(task: OrderIssueTaskListItemApi): 
     "READY_TO_PACK",
     "DONE",
   ];
-  if (allowed.includes(fromApi as ShortageLifecyclePhase)) {
-    return fromApi as ShortageLifecyclePhase;
+  if (allowed.includes(phase as ShortageLifecyclePhase)) {
+    return phase as ShortageLifecyclePhase;
   }
-
-  const wf = parseBrakiWorkflowStatus(task);
-  if (wf === "awaiting") return "AWAITING_OMS";
-  if (wf === "pick" || wf === "pick_and_relocation") return "RECOVERY_PICK";
-  if (wf === "relocation" || wf === "relocation_partial") return "RELOCATION_REQUIRED";
-  if (wf === "ready_pack") return "READY_TO_PACK";
   return "SHORTAGE_DETECTED";
 }
 
@@ -114,40 +111,15 @@ export function shortageLifecycleHeadline(phase: ShortageLifecyclePhase): string
   }
 }
 
-/** Aktywne strumienie pracy — resolver SSOT z API. */
+/** Aktywne strumienie pracy — wyłącznie z braki_operational_state (bez inferencji). */
 export function deriveBrakiWorkstreams(task: OrderIssueTaskListItemApi): BrakiWorkstreams {
-  const ws = task.braki_workstreams;
-  if (ws) {
-    return {
-      has_pick_work: Boolean(ws.has_pick_work),
-      has_relocation_work: Boolean(ws.has_relocation_work),
-      has_packing_ready: Boolean(ws.has_packing_ready),
-      has_oms_pending: Boolean(ws.has_oms_pending),
-      pick_line_count: Number(ws.pick_line_count) || 0,
-      relocation_line_count: Number(ws.relocation_line_count) || 0,
-      packing_ready_line_count: Number(ws.packing_ready_line_count) || 0,
-      oms_line_count: Number(ws.oms_line_count) || 0,
-      collected_line_count: Number(ws.collected_line_count) || 0,
-    };
-  }
-  const ctx = task.order_context;
-  return {
-    has_pick_work: (task.recovery_active_lines ?? 0) > 0,
-    has_relocation_work: task.recovery_has_relocation_work === true,
-    has_packing_ready:
-      task.recovery_packing_allowed === true ||
-      (ctx?.packing_ready_lines?.length ?? 0) > 0,
-    has_oms_pending: (ctx?.shortage_decision_lines?.length ?? 0) > 0,
-    pick_line_count: ctx?.remaining_pick_lines?.length ?? task.recovery_active_lines ?? 0,
-    relocation_line_count: ctx?.relocation_lines?.length ?? 0,
-    packing_ready_line_count: ctx?.packing_ready_lines?.length ?? 0,
-    oms_line_count: ctx?.shortage_decision_lines?.length ?? 0,
-    collected_line_count: ctx?.collected_lines?.length ?? 0,
-  };
+  return readBrakiWorkstreams(task);
 }
 
 export function brakiMixedStateSummary(task: OrderIssueTaskListItemApi): string {
-  const ws = deriveBrakiWorkstreams(task);
+  const op = readBrakiOperationalState(task);
+  if (op.workflow_stage) return op.workflow_stage;
+  const ws = op.workstreams;
   const parts: string[] = [];
   if (ws.has_oms_pending) parts.push("decyzja OMS");
   if (ws.has_pick_work) parts.push("dogrywka");

@@ -49,36 +49,29 @@ class TestOrderIssueTaskSerialize(unittest.TestCase):
                 return_value=("awaiting", []),
             ),
             patch(
-                "backend.api.wms_order_issue_tasks.count_issue_queue_operational_lines",
-                return_value=(1, 0),
-            ),
-            patch(
-                "backend.api.wms_order_issue_tasks.braki_queue_bucket",
-                return_value="awaiting_oms",
-            ),
-            patch(
-                "backend.api.wms_order_issue_tasks.resolve_braki_workflow_status",
-                return_value="awaiting",
-            ),
-            patch(
-                "backend.services.wms_recovery_pick_service.order_has_waiting_customer_line",
-                return_value=False,
-            ),
-            patch(
-                "backend.services.braki_order_state_service.order_has_waiting_for_stock_lines",
-                return_value=True,
-            ),
-            patch(
-                "backend.api.wms_order_issue_tasks.build_order_issue_detail_context",
+                "backend.api.wms_order_issue_tasks._build_task_operational_bundle",
                 return_value={
-                    "collected_lines": [],
-                    "shortage_decision_lines": [],
-                    "remaining_pick_lines": [],
+                    "braki_workflow_status": "awaiting",
+                    "braki_workflow_status_label": "Oczekujące",
+                    "issue_queue_summary_line": "Oczekujące",
+                    "issue_queue_status_label": "Oczekujące",
+                    "unresolved_shortage_count": 1,
+                    "replacement_pick_pending_count": 0,
+                    "order_context": {
+                        "collected_lines": [],
+                        "shortage_decision_lines": [],
+                        "remaining_pick_lines": [],
+                    },
+                    "shortage_lines": [],
+                    "partial_data": False,
+                    "queue_warnings": [],
+                    "braki_operational_state": {
+                        "workflow_stage": "Oczekujące",
+                        "queue_stage": "awaiting",
+                        "can_remove_from_braki": True,
+                        "can_close_shortage": True,
+                    },
                 },
-            ),
-            patch(
-                "backend.api.wms_order_issue_tasks.build_shortage_lines_for_order",
-                return_value=[],
             ),
             patch(
                 "backend.api.wms_order_issue_tasks.first_pending_substitute_product",

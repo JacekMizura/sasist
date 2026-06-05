@@ -7,6 +7,7 @@ import logging
 import time
 from contextlib import contextmanager
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import event
@@ -20,6 +21,9 @@ from ..models.order import Order
 from ..models.order_item import OrderItem
 from ..models.order_issue_task import OrderIssueTask
 from ..schemas.order_issue_task import (
+    BrakiActiveOperations,
+    BrakiOperationalState,
+    BrakiWorkstreams,
     NewProductLineHint,
     OrderIssueDetailLine,
     OrderIssueOrderContext,
@@ -40,12 +44,9 @@ from ..services.order_issue_task_service import (
     build_order_issue_detail_context,
     build_shortage_lines_for_order,
     compute_recommended_action,
-    count_issue_queue_operational_lines,
     compute_ui_decision,
     find_order_by_scan,
     first_pending_substitute_product,
-    format_braki_issue_summary_line,
-    format_issue_queue_status_label,
     format_issue_queue_summary_line,
     log_operator_event,
     mark_task_done,
@@ -59,14 +60,12 @@ from ..services.order_issue_task_service import (
 from ..services.braki_workflow_service import (
     BRAKI_FILTER_ALL,
     compute_braki_filter_counts,
-    resolve_braki_workflow_status,
-    braki_workflow_status_label,
 )
 from ..services.recovery_workflow_service import (
     build_braki_detail_sections_from_state,
+    build_braki_operational_state,
     build_braki_remaining_pick_lines_from_state,
     build_braki_shortage_lines_from_state,
-    recovery_state_for_braki_task,
     resolve_order_recovery_state,
 )
 from ..services.wms_recovery_pick_service import braki_queue_bucket
@@ -114,6 +113,121 @@ def _fetch_orders_by_id(
         .all()
     )
     return {int(o.id): o for o in rows}
+
+
+def _sections_to_order_context(sections: dict[str, list]) -> OrderIssueOrderContext:
+    def _lines(key: str) -> list[OrderIssueDetailLine]:
+        out: list[OrderIssueDetailLine] = []
+        for r in sections.get(key) or []:
+            if not isinstance(r, dict):
+                continue
+            try:
+                out.append(OrderIssueDetailLine.model_validate(r))
+            except Exception:
+                continue
+        return out
+
+    return OrderIssueOrderContext(
+        collected_lines=_lines("collected_lines"),
+        shortage_decision_lines=_lines("shortage_decision_lines"),
+        remaining_pick_lines=_lines("remaining_pick_lines"),
+        relocation_lines=_lines("relocation_lines"),
+        packing_ready_lines=_lines("packing_ready_lines"),
+    )
+
+
+def _operational_state_model(op: dict) -> BrakiOperationalState:
+    ws = op.get("braki_workstreams") or {}
+    locks = op.get("active_operations") or {}
+    return BrakiOperationalState(
+        workflow_stage=str(op.get("workflow_stage") or ""),
+        queue_stage=str(op.get("queue_stage") or "awaiting"),
+        operational_mode=str(op.get("operational_mode") or "SINGLE"),
+        can_remove_from_braki=bool(op.get("can_remove_from_braki")),
+        can_close_shortage=bool(op.get("can_close_shortage")),
+        active_operations=BrakiActiveOperations.model_validate(locks),
+        braki_workstreams=BrakiWorkstreams.model_validate(ws),
+        packing_allowed=bool(op.get("packing_allowed")),
+        relocation_required=bool(op.get("relocation_required")),
+        recovery_required=bool(op.get("recovery_required")),
+        warnings=list(op.get("warnings") or []),
+        state_hash=str(op.get("state_hash") or ""),
+        shortage_lifecycle_phase=str(op.get("shortage_lifecycle_phase") or ""),
+        relocation_task_id=op.get("relocation_task_id"),
+        relocation_mode=op.get("relocation_mode"),
+    )
+
+
+def _build_task_operational_bundle(
+    db: Session,
+    order: Order,
+    t: OrderIssueTask,
+    *,
+    rec_st: Any | None = None,
+    last_shortage_at: str = "",
+    include_sections: bool = False,
+) -> dict[str, Any]:
+    """Jedno wywołanie resolvera — wszystkie pola operacyjne Braki."""
+    from ..services.recovery_intelligence import priority_fields_for_braki_task
+
+    st = rec_st if rec_st is not None else resolve_order_recovery_state(db, order, log=False)
+    op = build_braki_operational_state(
+        db,
+        order,
+        tenant_id=int(t.tenant_id),
+        warehouse_id=int(t.warehouse_id),
+        rec_state=st,
+        skip_repair=True,
+    )
+    priority = priority_fields_for_braki_task(
+        db, order, st, task=t, last_shortage_at=last_shortage_at or None
+    )
+    ws = op.get("braki_workstreams") or {}
+    bundle: dict[str, Any] = {
+        "braki_operational_state": _operational_state_model(op),
+        "braki_workflow_status": str(op.get("queue_stage") or "awaiting"),
+        "braki_workflow_status_label": str(op.get("workflow_stage") or ""),
+        "issue_queue_summary_line": str(op.get("workflow_stage") or ""),
+        "issue_queue_status_label": str(op.get("workflow_stage") or ""),
+        "unresolved_shortage_count": int(ws.get("oms_line_count") or 0),
+        "replacement_pick_pending_count": int(ws.get("relocation_line_count") or 0),
+        "recovery_packing_allowed": bool(op.get("recovery_packing_allowed")),
+        "recovery_active_lines": int(op.get("recovery_active_lines") or 0),
+        "recovery_unresolved_lines": int(op.get("recovery_unresolved_lines") or 0),
+        "recovery_has_relocation_work": bool(op.get("recovery_has_relocation_work")),
+        "relocation_task_id": op.get("relocation_task_id"),
+        "can_close_shortage": bool(op.get("can_close_shortage")),
+        "recovery_state_hash": str(op.get("state_hash") or ""),
+        "shortage_lifecycle_phase": str(op.get("shortage_lifecycle_phase") or ""),
+        "relocation_mode": op.get("relocation_mode"),
+        "braki_workstreams": BrakiWorkstreams.model_validate(ws),
+        "partial_data": False,
+        "queue_warnings": list(op.get("warnings") or []),
+        **priority,
+    }
+    if include_sections:
+        sections = build_braki_detail_sections_from_state(
+            db,
+            order,
+            st,
+            tenant_id=int(t.tenant_id),
+            warehouse_id=int(t.warehouse_id),
+        )
+        bundle["order_context"] = _sections_to_order_context(sections)
+        shortage_line_models: list[OrderIssueShortageLine] = []
+        for row in build_braki_shortage_lines_from_state(
+            db,
+            order,
+            st,
+            tenant_id=int(t.tenant_id),
+            warehouse_id=int(t.warehouse_id),
+        ):
+            try:
+                shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
+            except Exception:
+                continue
+        bundle["shortage_lines"] = shortage_line_models
+    return bundle
 
 
 def _public_serialize_error_message(exc: Exception) -> str:
@@ -205,153 +319,60 @@ def serialize_order_issue_task_item(
     hint_models = [NewProductLineHint.model_validate(h) for h in hint_rows]
     shortage_line_models: list[OrderIssueShortageLine] = []
     order_context_model = OrderIssueOrderContext()
-    u_short = 0
-    r_pend = 0
     sub_pid = 0
     sub_name = ""
+    bucket = "awaiting_oms"
+    workflow_status = "awaiting"
+    workflow_label = "Braki w realizacji"
+    op_bundle: dict[str, Any] = {}
     from ..services.braki_order_state_service import build_order_issue_customer_fields
 
     cust_fields = build_order_issue_customer_fields(o)
     cust_name = (cust_fields.get("customer_name") or order_customer_display_name(o) or "—").strip() or "—"
-    summary_line = ""
-    status_line = ""
-    bucket = "awaiting_oms"
-    workflow_status = "awaiting"
-    workflow_label = braki_workflow_status_label(workflow_status)
-    rec_st = None
-    queue_warnings: list[str] = []
-    if o is not None:
-        from ..services.recovery_workflow_service import repair_order_relocation_consistency
-
-        from ..services.recovery_workflow_service import resolve_order_recovery_state
-
-        repair_order_relocation_consistency(
-            db,
-            o,
-            tenant_id=int(t.tenant_id),
-            warehouse_id=int(t.warehouse_id),
-            source_event_id=f"braki.api.serialize:{int(t.id)}",
-        )
-        rec_st = resolve_order_recovery_state(db, o, log=False)
-        u_short, r_pend = count_issue_queue_operational_lines(db, o)
-        bucket = braki_queue_bucket(db, o, u_short=u_short, r_pend=r_pend)
-        workflow_status = resolve_braki_workflow_status(
-            db, o, u_short=u_short, r_pend=r_pend, rec_state=rec_st
-        )
-        workflow_label = braki_workflow_status_label(workflow_status)
-        from ..services.wms_recovery_pick_service import order_has_waiting_customer_line
-
-        from ..services.braki_order_state_service import order_has_waiting_for_stock_lines as braki_waiting_stock
-
-        oms_wait = order_has_waiting_customer_line(o) or braki_waiting_stock(o, db=db)
-        summary_line = format_braki_issue_summary_line(
-            workflow_status,
-            unresolved=u_short,
-            repl_pending=r_pend,
-            oms_waiting=oms_wait,
-        )
-        status_line = format_issue_queue_status_label(u_short, r_pend)
-        sub_pid, sub_name = first_pending_substitute_product(db, o)
-        try:
-            sections = build_braki_detail_sections_from_state(
-                db,
-                o,
-                rec_st,
-                tenant_id=int(t.tenant_id),
-                warehouse_id=int(t.warehouse_id),
-            )
-            resolver_rows = build_braki_shortage_lines_from_state(
-                db,
-                o,
-                rec_st,
-                tenant_id=int(t.tenant_id),
-                warehouse_id=int(t.warehouse_id),
-            )
-            for row in resolver_rows:
-                try:
-                    shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
-                except Exception:
-                    continue
-            order_context_model = OrderIssueOrderContext(
-                collected_lines=[
-                    OrderIssueDetailLine.model_validate(r)
-                    for r in sections.get("collected_lines", [])
-                    if isinstance(r, dict)
-                ],
-                shortage_decision_lines=[
-                    OrderIssueDetailLine.model_validate(r)
-                    for r in sections.get("shortage_decision_lines", [])
-                    if isinstance(r, dict)
-                ],
-                remaining_pick_lines=[
-                    OrderIssueDetailLine.model_validate(r)
-                    for r in sections.get("remaining_pick_lines", [])
-                    if isinstance(r, dict)
-                ],
-                relocation_lines=[
-                    OrderIssueDetailLine.model_validate(r)
-                    for r in sections.get("relocation_lines", [])
-                    if isinstance(r, dict)
-                ],
-                packing_ready_lines=[
-                    OrderIssueDetailLine.model_validate(r)
-                    for r in sections.get("packing_ready_lines", [])
-                    if isinstance(r, dict)
-                ],
-            )
-        except Exception as sect_exc:
-            queue_warnings.append("Niepełne dane operacyjne")
-            logger.warning(
-                "[braki.queue.partial] task_id=%s order_id=%s sections_failed err=%s",
-                int(t.id),
-                int(o.id),
-                sect_exc,
-                exc_info=True,
-            )
-        if u_short > 0 and not shortage_line_models and missing:
-            for row in build_fallback_shortage_lines_from_task_snapshot(
-                db,
-                tenant_id=int(t.tenant_id),
-                warehouse_id=int(t.warehouse_id),
-                order=o,
-                missing_snapshot=missing,
-            ):
-                shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
-        if not shortage_line_models and order_context_model.shortage_decision_lines:
-            for dl in order_context_model.shortage_decision_lines:
-                if float(dl.missing_qty or 0) > 1e-6:
-                    shortage_line_models.append(OrderIssueShortageLine.model_validate(dl.model_dump()))
     created = t.created_at.isoformat() + "Z" if isinstance(t.created_at, datetime) else str(t.created_at)
     last_shortage_at = created
     for e in reversed(logs):
         if str(e.kind or "") == "shortage_reported" and str(e.at or "").strip():
             last_shortage_at = str(e.at).strip()
             break
-    recovery_fields: dict = {}
     if o is not None:
-        from ..services.recovery_intelligence import priority_fields_for_braki_task
-
+        sub_pid, sub_name = first_pending_substitute_product(db, o)
         try:
-            recovery_fields = {
-                **recovery_state_for_braki_task(
+            op_bundle = _build_task_operational_bundle(
+                db,
+                o,
+                t,
+                last_shortage_at=last_shortage_at,
+                include_sections=True,
+            )
+            order_context_model = op_bundle.get("order_context") or OrderIssueOrderContext()
+            shortage_line_models = list(op_bundle.get("shortage_lines") or [])
+            workflow_status = str(op_bundle.get("braki_workflow_status") or "awaiting")
+            workflow_label = str(op_bundle.get("braki_workflow_status_label") or workflow_label)
+            if not shortage_line_models and missing:
+                for row in build_fallback_shortage_lines_from_task_snapshot(
                     db,
-                    o,
-                    rec_state=rec_st if o is not None else None,
-                    skip_repair=True,
-                ),
-                **priority_fields_for_braki_task(
-                    db, o, rec_st, task=t, last_shortage_at=last_shortage_at
-                ),
-            }
-        except Exception as rec_exc:
-            queue_warnings.append("Niepełne dane operacyjne")
+                    tenant_id=int(t.tenant_id),
+                    warehouse_id=int(t.warehouse_id),
+                    order=o,
+                    missing_snapshot=missing,
+                ):
+                    try:
+                        shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
+                    except Exception:
+                        continue
+        except Exception as bundle_exc:
             logger.warning(
-                "[braki.queue.partial] task_id=%s order_id=%s detail_recovery_failed err=%s",
+                "[braki.queue.partial] task_id=%s order_id=%s bundle_failed err=%s",
                 int(t.id),
                 int(o.id),
-                rec_exc,
+                bundle_exc,
                 exc_info=True,
             )
+            op_bundle = {
+                "partial_data": True,
+                "queue_warnings": ["Niepełne dane operacyjne"],
+            }
     return OrderIssueTaskListItem(
         id=int(t.id),
         order_id=int(t.order_id),
@@ -362,10 +383,10 @@ def serialize_order_issue_task_item(
         customer_phone=cust_fields.get("phone") or "—",
         customer_email=cust_fields.get("email") or "—",
         customer_address=cust_fields.get("address") or "—",
-        unresolved_shortage_count=u_short,
-        replacement_pick_pending_count=r_pend,
-        issue_queue_summary_line=summary_line,
-        issue_queue_status_label=status_line,
+        unresolved_shortage_count=int(op_bundle.get("unresolved_shortage_count") or 0),
+        replacement_pick_pending_count=int(op_bundle.get("replacement_pick_pending_count") or 0),
+        issue_queue_summary_line=str(op_bundle.get("issue_queue_summary_line") or workflow_label),
+        issue_queue_status_label=str(op_bundle.get("issue_queue_status_label") or workflow_label),
         substitute_product_id=int(sub_pid),
         substitute_product_name=sub_name,
         order_ui_status_name=ui_name,
@@ -385,9 +406,23 @@ def serialize_order_issue_task_item(
         braki_queue_bucket=bucket,
         braki_workflow_status=workflow_status,
         braki_workflow_status_label=workflow_label,
-        queue_warnings=queue_warnings,
-        partial_data=bool(queue_warnings),
-        **recovery_fields,
+        braki_operational_state=op_bundle.get("braki_operational_state") or BrakiOperationalState(),
+        queue_warnings=list(op_bundle.get("queue_warnings") or []),
+        partial_data=bool(op_bundle.get("partial_data")),
+        recovery_packing_allowed=bool(op_bundle.get("recovery_packing_allowed")),
+        recovery_active_lines=int(op_bundle.get("recovery_active_lines") or 0),
+        recovery_unresolved_lines=int(op_bundle.get("recovery_unresolved_lines") or 0),
+        recovery_has_relocation_work=bool(op_bundle.get("recovery_has_relocation_work")),
+        relocation_task_id=op_bundle.get("relocation_task_id"),
+        can_close_shortage=bool(op_bundle.get("can_close_shortage")),
+        recovery_state_hash=str(op_bundle.get("recovery_state_hash") or ""),
+        shortage_lifecycle_phase=str(op_bundle.get("shortage_lifecycle_phase") or "") or None,
+        relocation_mode=op_bundle.get("relocation_mode"),
+        braki_workstreams=op_bundle.get("braki_workstreams") or BrakiWorkstreams(),
+        shortage_priority_score=int(op_bundle.get("shortage_priority_score") or 0),
+        shortage_priority_level=str(op_bundle.get("shortage_priority_level") or "LOW"),
+        shortage_priority_label=str(op_bundle.get("shortage_priority_label") or ""),
+        shortage_priority_factors=list(op_bundle.get("shortage_priority_factors") or []),
     )
 
 
@@ -396,38 +431,22 @@ def serialize_order_issue_task_list_card(
     t: OrderIssueTask,
     o: Order | None,
     *,
-    u_short: int,
-    r_pend: int,
-    workflow_status: str,
+    u_short: int = 0,
+    r_pend: int = 0,
+    workflow_status: str = "awaiting",
 ) -> OrderIssueTaskListItem:
     """
-    Lekka karta kolejki — bez order_context, logów, lokalizacji produktów ani pełnych shortage_lines.
+    Lekka karta kolejki — stan operacyjny z resolvera (bez sekcji produktów).
     Szczegóły: GET /order-issue-tasks/{id}.
     """
+    _ = (u_short, r_pend, workflow_status)
     from ..services.braki_order_state_service import build_order_issue_customer_fields
-    from ..services.wms_recovery_pick_service import order_has_waiting_customer_line
-
-    from ..services.braki_order_state_service import order_has_waiting_for_stock_lines as braki_waiting_stock
 
     cust_fields = build_order_issue_customer_fields(o)
     cust_name = (cust_fields.get("customer_name") or order_customer_display_name(o) or "—").strip() or "—"
     ui_name = None
     if o and o.order_ui_status is not None:
         ui_name = str(o.order_ui_status.name or "").strip() or None
-
-    bucket = "awaiting_oms"
-    workflow_label = braki_workflow_status_label(workflow_status)
-    summary_line = ""
-    status_line = format_issue_queue_status_label(u_short, r_pend)
-    if o is not None:
-        bucket = braki_queue_bucket(db, o, u_short=u_short, r_pend=r_pend)
-        oms_wait = order_has_waiting_customer_line(o) or braki_waiting_stock(o, db=db)
-        summary_line = format_braki_issue_summary_line(
-            workflow_status,
-            unresolved=u_short,
-            repl_pending=r_pend,
-            oms_waiting=oms_wait,
-        )
 
     _missing, _picked, logs = _parse_task_json_lists(t)
     created = t.created_at.isoformat() + "Z" if isinstance(t.created_at, datetime) else str(t.created_at)
@@ -436,13 +455,32 @@ def serialize_order_issue_task_list_card(
         if str(e.kind or "") == "shortage_reported" and str(e.at or "").strip():
             last_shortage_at = str(e.at).strip()
             break
-    from ..services.braki_queue_normalize import safe_recovery_fields_for_list_card
 
-    recovery_fields, queue_warnings = (
-        safe_recovery_fields_for_list_card(db, o, t, last_shortage_at=last_shortage_at)
-        if o is not None
-        else ({}, [])
-    )
+    op_bundle: dict[str, Any] = {}
+    bucket = "awaiting_oms"
+    if o is not None:
+        try:
+            op_bundle = _build_task_operational_bundle(
+                db, o, t, last_shortage_at=last_shortage_at, include_sections=False
+            )
+            bucket = braki_queue_bucket(
+                db,
+                o,
+                u_short=int(op_bundle.get("unresolved_shortage_count") or 0),
+                r_pend=int(op_bundle.get("replacement_pick_pending_count") or 0),
+            )
+        except Exception as exc:
+            logger.warning(
+                "[braki.queue.partial] list_card task_id=%s order_id=%s err=%s",
+                int(t.id),
+                int(o.id),
+                exc,
+                exc_info=True,
+            )
+            op_bundle = {"partial_data": True, "queue_warnings": ["Niepełne dane operacyjne"]}
+
+    workflow_status = str(op_bundle.get("braki_workflow_status") or "awaiting")
+    workflow_label = str(op_bundle.get("braki_workflow_status_label") or "Braki w realizacji")
 
     return OrderIssueTaskListItem(
         id=int(t.id),
@@ -454,10 +492,10 @@ def serialize_order_issue_task_list_card(
         customer_phone=cust_fields.get("phone") or "—",
         customer_email=cust_fields.get("email") or "—",
         customer_address=cust_fields.get("address") or "—",
-        unresolved_shortage_count=int(u_short),
-        replacement_pick_pending_count=int(r_pend),
-        issue_queue_summary_line=summary_line,
-        issue_queue_status_label=status_line,
+        unresolved_shortage_count=int(op_bundle.get("unresolved_shortage_count") or 0),
+        replacement_pick_pending_count=int(op_bundle.get("replacement_pick_pending_count") or 0),
+        issue_queue_summary_line=str(op_bundle.get("issue_queue_summary_line") or workflow_label),
+        issue_queue_status_label=str(op_bundle.get("issue_queue_status_label") or workflow_label),
         substitute_product_id=0,
         substitute_product_name="",
         order_ui_status_name=ui_name,
@@ -477,9 +515,23 @@ def serialize_order_issue_task_list_card(
         braki_queue_bucket=bucket,
         braki_workflow_status=workflow_status,
         braki_workflow_status_label=workflow_label,
-        queue_warnings=queue_warnings,
-        partial_data=bool(queue_warnings),
-        **recovery_fields,
+        braki_operational_state=op_bundle.get("braki_operational_state") or BrakiOperationalState(),
+        queue_warnings=list(op_bundle.get("queue_warnings") or []),
+        partial_data=bool(op_bundle.get("partial_data")),
+        recovery_packing_allowed=bool(op_bundle.get("recovery_packing_allowed")),
+        recovery_active_lines=int(op_bundle.get("recovery_active_lines") or 0),
+        recovery_unresolved_lines=int(op_bundle.get("recovery_unresolved_lines") or 0),
+        recovery_has_relocation_work=bool(op_bundle.get("recovery_has_relocation_work")),
+        relocation_task_id=op_bundle.get("relocation_task_id"),
+        can_close_shortage=bool(op_bundle.get("can_close_shortage")),
+        recovery_state_hash=str(op_bundle.get("recovery_state_hash") or ""),
+        shortage_lifecycle_phase=str(op_bundle.get("shortage_lifecycle_phase") or "") or None,
+        relocation_mode=op_bundle.get("relocation_mode"),
+        braki_workstreams=op_bundle.get("braki_workstreams") or BrakiWorkstreams(),
+        shortage_priority_score=int(op_bundle.get("shortage_priority_score") or 0),
+        shortage_priority_level=str(op_bundle.get("shortage_priority_level") or "LOW"),
+        shortage_priority_label=str(op_bundle.get("shortage_priority_label") or ""),
+        shortage_priority_factors=list(op_bundle.get("shortage_priority_factors") or []),
     )
 
 
@@ -710,8 +762,6 @@ def _build_order_issue_tasks_list(
                         warehouse_id=int(warehouse_id),
                         source_event_id=f"braki.api.list:{int(t.id)}",
                     )
-                    u_short, r_pend = count_issue_queue_operational_lines(db, o)
-                    wf_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
                 except Exception as wf_exc:
                     logger.warning(
                         "[wms.order_issue_tasks.invalid_state] task_id=%s order_id=%s err=%s",
@@ -719,15 +769,7 @@ def _build_order_issue_tasks_list(
                         getattr(t, "order_id", None),
                         wf_exc,
                     )
-                    wf_status = "awaiting"
-                item = serialize_order_issue_task_list_card(
-                    db,
-                    t,
-                    o,
-                    u_short=u_short,
-                    r_pend=r_pend,
-                    workflow_status=wf_status,
-                )
+                item = serialize_order_issue_task_list_card(db, t, o)
                 if not order_requires_shortage_handling(db, o):
                     mark_task_done(db, t, "Braki rozliczone — usunięto z kolejki WMS")
                     continue

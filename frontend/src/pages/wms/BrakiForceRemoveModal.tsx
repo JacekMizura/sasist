@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { OrderIssueTaskListItemApi } from "../../api/wmsOrderIssueTasksApi";
-import { deriveBrakiWorkstreams } from "./brakiWorkflowCta";
+import { readBrakiOperationalState } from "./readBrakiOperationalState";
 import { WMS_UI } from "./wmsTerminology";
 
 export type BrakiForceRemoveMode = "full" | "wms_only" | "oms_review";
@@ -30,17 +30,12 @@ function ActiveOpRow({ label, active }: { label: string; active: boolean }) {
 
 /** Modal wymuszonego usunięcia z kolejki Braki — zawsze dostępny dla operatora. */
 export function BrakiForceRemoveModal({ task, open, pending, onClose, onConfirm }: Props) {
-  const ws = useMemo(() => deriveBrakiWorkstreams(task), [task]);
-  const canDirectArchive = task.can_close_shortage === true;
+  const op = useMemo(() => readBrakiOperationalState(task), [task]);
+  const canDirectArchive = op.can_remove_from_braki;
 
   if (!open) return null;
 
-  const activeOps = {
-    recovery: ws.has_pick_work || (task.recovery_active_lines ?? 0) > 0,
-    relocation: ws.has_relocation_work,
-    oms: ws.has_oms_pending,
-    packing: ws.has_packing_ready,
-  };
+  const locks = op.active_operations;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/50 p-4 sm:items-center">
@@ -60,16 +55,19 @@ export function BrakiForceRemoveModal({ task, open, pending, onClose, onConfirm 
         <div className="space-y-4 px-5 py-4">
           {canDirectArchive ? (
             <p className="text-sm text-slate-600">
-              Zamówienie można bezpiecznie usunąć z kolejki — brak blokujących operacji.
+              Zamówienie można bezpiecznie usunąć z kolejki — brak aktywnych sesji ani blokad OMS.
             </p>
           ) : (
             <>
               <p className="text-sm font-medium text-slate-700">To zamówienie ma aktywne operacje:</p>
               <ul className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-                <ActiveOpRow label="Zadanie dogrywki" active={activeOps.recovery} />
-                <ActiveOpRow label={`Zadanie ${WMS_UI.productRelocation}`} active={activeOps.relocation} />
-                <ActiveOpRow label="Decyzja OMS" active={activeOps.oms} />
-                <ActiveOpRow label="Przejście do pakowania" active={activeOps.packing} />
+                <ActiveOpRow label="Sesja dogrywki" active={locks.recovery_session === true} />
+                <ActiveOpRow
+                  label={`Sesja ${WMS_UI.productRelocation}`}
+                  active={locks.relocation_session === true}
+                />
+                <ActiveOpRow label="Blokada OMS" active={locks.oms_locked === true} />
+                <ActiveOpRow label="Sesja pakowania" active={locks.packing_session === true} />
               </ul>
               <p className="text-sm text-slate-600">Wybierz akcję:</p>
             </>

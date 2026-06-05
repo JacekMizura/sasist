@@ -12,11 +12,8 @@ import { executionContextFromBrakiTask } from "../../components/wms/execution/sy
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { BrakiForceRemoveModal, type BrakiForceRemoveMode } from "./BrakiForceRemoveModal";
-import {
-  brakiOperationalActions,
-  deriveBrakiWorkstreams,
-  type BrakiOperationalAction,
-} from "./brakiWorkflowCta";
+import { brakiOperationalActions, type BrakiOperationalAction } from "./brakiWorkflowCta";
+import { readBrakiOperationalState } from "./readBrakiOperationalState";
 import { WMS_UI } from "./wmsTerminology";
 import { WMS_ROUTES, dispatchWmsShortagesUpdated } from "./wmsRoutes";
 import { IssueDetailSection } from "./WmsOrderIssueDetailPage";
@@ -70,7 +67,8 @@ export function WmsOrderIssueDetailContent({
   const [forceRemoveOpen, setForceRemoveOpen] = useState(false);
 
   const ctx = emptyContext(task.order_context);
-  const ws = useMemo(() => deriveBrakiWorkstreams(task), [task]);
+  const op = useMemo(() => readBrakiOperationalState(task), [task]);
+  const ws = op.workstreams;
 
   const actions = useMemo(
     () =>
@@ -110,7 +108,7 @@ export function WmsOrderIssueDetailContent({
       setActionPending("archive");
       setActionError(null);
       try {
-        if (task.can_close_shortage === true && (mode == null || mode === "full")) {
+        if (op.can_remove_from_braki && (mode == null || mode === "full")) {
           await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
         } else if (mode != null) {
           await postWmsOrderIssueTaskForceRemove(DAMAGE_TENANT_ID, warehouseId, task.id, mode);
@@ -126,7 +124,7 @@ export function WmsOrderIssueDetailContent({
         setForceRemoveOpen(false);
       }
     },
-    [navigate, onArchiveError, task.can_close_shortage, task.id, warehouseId],
+    [navigate, onArchiveError, op.can_remove_from_braki, task.id, warehouseId],
   );
 
   const runAction = useCallback(

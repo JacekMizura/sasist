@@ -70,6 +70,32 @@ export type BrakiWorkstreamsApi = {
   collected_line_count?: number;
 };
 
+export type BrakiActiveOperationsApi = {
+  recovery_session?: boolean;
+  relocation_session?: boolean;
+  packing_session?: boolean;
+  oms_locked?: boolean;
+};
+
+/** Kanoniczny stan operacyjny Braki — wyłącznie z resolve_order_recovery_state (backend). */
+export type BrakiOperationalStateApi = {
+  workflow_stage?: string;
+  queue_stage?: string;
+  operational_mode?: string;
+  can_remove_from_braki?: boolean;
+  can_close_shortage?: boolean;
+  active_operations?: BrakiActiveOperationsApi;
+  braki_workstreams?: BrakiWorkstreamsApi;
+  packing_allowed?: boolean;
+  relocation_required?: boolean;
+  recovery_required?: boolean;
+  warnings?: string[];
+  state_hash?: string;
+  shortage_lifecycle_phase?: string;
+  relocation_task_id?: number | null;
+  relocation_mode?: "CARRIER" | "LOCATION" | null;
+};
+
 export type OrderIssueOrderContextApi = {
   collected_lines: OrderIssueDetailLineApi[];
   shortage_decision_lines: OrderIssueDetailLineApi[];
@@ -135,6 +161,8 @@ export type OrderIssueTaskListItemApi = {
   relocation_mode?: "CARRIER" | "LOCATION" | null;
   /** Resolver: pokaż „Zamknij brak” / „Usuń z Braków” */
   can_close_shortage?: boolean;
+  /** Kanoniczny stan operacyjny — SSOT dla UI (kolejka, detal, nagłówek). */
+  braki_operational_state?: BrakiOperationalStateApi;
   recovery_state_hash?: string;
   braki_workstreams?: BrakiWorkstreamsApi;
   shortage_priority_score?: number;

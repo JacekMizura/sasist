@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 
 from ..models.order import Order
 from ..models.order_issue_task import OrderIssueTask
-from ..schemas.order_issue_task import BrakiWorkstreams, OrderIssueOrderContext, OrderIssueTaskListItem
+from ..schemas.order_issue_task import (
+    BrakiActiveOperations,
+    BrakiOperationalState,
+    BrakiWorkstreams,
+    OrderIssueOrderContext,
+    OrderIssueTaskListItem,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,21 +114,21 @@ def build_fallback_braki_queue_card(
     cust_name = _safe_customer_name(o)
     order_number = str(getattr(o, "number", None) or f"#{t.order_id}") if o else f"#{t.order_id}"
 
-    ws = BrakiWorkstreams(
-        has_pick_work=u_short > 0 or r_pend > 0,
-        has_relocation_work=workflow_status in ("relocation", "relocation_partial", "pick_and_relocation"),
-        has_packing_ready=workflow_status == "ready_pack",
-        has_oms_pending=workflow_status == "awaiting",
-        pick_line_count=max(0, int(u_short)),
-        relocation_line_count=max(0, int(r_pend)),
-        packing_ready_line_count=1 if workflow_status == "ready_pack" else 0,
-        oms_line_count=max(0, int(u_short)) if workflow_status == "awaiting" else 0,
-        collected_line_count=0,
-    )
-
     merged_warnings = list(warnings)
     if "Niepełne dane operacyjne" not in " ".join(merged_warnings):
         merged_warnings.append("Niepełne dane operacyjne")
+
+    ws = BrakiWorkstreams()
+    op_state = BrakiOperationalState(
+        workflow_stage=workflow_label or "Braki — wymaga obsługi",
+        queue_stage=workflow_status,
+        operational_mode="SINGLE",
+        can_remove_from_braki=False,
+        can_close_shortage=False,
+        active_operations=BrakiActiveOperations(),
+        braki_workstreams=ws,
+        warnings=merged_warnings,
+    )
 
     logger.warning(
         "[braki.queue.render_fallback] task_id=%s order_id=%s workflow=%s warnings=%s",
@@ -165,10 +171,11 @@ def build_fallback_braki_queue_card(
         braki_queue_bucket="awaiting_oms",
         braki_workflow_status=workflow_status,
         braki_workflow_status_label=workflow_label,
-        recovery_packing_allowed=workflow_status == "ready_pack",
-        recovery_active_lines=max(0, int(u_short)),
-        recovery_unresolved_lines=max(0, int(u_short)),
-        recovery_has_relocation_work=workflow_status in ("relocation", "relocation_partial", "pick_and_relocation"),
+        braki_operational_state=op_state,
+        recovery_packing_allowed=False,
+        recovery_active_lines=0,
+        recovery_unresolved_lines=0,
+        recovery_has_relocation_work=False,
         relocation_task_id=None,
         can_close_shortage=False,
         recovery_state_hash="",

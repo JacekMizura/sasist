@@ -74,6 +74,41 @@ class OrderIssueDetailLine(OrderIssueShortageLine):
     )
 
 
+class BrakiActiveOperations(BaseModel):
+    """Aktywne sesje / blokady operatora — jedyny powód blokady usunięcia z Braki."""
+
+    recovery_session: bool = False
+    relocation_session: bool = False
+    packing_session: bool = False
+    oms_locked: bool = False
+
+
+class BrakiOperationalState(BaseModel):
+    """
+    Kanoniczny stan operacyjny Braki — wyłącznie z ``resolve_order_recovery_state``.
+    Frontend renderuje bez własnej logiki biznesowej.
+    """
+
+    workflow_stage: str = Field(default="", description="Etykieta mieszanego stanu (kolejka + nagłówek)")
+    queue_stage: str = Field(
+        default="awaiting",
+        description="Filtr listy — awaiting | pick | relocation | ready_pack | pick_and_relocation | …",
+    )
+    operational_mode: str = Field(default="SINGLE", description="SINGLE | MIXED")
+    can_remove_from_braki: bool = False
+    can_close_shortage: bool = False
+    active_operations: BrakiActiveOperations = Field(default_factory=BrakiActiveOperations)
+    braki_workstreams: "BrakiWorkstreams" = Field(default_factory=lambda: BrakiWorkstreams())
+    packing_allowed: bool = False
+    relocation_required: bool = False
+    recovery_required: bool = False
+    warnings: list[str] = Field(default_factory=list)
+    state_hash: str = ""
+    shortage_lifecycle_phase: str = ""
+    relocation_task_id: int | None = None
+    relocation_mode: str | None = None
+
+
 class BrakiWorkstreams(BaseModel):
     """Aktywne strumienie pracy w zamówieniu Braki (mogą współistnieć)."""
 
@@ -207,6 +242,10 @@ class OrderIssueTaskListItem(BaseModel):
     braki_workstreams: BrakiWorkstreams = Field(
         default_factory=BrakiWorkstreams,
         description="Aktywne strumienie pracy — mieszane stany w jednym zamówieniu",
+    )
+    braki_operational_state: BrakiOperationalState = Field(
+        default_factory=BrakiOperationalState,
+        description="SSOT stan operacyjny Braki — resolver + sesje aktywne",
     )
     shortage_priority_score: int = Field(
         default=0,

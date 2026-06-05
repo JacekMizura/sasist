@@ -1,12 +1,8 @@
 import type { WmsOperationalTaskDetailApi } from "../../../api/wmsOperationalTasksApi";
 import type { OrderIssueTaskListItemApi } from "../../../api/wmsOrderIssueTasksApi";
 import type { ExecutionActiveContext } from "../../../context/WarehouseExecutionContext";
-import {
-  brakiMixedStateSummary,
-  deriveBrakiWorkstreams,
-  resolveShortageLifecyclePhase,
-  shortageLifecycleHeadline,
-} from "../../../pages/wms/brakiWorkflowCta";
+import { brakiMixedStateSummary, resolveShortageLifecyclePhase } from "../../../pages/wms/brakiWorkflowCta";
+import { readBrakiOperationalState } from "../../../pages/wms/readBrakiOperationalState";
 import { priorityLabelForTask } from "../../../pages/wms/brakiPriority";
 import {
   mapRelocationModeToTargetType,
@@ -127,16 +123,15 @@ export function executionContextFromBrakiTask(
   task: OrderIssueTaskListItemApi,
   extras?: Partial<ExecutionActiveContext>,
 ): ExecutionActiveContext {
-  const ws = deriveBrakiWorkstreams(task);
+  const op = readBrakiOperationalState(task);
   const phase = resolveShortageLifecyclePhase(task);
-  const stageLabel =
-    (task.braki_workflow_status_label ?? "").trim() || shortageLifecycleHeadline(phase);
+  const stageLabel = op.workflow_stage || (task.braki_workflow_status_label ?? "").trim();
 
   return {
     operationType: "BRAKI WMS",
     orderNumber: formatOrderNumberLabel(task.order_number, task.order_id),
     brakiStageLabel: stageLabel,
-    brakiWorkstreams: ws,
+    brakiWorkstreams: op.workstreams,
     shortageLifecyclePhase: phase,
     priorityLabel: priorityLabelForTask(task),
     currentStep: brakiMixedStateSummary(task),

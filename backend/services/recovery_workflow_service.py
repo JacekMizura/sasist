@@ -902,6 +902,207 @@ def build_braki_workstreams_from_state(state: OrderRecoveryState) -> dict[str, A
     }
 
 
+def _build_workflow_stage_label(ws: dict[str, Any]) -> str:
+    """Mieszana etykieta stanu — wszystkie aktywne strumienie naraz."""
+    parts: list[str] = []
+    if ws.get("has_oms_pending"):
+        parts.append("decyzja OMS")
+    if ws.get("has_pick_work"):
+        parts.append("dogrywka")
+    if ws.get("has_relocation_work"):
+        parts.append("rozlokowanie produktów")
+    if ws.get("has_packing_ready"):
+        parts.append("gotowe do pakowania")
+    return " · ".join(parts) if parts else "Braki w realizacji"
+
+
+def _resolve_queue_stage_from_workstreams(ws: dict[str, Any]) -> str:
+    """Filtr listy — z agregatów resolvera, nie z pojedynczego priorytetu."""
+    from .braki_workflow_service import (
+        BRAKI_FILTER_AWAITING,
+        BRAKI_FILTER_PICK,
+        BRAKI_FILTER_PICK_AND_RELOCATION,
+        BRAKI_FILTER_READY_PACK,
+        BRAKI_FILTER_RELOCATION,
+        BRAKI_FILTER_RELOCATION_PARTIAL,
+    )
+
+    if ws.get("has_oms_pending"):
+        return BRAKI_FILTER_AWAITING
+    pick = bool(ws.get("has_pick_work"))
+    reloc = bool(ws.get("has_relocation_work"))
+    pack = bool(ws.get("has_packing_ready"))
+    if pick and reloc:
+        return BRAKI_FILTER_PICK_AND_RELOCATION
+    if pack and reloc:
+        return BRAKI_FILTER_RELOCATION
+    if pack and pick:
+        return BRAKI_FILTER_PICK_AND_RELOCATION
+    if pack:
+        return BRAKI_FILTER_READY_PACK
+    if reloc:
+        return BRAKI_FILTER_RELOCATION
+    if pick:
+        return BRAKI_FILTER_PICK
+    return BRAKI_FILTER_AWAITING
+
+
+def detect_active_braki_locks(
+    db: Session,
+    order: Order,
+    *,
+    state: OrderRecoveryState | None = None,
+) -> dict[str, bool]:
+    """
+    Aktywne sesje operatora blokujące usunięcie z Braki.
+    NIE traktuje wymagania rozlokowania / gotowości do pakowania jako blokady.
+    """
+    from ..models.wms_operational_task import WmsOperationalTask
+    from .wms_audit_service import get_open_wms_packing_session
+    from .wms_operational_task_service import ACTIVE_STATUSES, TASK_RELOCATION
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+    from .wms_relocation_workflow import (
+        _is_session_expired,
+        _json_loads,
+        _session_from_payload,
+    )
+
+    st = state if state is not None else resolve_order_recovery_state(db, order, log=False)
+    tid = int(order.tenant_id)
+    wid = int(order.warehouse_id)
+    oid = int(order.id)
+
+    recovery_session = (
+        get_open_recovery_task_for_order(db, tenant_id=tid, warehouse_id=wid, order_id=oid)
+        is not None
+    )
+    packing_session = get_open_wms_packing_session(db, oid) is not None
+    oms_locked = int(st.totals.oms_decision_lines) > 0
+
+    relocation_session = False
+    for t in (
+        db.query(WmsOperationalTask)
+        .filter(
+            WmsOperationalTask.tenant_id == tid,
+            WmsOperationalTask.warehouse_id == wid,
+            WmsOperationalTask.order_id == oid,
+            WmsOperationalTask.task_type == TASK_RELOCATION,
+            WmsOperationalTask.status.in_(list(ACTIVE_STATUSES)),
+        )
+        .all()
+    ):
+        payload = _json_loads(getattr(t, "payload_json", None) or "{}", {})
+        if not isinstance(payload, dict):
+            continue
+        session = _session_from_payload(payload)
+        if session and not _is_session_expired(session):
+            relocation_session = True
+            break
+
+    return {
+        "recovery_session": recovery_session,
+        "relocation_session": relocation_session,
+        "packing_session": packing_session,
+        "oms_locked": oms_locked,
+    }
+
+
+def can_remove_from_braki(
+    db: Session,
+    order: Order,
+    *,
+    state: OrderRecoveryState | None = None,
+    locks: dict[str, bool] | None = None,
+) -> bool:
+    """Operator może usunąć zamówienie z Braki gdy brak aktywnych sesji / blokady OMS."""
+    active = locks if locks is not None else detect_active_braki_locks(db, order, state=state)
+    return not any(bool(v) for v in active.values())
+
+
+def build_braki_operational_state(
+    db: Session,
+    order: Order,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    rec_state: OrderRecoveryState | None = None,
+    skip_repair: bool = False,
+) -> dict[str, Any]:
+    """
+    Jedno źródło prawdy stanu operacyjnego Braki dla API (kolejka + detal + nagłówek).
+    Wyłącznie z ``resolve_order_recovery_state`` i aktywnych sesji.
+    """
+    from .wms_relocation_workflow import find_relocation_task_for_order
+
+    if not skip_repair:
+        repair_order_relocation_consistency(
+            db,
+            order,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_event_id="braki.operational_state",
+        )
+    st = rec_state if rec_state is not None else resolve_order_recovery_state(db, order, log=False)
+    ws = build_braki_workstreams_from_state(st)
+    locks = detect_active_braki_locks(db, order, state=st)
+    can_remove = can_remove_from_braki(db, order, state=st, locks=locks)
+
+    rel_task = find_relocation_task_for_order(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order.id),
+    )
+    from .braki_order_state_service import order_fully_packed
+
+    fully_packed = bool(order_fully_packed(db, order))
+    phase = canonical_shortage_lifecycle_phase(st, order_fully_packed=fully_packed)
+    workflow_stage = _build_workflow_stage_label(ws)
+    queue_stage = _resolve_queue_stage_from_workstreams(ws)
+    stream_count = sum(
+        1
+        for k in ("has_pick_work", "has_relocation_work", "has_packing_ready", "has_oms_pending")
+        if ws.get(k)
+    )
+    needs_reloc_ui = bool(ws.get("has_relocation_work"))
+
+    logger.info(
+        "[braki.operational_state] order_id=%s workflow_stage=%s queue_stage=%s "
+        "can_remove=%s locks=%s workstreams=%s state_hash=%s",
+        int(order.id),
+        workflow_stage,
+        queue_stage,
+        can_remove,
+        locks,
+        ws,
+        st.state_hash,
+    )
+
+    return {
+        "workflow_stage": workflow_stage,
+        "queue_stage": queue_stage,
+        "operational_mode": "MIXED" if stream_count > 1 else "SINGLE",
+        "can_remove_from_braki": can_remove,
+        "can_close_shortage": can_remove,
+        "active_operations": locks,
+        "braki_workstreams": ws,
+        "packing_allowed": bool(st.packing_allowed),
+        "relocation_required": needs_reloc_ui,
+        "recovery_required": bool(st.has_recovery_pick_work) or bool(ws.get("has_pick_work")),
+        "warnings": [],
+        "state_hash": st.state_hash,
+        "shortage_lifecycle_phase": phase,
+        "relocation_task_id": int(rel_task.id) if rel_task is not None else None,
+        "relocation_mode": RELOCATION_MODE_CARRIER if needs_reloc_ui else None,
+        # Legacy flat fields — projekcja z tego samego stanu
+        "recovery_packing_allowed": bool(st.packing_allowed),
+        "recovery_active_lines": int(ws.get("pick_line_count") or 0),
+        "recovery_unresolved_lines": int(st.totals.unresolved_lines),
+        "recovery_has_relocation_work": needs_reloc_ui,
+        "can_close_shortage_legacy": can_remove,
+    }
+
+
 def can_order_be_packed(
     db: Session,
     order_or_id: Order | int,
@@ -1157,26 +1358,13 @@ def snapshot_braki_active_operations(
     *,
     state: OrderRecoveryState | None = None,
 ) -> dict[str, bool]:
-    """Aktywne operacje blokujące zwykłe zamknięcie — do UI force-remove."""
-    from .wms_recovery_pick_service import get_open_recovery_task_for_order
-
-    st = state if state is not None else resolve_order_recovery_state(db, order, log=False)
-    open_recovery = get_open_recovery_task_for_order(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order_id=int(order.id),
-    )
-    has_reloc = bool(st.has_pending_relocation) or any(
-        ln.visible_in_relocation for ln in st.lines
-    )
+    """Mapowanie aktywnych sesji / blokad OMS na etykiety force-remove modal."""
+    locks = detect_active_braki_locks(db, order, state=state)
     return {
-        "recovery_task": open_recovery is not None or bool(st.has_recovery_pick_work),
-        "relocation_task": has_reloc,
-        "oms_decision": int(st.totals.oms_decision_lines) > 0,
-        "packing_transition": bool(st.packing_allowed) and (
-            has_reloc or bool(st.has_recovery_pick_work) or int(st.totals.oms_decision_lines) > 0
-        ),
+        "recovery_task": locks["recovery_session"],
+        "relocation_task": locks["relocation_session"],
+        "oms_decision": locks["oms_locked"],
+        "packing_transition": locks["packing_session"],
     }
 
 
@@ -1316,9 +1504,7 @@ def can_close_braki_shortage(
     state: OrderRecoveryState | None = None,
     repair_relocation: bool = True,
 ) -> bool:
-    """
-    Czy operator może zamknąć kartę Braki — wyłącznie z resolvera (bez legacy shortage_state).
-    """
+    """Czy operator może zamknąć kartę Braki — tylko aktywne sesje / blokada OMS."""
     order = _load_order(db, order_or_id) if order_or_id is not None else None
     if repair_relocation and order is not None:
         repair_order_relocation_consistency(
@@ -1328,27 +1514,13 @@ def can_close_braki_shortage(
             warehouse_id=int(order.warehouse_id),
             source_event_id="braki.archive.repair",
         )
-    if state is not None and (not repair_relocation or order is None):
-        st = state
-    elif order is not None:
-        st = resolve_order_recovery_state(db, order, log=False)
-    elif order_or_id is not None:
-        st = resolve_order_recovery_state(db, order_or_id, log=False)
-    else:
-        return False
-    if st.totals.oms_decision_lines > 0:
-        return False
-    if st.has_pending_relocation:
-        return False
-    if any(ln.visible_in_relocation for ln in st.lines):
-        return False
-    if st.has_recovery_pick_work:
-        return False
-    if st.packing_allowed:
-        return True
-    if st.totals.recovery_lines > 0 or st.totals.unresolved_lines > 0:
-        return False
-    return not any(ln.active_recovery and ln.visible_in_recovery_pick for ln in st.lines)
+    if order is not None:
+        return can_remove_from_braki(db, order, state=state)
+    if state is not None:
+        return not any(detect_active_braki_locks(db, _load_order(db, state.order_id), state=state).values())
+    if order_or_id is not None:
+        return can_remove_from_braki(db, order_or_id, state=state)
+    return False
 
 
 def recovery_state_for_braki_task(
@@ -1358,47 +1530,50 @@ def recovery_state_for_braki_task(
     rec_state: OrderRecoveryState | None = None,
     skip_repair: bool = False,
 ) -> dict[str, Any]:
-    """Pola resolvera dla kart kolejki Braki (serializacja API)."""
-    from .wms_relocation_workflow import find_relocation_task_for_order
-
-    if not skip_repair:
-        repair_order_relocation_consistency(
-            db,
-            order,
-            tenant_id=int(order.tenant_id),
-            warehouse_id=int(order.warehouse_id),
-            source_event_id="braki.task.serialize",
-        )
-    st = rec_state if rec_state is not None else resolve_order_recovery_state(db, order, log=False)
-    rel_task = find_relocation_task_for_order(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order_id=int(order.id),
-    )
-    needs_reloc_ui = bool(st.has_pending_relocation) or any(
-        ln.visible_in_relocation for ln in st.lines
-    )
-    from .braki_order_state_service import order_fully_packed
-
-    fully_packed = bool(order_fully_packed(db, order))
+    """Pola resolvera dla kart kolejki Braki — delegacja do ``build_braki_operational_state``."""
     from .recovery_intelligence import priority_fields_for_braki_task
 
+    op = build_braki_operational_state(
+        db,
+        order,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        rec_state=rec_state,
+        skip_repair=skip_repair,
+    )
+    st = rec_state if rec_state is not None else resolve_order_recovery_state(db, order, log=False)
     priority = priority_fields_for_braki_task(db, order, st, task=None)
     return {
-        "recovery_packing_allowed": bool(st.packing_allowed),
-        "recovery_active_lines": sum(1 for ln in st.lines if ln.visible_in_recovery_pick),
-        "recovery_unresolved_lines": int(st.totals.unresolved_lines),
-        "recovery_has_relocation_work": needs_reloc_ui,
-        "relocation_task_id": int(rel_task.id) if rel_task is not None else None,
-        "can_close_shortage": can_close_braki_shortage(db, order, repair_relocation=False),
-        "recovery_state_hash": st.state_hash,
-        "shortage_lifecycle_phase": canonical_shortage_lifecycle_phase(
-            st,
-            order_fully_packed=fully_packed,
-        ),
-        "relocation_mode": RELOCATION_MODE_CARRIER if needs_reloc_ui else None,
-        "braki_workstreams": build_braki_workstreams_from_state(st),
+        "recovery_packing_allowed": op["recovery_packing_allowed"],
+        "recovery_active_lines": op["recovery_active_lines"],
+        "recovery_unresolved_lines": op["recovery_unresolved_lines"],
+        "recovery_has_relocation_work": op["recovery_has_relocation_work"],
+        "relocation_task_id": op["relocation_task_id"],
+        "can_close_shortage": op["can_close_shortage"],
+        "recovery_state_hash": op["state_hash"],
+        "shortage_lifecycle_phase": op["shortage_lifecycle_phase"],
+        "relocation_mode": op["relocation_mode"],
+        "braki_workstreams": op["braki_workstreams"],
+        "braki_operational_state": {
+            k: op[k]
+            for k in (
+                "workflow_stage",
+                "queue_stage",
+                "operational_mode",
+                "can_remove_from_braki",
+                "can_close_shortage",
+                "active_operations",
+                "braki_workstreams",
+                "packing_allowed",
+                "relocation_required",
+                "recovery_required",
+                "warnings",
+                "state_hash",
+                "shortage_lifecycle_phase",
+                "relocation_task_id",
+                "relocation_mode",
+            )
+        },
         **priority,
     }
 
