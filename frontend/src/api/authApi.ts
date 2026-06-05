@@ -335,10 +335,12 @@ export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił bł�
         return msg;
       }
       if (detail && typeof detail === "object" && !Array.isArray(detail)) {
-        const msg = (detail as { message?: unknown; step?: unknown }).message;
-        const step = (detail as { step?: unknown }).step;
-        if (typeof msg === "string" && msg.trim()) {
-          return typeof step === "string" && step.trim() ? `${msg.trim()} (${step})` : msg.trim();
+        const d = detail as { message?: unknown; error?: unknown; step?: unknown };
+        const rawMsg = d.message ?? d.error;
+        const step = d.step;
+        if (typeof rawMsg === "string" && rawMsg.trim() && rawMsg.trim() !== "[object Object]") {
+          const msg = rawMsg.trim();
+          return typeof step === "string" && step.trim() ? `${msg} (${step})` : msg;
         }
       }
       if (Array.isArray(detail)) {

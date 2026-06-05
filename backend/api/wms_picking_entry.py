@@ -967,36 +967,61 @@ def post_picking_finalize_cart(
         db.commit()
     except PickingFinalizeError as e:
         db.rollback()
-        logger.exception(
-            "[wms.picking.finalize.error] cart_id=%s order_id=%s reason=%s step=%s",
+        logger.warning(
+            "[picking.finalize.error] cart_id=%s source_status_id=%s order_id=%s reason=%s step=%s code=%s",
             cart_id,
+            source_status_id,
             e.order_id,
             e.reason,
             e.step,
+            e.code,
         )
-        raise HTTPException(status_code=422, detail=e.as_detail()) from e
+        raise HTTPException(status_code=int(e.http_status), detail=e.as_detail()) from e
     except ValueError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        msg = str(e).strip() or "Nieprawidłowy stan zbierania."
+        logger.warning(
+            "[picking.finalize.error] cart_id=%s source_status_id=%s reason=ValueError message=%s",
+            cart_id,
+            source_status_id,
+            msg,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"message": msg, "error": msg, "code": "picking_finalize_invalid", "cart_id": int(cart_id)},
+        ) from e
     except SQLAlchemyError as e:
         db.rollback()
-        logger.exception("[wms.picking.finalize.error] cart_id=%s sqlalchemy", cart_id)
+        logger.exception(
+            "[picking.finalize.error] cart_id=%s source_status_id=%s step=database",
+            cart_id,
+            source_status_id,
+        )
         raise HTTPException(
             status_code=503,
             detail={
+                "message": "Zakończenie zbiórki nie powiodło się (błąd bazy danych).",
                 "error": "Zakończenie zbiórki nie powiodło się (błąd bazy danych).",
                 "reason": e.__class__.__name__,
+                "code": "database_error",
                 "cart_id": int(cart_id),
             },
         ) from e
     except Exception as e:
         db.rollback()
-        logger.exception("[wms.picking.finalize.error] cart_id=%s unexpected", cart_id)
+        logger.exception(
+            "[picking.finalize.error] cart_id=%s source_status_id=%s step=unexpected",
+            cart_id,
+            source_status_id,
+        )
+        msg = str(e).strip() or e.__class__.__name__
         raise HTTPException(
-            status_code=500,
+            status_code=503,
             detail={
-                "error": str(e).strip() or e.__class__.__name__,
+                "message": f"Zakończenie zbiórki nie powiodło się: {msg}",
+                "error": msg,
                 "reason": e.__class__.__name__,
+                "code": "unexpected_error",
                 "cart_id": int(cart_id),
             },
         ) from e

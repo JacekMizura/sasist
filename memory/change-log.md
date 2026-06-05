@@ -1,5 +1,23 @@
 # Change Log
 
+## 2026-06-04 — Workflow unification (finalize / relocation / packing SSOT)
+
+- ``RecoveryWorkflowService`` — ``can_order_be_packed``, ``validate_order_finalize_allowed``, ``sync_relocation_tasks_from_recovery_state``, ``state_hash`` / ``state_version`` / ``resolved_at``.
+- ``finalize_wms_picking_cart`` — wyłącznie resolver; logi ``[picking.finalize.*]``; błędy 400/404/409 (nie 500).
+- ``ensure_relocation_for_order_item_picks`` — gate ``relocation_required`` z resolvera (zwykły brak → brak zadania).
+- OMS line removal → ``sync_relocation_tasks_from_recovery_state`` zamiast bezpośredniego ``ensure_relocation``.
+- ``order_has_active_braki_operations``, ``braki_workflow_service`` — delegacja do resolvera (packing / recovery / shortage).
+- Frontend: ``WmsPackingOrdersPage`` → ``extractApiErrorMessage``.
+- Testy: ``test_recovery_workflow_finalize.py``.
+
+## 2026-06-04 — finalize-cart: brak HTTP 500 dla workflow recovery
+
+- ``finalize_wms_picking_cart`` — etapy z logami: ``[picking.finalize.start|validate|recovery|relocation|finish|error]``.
+- Walidacja wyłącznie przez ``RecoveryWorkflowService`` (cache stanu per zamówienie).
+- ``PickingFinalizeError`` → HTTP 400/404/409 (nie 500); nieoczekiwane → 503.
+- API ``POST /wms/picking/finalize-cart`` zwraca ``detail.message`` / ``detail.error``.
+- Frontend ``extractApiErrorMessage`` czyta ``detail.error``.
+
 ## 2026-06-04 — RecoveryWorkflowService (jedno źródło prawdy)
 
 - ``recovery_workflow_service.py`` — ``resolve_order_recovery_state()`` z pełnym stanem linii + ``[recovery.state]`` logi.

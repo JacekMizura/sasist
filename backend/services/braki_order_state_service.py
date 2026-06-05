@@ -186,41 +186,37 @@ def order_has_pending_relocation_work(
     warehouse_id: int,
     order_id: int,
 ) -> bool:
-    from .wms_relocation_workflow import order_has_active_relocation_work
+    from .recovery_workflow_service import order_has_relocation_work
 
-    return order_has_active_relocation_work(
+    order = db.query(Order).filter(Order.id == int(order_id)).first()
+    if order is None:
+        return False
+    return order_has_relocation_work(
         db,
+        order,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
-        order_id=int(order_id),
-        log_checks=False,
     )
 
 
 def order_has_active_braki_operations(db: Session, order: Order) -> bool:
-    """Operacyjna praca magazynowa / OMS — bez domykania po samym picku recovery."""
-    from .order_fulfillment_recompute import (
-        compute_line_missing_qty,
-        order_item_needs_substitute_pick_completion,
-    )
+    """Operacyjna praca magazynowa / OMS — kanoniczny stan z ``RecoveryWorkflowService``."""
+    from .recovery_workflow_service import resolve_order_recovery_state
     from .wms_recovery_pick_service import get_open_recovery_task_for_order
 
     tid = int(order.tenant_id)
     wid = int(order.warehouse_id)
     oid = int(order.id)
 
-    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
-        if order_line_awaiting_oms_attention(db, order, oi):
-            return True
-        if order_item_needs_substitute_pick_completion(db, order, oi):
-            return True
-
+    state = resolve_order_recovery_state(db, order, log=False)
+    if state.totals.oms_decision_lines > 0:
+        return True
+    if state.has_recovery_work:
+        return True
     if get_open_recovery_task_for_order(db, tenant_id=tid, warehouse_id=wid, order_id=oid):
         return True
-
-    if order_has_pending_relocation_work(db, tenant_id=tid, warehouse_id=wid, order_id=oid):
+    if state.has_relocation_work:
         return True
-
     return False
 
 
@@ -275,31 +271,10 @@ def order_had_braki_workflow_signals(db: Session, order: Order) -> bool:
 
 
 def order_braki_picking_resolved(db: Session, order: Order) -> bool:
-    """
-    Braki rozliczone po stronie magazynu (zbiórka / dogrywka / brak operacyjny).
-    Nie wymaga pełnego pakowania — to warunek ``ready_pack``.
-    """
-    from .order_fulfillment_recompute import compute_line_missing_qty, _order_fully_picked_for_fulfillment
-    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+    """Braki rozliczone magazynowo — ``can_order_be_packed`` z resolvera."""
+    from .recovery_workflow_service import can_order_be_packed
 
-    if order_has_active_braki_operations(db, order):
-        return False
-    u_short, r_pend = count_issue_queue_operational_lines(db, order)
-    if int(u_short) > 0 or int(r_pend) > 0:
-        return False
-    tid = int(order.tenant_id)
-    wid = int(order.warehouse_id)
-    oid = int(order.id)
-    if get_open_recovery_task_for_order(db, tenant_id=tid, warehouse_id=wid, order_id=oid):
-        return False
-    if order_has_pending_relocation_work(db, tenant_id=tid, warehouse_id=wid, order_id=oid):
-        return False
-    for oi in order.items or []:
-        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
-            return False
-        if order_line_awaiting_oms_attention(db, order, oi):
-            return False
-    return _order_fully_picked_for_fulfillment(db, order)
+    return can_order_be_packed(db, order, require_physical_pack=False)
 
 
 def order_braki_workflow_complete(db: Session, order: Order) -> bool:
@@ -335,8 +310,10 @@ def order_has_open_issue_task(db: Session, order: Order) -> bool:
 
 
 def order_can_show_ready_pack(db: Session, order: Order) -> bool:
-    """``ready_pack`` gdy braki rozliczone magazynowo — niezależnie od historycznego zgłoszenia braku."""
-    return order_braki_picking_resolved(db, order)
+    """``ready_pack`` — delegacja do ``RecoveryWorkflowService.can_order_be_packed``."""
+    from .recovery_workflow_service import can_order_be_packed
+
+    return can_order_be_packed(db, order, require_physical_pack=False)
 
 
 def evaluate_order_braki_state(
@@ -629,6 +606,22 @@ def ensure_relocation_for_order_item_picks(
             "[wms.relocation.create] skip order_id=%s order_item_id=%s reason=no_line",
             oid,
             oiid,
+        )
+        return []
+
+    from .recovery_workflow_service import resolve_order_recovery_state
+
+    rec_state = resolve_order_recovery_state(db, order, log=False)
+    line_state = next((ln for ln in rec_state.lines if int(ln.order_line_id) == oiid), None)
+    if line_state is None or not line_state.relocation_required:
+        logger.info(
+            "[wms.relocation.create] skip order_id=%s order_item_id=%s picked_qty=%s "
+            "reason=resolver_relocation_not_required relocation_required=%s source=%s",
+            oid,
+            oiid,
+            float(line_state.picked_qty) if line_state is not None else 0.0,
+            bool(line_state.relocation_required) if line_state is not None else False,
+            source_event_id,
         )
         return []
 

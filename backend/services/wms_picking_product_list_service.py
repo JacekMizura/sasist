@@ -101,7 +101,7 @@ logger = logging.getLogger(__name__)
 
 
 class PickingFinalizeError(Exception):
-    """Structured finalize failure — mapped to HTTP 400/422 with diagnostics."""
+    """Structured finalize failure — mapped to HTTP 400/409 (never generic 500)."""
 
     def __init__(
         self,
@@ -111,15 +111,24 @@ class PickingFinalizeError(Exception):
         order_id: int | None = None,
         line_id: int | None = None,
         step: str | None = None,
+        http_status: int = 400,
+        code: str = "picking_finalize_invalid",
     ) -> None:
         super().__init__(message)
         self.reason = reason
         self.order_id = order_id
         self.line_id = line_id
         self.step = step
+        self.http_status = int(http_status)
+        self.code = code
 
     def as_detail(self) -> dict:
-        out: dict = {"error": str(self), "reason": self.reason}
+        out: dict = {
+            "message": str(self),
+            "error": str(self),
+            "reason": self.reason,
+            "code": self.code,
+        }
         if self.order_id is not None:
             out["order_id"] = int(self.order_id)
         if self.line_id is not None:
@@ -609,17 +618,23 @@ def _picking_line_resolved_for_finalize(
     tenant_id: int,
     warehouse_id: int,
     cart_id: int,
+    recovery_state: object | None = None,
 ) -> tuple[bool, str]:
     """
     Linia domknięta na finalize wózka gdy ``picked + shortage >= required``.
 
     Brak nie musi być rozwiązany przez OMS (workflow Braki po finalize).
+    Deleguje stan recovery do ``RecoveryWorkflowService`` (jedno źródło prawdy).
     """
+    from .recovery_workflow_service import OrderRecoveryState, line_skipped_for_recovery, resolve_order_recovery_state
+
     _ = tenant_id, warehouse_id
     eps = 1e-5
     cid = int(cart_id)
     if order_item_is_replaced_line(oi):
         return True, "replaced_archive_skip"
+    if line_skipped_for_recovery(oi):
+        return True, "recovery_skipped_line"
     qty = float(oi.quantity or 0)
     if qty <= eps:
         return True, "zero_qty"
@@ -638,9 +653,12 @@ def _picking_line_resolved_for_finalize(
             return True, "picked_plus_shortage"
         return True, "fully_picked"
 
-    from .recovery_workflow_service import resolve_order_recovery_state
+    state: OrderRecoveryState
+    if recovery_state is not None:
+        state = recovery_state  # type: ignore[assignment]
+    else:
+        state = resolve_order_recovery_state(db, order, session_cart_id=cid, log=False)
 
-    state = resolve_order_recovery_state(db, order, session_cart_id=cid, log=False)
     for ln in state.lines:
         if int(ln.order_line_id) != int(oi.id):
             continue
@@ -650,6 +668,8 @@ def _picking_line_resolved_for_finalize(
             return True, "recovery_deferred_substitute" if ln.replacement_applied else "recovery_deferred"
         if ln.packing_eligible or ln.recovery_completed:
             return True, "fully_picked"
+        if ln.recovery_qty <= eps and ln.unresolved_qty <= eps:
+            return True, "shortage_covers_gap"
         break
 
     return False, "incomplete"
@@ -704,6 +724,7 @@ def _classify_order_after_picking_session(
     tenant_id: int,
     warehouse_id: int,
     cart_id: int,
+    recovery_state: object | None = None,
 ) -> OrderFinalizeKind:
     """Stan końcowy zamówienia po domknięciu Picków z wózka (linie zamknięte pick + brak)."""
     eps = 1e-5
@@ -743,6 +764,7 @@ def _classify_order_after_picking_session(
             tenant_id=tenant_id,
             warehouse_id=warehouse_id,
             cart_id=int(cart_id),
+            recovery_state=recovery_state,
         )
         logger.info(
             "[picking.finalize] LINE_CHECK order_id=%s order_item_id=%s product_id=%s "
@@ -761,22 +783,13 @@ def _classify_order_after_picking_session(
             int(cart_id),
         )
         if not resolved:
-            num = str(order.number or order.id)
-            logger.warning(
-                "[picking.finalize] BLOCKED order_id=%s order_item_id=%s product_id=%s "
-                "required=%s picked=%s shortage=%s effective=%s reason=%s",
-                int(order.id),
-                int(oi.id),
-                int(oi.product_id or 0),
-                qty,
-                picked,
-                miss,
-                effective,
-                reason,
-            )
-            raise ValueError(
-                f"Zamówienie #{num}: nie wszystkie pozycje zostały zebrane lub oznaczone jako brak."
-            )
+            if reason in ("recovery_deferred", "recovery_deferred_substitute"):
+                fully_missing.append(False)
+                fully_picked.append(False)
+                continue
+            fully_missing.append(miss + eps >= qty)
+            fully_picked.append(False)
+            continue
         fully_missing.append(miss + eps >= qty)
         fully_picked.append(miss < eps and picked + eps >= qty)
     if not fully_picked and not fully_missing:
@@ -2040,6 +2053,56 @@ def report_wms_picking_product_shortage(
     }
 
 
+def _finalize_recovery_state_summaries(
+    db: Session,
+    orders: Sequence[Order],
+    *,
+    cart_id: int,
+) -> list[dict]:
+    """Skrót stanu recovery per zamówienie — do logów finalize."""
+    from .recovery_workflow_service import RecoveryWorkflowError, resolve_order_recovery_state
+
+    cid = int(cart_id)
+    out: list[dict] = []
+    for order in orders:
+        oid = int(order.id)
+        try:
+            st = resolve_order_recovery_state(db, order, session_cart_id=cid, log=False)
+            out.append(
+                {
+                    "order_id": oid,
+                    "recovery_status": st.recovery_status,
+                    "unresolved_lines": int(st.totals.recovery_lines),
+                    "recovery_lines": int(st.totals.recovery_lines),
+                    "relocation_lines": int(st.totals.relocation_lines),
+                    "oms_lines": int(st.totals.oms_decision_lines),
+                    "packing_allowed": bool(st.packing_allowed),
+                    "finalize_allowed": bool(st.finalize_allowed),
+                    "has_recovery_work": bool(st.has_recovery_work),
+                    "has_relocation_work": bool(st.has_relocation_work),
+                    "state_hash": st.state_hash,
+                    "state_version": st.state_version,
+                }
+            )
+        except RecoveryWorkflowError as exc:
+            out.append(
+                {
+                    "order_id": oid,
+                    "error": exc.message,
+                    "code": exc.code,
+                }
+            )
+        except Exception as exc:
+            out.append(
+                {
+                    "order_id": oid,
+                    "error": str(exc).strip() or exc.__class__.__name__,
+                    "code": "recovery_state_compute_failed",
+                }
+            )
+    return out
+
+
 def _finalize_cohort_snapshot(
     db: Session,
     orders: Sequence[Order],
@@ -2047,10 +2110,9 @@ def _finalize_cohort_snapshot(
     tenant_id: int,
     warehouse_id: int,
     cart_id: int,
+    recovery_summaries: Sequence[dict] | None = None,
 ) -> dict:
-    """Diagnoza kohorty przed domknięciem wózka — log ``[wms.picking.finalize.start]``."""
-    from .wms_recovery_pick_service import get_unresolved_recovery_lines
-
+    """Diagnoza kohorty przed domknięciem wózka."""
     picked_lines = 0
     shortage_lines = 0
     replacement_lines = 0
@@ -2100,9 +2162,10 @@ def _finalize_cohort_snapshot(
                 recovery_deferred_lines += 1
             elif not resolved:
                 unresolved_lines += 1
-    recovery_deferred_lines = sum(
-        len(get_unresolved_recovery_lines(db, o, session_cart_id=cid, log=False)) for o in orders
-    )
+    if recovery_summaries is not None:
+        recovery_deferred_lines = sum(
+            int(s.get("unresolved_lines") or 0) for s in recovery_summaries if "unresolved_lines" in s
+        )
     return {
         "cart_id": cid,
         "order_count": len(orders),
@@ -2112,6 +2175,7 @@ def _finalize_cohort_snapshot(
         "removed_lines": removed_lines,
         "unresolved_lines": unresolved_lines,
         "recovery_deferred_lines": recovery_deferred_lines,
+        "recovery_state_summary": list(recovery_summaries or []),
     }
 
 
@@ -2171,7 +2235,13 @@ def finalize_wms_picking_cart(
         .first()
     )
     if not pc:
-        raise ValueError("Brak konfiguracji zbierania dla tego statusu źródłowego.")
+        raise PickingFinalizeError(
+            "Brak konfiguracji zbierania dla tego statusu źródłowego.",
+            reason="missing_picking_config",
+            step="start",
+            http_status=404,
+            code="picking_config_not_found",
+        )
 
     cart = (
         db.query(Cart)
@@ -2183,7 +2253,13 @@ def finalize_wms_picking_cart(
         .first()
     )
     if not cart:
-        raise ValueError("Nie znaleziono aktywnego wózka (sesja wygasła lub błędne ID).")
+        raise PickingFinalizeError(
+            "Nie znaleziono aktywnego wózka (sesja wygasła lub błędne ID).",
+            reason="cart_not_found",
+            step="start",
+            http_status=404,
+            code="cart_not_found",
+        )
 
     ot = _order_type_filter(order_type)
     order_ids = _query_order_ids_for_status(
@@ -2194,18 +2270,46 @@ def finalize_wms_picking_cart(
         order_type=ot,
     )
     if not order_ids:
-        raise ValueError("Brak zamówień w tej kohortcie.")
+        raise PickingFinalizeError(
+            "Brak zamówień w tej kohortcie.",
+            reason="empty_cohort",
+            step="start",
+            http_status=400,
+            code="cohort_empty",
+        )
 
     cid = int(cart.id)
-    for oid in order_ids:
-        recompute_order_fulfillment(db, int(oid), commit=False, session_cart_id=cid)
-    db.flush()
+    sid = int(source_status_id)
     logger.info(
-        "[picking.finalize] ENTER cart_id=%s order_ids=%s cohort_orders=%s",
+        "[picking.finalize.start] cart_id=%s source_status_id=%s order_type=%s tenant_id=%s warehouse_id=%s "
+        "order_ids=%s cohort_orders=%s",
         cid,
+        sid,
+        str(order_type),
+        int(tenant_id),
+        int(warehouse_id),
         list(order_ids),
         len(order_ids),
     )
+
+    try:
+        for oid in order_ids:
+            recompute_order_fulfillment(db, int(oid), commit=False, session_cart_id=cid)
+        db.flush()
+    except Exception as exc:
+        logger.exception(
+            "[picking.finalize.error] cart_id=%s source_status_id=%s step=recompute_fulfillment",
+            cid,
+            sid,
+        )
+        raise PickingFinalizeError(
+            f"Nie udało się przeliczyć stanu zamówień przed domknięciem wózka: {exc}",
+            reason=exc.__class__.__name__,
+            step="recompute_fulfillment",
+            http_status=409,
+            code="fulfillment_recompute_failed",
+        ) from exc
+
     orders = (
         db.query(Order)
         .options(joinedload(Order.items))
@@ -2215,44 +2319,85 @@ def finalize_wms_picking_cart(
     for o in orders:
         if o.cart_id is not None and int(o.cart_id) != cid:
             num = str(o.number or o.id)
-            raise ValueError(
-                f"Zamówienie #{num} jest przypisane do innego wózka — dokończ na właściwej sesji."
+            raise PickingFinalizeError(
+                f"Zamówienie #{num} jest przypisane do innego wózka — dokończ na właściwej sesji.",
+                reason="wrong_cart",
+                order_id=int(o.id),
+                step="validate",
+                http_status=409,
+                code="order_wrong_cart",
             )
 
+    from .recovery_workflow_service import (
+        OrderRecoveryState,
+        RecoveryWorkflowError,
+        resolve_order_recovery_state,
+        validate_order_finalize_allowed,
+    )
+
+    recovery_by_order: dict[int, OrderRecoveryState] = {}
+    recovery_summaries = _finalize_recovery_state_summaries(db, orders, cart_id=cid)
     for o in orders:
-        for oi in o.items or []:
-            if getattr(oi, "parent_bundle_order_item_id", None) is not None:
-                continue
-            if bool(getattr(oi, "is_bundle_parent", False)):
-                continue
-            if order_item_is_replaced_line(oi):
-                continue
-            qty = float(oi.quantity or 0)
-            if qty <= 1e-5:
-                continue
-            resolved, reason = _picking_line_resolved_for_finalize(
+        oid = int(o.id)
+        try:
+            recovery_by_order[oid] = resolve_order_recovery_state(
                 db,
                 o,
-                oi,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-                cart_id=cid,
+                session_cart_id=cid,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                log=True,
             )
-            if not resolved:
-                num = str(o.number or o.id)
-                logger.warning(
-                    "[picking.finalize] BLOCKED order_id=%s order_item_id=%s product_id=%s "
-                    "reason=%s cart_id=%s",
-                    int(o.id),
-                    int(oi.id),
-                    int(oi.product_id or 0),
-                    reason,
-                    cid,
-                )
-                raise ValueError(
-                    f"Zamówienie #{num}: linia produktu nie jest domknięta "
-                    f"(zebrano + brak < wymagane lub wymagana decyzja OMS)."
-                )
+        except RecoveryWorkflowError as exc:
+            raise PickingFinalizeError(
+                exc.message,
+                reason=exc.code,
+                order_id=oid,
+                step="validate",
+                http_status=exc.http_status,
+                code=exc.code,
+            ) from exc
+        except Exception as exc:
+            raise PickingFinalizeError(
+                f"Nie udało się ustalić stanu recovery zamówienia #{o.number or oid}: {exc}",
+                reason=exc.__class__.__name__,
+                order_id=oid,
+                step="validate",
+                http_status=409,
+                code="recovery_state_failed",
+            ) from exc
+
+    logger.info(
+        "[picking.finalize.validate] cart_id=%s source_status_id=%s recovery_state_summary=%s",
+        cid,
+        sid,
+        recovery_summaries,
+    )
+
+    for o in orders:
+        rec_state = recovery_by_order[int(o.id)]
+        try:
+            validate_order_finalize_allowed(rec_state, order_number=str(o.number or o.id))
+        except RecoveryWorkflowError as exc:
+            logger.warning(
+                "[picking.finalize.validate] BLOCKED order_id=%s cart_id=%s source_status_id=%s "
+                "code=%s finalize_allowed=%s packing_allowed=%s",
+                int(o.id),
+                cid,
+                sid,
+                exc.code,
+                rec_state.finalize_allowed,
+                rec_state.packing_allowed,
+            )
+            raise PickingFinalizeError(
+                exc.message,
+                reason=exc.code,
+                order_id=int(o.id),
+                line_id=exc.order_item_id,
+                step="validate",
+                http_status=exc.http_status,
+                code=exc.code,
+            ) from exc
 
     start_snap = _finalize_cohort_snapshot(
         db,
@@ -2260,31 +2405,57 @@ def finalize_wms_picking_cart(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         cart_id=cid,
+        recovery_summaries=recovery_summaries,
     )
-    logger.info("[wms.picking.finalize.start] %s", start_snap)
+    logger.info(
+        "[picking.finalize.start] cart_id=%s source_status_id=%s snapshot=%s",
+        cid,
+        sid,
+        start_snap,
+    )
 
-    pending_picks = (
-        db.query(Pick)
-        .filter(
-            Pick.tenant_id == int(tenant_id),
-            Pick.warehouse_id == int(warehouse_id),
-            Pick.cart_id == cid,
-            Pick.order_id.in_(list(order_ids)),
-            Pick.picked_at.is_(None),
+    try:
+        pending_picks = (
+            db.query(Pick)
+            .filter(
+                Pick.tenant_id == int(tenant_id),
+                Pick.warehouse_id == int(warehouse_id),
+                Pick.cart_id == cid,
+                Pick.order_id.in_(list(order_ids)),
+                Pick.picked_at.is_(None),
+            )
+            .order_by(Pick.id.asc())
+            .with_for_update()
+            .all()
         )
-        .order_by(Pick.id.asc())
-        .with_for_update()
-        .all()
-    )
-    now = datetime.utcnow()
-    finalized_ids: list[int] = []
-    for p in pending_picks:
-        finalized_rows = _decrement_inventory_for_wms_pick(db, p, performed_by=performed_by, picked_at=now)
-        for row in finalized_rows:
-            row.picked_at = now
-            row.status = "done"
-            finalized_ids.append(int(row.id))
-    mark_pick_events_finalized_for_pick_ids(db, finalized_ids)
+        now = datetime.utcnow()
+        finalized_ids: list[int] = []
+        for p in pending_picks:
+            finalized_rows = _decrement_inventory_for_wms_pick(db, p, performed_by=performed_by, picked_at=now)
+            for row in finalized_rows:
+                row.picked_at = now
+                row.status = "done"
+                finalized_ids.append(int(row.id))
+        mark_pick_events_finalized_for_pick_ids(db, finalized_ids)
+        logger.info(
+            "[picking.finalize.finish] cart_id=%s source_status_id=%s step=inventory picks_finalized=%s",
+            cid,
+            sid,
+            len(finalized_ids),
+        )
+    except Exception as exc:
+        logger.exception(
+            "[picking.finalize.error] cart_id=%s source_status_id=%s step=inventory",
+            cid,
+            sid,
+        )
+        raise PickingFinalizeError(
+            f"Nie udało się spisać stanu magazynu dla zbierania: {exc}",
+            reason=exc.__class__.__name__,
+            step="inventory",
+            http_status=409,
+            code="inventory_finalize_failed",
+        ) from exc
 
     tgt = int(pc.target_status_id)
     ss = get_or_create_wms_picking_shortage_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
@@ -2293,6 +2464,7 @@ def finalize_wms_picking_cart(
 
     order_kinds: dict[int, OrderFinalizeKind] = {}
     for o in orders:
+        rec_state = recovery_by_order[int(o.id)]
         lines = list(o.items or [])
         for oi in lines:
             if order_item_is_replaced_line(oi):
@@ -2311,10 +2483,19 @@ def finalize_wms_picking_cart(
                 db, o, oi, session_cart_id=cid, picked=picked_dbg
             )
             declared_dbg = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+            resolved_dbg, reason_dbg = _picking_line_resolved_for_finalize(
+                db,
+                o,
+                oi,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                cart_id=cid,
+                recovery_state=rec_state,
+            )
             logger.info(
-                "wms finalize-cart line gate: order_id=%s order_item_id=%s product_id=%s "
+                "[picking.finalize.validate] order_id=%s order_item_id=%s product_id=%s "
                 "required_qty=%s picked_qty=%s shortage_qty=%s resolved_shortage_qty=%s "
-                "effective_qty=%s cart_id=%s",
+                "effective_qty=%s resolved=%s reason=%s cart_id=%s source_status_id=%s",
                 int(o.id),
                 int(oi.id),
                 int(oi.product_id or 0),
@@ -2323,25 +2504,39 @@ def finalize_wms_picking_cart(
                 miss_dbg,
                 declared_dbg,
                 picked_dbg + miss_dbg,
+                resolved_dbg,
+                reason_dbg,
                 cid,
+                sid,
             )
-        order_kinds[int(o.id)] = _classify_order_after_picking_session(
-            o,
-            db=db,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-            cart_id=cid,
-        )
+        try:
+            order_kinds[int(o.id)] = _classify_order_after_picking_session(
+                o,
+                db=db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                cart_id=cid,
+                recovery_state=rec_state,
+            )
+        except ValueError as exc:
+            raise PickingFinalizeError(
+                str(exc),
+                reason="classify_order",
+                order_id=int(o.id),
+                step="validate",
+                http_status=400,
+                code="order_classify_failed",
+            ) from exc
 
-    from .braki_order_state_service import order_can_show_ready_pack, order_has_pending_relocation_work
-    from .wms_recovery_pick_service import get_open_recovery_task_for_order
+    from .recovery_workflow_service import sync_relocation_tasks_from_recovery_state
+    from .wms_recovery_pick_service import ensure_recovery_pick_task, get_open_recovery_task_for_order
 
     for o in orders:
         oid = int(o.id)
-        wf_before = (getattr(o, "fulfillment_state", None) or "").strip() or None
+        rec_state = recovery_by_order[oid]
         kind = order_kinds[oid]
         try:
-            pack_ok = order_can_show_ready_pack(db, o)
+            pack_ok = bool(rec_state.packing_allowed)
             panel_kind: OrderFinalizeKind = kind
             if kind == "all_picked" and not pack_ok:
                 panel_kind = "some_missing"
@@ -2368,16 +2563,115 @@ def finalize_wms_picking_cart(
             )
         except Exception as exc:
             logger.exception(
-                "[wms.picking.finalize.error] order_id=%s step=apply_order_state cart_id=%s",
+                "[picking.finalize.error] order_id=%s cart_id=%s source_status_id=%s step=apply_order_state",
                 oid,
                 cid,
+                sid,
             )
             raise PickingFinalizeError(
                 f"Nie udało się domknąć zbierania zamówienia #{o.number or oid}: {exc}",
                 reason=exc.__class__.__name__,
                 order_id=oid,
                 step="apply_order_state",
+                http_status=409,
+                code="apply_order_state_failed",
             ) from exc
+
+        try:
+            sync_relocation_tasks_from_recovery_state(
+                db,
+                o,
+                rec_state,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                source_event_id=f"picking_finalize:{cid}",
+            )
+        except Exception as exc:
+            logger.exception(
+                "[picking.finalize.error] order_id=%s cart_id=%s source_status_id=%s step=relocation",
+                oid,
+                cid,
+                sid,
+            )
+            raise PickingFinalizeError(
+                f"Nie udało się utworzyć zadań rozlokowania dla zamówienia #{o.number or oid}: {exc}",
+                reason=exc.__class__.__name__,
+                order_id=oid,
+                step="relocation",
+                http_status=409,
+                code="relocation_sync_failed",
+            ) from exc
+
+        logger.info(
+            "[picking.finalize.relocation] order_id=%s cart_id=%s source_status_id=%s "
+            "relocation_required=%s relocation_lines=%s packing_allowed=%s",
+            oid,
+            cid,
+            sid,
+            bool(rec_state.has_relocation_work),
+            int(rec_state.totals.relocation_lines),
+            bool(rec_state.packing_allowed),
+        )
+
+    for o in orders:
+        oid = int(o.id)
+        try:
+            post_state = resolve_order_recovery_state(
+                db,
+                o,
+                session_cart_id=cid,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                log=True,
+            )
+            recovery_by_order[oid] = post_state
+            logger.info(
+                "[picking.finalize.recovery] order_id=%s cart_id=%s source_status_id=%s "
+                "recovery_status=%s unresolved_lines=%s recovery_lines=%s "
+                "has_recovery_work=%s state_hash=%s packing_allowed=%s",
+                oid,
+                cid,
+                sid,
+                post_state.recovery_status,
+                int(post_state.totals.unresolved_lines),
+                int(post_state.totals.recovery_lines),
+                bool(post_state.has_recovery_work),
+                post_state.state_hash,
+                bool(post_state.packing_allowed),
+            )
+            if post_state.has_recovery_work:
+                ensure_recovery_pick_task(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    order=o,
+                    kind="other",
+                )
+        except RecoveryWorkflowError as exc:
+            raise PickingFinalizeError(
+                exc.message,
+                reason=exc.code,
+                order_id=oid,
+                step="recovery",
+                http_status=exc.http_status,
+                code=exc.code,
+            ) from exc
+        except Exception as exc:
+            logger.exception(
+                "[picking.finalize.error] order_id=%s cart_id=%s source_status_id=%s step=recovery",
+                oid,
+                cid,
+                sid,
+            )
+            raise PickingFinalizeError(
+                f"Nie udało się utworzyć zadania dogrywki dla zamówienia #{o.number or oid}: {exc}",
+                reason=exc.__class__.__name__,
+                order_id=oid,
+                step="recovery",
+                http_status=409,
+                code="recovery_task_failed",
+            ) from exc
+
         recovery_required = (
             get_open_recovery_task_for_order(
                 db,
@@ -2387,67 +2681,70 @@ def finalize_wms_picking_cart(
             )
             is not None
         )
-        relocation_required = order_has_pending_relocation_work(
+        post = recovery_by_order.get(oid)
+        logger.info(
+            "[wms.picking.finalize.order] order_id=%s workflow_state_after=%s "
+            "has_shortages=%s recovery_required=%s relocation_required=%s kind=%s "
+            "packing_allowed=%s state_hash=%s",
+            oid,
+            (getattr(o, "fulfillment_state", None) or "").strip() or None,
+            order_kinds[oid] != "all_picked",
+            recovery_required,
+            bool(post.has_relocation_work) if post is not None else False,
+            order_kinds[oid],
+            bool(post.packing_allowed) if post is not None else False,
+            post.state_hash if post is not None else None,
+        )
+
+    try:
+        for o in orders:
+            recalculate_order_shortage_state(db, int(o.id), commit=False)
+
+        if bool(getattr(ss, "auto_enqueue_braki", True)):
+            for o in orders:
+                if order_kinds[int(o.id)] == "all_picked":
+                    continue
+                spid = _first_shortage_product_id_for_order_issue(db, o)
+                if spid is not None:
+                    upsert_order_issue_tasks_from_shortage(
+                        db,
+                        tenant_id=int(tenant_id),
+                        warehouse_id=int(warehouse_id),
+                        order_ids=[int(o.id)],
+                        shortage_product_id=int(spid),
+                    )
+
+        cart.status = CartStatus.FULL
+
+        record_picking_cart_finalize_session(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
-            order_id=oid,
+            cart_id=cid,
+            operator_user_id=operator_user_id,
+            orders=list(orders),
+            completed_at=datetime.utcnow(),
         )
         logger.info(
-            "[wms.picking.finalize.order] order_id=%s workflow_state_before=%s workflow_state_after=%s "
-            "has_shortages=%s recovery_required=%s relocation_required=%s kind=%s pack_ok=%s",
-            oid,
-            wf_before,
-            (getattr(o, "fulfillment_state", None) or "").strip() or None,
-            kind != "all_picked",
-            recovery_required,
-            relocation_required,
-            kind,
-            pack_ok,
+            "[picking.finalize.finish] cart_id=%s source_status_id=%s orders_updated=%s target_status_id=%s",
+            cid,
+            sid,
+            len(orders),
+            tgt,
         )
-
-    from .recovery_workflow_service import resolve_order_recovery_state
-    from .wms_recovery_pick_service import ensure_recovery_pick_task, order_has_recovery_pick_work
-
-    for o in orders:
-        resolve_order_recovery_state(db, o, session_cart_id=cid, log=True)
-        if order_has_recovery_pick_work(db, o):
-            ensure_recovery_pick_task(
-                db,
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                order=o,
-                kind="other",
-            )
-
-    for o in orders:
-        recalculate_order_shortage_state(db, int(o.id), commit=False)
-
-    if bool(getattr(ss, "auto_enqueue_braki", True)):
-        for o in orders:
-            if order_kinds[int(o.id)] == "all_picked":
-                continue
-            spid = _first_shortage_product_id_for_order_issue(db, o)
-            if spid is not None:
-                upsert_order_issue_tasks_from_shortage(
-                    db,
-                    tenant_id=int(tenant_id),
-                    warehouse_id=int(warehouse_id),
-                    order_ids=[int(o.id)],
-                    shortage_product_id=int(spid),
-                )
-
-    cart.status = CartStatus.FULL
-
-    record_picking_cart_finalize_session(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        cart_id=cid,
-        operator_user_id=operator_user_id,
-        orders=list(orders),
-        completed_at=datetime.utcnow(),
-    )
+    except Exception as exc:
+        logger.exception(
+            "[picking.finalize.error] cart_id=%s source_status_id=%s step=finish",
+            cid,
+            sid,
+        )
+        raise PickingFinalizeError(
+            f"Nie udało się domknąć sesji wózka: {exc}",
+            reason=exc.__class__.__name__,
+            step="finish",
+            http_status=409,
+            code="cart_finalize_failed",
+        ) from exc
 
     shortage_pc, shortage_tot = cohort_shortage_stats_from_orders(orders)
     shortage_oids = cohort_shortage_order_ids_from_orders(db, orders)

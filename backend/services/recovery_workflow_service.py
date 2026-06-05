@@ -6,9 +6,11 @@ Jedno źródło prawdy — wszystkie ekrany WMS delegują tutaj zamiast duplikow
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from typing import Any, Literal
 
 from sqlalchemy.orm import Session, joinedload
@@ -28,6 +30,7 @@ RecoveryStatus = Literal[
 ]
 
 _EPS = 1e-9
+STATE_VERSION = 1
 
 
 class RecoveryWorkflowError(Exception):
@@ -79,6 +82,7 @@ class RecoveryLineState:
     visible_in_relocation: bool
     visible_in_finalize: bool
     packing_eligible: bool
+    finalize_allowed: bool
     reason: str
 
     def to_dict(self) -> dict[str, Any]:
@@ -106,6 +110,10 @@ class OrderRecoveryState:
     has_recovery_work: bool = False
     has_relocation_work: bool = False
     packing_allowed: bool = False
+    finalize_allowed: bool = False
+    state_version: int = STATE_VERSION
+    state_hash: str = ""
+    resolved_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -116,7 +124,36 @@ class OrderRecoveryState:
             "has_recovery_work": self.has_recovery_work,
             "has_relocation_work": self.has_relocation_work,
             "packing_allowed": self.packing_allowed,
+            "finalize_allowed": self.finalize_allowed,
+            "state_version": self.state_version,
+            "state_hash": self.state_hash,
+            "resolved_at": self.resolved_at,
         }
+
+
+def _compute_state_hash(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def log_recovery_state_snapshot(state: OrderRecoveryState, *, tag: str = "recovery.snapshot") -> None:
+    logger.info(
+        "[%s] order_id=%s state_version=%s state_hash=%s resolved_at=%s "
+        "recovery_status=%s packing_allowed=%s finalize_allowed=%s "
+        "unresolved_lines=%s recovery_lines=%s relocation_lines=%s snapshot=%s",
+        tag,
+        state.order_id,
+        state.state_version,
+        state.state_hash,
+        state.resolved_at,
+        state.recovery_status,
+        state.packing_allowed,
+        state.finalize_allowed,
+        state.totals.unresolved_lines,
+        state.totals.recovery_lines,
+        state.totals.relocation_lines,
+        state.to_dict(),
+    )
 
 
 def _order_item_meta_dict(item: OrderItem) -> dict[str, Any]:
@@ -128,6 +165,11 @@ def _order_item_meta_dict(item: OrderItem) -> dict[str, Any]:
         return m if isinstance(m, dict) else {}
     except json.JSONDecodeError:
         return {}
+
+
+def line_skipped_for_recovery(oi: OrderItem) -> bool:
+    """Linie wyłączone z workflow recovery (bundle, archiwum, usunięte OMS)."""
+    return _line_skipped(oi)
 
 
 def _line_skipped(oi: OrderItem) -> bool:
@@ -321,6 +363,12 @@ def resolve_order_recovery_state(
         visible_in_relocation = relocation_required or has_active_relocation_task
 
         packing_eligible = line_resolved and not active_recovery and not requires_oms
+        finalize_allowed = (
+            packing_eligible
+            or active_recovery
+            or (shortage_reported and unresolved_qty <= _EPS)
+            or (line_closed and cid is not None)
+        )
 
         if requires_oms:
             totals.oms_decision_lines += 1
@@ -334,7 +382,7 @@ def resolve_order_recovery_state(
 
         row = RecoveryLineState(
             order_line_id=int(oi.id),
-            product_id=int(oi.product_id),
+            product_id=int(oi.product_id or 0),
             ordered_qty=round(ordered, 6),
             picked_qty=round(picked, 6),
             removed_qty=round(removed, 6),
@@ -351,6 +399,7 @@ def resolve_order_recovery_state(
             visible_in_relocation=visible_in_relocation,
             visible_in_finalize=visible_in_finalize,
             packing_eligible=packing_eligible,
+            finalize_allowed=finalize_allowed,
             reason=reason if not blocks_finalize else "finalize_blocked",
         )
         line_states.append(row)
@@ -383,7 +432,9 @@ def resolve_order_recovery_state(
         totals.packing_blocked_lines == 0
         and totals.oms_decision_lines == 0
         and totals.recovery_lines == 0
+        and not has_active_relocation_task
     )
+    finalize_allowed = all(ln.finalize_allowed for ln in line_states) if line_states else True
 
     if totals.oms_decision_lines > 0:
         recovery_status: RecoveryStatus = "awaiting_oms"
@@ -396,7 +447,8 @@ def resolve_order_recovery_state(
     else:
         recovery_status = "none"
 
-    return OrderRecoveryState(
+    resolved_at = datetime.utcnow().isoformat() + "Z"
+    state = OrderRecoveryState(
         order_id=oid,
         recovery_status=recovery_status,
         lines=line_states,
@@ -404,7 +456,21 @@ def resolve_order_recovery_state(
         has_recovery_work=has_recovery_work,
         has_relocation_work=has_relocation_work,
         packing_allowed=packing_allowed,
+        finalize_allowed=finalize_allowed,
+        state_version=STATE_VERSION,
+        resolved_at=resolved_at,
     )
+    state.state_hash = _compute_state_hash(
+        {
+            "order_id": oid,
+            "recovery_status": recovery_status,
+            "totals": totals.to_dict(),
+            "lines": [ln.to_dict() for ln in line_states],
+        }
+    )
+    if log:
+        log_recovery_state_snapshot(state, tag="recovery.state.snapshot")
+    return state
 
 
 def get_recovery_pick_lines(
@@ -443,3 +509,133 @@ def count_recovery_operational_lines(db: Session, order: Order) -> tuple[int, in
     """(linie OMS, linie dogrywki) — delegacja do resolvera."""
     state = resolve_order_recovery_state(db, order, log=False)
     return state.totals.oms_decision_lines, state.totals.recovery_lines
+
+
+def can_order_be_packed(
+    db: Session,
+    order_or_id: Order | int,
+    *,
+    session_cart_id: int | None = None,
+    require_physical_pack: bool = False,
+) -> bool:
+    """
+    Jedno źródło prawdy: czy zamówienie może wejść / domknąć pakowanie.
+    Wymaga braku recovery, OMS, relocation oraz rozliczonych linii.
+    """
+    state = resolve_order_recovery_state(db, order_or_id, session_cart_id=session_cart_id, log=False)
+    if not state.packing_allowed:
+        return False
+    if not require_physical_pack:
+        return True
+    order = _load_order(db, order_or_id)
+    if order is None:
+        return False
+    from .braki_order_state_service import order_fully_packed
+
+    return order_fully_packed(db, order)
+
+
+def order_has_relocation_work(
+    db: Session,
+    order_or_id: Order | int,
+    *,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+) -> bool:
+    """Czy zamówienie ma aktywną lub wymaganą pracę rozlokowania — z resolvera."""
+    state = resolve_order_recovery_state(
+        db,
+        order_or_id,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        log=False,
+    )
+    return bool(state.has_relocation_work)
+
+
+def sync_relocation_tasks_from_recovery_state(
+    db: Session,
+    order: Order,
+    state: OrderRecoveryState,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_event_id: str,
+    picked_from_location: str | None = None,
+) -> list[int]:
+    """
+    Tworzy zadania RELOCATION wyłącznie dla linii z ``relocation_required`` w stanie resolvera.
+    Nigdy dla zwykłych braków bez zebranego towaru.
+    """
+    from .braki_order_state_service import ensure_relocation_for_order_item_picks
+    from .wms_relocation_workflow import order_has_active_relocation_work
+
+    oid = int(order.id)
+    if order_has_active_relocation_work(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=oid,
+        log_checks=False,
+    ):
+        logger.info(
+            "[recovery.relocation.sync] order_id=%s skip=active_task_exists source=%s",
+            oid,
+            source_event_id,
+        )
+        return []
+
+    task_ids: list[int] = []
+    for ln in state.lines:
+        if not ln.relocation_required or ln.picked_qty <= _EPS:
+            continue
+        ids = ensure_relocation_for_order_item_picks(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order=order,
+            order_item_id=int(ln.order_line_id),
+            source_event_id=source_event_id,
+            picked_from_location=picked_from_location,
+        )
+        task_ids.extend(ids)
+        logger.info(
+            "[recovery.relocation.sync] order_id=%s line_id=%s product_id=%s "
+            "picked_qty=%s relocation_required=%s task_ids=%s source=%s",
+            oid,
+            ln.order_line_id,
+            ln.product_id,
+            ln.picked_qty,
+            ln.relocation_required,
+            ids,
+            source_event_id,
+        )
+    return task_ids
+
+
+def validate_order_finalize_allowed(
+    state: OrderRecoveryState,
+    *,
+    order_number: str | int,
+) -> None:
+    """Walidacja finalize-cart wyłącznie z resolvera — bez duplikowanych filtrów."""
+    if state.finalize_allowed:
+        return
+    blocking = [ln for ln in state.lines if not ln.finalize_allowed]
+    first = blocking[0] if blocking else None
+    if first is not None and first.reason == "awaiting_oms":
+        raise RecoveryWorkflowError(
+            f"Zamówienie #{order_number}: wymagana decyzja OMS przed domknięciem wózka.",
+            code="oms_decision_required",
+            http_status=400,
+            order_id=int(state.order_id),
+            order_item_id=int(first.order_line_id),
+        )
+    line_hint = f" (linia {first.order_line_id})" if first is not None else ""
+    raise RecoveryWorkflowError(
+        f"Zamówienie #{order_number}: nie wszystkie pozycje są domknięte{line_hint}.",
+        code="line_not_resolved",
+        http_status=400,
+        order_id=int(state.order_id),
+        order_item_id=int(first.order_line_id) if first is not None else None,
+    )

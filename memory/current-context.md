@@ -1,5 +1,7 @@
 # Current Context
 
+- **Recovery workflow SSOT (2026-06-04):** ``RecoveryWorkflowService.resolve_order_recovery_state()`` — jedno źródło dla kolejki Braki, dogrywki, finalize-cart, rozlokowania i ``packing_allowed``. Finalize: logi ``[picking.finalize.*]``, błędy 400/404/409 (nie 500). Relocation tylko gdy ``relocation_required`` + ``picked_qty > 0``. Po deploy: zweryfikować order #1196 partial finalize → 200.
+
 - **„Braki — decyzja” (2026-06-04):** Etykieta OMS z ``wms_workflow_phase`` — ``NEEDS_DECISION`` tylko przy ``order_has_pending_shortage_decision`` (``compute_line_missing_qty > 0``). Po decyzji OMS + rozliczeniu picku: ``READY_TO_PACK`` / pakowanie. Log: ``[wms.order.status.compute]``. Deploy backend + odświeżenie listy/karty zamówienia.
 
 - **Railway backend (2026-06-04):** Serwis API: **Root Directory = `/`** (repo root), **nie** `frontend`. Build: `nixpacks.toml` → `providers = ["python"]` (ignoruje root `package.json`). Start: `python run_server.py`. Log build OK: `setup │ python3`, nie `nodejs_18`. Instrukcja: `docs/RAILWAY_BACKEND.md`. Port: `PORT` env; `Procfile` / `railway.toml` / `Dockerfile` opcjonalnie.

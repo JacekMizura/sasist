@@ -210,12 +210,12 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
                 }
             )
 
-    from .recovery_workflow_service import resolve_order_recovery_state
+    from .recovery_workflow_service import can_order_be_packed, resolve_order_recovery_state
 
     rec_state = resolve_order_recovery_state(db, order, log=False)
     u_short, r_pend = rec_state.totals.oms_decision_lines, rec_state.totals.recovery_lines
     lines_packed_complete = len(unresolved_lines) == 0
-    packable = lines_packed_complete and rec_state.packing_allowed
+    packable = lines_packed_complete and can_order_be_packed(db, order, require_physical_pack=False)
 
     snap = {
         "order_id": int(order.id),
@@ -257,8 +257,10 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
 
 
 def _assert_order_packable_for_finish(db: Session, order: Order) -> None:
+    from .recovery_workflow_service import can_order_be_packed
+
     snap = _packing_finish_validation_snapshot(db, order, log=True)
-    if snap["packable"]:
+    if snap["packable"] and can_order_be_packed(db, order, require_physical_pack=True):
         return
     if int(snap["issue_queue_oms"]) > 0:
         raise PackingScanError(

@@ -296,6 +296,10 @@ class ReportShortageWorkflowTests(unittest.TestCase):
         )
         with (
             patch(
+                "backend.services.wms_recovery_pick_service.order_has_recovery_pick_work",
+                return_value=True,
+            ),
+            patch(
                 "backend.services.wms_recovery_pick_service.get_open_recovery_task_for_order",
                 return_value=SimpleNamespace(id=1),
             ),
@@ -350,13 +354,43 @@ class ReportShortageWorkflowTests(unittest.TestCase):
 class RelocationOnPickedReplacementRemovalTests(unittest.TestCase):
     """TEST 5: usunięcie zebranej linii zamiennika → relocation."""
 
+    @patch("backend.services.recovery_workflow_service.resolve_order_recovery_state")
     @patch("backend.services.wms_operational_task_service.merge_relocation_from_picks")
     @patch("backend.services.fulfillment_event_service.line_picked_sum_for_order")
-    def test_picked_replacement_triggers_relocation(self, mock_picked_sum, mock_merge_picks):
+    def test_picked_replacement_triggers_relocation(
+        self, mock_picked_sum, mock_merge_picks, mock_recovery_state
+    ):
         from backend.models.order_item import OrderItem
         from backend.models.pick import Pick
         from backend.services.braki_order_state_service import ensure_relocation_for_order_item_picks
+        from backend.services.recovery_workflow_service import RecoveryLineState
 
+        mock_recovery_state.return_value = SimpleNamespace(
+            lines=[
+                RecoveryLineState(
+                    order_line_id=2045,
+                    product_id=77,
+                    ordered_qty=1.0,
+                    picked_qty=2.0,
+                    removed_qty=0.0,
+                    replacement_qty=0.0,
+                    unresolved_qty=0.0,
+                    recovery_qty=0.0,
+                    shortage_reported=False,
+                    replacement_applied=True,
+                    relocation_required=True,
+                    active_recovery=False,
+                    recovery_completed=True,
+                    visible_in_queue=False,
+                    visible_in_recovery_pick=False,
+                    visible_in_relocation=True,
+                    visible_in_finalize=True,
+                    packing_eligible=True,
+                    finalize_allowed=True,
+                    reason="relocation_leftover",
+                )
+            ]
+        )
         mock_picked_sum.return_value = 2.0
         pick = SimpleNamespace(id=1, quantity=2.0, picked_at="2026-06-04", order_item_id=2045)
         mock_merge_picks.return_value = [SimpleNamespace(id=901)]

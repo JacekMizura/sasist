@@ -2534,16 +2534,19 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
                 "line_total": round(rm_tot, 2),
             },
         )
-        from ..services.braki_order_state_service import ensure_relocation_for_order_item_picks
+        from ..services.recovery_workflow_service import (
+            resolve_order_recovery_state,
+            sync_relocation_tasks_from_recovery_state,
+        )
 
-        ensure_relocation_for_order_item_picks(
+        _reloc_state = resolve_order_recovery_state(db, order, log=False)
+        sync_relocation_tasks_from_recovery_state(
             db,
+            order,
+            _reloc_state,
             tenant_id=int(order.tenant_id),
             warehouse_id=int(order.warehouse_id),
-            order=order,
-            order_item_id=int(item.id),
             source_event_id=f"order_line_removed:{int(item.id)}",
-            removal_type=removal_type,
         )
         purge_order_item_wms_dependents(
             db,
@@ -2828,16 +2831,20 @@ def patch_order_item_line(
             },
         )
         touch_picking_in_progress(order)
-        from ..services.braki_order_state_service import ensure_relocation_for_order_item_picks
+        from ..services.recovery_workflow_service import (
+            resolve_order_recovery_state,
+            sync_relocation_tasks_from_recovery_state,
+        )
         from ..services.wms_audit_service import emit_oms_decision_accepted
 
         if float(picked) > float(new_qty) + 1e-9:
-            ensure_relocation_for_order_item_picks(
+            _reloc_state = resolve_order_recovery_state(db, order, log=False)
+            sync_relocation_tasks_from_recovery_state(
                 db,
+                order,
+                _reloc_state,
                 tenant_id=int(order.tenant_id),
                 warehouse_id=int(order.warehouse_id),
-                order=order,
-                order_item_id=int(item.id),
                 source_event_id=f"remove_missing_reloc:{int(item.id)}",
             )
         emit_oms_decision_accepted(

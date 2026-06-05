@@ -1,4 +1,5 @@
 import axios from "axios";
+import { extractApiErrorMessage } from "../../api/authApi";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { updateWarehousePriorityTask } from "../../api/warehouseOperationsApi";
@@ -309,12 +310,13 @@ export default function WmsPackingOrdersPage() {
                   return;
                 }
                 if (axios.isAxiosError(be) && be.response != null) {
-                  if (be.response.status >= 500) {
-                    showScannerToast("Błąd serwera.");
+                  const apiMsg = extractApiErrorMessage(be, "");
+                  if (apiMsg) {
+                    showScannerToast(apiMsg);
                     return;
                   }
-                  if (be.response.status === 400 && typeof be.response.data?.detail === "string") {
-                    showScannerToast(be.response.data.detail);
+                  if (be.response.status >= 500) {
+                    showScannerToast("Błąd serwera.");
                     return;
                   }
                 } else if (!axios.isAxiosError(be)) {
@@ -345,8 +347,9 @@ export default function WmsPackingOrdersPage() {
                   setOrders(cr.orders);
                   return;
                 } catch (ce) {
-                  if (axios.isAxiosError(ce) && ce.response?.status === 400 && typeof ce.response.data?.detail === "string") {
-                    showScannerToast(ce.response.data.detail);
+                  const cartMsg = extractApiErrorMessage(ce, "");
+                  if (cartMsg) {
+                    showScannerToast(cartMsg);
                     return;
                   }
                   showScannerToast("Nie rozpoznano kodu (ani koszyka, ani wózka).");

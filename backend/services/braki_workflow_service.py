@@ -79,14 +79,9 @@ def order_needs_warehouse_pick(db: Session, order: Order, *, r_pend: int) -> boo
         order_id=int(order.id),
     ):
         return True
-    from .braki_order_state_service import order_line_pick_still_possible
+    from .recovery_workflow_service import resolve_order_recovery_state
 
-    for oi in order.items or []:
-        if order_item_needs_substitute_pick_completion(db, order, oi):
-            return True
-        if order_line_pick_still_possible(db, order, oi):
-            return True
-    return False
+    return resolve_order_recovery_state(db, order, log=False).has_recovery_work
 
 
 def resolve_braki_workflow_status(
@@ -120,10 +115,11 @@ def resolve_braki_workflow_status(
         evaluate_order_braki_state,
         order_can_show_ready_pack,
         order_has_pending_shortage_decision,
-        order_line_pick_still_possible,
     )
+    from .recovery_workflow_service import resolve_order_recovery_state
 
-    pack_ready = order_can_show_ready_pack(db, order)
+    rec_state = resolve_order_recovery_state(db, order, log=False)
+    pack_ready = rec_state.packing_allowed
     pending_oms = order_has_pending_shortage_decision(db, order)
     recovery_possible = bool(needs_pick or int(r_pend) > 0)
 
@@ -155,10 +151,10 @@ def resolve_braki_workflow_status(
         else:
             status = BRAKI_FILTER_AWAITING
 
-    shortage_exists = any(
-        order_line_pick_still_possible(db, order, oi) or pending_oms
-        for oi in (order.items or [])
-        if getattr(oi, "parent_bundle_order_item_id", None) is None
+    shortage_exists = (
+        pending_oms
+        or rec_state.totals.recovery_lines > 0
+        or rec_state.totals.oms_decision_lines > 0
     )
     logger.info(
         "[wms.issue.state_transition] order_id=%s previous_status=%s next_status=%s "
