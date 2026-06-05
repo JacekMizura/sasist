@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — Braki queue fault tolerance + WMS mode strip
+
+- Backend: `braki_queue_normalize.py` — fallback karty zamiast skip; pola `partial_data`, `queue_warnings`.
+- Frontend: `normalizeShortageQueueCard.ts`, `mergeQueueCards` — render partial + warning badge.
+- Layout: `WmsExecutionModeStrip` + zawsze widoczny `ExecutionGlobalContextBar` (`defaultExecutionContextForPath`).
+- Test: `test_braki_queue_normalize.py`.
+
 ## 2026-06-04 — Braki global bar + force remove
 
 - Przywrócono globalny pasek operacyjny na hubie i detalu Braki (`executionContextFromBrakiTask/Hub`); wzbogacony `ActiveOperationContextBar` (etap, priorytet, liczniki zebrane/dogrywka/rozlokowanie/pakowanie, badge OMS).

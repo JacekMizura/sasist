@@ -225,6 +225,18 @@ class OrderIssueTaskListItem(BaseModel):
         default_factory=list,
         description="Czynniki wpływające na score (debug / UI)",
     )
+    shortage_lifecycle_phase: Optional[str] = Field(
+        default=None,
+        description="Canonical lifecycle phase z resolvera",
+    )
+    partial_data: bool = Field(
+        default=False,
+        description="Karta zbudowana z fallbacku — niepełne dane resolvera",
+    )
+    queue_warnings: list[str] = Field(
+        default_factory=list,
+        description="Ostrzeżenia dla operatora (nie blokuje renderu karty)",
+    )
 
 
 class OrderIssueTaskSkippedItem(BaseModel):

@@ -212,13 +212,14 @@ def serialize_order_issue_task_item(
     from ..services.braki_order_state_service import build_order_issue_customer_fields
 
     cust_fields = build_order_issue_customer_fields(o)
-    cust_name = cust_fields.get("customer_name") or order_customer_display_name(o)
+    cust_name = (cust_fields.get("customer_name") or order_customer_display_name(o) or "—").strip() or "—"
     summary_line = ""
     status_line = ""
     bucket = "awaiting_oms"
     workflow_status = "awaiting"
     workflow_label = braki_workflow_status_label(workflow_status)
     rec_st = None
+    queue_warnings: list[str] = []
     if o is not None:
         from ..services.recovery_workflow_service import repair_order_relocation_consistency
 
@@ -251,40 +252,62 @@ def serialize_order_issue_task_item(
         )
         status_line = format_issue_queue_status_label(u_short, r_pend)
         sub_pid, sub_name = first_pending_substitute_product(db, o)
-        sections = build_braki_detail_sections_from_state(
-            db,
-            o,
-            rec_st,
-            tenant_id=int(t.tenant_id),
-            warehouse_id=int(t.warehouse_id),
-        )
-        resolver_rows = build_braki_shortage_lines_from_state(
-            db,
-            o,
-            rec_st,
-            tenant_id=int(t.tenant_id),
-            warehouse_id=int(t.warehouse_id),
-        )
-        for row in resolver_rows:
-            shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
-        order_context_model = OrderIssueOrderContext(
-            collected_lines=[
-                OrderIssueDetailLine.model_validate(r) for r in sections.get("collected_lines", [])
-            ],
-            shortage_decision_lines=[
-                OrderIssueDetailLine.model_validate(r)
-                for r in sections.get("shortage_decision_lines", [])
-            ],
-            remaining_pick_lines=[
-                OrderIssueDetailLine.model_validate(r) for r in sections.get("remaining_pick_lines", [])
-            ],
-            relocation_lines=[
-                OrderIssueDetailLine.model_validate(r) for r in sections.get("relocation_lines", [])
-            ],
-            packing_ready_lines=[
-                OrderIssueDetailLine.model_validate(r) for r in sections.get("packing_ready_lines", [])
-            ],
-        )
+        try:
+            sections = build_braki_detail_sections_from_state(
+                db,
+                o,
+                rec_st,
+                tenant_id=int(t.tenant_id),
+                warehouse_id=int(t.warehouse_id),
+            )
+            resolver_rows = build_braki_shortage_lines_from_state(
+                db,
+                o,
+                rec_st,
+                tenant_id=int(t.tenant_id),
+                warehouse_id=int(t.warehouse_id),
+            )
+            for row in resolver_rows:
+                try:
+                    shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
+                except Exception:
+                    continue
+            order_context_model = OrderIssueOrderContext(
+                collected_lines=[
+                    OrderIssueDetailLine.model_validate(r)
+                    for r in sections.get("collected_lines", [])
+                    if isinstance(r, dict)
+                ],
+                shortage_decision_lines=[
+                    OrderIssueDetailLine.model_validate(r)
+                    for r in sections.get("shortage_decision_lines", [])
+                    if isinstance(r, dict)
+                ],
+                remaining_pick_lines=[
+                    OrderIssueDetailLine.model_validate(r)
+                    for r in sections.get("remaining_pick_lines", [])
+                    if isinstance(r, dict)
+                ],
+                relocation_lines=[
+                    OrderIssueDetailLine.model_validate(r)
+                    for r in sections.get("relocation_lines", [])
+                    if isinstance(r, dict)
+                ],
+                packing_ready_lines=[
+                    OrderIssueDetailLine.model_validate(r)
+                    for r in sections.get("packing_ready_lines", [])
+                    if isinstance(r, dict)
+                ],
+            )
+        except Exception as sect_exc:
+            queue_warnings.append("Niepełne dane operacyjne")
+            logger.warning(
+                "[braki.queue.partial] task_id=%s order_id=%s sections_failed err=%s",
+                int(t.id),
+                int(o.id),
+                sect_exc,
+                exc_info=True,
+            )
         if u_short > 0 and not shortage_line_models and missing:
             for row in build_fallback_shortage_lines_from_task_snapshot(
                 db,
@@ -308,17 +331,27 @@ def serialize_order_issue_task_item(
     if o is not None:
         from ..services.recovery_intelligence import priority_fields_for_braki_task
 
-        recovery_fields = {
-            **recovery_state_for_braki_task(
-                db,
-                o,
-                rec_state=rec_st if o is not None else None,
-                skip_repair=True,
-            ),
-            **priority_fields_for_braki_task(
-                db, o, rec_st, task=t, last_shortage_at=last_shortage_at
-            ),
-        }
+        try:
+            recovery_fields = {
+                **recovery_state_for_braki_task(
+                    db,
+                    o,
+                    rec_state=rec_st if o is not None else None,
+                    skip_repair=True,
+                ),
+                **priority_fields_for_braki_task(
+                    db, o, rec_st, task=t, last_shortage_at=last_shortage_at
+                ),
+            }
+        except Exception as rec_exc:
+            queue_warnings.append("Niepełne dane operacyjne")
+            logger.warning(
+                "[braki.queue.partial] task_id=%s order_id=%s detail_recovery_failed err=%s",
+                int(t.id),
+                int(o.id),
+                rec_exc,
+                exc_info=True,
+            )
     return OrderIssueTaskListItem(
         id=int(t.id),
         order_id=int(t.order_id),
@@ -352,6 +385,8 @@ def serialize_order_issue_task_item(
         braki_queue_bucket=bucket,
         braki_workflow_status=workflow_status,
         braki_workflow_status_label=workflow_label,
+        queue_warnings=queue_warnings,
+        partial_data=bool(queue_warnings),
         **recovery_fields,
     )
 
@@ -375,7 +410,7 @@ def serialize_order_issue_task_list_card(
     from ..services.braki_order_state_service import order_has_waiting_for_stock_lines as braki_waiting_stock
 
     cust_fields = build_order_issue_customer_fields(o)
-    cust_name = cust_fields.get("customer_name") or order_customer_display_name(o)
+    cust_name = (cust_fields.get("customer_name") or order_customer_display_name(o) or "—").strip() or "—"
     ui_name = None
     if o and o.order_ui_status is not None:
         ui_name = str(o.order_ui_status.name or "").strip() or None
@@ -401,16 +436,13 @@ def serialize_order_issue_task_list_card(
         if str(e.kind or "") == "shortage_reported" and str(e.at or "").strip():
             last_shortage_at = str(e.at).strip()
             break
-    recovery_fields: dict = {}
-    if o is not None:
-        from ..services.recovery_workflow_service import resolve_order_recovery_state
-        from ..services.recovery_intelligence import priority_fields_for_braki_task
+    from ..services.braki_queue_normalize import safe_recovery_fields_for_list_card
 
-        rec_st = resolve_order_recovery_state(db, o, log=False)
-        recovery_fields = {
-            **recovery_state_for_braki_task(db, o, rec_state=rec_st, skip_repair=True),
-            **priority_fields_for_braki_task(db, o, rec_st, task=t, last_shortage_at=last_shortage_at),
-        }
+    recovery_fields, queue_warnings = (
+        safe_recovery_fields_for_list_card(db, o, t, last_shortage_at=last_shortage_at)
+        if o is not None
+        else ({}, [])
+    )
 
     return OrderIssueTaskListItem(
         id=int(t.id),
@@ -445,6 +477,8 @@ def serialize_order_issue_task_list_card(
         braki_queue_bucket=bucket,
         braki_workflow_status=workflow_status,
         braki_workflow_status_label=workflow_label,
+        queue_warnings=queue_warnings,
+        partial_data=bool(queue_warnings),
         **recovery_fields,
     )
 
@@ -713,15 +747,40 @@ def _build_order_issue_tasks_list(
                     _SERIALIZE_ERROR_CODE,
                     exc,
                 )
-                skipped.append(
-                    OrderIssueTaskSkippedItem(
-                        task_id=int(t.id),
-                        order_id=int(t.order_id),
-                        order_number=str((o.number if o is not None else None) or f"#{t.order_id}"),
-                        error_code=_SERIALIZE_ERROR_CODE,
-                        error_message=err_public,
+                from ..services.braki_queue_normalize import build_fallback_braki_queue_card
+
+                try:
+                    fallback = build_fallback_braki_queue_card(
+                        db,
+                        t,
+                        o,
+                        warnings=[err_public, "Niepełne dane operacyjne"],
+                        u_short=int(u_short),
+                        r_pend=int(r_pend),
+                        workflow_status=str(wf_status or "awaiting"),
                     )
-                )
+                    out.append(fallback)
+                    logger.warning(
+                        "[braki.queue.render_fallback] task_id=%s order_id=%s appended_fallback=true",
+                        int(t.id),
+                        int(t.order_id),
+                    )
+                except Exception as fallback_exc:
+                    logger.exception(
+                        "[braki.queue.render_fallback] task_id=%s order_id=%s fallback_failed err=%s",
+                        int(t.id),
+                        int(t.order_id),
+                        fallback_exc,
+                    )
+                    skipped.append(
+                        OrderIssueTaskSkippedItem(
+                            task_id=int(t.id),
+                            order_id=int(t.order_id),
+                            order_number=str((o.number if o is not None else None) or f"#{t.order_id}"),
+                            error_code=_SERIALIZE_ERROR_CODE,
+                            error_message=err_public,
+                        )
+                    )
                 continue
         serialization_ms = int((time.perf_counter() - t_serialize_start) * 1000)
 

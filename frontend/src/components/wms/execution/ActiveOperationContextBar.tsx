@@ -13,6 +13,8 @@ function fmtQty(n: number): string {
 type Props = {
   context: ExecutionActiveContext | null | undefined;
   className?: string;
+  /** Gdy true — renderowany wewnątrz sticky shell layoutu (bez własnego sticky). */
+  embedded?: boolean;
 };
 
 function BrakiQtyPill({ label, count, tone }: { label: string; count: number; tone: string }) {
@@ -31,7 +33,7 @@ function BrakiQtyPill({ label, count, tone }: { label: string; count: number; to
  * Unified sticky context for all WMS operational execution screens.
  * Separates picking tools (cart/basket) from logistics carriers (nośniki).
  */
-export function ActiveOperationContextBar({ context, className = "" }: Props) {
+export function ActiveOperationContextBar({ context, className = "", embedded = false }: Props) {
   const ctx = normalizeOperationContext(context);
   if (!ctx) return null;
 
@@ -67,7 +69,7 @@ export function ActiveOperationContextBar({ context, className = "" }: Props) {
 
   return (
     <div
-      className={`sticky top-0 z-[45] border-b border-indigo-300 bg-indigo-950 text-white shadow-lg ${className}`}
+      className={`${embedded ? "" : "sticky top-0 z-[45]"} border-b border-indigo-300 bg-indigo-950 text-white shadow-lg ${className}`}
       data-wms-active-operation-context
     >
       <div className="mx-auto max-w-3xl px-4 py-3 sm:px-6">

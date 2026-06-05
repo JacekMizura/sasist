@@ -1,4 +1,5 @@
 import api from "./axios";
+import { mergeQueueCards } from "../pages/wms/normalizeShortageQueueCard";
 import { createRequestDeduper } from "../utils/wmsRefresh";
 
 const orderIssueTasksListDeduper = createRequestDeduper();
@@ -140,6 +141,8 @@ export type OrderIssueTaskListItemApi = {
   shortage_priority_level?: "CRITICAL" | "HIGH" | "NORMAL" | "LOW" | string;
   shortage_priority_label?: string;
   shortage_priority_factors?: { key: string; weight: number; detail?: string }[];
+  partial_data?: boolean;
+  queue_warnings?: string[];
 };
 
 export type OrderIssueTaskSkippedItemApi = {
@@ -175,10 +178,19 @@ export async function listWmsOrderIssueTasks(
   const key = JSON.stringify(params);
   return orderIssueTasksListDeduper(key, async () => {
     const res = await api.get<OrderIssueTaskListResult>("/wms/order-issue-tasks", { params });
+    const tasks = (res.data?.tasks ?? []).map((t) => {
+      try {
+        return mergeQueueCards([t], [])[0]?.raw ?? t;
+      } catch {
+        return t;
+      }
+    });
+    const skipped = res.data?.skipped_tasks ?? [];
+    const merged = mergeQueueCards(tasks, skipped);
     return {
       success: res.data?.success ?? true,
-      tasks: res.data?.tasks ?? [],
-      skipped_tasks: res.data?.skipped_tasks ?? [],
+      tasks: merged.map((c) => c.raw),
+      skipped_tasks: skipped.filter((s) => !merged.some((c) => c.task_id === s.task_id)),
       filter_counts: res.data?.filter_counts ?? {},
     };
   });

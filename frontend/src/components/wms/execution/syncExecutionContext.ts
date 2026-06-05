@@ -145,6 +145,71 @@ export function executionContextFromBrakiTask(
   };
 }
 
+/** Domyślny kontekst operacyjny gdy strona nie ustawiła setActiveContext. */
+export function defaultExecutionContextForPath(pathname: string): ExecutionActiveContext {
+  const p = pathname.replace(/\/+$/, "") || "/";
+
+  if (p === "/wms/braki" || p === "/wms/issues" || p.startsWith("/wms/issues/")) {
+    if (p.startsWith("/wms/issues/") && p !== "/wms/issues") {
+      return {
+        operationType: "BRAKI WMS",
+        scanHint: "Zeskanuj zamówienie lub wybierz akcję",
+        currentStep: "Szczegóły braków",
+      };
+    }
+    return executionContextFromBrakiHub({
+      scanHint: "Zeskanuj EAN lub numer zamówienia",
+    });
+  }
+  if (p.includes("/picking/recovery/batch/")) {
+    return {
+      operationType: "DOGRYWKA BATCH",
+      currentStep: "Grupowa dogrywka braków",
+      scanHint: "Wybierz lokalizację lub zamówienie",
+    };
+  }
+  if (p.includes("/picking/recovery/")) {
+    return {
+      operationType: "DOGRYWKA BRAKÓW",
+      currentStep: "Zbierz brakującą ilość",
+      scanHint: "Skanuj EAN produktu lub kod lokalizacji",
+    };
+  }
+  if (p.includes("/operational-queues/relocation/") || p.includes("/relocation")) {
+    return {
+      operationType: "ROZLOKOWANIE PRODUKTÓW",
+      currentStep: "Przypisz zebrane produkty do nośnika lub lokalizacji",
+      scanHint: "Skanuj nośnik (PAL, BOX…) lub lokalizację docelową",
+    };
+  }
+  if (p.includes("/packing/order/")) {
+    return {
+      operationType: "PAKOWANIE",
+      currentStep: "Skanuj produkt do spakowania",
+      scanHint: "Skanuj EAN — ilość rośnie automatycznie",
+    };
+  }
+  if (p.includes("/operational-queues")) {
+    return {
+      operationType: "KOLEJKI OPERACYJNE",
+      currentStep: "Wybierz zadanie magazynowe",
+      scanHint: "Skanuj kod zadania lub zamówienia",
+    };
+  }
+  if (p.includes("/picking/")) {
+    return {
+      operationType: "ZBIERANIE",
+      currentStep: "Skanuj produkt lub lokalizację",
+      scanHint: "Skanuj EAN produktu lub kod lokalizacji",
+    };
+  }
+  return {
+    operationType: "WMS",
+    currentStep: "Operacja magazynowa",
+    scanHint: "Skanuj kod kreskowy",
+  };
+}
+
 export function executionContextFromBrakiHub(opts: {
   queueCount?: number;
   scanHint?: string;

@@ -1,8 +1,11 @@
 import type { ExecutionActiveContext, RelocationTargetType } from "../../../context/WarehouseExecutionContext";
 import { relocationTargetRowLabel } from "../../../pages/wms/wmsTerminology";
 
-/** Sticky offset for page headers when the global context bar is visible (~7rem with Braki badges). */
-export const ACTIVE_OPERATION_CONTEXT_BAR_OFFSET = "7rem";
+/** Wysokość paska trybów WMS na trasach wykonawczych. */
+export const WMS_EXECUTION_MODE_STRIP_OFFSET = "2.75rem";
+
+/** Sticky offset: pasek trybów + kontekst operacyjny (~10rem z badge Braki). */
+export const ACTIVE_OPERATION_CONTEXT_BAR_OFFSET = "10rem";
 
 export type NormalizedOperationContext = {
   operationType: string;

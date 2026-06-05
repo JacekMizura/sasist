@@ -21,6 +21,7 @@ import {
   priorityLevelFromTask,
   sortTasksByPriority,
 } from "./brakiPriority";
+import { mergeQueueCards, type NormalizedShortageQueueCard } from "./normalizeShortageQueueCard";
 
 type BrakiWorkflowFilterId =
   | "all"
@@ -166,15 +167,21 @@ export default function WmsOrderIssuesHub() {
   const activeFilterLabel =
     BRAKI_WORKFLOW_FILTERS.find((f) => f.id === activeFilterId)?.label ?? "Wszystkie statusy";
 
-  const sortedTasks = useMemo(() => sortTasksByPriority(tasks), [tasks]);
+  const queueCards = useMemo(
+    () => mergeQueueCards(tasks, skippedTasks),
+    [tasks, skippedTasks],
+  );
 
-  const filteredTasks = useMemo(() => {
-    const base =
-      activeFilterId === "all"
-        ? sortedTasks
-        : sortedTasks.filter((t) => normalizeWorkflowStatus(t) === activeFilterId);
-    return base;
-  }, [sortedTasks, activeFilterId]);
+  const sortedCards = useMemo(() => {
+    const sorted = sortTasksByPriority(queueCards.map((c) => c.raw));
+    const order = new Map(sorted.map((t, i) => [t.id, i]));
+    return [...queueCards].sort((a, b) => (order.get(a.task_id) ?? 999) - (order.get(b.task_id) ?? 999));
+  }, [queueCards]);
+
+  const filteredCards = useMemo(() => {
+    if (activeFilterId === "all") return sortedCards;
+    return sortedCards.filter((c) => normalizeWorkflowStatus(c.raw) === activeFilterId);
+  }, [sortedCards, activeFilterId]);
 
   const startRecoveryBatch = useCallback(async () => {
     if (warehouseId == null || batchPending) return;
@@ -308,7 +315,7 @@ export default function WmsOrderIssuesHub() {
             <i className="fa-solid fa-arrow-left text-lg md:text-sm"></i>
           </button>
           <h1 className="text-lg font-bold leading-tight text-slate-800 md:text-xl">
-            Zamówienia z brakami <span className="font-medium text-slate-500">({tasks.length})</span>
+            Zamówienia z brakami <span className="font-medium text-slate-500">({queueCards.length})</span>
           </h1>
         </div>
         <div className="flex items-center gap-2">
@@ -389,15 +396,8 @@ export default function WmsOrderIssuesHub() {
         {!loading && skippedTasks.length > 0 ? (
           <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
             <p className="font-semibold">
-              {skippedTasks.length} zadanie/zadań w kolejce nie mogło zostać wczytane.
+              {skippedTasks.length} zadanie/zadań wczytano w trybie awaryjnym (niepełne dane).
             </p>
-            <ul className="mt-2 list-inside list-disc space-y-0.5 text-xs">
-              {skippedTasks.slice(0, 5).map((s) => (
-                <li key={s.task_id}>
-                  {displayOrderNumber(s.order_number)} — {s.error_message}
-                </li>
-              ))}
-            </ul>
           </div>
         ) : null}
       </div>
@@ -408,31 +408,29 @@ export default function WmsOrderIssuesHub() {
             <i className="fa-solid fa-circle-notch animate-spin text-4xl"></i>
             <p className="mt-4 text-sm font-medium">Ładowanie kolejki…</p>
           </div>
-        ) : tasks.length === 0 ? (
+        ) : queueCards.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
-            <p className="text-base font-semibold text-slate-800">
-              {skippedTasks.length > 0 ? "Brak widocznych kart w kolejce" : "Kolejka jest pusta"}
-            </p>
+            <p className="text-base font-semibold text-slate-800">Kolejka jest pusta</p>
             <p className="mt-2 text-sm text-slate-600">
-              {skippedTasks.length > 0
-                ? "Zadania istnieją, ale wystąpił błąd odczytu."
-                : "Po zgłoszeniu braku przy zbieraniu zamówienie pojawi się tutaj."}
+              Po zgłoszeniu braku przy zbieraniu zamówienie pojawi się tutaj.
             </p>
           </div>
-        ) : filteredTasks.length === 0 ? (
+        ) : filteredCards.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
             <p className="text-base font-semibold text-slate-800">Brak zamówień dla wybranego filtra</p>
             <p className="mt-2 text-sm text-slate-600">Zmień filtr statusu lub odśwież kolejkę.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredTasks.map((t) => {
+            {filteredCards.map((card: NormalizedShortageQueueCard) => {
+              const t = card.raw;
               const wf = normalizeWorkflowStatus(t);
-              const uShort = t.unresolved_shortage_count ?? 0;
-              const recoveryLineCount =
+              const uShort = card.missing_count || (t.unresolved_shortage_count ?? 0);
+              const recoveryLineCount = card.recovery_count || (
                 t.recovery_active_lines != null && t.recovery_active_lines >= 0
                   ? t.recovery_active_lines
-                  : (t.replacement_pick_pending_count ?? 0);
+                  : (t.replacement_pick_pending_count ?? 0)
+              );
               const lineCount =
                 wf === "awaiting"
                   ? Math.max(0, uShort)
@@ -497,6 +495,11 @@ export default function WmsOrderIssuesHub() {
                     </div>
 
                     <div className="space-y-2.5 md:space-y-3">
+                      {card.partial_data ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900">
+                          ⚠ Niepełne dane operacyjne
+                        </div>
+                      ) : null}
                       <div className="flex items-center gap-2">
                         <span
                           className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${prBadge}`}
