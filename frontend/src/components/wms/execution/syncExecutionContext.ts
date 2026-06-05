@@ -1,7 +1,11 @@
 import type { WmsOperationalTaskDetailApi } from "../../../api/wmsOperationalTasksApi";
 import type { ExecutionActiveContext } from "../../../context/WarehouseExecutionContext";
+import {
+  mapRelocationModeToTargetType,
+  WMS_UI,
+} from "../../../pages/wms/wmsTerminology";
 import { nextOperationalAction, taskTypeLabel } from "../operational/operationalWorkflow";
-import { formatCartLabel, formatOrderNumberLabel } from "./activeOperationContext";
+import { formatOrderNumberLabel, formatPickingToolLabel } from "./activeOperationContext";
 
 export function executionContextFromOperationalDetail(
   detail: WmsOperationalTaskDetailApi,
@@ -13,18 +17,24 @@ export function executionContextFromOperationalDetail(
     Math.max(0, (detail.quantity_required || 0) - (detail.quantity_done || 0));
   const orderNumber = formatOrderNumberLabel(detail.order_number, detail.order_id);
   const source = detail.picked_from_location ?? detail.location_hint ?? null;
-  const target =
+
+  const isRelocation = detail.task_type === "RELOCATION";
+  const relocationMode = detail.relocation_mode;
+  const relocationTargetType =
+    extras?.relocationTargetType ??
+    (isRelocation ? mapRelocationModeToTargetType(relocationMode ?? "CARRIER") : null);
+  const targetLabel =
     extras?.targetLocation ??
     extras?.carrierLabel ??
     detail.relocation_session?.active_carrier_label ??
-    (detail.task_type === "RELOCATION" ? "NOŚNIK" : null);
+    null;
 
   return {
     operationType: taskTypeLabel(detail.task_type).toUpperCase(),
     orderNumber,
-    cartLabel: source,
     sourceLocation: source,
-    targetLocation: target,
+    relocationTargetType: isRelocation ? relocationTargetType : null,
+    targetLocation: isRelocation ? targetLabel : extras?.targetLocation ?? null,
     remainingQty: rem,
     currentStep: next.label,
     operatorName: detail.relocation_session?.operator_name ?? extras?.operatorName,
@@ -32,7 +42,6 @@ export function executionContextFromOperationalDetail(
     taskLabel: taskTypeLabel(detail.task_type),
     productName: detail.product_name,
     productSku: detail.product_sku ?? detail.product_ean ?? undefined,
-    carrierLabel: target ?? undefined,
     locationLabel: source ?? undefined,
     stepLabel: next.label,
     ...extras,
@@ -45,7 +54,6 @@ export function executionContextFromPicking(opts: {
   cartCode?: string | null;
   cartName?: string | null;
   sourceLocation?: string | null;
-  targetLocation?: string | null;
   remainingQty?: number;
   remainingLines?: number;
   currentStep?: string;
@@ -56,7 +64,7 @@ export function executionContextFromPicking(opts: {
   const orderNumber =
     formatOrderNumberLabel(opts.orderNumber, opts.recoveryOrderId) ??
     (isRecovery ? formatOrderNumberLabel(null, opts.recoveryOrderId) : null);
-  const cartLabel = formatCartLabel(opts.cartCode, opts.cartName);
+  const pickingToolLabel = formatPickingToolLabel(opts.cartCode, opts.cartName);
   const rem =
     opts.remainingQty ??
     (opts.remainingLines != null && opts.remainingLines > 0 ? opts.remainingLines : undefined);
@@ -70,16 +78,14 @@ export function executionContextFromPicking(opts: {
   return {
     operationType: isRecovery ? "DOGRYWKA BRAKÓW" : "ZBIERANIE",
     orderNumber,
-    cartLabel,
+    pickingToolLabel,
     sourceLocation: opts.sourceLocation ?? null,
-    targetLocation: opts.targetLocation ?? cartLabel ?? "WÓZEK",
     remainingQty: rem,
     currentStep,
     operatorName: opts.operatorName,
     scanHint: opts.scanHint ?? "Skanuj EAN produktu lub kod lokalizacji",
-    taskLabel: isRecovery ? "Dogrywka zbierki" : "Zbieranie",
+    taskLabel: isRecovery ? WMS_UI.recoveryPickFull : "Zbieranie",
     stepLabel: currentStep,
-    carrierLabel: cartLabel ?? undefined,
     locationLabel: opts.sourceLocation ?? undefined,
   };
 }
@@ -88,21 +94,23 @@ export function executionContextFromPutaway(opts: {
   documentLabel?: string | null;
   sourceLocation?: string | null;
   targetLocation?: string | null;
+  targetType?: "LOCATION" | "CARRIER_UNIT";
   remainingQty?: number;
   currentStep?: string;
   operatorName?: string | null;
   scanHint?: string;
 }): ExecutionActiveContext {
+  const targetType = opts.targetType ?? "LOCATION";
   return {
     operationType: "ROZLOKOWANIE PZ",
-    cartLabel: opts.documentLabel ?? null,
     sourceLocation: opts.sourceLocation ?? null,
-    targetLocation: opts.targetLocation ?? "LOKALIZACJA",
+    relocationTargetType: targetType,
+    targetLocation: opts.targetLocation ?? (targetType === "LOCATION" ? "—" : null),
     remainingQty: opts.remainingQty,
     currentStep: opts.currentStep ?? "Skanuj lokalizację docelową",
     operatorName: opts.operatorName,
-    scanHint: opts.scanHint ?? "Lokalizacja → EAN → nośnik",
-    taskLabel: "Rozlokowanie PZ",
+    scanHint: opts.scanHint ?? "Lokalizacja docelowa lub nośnik logistyczny (PAL, BOX…)",
+    taskLabel: WMS_UI.putawayPz,
     stepLabel: opts.currentStep,
   };
 }
@@ -115,24 +123,22 @@ export function executionContextFromPacking(opts: {
   remainingQty?: number;
   currentStep?: string;
   operatorName?: string | null;
-  targetLocation?: string | null;
+  packagingLabel?: string | null;
   scanHint?: string;
 }): ExecutionActiveContext {
   const orderNumber = formatOrderNumberLabel(opts.orderNumber, opts.orderId);
-  const cartLabel = formatCartLabel(opts.cartCode, opts.cartName);
+  const pickingToolLabel = formatPickingToolLabel(opts.cartCode, opts.cartName);
 
   return {
     operationType: "PAKOWANIE",
     orderNumber,
-    cartLabel,
-    sourceLocation: cartLabel,
-    targetLocation: opts.targetLocation ?? "KARTON",
+    pickingToolLabel: pickingToolLabel ?? undefined,
+    packagingLabel: opts.packagingLabel ?? null,
     remainingQty: opts.remainingQty,
     currentStep: opts.currentStep ?? "Skanuj produkt do spakowania",
     operatorName: opts.operatorName,
     scanHint: opts.scanHint ?? "Skanuj EAN — ilość rośnie automatycznie",
     taskLabel: "Pakowanie",
     stepLabel: opts.currentStep,
-    carrierLabel: opts.targetLocation ?? undefined,
   };
 }

@@ -17,22 +17,31 @@ const STORAGE_KEY = "wms.warehouseExecutionMode";
 
 export type ScanFeedbackKind = "success" | "error" | "conflict" | "warning";
 
+export type RelocationTargetType = "LOCATION" | "CARRIER_UNIT";
+
 export type ExecutionActiveContext = {
   /** Primary operation label, e.g. DOGRYWKA BRAKÓW, ROZLOKOWANIE PRODUKTÓW */
   operationType?: string;
   orderNumber?: string | null;
-  cartLabel?: string | null;
+  /** Wózek / koszyk / tote — tylko sesja zbierania (nie nośnik logistyczny). */
+  pickingToolLabel?: string | null;
   sourceLocation?: string | null;
+  /** Cel rozlokowania — etykieta lokalizacji lub kod nośnika (PAL-, BOX-, …). */
   targetLocation?: string | null;
+  relocationTargetType?: RelocationTargetType | null;
+  /** Karton pakowy — nie nośnik logistyczny. */
+  packagingLabel?: string | null;
   remainingQty?: number;
   currentStep?: string | null;
   operatorName?: string | null;
   scanHint?: string;
+  /** @deprecated Use pickingToolLabel — nie mylić z nośnikiem logistycznym */
+  cartLabel?: string | null;
   /** @deprecated Use operationType */
   taskLabel?: string;
   productName?: string;
   productSku?: string;
-  /** @deprecated Use targetLocation */
+  /** @deprecated Use targetLocation + relocationTargetType */
   carrierLabel?: string;
   /** @deprecated Use sourceLocation */
   locationLabel?: string;

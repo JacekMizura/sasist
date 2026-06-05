@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Nośniki vs picking tools (UI domain)
+
+- Rozdzielono w UI **narzędzie zbierania** (wózek/koszyk) od **nośnika logistycznego** (PAL, BOX…).
+- `ExecutionActiveContext`: `pickingToolLabel`, `relocationTargetType` (LOCATION|CARRIER_UNIT), `packagingLabel`.
+- `ActiveOperationContextBar`: osobne wiersze celu rozlokowania vs wózek vs karton pakowy.
+- Mappery `syncExecutionContext`, `operationalWorkflow` (hinty RELOCATION wg trybu), relocation/picking/packing pages.
+- `wmsTerminology.ts`: `mapRelocationModeToTargetType`, etykiety domenowe.
+
 ## 2026-06-04 — WMS stabilization: errors + stale tasks + CTA fixes
 
 - API błędy operacyjne: ``detail={"message": "..."}`` w ``wms_operational_tasks``, ``wms_order_issue_tasks`` (list/detail/archive), ``wms_relocation`` finalize.

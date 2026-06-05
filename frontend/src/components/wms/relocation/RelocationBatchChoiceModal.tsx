@@ -126,10 +126,11 @@ export function RelocationBatchChoiceModal({
             </div>
             <div>
               <h3 id={titleId} className="text-lg font-bold text-slate-900">
-                Produkty wymagają rozlokowania na nośniki
+                Produkty wymagają rozlokowania
               </h3>
               <p className="mt-1 text-sm text-slate-600">
-                Możesz dodać produkty do dokumentu ZWK teraz i wykonać rozlokowanie produktów później.
+                Cel rozlokowania: nośnik logistyczny (paleta, skrzynia…) lub lokacja magazynowa. Możesz
+                dodać produkty do ZWK teraz i wykonać rozlokowanie później.
               </p>
             </div>
           </div>

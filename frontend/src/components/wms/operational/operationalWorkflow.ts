@@ -2,6 +2,10 @@ import type {
   WmsOperationalTaskApi,
   WmsOperationalTaskDetailApi,
 } from "../../../api/wmsOperationalTasksApi";
+import {
+  mapRelocationModeToTargetType,
+  type RelocationTargetTypeUi,
+} from "../../../pages/wms/wmsTerminology";
 import { formatOperationalDuration } from "../../../utils/formatOperationalDuration";
 import { formatOrderEventKeyFallback } from "../../../utils/orderEventLabels";
 
@@ -142,7 +146,16 @@ export function buildWorkflowTimeline(
   }
 
   if (detail.task_type === "RELOCATION") {
-    const src = detail.picked_from_location ?? "Batch / nośnik źródłowy";
+    const targetType = relocationTargetTypeFromDetail(detail);
+    const src = detail.picked_from_location ?? "Towar po zbieraniu";
+    const assignHint =
+      targetType === "LOCATION"
+        ? hasAssign
+          ? "Część przypisana"
+          : "Skan lokacji → przypisz"
+        : hasAssign
+          ? "Część przypisana"
+          : "Skan nośnika (PAL, BOX…) → przypisz";
     return [
       mark("batch", "Batch po zbieraniu", src, "done"),
       hasPromote || detectCrossdock(detail)
@@ -157,7 +170,7 @@ export function buildWorkflowTimeline(
       mark(
         "assign",
         "Rozłożone",
-        hasAssign ? "Część przypisana" : "Skan nośnika → przypisz",
+        assignHint,
         hasAssign ? (done ? "done" : "current") : "upcoming",
       ),
       mark("done", "Gotowe", "Wszystkie alokacje", done ? "done" : "upcoming"),
@@ -170,6 +183,13 @@ export function buildWorkflowTimeline(
   ];
 }
 
+export function relocationTargetTypeFromDetail(
+  detail: WmsOperationalTaskDetailApi,
+): RelocationTargetTypeUi {
+  const mode = detail.relocation_mode;
+  return mapRelocationModeToTargetType(mode ?? "CARRIER");
+}
+
 export function nextOperationalAction(
   detail: WmsOperationalTaskDetailApi,
 ): OperationalNextAction {
@@ -179,9 +199,16 @@ export function nextOperationalAction(
     if (sess && !sess.can_edit && sess.operator_name) {
       return { label: `Zajęte: ${sess.operator_name}`, scanHint: "Przejmij lub podgląd" };
     }
+    const targetType = relocationTargetTypeFromDetail(detail);
+    if (targetType === "LOCATION") {
+      return {
+        label: "Skanuj lokalizację docelową",
+        scanHint: "Potem kliknij alokację lub zbiorczo",
+      };
+    }
     return {
       label: "Skanuj nośnik docelowy",
-      scanHint: "Potem kliknij alokację lub zbiorczo",
+      scanHint: "Paleta, skrzynia lub kontener (PAL, BOX…) — potem alokacja",
     };
   }
   if (detail.task_type === "WAITING_SUPPLY") {

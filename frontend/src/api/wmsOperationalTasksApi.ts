@@ -27,6 +27,8 @@ export type WmsOperationalTaskApi = {
   picked_from_location?: string | null;
   relocation_order_count?: number;
   relocation_allocation_count?: number;
+  /** CARRIER = nośnik logistyczny; LOCATION = lokacja (z payload zadania RELOCATION). */
+  relocation_mode?: "CARRIER" | "LOCATION" | null;
   target_zones?: string[];
   waiting_order_count?: number;
   waiting_oldest_at?: string | null;
@@ -144,7 +146,7 @@ export const OPERATIONAL_QUEUES = [
   { id: "DO_DECYZJI", label: "Do decyzji", icon: "decision", routeHint: "Strefa decyzji OMS" },
   { id: "DO_DOGRYWKI", label: "Dogrywka", icon: "recollect", routeHint: "Trasa zbierania — domknięcie braków" },
   { id: "OCZEKUJE_NA_DOSTAWE", label: "Na dostawę", icon: "waiting", routeHint: "Inbound → auto promote" },
-  { id: "DO_ROZLOKOWANIA", label: "Rozlokowanie produktów", icon: "relocation", routeHint: "Przypisanie zebranego towaru do nośników zamówień" },
+  { id: "DO_ROZLOKOWANIA", label: "Rozlokowanie produktów", icon: "relocation", routeHint: "Przypisanie towaru do celu: nośnik (PAL, BOX…) lub lokacja" },
 ] as const;
 
 export type OperationalQueueId = (typeof OPERATIONAL_QUEUES)[number]["id"];

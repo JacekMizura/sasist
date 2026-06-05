@@ -9,6 +9,7 @@ export {
   normalizeOperationContext,
   formatOrderNumberLabel,
   formatCartLabel,
+  formatPickingToolLabel,
   formatOperatorDisplayName,
 } from "./activeOperationContext";
 export { ScanFeedbackOverlay } from "./ScanFeedbackOverlay";

@@ -1,4 +1,5 @@
-import type { ExecutionActiveContext } from "../../../context/WarehouseExecutionContext";
+import type { ExecutionActiveContext, RelocationTargetType } from "../../../context/WarehouseExecutionContext";
+import { relocationTargetRowLabel } from "../../../pages/wms/wmsTerminology";
 
 /** Sticky offset for page headers when the global context bar is visible (~5.75rem). */
 export const ACTIVE_OPERATION_CONTEXT_BAR_OFFSET = "5.75rem";
@@ -6,9 +7,11 @@ export const ACTIVE_OPERATION_CONTEXT_BAR_OFFSET = "5.75rem";
 export type NormalizedOperationContext = {
   operationType: string;
   orderNumber?: string | null;
-  cartLabel?: string | null;
+  pickingToolLabel?: string | null;
   sourceLocation?: string | null;
-  targetLocation?: string | null;
+  relocationTargetType?: RelocationTargetType | null;
+  relocationTargetLabel?: string | null;
+  packagingLabel?: string | null;
   remainingQty?: number | null;
   currentStep?: string | null;
   operatorName?: string | null;
@@ -26,12 +29,23 @@ export function normalizeOperationContext(
 
   if (!operationType) return null;
 
+  const pickingToolLabel = (ctx.pickingToolLabel ?? ctx.cartLabel ?? "").trim() || null;
+  const sourceLocation = (ctx.sourceLocation ?? ctx.locationLabel ?? "").trim() || null;
+  const relocationTargetType = ctx.relocationTargetType ?? null;
+  const relocationTargetLabel =
+    relocationTargetType != null
+      ? (ctx.targetLocation ?? ctx.carrierLabel ?? "").trim() || null
+      : null;
+  const packagingLabel = (ctx.packagingLabel ?? "").trim() || null;
+
   return {
     operationType,
     orderNumber: ctx.orderNumber ?? null,
-    cartLabel: ctx.cartLabel ?? null,
-    sourceLocation: ctx.sourceLocation ?? ctx.locationLabel ?? null,
-    targetLocation: ctx.targetLocation ?? ctx.carrierLabel ?? null,
+    pickingToolLabel,
+    sourceLocation,
+    relocationTargetType,
+    relocationTargetLabel,
+    packagingLabel,
     remainingQty: ctx.remainingQty ?? null,
     currentStep: ctx.currentStep ?? ctx.stepLabel ?? null,
     operatorName: ctx.operatorName ?? null,
@@ -74,11 +88,24 @@ export function formatOperatorDisplayName(
   return null;
 }
 
-export function formatCartLabel(code?: string | null, name?: string | null): string | null {
+/** Etykieta wózka/koszyka z sesji zbierania — nie nośnik magazynowy. */
+export function formatPickingToolLabel(code?: string | null, name?: string | null): string | null {
   const c = (code ?? "").trim();
   const n = (name ?? "").trim();
   if (c && n) return `${n} (${c})`;
   if (c) return c;
   if (n) return n;
   return null;
+}
+
+/** @deprecated Use formatPickingToolLabel */
+export const formatCartLabel = formatPickingToolLabel;
+
+export function formatRelocationTargetDisplay(
+  type: RelocationTargetType,
+  label: string | null | undefined,
+): string | null {
+  const value = (label ?? "").trim();
+  if (!value) return null;
+  return `${relocationTargetRowLabel(type)} ${value}`;
 }

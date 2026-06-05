@@ -52,7 +52,7 @@ function modeHint(mode: string): string {
     case "operational":
       return "Kolejki operacyjne.";
     case "operational-relocation":
-      return "Rozłożenie batch — nośnik docelowy.";
+      return "Rozlokowanie produktów — skan nośnika logistycznego (PAL, BOX…) lub lokacji.";
     default:
       return "Symulacja skanera — zależnie od aktywnej strony WMS.";
   }

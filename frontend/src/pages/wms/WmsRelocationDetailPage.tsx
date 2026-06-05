@@ -192,8 +192,8 @@ export default function WmsRelocationDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    setActiveDocument({ kind: "custom", label: "Rozlokowanie produktów — skan nośnika" });
-    setScannerInputPlaceholder("Skanuj nośnik (koszyk / tote / wózek)");
+    setActiveDocument({ kind: "custom", label: "Rozlokowanie produktów — cel rozlokowania" });
+    setScannerInputPlaceholder("Skanuj nośnik logistyczny (PAL, BOX, skrzynia…) lub lokację");
     return () => setActiveDocument(null);
   }, [setActiveDocument, setScannerInputPlaceholder]);
 
@@ -302,7 +302,10 @@ export default function WmsRelocationDetailPage() {
   useEffect(() => {
     if (!detail) return;
     const target =
-      activeCarrier?.barcode || activeCarrier?.code || detail.relocation_session?.active_carrier_label || "NOŚNIK";
+      activeCarrier?.barcode ||
+      activeCarrier?.code ||
+      detail.relocation_session?.active_carrier_label ||
+      null;
     setActiveContext(
       executionContextFromOperationalDetail(detail, {
         operationType: "ROZLOKOWANIE PRODUKTÓW",
@@ -310,6 +313,7 @@ export default function WmsRelocationDetailPage() {
         remainingQty: Math.max(0, totalQty - relocatedQty),
         operatorName: detail.relocation_session?.operator_name ?? formatOperatorDisplayName(user),
         currentStep: nextOperationalAction(detail).label,
+        scanHint: nextOperationalAction(detail).scanHint,
       }),
     );
     return () => setActiveContext(null);

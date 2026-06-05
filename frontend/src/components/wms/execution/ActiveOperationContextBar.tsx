@@ -1,5 +1,6 @@
 import { ScanLine, User } from "lucide-react";
 import type { ExecutionActiveContext } from "../../../context/WarehouseExecutionContext";
+import { WMS_UI, relocationTargetRowLabel } from "../../../pages/wms/wmsTerminology";
 import { normalizeOperationContext } from "./activeOperationContext";
 
 function fmtQty(n: number): string {
@@ -13,7 +14,7 @@ type Props = {
 
 /**
  * Unified sticky context for all WMS operational execution screens.
- * Reads normalized fields from WarehouseExecutionContext — no workflow logic.
+ * Separates picking tools (cart/basket) from logistics carriers (nośniki).
  */
 export function ActiveOperationContextBar({ context, className = "" }: Props) {
   const ctx = normalizeOperationContext(context);
@@ -24,14 +25,20 @@ export function ActiveOperationContextBar({ context, className = "" }: Props) {
   if (ctx.orderNumber) {
     rows.push({ label: "Zamówienie", value: ctx.orderNumber });
   }
-  if (ctx.cartLabel) {
-    rows.push({ label: "Wózek / batch", value: ctx.cartLabel });
+  if (ctx.pickingToolLabel) {
+    rows.push({ label: WMS_UI.pickingTool, value: ctx.pickingToolLabel });
   }
-  if (ctx.sourceLocation && ctx.sourceLocation !== ctx.cartLabel) {
+  if (ctx.sourceLocation) {
     rows.push({ label: "Źródło", value: ctx.sourceLocation });
   }
-  if (ctx.targetLocation) {
-    rows.push({ label: "Cel", value: ctx.targetLocation });
+  if (ctx.relocationTargetLabel && ctx.relocationTargetType) {
+    rows.push({
+      label: `Cel — ${relocationTargetRowLabel(ctx.relocationTargetType)}`,
+      value: ctx.relocationTargetLabel,
+    });
+  }
+  if (ctx.packagingLabel) {
+    rows.push({ label: "Karton pakowy", value: ctx.packagingLabel });
   }
   if (ctx.remainingQty != null && Number.isFinite(ctx.remainingQty)) {
     rows.push({ label: "Pozostało", value: `${fmtQty(ctx.remainingQty)} szt.` });

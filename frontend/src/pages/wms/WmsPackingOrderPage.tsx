@@ -71,7 +71,7 @@ export default function WmsPackingOrderPage() {
             ? "Finalizacja zamówienia"
             : "Skanuj produkt do spakowania",
         operatorName: packerDisplayName,
-        targetLocation: cartonLabel ?? "KARTON",
+        packagingLabel: cartonLabel,
       }),
     );
     return () => setActiveContext(null);

@@ -250,7 +250,6 @@ export default function WmsPickingProductDetailPage() {
         cartCode: pickingSession.cartCode,
         cartName: pickingSession.cartName,
         sourceLocation: source !== "—" ? source : null,
-        targetLocation: pickingSession.cartCode ?? "WÓZEK",
         remainingQty: remaining,
         currentStep:
           needsLocationScan && activeLocationId == null
