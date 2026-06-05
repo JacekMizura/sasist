@@ -31,4 +31,4 @@ export {
   executionContextFromPutaway,
 } from "./syncExecutionContext";
 export { executionContextFromPicking } from "./pickingExecutionContext";
-export { isWarehouseExecutionRoute } from "./executionRoutes";
+export { isPackingRoute, isWarehouseExecutionRoute } from "./executionRoutes";
