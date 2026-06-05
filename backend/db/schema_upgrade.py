@@ -3881,14 +3881,24 @@ def ensure_bdo_packaging_wm_ref_migration(engine: Engine) -> None:
     BdoCorrection.__table__.create(bind=engine, checkfirst=True)
 
 
+def _bool_col_default(engine: Engine, *, default_true: bool) -> str:
+    if engine.dialect.name == "postgresql":
+        return f"BOOLEAN NOT NULL DEFAULT {'true' if default_true else 'false'}"
+    return f"BOOLEAN NOT NULL DEFAULT {1 if default_true else 0}"
+
+
 def ensure_document_series_extended_columns(engine: Engine) -> None:
-    """Print template id, VAT line calc modes, structured company address on document_series."""
+    """Create document_series if missing; add extended numbering/company columns."""
+    from ..models.document_series import DocumentSeries
+
+    DocumentSeries.__table__.create(bind=engine, checkfirst=True)
+    false_bool = _bool_col_default(engine, default_true=False)
+    true_bool = _bool_col_default(engine, default_true=True)
     with engine.connect() as conn:
-        t = _table_exists(conn, "document_series")
-        if not t:
+        if not _table_exists(conn, "document_series"):
             return
         cols = _table_column_names(conn, "document_series")
-        for col, typ in [
+        additions: list[tuple[str, str]] = [
             ("print_template_id", "INTEGER"),
             ("vat_calc_shipping", "VARCHAR(32) NOT NULL DEFAULT 'DEFAULT'"),
             ("vat_calc_payment", "VARCHAR(32) NOT NULL DEFAULT 'DEFAULT'"),
@@ -3899,12 +3909,13 @@ def ensure_document_series_extended_columns(engine: Engine) -> None:
             ("vat_rate_percent", "INTEGER"),
             ("code", "VARCHAR(32) NOT NULL DEFAULT ''"),
             ("padding_length", "INTEGER NOT NULL DEFAULT 6"),
-            ("yearly_reset", "BOOLEAN NOT NULL DEFAULT 0"),
-            ("monthly_reset", "BOOLEAN NOT NULL DEFAULT 0"),
-            ("is_default", "BOOLEAN NOT NULL DEFAULT 0"),
-            ("is_active", "BOOLEAN NOT NULL DEFAULT 1"),
+            ("yearly_reset", false_bool),
+            ("monthly_reset", false_bool),
+            ("is_default", false_bool),
+            ("is_active", true_bool),
             ("last_number_period", "VARCHAR(16)"),
-        ]:
+        ]
+        for col, typ in additions:
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE document_series ADD COLUMN {col} {typ}"))
         conn.commit()

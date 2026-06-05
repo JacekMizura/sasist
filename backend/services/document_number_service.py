@@ -178,6 +178,16 @@ def require_warehouse_series(
     warehouse_id: int,
     subtype: str,
 ) -> DocumentSeries:
+    from .document_series_seed_service import ensure_default_document_series
+
+    try:
+        ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
+    except Exception:
+        logger.exception(
+            "[document_series.ensure] tenant_id=%s warehouse_id=%s failed",
+            tenant_id,
+            warehouse_id,
+        )
     hit = resolve_default_document_series(
         db,
         tenant_id=int(tenant_id),

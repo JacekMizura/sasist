@@ -1,6 +1,6 @@
 # Current Context
 
-- **Serie dokumentów ERP/WMS (2026-06-04):** Centralny model `document_series` + `document_number_service` (format, allocate, `DocumentSeriesOperationalError`). Domyślne serie PZ/WZ/MM/RW/PW/FV/PA/KOR seedowane idempotentnie per tenant↔magazyn (`document_series_seed_service` w `seed_basic_data`). Relokacja używa **prawdziwych dokumentów MM** z numeracją z serii — brak serii → HTTP 400 `{ message, code: DOCUMENT_SERIES_MISSING, document_type: MM }`, nie 500. UI: Dokumenty/Ustawienia → `/documents/series` (MM w podtypach, pola default/active/padding/reset); modal rozlokowania linkuje do konfiguracji serii.
+- **Serie dokumentów ERP/WMS (2026-06-04):** Centralny model `document_series` + `document_number_service`. Migracje: `ensure_document_series_extended_columns` (tworzy tabelę + kolumny, PG-safe booleans) i `ensure_stock_document_series_columns` **przed** migracjami PZ/stock ORM. `ensure_default_document_series(tenant, warehouse)` — auto-seed PZ/WZ/MM/RW/PW/FV/PA/KOR przy liście API i `require_warehouse_series`. GET `/api/document-series` i `/api/document-series/` bez redirectu. Relokacja = MM + structured 400 gdy brak serii. Testy: `test_document_series_api.py`.
 
 - **WMS terminology (2026-06-04):** UI-only — **Rozlokowanie PZ** (putaway `/wms/putaway`), **Rozlokowanie produktów** (RELOCATION po zbieraniu), **Dogrywka** (recovery pick), **Przesunięcie magazynowe** (MM). Słownik: `frontend/src/pages/wms/wmsTerminology.ts`. Encje backendowe (`RELOCATION`, `putaway`, filtry API id) bez zmian.
 

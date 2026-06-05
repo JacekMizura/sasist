@@ -8,8 +8,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
-from ..database import get_db
+from ..database import engine, get_db
+from ..db.schema_upgrade import ensure_document_series_extended_columns
 from ..models.document_series import DocumentSeries
+from ..services.document_series_seed_service import ensure_default_document_series
 from ..models.order_ui_status import OrderUiStatus
 from ..schemas.document_series import (
     DocumentSeriesBase,
@@ -25,6 +27,41 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/document-series", tags=["Document series"])
 
+_VALID_SERIES_TYPES = {"SALE", "WAREHOUSE", "CORRECTION"}
+_VALID_SUBTYPES = {
+    "INVOICE",
+    "RECEIPT",
+    "WZ",
+    "PZ",
+    "MM",
+    "RW",
+    "PW",
+    "RESERVATION",
+    "CORRECTION",
+}
+_VALID_DELETE_MODES = {"ALWAYS_DELETE", "ASK"}
+
+
+def _coerce_series_type(raw: object) -> str:
+    s = str(raw or "WAREHOUSE").strip().upper()
+    return s if s in _VALID_SERIES_TYPES else "WAREHOUSE"
+
+
+def _coerce_subtype(raw: object, series_type: str) -> str:
+    s = str(raw or "").strip().upper()
+    if s in _VALID_SUBTYPES:
+        return s
+    if series_type == "SALE":
+        return "INVOICE"
+    if series_type == "CORRECTION":
+        return "CORRECTION"
+    return "PZ"
+
+
+def _coerce_delete_mode(raw: object) -> str:
+    s = str(raw or "ASK").strip().upper()
+    return s if s in _VALID_DELETE_MODES else "ASK"
+
 
 def _mini_status(row: Optional[OrderUiStatus]) -> Optional[OrderUiStatusMiniOut]:
     if row is None:
@@ -34,6 +71,7 @@ def _mini_status(row: Optional[OrderUiStatus]) -> Optional[OrderUiStatusMiniOut]
 
 
 def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
+    series_type = _coerce_series_type(row.series_type)
     return DocumentSeriesRead(
         id=str(row.id),
         tenant_id=int(row.tenant_id),
@@ -42,13 +80,13 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         prefix=str(row.prefix or ""),
         suffix=str(row.suffix or ""),
         color=str(row.color or "#64748b"),
-        type=str(row.series_type).strip().upper(),  # type: ignore[arg-type]
-        subtype=str(row.subtype).strip().upper(),  # type: ignore[arg-type]
+        type=series_type,  # type: ignore[arg-type]
+        subtype=_coerce_subtype(row.subtype, series_type),  # type: ignore[arg-type]
         correction_series_id=str(row.correction_series_id).strip() if row.correction_series_id else None,
         print_template=str(row.print_template or ""),
         print_template_id=int(row.print_template_id) if getattr(row, "print_template_id", None) is not None else None,
         email_notification_enabled=bool(row.email_notification_enabled),
-        delete_mode=str(row.delete_mode or "ASK").upper(),  # type: ignore[arg-type]
+        delete_mode=_coerce_delete_mode(row.delete_mode),  # type: ignore[arg-type]
         vat_source=str(row.vat_source).strip().upper() if row.vat_source else None,  # type: ignore[arg-type]
         vat_calc_shipping=str(getattr(row, "vat_calc_shipping", None) or "DEFAULT").strip().upper(),  # type: ignore[arg-type]
         vat_calc_payment=str(getattr(row, "vat_calc_payment", None) or "DEFAULT").strip().upper(),  # type: ignore[arg-type]
@@ -227,13 +265,26 @@ def document_series_bulk_delete(body: DocumentSeriesBulkDeleteBody, db: Session 
     return DocumentSeriesBulkDeleteOut(deleted=int(n))
 
 
-@router.get("", response_model=List[DocumentSeriesRead])
-def list_document_series(
-    tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
-    series_type: Optional[str] = Query(None, alias="type", description="Filter: SALE | WAREHOUSE | CORRECTION"),
-    db: Session = Depends(get_db),
-):
+def _list_document_series_impl(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    series_type: Optional[str],
+) -> List[DocumentSeriesRead]:
+    try:
+        ensure_document_series_extended_columns(engine)
+    except Exception:
+        logger.exception("ensure_document_series_extended_columns failed in list_document_series")
+    try:
+        ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
+    except Exception:
+        logger.exception(
+            "ensure_default_document_series failed tenant=%s warehouse=%s",
+            tenant_id,
+            warehouse_id,
+        )
+        db.rollback()
     q = (
         db.query(DocumentSeries)
         .options(
@@ -254,7 +305,24 @@ def list_document_series(
     return [_series_to_read(r) for r in rows]
 
 
+@router.get("", response_model=List[DocumentSeriesRead])
+@router.get("/", response_model=List[DocumentSeriesRead], include_in_schema=False)
+def list_document_series(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    series_type: Optional[str] = Query(None, alias="type", description="Filter: SALE | WAREHOUSE | CORRECTION"),
+    db: Session = Depends(get_db),
+):
+    return _list_document_series_impl(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        series_type=series_type,
+    )
+
+
 @router.post("", response_model=DocumentSeriesRead, status_code=201)
+@router.post("/", response_model=DocumentSeriesRead, status_code=201, include_in_schema=False)
 def create_document_series(body: DocumentSeriesCreate, db: Session = Depends(get_db)):
     for fld, sid in (
         ("status_on_create_id", body.status_on_create_id),

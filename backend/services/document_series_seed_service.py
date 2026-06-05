@@ -175,43 +175,52 @@ def _ensure_series_row(
     return row
 
 
-def seed_default_document_series(db: Session) -> int:
-    """Create default series for every tenant↔warehouse link. Returns rows created (approx)."""
+def ensure_default_document_series(db: Session, tenant_id: int, warehouse_id: int) -> int:
+    """Idempotent defaults for one tenant/warehouse — PZ,WZ,MM,RW,PW,FV,PA,KOR."""
     created = 0
-    for tenant_id, warehouse_id in _tenant_warehouse_pairs(db):
-        for spec in _DEFAULT_WAREHOUSE_SERIES:
-            before = db.query(DocumentSeries).count()
-            _ensure_series_row(
-                db,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-                series_type="WAREHOUSE",
-                spec=spec,
+    tid, wid = int(tenant_id), int(warehouse_id)
+
+    def _maybe_create(series_type: str, spec: dict) -> None:
+        nonlocal created
+        before = (
+            db.query(DocumentSeries)
+            .filter(
+                DocumentSeries.tenant_id == tid,
+                DocumentSeries.warehouse_id == wid,
+                DocumentSeries.series_type == series_type,
+                DocumentSeries.subtype == str(spec["subtype"]).strip().upper(),
             )
-            if db.query(DocumentSeries).count() > before:
-                created += 1
-        for spec in _DEFAULT_SALE_SERIES:
-            before = db.query(DocumentSeries).count()
-            _ensure_series_row(
-                db,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-                series_type="SALE",
-                spec=spec,
+            .count()
+        )
+        _ensure_series_row(db, tenant_id=tid, warehouse_id=wid, series_type=series_type, spec=spec)
+        after = (
+            db.query(DocumentSeries)
+            .filter(
+                DocumentSeries.tenant_id == tid,
+                DocumentSeries.warehouse_id == wid,
+                DocumentSeries.series_type == series_type,
+                DocumentSeries.subtype == str(spec["subtype"]).strip().upper(),
             )
-            if db.query(DocumentSeries).count() > before:
-                created += 1
-        for spec in _DEFAULT_CORRECTION_SERIES:
-            before = db.query(DocumentSeries).count()
-            _ensure_series_row(
-                db,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-                series_type="CORRECTION",
-                spec=spec,
-            )
-            if db.query(DocumentSeries).count() > before:
-                created += 1
+            .count()
+        )
+        if after > before:
+            created += 1
+
+    for spec in _DEFAULT_WAREHOUSE_SERIES:
+        _maybe_create("WAREHOUSE", spec)
+    for spec in _DEFAULT_SALE_SERIES:
+        _maybe_create("SALE", spec)
+    for spec in _DEFAULT_CORRECTION_SERIES:
+        _maybe_create("CORRECTION", spec)
+
     if created:
         db.commit()
     return created
+
+
+def seed_default_document_series(db: Session) -> int:
+    """Create default series for every tenant↔warehouse link. Returns rows created (approx)."""
+    total = 0
+    for tenant_id, warehouse_id in _tenant_warehouse_pairs(db):
+        total += ensure_default_document_series(db, tenant_id, warehouse_id)
+    return total

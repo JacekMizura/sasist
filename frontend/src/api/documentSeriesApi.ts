@@ -195,7 +195,7 @@ export async function listDocumentSeries(tenantId: number, warehouseId: number):
   assertTenantWarehouse(tenantId, warehouseId, "listDocumentSeries");
   const params = { ...baseParams(tenantId, warehouseId) };
   if (import.meta.env.DEV) console.log("FETCH PARAMS document-series/", params);
-  const res = await api.get<DocumentSeriesDto[]>("document-series/", {
+  const res = await api.get<DocumentSeriesDto[]>("document-series", {
     params,
     headers: {
       "Cache-Control": "no-cache, no-store",
@@ -232,7 +232,7 @@ export async function createDocumentSeries(
     warehouse_id: warehouseId,
   };
   if (import.meta.env.DEV) console.log("CREATE PAYLOAD", payload);
-  const res = await api.post<DocumentSeriesDto>("document-series/", payload);
+  const res = await api.post<DocumentSeriesDto>("document-series", payload);
   return res.data;
 }
 
