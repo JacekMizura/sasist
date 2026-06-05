@@ -32,6 +32,8 @@ export function documentSeriesSubtypeLabelPl(s: DocumentSeriesSubtype): string {
       return "WZ";
     case "PZ":
       return "PZ";
+    case "MM":
+      return "MM — przesunięcie";
     case "RW":
       return "RW";
     case "PW":
@@ -134,10 +136,12 @@ export function documentSeriesNumberingPreview(
   prefix: string,
   preset: NumberingPresetUi,
   numbering_start: number,
+  padding_length = 6,
 ): string {
   const p = (prefix || "FS").trim() || "FS";
   const n = Math.max(1, numbering_start || 1);
-  const num = String(n).padStart(4, "0");
+  const pad = Math.min(12, Math.max(1, padding_length || 6));
+  const num = String(n).padStart(pad, "0");
   if (preset === "continuous") return `${p}/${num}`;
   if (preset === "monthly") return `${p}/2024/04/${num}`;
   return `${p}/2024/${num}`;

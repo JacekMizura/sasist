@@ -13,6 +13,7 @@ DocumentSeriesSubtype = Literal[
     "RECEIPT",
     "WZ",
     "PZ",
+    "MM",
     "RW",
     "PW",
     "RESERVATION",
@@ -30,7 +31,7 @@ def _allowed_subtypes(series_type: str) -> set[str]:
     if t == "SALE":
         return {"INVOICE", "RECEIPT"}
     if t == "WAREHOUSE":
-        return {"WZ", "PZ", "RW", "PW", "RESERVATION"}
+        return {"WZ", "PZ", "MM", "RW", "PW", "RESERVATION"}
     if t == "CORRECTION":
         return {"CORRECTION"}
     return set()
@@ -75,6 +76,12 @@ class DocumentSeriesBase(BaseModel):
     numbering_start: int = Field(1, ge=1)
     numbering_format: str = Field("{PREFIX}{NUMBER}", max_length=256)
     reset_each_period: bool = False
+    code: str = Field("", max_length=32)
+    padding_length: int = Field(6, ge=1, le=12)
+    yearly_reset: bool = False
+    monthly_reset: bool = False
+    is_default: bool = False
+    is_active: bool = True
     notes: Optional[str] = None
     company_name: Optional[str] = Field(None, max_length=256)
     company_street: Optional[str] = Field(None, max_length=256)

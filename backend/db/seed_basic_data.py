@@ -110,6 +110,13 @@ def seed_basic_data(db: Session) -> None:
             )
         db.commit()
 
+    from ..services.document_series_seed_service import seed_default_document_series
+
+    try:
+        seed_default_document_series(db)
+    except Exception:
+        logger.exception("seed_basic_data: document series seed failed")
+
 
 def seed_wms_panel_defaults(db: Session) -> None:
     """Return workflow statuses, return module config, packing settings for panel tenant (id=1)."""

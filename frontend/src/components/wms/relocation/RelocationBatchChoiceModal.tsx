@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { Loader2, MapPin, X } from "lucide-react";
-import { extractApiErrorMessage } from "../../../api/authApi";
+import { extractApiErrorMessage, extractApiOperationalErrorDetail } from "../../../api/authApi";
 import {
   fetchWmsRelocationBatchContext,
   postWmsRelocationAddItems,
@@ -15,11 +16,18 @@ export type RelocationBatchChoiceModalProps = {
   warehouseId: number;
   orderId: number;
   onClose: () => void;
-  /** Tylko dopisanie do ZWK — bez nawigacji. */
+  /** Tylko dopisanie do MM — bez nawigacji. */
   onAddOnly: (result: { document_label: string; lines_added: number }) => void;
   /** Dopisanie + start sesji — nawigacja do zadania RELOCATION. */
   onAddAndGo: (result: { task_id: number; document_label: string | null }) => void;
 };
+
+function isDocumentSeriesMissing(err: unknown): boolean {
+  const op = extractApiOperationalErrorDetail(err);
+  if (op?.code === "DOCUMENT_SERIES_MISSING") return true;
+  const msg = extractApiErrorMessage(err, "").toLowerCase();
+  return msg.includes("brak aktywnej serii dokumentów");
+}
 
 export function RelocationBatchChoiceModal({
   open,
@@ -35,6 +43,7 @@ export function RelocationBatchChoiceModal({
   const [loadingCtx, setLoadingCtx] = useState(false);
   const [acting, setActing] = useState<"add" | "go" | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [seriesMissing, setSeriesMissing] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -47,11 +56,13 @@ export function RelocationBatchChoiceModal({
   const loadContext = useCallback(async () => {
     setLoadingCtx(true);
     setErr(null);
+    setSeriesMissing(false);
     try {
       const data = await fetchWmsRelocationBatchContext(tenantId, warehouseId, orderId);
       setCtx(data);
     } catch (e: unknown) {
       setErr(extractApiErrorMessage(e, "Nie udało się wczytać kontekstu rozlokowania."));
+      setSeriesMissing(isDocumentSeriesMissing(e));
       setCtx(null);
     } finally {
       setLoadingCtx(false);
@@ -62,15 +73,21 @@ export function RelocationBatchChoiceModal({
     if (open) void loadContext();
   }, [loadContext, open]);
 
+  const handleError = (e: unknown, fallback: string) => {
+    setErr(extractApiErrorMessage(e, fallback));
+    setSeriesMissing(isDocumentSeriesMissing(e));
+  };
+
   const handleAddOnly = async () => {
     setActing("add");
     setErr(null);
+    setSeriesMissing(false);
     try {
       const out = await postWmsRelocationAddItems(tenantId, warehouseId, { order_id: orderId });
       onAddOnly({ document_label: out.document_label, lines_added: out.lines_added });
       onClose();
     } catch (e: unknown) {
-      setErr(extractApiErrorMessage(e, "Nie udało się dodać pozycji do dokumentu."));
+      handleError(e, "Nie udało się dodać pozycji do dokumentu.");
     } finally {
       setActing(null);
     }
@@ -79,6 +96,7 @@ export function RelocationBatchChoiceModal({
   const handleAddAndGo = async () => {
     setActing("go");
     setErr(null);
+    setSeriesMissing(false);
     try {
       const added = await postWmsRelocationAddItems(tenantId, warehouseId, { order_id: orderId });
       const started = await postWmsRelocationStartSession(tenantId, warehouseId, {
@@ -91,7 +109,7 @@ export function RelocationBatchChoiceModal({
       });
       onClose();
     } catch (e: unknown) {
-      setErr(extractApiErrorMessage(e, "Nie udało się rozpocząć rozlokowania."));
+      handleError(e, "Nie udało się rozpocząć rozlokowania.");
     } finally {
       setActing(null);
     }
@@ -102,7 +120,7 @@ export function RelocationBatchChoiceModal({
   const pending = acting !== null;
   const docLabel =
     ctx?.document_label ??
-    (ctx?.has_active_document ? `ZWK (id ${ctx.document_id})` : null);
+    (ctx?.has_active_document ? `MM (id ${ctx.document_id})` : null);
 
   const modal = (
     <div
@@ -130,7 +148,7 @@ export function RelocationBatchChoiceModal({
               </h3>
               <p className="mt-1 text-sm text-slate-600">
                 Cel rozlokowania: nośnik logistyczny (paleta, skrzynia…) lub lokacja magazynowa. Możesz
-                dodać produkty do ZWK teraz i wykonać rozlokowanie później.
+                dodać produkty do dokumentu MM teraz i wykonać rozlokowanie później.
               </p>
             </div>
           </div>
@@ -164,22 +182,34 @@ export function RelocationBatchChoiceModal({
               </p>
             ) : (
               <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600">
-                Zostanie utworzony nowy dokument roboczy ZWK.
+                Zostanie utworzony nowy dokument roboczy MM.
               </p>
             )}
           </div>
         )}
 
         {err ? (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            {err}
-          </p>
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <p>{err}</p>
+            {seriesMissing ? (
+              <p className="mt-2">
+                <Link
+                  to="/documents/series"
+                  className="font-semibold text-red-900 underline hover:text-red-950"
+                  onClick={onClose}
+                >
+                  Ustawienia → Serie dokumentów
+                </Link>
+                {" — skonfiguruj aktywną serię MM dla tego magazynu."}
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
-            disabled={pending || loadingCtx}
+            disabled={pending || loadingCtx || seriesMissing}
             onClick={() => void handleAddOnly()}
             className="h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
@@ -187,7 +217,7 @@ export function RelocationBatchChoiceModal({
           </button>
           <button
             type="button"
-            disabled={pending || loadingCtx}
+            disabled={pending || loadingCtx || seriesMissing}
             onClick={() => void handleAddAndGo()}
             className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-md hover:bg-blue-700 disabled:opacity-50"
           >

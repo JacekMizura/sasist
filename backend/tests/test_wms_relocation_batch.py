@@ -8,6 +8,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from backend.services.document_number_service import DocumentSeriesOperationalError
 from backend.services.wms_relocation_batch_service import (
     ZWK_DOCUMENT_TYPE,
     add_relocation_items_to_document,
@@ -17,9 +18,18 @@ from backend.services.wms_relocation_batch_service import (
 
 
 class ZwkDocumentLabelTests(unittest.TestCase):
-    def test_label_format(self):
-        doc = SimpleNamespace(id=124, created_at=datetime(2026, 3, 15))
-        self.assertEqual(zwk_document_label(doc), "ZWK-2026-00124")
+    def test_label_uses_allocated_number(self):
+        doc = SimpleNamespace(
+            id=124,
+            created_at=datetime(2026, 3, 15),
+            document_type="MM",
+            document_number="MM/2026/000124",
+        )
+        self.assertEqual(zwk_document_label(doc), "MM/2026/000124")
+
+    def test_label_fallback_pm_format(self):
+        doc = SimpleNamespace(id=124, created_at=datetime(2026, 3, 15), document_type="MM")
+        self.assertEqual(zwk_document_label(doc), "PM-2026-0124")
 
 
 class AddItemsWithoutSessionTests(unittest.TestCase):
@@ -89,13 +99,15 @@ class AddItemsWithoutSessionTests(unittest.TestCase):
         with patch(
             "backend.services.wms_relocation_batch_service._assert_warehouse_for_tenant",
         ), patch(
-            "backend.services.wms_relocation_batch_service.assert_relocation_document_series_configured",
-            side_effect=ValueError(
-                "Brak skonfigurowanej serii dokumentów dla rozlokowania (ZWK/MM)."
+            "backend.services.wms_mm_draft_service.get_or_create_mm_draft_document",
+            side_effect=DocumentSeriesOperationalError(
+                document_type="MM",
+                message="Brak aktywnej serii dokumentów MM",
             ),
         ):
-            with self.assertRaises(ValueError):
+            with self.assertRaises(ValueError) as ctx:
                 get_or_create_zwk_draft_document(db, tenant_id=1, warehouse_id=2)
+        self.assertEqual(str(ctx.exception), "Brak aktywnej serii dokumentów MM")
 
     def test_get_or_create_uses_zwk_type(self):
         db = MagicMock()
@@ -110,8 +122,8 @@ class AddItemsWithoutSessionTests(unittest.TestCase):
         with patch(
             "backend.services.wms_relocation_batch_service._assert_warehouse_for_tenant",
         ), patch(
-            "backend.services.wms_relocation_batch_service.assert_relocation_document_series_configured",
-            return_value=SimpleNamespace(id="series-1"),
+            "backend.services.wms_mm_draft_service.get_or_create_mm_draft_document",
+            return_value=existing,
         ):
             doc = get_or_create_zwk_draft_document(db, tenant_id=1, warehouse_id=2)
         self.assertIs(doc, existing)

@@ -110,6 +110,12 @@ function dtoToWrite(d: DocumentSeriesDto): DocumentSeriesWritePayload {
     numbering_start: d.numbering_start,
     numbering_format: d.numbering_format,
     reset_each_period: d.reset_each_period,
+    code: d.code ?? "",
+    padding_length: d.padding_length ?? 6,
+    yearly_reset: d.yearly_reset ?? false,
+    monthly_reset: d.monthly_reset ?? false,
+    is_default: d.is_default ?? false,
+    is_active: d.is_active ?? true,
     notes: d.notes,
     company_name: d.company_name,
     company_street: d.company_street ?? null,
@@ -638,10 +644,71 @@ export default function DocumentSeriesEditPage() {
                   onChange={(e) => setField("numbering_start", Math.max(1, parseInt(e.target.value, 10) || 1))}
                 />
               </label>
+              <label className={lab}>
+                Długość numeru (padding)
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  className={inpSm}
+                  value={draft.padding_length}
+                  onChange={(e) =>
+                    setField("padding_length", Math.min(12, Math.max(1, parseInt(e.target.value, 10) || 6)))
+                  }
+                />
+              </label>
+              {draft.type === "WAREHOUSE" ? (
+                <label className={lab}>
+                  Kod magazynu (opcjonalnie)
+                  <input
+                    className={inpSm}
+                    value={draft.code}
+                    onChange={(e) => setField("code", e.target.value)}
+                    placeholder="np. MAG1"
+                  />
+                </label>
+              ) : null}
+              <label className="flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={draft.is_default}
+                  onChange={(e) => setField("is_default", e.target.checked)}
+                />
+                Domyślna seria dla typu dokumentu
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={draft.is_active}
+                  onChange={(e) => setField("is_active", e.target.checked)}
+                />
+                Aktywna
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={draft.yearly_reset}
+                  onChange={(e) => setField("yearly_reset", e.target.checked)}
+                />
+                Reset roczny licznika
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={draft.monthly_reset}
+                  onChange={(e) => setField("monthly_reset", e.target.checked)}
+                />
+                Reset miesięczny licznika
+              </label>
               <p className={`${lab} sm:col-span-2`}>
                 Przykład numeru
                 <span className="mt-1 block rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 font-mono text-sm text-slate-800">
-                  {documentSeriesNumberingPreview(draft.prefix || "FS", numberingPreset, draft.numbering_start)}
+                  {documentSeriesNumberingPreview(
+                    draft.prefix || "FS",
+                    numberingPreset,
+                    draft.numbering_start,
+                    draft.padding_length,
+                  )}
                 </span>
               </p>
               <details className="sm:col-span-2">

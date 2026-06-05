@@ -21,6 +21,8 @@ from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 from .stock_document_service import build_stock_document_read, get_stock_document_read, recompute_putaway_status_for_document
 from .wms_receiving_service import build_wms_pz_list_row
 from .tenant_default_warehouse import list_tenant_warehouse_ids
+from .document_number_service import assign_series_number_to_stock_document
+from .relocation_document_series_service import assert_relocation_document_series_configured
 from .wms_mm_internal_placeholder import get_or_create_mm_placeholder_fks
 
 
@@ -83,6 +85,11 @@ def get_or_create_mm_draft_document(db: Session, tenant_id: int, warehouse_id: i
     )
     if doc:
         return doc
+    series = assert_relocation_document_series_configured(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
     sid, did = get_or_create_mm_placeholder_fks(db, tenant_id)
     now = datetime.utcnow()
     doc = StockDocument(
@@ -98,11 +105,14 @@ def get_or_create_mm_draft_document(db: Session, tenant_id: int, warehouse_id: i
         receiving_status="DONE",
         putaway_status="NOT_STARTED",
         relocation_status="OPEN",
+        creation_source="WMS",
         created_at=now,
         updated_at=now,
     )
     db.add(doc)
     db.flush()
+    wh_code = str(getattr(series, "code", None) or "").strip() or None
+    assign_series_number_to_stock_document(db, doc, series, warehouse_code=wh_code)
     return doc
 
 

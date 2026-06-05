@@ -72,6 +72,12 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         numbering_start=int(row.numbering_start or 1),
         numbering_format=str(row.numbering_format or "{PREFIX}{NUMBER}"),
         reset_each_period=bool(row.reset_each_period),
+        code=str(getattr(row, "code", None) or ""),
+        padding_length=int(getattr(row, "padding_length", None) or 6),
+        yearly_reset=bool(getattr(row, "yearly_reset", False)),
+        monthly_reset=bool(getattr(row, "monthly_reset", False)),
+        is_default=bool(getattr(row, "is_default", False)),
+        is_active=bool(getattr(row, "is_active", True)),
         notes=row.notes,
         company_name=row.company_name,
         company_street=getattr(row, "company_street", None),
@@ -179,6 +185,18 @@ def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
     row.numbering_start = int(body.numbering_start)
     row.numbering_format = (body.numbering_format or "{PREFIX}{NUMBER}").strip()
     row.reset_each_period = bool(body.reset_each_period)
+    if hasattr(row, "code"):
+        row.code = (body.code or "").strip()
+    if hasattr(row, "padding_length"):
+        row.padding_length = int(body.padding_length or 6)
+    if hasattr(row, "yearly_reset"):
+        row.yearly_reset = bool(body.yearly_reset)
+    if hasattr(row, "monthly_reset"):
+        row.monthly_reset = bool(body.monthly_reset)
+    if hasattr(row, "is_default"):
+        row.is_default = bool(body.is_default)
+    if hasattr(row, "is_active"):
+        row.is_active = bool(body.is_active)
     row.notes = body.notes
     row.company_name = body.company_name
     row.company_street = body.company_street

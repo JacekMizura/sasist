@@ -15,6 +15,8 @@ class StockDocument(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     # PZ = przyjęcie towaru; PZ_RT / RETURN_RECEIPT = zwrot z RMZ (do VARCHAR(32) w SQLite / Postgres).
     document_type = Column(String(32), nullable=False, default="PZ", index=True)
+    document_series_id = Column(String(36), ForeignKey("document_series.id", ondelete="SET NULL"), nullable=True, index=True)
+    document_number = Column(String(128), nullable=True, index=True)
     #: Zwrot z RMZ → przyjęcie zwrotne (PZ_RT); FK dla idempotentnego powiązania z dokumentem biznesowym.
     rmz_id = Column(Integer, ForeignKey("wms_order_returns.id", ondelete="SET NULL"), nullable=True, index=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=True, index=True)

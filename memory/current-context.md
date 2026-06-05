@@ -1,5 +1,7 @@
 # Current Context
 
+- **Serie dokumentów ERP/WMS (2026-06-04):** Centralny model `document_series` + `document_number_service` (format, allocate, `DocumentSeriesOperationalError`). Domyślne serie PZ/WZ/MM/RW/PW/FV/PA/KOR seedowane idempotentnie per tenant↔magazyn (`document_series_seed_service` w `seed_basic_data`). Relokacja używa **prawdziwych dokumentów MM** z numeracją z serii — brak serii → HTTP 400 `{ message, code: DOCUMENT_SERIES_MISSING, document_type: MM }`, nie 500. UI: Dokumenty/Ustawienia → `/documents/series` (MM w podtypach, pola default/active/padding/reset); modal rozlokowania linkuje do konfiguracji serii.
+
 - **WMS terminology (2026-06-04):** UI-only — **Rozlokowanie PZ** (putaway `/wms/putaway`), **Rozlokowanie produktów** (RELOCATION po zbieraniu), **Dogrywka** (recovery pick), **Przesunięcie magazynowe** (MM). Słownik: `frontend/src/pages/wms/wmsTerminology.ts`. Encje backendowe (`RELOCATION`, `putaway`, filtry API id) bez zmian.
 
 - **Nośniki vs narzędzia zbierania (2026-06-04):** Osobne domeny UI — **narzędzie zbierania** (wózek/koszyk/tote, sesja pickingu) vs **nośnik logistyczny** (paleta, skrzynia, PAL/BOX…). Rozlokowanie = jeden workflow; cel: `LOCATION` lub `CARRIER_UNIT` (`relocation_mode` CARRIER|LOCATION). `ActiveOperationContextBar` — osobne wiersze: „Narzędzie zbierania”, „Cel — Nośnik/Lokacja”, „Karton pakowy” (pakowanie). Nie łączyć wózków pickingu z nośnikami.

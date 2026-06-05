@@ -15,11 +15,9 @@ from ..models.product import Product
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.wms_operational_task import ACTIVE_STATUSES, TASK_RELOCATION, WmsOperationalTask
 from .relocation_reason import infer_relocation_reason, relocation_reason_is_actionable
-from .relocation_document_series_service import (
-    RELOCATION_DOCUMENT_SERIES_MISSING_MSG,
-    assert_relocation_document_series_configured,
-)
-from .wms_mm_internal_placeholder import get_or_create_mm_placeholder_fks
+from .document_number_service import DocumentSeriesOperationalError, stock_document_display_label
+from .relocation_document_series_service import RELOCATION_DOCUMENT_SERIES_MISSING_MSG
+from .wms_mm_draft_service import get_or_create_mm_draft_document
 from .wms_operational_task_service import (
     _allocation_row_status,
     _json_loads,
@@ -29,13 +27,13 @@ from .wms_relocation_workflow import find_relocation_task_for_order
 
 logger = logging.getLogger(__name__)
 
-ZWK_DOCUMENT_TYPE = "ZWK"
+# Relocation batch uses real MM stock documents (series-driven numbering).
+RELOCATION_STOCK_DOCUMENT_TYPE = "MM"
+ZWK_DOCUMENT_TYPE = RELOCATION_STOCK_DOCUMENT_TYPE  # legacy alias for tests
 
 
 def zwk_document_label(doc: StockDocument) -> str:
-    year = getattr(doc, "created_at", None)
-    y = int(year.year) if year is not None else datetime.utcnow().year
-    return f"ZWK-{y}-{int(doc.id):05d}"
+    return stock_document_display_label(doc)
 
 
 def _assert_warehouse_for_tenant(db: Session, tenant_id: int, warehouse_id: int) -> None:
@@ -52,54 +50,19 @@ def get_or_create_zwk_draft_document(
     tenant_id: int,
     warehouse_id: int,
 ) -> StockDocument:
+    """Relocation batch document — delegates to MM draft with series allocation."""
     _assert_warehouse_for_tenant(db, tenant_id, warehouse_id)
-    doc = (
-        db.query(StockDocument)
-        .filter(
-            StockDocument.tenant_id == int(tenant_id),
-            StockDocument.warehouse_id == int(warehouse_id),
-            StockDocument.document_type == ZWK_DOCUMENT_TYPE,
-            StockDocument.status == "draft",
-            StockDocument.relocation_status != "DONE",
-        )
-        .order_by(StockDocument.updated_at.desc())
-        .first()
-    )
-    if doc is not None:
-        return doc
-    assert_relocation_document_series_configured(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-    )
-    sid, did = get_or_create_mm_placeholder_fks(db, tenant_id)
-    now = datetime.utcnow()
-    doc = StockDocument(
-        tenant_id=int(tenant_id),
-        document_type=ZWK_DOCUMENT_TYPE,
-        supplier_id=sid,
-        delivery_id=did,
-        warehouse_id=int(warehouse_id),
-        location_id=None,
-        status="draft",
-        receiving_status="DONE",
-        putaway_status="NOT_STARTED",
-        relocation_status="OPEN",
-        creation_source="WMS",
-        created_at=now,
-        updated_at=now,
-    )
     try:
-        db.add(doc)
-        db.flush()
+        return get_or_create_mm_draft_document(db, int(tenant_id), int(warehouse_id))
+    except DocumentSeriesOperationalError as exc:
+        raise ValueError(exc.message) from exc
     except SQLAlchemyError as exc:
         logger.exception(
-            "[wms.relocation.zwk.create] tenant_id=%s warehouse_id=%s failed",
+            "[wms.relocation.mm.create] tenant_id=%s warehouse_id=%s failed",
             tenant_id,
             warehouse_id,
         )
         raise ValueError(RELOCATION_DOCUMENT_SERIES_MISSING_MSG) from exc
-    return doc
 
 
 def _zwk_line_batch_key(order_item_id: int) -> str:
@@ -190,7 +153,7 @@ def get_relocation_batch_context(
         .filter(
             StockDocument.tenant_id == int(tenant_id),
             StockDocument.warehouse_id == int(warehouse_id),
-            StockDocument.document_type == ZWK_DOCUMENT_TYPE,
+            StockDocument.document_type.in_([RELOCATION_STOCK_DOCUMENT_TYPE, "ZWK"]),
             StockDocument.status == "draft",
             StockDocument.relocation_status != "DONE",
         )
@@ -388,7 +351,7 @@ def start_relocation_session(
         .filter(
             StockDocument.tenant_id == int(tenant_id),
             StockDocument.warehouse_id == int(warehouse_id),
-            StockDocument.document_type == ZWK_DOCUMENT_TYPE,
+            StockDocument.document_type.in_([RELOCATION_STOCK_DOCUMENT_TYPE, "ZWK"]),
             StockDocument.status == "draft",
             StockDocument.relocation_status != "DONE",
         )

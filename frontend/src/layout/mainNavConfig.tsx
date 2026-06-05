@@ -31,6 +31,7 @@ import {
   MessageSquare,
   FileText,
   Building2,
+  Library,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -310,6 +311,12 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
             path: "/settings/shipping-methods",
             label: UI_STRINGS.navigation.shippingMethods,
             Icon: Truck,
+          },
+          {
+            path: "/documents/series",
+            label: "Serie dokumentów",
+            Icon: Library,
+            permissionsAny: ["settings.users", "settings.company"],
           },
         ],
       },

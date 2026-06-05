@@ -6,6 +6,7 @@ export type DocumentSeriesSubtype =
   | "RECEIPT"
   | "WZ"
   | "PZ"
+  | "MM"
   | "RW"
   | "PW"
   | "RESERVATION"
@@ -55,6 +56,12 @@ export type DocumentSeriesDto = {
   numbering_start: number;
   numbering_format: string;
   reset_each_period: boolean;
+  code: string;
+  padding_length: number;
+  yearly_reset: boolean;
+  monthly_reset: boolean;
+  is_default: boolean;
+  is_active: boolean;
   notes: string | null;
   company_name: string | null;
   company_street: string | null;
@@ -126,6 +133,12 @@ export function createDefaultDocumentSeriesWrite(): DocumentSeriesWritePayload {
     numbering_start: 1,
     numbering_format: "{PREFIX}{NUMBER}",
     reset_each_period: false,
+    code: "",
+    padding_length: 6,
+    yearly_reset: false,
+    monthly_reset: false,
+    is_default: false,
+    is_active: true,
     notes: null,
     company_name: null,
     company_street: null,
@@ -146,7 +159,7 @@ export function createDefaultDocumentSeriesWrite(): DocumentSeriesWritePayload {
 
 export function subtypesForDocumentSeriesType(t: DocumentSeriesType): DocumentSeriesSubtype[] {
   if (t === "SALE") return ["INVOICE", "RECEIPT"];
-  if (t === "WAREHOUSE") return ["WZ", "PZ", "RW", "PW", "RESERVATION"];
+  if (t === "WAREHOUSE") return ["WZ", "PZ", "MM", "RW", "PW", "RESERVATION"];
   return ["CORRECTION"];
 }
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ..services.document_number_service import DocumentSeriesOperationalError
 from ..services.relocation_document_series_service import RELOCATION_DOCUMENT_SERIES_MISSING_MSG
 
 from ..auth.deps import get_current_user
@@ -34,9 +35,17 @@ logger = logging.getLogger(__name__)
 
 
 def _relocation_error_detail(exc: Exception) -> dict[str, str]:
+    if isinstance(exc, DocumentSeriesOperationalError):
+        return exc.to_detail()
     if isinstance(exc, ValueError):
         msg = str(exc).strip()
         if msg:
+            if "serii dokumentów" in msg.lower() or "brak aktywnej serii" in msg.lower():
+                return {
+                    "message": msg,
+                    "code": "DOCUMENT_SERIES_MISSING",
+                    "document_type": "MM",
+                }
             return {"message": msg}
     raw = str(exc).lower()
     if any(

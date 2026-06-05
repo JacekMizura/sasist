@@ -156,6 +156,7 @@ from .db.schema_upgrade import (
     ensure_delivery_item_catalog_snapshot_columns,
     ensure_bdo_packaging_wm_ref_migration,
     ensure_document_series_extended_columns,
+    ensure_stock_document_series_columns,
     ensure_sale_documents_table,
     ensure_orders_customer_id_column,
     ensure_order_issue_tasks_table,
@@ -1158,6 +1159,10 @@ try:
     ensure_document_series_extended_columns(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_document_series_extended_columns failed at import")
+try:
+    ensure_stock_document_series_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_document_series_columns failed at import")
 try:
     ensure_sale_documents_table(engine)
     ensure_orders_customer_id_column(engine)

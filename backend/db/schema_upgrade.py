@@ -3897,9 +3897,29 @@ def ensure_document_series_extended_columns(engine: Engine) -> None:
             ("company_apartment_number", "VARCHAR(32)"),
             ("company_regon", "VARCHAR(32)"),
             ("vat_rate_percent", "INTEGER"),
+            ("code", "VARCHAR(32) NOT NULL DEFAULT ''"),
+            ("padding_length", "INTEGER NOT NULL DEFAULT 6"),
+            ("yearly_reset", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("monthly_reset", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("is_default", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("is_active", "BOOLEAN NOT NULL DEFAULT 1"),
+            ("last_number_period", "VARCHAR(16)"),
         ]:
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE document_series ADD COLUMN {col} {typ}"))
+        conn.commit()
+
+
+def ensure_stock_document_series_columns(engine: Engine) -> None:
+    """FK + persisted document number for warehouse stock documents."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "stock_documents"):
+            return
+        cols = _table_column_names(conn, "stock_documents")
+        if "document_series_id" not in cols:
+            conn.execute(text("ALTER TABLE stock_documents ADD COLUMN document_series_id VARCHAR(36)"))
+        if "document_number" not in cols:
+            conn.execute(text("ALTER TABLE stock_documents ADD COLUMN document_number VARCHAR(128)"))
         conn.commit()
 
 
