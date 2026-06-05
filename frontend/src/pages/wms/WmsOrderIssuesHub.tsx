@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractApiErrorMessage } from "../../api/authApi";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  WmsOperationalPageBody,
-  WmsOperationalPageHeader,
-  WmsOperationalPageShell,
-} from "../../components/wms/execution/WmsOperationalPageShell";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
+import { WMS_OPERATIONAL_CONTAINER } from "../../components/wms/execution/wmsLayoutTokens";
 import { executionContextFromBrakiHub } from "../../components/wms/execution/syncExecutionContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
@@ -78,7 +75,7 @@ export default function WmsOrderIssuesHub() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const navigate = useNavigate();
-  const { setActiveContext } = useWarehouseExecution();
+  const { activeContext, setActiveContext } = useWarehouseExecution();
   const [searchParams] = useSearchParams();
   const orderIdFromUrl = searchParams.get("order_id");
   const {
@@ -244,22 +241,15 @@ export default function WmsOrderIssuesHub() {
   }
 
   return (
-    <WmsOperationalPageShell className="bg-slate-100 antialiased">
-      <WmsOperationalPageHeader>
-        <div className="flex min-h-[52px] items-center justify-between gap-3 py-2">
-          <div className="flex min-w-0 items-center gap-3">
-            <Link
-              to={WMS_ROUTES.menu}
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50"
-              aria-label="Menu WMS"
-            >
-              <i className="fa-solid fa-arrow-left text-sm"></i>
-            </Link>
-            <h1 className="truncate text-lg font-bold text-slate-900 md:text-xl">
-              Zamówienia z brakami{" "}
-              <span className="font-medium text-slate-500">({queueCards.length})</span>
-            </h1>
-          </div>
+    <div className="flex w-full flex-col bg-white">
+      <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-4 md:py-5`}>
+        <ActiveOperationContextBar context={activeContext} inline />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-lg font-bold text-slate-900 md:text-xl">
+            Zamówienia z brakami{" "}
+            <span className="font-medium text-slate-500">({queueCards.length})</span>
+          </h1>
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
@@ -279,9 +269,7 @@ export default function WmsOrderIssuesHub() {
             </button>
           </div>
         </div>
-      </WmsOperationalPageHeader>
 
-      <WmsOperationalPageBody className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <button
           onClick={() => setIsFilterModalOpen(true)}
@@ -460,7 +448,7 @@ export default function WmsOrderIssuesHub() {
             })}
           </div>
         )}
-      </WmsOperationalPageBody>
+      </div>
 
       {isFilterModalOpen && (
         <div
@@ -511,6 +499,6 @@ export default function WmsOrderIssuesHub() {
           </div>
         </div>
       )}
-    </WmsOperationalPageShell>
+    </div>
   );
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
+import { WMS_OPERATIONAL_CONTAINER } from "../../components/wms/execution/wmsLayoutTokens";
 import {
   postWmsOrderIssueTaskArchive,
   postWmsOrderIssueTaskForceRemove,
@@ -8,12 +10,6 @@ import {
 } from "../../api/wmsOrderIssueTasksApi";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { executionContextFromBrakiTask } from "../../components/wms/execution/syncExecutionContext";
-import {
-  WmsOperationalPageBody,
-  WmsOperationalPageFooter,
-  WmsOperationalPageHeader,
-  WmsOperationalPageShell,
-} from "../../components/wms/execution/WmsOperationalPageShell";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { BrakiOperationalHeader } from "./BrakiOperationalHeader";
@@ -66,7 +62,7 @@ export function WmsOrderIssueDetailContent({
   onArchiveError,
 }: WmsOrderIssueDetailContentProps) {
   const navigate = useNavigate();
-  const { setActiveContext } = useWarehouseExecution();
+  const { activeContext, setActiveContext } = useWarehouseExecution();
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -153,21 +149,9 @@ export function WmsOrderIssueDetailContent({
   );
 
   return (
-    <WmsOperationalPageShell className="bg-slate-100">
-      <WmsOperationalPageHeader>
-        <div className="flex min-h-[52px] items-center gap-3 py-2">
-          <Link
-            to={WMS_ROUTES.braki()}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-          >
-            <i className="fa-solid fa-arrow-left text-sm"></i>
-            <span>Kolejka braków</span>
-          </Link>
-          <h1 className="text-lg font-bold text-slate-900">Szczegóły braków</h1>
-        </div>
-      </WmsOperationalPageHeader>
-
-      <WmsOperationalPageBody>
+    <div className="flex w-full flex-col bg-white">
+      <div className={`${WMS_OPERATIONAL_CONTAINER} flex-1 space-y-4 py-4 md:py-5`}>
+        <ActiveOperationContextBar context={activeContext} inline />
         <BrakiOperationalHeader task={task} />
 
         {actionError ? (
@@ -222,10 +206,10 @@ export function WmsOrderIssueDetailContent({
             dokumentu ZWK i wykonać zbiorczo później.
           </p>
         ) : null}
-      </WmsOperationalPageBody>
+      </div>
 
-      <WmsOperationalPageFooter>
-        <div className="space-y-2">
+      <footer className="shrink-0 border-t border-slate-200 bg-white">
+        <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-2 py-4 md:py-5`}>
           {operationalActions.map((action) => (
             <button
               key={action.id}
@@ -250,7 +234,7 @@ export function WmsOrderIssueDetailContent({
             </button>
           ) : null}
         </div>
-      </WmsOperationalPageFooter>
+      </footer>
 
       <BrakiForceRemoveModal
         task={task}
@@ -259,6 +243,6 @@ export function WmsOrderIssueDetailContent({
         onClose={() => setForceRemoveOpen(false)}
         onConfirm={(mode) => void onArchiveShortage(mode)}
       />
-    </WmsOperationalPageShell>
+    </div>
   );
 }

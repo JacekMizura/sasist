@@ -9,5 +9,5 @@ export function ExecutionGlobalContextBar() {
   const { activeContext, warehouseMode } = useWarehouseExecution();
   if (!warehouseMode) return null;
   const ctx = activeContext ?? defaultExecutionContextForPath(pathname);
-  return <ActiveOperationContextBar context={ctx} embedded />;
+  return <ActiveOperationContextBar context={ctx} />;
 }

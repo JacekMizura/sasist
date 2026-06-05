@@ -12,15 +12,15 @@ function fmtQty(n: number): string {
 type Props = {
   context: ExecutionActiveContext | null | undefined;
   className?: string;
-  /** Gdy true — renderowany wewnątrz shell layoutu (bez własnego sticky). */
-  embedded?: boolean;
+  /** Gdy true — karta w normalnym flow strony (Braki, hub), nie pasek w shellu. */
+  inline?: boolean;
 };
 
 /**
  * Compact operational context for all WMS execution screens.
  * Light surfaces — same visual system as ScanExecutionShell / operational pages.
  */
-export function ActiveOperationContextBar({ context, className = "", embedded = false }: Props) {
+export function ActiveOperationContextBar({ context, className = "", inline = false }: Props) {
   const ctx = normalizeOperationContext(context);
   if (!ctx) return null;
 
@@ -54,9 +54,13 @@ export function ActiveOperationContextBar({ context, className = "", embedded = 
   const ws = ctx.brakiWorkstreams;
   const isBraki = (ctx.operationType ?? "").toUpperCase().includes("BRAKI");
 
+  const shellClass = inline
+    ? "rounded-xl border border-slate-200 bg-slate-50/80"
+    : WMS_WORKFLOW_BAR_SHELL;
+
   return (
-    <div className={`${WMS_WORKFLOW_BAR_SHELL} ${className}`} data-wms-active-operation-context>
-      <div className={`${WMS_OPERATIONAL_CONTAINER} py-2.5`}>
+    <div className={`${shellClass} ${className}`} data-wms-active-operation-context>
+      <div className={inline ? "px-4 py-3" : `${WMS_OPERATIONAL_CONTAINER} py-2.5`}>
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             {ctx.operationType}
