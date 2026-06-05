@@ -27,5 +27,8 @@ class LocationStockRow(BaseModel):
 class LocationStockResponse(BaseModel):
     product_id: int
     warehouse_id: int
+    tenant_id: int | None = None
+    as_of: str | None = None
+    revision: str | None = None
     summary: LocationStockSummary
     locations: list[LocationStockRow] = Field(default_factory=list)

@@ -335,7 +335,12 @@ def _packing_orders_base_query(
             Order.fulfillment_state == "READY_TO_PACK",
             and_(Order.fulfillment_state.is_(None), Order.order_ui_status_id.in_(status_ids)),
         ),
-        *wms_queue_fulfillment_mode_clauses(),
+        *wms_queue_fulfillment_mode_clauses(
+            db=db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            queue_name="packing",
+        ),
     )
     return q
 

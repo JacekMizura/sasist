@@ -77,6 +77,19 @@ class OrderItem(Base):
     wms_shortage_declared_qty = Column(Float, nullable=True, server_default=text("0"), default=0)
     #: Skąd wydano / sprzedano towar (lokalizacja magazynowa).
     source_location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_movement_id = Column(
+        Integer,
+        ForeignKey("warehouse_inventory_movements.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    issue_session_id = Column(
+        Integer,
+        ForeignKey("direct_sale_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    issued_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     #: OMS: ilość zdjęta z braku (np. częściowe usunięcie z realizacji).
     oms_removed_qty = Column(Float, nullable=True, server_default=text("0"), default=0)

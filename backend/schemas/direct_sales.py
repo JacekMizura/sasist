@@ -42,6 +42,8 @@ class DirectSaleSessionRead(BaseModel):
     suspended_at: datetime | None = None
     last_activity_at: datetime | None = None
     completed_at: datetime | None = None
+    customer_id: int | None = None
+    expires_at: datetime | None = None
     lines: list[DirectSaleSessionLineRead] = Field(default_factory=list)
 
 
@@ -64,3 +66,25 @@ class DirectSaleScanResponse(BaseModel):
     product_id: int
     quantity: float
     suggested_locations: list[dict] = Field(default_factory=list)
+
+
+class DirectSaleSetCustomerBody(BaseModel):
+    customer_id: int | None = None
+
+
+class DirectSaleStartPaymentBody(BaseModel):
+    payment_method: str = Field("CASH", max_length=24)
+
+
+class DirectSaleCompleteBody(BaseModel):
+    payment_method: str = Field("CASH", max_length=24)
+    document_subtype: str = Field("RECEIPT", description="RECEIPT or INVOICE")
+
+
+class DirectSaleCompleteResponse(BaseModel):
+    session_id: int
+    order_id: int
+    payment_id: int
+    document_job_id: int | None = None
+    document_number: str | None = None
+    total_amount: float

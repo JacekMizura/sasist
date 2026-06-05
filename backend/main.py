@@ -165,6 +165,10 @@ from .db.schema_upgrade import (
     ensure_order_issue_task_items_table,
     ensure_wms_operational_tasks_table,
     ensure_operational_sales_phase1_schema,
+    ensure_operational_sales_phase2_schema,
+    ensure_operational_sales_phase3_schema,
+    ensure_operational_runtime_phase4_schema,
+    ensure_operational_feature_scopes_schema,
     ensure_orders_fulfillment_state_columns,
     ensure_orders_priority_color_column,
     ensure_orders_discount_columns,
@@ -284,6 +288,13 @@ from .api.wms_order_issue_tasks import router as wms_order_issue_tasks_router
 from .api.wms_operational_tasks import router as wms_operational_tasks_router
 from .api.location_stock import router as location_stock_router
 from .api.direct_sales import router as direct_sales_router
+from .api.document_generation_jobs import router as document_generation_jobs_router
+from .api.operational_pickup import router as operational_pickup_router
+from .api.operational_workstations import router as operational_workstations_router
+from .api.operational_runtime import router as operational_runtime_router
+from .api.operational_replenishment import router as operational_replenishment_router
+from .api.operational_alerts import router as operational_alerts_router
+from .api.operational_orchestration import router as operational_orchestration_router
 from .api.wms_packing_entry import router as wms_packing_entry_router
 from .api.wms_packing_basket_entry import router as wms_packing_basket_entry_router
 from .api.wms_dashboard import router as wms_dashboard_router
@@ -1117,6 +1128,13 @@ def _upgrade_schema() -> None:
         ensure_order_issue_task_items_table(engine)
         ensure_wms_operational_tasks_table(engine)
         ensure_operational_sales_phase1_schema(engine)
+        ensure_operational_sales_phase2_schema(engine)
+        ensure_operational_sales_phase3_schema(engine)
+        ensure_operational_runtime_phase4_schema(engine)
+        try:
+            ensure_operational_feature_scopes_schema(engine)
+        except Exception:
+            logging.getLogger(__name__).exception("ensure_operational_feature_scopes_schema failed")
         ensure_orders_fulfillment_state_columns(engine)
         ensure_orders_priority_color_column(engine)
         ensure_orders_discount_columns(engine)
@@ -1167,6 +1185,22 @@ def _upgrade_schema() -> None:
         install_replenishment_listeners()
     except Exception:
         logging.getLogger(__name__).exception("install_replenishment_listeners failed")
+    try:
+        from .database import SessionLocal
+        from .workers.document_generation_worker import process_pending_document_jobs
+        from .workers.replenishment_scan_worker import run_replenishment_scan_worker
+        from .workers.reservation_expiration_worker import run_reservation_lifecycle_worker
+
+        _ops_db = SessionLocal()
+        try:
+            run_reservation_lifecycle_worker(_ops_db)
+            process_pending_document_jobs(_ops_db, limit=20)
+            run_replenishment_scan_worker(_ops_db)
+            _ops_db.commit()
+        finally:
+            _ops_db.close()
+    except Exception:
+        logging.getLogger(__name__).exception("operational_commerce_workers startup failed")
 
     print("[startup] upgrade_schema: done", flush=True)
 
@@ -1330,6 +1364,13 @@ _API_ROUTERS = (
     wms_operational_tasks_router,
     location_stock_router,
     direct_sales_router,
+    document_generation_jobs_router,
+    operational_pickup_router,
+    operational_workstations_router,
+    operational_runtime_router,
+    operational_replenishment_router,
+    operational_alerts_router,
+    operational_orchestration_router,
     wms_packing_entry_router,
     wms_packing_basket_entry_router,
     wms_dashboard_router,

@@ -35,6 +35,7 @@ MOVEMENT_RETURN = "return"
 MOVEMENT_ADJUSTMENT = "adjustment"
 MOVEMENT_RESERVATION = "reservation"
 MOVEMENT_UNRESERVATION = "unreservation"
+MOVEMENT_ISSUE = "issue"
 
 ALLOWED_MOVEMENT_TYPES = frozenset(
     {
@@ -49,6 +50,7 @@ ALLOWED_MOVEMENT_TYPES = frozenset(
         MOVEMENT_ADJUSTMENT,
         MOVEMENT_RESERVATION,
         MOVEMENT_UNRESERVATION,
+        MOVEMENT_ISSUE,
     }
 )
 

@@ -5,9 +5,9 @@ Reserved quantity for an order. status: reserved | released | picked.
 Pick: decrease stock.quantity and set status to picked.
 """
 
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Column, Date, Integer, Float, ForeignKey, String
+from sqlalchemy import Column, Date, DateTime, Integer, Float, ForeignKey, String
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -44,6 +44,14 @@ class StockReservation(Base, BaseModelMixin):
     status = Column(String(20), nullable=False, default="reserved")  # reserved | released | picked
     batch_number = Column(String(128), nullable=False, default="")
     expiry_date = Column(Date, nullable=False, default=date(9999, 12, 31))
+    expires_at = Column(DateTime, nullable=True, index=True)
+    direct_sale_session_id = Column(
+        Integer,
+        ForeignKey("direct_sale_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reservation_kind = Column(String(24), nullable=True)
 
     tenant = relationship("Tenant", back_populates="stock_reservations")
     order = relationship("Order", back_populates="stock_reservations")

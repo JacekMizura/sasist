@@ -1,5 +1,73 @@
 # Change Log
 
+## 2026-06-05 — Visual operational runtime Phase 5 (WMS UI)
+
+- WMS tab **Operacje** → `/wms/operations` (hub, replenishment, tasks, operators, alerts).
+- Modular UI: `components/operations/`, `hooks/runtime/`, thin pages under `pages/wms/operations/`.
+- Direct sales terminal: top bar + runtime footer, live stock via SSE.
+- API clients: replenishment, alerts, orchestration; fix `operationalRuntimeApi` axios import.
+
+## 2026-06-05 — Operational runtime Phase 4
+
+- Replenishment engine: `operational_replenishment_rules`, detection → `wms_operational_tasks` (REPLENISHMENT/PICKFACE_REFILL/SHOWROOM_REFILL).
+- Live runtime: `operational_live_events`, SSE `/operational-runtime/stream`, polling fallback.
+- Mobile: `device_sessions`; operator SSOT: `operator_runtime_context`.
+- Orchestration: `orchestration_state`, assign/transition API.
+- Alerts: `operational_alerts`; multi-store stub: `store_transfer_requests`.
+- Flags: `FEATURE_OPERATIONAL_RUNTIME`, `FEATURE_REPLENISHMENT_ENGINE` (default OFF).
+- Frontend: `useOperationalLiveStream`, direct-sales live stock refresh.
+- Tests: `test_operational_runtime_phase4.py`.
+
+## 2026-06-05 — Modular package boundaries (operational commerce)
+
+- Backend packages: `services/direct_sale/`, `documents/`, `reservations/`, `pickup/`, `workers/`.
+- Legacy flat service files → thin shims (backward compatible imports).
+- Frontend: `pages/wms/direct-sales/` with hooks + components + thin `DirectSalesPage`.
+- Cursor rule: `.cursor/rules/operational-module-boundaries.mdc`.
+- Tests updated to import from package paths.
+
+## 2026-06-05 — Operational sales Phase 3 (commerce expansion)
+
+- Async document pipeline: `document_generation_jobs`, queue/worker/fiscal dispatch, `document_series_resolution_rules`.
+- Series resolution by channel/mode/zone — no hardcoded FV/PA/WZ in operational flows.
+- Reservation lifecycle service + expiration worker; soft-hold scan (`FEATURE_SESSION_SOFT_HOLD`).
+- Pickup flow API + `operational_commerce_task_service` (PICKUP_PREP/READY/HANDOFF).
+- Payment orchestration fields: provider, terminal, settlement_state, external_transaction_id.
+- Workstation device columns: printer_id, scanner_type, fiscal_terminal_id, zone_id.
+- Event envelope hardening (`metadata` + `payload`); logs `[reservation.lifecycle]`, `[document.pipeline]`, `[pickup.flow]`, `[payment.orchestration]`.
+- Location-stock live `revision`/`as_of`; soft-hold in availability projection.
+- Frontend: `/wms/direct-sales` scanner-first terminal + WMS tab.
+- Schema: `ensure_operational_sales_phase3_schema`; startup workers for docs + reservations.
+- Tests: `test_operational_sales_phase3.py`.
+
+## 2026-06-05 — Operational sales safety hardening (rollout)
+
+- `OperationalFeaturesContext` — request-scoped via ContextVar; resolved once per request (`operational_features_deps.py`).
+- Scoped flags: global env → tenant (`warehouse_id=0`) → warehouse (`operational_feature_scopes` table).
+- Observability: `[wms.eligibility]`, `[direct-sales.complete]`, `[order.operational-mode]` (`operational_observability.py`).
+- WMS eligibility snapshot tests: `test_wms_eligibility_snapshots.py` (NULL/WMS/IMMEDIATE/PICKUP/DELIVERY/malformed).
+- Direct-sales API isolation: `operational_sales_sessions_for_request` — single generator dependency (gate + bind); no nested Depends on generator.
+- NULL legacy compatibility documented as permanent in `order_operational_mode.py`.
+- All operational-sales tests green (32 passed).
+
+## 2026-06-05 — WMS backward compatibility guard
+
+- `order_operational_mode.py` — `resolve_order_operational_mode` (NULL → ONLINE + WMS).
+- `operational_sales_flags.py` — feature flags default OFF; WMS exclusion opt-in only.
+- `wms_queue_eligibility` — no SQL filters when exclusion disabled; centralized NULL-safe clauses.
+- `/direct-sales/*` gated behind `FEATURE_OPERATIONAL_SALES_SESSIONS`.
+- Tests: `test_wms_backward_compatibility.py`.
+
+## 2026-06-05 — Operational sales Phase 2 (execution pipeline)
+
+- Atomic `complete_direct_sale_session`: order-first → reserve → issue → payment → documents → session complete.
+- Services: `direct_sale_issue_plan_service`, `direct_sale_stock_service`, `direct_sale_order_service`, `direct_sale_payment_service`, `direct_sale_document_pipeline_service`, `direct_sale_complete_service`.
+- API: `POST /api/direct-sales/session/{id}/start-payment`, `…/complete`, `…/set-customer`.
+- Movements: `MOVEMENT_ISSUE` + reservation audit rows; traceability columns on `order_items`.
+- Events persisted to `operational_commerce_events` (direct_sale.*, reservation.*, stock.*, payment.*).
+- Schema: `ensure_operational_sales_phase2_schema`.
+- Tests: `test_operational_sales_phase2.py`.
+
 ## 2026-06-05 — Operational sales Phase 1 (direct-sales foundation)
 
 - Schema: `order_channel`, `fulfillment_mode`, location zones/priorities, `direct_sale_sessions`, `payments`, `operational_workstations` (`ensure_operational_sales_phase1_schema`).

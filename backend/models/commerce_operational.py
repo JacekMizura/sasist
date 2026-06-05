@@ -22,6 +22,10 @@ class OperationalWorkstation(Base):
     name = Column(String(128), nullable=False)
     operational_zone_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
     device_type = Column(String(32), nullable=True)  # scanner | printer | terminal | tablet
+    printer_id = Column(Integer, nullable=True)
+    scanner_type = Column(String(32), nullable=True)  # zebra | camera | keyboard
+    fiscal_terminal_id = Column(Integer, nullable=True)
+    zone_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active = Column(Integer, nullable=False, default=1)
     metadata_json = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -40,7 +44,9 @@ class DirectSaleSession(Base):
     operational_zone_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
     status = Column(String(16), nullable=False, default="ACTIVE", index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
     payment_context_json = Column(Text, nullable=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
     issue_strategy = Column(String(32), nullable=False, default="STRICT_LOCATION")
     reservation_scope = Column(String(16), nullable=False, default="SESSION")
     started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -98,6 +104,11 @@ class Payment(Base):
     created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     performed_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     device_id = Column(Integer, ForeignKey("operational_workstations.id", ondelete="SET NULL"), nullable=True)
+    payment_provider = Column(String(32), nullable=True)  # CASH | STRIPE | PAYU | TERMINAL
+    external_transaction_id = Column(String(128), nullable=True)
+    terminal_id = Column(String(64), nullable=True)
+    authorization_reference = Column(String(128), nullable=True)
+    settlement_state = Column(String(24), nullable=True)  # PENDING | AUTHORIZED | SETTLED | FAILED
     metadata_json = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)

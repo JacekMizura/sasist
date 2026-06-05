@@ -4046,6 +4046,33 @@ def ensure_operational_sales_phase1_schema(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_operational_sales_phase2_schema(engine: Engine) -> None:
+    """Operational sales phase 2 — traceability, events, reservation TTL."""
+    from .schema_introspection import ensure_operational_sales_phase2_schema as _impl
+
+    _impl(engine)
+
+
+def ensure_operational_feature_scopes_schema(engine: Engine) -> None:
+    """Scoped operational feature overrides (tenant / warehouse)."""
+    from .schema_introspection import ensure_operational_feature_scopes_schema as _impl
+
+    _impl(engine)
+
+
+def ensure_operational_sales_phase3_schema(engine: Engine) -> None:
+    """Operational sales phase 3 — async documents, pickup tasks, devices."""
+    from .schema_introspection import ensure_operational_sales_phase3_schema as _impl
+
+    _impl(engine)
+
+
+def ensure_operational_runtime_phase4_schema(engine: Engine) -> None:
+    """Phase 4 — replenishment engine, live runtime, orchestration columns."""
+    from .schema_introspection import ensure_operational_runtime_phase4_schema as _impl
+
+    _impl(engine)
+
 
 def ensure_wms_operational_tasks_table(engine: Engine) -> None:
     """WMS operational tasks — product-centric work queue (source of truth)."""

@@ -336,7 +336,13 @@ def _order_type_filter(order_type: WmsPickingOrderTypeFilter) -> OrderTypeFilter
 _PICKING_QUEUE_OPEN_FULFILLMENT = ("PICKING", "PARTIAL")
 
 
-def _picking_queue_eligibility_clauses():
+def _picking_queue_eligibility_clauses(
+    db: Session | None = None,
+    *,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+    features=None,
+):
     """Zamówienia operacyjnie otwarte na zbieranie (SSOT dla kohorty / workload)."""
     from .wms_queue_eligibility import wms_queue_fulfillment_mode_clauses
 
@@ -346,7 +352,13 @@ def _picking_queue_eligibility_clauses():
             Order.fulfillment_state.is_(None),
             Order.fulfillment_state.in_(_PICKING_QUEUE_OPEN_FULFILLMENT),
         ),
-        *wms_queue_fulfillment_mode_clauses(),
+        *wms_queue_fulfillment_mode_clauses(
+            db=db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            features=features,
+            queue_name="picking",
+        ),
     )
 
 
@@ -364,7 +376,9 @@ def _query_order_ids_for_status(
             Order.tenant_id == int(tenant_id),
             Order.warehouse_id == int(warehouse_id),
             Order.order_ui_status_id == int(source_status_id),
-            *_picking_queue_eligibility_clauses(),
+            *_picking_queue_eligibility_clauses(
+                db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+            ),
         )
     )
     if order_type == "all":

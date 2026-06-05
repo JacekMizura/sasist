@@ -328,7 +328,9 @@ def get_picking_status_workload(
 
         from ..services.wms_picking_product_list_service import _picking_queue_eligibility_clauses
 
-        queue_eligible = _picking_queue_eligibility_clauses()
+        queue_eligible = _picking_queue_eligibility_clauses(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+        )
         total_rows = (
             db.query(Order.order_ui_status_id, func.count(Order.id))
             .filter(

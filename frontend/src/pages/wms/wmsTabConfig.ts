@@ -8,12 +8,14 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   AlertTriangle,
   ArrowLeftRight,
   ClipboardList,
   Inbox,
   Package,
   ScanSearch,
+  ShoppingCart,
   Undo2,
   Warehouse,
 } from "lucide-react";
@@ -26,7 +28,9 @@ export type WmsTabId =
   | "picking"
   | "product_preview"
   | "packing"
-  | "issues";
+  | "issues"
+  | "direct_sales"
+  | "operations";
 
 export type WmsTabConfigItem = {
   id: WmsTabId;
@@ -44,6 +48,8 @@ export const WMS_TAB_ITEMS: WmsTabConfigItem[] = [
   { id: "issues", path: "/wms/braki", label: "Braki", icon: AlertTriangle },
   { id: "product_preview", path: "/wms/product-preview", label: "Podgląd produktu", icon: ScanSearch },
   { id: "packing", path: "/wms/packing", label: "Pakowanie", icon: Package },
+  { id: "operations", path: "/wms/operations", label: "Operacje", icon: Activity },
+  { id: "direct_sales", path: "/wms/direct-sales", label: "Sprzedaż bezpośrednia", icon: ShoppingCart },
 ];
 
 /** Active tab detection shared by top bar and quick-access overlay. */
@@ -51,6 +57,9 @@ export function isWmsTabPathActive(pathname: string, tab: WmsTabConfigItem): boo
   const p = pathname;
   if (tab.id === "issues") {
     return p.startsWith("/wms/braki") || p.startsWith("/wms/issues");
+  }
+  if (tab.id === "operations") {
+    return p.startsWith("/wms/operations");
   }
   return p === tab.path || p.startsWith(`${tab.path}/`);
 }

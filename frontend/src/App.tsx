@@ -144,6 +144,13 @@ import WmsPackingModePage from "./pages/wms/WmsPackingModePage"
 import WmsPackingScanCartPage from "./pages/wms/WmsPackingScanCartPage"
 import WmsPackingOrdersPage from "./pages/wms/WmsPackingOrdersPage"
 import WmsPackingOrderPage from "./pages/wms/WmsPackingOrderPage"
+import WmsDirectSalesPage from "./pages/wms/WmsDirectSalesPage"
+import OperationsLayout from "./pages/wms/operations/OperationsLayout"
+import OperationsRuntimePage from "./pages/wms/operations/OperationsRuntimePage"
+import OperationsReplenishmentPage from "./pages/wms/operations/OperationsReplenishmentPage"
+import OperationsOperatorsPage from "./pages/wms/operations/OperationsOperatorsPage"
+import OperationsAlertsPage from "./pages/wms/operations/OperationsAlertsPage"
+import OperationsTasksPage from "./pages/wms/operations/OperationsTasksPage"
 import WmsReceivingPage from "./pages/wms/WmsReceivingPage"
 import WmsReceivingCountPage from "./pages/wms/WmsReceivingCountPage"
 import WmsIncompleteProductDataPage from "./pages/wms/WmsIncompleteProductDataPage"
@@ -362,6 +369,14 @@ export const router = createBrowserRouter(
         />
         <Route path="product-preview" element={<WmsProductPreviewHubPage />} />
         <Route path="product-preview/:productId" element={<WmsProductPreviewPage />} />
+        <Route path="operations" element={<OperationsLayout />}>
+          <Route index element={<OperationsRuntimePage />} />
+          <Route path="replenishment" element={<OperationsReplenishmentPage />} />
+          <Route path="operators" element={<OperationsOperatorsPage />} />
+          <Route path="alerts" element={<OperationsAlertsPage />} />
+          <Route path="tasks" element={<OperationsTasksPage />} />
+        </Route>
+        <Route path="direct-sales" element={<WmsDirectSalesPage />} />
         <Route path="packing" element={<Outlet />}>
           <Route index element={<WmsPackingStatusPage />} />
           <Route path="mode" element={<WmsPackingModePage />} />

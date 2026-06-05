@@ -5,26 +5,40 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from ..api.operational_features_deps import operational_sales_sessions_for_request
 from ..auth.deps import get_current_user
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
 from ..schemas.direct_sales import (
+    DirectSaleCompleteBody,
+    DirectSaleCompleteResponse,
     DirectSaleScanBody,
     DirectSaleScanResponse,
     DirectSaleSessionCreateBody,
     DirectSaleSessionLineRead,
     DirectSaleSessionRead,
+    DirectSaleSetCustomerBody,
+    DirectSaleStartPaymentBody,
+)
+from ..services.direct_sale_complete_service import (
+    complete_direct_sale_session,
+    start_direct_sale_payment,
 )
 from ..services.direct_sale_service import (
     DirectSaleError,
     create_session,
     get_session,
     session_scan_add_line,
+    set_session_customer,
     suspend_session,
 )
 
-router = APIRouter(prefix="/direct-sales", tags=["Direct sales"])
+router = APIRouter(
+    prefix="/direct-sales",
+    tags=["Direct sales"],
+    dependencies=[Depends(operational_sales_sessions_for_request)],
+)
 
 
 def _operator_id(user: AppUser | None) -> int | None:
@@ -63,6 +77,8 @@ def _session_to_read(sess: DirectSaleSession) -> DirectSaleSessionRead:
         suspended_at=sess.suspended_at,
         last_activity_at=sess.last_activity_at,
         completed_at=sess.completed_at,
+        customer_id=int(sess.customer_id) if getattr(sess, "customer_id", None) else None,
+        expires_at=getattr(sess, "expires_at", None),
         lines=lines,
     )
 
@@ -157,3 +173,77 @@ def post_session_suspend(
         return _session_to_read(sess)
     except DirectSaleError as exc:
         raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.post("/session/{session_id}/set-customer", response_model=DirectSaleSessionRead)
+def post_session_set_customer(
+    session_id: int,
+    body: DirectSaleSetCustomerBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        set_session_customer(db, sess, customer_id=body.customer_id)
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(sess)
+    except DirectSaleError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.post("/session/{session_id}/start-payment", response_model=DirectSaleSessionRead)
+def post_session_start_payment(
+    session_id: int,
+    body: DirectSaleStartPaymentBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        start_direct_sale_payment(
+            db,
+            sess,
+            payment_method=body.payment_method,
+            performed_by_user_id=_operator_id(user),
+        )
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(sess)
+    except DirectSaleError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.post("/session/{session_id}/complete", response_model=DirectSaleCompleteResponse)
+def post_session_complete(
+    session_id: int,
+    body: DirectSaleCompleteBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        result = complete_direct_sale_session(
+            db,
+            sess,
+            payment_method=body.payment_method,
+            document_subtype=body.document_subtype,
+            performed_by_user_id=_operator_id(user),
+        )
+        db.commit()
+        return DirectSaleCompleteResponse(
+            session_id=result.session_id,
+            order_id=result.order_id,
+            payment_id=result.payment_id,
+            document_job_id=result.document_job_id,
+            document_number=result.document_number,
+            total_amount=result.total_amount,
+        )
+    except DirectSaleError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Nie udało się zakończyć sprzedaży.") from exc

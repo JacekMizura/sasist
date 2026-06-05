@@ -135,6 +135,16 @@ from .commerce_operational import (  # noqa: F401 — Phase 1 operational sales
     Payment,
     PaymentTransaction,
 )
+from .operational_commerce_event import OperationalCommerceEvent  # noqa: F401
+from .operational_feature_scope import OperationalFeatureScope  # noqa: F401
+from .operational_replenishment_rule import OperationalReplenishmentRule  # noqa: F401
+from .operational_alert import OperationalAlert  # noqa: F401
+from .device_session import DeviceSession  # noqa: F401
+from .operator_runtime_context import OperatorRuntimeContext  # noqa: F401
+from .operational_live_event import OperationalLiveEvent  # noqa: F401
+from .store_transfer_request import StoreTransferRequest  # noqa: F401
+from .document_generation_job import DocumentGenerationJob  # noqa: F401
+from .document_series_resolution_rule import DocumentSeriesResolutionRule  # noqa: F401
 from .permission_preset import PermissionPreset  # noqa: F401
 from .bdo_packaging import (  # noqa: F401
     BdoAuditLog,

@@ -1,0 +1,17 @@
+"""Replenishment engine task types and zone defaults."""
+
+from ...models.wms_operational_task import (
+    TASK_COUNTER_TRANSFER,
+    TASK_PICKFACE_REFILL,
+    TASK_REPLENISHMENT,
+    TASK_SHOWROOM_REFILL,
+)
+
+DEFAULT_SOURCE_ZONE = "BACKROOM"
+
+TASK_TYPE_BY_ZONE = {
+    "SALES": TASK_REPLENISHMENT,
+    "SHOWROOM": TASK_SHOWROOM_REFILL,
+    "PICKFACE": TASK_PICKFACE_REFILL,
+    "COUNTER": TASK_COUNTER_TRANSFER,
+}

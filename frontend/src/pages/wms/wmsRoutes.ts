@@ -59,6 +59,14 @@ export const WMS_ROUTES = {
   /** Szczegóły PZ — wyłącznie liczenie (``WmsReceivingCountPage``), segment ``pz`` jak w REST ``/wms/receiving/pz/{id}``. */
   receivingPz: (pzId: number | string) => `/wms/receiving/pz/${pzId}`,
   putaway: "/wms/putaway",
+  /** Live operational runtime hub (Phase 5). */
+  operations: "/wms/operations",
+  operationsReplenishment: "/wms/operations/replenishment",
+  operationsOperators: "/wms/operations/operators",
+  operationsAlerts: "/wms/operations/alerts",
+  operationsTasks: "/wms/operations/tasks",
+  /** Sprzedaż bezpośrednia — terminal operacyjny (nie POS). */
+  directSales: "/wms/direct-sales",
   mm: "/wms/mm",
   /** PM/MM draft — assign destination locations (not PZ receiving / putaway list). */
   mmRelocation: (docId: number | string) => `/wms/mm/relocation/${docId}`,

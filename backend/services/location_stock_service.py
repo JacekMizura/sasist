@@ -6,11 +6,15 @@ Long-term SSOT: ``warehouse_inventory_movements`` ledger; ``Inventory`` is opera
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import defaultdict
+from datetime import datetime
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from ..models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.pick import Pick
@@ -118,6 +122,35 @@ def build_location_stock(
         if lid is not None:
             reserved_by_loc[int(lid)] = float(qty or 0)
 
+    soft_rows = (
+        db.query(DirectSaleSessionLine)
+        .join(DirectSaleSession, DirectSaleSession.id == DirectSaleSessionLine.session_id)
+        .filter(
+            DirectSaleSession.tenant_id == tid,
+            DirectSaleSession.warehouse_id == wid,
+            DirectSaleSession.status.in_(("ACTIVE", "SUSPENDED", "CHECKOUT")),
+            DirectSaleSessionLine.product_id == pid,
+            DirectSaleSessionLine.metadata_json.isnot(None),
+        )
+        .all()
+    )
+    now = datetime.utcnow()
+    for line in soft_rows:
+        try:
+            meta = json.loads(line.metadata_json or "{}")
+            hold = meta.get("soft_hold") or {}
+            exp_raw = hold.get("expires_at")
+            if exp_raw:
+                exp = datetime.fromisoformat(str(exp_raw).replace("Z", ""))
+                if exp <= now:
+                    continue
+            lid = hold.get("location_id")
+            qty = float(hold.get("qty") or 0)
+            if lid and qty > 0:
+                reserved_by_loc[int(lid)] += qty
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+
     picking_by_loc: dict[int, float] = defaultdict(float)
     pick_rows = (
         db.query(Pick.location_id, func.sum(Pick.quantity))
@@ -180,9 +213,16 @@ def build_location_stock(
         )
     )
 
+    as_of = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    revision_src = f"{pid}:{wid}:{total_available}:{total_reserved}:{total_picking}:{len(locations_out)}"
+    revision = hashlib.sha256(revision_src.encode()).hexdigest()[:16]
+
     return {
         "product_id": pid,
         "warehouse_id": wid,
+        "tenant_id": tid,
+        "as_of": as_of,
+        "revision": revision,
         "summary": {
             "available": round(total_available, 6),
             "reserved": round(total_reserved, 6),
