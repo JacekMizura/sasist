@@ -62,6 +62,7 @@ from ..services.braki_workflow_service import (
     braki_workflow_status_label,
 )
 from ..services.recovery_workflow_service import (
+    build_braki_detail_sections_from_state,
     build_braki_remaining_pick_lines_from_state,
     build_braki_shortage_lines_from_state,
     recovery_state_for_braki_task,
@@ -249,11 +250,12 @@ def serialize_order_issue_task_item(
         )
         status_line = format_issue_queue_status_label(u_short, r_pend)
         sub_pid, sub_name = first_pending_substitute_product(db, o)
-        ctx = build_order_issue_detail_context(
+        sections = build_braki_detail_sections_from_state(
             db,
+            o,
+            rec_st,
             tenant_id=int(t.tenant_id),
             warehouse_id=int(t.warehouse_id),
-            order=o,
         )
         resolver_rows = build_braki_shortage_lines_from_state(
             db,
@@ -265,16 +267,21 @@ def serialize_order_issue_task_item(
         for row in resolver_rows:
             shortage_line_models.append(OrderIssueShortageLine.model_validate(row))
         order_context_model = OrderIssueOrderContext(
-            collected_lines=[OrderIssueDetailLine.model_validate(r) for r in ctx.get("collected_lines", [])],
+            collected_lines=[
+                OrderIssueDetailLine.model_validate(r) for r in sections.get("collected_lines", [])
+            ],
             shortage_decision_lines=[
                 OrderIssueDetailLine.model_validate(r)
-                for r in resolver_rows
-                if (r.get("line_kind") or "") == "shortage_unresolved"
+                for r in sections.get("shortage_decision_lines", [])
             ],
             remaining_pick_lines=[
-                OrderIssueDetailLine.model_validate(r)
-                for r in resolver_rows
-                if (r.get("line_kind") or "") == "remaining"
+                OrderIssueDetailLine.model_validate(r) for r in sections.get("remaining_pick_lines", [])
+            ],
+            relocation_lines=[
+                OrderIssueDetailLine.model_validate(r) for r in sections.get("relocation_lines", [])
+            ],
+            packing_ready_lines=[
+                OrderIssueDetailLine.model_validate(r) for r in sections.get("packing_ready_lines", [])
             ],
         )
         if u_short > 0 and not shortage_line_models and missing:

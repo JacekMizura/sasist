@@ -74,15 +74,37 @@ class OrderIssueDetailLine(OrderIssueShortageLine):
     )
 
 
+class BrakiWorkstreams(BaseModel):
+    """Aktywne strumienie pracy w zamówieniu Braki (mogą współistnieć)."""
+
+    has_pick_work: bool = False
+    has_relocation_work: bool = False
+    has_packing_ready: bool = False
+    has_oms_pending: bool = False
+    pick_line_count: int = 0
+    relocation_line_count: int = 0
+    packing_ready_line_count: int = 0
+    oms_line_count: int = 0
+    collected_line_count: int = 0
+
+
 class OrderIssueOrderContext(BaseModel):
     """Sekcje operacyjne szczegółów Braki WMS (magazyn)."""
 
     collected_lines: list[OrderIssueDetailLine] = Field(default_factory=list)
     shortage_decision_lines: list[OrderIssueDetailLine] = Field(
         default_factory=list,
-        description="Puste w widoku magazynu — historia OMS ukryta",
+        description="Linie oczekujące na decyzję OMS",
     )
     remaining_pick_lines: list[OrderIssueDetailLine] = Field(default_factory=list)
+    relocation_lines: list[OrderIssueDetailLine] = Field(
+        default_factory=list,
+        description="Tylko zebrane produkty wymagające rozlokowania",
+    )
+    packing_ready_lines: list[OrderIssueDetailLine] = Field(
+        default_factory=list,
+        description="Linie gotowe do pakowania (packing_eligible)",
+    )
 
 
 class OrderIssueTaskListItem(BaseModel):
@@ -181,6 +203,10 @@ class OrderIssueTaskListItem(BaseModel):
     recovery_state_hash: str = Field(
         default="",
         description="Skrót stanu resolvera (debug)",
+    )
+    braki_workstreams: BrakiWorkstreams = Field(
+        default_factory=BrakiWorkstreams,
+        description="Aktywne strumienie pracy — mieszane stany w jednym zamówieniu",
     )
 
 

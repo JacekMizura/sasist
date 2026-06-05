@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Braki mixed-state workflow
+
+- Braki jako overlay — wiele równoległych strumieni w jednym zamówieniu (`braki_workstreams`).
+- Backend: `build_braki_detail_sections_from_state` — sekcje z resolvera (relocation tylko picked).
+- API: `relocation_lines`, `packing_ready_lines`, `BrakiWorkstreams`.
+- Frontend: `BrakiOperationalHeader`, 4+ sekcje produktów, wiele CTA, batch ZWK + rozlokuj teraz.
+- Zawsze widoczne „Usuń z Braki WMS”; `ActiveOperationContextBar` na detalu.
+
 ## 2026-06-04 — Nośniki vs picking tools (UI domain)
 
 - Rozdzielono w UI **narzędzie zbierania** (wózek/koszyk) od **nośnika logistycznego** (PAL, BOX…).

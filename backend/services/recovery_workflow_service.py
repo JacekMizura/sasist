@@ -696,10 +696,210 @@ def build_braki_remaining_pick_lines_from_state(
     warehouse_id: int,
 ) -> list[dict[str, Any]]:
     """``remaining_pick_lines`` — tylko ``visible_in_recovery_pick``."""
-    rows = build_braki_shortage_lines_from_state(
+    sections = build_braki_detail_sections_from_state(
         db, order, state, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )
-    return [r for r in rows if (r.get("line_kind") or "") == "remaining"]
+    return list(sections.get("remaining_pick_lines") or [])
+
+
+def _braki_detail_line_row(
+    db: Session,
+    order: Order,
+    ln: RecoveryLineState,
+    oi: Any,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    pick_summaries: dict[int, str | None],
+    line_kind: str,
+    badge_label: str,
+    display_qty: float | None = None,
+) -> dict[str, Any]:
+    """Wiersz linii na ekranie szczegółów Braki — wyłącznie z ``RecoveryLineState``."""
+    from ..models.product import Product
+    from .braki_order_state_service import enrich_shortage_line_location_fields
+    from .fulfillment_event_service import picked_location_breakdown_for_order_line
+
+    pid = int(ln.product_id)
+    pr = db.query(Product).filter(Product.id == pid).first()
+    name = (pr.name if pr and pr.name else "") or f"Produkt #{pid}"
+    img = str(pr.image_url).strip() if pr and getattr(pr, "image_url", None) else None
+    sku = str(getattr(pr, "symbol", None) or getattr(pr, "sku", None) or "").strip() if pr else ""
+    ean = str(getattr(pr, "ean", None) or "").strip() if pr else ""
+    qty = round(float(display_qty if display_qty is not None else ln.picked_qty), 6)
+    picked_locs: list[dict[str, Any]] = []
+    for lbl, qv, batch, exp_iso in picked_location_breakdown_for_order_line(db, order, int(oi.id)):
+        picked_locs.append(
+            {
+                "location_label": lbl,
+                "quantity": round(float(qv), 6),
+                "batch_number": batch or None,
+                "expiry_date": exp_iso,
+            }
+        )
+    row_out = {
+        "order_item_id": int(ln.order_line_id),
+        "product_id": pid,
+        "product_name": name,
+        "image_url": img,
+        "ordered_qty": ln.ordered_qty,
+        "picked_qty": ln.picked_qty,
+        "missing_qty": qty if line_kind in ("remaining", "shortage_unresolved") else 0.0,
+        "remaining_qty": qty if line_kind in ("remaining", "shortage_unresolved") else 0.0,
+        "location_code": "",
+        "sku": sku,
+        "ean": ean,
+        "line_kind": line_kind,
+        "badge_label": badge_label,
+        "pick_audit_summary": pick_summaries.get(int(ln.order_line_id)),
+        "picked_locations": picked_locs,
+    }
+    return enrich_shortage_line_location_fields(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order.id),
+        product_id=pid,
+        row=row_out,
+    )
+
+
+def build_braki_detail_sections_from_state(
+    db: Session,
+    order: Order,
+    state: OrderRecoveryState,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Sekcje szczegółów Braki — wzajemnie wykluczające wiadra z resolvera.
+
+    Kolejność priorytetu: dogrywka → OMS → rozlokowanie → pakowanie → zebrane.
+    Do rozlokowania tylko zebrane linie (``visible_in_relocation``).
+    """
+    from .wms_audit_service import last_pick_audit_summaries_for_order_lines
+
+    oi_ids = [int(ln.order_line_id) for ln in state.lines]
+    pick_summaries = last_pick_audit_summaries_for_order_lines(db, int(order.id), oi_ids)
+    oi_by_id = {int(oi.id): oi for oi in (order.items or [])}
+
+    sections: dict[str, list[dict[str, Any]]] = {
+        "collected_lines": [],
+        "shortage_decision_lines": [],
+        "remaining_pick_lines": [],
+        "relocation_lines": [],
+        "packing_ready_lines": [],
+    }
+
+    for ln in state.lines:
+        oi = oi_by_id.get(int(ln.order_line_id))
+        if oi is None:
+            continue
+
+        if ln.visible_in_recovery_pick:
+            missing = ln.recovery_qty if ln.recovery_qty > _EPS else ln.unresolved_qty
+            sections["remaining_pick_lines"].append(
+                _braki_detail_line_row(
+                    db,
+                    order,
+                    ln,
+                    oi,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    pick_summaries=pick_summaries,
+                    line_kind="remaining",
+                    badge_label="Do zebrania",
+                    display_qty=missing,
+                )
+            )
+        elif ln.reason == "awaiting_oms" and ln.visible_in_queue:
+            missing = max(0.0, ln.ordered_qty - ln.picked_qty)
+            if missing <= _EPS:
+                missing = 1.0
+            sections["shortage_decision_lines"].append(
+                _braki_detail_line_row(
+                    db,
+                    order,
+                    ln,
+                    oi,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    pick_summaries=pick_summaries,
+                    line_kind="shortage_unresolved",
+                    badge_label="Oczekuje na decyzję OMS",
+                    display_qty=missing,
+                )
+            )
+        elif ln.visible_in_relocation:
+            sections["relocation_lines"].append(
+                _braki_detail_line_row(
+                    db,
+                    order,
+                    ln,
+                    oi,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    pick_summaries=pick_summaries,
+                    line_kind="relocation",
+                    badge_label="Do rozlokowania",
+                    display_qty=ln.picked_qty,
+                )
+            )
+        elif ln.packing_eligible:
+            sections["packing_ready_lines"].append(
+                _braki_detail_line_row(
+                    db,
+                    order,
+                    ln,
+                    oi,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    pick_summaries=pick_summaries,
+                    line_kind="packing_ready",
+                    badge_label="Gotowe do pakowania",
+                    display_qty=ln.picked_qty,
+                )
+            )
+        elif ln.picked_qty > _EPS:
+            sections["collected_lines"].append(
+                _braki_detail_line_row(
+                    db,
+                    order,
+                    ln,
+                    oi,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    pick_summaries=pick_summaries,
+                    line_kind="collected",
+                    badge_label="Zebrano",
+                    display_qty=ln.picked_qty,
+                )
+            )
+
+    return sections
+
+
+def build_braki_workstreams_from_state(state: OrderRecoveryState) -> dict[str, Any]:
+    """Aktywne strumienie pracy w zamówieniu Braki (mieszane stany)."""
+    pick_lines = sum(1 for ln in state.lines if ln.visible_in_recovery_pick)
+    reloc_lines = sum(1 for ln in state.lines if ln.visible_in_relocation)
+    pack_lines = sum(1 for ln in state.lines if ln.packing_eligible)
+    oms_lines = int(state.totals.oms_decision_lines)
+    needs_reloc = bool(state.has_pending_relocation) or reloc_lines > 0
+    return {
+        "has_pick_work": bool(state.has_recovery_pick_work) or pick_lines > 0,
+        "has_relocation_work": needs_reloc,
+        "has_packing_ready": pack_lines > 0 or bool(state.packing_allowed),
+        "has_oms_pending": oms_lines > 0,
+        "pick_line_count": pick_lines,
+        "relocation_line_count": reloc_lines,
+        "packing_ready_line_count": pack_lines,
+        "oms_line_count": oms_lines,
+        "collected_line_count": sum(
+            1 for ln in state.lines if ln.picked_qty > _EPS and not ln.visible_in_recovery_pick
+        ),
+    }
 
 
 def can_order_be_packed(
@@ -1034,6 +1234,7 @@ def recovery_state_for_braki_task(
             order_fully_packed=fully_packed,
         ),
         "relocation_mode": RELOCATION_MODE_CARRIER if needs_reloc_ui else None,
+        "braki_workstreams": build_braki_workstreams_from_state(st),
     }
 
 

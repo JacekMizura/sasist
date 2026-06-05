@@ -57,10 +57,24 @@ export type OrderIssueDetailLineApi = OrderIssueShortageLineApi & {
   remaining_qty?: number;
 };
 
+export type BrakiWorkstreamsApi = {
+  has_pick_work?: boolean;
+  has_relocation_work?: boolean;
+  has_packing_ready?: boolean;
+  has_oms_pending?: boolean;
+  pick_line_count?: number;
+  relocation_line_count?: number;
+  packing_ready_line_count?: number;
+  oms_line_count?: number;
+  collected_line_count?: number;
+};
+
 export type OrderIssueOrderContextApi = {
   collected_lines: OrderIssueDetailLineApi[];
   shortage_decision_lines: OrderIssueDetailLineApi[];
   remaining_pick_lines: OrderIssueDetailLineApi[];
+  relocation_lines?: OrderIssueDetailLineApi[];
+  packing_ready_lines?: OrderIssueDetailLineApi[];
 };
 
 export type OrderIssueTaskListItemApi = {
@@ -121,6 +135,7 @@ export type OrderIssueTaskListItemApi = {
   /** Resolver: pokaż „Zamknij brak” / „Usuń z Braków” */
   can_close_shortage?: boolean;
   recovery_state_hash?: string;
+  braki_workstreams?: BrakiWorkstreamsApi;
 };
 
 export type OrderIssueTaskSkippedItemApi = {

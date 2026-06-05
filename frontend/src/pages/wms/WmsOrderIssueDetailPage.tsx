@@ -16,6 +16,48 @@ import { WMS_ROUTES } from "./wmsRoutes";
 import { WmsOrderIssueDetailContent } from "./WmsOrderIssueDetailContent";
 
 // Zoptymalizowany pod Zebrę komponent renderujący sekcje produktów
+export type IssueDetailSectionVariant =
+  | "collected"
+  | "remaining"
+  | "relocation"
+  | "packing_ready"
+  | "oms";
+
+const SECTION_STYLES: Record<
+  IssueDetailSectionVariant,
+  { title: string; icon: string; card: string; accent?: string }
+> = {
+  collected: {
+    title: "text-emerald-600",
+    icon: "fa-check-circle",
+    card: "border-emerald-200 bg-emerald-50/30",
+  },
+  remaining: {
+    title: "text-amber-600",
+    icon: "fa-triangle-exclamation",
+    card: "border-2 border-amber-300 bg-amber-50/40",
+    accent: "bg-amber-400",
+  },
+  relocation: {
+    title: "text-indigo-700",
+    icon: "fa-arrows-turn-to-dots",
+    card: "border-2 border-indigo-300 bg-indigo-50/40",
+    accent: "bg-indigo-500",
+  },
+  packing_ready: {
+    title: "text-blue-700",
+    icon: "fa-box-open",
+    card: "border-2 border-blue-300 bg-blue-50/40",
+    accent: "bg-blue-500",
+  },
+  oms: {
+    title: "text-red-700",
+    icon: "fa-hourglass-half",
+    card: "border-2 border-red-200 bg-red-50/40",
+    accent: "bg-red-400",
+  },
+};
+
 export function IssueDetailSection({
   title,
   lines,
@@ -23,13 +65,15 @@ export function IssueDetailSection({
 }: {
   title: string;
   lines: OrderIssueDetailLineApi[];
-  variant: "collected" | "remaining";
+  variant: IssueDetailSectionVariant;
 }) {
   if (!lines.length) return null;
+  const style = SECTION_STYLES[variant];
   const isCollected = variant === "collected";
+  const isActionable = variant === "remaining" || variant === "relocation" || variant === "packing_ready" || variant === "oms";
 
-  const sectionTitleClass = isCollected ? "text-emerald-600" : "text-amber-600";
-  const iconClass = isCollected ? "fa-check-circle" : "fa-triangle-exclamation";
+  const sectionTitleClass = style.title;
+  const iconClass = style.icon;
 
   return (
     <div className={isCollected ? "mt-6 p-4 pt-0 md:mt-8 md:p-6 md:pt-0" : "mt-2 p-4 pt-0 md:p-6 md:pt-0"}>
@@ -60,11 +104,13 @@ export function IssueDetailSection({
 
           const lastAction = (line.pick_audit_summary || "").trim() || "—";
 
+          const badge = (line.badge_label ?? "").trim();
+
           if (isCollected) {
             return (
               <div
                 key={key}
-                className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 opacity-90 shadow-sm transition-opacity hover:opacity-100 md:p-5"
+                className={`rounded-xl border p-4 opacity-90 shadow-sm transition-opacity hover:opacity-100 md:p-5 ${style.card}`}
               >
                 <div className="flex gap-4">
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-emerald-100 bg-white p-1.5 shadow-sm md:h-20 md:w-20">
@@ -108,9 +154,11 @@ export function IssueDetailSection({
           return (
             <div
               key={key}
-              className="relative overflow-hidden rounded-xl border-2 border-amber-300 bg-amber-50/40 p-4 shadow-md md:p-5"
+              className={`relative overflow-hidden rounded-xl p-4 shadow-md md:p-5 ${style.card}`}
             >
-              <div className="absolute bottom-0 left-0 top-0 w-1.5 bg-amber-400"></div>
+              {style.accent ? (
+                <div className={`absolute bottom-0 left-0 top-0 w-1.5 ${style.accent}`}></div>
+              ) : null}
               <div className="flex gap-4">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-white p-1.5 shadow-sm md:h-20 md:w-20">
                   <img
@@ -139,12 +187,21 @@ export function IssueDetailSection({
                   </div>
 
                   <div className="mb-4 flex flex-wrap items-center gap-2 text-xs md:gap-3">
-                    <span className="rounded-md border border-amber-300 bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
-                      Pozostało: {remainingQty} szt.
-                    </span>
-                    <span className="rounded-md border border-slate-300 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 shadow-sm">
-                      Do zebrania
-                    </span>
+                    {isActionable && remainingQty > 0 ? (
+                      <span className="rounded-md border border-amber-300 bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
+                        Pozostało: {remainingQty} szt.
+                      </span>
+                    ) : null}
+                    {variant === "relocation" || variant === "packing_ready" ? (
+                      <span className="rounded-md border border-slate-300 bg-white px-3 py-1 text-[11px] font-bold text-slate-800">
+                        Zebrano: {collectedQty} szt.
+                      </span>
+                    ) : null}
+                    {badge ? (
+                      <span className="rounded-md border border-slate-300 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 shadow-sm">
+                        {badge}
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="mt-4 border-t border-amber-200 pt-3 text-[11px] leading-relaxed text-slate-600">

@@ -2,54 +2,49 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   postWmsOrderIssueTaskArchive,
-  type OrderIssueDetailLineApi,
   type OrderIssueOrderContextApi,
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
 import { extractApiErrorMessage } from "../../api/authApi";
+import { ACTIVE_OPERATION_CONTEXT_BAR_OFFSET } from "../../components/wms/execution/activeOperationContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
+import { BrakiOperationalHeader } from "./BrakiOperationalHeader";
 import {
-  brakiPrimaryAction,
-  resolveShortageLifecyclePhase,
-  shortageLifecycleHeadline,
+  brakiMixedStateSummary,
+  brakiOperationalActions,
+  deriveBrakiWorkstreams,
+  type BrakiOperationalAction,
 } from "./brakiWorkflowCta";
+import { WMS_UI } from "./wmsTerminology";
 import { WMS_ROUTES, dispatchWmsShortagesUpdated } from "./wmsRoutes";
 import { IssueDetailSection } from "./WmsOrderIssueDetailPage";
 
 function emptyContext(ctx: OrderIssueOrderContextApi | undefined): OrderIssueOrderContextApi {
-  return ctx ?? { collected_lines: [], shortage_decision_lines: [], remaining_pick_lines: [] };
+  return (
+    ctx ?? {
+      collected_lines: [],
+      shortage_decision_lines: [],
+      remaining_pick_lines: [],
+      relocation_lines: [],
+      packing_ready_lines: [],
+    }
+  );
 }
 
-function shortageLineToDetailLine(
-  sl: {
-    missing_qty: number;
-    remaining_qty?: number;
-    order_item_id?: number;
-    product_id?: number;
-    product_name?: string | null;
-    sku?: string | null;
-    ean?: string | null;
-    nearest_location_code?: string | null;
-    location_code?: string | null;
-    image_url?: string | null;
-    picked_qty?: number;
-    ordered_qty?: number;
-    pick_audit_summary?: string | null;
-    badge_label?: string | null;
-  },
-  awaitingOms: boolean,
-): OrderIssueDetailLineApi {
-  const badge =
-    (sl.badge_label ?? "").trim() ||
-    (awaitingOms ? "Brak do decyzji OMS" : "Do zebrania");
-  return {
-    ...sl,
-    line_kind: awaitingOms ? "shortage_unresolved" : "remaining",
-    badge_label: badge,
-    remaining_qty: sl.remaining_qty ?? sl.missing_qty,
-    sku: sl.sku ?? "",
-    ean: sl.ean ?? "",
-  } as OrderIssueDetailLineApi;
+function actionButtonClass(action: BrakiOperationalAction): string {
+  const base =
+    "flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all focus:outline-none focus:ring-4 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 md:text-base";
+  if (action.variant === "danger") {
+    return `${base} border border-red-300 bg-white text-red-700 hover:bg-red-50 focus:ring-red-100`;
+  }
+  if (action.variant === "outline") {
+    return `${base} border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 focus:ring-slate-100`;
+  }
+  if (action.variant === "secondary") {
+    return `${base} border border-indigo-300 bg-indigo-50 text-indigo-900 hover:bg-indigo-100 focus:ring-indigo-100`;
+  }
+  return `${base} bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700 focus:ring-blue-100`;
 }
 
 export type WmsOrderIssueDetailContentProps = {
@@ -59,7 +54,7 @@ export type WmsOrderIssueDetailContentProps = {
   onArchiveError: (message: string) => void;
 };
 
-/** Widok szczegółów braków — jedna akcja operacyjna z resolvera. */
+/** Widok szczegółów braków — mieszane stany + wiele akcji z resolvera. */
 export function WmsOrderIssueDetailContent({
   task,
   warehouseId,
@@ -67,49 +62,61 @@ export function WmsOrderIssueDetailContent({
   onArchiveError,
 }: WmsOrderIssueDetailContentProps) {
   const navigate = useNavigate();
-  const [actionPending, setActionPending] = useState(false);
+  const { setActiveContext, activeContext } = useWarehouseExecution();
+  const [actionPending, setActionPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const lifecyclePhase = resolveShortageLifecyclePhase(task);
-  const awaitingOms = lifecyclePhase === "AWAITING_OMS";
+  const ctx = emptyContext(task.order_context);
+  const ws = useMemo(() => deriveBrakiWorkstreams(task), [task]);
 
-  const primaryAction = useMemo(
+  const actions = useMemo(
     () =>
-      brakiPrimaryAction(task, navigate, {
+      brakiOperationalActions(task, navigate, {
         tenantId: DAMAGE_TENANT_ID,
         warehouseId,
         onError: (msg) => setActionError(msg),
+        onSuccess: (msg) => {
+          setSuccessMsg(msg);
+          onReload();
+        },
       }),
-    [task, navigate, warehouseId],
+    [navigate, onReload, task, warehouseId],
   );
 
-  const ctx = emptyContext(task.order_context);
-  const shortageAsDetail = (task.shortage_lines ?? [])
-    .filter((l) => l.missing_qty > 1e-9)
-    .map((l) => shortageLineToDetailLine(l, awaitingOms));
-  const remainingLines = (ctx.remaining_pick_lines ?? []).filter(
-    (l) => (l.remaining_qty ?? l.missing_qty ?? 0) > 1e-9,
-  );
-  const collectedLines = ctx.collected_lines ?? [];
-  const hasActiveShortageLines = shortageAsDetail.length > 0 || remainingLines.length > 0;
+  const operationalActions = actions.filter((a) => a.id !== "archive");
+  const archiveAction = actions.find((a) => a.id === "archive");
 
-  const statusHeadline =
-    (task.braki_workflow_status_label ?? "").trim() ||
-    shortageLifecycleHeadline(lifecyclePhase);
+  const hasAnyLines =
+    (ctx.collected_lines?.length ?? 0) > 0 ||
+    (ctx.shortage_decision_lines?.length ?? 0) > 0 ||
+    (ctx.remaining_pick_lines?.length ?? 0) > 0 ||
+    (ctx.relocation_lines?.length ?? 0) > 0 ||
+    (ctx.packing_ready_lines?.length ?? 0) > 0;
+
+  useEffect(() => {
+    setActiveContext({
+      operationType: "BRAKI WMS",
+      orderNumber: task.order_number,
+      currentStep: brakiMixedStateSummary(task),
+      scanHint: "Zeskanuj inne zamówienie, aby przełączyć kartę",
+    });
+    return () => setActiveContext(null);
+  }, [setActiveContext, task]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     console.log("braki detail", {
       taskId: task.id,
       orderId: task.order_id,
-      lifecyclePhase,
-      primaryAction: primaryAction.id,
+      workstreams: ws,
+      actions: actions.map((a) => a.id),
     });
-  }, [task.id, task.order_id, lifecyclePhase, primaryAction.id]);
+  }, [actions, task.id, task.order_id, ws]);
 
   const onArchiveShortage = useCallback(async () => {
     if (task.can_close_shortage !== true) return;
-    setActionPending(true);
+    setActionPending("archive");
     setActionError(null);
     try {
       await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
@@ -118,29 +125,38 @@ export function WmsOrderIssueDetailContent({
     } catch (e: unknown) {
       onArchiveError(extractApiErrorMessage(e, "Nie udało się usunąć zamówienia z kolejki Braki."));
     } finally {
-      setActionPending(false);
+      setActionPending(null);
     }
-  }, [navigate, onArchiveError, task.id, warehouseId]);
+  }, [navigate, onArchiveError, task.can_close_shortage, task.id, warehouseId]);
 
-  const onPrimaryClick = useCallback(async () => {
-    if (primaryAction.disabled || actionPending) return;
-    setActionError(null);
-    if (primaryAction.id === "archive") {
-      await onArchiveShortage();
-      return;
-    }
-    setActionPending(true);
-    try {
-      await Promise.resolve(primaryAction.execute());
-    } finally {
-      setActionPending(false);
-    }
-  }, [actionPending, onArchiveShortage, primaryAction]);
+  const runAction = useCallback(
+    async (action: BrakiOperationalAction) => {
+      if (action.disabled || actionPending) return;
+      setActionError(null);
+      setSuccessMsg(null);
+      if (action.id === "archive") {
+        await onArchiveShortage();
+        return;
+      }
+      setActionPending(action.id);
+      try {
+        await Promise.resolve(action.execute());
+      } finally {
+        setActionPending(null);
+      }
+    },
+    [actionPending, onArchiveShortage],
+  );
+
+  const stickyTop = activeContext ? ACTIVE_OPERATION_CONTEXT_BAR_OFFSET : 0;
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-50 antialiased">
       <div className="relative mx-auto flex h-full w-full max-w-4xl flex-col bg-white shadow-xl">
-        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-2 md:h-16 md:px-4">
+        <header
+          className="sticky z-20 flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-2 md:h-16 md:px-4"
+          style={{ top: stickyTop }}
+        >
           <Link
             to={WMS_ROUTES.braki()}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 active:bg-slate-200"
@@ -150,78 +166,96 @@ export function WmsOrderIssueDetailContent({
           </Link>
         </header>
 
-        <main className="custom-scrollbar flex-1 overflow-y-auto pb-32 md:pb-36">
-          <div className="p-4 pb-2 md:p-6">
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Zamówienie
-                </div>
-                <h1 className="font-mono text-3xl font-black tracking-tight text-slate-900">
-                  {task.order_number}
-                </h1>
-              </div>
-              <div className="hidden rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm md:block">
-                {shortageLifecycleHeadline(lifecyclePhase)}
-              </div>
-            </div>
+        <BrakiOperationalHeader task={task} />
 
-            <div className="space-y-1.5 text-sm md:text-base">
-              <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
-                <span className="font-medium text-slate-500 shrink-0">Klient:</span>
-                <span className="font-semibold text-slate-800">
-                  {(task.customer_name ?? "").trim() || (task.delivery_name ?? "").trim() || "—"}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-slate-500">Następny krok:</span>
-                <span className="font-bold text-slate-800">{statusHeadline}</span>
-              </div>
-            </div>
+        <main className="custom-scrollbar flex-1 overflow-y-auto pb-48 md:pb-52">
+          <div className="border-b border-slate-100 px-4 py-3 text-sm text-slate-600 md:px-6">
+            <span className="font-medium text-slate-500">Klient: </span>
+            <span className="font-semibold text-slate-800">
+              {(task.customer_name ?? "").trim() || (task.delivery_name ?? "").trim() || "—"}
+            </span>
           </div>
 
           {actionError ? (
-            <div className="mx-4 mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 md:mx-6">
+            <div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 md:mx-6">
               {actionError}
             </div>
           ) : null}
 
-          {lifecyclePhase === "READY_TO_PACK" ? (
-            <div className="mx-4 mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-5 text-center md:mx-6">
-              <p className="text-sm font-bold text-blue-900">Zamówienie gotowe do pakowania</p>
-              <p className="mt-1 text-xs text-blue-700">
-                Wszystkie braki rozliczone — kontynuuj operację przyciskiem poniżej.
-              </p>
+          {successMsg ? (
+            <div className="mx-4 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 md:mx-6">
+              {successMsg}
             </div>
           ) : null}
 
-          {collectedLines.length === 0 && !hasActiveShortageLines && lifecyclePhase !== "READY_TO_PACK" ? (
+          {!hasAnyLines ? (
             <div className="m-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500 md:m-6">
-              Brak pozycji na zamówieniu.
+              Brak pozycji na zamówieniu — odśwież lub sprawdź OMS.
             </div>
           ) : (
             <>
-              <IssueDetailSection title="Produkty zebrane" lines={collectedLines} variant="collected" />
-              {hasActiveShortageLines ? (
-                <IssueDetailSection
-                  title={awaitingOms ? "Braki do decyzji OMS" : "Produkty do zebrania"}
-                  lines={remainingLines.length > 0 ? remainingLines : shortageAsDetail}
-                  variant="remaining"
-                />
-              ) : null}
+              <IssueDetailSection
+                title="Produkty do zebrania"
+                lines={ctx.remaining_pick_lines ?? []}
+                variant="remaining"
+              />
+              <IssueDetailSection
+                title="Braki do decyzji OMS"
+                lines={ctx.shortage_decision_lines ?? []}
+                variant="oms"
+              />
+              <IssueDetailSection
+                title="Produkty do rozlokowania"
+                lines={ctx.relocation_lines ?? []}
+                variant="relocation"
+              />
+              <IssueDetailSection
+                title="Gotowe do pakowania"
+                lines={ctx.packing_ready_lines ?? []}
+                variant="packing_ready"
+              />
+              <IssueDetailSection
+                title="Produkty zebrane"
+                lines={ctx.collected_lines ?? []}
+                variant="collected"
+              />
             </>
           )}
+
+          {ws.has_relocation_work ? (
+            <p className="mx-4 mt-2 text-xs text-slate-500 md:mx-6">
+              {WMS_UI.productRelocation}: tylko zebrane produkty. Możesz rozlokować teraz lub dodać do
+              dokumentu ZWK i wykonać zbiorczo później.
+            </p>
+          ) : null}
         </main>
 
         <div className="absolute bottom-0 left-0 z-30 w-full border-t border-slate-200 bg-white p-4 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)] md:p-6">
-          <button
-            type="button"
-            disabled={primaryAction.disabled || actionPending}
-            onClick={() => void onPrimaryClick()}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 md:text-base"
-          >
-            {actionPending ? "Przetwarzanie…" : primaryAction.label}
-          </button>
+          <div className="space-y-2">
+            {operationalActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                disabled={action.disabled || actionPending != null}
+                title={action.disabled ? action.disabledReason : undefined}
+                onClick={() => void runAction(action)}
+                className={actionButtonClass(action)}
+              >
+                {actionPending === action.id ? "Przetwarzanie…" : action.label}
+              </button>
+            ))}
+            {archiveAction ? (
+              <button
+                type="button"
+                disabled={archiveAction.disabled || actionPending != null}
+                title={archiveAction.disabled ? archiveAction.disabledReason : "Usuń zamówienie z kolejki Braki WMS"}
+                onClick={() => void runAction(archiveAction)}
+                className={actionButtonClass(archiveAction)}
+              >
+                {actionPending === "archive" ? "Usuwanie…" : archiveAction.label}
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
