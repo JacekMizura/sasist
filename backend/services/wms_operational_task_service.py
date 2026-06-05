@@ -1093,6 +1093,26 @@ def sync_operational_tasks_for_order(db: Session, order: Order) -> set[str]:
         if task.group_key not in desired_line_keys:
             _close_task(db, task, reason="order_sync_stale")
 
+    from .recovery_workflow_service import resolve_order_recovery_state
+
+    rec_st = resolve_order_recovery_state(db, order, log=False)
+    if not rec_st.has_pending_relocation:
+        stale_reloc = (
+            db.query(WmsOperationalTask)
+            .filter(
+                WmsOperationalTask.tenant_id == tid,
+                WmsOperationalTask.warehouse_id == wid,
+                WmsOperationalTask.order_id == oid,
+                WmsOperationalTask.status.in_(list(ACTIVE_STATUSES)),
+                WmsOperationalTask.task_type == TASK_RELOCATION,
+            )
+            .all()
+        )
+        for task in stale_reloc:
+            _try_auto_complete_relocation_task(db, task)
+            if task.status in ACTIVE_STATUSES:
+                _close_task(db, task, reason="order_sync_stale")
+
     return desired_line_keys
 
 

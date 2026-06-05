@@ -106,7 +106,7 @@ def get_operational_tasks(
         logger.exception("list operational tasks failed queue=%s", queue)
         raise HTTPException(
             status_code=500,
-            detail="Nie udało się załadować kolejki operacyjnej.",
+            detail={"message": "Nie udało się załadować kolejki operacyjnej."},
         ) from exc
 
 
@@ -276,7 +276,10 @@ def post_relocation_session_acquire(
         ) from exc
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail={"message": str(exc).strip() or "Operacja niedozwolona."},
+        ) from exc
 
 
 @router.post("/{task_id}/relocation/session/release", response_model=WmsOperationalTaskActionResponse)
@@ -300,7 +303,10 @@ def post_relocation_session_release(
         return WmsOperationalTaskActionResponse(task_id=int(task_id), status="released")
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail={"message": str(exc).strip() or "Operacja niedozwolona."},
+        ) from exc
 
 
 @router.get("/{task_id}/relocation/allocations", response_model=WmsRelocationAllocationsPage)
@@ -389,7 +395,10 @@ def post_relocation_assign(
         return detail
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail={"message": str(exc).strip() or "Operacja niedozwolona."},
+        ) from exc
 
 
 @router.post("/{task_id}/relocation/bulk-assign", response_model=WmsOperationalTaskDetail)
@@ -422,7 +431,10 @@ def post_relocation_bulk_assign(
         return detail
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail={"message": str(exc).strip() or "Operacja niedozwolona."},
+        ) from exc
 
 
 @router.post("/relocation/{group_key}/complete", response_model=WmsOperationalTaskActionResponse)
@@ -445,4 +457,7 @@ def post_relocation_complete(
         return WmsOperationalTaskActionResponse(task_id=int(t.id), status=str(t.status))
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail={"message": str(exc).strip() or "Operacja niedozwolona."},
+        ) from exc

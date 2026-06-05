@@ -1,5 +1,5 @@
-import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { extractApiErrorMessage } from "../../api/authApi";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -32,10 +32,22 @@ const BRAKI_WORKFLOW_FILTERS: { id: BrakiWorkflowFilterId; label: string }[] = [
   { id: "pick_and_relocation", label: "Produkty do zebrania oraz rozlokowania" },
 ];
 
+function phaseToWorkflowFilter(phase: string | null | undefined): BrakiWorkflowFilterId {
+  const p = (phase ?? "").trim().toUpperCase();
+  if (p === "AWAITING_OMS" || p === "WAITING_SUPPLY" || p === "SHORTAGE_DETECTED") return "awaiting";
+  if (p === "RECOVERY_PICK") return "pick";
+  if (p === "RELOCATION_REQUIRED") return "relocation";
+  if (p === "READY_TO_PACK") return "ready_pack";
+  if (p === "DONE") return "ready_pack";
+  return "awaiting";
+}
+
 function normalizeWorkflowStatus(t: OrderIssueTaskListItemApi): BrakiWorkflowFilterId {
+  const fromPhase = (t.shortage_lifecycle_phase ?? "").trim();
+  if (fromPhase) return phaseToWorkflowFilter(fromPhase);
   const s = (t.braki_workflow_status ?? "").trim() as BrakiWorkflowFilterId;
   if (BRAKI_WORKFLOW_FILTERS.some((f) => f.id === s)) return s;
-  return "pick";
+  return "awaiting";
 }
 
 function displayOrderNumber(raw: string): string {
@@ -166,15 +178,7 @@ export default function WmsOrderIssuesHub() {
         setSkippedTasks(res.skipped_tasks ?? []);
       })
       .catch((e: unknown) => {
-        const detail = axios.isAxiosError(e) ? e.response?.data?.detail : null;
-        let msg = "Nie udało się wczytać kolejki.";
-        if (typeof detail === "string" && detail.trim()) {
-          msg = detail.trim();
-        } else if (detail && typeof detail === "object" && "message" in detail) {
-          const m = (detail as { message?: unknown }).message;
-          if (typeof m === "string" && m.trim()) msg = m.trim();
-        }
-        setErr(msg);
+        setErr(extractApiErrorMessage(e, "Nie udało się wczytać kolejki Braki."));
         setTasks([]);
         setSkippedTasks([]);
         setFilterCounts({});

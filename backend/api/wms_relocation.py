@@ -176,4 +176,4 @@ def patch_finalize_wms_relocation_pz(
         db.commit()
         return doc
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_relocation_error_detail(e))

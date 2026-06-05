@@ -11,13 +11,21 @@ export function formatOperationalError(e: unknown, fallback: string): string {
       response?: { status?: number; data?: { detail?: unknown } };
       message?: string;
     };
-    const detail = ax.response?.data?.detail;
+    const data = ax.response?.data;
+    const detail =
+      data && typeof data === "object" && "detail" in data
+        ? (data as { detail?: unknown }).detail
+        : data;
     if (typeof detail === "string" && detail.trim()) {
       return polishKnownMessage(detail.trim());
     }
     if (detail && typeof detail === "object") {
       const msg = (detail as { message?: string }).message;
       if (msg?.trim()) return polishKnownMessage(msg.trim());
+    }
+    if (data && typeof data === "object" && "message" in data) {
+      const topMsg = String((data as { message?: unknown }).message ?? "").trim();
+      if (topMsg && topMsg !== "[object Object]") return polishKnownMessage(topMsg);
     }
     const status = ax.response?.status;
     if (status === 409) return "Konflikt — odśwież zadanie lub przejmij sesję.";

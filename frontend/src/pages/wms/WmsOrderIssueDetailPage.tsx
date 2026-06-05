@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
+import { extractApiErrorMessage } from "../../api/authApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import {
   getWmsOrderIssueTask,
@@ -189,9 +190,9 @@ export default function WmsOrderIssueDetailPage() {
     setErr(null);
     getWmsOrderIssueTask(DAMAGE_TENANT_ID, warehouseId, taskId)
       .then(setTask)
-      .catch(() => {
+      .catch((e: unknown) => {
         setTask(null);
-        setErr("Nie znaleziono zadania.");
+        setErr(extractApiErrorMessage(e, "Nie udało się wczytać zadania braków."));
       })
       .finally(() => setLoading(false));
   }, [warehouseId, taskId]);

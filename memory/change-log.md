@@ -1,5 +1,14 @@
 # Change Log
 
+## 2026-06-04 — WMS stabilization: errors + stale tasks + CTA fixes
+
+- API błędy operacyjne: ``detail={"message": "..."}`` w ``wms_operational_tasks``, ``wms_order_issue_tasks`` (list/detail/archive), ``wms_relocation`` finalize.
+- List Braki 500: bez wycieku ``str(exc)`` do klienta.
+- ``serialize_order_issue_task_item``: jeden pass resolvera + ``recovery_state_for_braki_task(skip_repair=True)``.
+- ``sync_operational_tasks_for_order``: zamyka osierocone ``RELOCATION`` gdy resolver nie ma pending.
+- ``braki_workflow_service``: usunięty martwy kod; ``order_needs_warehouse_pick`` tylko z resolvera.
+- Frontend: filtry Braki z ``shortage_lifecycle_phase``; archive CTA ``disabled`` gdy ``can_close_shortage``; ``extractApiErrorMessage`` / ``formatOperationalError`` na detail/load.
+
 ## 2026-06-04 — Unified Active Operation Context Bar
 
 - ``ActiveOperationContextBar`` + rozszerzony ``ExecutionActiveContext`` (typ operacji, zamówienie, wózek/batch, źródło, cel, pozostało, krok, operator).

@@ -18,6 +18,7 @@ import { useScanFeedback } from "../../components/wms/execution/useScanFeedback"
 import { useAuth } from "../../context/AuthContext";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { formatOperatorDisplayName } from "../../components/wms/execution/activeOperationContext";
+import { formatOperationalError } from "../../components/wms/execution/formatOperationalError";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 
 function fmtQty(n: number): string {
@@ -43,9 +44,9 @@ export default function WmsOperationalTaskShellPage() {
     try {
       const d = await getWmsOperationalTaskDetail(DAMAGE_TENANT_ID, taskId);
       setDetail(d);
-    } catch {
+    } catch (e: unknown) {
       setDetail(null);
-      setErr("Nie udało się wczytać zadania.");
+      setErr(formatOperationalError(e, "Nie udało się wczytać zadania operacyjnego."));
     } finally {
       setLoading(false);
     }

@@ -210,6 +210,7 @@ export function brakiPrimaryAction(
         id: "archive",
         label: "Usuń z Braków",
         phase,
+        disabled: task.can_close_shortage !== true,
         execute: () => {},
       };
 

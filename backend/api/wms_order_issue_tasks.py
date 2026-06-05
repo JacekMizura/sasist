@@ -216,8 +216,11 @@ def serialize_order_issue_task_item(
     bucket = "awaiting_oms"
     workflow_status = "awaiting"
     workflow_label = braki_workflow_status_label(workflow_status)
+    rec_st = None
     if o is not None:
         from ..services.recovery_workflow_service import repair_order_relocation_consistency
+
+        from ..services.recovery_workflow_service import resolve_order_recovery_state
 
         repair_order_relocation_consistency(
             db,
@@ -226,9 +229,12 @@ def serialize_order_issue_task_item(
             warehouse_id=int(t.warehouse_id),
             source_event_id=f"braki.api.serialize:{int(t.id)}",
         )
+        rec_st = resolve_order_recovery_state(db, o, log=False)
         u_short, r_pend = count_issue_queue_operational_lines(db, o)
         bucket = braki_queue_bucket(db, o, u_short=u_short, r_pend=r_pend)
-        workflow_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
+        workflow_status = resolve_braki_workflow_status(
+            db, o, u_short=u_short, r_pend=r_pend, rec_state=rec_st
+        )
         workflow_label = braki_workflow_status_label(workflow_status)
         from ..services.wms_recovery_pick_service import order_has_waiting_customer_line
 
@@ -249,7 +255,6 @@ def serialize_order_issue_task_item(
             warehouse_id=int(t.warehouse_id),
             order=o,
         )
-        rec_st = resolve_order_recovery_state(db, o, log=False)
         resolver_rows = build_braki_shortage_lines_from_state(
             db,
             o,
@@ -287,7 +292,12 @@ def serialize_order_issue_task_item(
                     shortage_line_models.append(OrderIssueShortageLine.model_validate(dl.model_dump()))
     recovery_fields: dict = {}
     if o is not None:
-        recovery_fields = recovery_state_for_braki_task(db, o)
+        recovery_fields = recovery_state_for_braki_task(
+            db,
+            o,
+            rec_state=rec_st if o is not None else None,
+            skip_repair=True,
+        )
 
     created = t.created_at.isoformat() + "Z" if isinstance(t.created_at, datetime) else str(t.created_at)
     last_shortage_at = created
@@ -471,7 +481,10 @@ def resolve_order_issue_task_scan(
         item = serialize_order_issue_task_item(db, t, o_full)
     except Exception as exc:
         logger.exception("resolve_order_issue_task_scan serialize failed task_id=%s", t.id)
-        raise HTTPException(status_code=500, detail="Nie udało się wczytać zadania braków.") from exc
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Nie udało się wczytać zadania braków."},
+        ) from exc
     if not order_requires_shortage_handling(db, o_full):
         mark_task_done(db, t, "Braki rozwiązane — usunięto z kolejki WMS")
         db.commit()
@@ -530,7 +543,10 @@ def get_order_issue_task(
         item = serialize_order_issue_task_item(db, t, o)
     except Exception as exc:
         logger.exception("get_order_issue_task serialize failed task_id=%s", t.id)
-        raise HTTPException(status_code=500, detail="Nie udało się wczytać zadania braków.") from exc
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Nie udało się wczytać zadania braków."},
+        ) from exc
     logger.info(
         "[braki.detail] task_id=%s order_id=%s workflow=%s customer=%s remaining_lines=%s shortage_lines=%s",
         t.id,
@@ -768,7 +784,7 @@ def list_order_issue_tasks(
             detail={
                 "success": False,
                 "error": "order_issue_tasks_fetch_failed",
-                "message": str(exc)[:500],
+                "message": "Nie udało się wczytać kolejki Braki. Odśwież stronę lub skontaktuj się z kierownikiem.",
             },
         ) from exc
     except Exception as exc:
@@ -783,7 +799,7 @@ def list_order_issue_tasks(
             detail={
                 "success": False,
                 "error": "order_issue_tasks_fetch_failed",
-                "message": str(exc)[:500],
+                "message": "Nie udało się wczytać kolejki Braki. Odśwież stronę lub skontaktuj się z kierownikiem.",
             },
         ) from exc
 
@@ -888,7 +904,8 @@ def post_order_issue_task_archive(
             operator_user_id=int(current_user.id) if current_user and current_user.id else None,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        msg = str(exc).strip() or "Nie można usunąć zamówienia z kolejki Braki."
+        raise HTTPException(status_code=400, detail={"message": msg}) from exc
     except Exception as exc:
         logger.exception(
             "[wms.shortage.archive] failed task_id=%s order_id=%s",
@@ -896,7 +913,10 @@ def post_order_issue_task_archive(
             getattr(t, "order_id", None),
         )
         db.rollback()
-        raise HTTPException(status_code=500, detail="Archive failed") from exc
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Nie udało się usunąć zamówienia z kolejki Braki."},
+        ) from exc
     db.commit()
     return {
         "success": True,

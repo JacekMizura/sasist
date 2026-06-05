@@ -6,6 +6,7 @@ import {
   type OrderIssueOrderContextApi,
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
+import { extractApiErrorMessage } from "../../api/authApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import {
   brakiPrimaryAction,
@@ -114,8 +115,8 @@ export function WmsOrderIssueDetailContent({
       await postWmsOrderIssueTaskArchive(DAMAGE_TENANT_ID, warehouseId, task.id);
       dispatchWmsShortagesUpdated();
       navigate(WMS_ROUTES.braki(), { replace: true });
-    } catch {
-      onArchiveError("Nie udało się usunąć zamówienia z kolejki Braki.");
+    } catch (e: unknown) {
+      onArchiveError(extractApiErrorMessage(e, "Nie udało się usunąć zamówienia z kolejki Braki."));
     } finally {
       setActionPending(false);
     }

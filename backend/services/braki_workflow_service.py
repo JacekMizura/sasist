@@ -9,15 +9,6 @@ from sqlalchemy.orm import Session
 
 from ..models.order import Order
 from .order_issue_task_service import count_issue_queue_operational_lines
-from .order_fulfillment_recompute import (
-    order_has_waiting_for_stock_lines,
-    order_item_needs_substitute_pick_completion,
-)
-from .wms_recovery_pick_service import (
-    get_open_recovery_task_for_order,
-    order_has_waiting_customer_line,
-)
-
 logger = logging.getLogger(__name__)
 
 # Identyfikatory filtrów (API + frontend) — jeden główny status na zamówienie.
@@ -50,31 +41,11 @@ BRAKI_FILTER_LABELS_PL: dict[str, str] = {
 }
 
 
-def _order_relocation_alloc_states(
-    db: Session,
-    *,
-    tenant_id: int,
-    warehouse_id: int,
-    order_id: int,
-) -> tuple[int, int, int]:
-    """(pending, partial, done) — tylko aktywne alokacje rozlokowania (nie historia ``done``)."""
-    from .wms_relocation_workflow import relocation_alloc_counts_for_order
-
-    return relocation_alloc_counts_for_order(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        order_id=int(order_id),
-        log_checks=True,
-    )
-
-
 def order_needs_warehouse_pick(db: Session, order: Order, *, r_pend: int) -> bool:
-    """Delegacja do ``has_recovery_pick_work`` — bez dodatkowych filtrów."""
+    """Delegacja do ``has_recovery_pick_work`` (resolver SSOT)."""
     from .recovery_workflow_service import resolve_order_recovery_state
 
-    if int(r_pend) > 0:
-        return True
+    _ = r_pend  # legacy callers pass line count; resolver is authoritative
     return resolve_order_recovery_state(db, order, log=False).has_recovery_pick_work
 
 
@@ -85,6 +56,7 @@ def resolve_braki_workflow_status(
     u_short: int | None = None,
     r_pend: int | None = None,
     previous_status: str | None = None,
+    rec_state: Any | None = None,
 ) -> str:
     """
     Jeden główny status operacyjny zamówienia w kolejce Braki.
@@ -95,9 +67,10 @@ def resolve_braki_workflow_status(
     u_short = int(u_short)
     r_pend = int(r_pend)
 
-    from .recovery_workflow_service import resolve_order_recovery_state
+    if rec_state is None:
+        from .recovery_workflow_service import resolve_order_recovery_state
 
-    rec_state = resolve_order_recovery_state(db, order, log=False)
+        rec_state = resolve_order_recovery_state(db, order, log=False)
     needs_pick = rec_state.has_recovery_pick_work
     needs_reloc_partial = rec_state.relocation_alloc_partial > 0
     needs_reloc = rec_state.has_pending_relocation and not needs_reloc_partial

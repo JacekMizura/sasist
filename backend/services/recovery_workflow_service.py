@@ -990,18 +990,25 @@ def can_close_braki_shortage(
     return not any(ln.active_recovery and ln.visible_in_recovery_pick for ln in st.lines)
 
 
-def recovery_state_for_braki_task(db: Session, order: Order) -> dict[str, Any]:
+def recovery_state_for_braki_task(
+    db: Session,
+    order: Order,
+    *,
+    rec_state: OrderRecoveryState | None = None,
+    skip_repair: bool = False,
+) -> dict[str, Any]:
     """Pola resolvera dla kart kolejki Braki (serializacja API)."""
     from .wms_relocation_workflow import find_relocation_task_for_order
 
-    repair_order_relocation_consistency(
-        db,
-        order,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        source_event_id="braki.task.serialize",
-    )
-    st = resolve_order_recovery_state(db, order, log=False)
+    if not skip_repair:
+        repair_order_relocation_consistency(
+            db,
+            order,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            source_event_id="braki.task.serialize",
+        )
+    st = rec_state if rec_state is not None else resolve_order_recovery_state(db, order, log=False)
     rel_task = find_relocation_task_for_order(
         db,
         tenant_id=int(order.tenant_id),
