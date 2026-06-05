@@ -5,6 +5,7 @@ import type {
 } from "../../../context/WarehouseExecutionContext";
 import { WMS_UI, relocationTargetRowLabel } from "../../../pages/wms/wmsTerminology";
 import { normalizeOperationContext } from "./activeOperationContext";
+import { WMS_OPERATIONAL_CONTAINER, WMS_WORKFLOW_BAR_SHELL } from "./wmsLayoutTokens";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -13,7 +14,7 @@ function fmtQty(n: number): string {
 type Props = {
   context: ExecutionActiveContext | null | undefined;
   className?: string;
-  /** Gdy true — renderowany wewnątrz sticky shell layoutu (bez własnego sticky). */
+  /** Gdy true — renderowany wewnątrz shell layoutu (bez własnego sticky). */
   embedded?: boolean;
 };
 
@@ -69,10 +70,10 @@ export function ActiveOperationContextBar({ context, className = "", embedded = 
 
   return (
     <div
-      className={`${embedded ? "" : "sticky top-0 z-[45]"} border-b border-indigo-300 bg-indigo-950 text-white shadow-lg ${className}`}
+      className={`${WMS_WORKFLOW_BAR_SHELL} ${className}`}
       data-wms-active-operation-context
     >
-      <div className="mx-auto max-w-3xl px-4 py-3 sm:px-6">
+      <div className={`${WMS_OPERATIONAL_CONTAINER} py-3`}>
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-300">
             {ctx.operationType}

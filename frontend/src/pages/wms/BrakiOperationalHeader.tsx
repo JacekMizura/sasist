@@ -44,7 +44,7 @@ export function BrakiOperationalHeader({ task }: Props) {
   const prLabel = priorityLabelForTask(task);
 
   return (
-    <div className="border-b border-slate-200 bg-slate-900 text-white">
+    <div className="border-b border-indigo-500/40 bg-gradient-to-r from-indigo-800 via-indigo-700 to-violet-800 text-white">
       <div className="px-4 py-3 md:px-6">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
           Braki WMS — kontekst operacyjny

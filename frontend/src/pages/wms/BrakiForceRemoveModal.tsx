@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { OrderIssueTaskListItemApi } from "../../api/wmsOrderIssueTasksApi";
+import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
 import { readBrakiOperationalState } from "./readBrakiOperationalState";
 import { WMS_UI } from "./wmsTerminology";
 
@@ -38,7 +39,10 @@ export function BrakiForceRemoveModal({ task, open, pending, onClose, onConfirm 
   const locks = op.active_operations;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/50 p-4 sm:items-center">
+    <div
+      className="fixed inset-0 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center"
+      style={{ zIndex: WMS_Z.modal }}
+    >
       <div
         className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl"
         role="dialog"

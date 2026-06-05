@@ -1,12 +1,11 @@
-import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
 import DevScannerPanel from "../components/wms/DevScannerPanel";
-import { ACTIVE_OPERATION_CONTEXT_BAR_OFFSET } from "../components/wms/execution/activeOperationContext";
 import { ExecutionGlobalContextBar } from "../components/wms/execution/ExecutionGlobalContextBar";
 import { WmsExecutionModeStrip } from "../components/wms/execution/WmsExecutionModeStrip";
 import { ScanFeedbackOverlay } from "../components/wms/execution/ScanFeedbackOverlay";
 import { isWarehouseExecutionRoute } from "../components/wms/execution/executionRoutes";
+import { WMS_Z } from "../components/wms/execution/wmsLayoutTokens";
 import { WmsPickingCartProvider } from "../context/WmsPickingCartContext";
 import { WarehouseExecutionProvider, useWarehouseExecution } from "../context/WarehouseExecutionContext";
 import { WmsScannerProvider } from "../context/WmsScannerContext";
@@ -14,8 +13,8 @@ import { WMS_ROUTES } from "../pages/wms/wmsRoutes";
 import WmsTopBar from "./WmsTopBar";
 
 /**
- * Terminal WMS — wyłącznie dla `/wms/*`: zwarty pasek, bez menu ERP i bez szkieletu panelu zarządzania.
- * Tryb terminala ukrywa globalny pasek na trasach wykonawczych (scan-first).
+ * Terminal WMS — AppShell: top chrome reserves space, page content scrolls below.
+ * Only top nav + operational context bar are fixed in the shell (flex siblings, not overlays).
  */
 function WmsLayoutChrome() {
   const { pathname } = useLocation();
@@ -23,27 +22,20 @@ function WmsLayoutChrome() {
   const hideMenuTopBar = pathname === WMS_ROUTES.menu;
   const showExecutionChrome = warehouseMode && isWarehouseExecutionRoute(pathname);
 
-  useEffect(() => {
-    if (showExecutionChrome) {
-      document.documentElement.style.setProperty("--wms-active-ctx-offset", ACTIVE_OPERATION_CONTEXT_BAR_OFFSET);
-    } else {
-      document.documentElement.style.removeProperty("--wms-active-ctx-offset");
-    }
-    return () => document.documentElement.style.removeProperty("--wms-active-ctx-offset");
-  }, [showExecutionChrome]);
-
   return (
-    <div className="flex h-screen min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-white">
+    <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-slate-100">
       {showExecutionChrome ? (
-        <div className="sticky top-0 z-50 shrink-0">
+        <div className="shrink-0" style={{ zIndex: WMS_Z.workflowBar }}>
           <WmsExecutionModeStrip />
           <ExecutionGlobalContextBar />
         </div>
       ) : hideMenuTopBar ? null : (
-        <WmsTopBar />
+        <div className="shrink-0" style={{ zIndex: WMS_Z.topNav }}>
+          <WmsTopBar />
+        </div>
       )}
       <ScanFeedbackOverlay />
-      <main className="min-h-0 min-w-0 w-full flex-1 overflow-auto bg-white">
+      <main className="min-h-0 w-full flex-1 overflow-y-auto bg-slate-100">
         <Outlet />
       </main>
     </div>

@@ -5,6 +5,7 @@ import { useWarehouseExecution } from "../../../context/WarehouseExecutionContex
 import { useWmsPinnedModes } from "../../../hooks/useWmsPinnedModes";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import WmsTopBarModuleNav from "../WmsTopBarModuleNav";
+import { WMS_TOP_NAV_SHELL } from "./wmsLayoutTokens";
 
 /** Zwarty pasek trybów WMS na trasach wykonawczych — wspólny dla całego terminala. */
 export function WmsExecutionModeStrip() {
@@ -13,10 +14,7 @@ export function WmsExecutionModeStrip() {
   const { visibleNavTabs } = useWmsPinnedModes(user?.id ?? null);
 
   return (
-    <header
-      className="shrink-0 border-b border-slate-800 bg-slate-950 text-white"
-      data-wms-execution-mode-strip
-    >
+    <header className={WMS_TOP_NAV_SHELL} data-wms-execution-mode-strip>
       <div className="flex h-11 min-h-[2.75rem] items-center gap-1 px-2 sm:px-4">
         <Link
           to={WMS_ROUTES.menu}
@@ -29,7 +27,7 @@ export function WmsExecutionModeStrip() {
         <nav className="flex h-full min-w-0 flex-1 items-center overflow-x-auto no-scrollbar">
           <WmsTopBarModuleNav
             tabs={visibleNavTabs}
-            className="[&_a]:text-slate-400 [&_a:hover]:text-white [&_.text-orange-600]:text-orange-400"
+            className="[&_a]:text-slate-300 [&_a:hover]:text-white [&_.text-orange-600]:text-orange-400"
           />
         </nav>
         <button

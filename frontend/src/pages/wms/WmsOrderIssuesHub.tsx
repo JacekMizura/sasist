@@ -21,6 +21,7 @@ import {
   priorityLevelFromTask,
   sortTasksByPriority,
 } from "./brakiPriority";
+import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
 import { mergeQueueCards, type NormalizedShortageQueueCard } from "./normalizeShortageQueueCard";
 import { readBrakiQueueStage } from "./readBrakiOperationalState";
 
@@ -275,8 +276,9 @@ export default function WmsOrderIssuesHub() {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white antialiased">
-      <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 md:h-16 md:px-6">
+    <div className="flex min-h-full w-full flex-col bg-slate-50 antialiased">
+      <header className="shrink-0 border-b border-slate-200 bg-white">
+        <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4 sm:px-6 md:h-16">
         <div className="flex items-center gap-3 md:gap-4">
           <button
             onClick={() => navigate(-1)}
@@ -305,9 +307,10 @@ export default function WmsOrderIssuesHub() {
             <span className="hidden text-sm md:inline">Odśwież</span>
           </button>
         </div>
+        </div>
       </header>
 
-      <div className="z-10 flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:gap-4 md:px-6 md:py-4">
+      <div className="mx-auto flex w-full max-w-5xl shrink-0 flex-col gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6 md:py-4">
         <button
           onClick={() => setIsFilterModalOpen(true)}
           className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 active:bg-slate-100 sm:w-72"
@@ -346,7 +349,7 @@ export default function WmsOrderIssuesHub() {
         </button>
       </div>
 
-      <div className="px-3 pt-3 md:px-6 md:pt-4 bg-white">
+      <div className="mx-auto w-full max-w-5xl px-4 pt-3 sm:px-6 md:pt-4">
         {err ? (
           <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950">
             <p className="font-semibold">{err}</p>
@@ -372,7 +375,7 @@ export default function WmsOrderIssuesHub() {
         ) : null}
       </div>
 
-      <main className="custom-scrollbar flex-1 overflow-y-auto p-3 pb-8 md:p-6 bg-white">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4 pb-8 sm:px-6 md:py-6">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <i className="fa-solid fa-circle-notch animate-spin text-4xl"></i>
@@ -490,7 +493,10 @@ export default function WmsOrderIssuesHub() {
       </main>
 
       {isFilterModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+        <div
+          className="fixed inset-0 flex items-end justify-center sm:items-center"
+          style={{ zIndex: WMS_Z.modal }}
+        >
           <div
             className="absolute inset-0 cursor-pointer bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={() => setIsFilterModalOpen(false)}

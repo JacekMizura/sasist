@@ -22,17 +22,20 @@ import { CrossdockFlowBanner } from "../../components/wms/operational/CrossdockF
 import { OperationalWorkflowTimeline } from "../../components/wms/operational/OperationalWorkflowTimeline";
 import { nextOperationalAction } from "../../components/wms/operational/operationalWorkflow";
 import {
-  ScanExecutionShell,
   ScanStepHero,
-  ExecutionBottomBar,
   ExecutionTouchButton,
-  ACTIVE_OPERATION_CONTEXT_BAR_OFFSET,
   formatOperatorDisplayName,
   executionContextFromOperationalDetail,
   formatOperationalError,
   useWmsPageScanHandler,
   useScanFeedback,
 } from "../../components/wms/execution";
+import {
+  WmsOperationalPageBody,
+  WmsOperationalPageHeader,
+  WmsOperationalPageShell,
+} from "../../components/wms/execution/WmsOperationalPageShell";
+import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 
 function fmtQty(n: number): string {
@@ -75,7 +78,7 @@ export default function WmsRelocationDetailPage() {
 
   const { showScannerToast, setScannerInputPlaceholder, setActiveDocument, refocusScannerInput } =
     useWmsScanner();
-  const { setActiveContext, activeContext } = useWarehouseExecution();
+  const { setActiveContext } = useWarehouseExecution();
   const scanFx = useScanFeedback();
 
   const [detail, setDetail] = useState<WmsOperationalTaskDetailApi | null>(null);
@@ -333,25 +336,25 @@ export default function WmsRelocationDetailPage() {
     activeCarrier?.barcode || activeCarrier?.code || detail?.relocation_session?.active_carrier_label;
 
   return (
-    <div className="min-h-full bg-[#F1F5F9] pb-32">
-      <header
-        className="sticky z-20 border-b border-slate-200 bg-white px-4 py-3 sm:px-6"
-        style={{ top: activeContext ? ACTIVE_OPERATION_CONTEXT_BAR_OFFSET : 0 }}
-      >
-        <div className="mx-auto flex max-w-3xl items-center gap-3">
+    <WmsOperationalPageShell className="bg-slate-100">
+      <WmsOperationalPageHeader>
+        <div className="flex min-h-[52px] items-center gap-3 py-2">
           <Link
             to={WMS_ROUTES.operatorHome}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
           >
             <ArrowLeft size={16} />
             Braki
           </Link>
           <h1 className="text-lg font-black text-slate-900">Rozlokowanie produktów</h1>
         </div>
-      </header>
+      </WmsOperationalPageHeader>
 
       {sessionLock ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-slate-900/50 p-4"
+          style={{ zIndex: WMS_Z.modal }}
+        >
           <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
             <p className="text-sm font-bold text-slate-600">Zadanie w użyciu</p>
             <p className="mt-2 text-base text-slate-900">
@@ -383,37 +386,11 @@ export default function WmsRelocationDetailPage() {
         </div>
       ) : null}
 
-      {pendingAssign && activeCarrier ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-indigo-200 bg-indigo-50 p-4 shadow-lg">
-          <p className="text-center text-sm font-bold text-indigo-950">
-            Odłóż {fmtQty(pendingAssign.remaining_qty)} szt. do{" "}
-            <span className="font-black">{carrierLabel}</span>
-          </p>
-          <p className="mt-1 text-center text-xs text-indigo-800">
-            {pendingAssign.order_number ?? `Zamówienie #${pendingAssign.order_id}`}
-          </p>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold"
-              onClick={() => setPendingAssign(null)}
-            >
-              Anuluj
-            </button>
-            <button
-              type="button"
-              disabled={acting}
-              className="flex-1 rounded-xl bg-indigo-600 py-3 text-sm font-black text-white"
-              onClick={() => void assignAlloc(pendingAssign)}
-            >
-              Potwierdź odkładanie
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {bulkConfirmOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
+        <div
+          className="fixed inset-0 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center"
+          style={{ zIndex: WMS_Z.modal }}
+        >
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <p className="font-black text-slate-900">Rozłożyć wszystko?</p>
             <p className="mt-2 text-sm text-slate-600">
@@ -440,7 +417,35 @@ export default function WmsRelocationDetailPage() {
         </div>
       ) : null}
 
-      <main className="mx-auto max-w-3xl space-y-4 px-4 py-4 sm:px-6">
+      <WmsOperationalPageBody className="space-y-4">
+        {pendingAssign && activeCarrier ? (
+          <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+            <p className="text-center text-sm font-bold text-indigo-950">
+              Odłóż {fmtQty(pendingAssign.remaining_qty)} szt. do{" "}
+              <span className="font-black">{carrierLabel}</span>
+            </p>
+            <p className="mt-1 text-center text-xs text-indigo-800">
+              {pendingAssign.order_number ?? `Zamówienie #${pendingAssign.order_id}`}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                className="flex-1 rounded-xl border border-slate-200 bg-white py-3 text-sm font-bold"
+                onClick={() => setPendingAssign(null)}
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                disabled={acting}
+                className="flex-1 rounded-xl bg-indigo-600 py-3 text-sm font-black text-white"
+                onClick={() => void assignAlloc(pendingAssign)}
+              >
+                Potwierdź odkładanie
+              </button>
+            </div>
+          </section>
+        ) : null}
         {detail ? <CrossdockFlowBanner detail={detail} /> : null}
         {!loading && detail && !canEdit && !readOnly && !sessionLock && detail.status !== "done" ? (
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
@@ -659,7 +664,7 @@ export default function WmsRelocationDetailPage() {
             ) : null}
           </>
         ) : null}
-      </main>
-    </div>
+      </WmsOperationalPageBody>
+    </WmsOperationalPageShell>
   );
 }

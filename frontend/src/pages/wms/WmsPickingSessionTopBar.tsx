@@ -38,10 +38,7 @@ export function WmsPickingSessionTopBar({
   const loggedUser = localStorage.getItem("user_username") || "Super Admin";
 
   return (
-    <div
-      className="sticky z-30 shrink-0 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-md sm:px-6"
-      style={{ top: "var(--wms-active-ctx-offset, 0px)" }}
-    >
+    <div className="shrink-0 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-md sm:px-6">
       <div className="flex w-full items-center justify-between gap-4">
         
         {/* LEWA STRONA: Powrót + Liczniki sesji */}

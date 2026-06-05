@@ -7,8 +7,13 @@ import {
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
 import { extractApiErrorMessage } from "../../api/authApi";
-import { ACTIVE_OPERATION_CONTEXT_BAR_OFFSET } from "../../components/wms/execution/activeOperationContext";
 import { executionContextFromBrakiTask } from "../../components/wms/execution/syncExecutionContext";
+import {
+  WmsOperationalPageBody,
+  WmsOperationalPageFooter,
+  WmsOperationalPageHeader,
+  WmsOperationalPageShell,
+} from "../../components/wms/execution/WmsOperationalPageShell";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { BrakiForceRemoveModal, type BrakiForceRemoveMode } from "./BrakiForceRemoveModal";
@@ -60,7 +65,7 @@ export function WmsOrderIssueDetailContent({
   onArchiveError,
 }: WmsOrderIssueDetailContentProps) {
   const navigate = useNavigate();
-  const { setActiveContext, activeContext } = useWarehouseExecution();
+  const { setActiveContext } = useWarehouseExecution();
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -146,15 +151,10 @@ export function WmsOrderIssueDetailContent({
     [actionPending, onArchiveShortage],
   );
 
-  const stickyTop = activeContext ? ACTIVE_OPERATION_CONTEXT_BAR_OFFSET : 0;
-
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-50 antialiased">
-      <div className="relative mx-auto flex h-full w-full max-w-4xl flex-col bg-white shadow-xl">
-        <header
-          className="sticky z-20 flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-2 md:h-16 md:px-4"
-          style={{ top: stickyTop }}
-        >
+    <WmsOperationalPageShell className="bg-slate-50">
+      <WmsOperationalPageHeader>
+        <div className="flex h-14 items-center md:h-16">
           <Link
             to={WMS_ROUTES.braki()}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 active:bg-slate-200"
@@ -162,106 +162,106 @@ export function WmsOrderIssueDetailContent({
             <i className="fa-solid fa-arrow-left"></i>
             <span>Kolejka braków</span>
           </Link>
-        </header>
+        </div>
+      </WmsOperationalPageHeader>
 
-        <main className="custom-scrollbar flex-1 overflow-y-auto pb-48 md:pb-52">
-          <div className="border-b border-slate-100 px-4 py-3 text-sm text-slate-600 md:px-6">
-            <span className="font-medium text-slate-500">Klient: </span>
-            <span className="font-semibold text-slate-800">
-              {(task.customer_name ?? "").trim() || (task.delivery_name ?? "").trim() || "—"}
-            </span>
-          </div>
-
-          {actionError ? (
-            <div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 md:mx-6">
-              {actionError}
-            </div>
-          ) : null}
-
-          {successMsg ? (
-            <div className="mx-4 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 md:mx-6">
-              {successMsg}
-            </div>
-          ) : null}
-
-          {!hasAnyLines ? (
-            <div className="m-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500 md:m-6">
-              Brak pozycji na zamówieniu — odśwież lub sprawdź OMS.
-            </div>
-          ) : (
-            <>
-              <IssueDetailSection
-                title="Produkty do zebrania"
-                lines={ctx.remaining_pick_lines ?? []}
-                variant="remaining"
-              />
-              <IssueDetailSection
-                title="Braki do decyzji OMS"
-                lines={ctx.shortage_decision_lines ?? []}
-                variant="oms"
-              />
-              <IssueDetailSection
-                title="Produkty do rozlokowania"
-                lines={ctx.relocation_lines ?? []}
-                variant="relocation"
-              />
-              <IssueDetailSection
-                title="Gotowe do pakowania"
-                lines={ctx.packing_ready_lines ?? []}
-                variant="packing_ready"
-              />
-              <IssueDetailSection
-                title="Produkty zebrane"
-                lines={ctx.collected_lines ?? []}
-                variant="collected"
-              />
-            </>
-          )}
-
-          {ws.has_relocation_work ? (
-            <p className="mx-4 mt-2 text-xs text-slate-500 md:mx-6">
-              {WMS_UI.productRelocation}: tylko zebrane produkty. Możesz rozlokować teraz lub dodać do
-              dokumentu ZWK i wykonać zbiorczo później.
-            </p>
-          ) : null}
-        </main>
-
-        <div className="absolute bottom-0 left-0 z-30 w-full border-t border-slate-200 bg-white p-4 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)] md:p-6">
-          <div className="space-y-2">
-            {operationalActions.map((action) => (
-              <button
-                key={action.id}
-                type="button"
-                disabled={action.disabled || actionPending != null}
-                title={action.disabled ? action.disabledReason : undefined}
-                onClick={() => void runAction(action)}
-                className={actionButtonClass(action)}
-              >
-                {actionPending === action.id ? "Przetwarzanie…" : action.label}
-              </button>
-            ))}
-            {archiveAction ? (
-              <button
-                type="button"
-                disabled={actionPending != null}
-                title="Usuń zamówienie z kolejki Braki WMS"
-                onClick={() => void runAction(archiveAction)}
-                className={actionButtonClass(archiveAction)}
-              >
-                {actionPending === "archive" ? "Usuwanie…" : archiveAction.label}
-              </button>
-            ) : null}
-          </div>
+      <WmsOperationalPageBody>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 md:px-5">
+          <span className="font-medium text-slate-500">Klient: </span>
+          <span className="font-semibold text-slate-800">
+            {(task.customer_name ?? "").trim() || (task.delivery_name ?? "").trim() || "—"}
+          </span>
         </div>
 
-        <BrakiForceRemoveModal
-          task={task}
-          open={forceRemoveOpen}
-          pending={actionPending === "archive"}
-          onClose={() => setForceRemoveOpen(false)}
-          onConfirm={(mode) => void onArchiveShortage(mode)}
-        />
-      </div>
-    </div>
+        {actionError ? (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+            {actionError}
+          </div>
+        ) : null}
+
+        {successMsg ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+            {successMsg}
+          </div>
+        ) : null}
+
+        {!hasAnyLines ? (
+          <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+            Brak pozycji na zamówieniu — odśwież lub sprawdź OMS.
+          </div>
+        ) : (
+          <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-white">
+            <IssueDetailSection
+              title="Produkty do zebrania"
+              lines={ctx.remaining_pick_lines ?? []}
+              variant="remaining"
+            />
+            <IssueDetailSection
+              title="Braki do decyzji OMS"
+              lines={ctx.shortage_decision_lines ?? []}
+              variant="oms"
+            />
+            <IssueDetailSection
+              title="Produkty do rozlokowania"
+              lines={ctx.relocation_lines ?? []}
+              variant="relocation"
+            />
+            <IssueDetailSection
+              title="Gotowe do pakowania"
+              lines={ctx.packing_ready_lines ?? []}
+              variant="packing_ready"
+            />
+            <IssueDetailSection
+              title="Produkty zebrane"
+              lines={ctx.collected_lines ?? []}
+              variant="collected"
+            />
+          </div>
+        )}
+
+        {ws.has_relocation_work ? (
+          <p className="mt-3 text-xs text-slate-500">
+            {WMS_UI.productRelocation}: tylko zebrane produkty. Możesz rozlokować teraz lub dodać do
+            dokumentu ZWK i wykonać zbiorczo później.
+          </p>
+        ) : null}
+      </WmsOperationalPageBody>
+
+      <WmsOperationalPageFooter>
+        <div className="space-y-2">
+          {operationalActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              disabled={action.disabled || actionPending != null}
+              title={action.disabled ? action.disabledReason : undefined}
+              onClick={() => void runAction(action)}
+              className={actionButtonClass(action)}
+            >
+              {actionPending === action.id ? "Przetwarzanie…" : action.label}
+            </button>
+          ))}
+          {archiveAction ? (
+            <button
+              type="button"
+              disabled={actionPending != null}
+              title="Usuń zamówienie z kolejki Braki WMS"
+              onClick={() => void runAction(archiveAction)}
+              className={actionButtonClass(archiveAction)}
+            >
+              {actionPending === "archive" ? "Usuwanie…" : archiveAction.label}
+            </button>
+          ) : null}
+        </div>
+      </WmsOperationalPageFooter>
+
+      <BrakiForceRemoveModal
+        task={task}
+        open={forceRemoveOpen}
+        pending={actionPending === "archive"}
+        onClose={() => setForceRemoveOpen(false)}
+        onConfirm={(mode) => void onArchiveShortage(mode)}
+      />
+    </WmsOperationalPageShell>
   );
 }

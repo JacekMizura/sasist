@@ -165,7 +165,7 @@ export default function WmsTopBar() {
 
   return (
     // Zmieniony styl nagłówka: czyste tło i subtelny shadow-sm zamiast grubego border-a
-    <header className="sticky top-0 z-30 shrink-0 bg-white/95 border-b border-slate-100 shadow-sm backdrop-blur-md">
+    <header className="shrink-0 border-b border-slate-100 bg-white/95 shadow-sm backdrop-blur-md">
       <div className="flex h-14 items-center justify-between gap-2 px-3 sm:px-6">
         
         <div className="flex h-full min-w-0 flex-1 items-center gap-2">

@@ -3,9 +3,8 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
 import { useWarehouseExecution } from "../../../context/WarehouseExecutionContext";
 import { useWmsScanner } from "../../../context/WmsScannerContext";
-import { ACTIVE_OPERATION_CONTEXT_BAR_OFFSET } from "./activeOperationContext";
-import { EXECUTION_BOTTOM_RESERVE } from "./ExecutionBottomBar";
 import { useOfflineActionQueue } from "./useOfflineActionQueue";
+import { WMS_OPERATIONAL_CONTAINER } from "./wmsLayoutTokens";
 
 type Props = {
   title: string;
@@ -18,7 +17,7 @@ type Props = {
 };
 
 /**
- * Unified mobile/scanner execution layout: minimal chrome, sticky context, scan feedback.
+ * Unified scanner execution layout — normal document flow, no nested sticky headers.
  */
 export function ScanExecutionShell({
   title,
@@ -29,8 +28,7 @@ export function ScanExecutionShell({
   headerRight,
   className = "",
 }: Props) {
-  const { warehouseMode, toggleWarehouseMode, isExecutionRoute, activeContext } = useWarehouseExecution();
-  const headerStickyTop = activeContext ? ACTIVE_OPERATION_CONTEXT_BAR_OFFSET : "0px";
+  const { warehouseMode, toggleWarehouseMode, isExecutionRoute } = useWarehouseExecution();
   const { scannerError, scannerToast } = useWmsScanner();
   const { pendingCount: offlineCount } = useOfflineActionQueue();
 
@@ -45,17 +43,12 @@ export function ScanExecutionShell({
   const pending = offlineCount;
 
   return (
-    <div
-      className={`flex min-h-full flex-col bg-[#E8EDF4] ${bottom ? EXECUTION_BOTTOM_RESERVE : "pb-8"} ${className}`}
-    >
-      <header
-        className="sticky z-30 shrink-0 border-b border-slate-200 bg-slate-900 text-white"
-        style={{ top: headerStickyTop }}
-      >
-        <div className="flex min-h-[52px] items-center gap-2 px-3">
+    <div className={`flex min-h-full w-full flex-col bg-slate-100 ${className}`}>
+      <header className="shrink-0 border-b border-slate-200 bg-white text-slate-900">
+        <div className={`${WMS_OPERATIONAL_CONTAINER} flex min-h-[52px] items-center gap-2 py-2`}>
           <Link
             to={backTo}
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white/10 px-2"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 px-2 text-slate-700 hover:bg-slate-50"
             aria-label={backLabel}
           >
             <ArrowLeft size={20} />
@@ -64,7 +57,7 @@ export function ScanExecutionShell({
           {headerRight}
           <button
             type="button"
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white/10"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50"
             title={warehouseMode ? "Wyłącz tryb terminala" : "Tryb terminala magazynu"}
             onClick={toggleWarehouseMode}
           >
@@ -73,7 +66,7 @@ export function ScanExecutionShell({
         </div>
         {(scannerError || scannerToast || pending > 0) && (
           <div
-            className={`px-3 py-2 text-center text-xs font-bold ${
+            className={`px-4 py-2 text-center text-xs font-bold sm:px-6 ${
               scannerError
                 ? "bg-red-600 text-white"
                 : pending > 0
@@ -88,9 +81,9 @@ export function ScanExecutionShell({
         )}
       </header>
 
-      <div className="mx-auto w-full max-w-3xl flex-1 px-3 py-3 sm:px-4">{children}</div>
+      <div className={`${WMS_OPERATIONAL_CONTAINER} flex-1 py-4 md:py-5`}>{children}</div>
 
-      {bottom}
+      {bottom ? <footer className="shrink-0 border-t border-slate-200 bg-white">{bottom}</footer> : null}
     </div>
   );
 }

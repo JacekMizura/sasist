@@ -1,18 +1,18 @@
 import type { ReactNode } from "react";
+import { WMS_OPERATIONAL_CONTAINER } from "./wmsLayoutTokens";
 
 type Props = {
   children: ReactNode;
-  /** Extra bottom padding for main content when bar is visible */
-  reserveSpace?: boolean;
 };
 
-/** Sticky bottom actions — thumb zone, one-hand friendly. */
+/** Bottom action area in normal document flow (inside ScanExecutionShell footer). */
 export function ExecutionBottomBar({ children }: Props) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[45] border-t border-slate-200 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md">
-      <div className="mx-auto flex max-w-3xl flex-col gap-2">{children}</div>
+    <div className={`${WMS_OPERATIONAL_CONTAINER} flex flex-col gap-2 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]`}>
+      {children}
     </div>
   );
 }
 
-export const EXECUTION_BOTTOM_RESERVE = "pb-36";
+/** @deprecated Reserve handled by flex footer — kept for API compatibility. */
+export const EXECUTION_BOTTOM_RESERVE = "";
