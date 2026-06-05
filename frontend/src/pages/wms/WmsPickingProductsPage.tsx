@@ -660,7 +660,12 @@ export default function WmsPickingProductsPage() {
         dispatchWmsShortagesUpdated();
       } else {
         showScannerToast("Zbieranie zakończone");
-        navigate(WMS_ROUTES.picking, { replace: true });
+        productLinesLoadKeyRef.current = "";
+        dispatchWmsShortagesUpdated();
+        navigate(WMS_ROUTES.picking, {
+          replace: true,
+          state: { pickingListRefreshAt: Date.now() } satisfies Pick<WmsPickingProductsNavState, "pickingListRefreshAt">,
+        });
       }
     } catch (e: unknown) {
       console.error("[picking.finalize]", e);

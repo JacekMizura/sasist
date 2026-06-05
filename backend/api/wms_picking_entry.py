@@ -326,12 +326,16 @@ def get_picking_status_workload(
             .all()
         )
 
+        from ..services.wms_picking_product_list_service import _picking_queue_eligibility_clauses
+
+        queue_eligible = _picking_queue_eligibility_clauses()
         total_rows = (
             db.query(Order.order_ui_status_id, func.count(Order.id))
             .filter(
                 Order.tenant_id == tenant_id,
                 Order.warehouse_id == warehouse_id,
                 Order.order_ui_status_id.isnot(None),
+                *queue_eligible,
             )
             .group_by(Order.order_ui_status_id)
             .all()
@@ -345,6 +349,7 @@ def get_picking_status_workload(
                 Order.warehouse_id == warehouse_id,
                 Order.order_ui_status_id.isnot(None),
                 Order.cart_id.isnot(None),
+                *queue_eligible,
             )
             .group_by(Order.order_ui_status_id)
             .all()

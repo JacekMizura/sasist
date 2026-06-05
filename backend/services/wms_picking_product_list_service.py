@@ -333,6 +333,20 @@ def _order_type_filter(order_type: WmsPickingOrderTypeFilter) -> OrderTypeFilter
     return "all"
 
 
+_PICKING_QUEUE_OPEN_FULFILLMENT = ("PICKING", "PARTIAL")
+
+
+def _picking_queue_eligibility_clauses():
+    """Zamówienia operacyjnie otwarte na zbieranie (SSOT dla kohorty / workload)."""
+    return (
+        Order.picking_finished_at.is_(None),
+        or_(
+            Order.fulfillment_state.is_(None),
+            Order.fulfillment_state.in_(_PICKING_QUEUE_OPEN_FULFILLMENT),
+        ),
+    )
+
+
 def _query_order_ids_for_status(
     db: Session,
     *,
@@ -347,10 +361,7 @@ def _query_order_ids_for_status(
             Order.tenant_id == int(tenant_id),
             Order.warehouse_id == int(warehouse_id),
             Order.order_ui_status_id == int(source_status_id),
-            or_(
-                Order.fulfillment_state.is_(None),
-                Order.fulfillment_state.in_(("PICKING", "PARTIAL")),
-            ),
+            *_picking_queue_eligibility_clauses(),
         )
     )
     if order_type == "all":
@@ -369,6 +380,129 @@ def _query_order_ids_for_status(
         q = q.filter(line_counts.c.cnt > 1)
     rows = q.order_by(Order.id.asc()).all()
     return [int(r[0]) for r in rows]
+
+
+def _order_ids_for_cart_finalize(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+    order_type: OrderTypeFilter,
+    cart_id: int,
+) -> list[int]:
+    """Zamówienia z kohorty z aktywnością na wózku (przypisanie lub Pick) — nie cała kohorta statusu."""
+    cohort = _query_order_ids_for_status(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        source_status_id=source_status_id,
+        order_type=order_type,
+    )
+    if not cohort:
+        return []
+    cid = int(cart_id)
+    active: set[int] = set()
+    on_cart = (
+        db.query(Order.id)
+        .filter(
+            Order.id.in_(list(cohort)),
+            Order.cart_id == cid,
+        )
+        .all()
+    )
+    active.update(int(r[0]) for r in on_cart)
+    pick_rows = (
+        db.query(Pick.order_id)
+        .filter(
+            Pick.tenant_id == int(tenant_id),
+            Pick.warehouse_id == int(warehouse_id),
+            Pick.cart_id == cid,
+            Pick.order_id.in_(list(cohort)),
+        )
+        .distinct()
+        .all()
+    )
+    for row in pick_rows:
+        if row[0] is not None:
+            active.add(int(row[0]))
+    return sorted(active)
+
+
+def _filter_fixed_order_ids_to_picking_queue(
+    db: Session,
+    order_ids: Sequence[int],
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+    order_type: OrderTypeFilter,
+) -> list[int]:
+    """Zadanie kierownika / scope CSV — tylko zamówienia nadal kwalifikujące się do zbierania."""
+    if not order_ids:
+        return []
+    eligible = set(
+        _query_order_ids_for_status(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            source_status_id=source_status_id,
+            order_type=order_type,
+        )
+    )
+    return [int(x) for x in order_ids if int(x) in eligible]
+
+
+def _picking_product_line_still_active(line: WmsPickingProductLine) -> bool:
+    """Produkt widoczny w kolejce zbierania — coś do pobrania lub operacyjny brak."""
+    return float(line.remaining_to_pick or 0) > 1e-9 or float(line.missing_quantity or 0) > 1e-9
+
+
+def _sync_order_operational_state_after_picking_finalize(
+    db: Session,
+    orders: Sequence[Order],
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    cart_id: int,
+) -> None:
+    """Po domknięciu wózka: linie picked/missing, brak remaining, fulfillment bez kontekstu sesji."""
+    cid = int(cart_id)
+    for o in orders:
+        for oi in o.items or []:
+            if order_item_is_replaced_line(oi) or bool(getattr(oi, "is_bundle_parent", False)):
+                continue
+            qty = float(oi.quantity or 0)
+            if qty <= 1e-9:
+                continue
+            picked = _picked_qty_for_order_item_on_cart(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                order_item_id=int(oi.id),
+                cart_id=cid,
+            )
+            miss = float(
+                line_shortage_qty_for_picking_finalize(
+                    db, o, oi, session_cart_id=cid, picked=picked
+                )
+            )
+            oi.wms_picking_line_missing_qty = round(max(0.0, miss), 6)
+            if picked + miss + 1e-5 >= qty:
+                if miss > 1e-9:
+                    oi.wms_picking_line_status = "missing"
+                else:
+                    oi.wms_picking_line_status = "picked"
+        recompute_order_fulfillment(db, int(o.id), commit=False, session_cart_id=None)
+
+
+def _release_cart_after_picking_finalize(db: Session, cart: Cart) -> None:
+    """Zwolnij wózek do kolejnego operatora — bez kasowania sfinalizowanych Pick (audyt)."""
+    for basket in list(cart.baskets or []):
+        basket.order_id = None
+        basket.used_volume = 0.0
+    cart.used_volume = 0.0
+    cart.status = CartStatus.AVAILABLE
 
 
 def _missing_qty_by_product_from_orders(
@@ -998,6 +1132,15 @@ def build_wms_picking_product_lines(
     if fixed_order_ids is not None:
         order_ids = [int(x) for x in fixed_order_ids if int(x) > 0]
         order_ids = list(dict.fromkeys(order_ids))
+        if not recovery_mode:
+            order_ids = _filter_fixed_order_ids_to_picking_queue(
+                db,
+                order_ids,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                source_status_id=source_status_id,
+                order_type=ot,
+            )
     else:
         order_ids = _query_order_ids_for_status(
             db,
@@ -1133,7 +1276,7 @@ def build_wms_picking_product_lines(
     cohort_missing = _build_cohort_missing_line_rows(db, order_ids, tenant_id=tenant_id)
 
     if recovery_mode:
-        lines = [ln for ln in lines if float(ln.remaining_to_pick or 0) > 1e-9]
+        lines = [ln for ln in lines if _picking_product_line_still_active(ln)]
         logger.info(
             "[wms.recovery.lines.fetch] order_id=%s cart_id=%s recovery_mode=recovery "
             "product_count=%s cohort_order_count=%s",
@@ -1142,6 +1285,8 @@ def build_wms_picking_product_lines(
             len(lines),
             len(order_ids),
         )
+    else:
+        lines = [ln for ln in lines if _picking_product_line_still_active(ln)]
 
     recovery_completed = bool(recovery_mode and len(lines) == 0)
     recovery_oid = int(order_ids[0]) if recovery_mode and order_ids else None
@@ -1189,6 +1334,15 @@ def build_wms_picking_product_detail(
     if fixed_order_ids is not None:
         order_ids = [int(x) for x in fixed_order_ids if int(x) > 0]
         order_ids = list(dict.fromkeys(order_ids))
+        if not recovery_mode:
+            order_ids = _filter_fixed_order_ids_to_picking_queue(
+                db,
+                order_ids,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                source_status_id=source_status_id,
+                order_type=_order_type_filter(order_type),
+            )
     else:
         order_ids = _query_order_ids_for_status(
             db,
@@ -2265,6 +2419,7 @@ def finalize_wms_picking_cart(
 
     cart = (
         db.query(Cart)
+        .options(joinedload(Cart.baskets))
         .filter(
             Cart.id == int(cart_id),
             Cart.tenant_id == int(tenant_id),
@@ -2282,16 +2437,17 @@ def finalize_wms_picking_cart(
         )
 
     ot = _order_type_filter(order_type)
-    order_ids = _query_order_ids_for_status(
+    order_ids = _order_ids_for_cart_finalize(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         source_status_id=source_status_id,
         order_type=ot,
+        cart_id=int(cart_id),
     )
     if not order_ids:
         raise PickingFinalizeError(
-            "Brak zamówień w tej kohortcie.",
+            "Brak zamówień przypisanych do tego wózka w tej kohortcie.",
             reason="empty_cohort",
             step="start",
             http_status=400,
@@ -2727,7 +2883,14 @@ def finalize_wms_picking_cart(
                 )
 
     try:
-        cart.status = CartStatus.FULL
+        _sync_order_operational_state_after_picking_finalize(
+            db,
+            orders,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            cart_id=cid,
+        )
+        _release_cart_after_picking_finalize(db, cart)
 
         record_picking_cart_finalize_session(
             db,
