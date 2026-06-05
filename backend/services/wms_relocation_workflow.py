@@ -577,6 +577,65 @@ def relocation_alloc_counts_for_order(
     return pending, partial, done
 
 
+def _relocation_alloc_state_rank(status: str) -> int:
+    if status == "pending":
+        return 3
+    if status == "partial":
+        return 2
+    if status == "done":
+        return 1
+    return 0
+
+
+def relocation_line_alloc_states_for_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+) -> dict[int, str]:
+    """
+    Stan alokacji RELOCATION per ``order_item_id``.
+
+    ``pending`` / ``partial`` / ``done`` — wiersz w zadaniu; brak wpisu → ``missing``.
+    """
+    from .relocation_reason import infer_relocation_reason, relocation_reason_is_actionable
+    from .wms_operational_task_service import _allocation_row_status, _normalize_relocation_allocation_row
+
+    oid = int(order_id)
+    task = _find_relocation_task_with_any_alloc_for_order(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=oid,
+    )
+    if task is None:
+        return {}
+
+    payload = _json_loads(getattr(task, "payload_json", None), {})
+    if not isinstance(payload, dict):
+        return {}
+
+    states: dict[int, str] = {}
+    for raw in payload.get("allocations") or []:
+        if not isinstance(raw, dict) or int(raw.get("order_id") or 0) != oid:
+            continue
+        row = _normalize_relocation_allocation_row(raw)
+        if float(row.get("qty") or 0) <= 1e-9:
+            continue
+        reason = infer_relocation_reason(row)
+        if not relocation_reason_is_actionable(reason):
+            continue
+        oiid = int(row.get("order_item_id") or 0)
+        if oiid < 1:
+            continue
+        st = _allocation_row_status(row)
+        prev = states.get(oiid)
+        if prev is None or _relocation_alloc_state_rank(st) > _relocation_alloc_state_rank(prev):
+            states[oiid] = st
+    return states
+
+
 def _find_relocation_task_with_any_alloc_for_order(
     db: Session,
     *,

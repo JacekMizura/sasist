@@ -85,7 +85,14 @@ class TestCanCloseBrakiShortage:
 
         assert can_close_braki_shortage(
             MagicMock(),
-            state=_state(packing_allowed=True, has_recovery_work=False),
+            state=_state(
+                packing_allowed=True,
+                has_recovery_work=False,
+                has_recovery_pick_work=False,
+                totals=RecoveryTotals(),
+                lines=[_line(active_recovery=False, visible_in_recovery_pick=False, unresolved_qty=0.0, recovery_qty=0.0)],
+            ),
+            repair_relocation=False,
         )
 
     def test_active_recovery_blocks_close(self):
@@ -98,6 +105,32 @@ class TestCanCloseBrakiShortage:
                 has_recovery_work=True,
                 lines=[_line(active_recovery=True, visible_in_recovery_pick=True)],
             ),
+        )
+
+    def test_visible_relocation_blocks_close_without_pending_alloc(self):
+        """Brak zadania RELOCATION (alloc missing) — nadal blokada archiwum do naprawy workflow."""
+        from backend.services.recovery_workflow_service import can_close_braki_shortage
+
+        assert not can_close_braki_shortage(
+            MagicMock(),
+            state=_state(
+                packing_allowed=False,
+                has_pending_relocation=False,
+                has_recovery_work=False,
+                lines=[
+                    _line(
+                        active_recovery=False,
+                        visible_in_recovery_pick=False,
+                        visible_in_relocation=True,
+                        relocation_required=True,
+                        packing_eligible=False,
+                        unresolved_qty=0.0,
+                        recovery_qty=0.0,
+                    )
+                ],
+                totals=RecoveryTotals(),
+            ),
+            repair_relocation=False,
         )
 
 

@@ -187,6 +187,9 @@ class TestRecoveryWorkflowService:
         ), patch(
             "backend.services.wms_relocation_workflow.relocation_alloc_counts_for_order",
             return_value=(0, 0, 0),
+        ), patch(
+            "backend.services.wms_relocation_workflow.relocation_line_alloc_states_for_order",
+            return_value={},
         ):
             state = resolve_order_recovery_state(db, order, log=False)
 
@@ -194,3 +197,38 @@ class TestRecoveryWorkflowService:
         assert line.relocation_required is True
         assert line.visible_in_relocation is True
         assert line.active_recovery is False
+
+    def test_relocation_done_does_not_block_packing(self):
+        """Po zakończonym rozlokowaniu has_pending_relocation=false mimo relocation_required."""
+        oi = _oi(id=20, product_id=400, quantity=2.0, oms_removed_qty=2.0)
+        order = _order([oi])
+        db = MagicMock()
+
+        with patch(
+            "backend.services.recovery_workflow_service.line_picked_sum_for_order",
+            return_value=1.0,
+        ), patch(
+            "backend.services.order_fulfillment_recompute.compute_line_missing_qty",
+            return_value=0.0,
+        ), patch(
+            "backend.services.braki_order_state_service.order_line_requires_oms_decision",
+            return_value=False,
+        ), patch(
+            "backend.services.braki_order_state_service.order_line_pick_still_possible",
+            return_value=False,
+        ), patch(
+            "backend.services.order_fulfillment_recompute.order_item_needs_substitute_pick_completion",
+            return_value=False,
+        ), patch(
+            "backend.services.wms_relocation_workflow.relocation_alloc_counts_for_order",
+            return_value=(0, 0, 1),
+        ), patch(
+            "backend.services.wms_relocation_workflow.relocation_line_alloc_states_for_order",
+            return_value={20: "done"},
+        ):
+            state = resolve_order_recovery_state(db, order, log=False)
+
+        line = state.lines[0]
+        assert line.relocation_required is True
+        assert line.visible_in_relocation is False
+        assert state.has_pending_relocation is False

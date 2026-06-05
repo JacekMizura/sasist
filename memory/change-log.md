@@ -1,5 +1,14 @@
 # Change Log
 
+## 2026-06-04 — Relocation workflow: resolver SSOT + self-heal (order #1197)
+
+- ``has_pending_relocation`` — tylko aktywne alokacje (pending/partial), nie historia ``done``.
+- ``visible_in_relocation`` — per-linia z ``relocation_line_alloc_states_for_order`` (done → false).
+- ``repair_order_relocation_consistency`` — auto-tworzenie zadania RELOCATION gdy resolver wymaga, brak alloc.
+- Wywołania repair: serializacja Braki (detail + lista), ``can_close_braki_shortage``, ``ensure_relocation_tasks_synced``.
+- ``can_close_shortage`` — blokada także przy ``visible_in_relocation`` (missing task do naprawy, nie dead-end).
+- API ``relocation_task_id``; CTA „Rozlokuj produkty” → bezpośrednio do zadania gdy istnieje.
+
 ## 2026-06-04 — WMS frontend: stop request storms
 
 - ``wmsRefresh.ts`` — debounced ``dispatchWmsShortagesUpdated``, in-flight request dedupe, visibility-aware polling.

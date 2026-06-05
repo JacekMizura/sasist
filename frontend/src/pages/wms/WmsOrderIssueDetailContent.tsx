@@ -94,8 +94,23 @@ export function WmsOrderIssueDetailContent({
     warehouseId,
     onPackingError: (msg) => setRelocationToast(msg),
   });
+  const relocationTaskId =
+    task.relocation_task_id != null && Number(task.relocation_task_id) > 0
+      ? Number(task.relocation_task_id)
+      : null;
   const needsRelocationChoice =
-    workflowStatus === "relocation" || workflowStatus === "relocation_partial";
+    workflowStatus === "relocation" ||
+    workflowStatus === "relocation_partial" ||
+    task.recovery_has_relocation_work === true;
+  const openRelocationWorkflow = () => {
+    if (relocationTaskId != null) {
+      navigate(WMS_ROUTES.operationalRelocationTask(relocationTaskId), {
+        state: { startRelocationSession: true },
+      });
+      return;
+    }
+    setRelocationModalOpen(true);
+  };
   const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
   const statusHeadline =
     workflowStatus === "awaiting"
@@ -239,7 +254,7 @@ export function WmsOrderIssueDetailContent({
               type="button"
               onClick={() => {
                 if (needsRelocationChoice) {
-                  setRelocationModalOpen(true);
+                  openRelocationWorkflow();
                 } else {
                   void Promise.resolve(primaryCta.navigate());
                 }

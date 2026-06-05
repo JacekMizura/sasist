@@ -217,6 +217,15 @@ def serialize_order_issue_task_item(
     workflow_status = "awaiting"
     workflow_label = braki_workflow_status_label(workflow_status)
     if o is not None:
+        from ..services.recovery_workflow_service import repair_order_relocation_consistency
+
+        repair_order_relocation_consistency(
+            db,
+            o,
+            tenant_id=int(t.tenant_id),
+            warehouse_id=int(t.warehouse_id),
+            source_event_id=f"braki.api.serialize:{int(t.id)}",
+        )
         u_short, r_pend = count_issue_queue_operational_lines(db, o)
         bucket = braki_queue_bucket(db, o, u_short=u_short, r_pend=r_pend)
         workflow_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
@@ -619,6 +628,15 @@ def _build_order_issue_tasks_list(
                     mark_task_done(db, t, "Zamówienie usunięte — zamknięto zadanie braków")
                     continue
                 try:
+                    from ..services.recovery_workflow_service import repair_order_relocation_consistency
+
+                    repair_order_relocation_consistency(
+                        db,
+                        o,
+                        tenant_id=int(tenant_id),
+                        warehouse_id=int(warehouse_id),
+                        source_event_id=f"braki.api.list:{int(t.id)}",
+                    )
                     u_short, r_pend = count_issue_queue_operational_lines(db, o)
                     wf_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
                 except Exception as wf_exc:

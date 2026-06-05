@@ -1232,8 +1232,8 @@ def archive_order_issue_task(
         )
         return {"archived": True, "already_archived": True}
 
-    rec_state = resolve_order_recovery_state(db, order, log=False)
-    if not can_close_braki_shortage(db, order, state=rec_state):
+    if not can_close_braki_shortage(db, order, repair_relocation=True):
+        rec_state = resolve_order_recovery_state(db, order, log=False)
         if rec_state.has_pending_relocation:
             raise ValueError("Nie można zamknąć — trwa rozlokowanie zebranego towaru.")
         if rec_state.has_recovery_pick_work or rec_state.totals.recovery_lines > 0:

@@ -287,6 +287,16 @@ def resolve_order_recovery_state(
     reloc_pending_i = int(reloc_pending)
     reloc_partial_i = int(reloc_partial)
     has_active_relocation_task = reloc_pending_i + reloc_partial_i > 0
+    line_reloc_alloc_states = {}
+    if oid > 0:
+        from .wms_relocation_workflow import relocation_line_alloc_states_for_order
+
+        line_reloc_alloc_states = relocation_line_alloc_states_for_order(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            order_id=oid,
+        )
 
     line_states: list[RecoveryLineState] = []
     totals = RecoveryTotals()
@@ -374,7 +384,16 @@ def resolve_order_recovery_state(
 
         visible_in_recovery_pick = active_recovery and recovery_qty > _EPS
         visible_in_queue = requires_oms or visible_in_recovery_pick
-        visible_in_relocation = relocation_required and picked > _EPS
+        reloc_alloc_st = line_reloc_alloc_states.get(int(oi.id), "missing")
+        if relocation_required and picked > _EPS:
+            if reloc_alloc_st in ("pending", "partial"):
+                visible_in_relocation = True
+            elif reloc_alloc_st == "done":
+                visible_in_relocation = False
+            else:
+                visible_in_relocation = True
+        else:
+            visible_in_relocation = False
 
         packing_eligible = (
             line_resolved
@@ -453,9 +472,7 @@ def resolve_order_recovery_state(
         ln.unresolved_qty > _EPS or ln.active_recovery or ln.visible_in_recovery_pick
         for ln in line_states
     )
-    has_pending_relocation = has_active_relocation_task or any(
-        ln.visible_in_relocation for ln in line_states
-    )
+    has_pending_relocation = has_active_relocation_task
     has_recovery_work = has_recovery_pick_work and totals.oms_decision_lines == 0
     has_relocation_work = has_pending_relocation
     packing_allowed = (
@@ -683,6 +700,93 @@ def order_has_relocation_work(
     return bool(state.has_pending_relocation)
 
 
+def repair_order_relocation_consistency(
+    db: Session,
+    order: Order,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_event_id: str = "relocation.self_heal",
+    picked_from_location: str | None = None,
+) -> dict[str, Any]:
+    """
+    Self-heal: gdy resolver wymaga rozlokowania, a brak aktywnego zadania — utwórz je.
+
+    Nigdy nie zostawia zamówienia w stanie „wymagane rozlokowanie” bez wykonalnej ścieżki.
+    """
+    from .wms_relocation_workflow import relocation_line_alloc_states_for_order
+
+    oid = int(order.id)
+    tid = int(tenant_id)
+    wid = int(warehouse_id)
+    line_alloc = relocation_line_alloc_states_for_order(
+        db, tenant_id=tid, warehouse_id=wid, order_id=oid
+    )
+    task_ids: list[int] = []
+    repaired_lines: list[int] = []
+    failed_lines: list[int] = []
+
+    for oi in sorted(order.items or [], key=lambda x: int(x.id)):
+        if _line_skipped(oi):
+            continue
+        oiid = int(oi.id)
+        picked = float(line_picked_sum_for_order(db, oiid, order))
+        meta = _order_item_meta_dict(oi)
+        reloc_required = _line_relocation_required(
+            ordered=float(oi.quantity or 0),
+            picked=picked,
+            removed=float(getattr(oi, "oms_removed_qty", None) or 0.0),
+            replaced=float(getattr(oi, "oms_replaced_qty", None) or 0.0),
+            meta_removed=bool(meta.get("oms_line_removed")),
+            is_substitute_line=(getattr(oi, "replaced_from_order_item_id", None) is not None)
+            or str(getattr(oi, "oms_line_status", None) or "").strip().upper() == "TO_PICK",
+        )
+        if not reloc_required or picked <= _EPS:
+            continue
+        alloc_st = line_alloc.get(oiid, "missing")
+        if alloc_st in ("pending", "partial", "done"):
+            continue
+        from .braki_order_state_service import ensure_relocation_for_order_item_picks
+
+        ids = ensure_relocation_for_order_item_picks(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            order=order,
+            order_item_id=oiid,
+            source_event_id=source_event_id,
+            picked_from_location=picked_from_location,
+        )
+        if ids:
+            task_ids.extend(ids)
+            repaired_lines.append(oiid)
+            logger.warning(
+                "[recovery.relocation.repair] order_id=%s line_id=%s action=created task_ids=%s source=%s",
+                oid,
+                oiid,
+                ids,
+                source_event_id,
+            )
+        else:
+            failed_lines.append(oiid)
+            logger.warning(
+                "[recovery.relocation.repair] order_id=%s line_id=%s action=create_failed picked_qty=%s source=%s",
+                oid,
+                oiid,
+                picked,
+                source_event_id,
+            )
+
+    if task_ids:
+        db.flush()
+    return {
+        "repaired": bool(repaired_lines),
+        "task_ids": task_ids,
+        "repaired_lines": repaired_lines,
+        "failed_lines": failed_lines,
+    }
+
+
 def ensure_relocation_tasks_synced_for_order(
     db: Session,
     order: Order,
@@ -692,7 +796,15 @@ def ensure_relocation_tasks_synced_for_order(
     source_event_id: str,
     picked_from_location: str | None = None,
 ) -> OrderRecoveryState:
-    """Resolver + utworzenie brakujących zadań RELOCATION dla ``visible_in_relocation``."""
+    """Resolver + self-heal + utworzenie brakujących zadań RELOCATION."""
+    repair_order_relocation_consistency(
+        db,
+        order,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        source_event_id=source_event_id,
+        picked_from_location=picked_from_location,
+    )
     state = resolve_order_recovery_state(
         db,
         order,
@@ -710,7 +822,13 @@ def ensure_relocation_tasks_synced_for_order(
             source_event_id=source_event_id,
             picked_from_location=picked_from_location,
         )
-    return state
+    return resolve_order_recovery_state(
+        db,
+        order,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        log=False,
+    )
 
 
 def sync_relocation_tasks_from_recovery_state(
@@ -791,12 +909,24 @@ def can_close_braki_shortage(
     order_or_id: Order | int | None = None,
     *,
     state: OrderRecoveryState | None = None,
+    repair_relocation: bool = True,
 ) -> bool:
     """
     Czy operator może zamknąć kartę Braki — wyłącznie z resolvera (bez legacy shortage_state).
     """
-    if state is not None:
+    order = _load_order(db, order_or_id) if order_or_id is not None else None
+    if repair_relocation and order is not None:
+        repair_order_relocation_consistency(
+            db,
+            order,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            source_event_id="braki.archive.repair",
+        )
+    if state is not None and (not repair_relocation or order is None):
         st = state
+    elif order is not None:
+        st = resolve_order_recovery_state(db, order, log=False)
     elif order_or_id is not None:
         st = resolve_order_recovery_state(db, order_or_id, log=False)
     else:
@@ -804,6 +934,8 @@ def can_close_braki_shortage(
     if st.totals.oms_decision_lines > 0:
         return False
     if st.has_pending_relocation:
+        return False
+    if any(ln.visible_in_relocation for ln in st.lines):
         return False
     if st.has_recovery_pick_work:
         return False
@@ -816,13 +948,32 @@ def can_close_braki_shortage(
 
 def recovery_state_for_braki_task(db: Session, order: Order) -> dict[str, Any]:
     """Pola resolvera dla kart kolejki Braki (serializacja API)."""
+    from .wms_relocation_workflow import find_relocation_task_for_order
+
+    repair_order_relocation_consistency(
+        db,
+        order,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        source_event_id="braki.task.serialize",
+    )
     st = resolve_order_recovery_state(db, order, log=False)
+    rel_task = find_relocation_task_for_order(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+    )
+    needs_reloc_ui = bool(st.has_pending_relocation) or any(
+        ln.visible_in_relocation for ln in st.lines
+    )
     return {
         "recovery_packing_allowed": bool(st.packing_allowed),
         "recovery_active_lines": sum(1 for ln in st.lines if ln.visible_in_recovery_pick),
         "recovery_unresolved_lines": int(st.totals.unresolved_lines),
-        "recovery_has_relocation_work": bool(st.has_pending_relocation),
-        "can_close_shortage": can_close_braki_shortage(db, order, state=st),
+        "recovery_has_relocation_work": needs_reloc_ui,
+        "relocation_task_id": int(rel_task.id) if rel_task is not None else None,
+        "can_close_shortage": can_close_braki_shortage(db, order, repair_relocation=False),
         "recovery_state_hash": st.state_hash,
     }
 

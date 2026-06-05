@@ -170,6 +170,10 @@ class OrderIssueTaskListItem(BaseModel):
         default=False,
         description="Resolver: wymagane / trwające rozlokowanie",
     )
+    relocation_task_id: int | None = Field(
+        default=None,
+        description="Aktywne zadanie RELOCATION dla zamówienia (po self-heal)",
+    )
     can_close_shortage: bool = Field(
         default=False,
         description="Resolver: operator może zamknąć kartę Braki (Usuń z Braków)",

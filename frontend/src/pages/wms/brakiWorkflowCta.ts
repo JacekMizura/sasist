@@ -60,13 +60,27 @@ export function brakiPrimaryCta(
       };
     case "relocation":
       return {
-        label: "Przejdź do rozlokowania",
-        navigate: () => navigate(WMS_ROUTES.operationalQueues),
+        label: "Rozlokuj produkty",
+        navigate: () => {
+          const taskId = task.relocation_task_id;
+          if (taskId != null && Number(taskId) > 0) {
+            navigate(WMS_ROUTES.operationalRelocationTask(Number(taskId)));
+            return;
+          }
+          navigate(WMS_ROUTES.braki(task.order_id));
+        },
       };
     case "relocation_partial":
       return {
         label: "Kontynuuj rozlokowanie",
-        navigate: () => navigate(WMS_ROUTES.operationalQueues),
+        navigate: () => {
+          const taskId = task.relocation_task_id;
+          if (taskId != null && Number(taskId) > 0) {
+            navigate(WMS_ROUTES.operationalRelocationTask(Number(taskId)));
+            return;
+          }
+          navigate(WMS_ROUTES.operationalQueues);
+        },
       };
     case "pick":
     case "pick_and_relocation":
