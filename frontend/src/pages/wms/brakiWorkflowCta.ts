@@ -1,4 +1,9 @@
 import type { OrderIssueTaskListItemApi } from "../../api/wmsOrderIssueTasksApi";
+import {
+  postWmsRelocationAddItems,
+  postWmsRelocationStartSession,
+} from "../../api/wmsRelocationBatchApi";
+import { extractApiErrorMessage } from "../../api/authApi";
 import { navigateBrakiToPacking } from "./brakiGoToPacking";
 import { WMS_ROUTES } from "./wmsRoutes";
 
@@ -11,10 +16,29 @@ export type BrakiWorkflowStatusId =
   | "ready_pack"
   | "";
 
-export type BrakiPrimaryCta = {
+export type ShortageLifecyclePhase =
+  | "SHORTAGE_DETECTED"
+  | "AWAITING_OMS"
+  | "WAITING_SUPPLY"
+  | "RECOVERY_PICK"
+  | "RELOCATION_REQUIRED"
+  | "READY_TO_PACK"
+  | "DONE";
+
+export type BrakiPrimaryActionId =
+  | "open_oms"
+  | "recovery_pick"
+  | "relocation"
+  | "packing"
+  | "archive"
+  | "waiting_supply";
+
+export type BrakiPrimaryAction = {
+  id: BrakiPrimaryActionId;
   label: string;
-  /** Sync lub async (np. bootstrap sesji pakowania). */
-  navigate: () => void | Promise<void>;
+  phase: ShortageLifecyclePhase;
+  disabled?: boolean;
+  execute: () => void | Promise<void>;
 };
 
 export function parseBrakiWorkflowStatus(task: OrderIssueTaskListItemApi): BrakiWorkflowStatusId {
@@ -32,67 +56,183 @@ export function parseBrakiWorkflowStatus(task: OrderIssueTaskListItemApi): Braki
   return "";
 }
 
-export function brakiPrimaryCta(
+/** SSOT phase from API; legacy braki_workflow_status only when phase absent. */
+export function resolveShortageLifecyclePhase(task: OrderIssueTaskListItemApi): ShortageLifecyclePhase {
+  const fromApi = (task.shortage_lifecycle_phase ?? "").trim().toUpperCase();
+  const allowed: ShortageLifecyclePhase[] = [
+    "SHORTAGE_DETECTED",
+    "AWAITING_OMS",
+    "WAITING_SUPPLY",
+    "RECOVERY_PICK",
+    "RELOCATION_REQUIRED",
+    "READY_TO_PACK",
+    "DONE",
+  ];
+  if (allowed.includes(fromApi as ShortageLifecyclePhase)) {
+    return fromApi as ShortageLifecyclePhase;
+  }
+
+  const wf = parseBrakiWorkflowStatus(task);
+  if (wf === "awaiting") return "AWAITING_OMS";
+  if (wf === "pick" || wf === "pick_and_relocation") return "RECOVERY_PICK";
+  if (wf === "relocation" || wf === "relocation_partial") return "RELOCATION_REQUIRED";
+  if (wf === "ready_pack") return "READY_TO_PACK";
+  return "SHORTAGE_DETECTED";
+}
+
+export function shortageLifecycleHeadline(phase: ShortageLifecyclePhase): string {
+  switch (phase) {
+    case "AWAITING_OMS":
+      return "Oczekuje na decyzję OMS";
+    case "WAITING_SUPPLY":
+      return "Oczekuje na dostawę";
+    case "RECOVERY_PICK":
+      return "Wymagana dogrywka zbierki";
+    case "RELOCATION_REQUIRED":
+      return "Wymagane rozlokowanie zebranych pozycji";
+    case "READY_TO_PACK":
+      return "Gotowe do pakowania";
+    case "DONE":
+      return "Brak rozliczony — usuń z kolejki";
+    default:
+      return "Braki w realizacji";
+  }
+}
+
+async function executeRelocation(
   task: OrderIssueTaskListItemApi,
   navigate: (path: string) => void,
-  opts?: { warehouseId?: number; onPackingError?: (message: string) => void },
-): BrakiPrimaryCta {
-  const wf = parseBrakiWorkflowStatus(task);
-  const orderId = task.order_id;
-  const warehouseId = opts?.warehouseId;
+  opts: { tenantId: number; warehouseId: number; onError?: (msg: string) => void },
+): Promise<void> {
+  const taskId =
+    task.relocation_task_id != null && Number(task.relocation_task_id) > 0
+      ? Number(task.relocation_task_id)
+      : null;
 
-  switch (wf) {
-    case "ready_pack":
+  if (taskId != null) {
+    navigate(WMS_ROUTES.operationalRelocationTask(taskId), {
+      state: { startRelocationSession: true },
+    });
+    return;
+  }
+
+  try {
+    const added = await postWmsRelocationAddItems(opts.tenantId, opts.warehouseId, {
+      order_id: task.order_id,
+    });
+    const started = await postWmsRelocationStartSession(opts.tenantId, opts.warehouseId, {
+      order_id: task.order_id,
+      task_id: added.relocation_task_id ?? undefined,
+    });
+    navigate(WMS_ROUTES.operationalRelocationTask(started.task_id), {
+      state: { startRelocationSession: true },
+    });
+  } catch (e: unknown) {
+    opts.onError?.(extractApiErrorMessage(e, "Nie udało się rozpocząć rozlokowania."));
+  }
+}
+
+/**
+ * Dokładnie jedna akcja operacyjna — wyłącznie z fazy lifecycle resolvera.
+ */
+export function brakiPrimaryAction(
+  task: OrderIssueTaskListItemApi,
+  navigate: (path: string) => void,
+  opts: {
+    tenantId: number;
+    warehouseId: number;
+    onError?: (message: string) => void;
+  },
+): BrakiPrimaryAction {
+  const phase = resolveShortageLifecyclePhase(task);
+  const orderId = task.order_id;
+
+  switch (phase) {
+    case "AWAITING_OMS":
       return {
+        id: "open_oms",
+        label: "Otwórz OMS",
+        phase,
+        execute: () => navigate(`/orders/${orderId}`),
+      };
+
+    case "WAITING_SUPPLY":
+      return {
+        id: "waiting_supply",
+        label: "Oczekuje na dostawę",
+        phase,
+        disabled: true,
+        execute: () => {},
+      };
+
+    case "RECOVERY_PICK":
+      return {
+        id: "recovery_pick",
+        label: "Przejdź do zbierania",
+        phase,
+        execute: () => navigate(WMS_ROUTES.pickingRecovery(orderId)),
+      };
+
+    case "RELOCATION_REQUIRED":
+      return {
+        id: "relocation",
+        label: "Rozłóż produkty",
+        phase,
+        execute: () =>
+          executeRelocation(task, navigate, {
+            tenantId: opts.tenantId,
+            warehouseId: opts.warehouseId,
+            onError: opts.onError,
+          }),
+      };
+
+    case "READY_TO_PACK":
+      return {
+        id: "packing",
         label: "Przejdź do pakowania",
-        navigate: () => {
-          if (warehouseId == null || warehouseId < 1) {
+        phase,
+        execute: () => {
+          if (opts.warehouseId < 1) {
             navigate(WMS_ROUTES.packingOrder(orderId));
             return;
           }
           return navigateBrakiToPacking(navigate, {
-            warehouseId,
+            warehouseId: opts.warehouseId,
             orderId,
-            redirectedFrom: "braki_workflow_cta",
-            onError: opts?.onPackingError,
+            redirectedFrom: "braki_detail",
+            onError: opts.onError,
           });
         },
       };
-    case "relocation":
+
+    case "DONE":
       return {
-        label: "Rozlokuj produkty",
-        navigate: () => {
-          const taskId = task.relocation_task_id;
-          if (taskId != null && Number(taskId) > 0) {
-            navigate(WMS_ROUTES.operationalRelocationTask(Number(taskId)));
-            return;
-          }
-          navigate(WMS_ROUTES.braki(task.order_id));
-        },
+        id: "archive",
+        label: "Usuń z Braków",
+        phase,
+        execute: () => {},
       };
-    case "relocation_partial":
-      return {
-        label: "Kontynuuj rozlokowanie",
-        navigate: () => {
-          const taskId = task.relocation_task_id;
-          if (taskId != null && Number(taskId) > 0) {
-            navigate(WMS_ROUTES.operationalRelocationTask(Number(taskId)));
-            return;
-          }
-          navigate(WMS_ROUTES.operationalQueues);
-        },
-      };
-    case "pick":
-    case "pick_and_relocation":
-      return {
-        label: "Przejdź do zbierania",
-        navigate: () => navigate(WMS_ROUTES.pickingRecovery(orderId)),
-      };
-    case "awaiting":
+
     default:
       return {
+        id: "open_oms",
         label: "Otwórz OMS",
-        navigate: () => navigate(`/orders/${orderId}`),
+        phase: "SHORTAGE_DETECTED",
+        execute: () => navigate(`/orders/${orderId}`),
       };
   }
+}
+
+/** @deprecated Use brakiPrimaryAction — kept for list cards if needed. */
+export function brakiPrimaryCta(
+  task: OrderIssueTaskListItemApi,
+  navigate: (path: string) => void,
+  opts?: { warehouseId?: number; onPackingError?: (message: string) => void },
+): { label: string; navigate: () => void | Promise<void> } {
+  const action = brakiPrimaryAction(task, navigate, {
+    tenantId: 1,
+    warehouseId: opts?.warehouseId ?? 0,
+    onError: opts?.onPackingError,
+  });
+  return { label: action.label, navigate: action.execute };
 }

@@ -546,6 +546,7 @@ def canonical_shortage_lifecycle_phase(
     state: OrderRecoveryState,
     *,
     archived: bool = False,
+    order_fully_packed: bool = False,
 ) -> ShortageLifecyclePhase:
     """
     Jedna kanoniczna faza lifecycle zamówienia — wyłącznie z ``OrderRecoveryState``.
@@ -561,6 +562,8 @@ def canonical_shortage_lifecycle_phase(
     if state.has_pending_relocation or any(ln.visible_in_relocation for ln in state.lines):
         return "RELOCATION_REQUIRED"
     if state.packing_allowed or state.recovery_status == "ready_pack":
+        if order_fully_packed:
+            return "DONE"
         return "READY_TO_PACK"
     if state.has_unresolved_lines or state.totals.unresolved_lines > 0:
         return "SHORTAGE_DETECTED"
@@ -1008,6 +1011,9 @@ def recovery_state_for_braki_task(db: Session, order: Order) -> dict[str, Any]:
     needs_reloc_ui = bool(st.has_pending_relocation) or any(
         ln.visible_in_relocation for ln in st.lines
     )
+    from .braki_order_state_service import order_fully_packed
+
+    fully_packed = bool(order_fully_packed(db, order))
     return {
         "recovery_packing_allowed": bool(st.packing_allowed),
         "recovery_active_lines": sum(1 for ln in st.lines if ln.visible_in_recovery_pick),
@@ -1016,7 +1022,10 @@ def recovery_state_for_braki_task(db: Session, order: Order) -> dict[str, Any]:
         "relocation_task_id": int(rel_task.id) if rel_task is not None else None,
         "can_close_shortage": can_close_braki_shortage(db, order, repair_relocation=False),
         "recovery_state_hash": st.state_hash,
-        "shortage_lifecycle_phase": canonical_shortage_lifecycle_phase(st),
+        "shortage_lifecycle_phase": canonical_shortage_lifecycle_phase(
+            st,
+            order_fully_packed=fully_packed,
+        ),
         "relocation_mode": RELOCATION_MODE_CARRIER if needs_reloc_ui else None,
     }
 

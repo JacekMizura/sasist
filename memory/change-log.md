@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — Braki detail: single resolver-driven CTA
+
+- ``brakiPrimaryAction()`` — jedna akcja z ``shortage_lifecycle_phase`` (SSOT).
+- Usunięto: modal ZWK, drugi przycisk archiwum, link OMS, logikę ``needsRelocationChoice``.
+- Relocation: auto bootstrap add-items + session gdy brak ``relocation_task_id``.
+- ``DONE`` = spakowane + ``Usuń z Braków`` (``order_fully_packed`` w resolverze).
+
 ## 2026-06-04 — WMS stabilization lock
 
 - Reguła Cursor: `.cursor/rules/wms-stabilization.mdc` — SSOT, zakazane warstwy, kanoniczny lifecycle.

@@ -269,3 +269,8 @@ class TestCanonicalShortageLifecycle:
     def test_done_when_archived(self):
         st = self._state(packing_allowed=True)
         assert canonical_shortage_lifecycle_phase(st, archived=True) == "DONE"
+
+    def test_done_when_packed(self):
+        st = self._state(recovery_status="ready_pack", packing_allowed=True)
+        assert canonical_shortage_lifecycle_phase(st, order_fully_packed=True) == "DONE"
+        assert canonical_shortage_lifecycle_phase(st, order_fully_packed=False) == "READY_TO_PACK"
