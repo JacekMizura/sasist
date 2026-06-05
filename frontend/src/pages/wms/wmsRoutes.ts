@@ -14,6 +14,7 @@ export const WMS_ROUTES = {
   pickingProducts: "/wms/picking/products",
   /** Dogrywka zbierki — tylko linie do domknięcia po decyzji OMS (bez kohorty statusu zbierania). */
   pickingRecovery: (orderId: number | string) => `/wms/picking/recovery/${orderId}`,
+  pickingRecoveryBatch: (batchId: number | string) => `/wms/picking/recovery/batch/${batchId}`,
   pickingProduct: (productId: number | string) => `/wms/picking/products/${productId}`,
   /** Hub: skan / przejście do produktu. */
   productPreviewRoot: "/wms/product-preview",

@@ -128,6 +128,7 @@ import ProductLocationReportPage from "./reports/ProductLocationReportPage"
 import WmsPickingPage from "./pages/wms/WmsPickingPage"
 import WmsPickingProductDetailPage from "./pages/wms/WmsPickingProductDetailPage"
 import WmsPickingProductsPage from "./pages/wms/WmsPickingProductsPage"
+import WmsRecoveryBatchPage from "./pages/wms/WmsRecoveryBatchPage"
 import WmsPickingStatusPage from "./pages/wms/WmsPickingStatusPage"
 import WmsOrderIssuesHub from "./pages/wms/WmsOrderIssuesHub"
 import WmsSupervisorDashboardGate from "./pages/wms/WmsSupervisorDashboardGate"
@@ -320,6 +321,7 @@ export const router = createBrowserRouter(
           <Route path="cart" element={<WmsPickingCartScanPage />} />
           <Route path="products/:productId" element={<WmsPickingProductDetailPage />} />
           <Route path="products" element={<WmsPickingProductsPage />} />
+          <Route path="recovery/batch/:batchId" element={<WmsRecoveryBatchPage />} />
           <Route path="recovery/:orderId" element={<WmsPickingProductsPage />} />
           <Route path="locations" element={<WmsPickingPage />} />
         </Route>

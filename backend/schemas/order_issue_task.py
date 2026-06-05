@@ -208,6 +208,23 @@ class OrderIssueTaskListItem(BaseModel):
         default_factory=BrakiWorkstreams,
         description="Aktywne strumienie pracy — mieszane stany w jednym zamówieniu",
     )
+    shortage_priority_score: int = Field(
+        default=0,
+        ge=0,
+        description="Dynamiczny scoring priorytetu braku (resolver)",
+    )
+    shortage_priority_level: str = Field(
+        default="LOW",
+        description="CRITICAL | HIGH | NORMAL | LOW",
+    )
+    shortage_priority_label: str = Field(
+        default="",
+        description="Etykieta PL priorytetu",
+    )
+    shortage_priority_factors: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Czynniki wpływające na score (debug / UI)",
+    )
 
 
 class OrderIssueTaskSkippedItem(BaseModel):

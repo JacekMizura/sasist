@@ -39,6 +39,8 @@ from ..schemas.wms_picking_products import (
     WmsPickingReportShortageBody,
     WmsPickingReportShortageResponse,
     WmsPickingResolveCartResponse,
+    WmsRecoveryBatchCreateBody,
+    WmsRecoveryBatchSessionRead,
 )
 from ..services.cart_display import cart_display_name_for_wms
 from ..services.picking_config_service import (
@@ -945,6 +947,68 @@ def post_picking_recovery_finalize(
             detail=f"Zakończenie dogrywki nie powiodło się: {msg}",
         ) from e
     return WmsPickingRecoveryFinalizeResponse(**out)
+
+
+def _batch_session_to_read(sess) -> dict:
+    from ..services.recovery_intelligence import batch_session_payload
+
+    payload = batch_session_payload(sess)
+    groups = payload.get("route_groups") or []
+    return {
+        "id": int(sess.id),
+        "label": str(sess.label or ""),
+        "status": str(sess.status or "open"),
+        "order_ids": list(payload.get("order_ids") or []),
+        "order_count": int(payload.get("order_count") or 0),
+        "line_count": int(payload.get("line_count") or 0),
+        "route_groups": groups,
+    }
+
+
+@router.post("/picking/recovery/batch", response_model=WmsRecoveryBatchSessionRead)
+def post_recovery_batch_create(
+    body: WmsRecoveryBatchCreateBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """Utwórz grupową sesję dogrywki (top priority lub wskazane order_ids)."""
+    from ..services.recovery_intelligence import create_recovery_batch_session
+
+    try:
+        sess = create_recovery_batch_session(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_ids=body.order_ids or None,
+            max_orders=int(body.max_orders),
+            operator_user_id=int(current_user.id),
+        )
+        db.commit()
+        return WmsRecoveryBatchSessionRead.model_validate(_batch_session_to_read(sess))
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"message": str(e)}) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=503, detail={"message": "Nie udało się utworzyć batch dogrywki."}) from e
+
+
+@router.get("/picking/recovery/batch/{batch_id}", response_model=WmsRecoveryBatchSessionRead)
+def get_recovery_batch_detail(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    from ..services.recovery_intelligence import get_recovery_batch_session
+
+    _ = current_user
+    sess = get_recovery_batch_session(db, int(batch_id), tenant_id=int(tenant_id))
+    if sess is None:
+        raise HTTPException(status_code=404, detail={"message": "Nie znaleziono sesji batch dogrywki."})
+    return WmsRecoveryBatchSessionRead.model_validate(_batch_session_to_read(sess))
 
 
 @router.post("/picking/finalize-cart", response_model=WmsPickingFinalizeCartResponse)

@@ -164,6 +164,24 @@ def record_inventory_movement(
         metadata_json=_dump_metadata(metadata),
     )
     db.add(row)
+    if mt in (MOVEMENT_PUTAWAY, MOVEMENT_RECEIVING, MOVEMENT_ADJUSTMENT, MOVEMENT_RETURN, MOVEMENT_RELOCATION):
+        try:
+            from .recovery_intelligence import process_recovery_stock_increase
+
+            process_recovery_stock_increase(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                product_id=int(product_id),
+                qty_added=q,
+                source_event=mt,
+            )
+        except Exception:
+            _logger.exception(
+                "recovery stock reserve hook failed product_id=%s movement=%s",
+                product_id,
+                mt,
+            )
     return row
 
 

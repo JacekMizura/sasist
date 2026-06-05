@@ -290,3 +290,25 @@ class WmsPickingReportShortageResponse(BaseModel):
         default=True,
         description="Z ustawień WMS — dla UI po zgłoszeniu (kontynuacja vs pauza).",
     )
+
+
+class WmsRecoveryBatchRouteGroup(BaseModel):
+    location_code: str = ""
+    line_count: int = 0
+    order_ids: list[int] = Field(default_factory=list)
+    lines: list[dict] = Field(default_factory=list)
+
+
+class WmsRecoveryBatchSessionRead(BaseModel):
+    id: int
+    label: str = ""
+    status: str = "open"
+    order_ids: list[int] = Field(default_factory=list)
+    order_count: int = 0
+    line_count: int = 0
+    route_groups: list[WmsRecoveryBatchRouteGroup] = Field(default_factory=list)
+
+
+class WmsRecoveryBatchCreateBody(BaseModel):
+    order_ids: list[int] = Field(default_factory=list, description="Puste = auto z top priority")
+    max_orders: int = Field(default=8, ge=1, le=20)

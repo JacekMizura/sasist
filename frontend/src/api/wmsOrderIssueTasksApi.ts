@@ -136,6 +136,10 @@ export type OrderIssueTaskListItemApi = {
   can_close_shortage?: boolean;
   recovery_state_hash?: string;
   braki_workstreams?: BrakiWorkstreamsApi;
+  shortage_priority_score?: number;
+  shortage_priority_level?: "CRITICAL" | "HIGH" | "NORMAL" | "LOW" | string;
+  shortage_priority_label?: string;
+  shortage_priority_factors?: { key: string; weight: number; detail?: string }[];
 };
 
 export type OrderIssueTaskSkippedItemApi = {

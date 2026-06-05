@@ -111,6 +111,8 @@ from .wms_settings import WmsSettings  # noqa: F401
 from .wms_packing_settings import WmsPackingSettings  # noqa: F401
 from .wms_picking_shortage_settings import WmsPickingShortageSettings  # noqa: F401
 from .wms_recovery_pick_task import WmsRecoveryPickTask  # noqa: F401
+from .wms_recovery_batch_session import WmsRecoveryBatchSession  # noqa: F401
+from .wms_recovery_soft_reservation import WmsRecoverySoftReservation  # noqa: F401
 from .wms_rmz_line import RMZLine  # noqa: F401
 from .wms_refund import WmsRefund  # noqa: F401
 from .replenishment_task import ReplenishmentTask  # noqa: F401

@@ -1221,6 +1221,9 @@ def recovery_state_for_braki_task(
     from .braki_order_state_service import order_fully_packed
 
     fully_packed = bool(order_fully_packed(db, order))
+    from .recovery_intelligence import priority_fields_for_braki_task
+
+    priority = priority_fields_for_braki_task(db, order, st, task=None)
     return {
         "recovery_packing_allowed": bool(st.packing_allowed),
         "recovery_active_lines": sum(1 for ln in st.lines if ln.visible_in_recovery_pick),
@@ -1235,6 +1238,7 @@ def recovery_state_for_braki_task(
         ),
         "relocation_mode": RELOCATION_MODE_CARRIER if needs_reloc_ui else None,
         "braki_workstreams": build_braki_workstreams_from_state(st),
+        **priority,
     }
 
 

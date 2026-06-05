@@ -297,21 +297,27 @@ def serialize_order_issue_task_item(
             for dl in order_context_model.shortage_decision_lines:
                 if float(dl.missing_qty or 0) > 1e-6:
                     shortage_line_models.append(OrderIssueShortageLine.model_validate(dl.model_dump()))
-    recovery_fields: dict = {}
-    if o is not None:
-        recovery_fields = recovery_state_for_braki_task(
-            db,
-            o,
-            rec_state=rec_st if o is not None else None,
-            skip_repair=True,
-        )
-
     created = t.created_at.isoformat() + "Z" if isinstance(t.created_at, datetime) else str(t.created_at)
     last_shortage_at = created
     for e in reversed(logs):
         if str(e.kind or "") == "shortage_reported" and str(e.at or "").strip():
             last_shortage_at = str(e.at).strip()
             break
+    recovery_fields: dict = {}
+    if o is not None:
+        from ..services.recovery_intelligence import priority_fields_for_braki_task
+
+        recovery_fields = {
+            **recovery_state_for_braki_task(
+                db,
+                o,
+                rec_state=rec_st if o is not None else None,
+                skip_repair=True,
+            ),
+            **priority_fields_for_braki_task(
+                db, o, rec_st, task=t, last_shortage_at=last_shortage_at
+            ),
+        }
     return OrderIssueTaskListItem(
         id=int(t.id),
         order_id=int(t.order_id),
@@ -388,13 +394,22 @@ def serialize_order_issue_task_list_card(
         )
 
     _missing, _picked, logs = _parse_task_json_lists(t)
-    recovery_fields: dict = recovery_state_for_braki_task(db, o) if o is not None else {}
     created = t.created_at.isoformat() + "Z" if isinstance(t.created_at, datetime) else str(t.created_at)
     last_shortage_at = created
     for e in reversed(logs):
         if str(e.kind or "") == "shortage_reported" and str(e.at or "").strip():
             last_shortage_at = str(e.at).strip()
             break
+    recovery_fields: dict = {}
+    if o is not None:
+        from ..services.recovery_workflow_service import resolve_order_recovery_state
+        from ..services.recovery_intelligence import priority_fields_for_braki_task
+
+        rec_st = resolve_order_recovery_state(db, o, log=False)
+        recovery_fields = {
+            **recovery_state_for_braki_task(db, o, rec_state=rec_st, skip_repair=True),
+            **priority_fields_for_braki_task(db, o, rec_st, task=t, last_shortage_at=last_shortage_at),
+        }
 
     return OrderIssueTaskListItem(
         id=int(t.id),
@@ -708,6 +723,13 @@ def _build_order_issue_tasks_list(
                 )
                 continue
         serialization_ms = int((time.perf_counter() - t_serialize_start) * 1000)
+
+        out.sort(
+            key=lambda item: (
+                -int(getattr(item, "shortage_priority_score", 0) or 0),
+                int(item.order_id),
+            )
+        )
 
         try:
             db.commit()

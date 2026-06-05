@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Recovery intelligence (priority + batch + soft reserve)
+
+- `recovery_intelligence.py` — scoring priorytetu braków (CRITICAL/HIGH/NORMAL/LOW), batch dogrywki, soft reservation.
+- API Braki: `shortage_priority_score/level/label`, sort kolejki desc.
+- `WmsRecoveryBatchSession`, `WmsRecoverySoftReservation` — modele operacyjne (nie workflow engine).
+- Hook `process_recovery_stock_increase` na ruchach magazynowych (putaway/receiving/adjustment…).
+- UI: badge priorytetu w Braki, przycisk „Dogrywka batch”, ekran `/wms/picking/recovery/batch/:id`.
+
 ## 2026-06-04 — Braki mixed-state workflow
 
 - Braki jako overlay — wiele równoległych strumieni w jednym zamówieniu (`braki_workstreams`).

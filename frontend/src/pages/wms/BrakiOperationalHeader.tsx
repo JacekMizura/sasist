@@ -1,5 +1,6 @@
 import type { OrderIssueTaskListItemApi } from "../../api/wmsOrderIssueTasksApi";
 import { WMS_UI } from "./wmsTerminology";
+import { priorityBadgeClass, priorityLabelForTask, priorityLevelFromTask } from "./brakiPriority";
 import { brakiMixedStateSummary, deriveBrakiWorkstreams } from "./brakiWorkflowCta";
 
 type Props = {
@@ -38,6 +39,8 @@ export function BrakiOperationalHeader({ task }: Props) {
   const workflowLabel =
     (task.braki_workflow_status_label ?? "").trim() || brakiMixedStateSummary(task);
   const summary = brakiMixedStateSummary(task);
+  const prLevel = priorityLevelFromTask(task);
+  const prLabel = priorityLabelForTask(task);
 
   return (
     <div className="border-b border-slate-200 bg-slate-900 text-white">
@@ -51,6 +54,11 @@ export function BrakiOperationalHeader({ task }: Props) {
           </h2>
           <span className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold text-slate-200">
             {workflowLabel}
+          </span>
+          <span
+            className={`rounded-md border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${priorityBadgeClass(prLevel)}`}
+          >
+            {prLabel}
           </span>
         </div>
         <p className="mt-1.5 text-sm text-slate-300">

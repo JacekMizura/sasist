@@ -10,8 +10,15 @@ import {
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
 import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
+import { createWmsRecoveryBatch } from "../../api/wmsRecoveryBatchApi";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
+import {
+  priorityBadgeClass,
+  priorityLabelForTask,
+  priorityLevelFromTask,
+  sortTasksByPriority,
+} from "./brakiPriority";
 
 type BrakiWorkflowFilterId =
   | "all"
@@ -151,14 +158,33 @@ export default function WmsOrderIssuesHub() {
 
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState<BrakiWorkflowFilterId>("all");
+  const [batchPending, setBatchPending] = useState(false);
 
   const activeFilterLabel =
     BRAKI_WORKFLOW_FILTERS.find((f) => f.id === activeFilterId)?.label ?? "Wszystkie statusy";
 
+  const sortedTasks = useMemo(() => sortTasksByPriority(tasks), [tasks]);
+
   const filteredTasks = useMemo(() => {
-    if (activeFilterId === "all") return tasks;
-    return tasks.filter((t) => normalizeWorkflowStatus(t) === activeFilterId);
-  }, [tasks, activeFilterId]);
+    const base =
+      activeFilterId === "all"
+        ? sortedTasks
+        : sortedTasks.filter((t) => normalizeWorkflowStatus(t) === activeFilterId);
+    return base;
+  }, [sortedTasks, activeFilterId]);
+
+  const startRecoveryBatch = useCallback(async () => {
+    if (warehouseId == null || batchPending) return;
+    setBatchPending(true);
+    try {
+      const batch = await createWmsRecoveryBatch(DAMAGE_TENANT_ID, warehouseId, { max_orders: 8 });
+      navigate(WMS_ROUTES.pickingRecoveryBatch(batch.id));
+    } catch (e: unknown) {
+      setErr(extractApiErrorMessage(e, "Nie udało się utworzyć batch dogrywki."));
+    } finally {
+      setBatchPending(false);
+    }
+  }, [batchPending, navigate, warehouseId]);
 
   const load = useCallback((options?: { sync?: boolean }) => {
     if (warehouseId == null) {
@@ -273,6 +299,14 @@ export default function WmsOrderIssuesHub() {
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={batchPending}
+            onClick={() => void startRecoveryBatch()}
+            className="hidden h-10 items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-sm font-bold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50 md:flex"
+          >
+            {batchPending ? "Tworzenie…" : "Dogrywka batch"}
+          </button>
           <button
             onClick={() => void load({ sync: true })}
             className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-95 md:px-4"
@@ -418,6 +452,9 @@ export default function WmsOrderIssuesHub() {
               }
 
               const statusLabel = cardStatusLabel(t);
+              const prLevel = priorityLevelFromTask(t);
+              const prLabel = priorityLabelForTask(t);
+              const prBadge = priorityBadgeClass(prLevel);
 
               return (
                 <div
@@ -447,6 +484,18 @@ export default function WmsOrderIssuesHub() {
                     </div>
 
                     <div className="space-y-2.5 md:space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${prBadge}`}
+                        >
+                          {prLabel}
+                        </span>
+                        {(t.shortage_priority_score ?? 0) > 0 ? (
+                          <span className="text-[10px] font-bold text-slate-400">
+                            score {t.shortage_priority_score}
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="flex items-start gap-2">
                         <div className="mt-0.5 w-14 shrink-0 text-[11px] font-semibold text-slate-500 md:text-xs">
                           Status:
