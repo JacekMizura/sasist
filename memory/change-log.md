@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — Dogrywka zbierki z kolejki Braki (recovery_order_id)
+
+- ``prepare_recovery_picking_for_order`` — auto ``WmsRecoveryPickTask`` gdy ``r_pend > 0``; logi ``[wms.recovery.open]`` / ``[wms.recovery.lines.fetch]``.
+- GET ``/picking/product-lines?mode=recovery&recovery_order_id=`` — 200 + ``recovery_completed`` zamiast 404 przy braku linii.
+- ``_recovery_demand_by_product_from_orders`` — tylko pozostałe ilości do zebrania (nie całe zamówienie).
+- Frontend: ``mode=recovery``, UX „Braki zostały już rozwiązane”; test ``test_recovery_picking_open.py``.
+
 ## 2026-06-04 — Pakowanie: finish po workflow braków
 
 - ``order_item_required_pack_qty`` — wymagana ilość po ``oms_removed_qty`` / zbieraniu, nie surowe ``quantity``.

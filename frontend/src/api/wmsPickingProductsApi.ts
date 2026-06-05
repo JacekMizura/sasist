@@ -49,6 +49,9 @@ export type WmsPickingProductLinesResponseApi = {
   shortfalls: unknown[];
   warnings: string[];
   allow_continue_other_lines_after_shortage?: boolean;
+  picking_mode?: "normal" | "recovery" | string | null;
+  recovery_order_id?: number | null;
+  recovery_completed?: boolean;
 };
 
 export type WmsPickingProductLocationRowApi = {
@@ -118,6 +121,7 @@ export async function getWmsPickingProductLines(
   }
   if (recoveryOrderId != null && recoveryOrderId > 0) {
     params.recovery_order_id = recoveryOrderId;
+    params.mode = "recovery";
   }
   if (orderIds?.length) {
     params.order_ids_csv = orderIds.join(",");
@@ -148,6 +152,7 @@ export async function getWmsPickingProductDetail(
   }
   if (recoveryOrderId != null && recoveryOrderId > 0) {
     params.recovery_order_id = recoveryOrderId;
+    params.mode = "recovery";
   }
   if (orderIds?.length) {
     params.order_ids_csv = orderIds.join(",");

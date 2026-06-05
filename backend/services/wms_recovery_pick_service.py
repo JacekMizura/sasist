@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any, Literal
 
 from sqlalchemy.orm import Session, joinedload
+
+logger = logging.getLogger(__name__)
 
 from ..models.order import Order
 from ..models.order_item import OrderItem
@@ -153,3 +156,137 @@ def get_open_recovery_task_for_order(
 def mark_recovery_task_done(db: Session, task: WmsRecoveryPickTask) -> None:
     task.status = "done"
     task.updated_at = datetime.utcnow()
+
+
+def order_has_recovery_pick_work(db: Session, order: Order) -> bool:
+    """Czy zamówienie ma jeszcze pracę magazynową (dogrywka / braki do zebrania), bez oczekującej decyzji OMS."""
+    u, r = count_issue_queue_operational_lines(db, order)
+    if int(u) > 0:
+        return False
+    if int(r) > 0:
+        return True
+    if order_has_pending_replacement_picking(db, order):
+        return True
+    from .braki_order_state_service import order_line_pick_still_possible
+    from .order_fulfillment_recompute import order_item_needs_substitute_pick_completion
+
+    for oi in order.items or []:
+        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+            continue
+        if order_item_needs_substitute_pick_completion(db, order, oi):
+            return True
+        if order_line_pick_still_possible(db, order, oi):
+            return True
+    return False
+
+
+def _recovery_line_stats(db: Session, order: Order) -> dict[str, int]:
+    """Liczniki linii dla logów recovery (bez bundle children / REPLACED)."""
+    from ..models.order_item import order_item_is_replaced_line
+    from .braki_order_state_service import order_line_pick_still_possible
+    from .order_fulfillment_recompute import order_item_needs_substitute_pick_completion
+
+    unresolved = resolved = removed = 0
+    for oi in order.items or []:
+        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+            continue
+        if order_item_is_replaced_line(oi):
+            removed += 1
+            continue
+        meta_removed = bool(_order_item_meta_dict(oi).get("oms_line_removed"))
+        if int(oi.quantity or 0) <= 0 or meta_removed:
+            removed += 1
+            continue
+        if order_line_pick_still_possible(db, order, oi) or order_item_needs_substitute_pick_completion(
+            db, order, oi
+        ):
+            unresolved += 1
+        else:
+            resolved += 1
+    return {
+        "unresolved_lines_count": unresolved,
+        "resolved_lines_count": resolved,
+        "removed_lines_count": removed,
+    }
+
+
+def prepare_recovery_picking_for_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    cart_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Otwarcie sesji dogrywki z kolejki Braki lub po OMS.
+    Tworzy ``WmsRecoveryPickTask`` gdy jest praca do zebrania; nie zwraca 404 gdy brak linii — ``completed=True``.
+    """
+    recompute_order_fulfillment(db, int(order_id), commit=False)
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(
+            Order.id == int(order_id),
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if order is None:
+        logger.info(
+            "[wms.recovery.open] order_id=%s cart_id=%s recovery_mode=recovery ok=false reason=order_not_found",
+            order_id,
+            cart_id,
+        )
+        return {
+            "ok": False,
+            "reason": "order_not_found",
+            "completed": False,
+            "eligible": False,
+        }
+
+    stats = _recovery_line_stats(db, order)
+    has_work = order_has_recovery_pick_work(db, order)
+    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    task = get_open_recovery_task_for_order(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+    )
+    if has_work and task is None:
+        task = ensure_recovery_pick_task(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order=order,
+            kind="other",
+        )
+
+    completed = not has_work
+    snap = {
+        "ok": True,
+        "reason": "completed" if completed else "open",
+        "completed": completed,
+        "eligible": True,
+        "recovery_task_id": int(task.id) if task is not None else None,
+        "issue_queue_oms": int(u_short),
+        "issue_queue_pick": int(r_pend),
+        **stats,
+    }
+    logger.info(
+        "[wms.recovery.open] order_id=%s cart_id=%s recovery_mode=recovery ok=true completed=%s "
+        "recovery_task_id=%s unresolved_lines_count=%s removed_lines_count=%s "
+        "resolved_lines_count=%s issue_queue_oms=%s issue_queue_pick=%s",
+        order_id,
+        cart_id,
+        completed,
+        snap.get("recovery_task_id"),
+        stats["unresolved_lines_count"],
+        stats["removed_lines_count"],
+        stats["resolved_lines_count"],
+        u_short,
+        r_pend,
+    )
+    return snap

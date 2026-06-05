@@ -140,6 +140,19 @@ class WmsPickingProductLinesResponse(BaseModel):
         default=True,
         description="Z ustawień WMS: czy po zgłoszeniu braku na jednej linii picker może zbierać inne SKU w tej samej sesji.",
     )
+    picking_mode: Optional[str] = Field(
+        default=None,
+        description="normal | recovery — tryb listy produktów",
+    )
+    recovery_order_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Zamówienie dogrywki (gdy picking_mode=recovery)",
+    )
+    recovery_completed: bool = Field(
+        default=False,
+        description="True gdy dogrywka nie ma już linii do zebrania (200 OK, pusta lista)",
+    )
 
 
 class WmsPickingProductDetailResponse(BaseModel):

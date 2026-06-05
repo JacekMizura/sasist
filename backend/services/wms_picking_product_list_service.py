@@ -350,6 +350,65 @@ def _missing_qty_by_product_from_orders(
     return out
 
 
+def _recovery_line_remaining_pick_qty(db: Session, order: Order, oi: OrderItem) -> float:
+    """Ilość do dogrywki na linii — tylko nierozwiązane, nieusunięte pozycje."""
+    from .braki_order_state_service import order_line_pick_still_possible, order_line_requires_oms_decision
+    from .order_fulfillment_recompute import order_item_needs_substitute_pick_completion
+    from .wms_operational_task_service import _line_remaining_qty
+
+    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+        return 0.0
+    if order_item_is_replaced_line(oi):
+        return 0.0
+    if int(oi.quantity or 0) <= 0:
+        return 0.0
+    raw_meta = getattr(oi, "metadata_json", None)
+    if raw_meta and str(raw_meta).strip():
+        try:
+            import json as _json
+
+            m = _json.loads(raw_meta)
+            if isinstance(m, dict) and m.get("oms_line_removed"):
+                return 0.0
+        except Exception:
+            pass
+    if order_line_requires_oms_decision(db, order, oi):
+        return 0.0
+    if not order_line_pick_still_possible(db, order, oi) and not order_item_needs_substitute_pick_completion(
+        db, order, oi
+    ):
+        return 0.0
+    remaining = float(_line_remaining_qty(db, order, oi))
+    missing = float(compute_line_missing_qty(db, order, oi))
+    return max(0.0, round(remaining - missing, 6))
+
+
+def _recovery_demand_by_product_from_orders(
+    db: Session,
+    order_ids: Sequence[int],
+    *,
+    tenant_id: int,
+) -> dict[int, float]:
+    """Suma pozostałej ilości do dogrywki per product_id (nie całe zamówienie)."""
+    if not order_ids:
+        return {}
+    orders = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(Order.id.in_(list(order_ids)), Order.tenant_id == int(tenant_id))
+        .all()
+    )
+    out: dict[int, float] = {}
+    for order in orders:
+        for oi in order.items or []:
+            rq = _recovery_line_remaining_pick_qty(db, order, oi)
+            if rq <= 1e-9:
+                continue
+            pid = int(oi.product_id)
+            out[pid] = round(float(out.get(pid, 0.0)) + rq, 6)
+    return out
+
+
 def _demand_by_product_from_orders(
     db: Session,
     order_ids: Sequence[int],
@@ -876,6 +935,7 @@ def build_wms_picking_product_lines(
     order_type: WmsPickingOrderTypeFilter,
     cart_id: int | None = None,
     fixed_order_ids: list[int] | None = None,
+    recovery_mode: bool = False,
 ) -> WmsPickingProductLinesResponse:
     """
     Lista produktów do zbiórki.
@@ -908,7 +968,10 @@ def build_wms_picking_product_lines(
             allow_continue_other_lines_after_shortage=allow_continue_other_lines,
         )
 
-    demand_by_product = _demand_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
+    if recovery_mode and fixed_order_ids is not None:
+        demand_by_product = _recovery_demand_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
+    else:
+        demand_by_product = _demand_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
     missing_by_product = _missing_qty_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
 
     routing = PickingRoutingService(db).build_location_pick_list(order_ids, tenant_id=tenant_id)
@@ -1020,6 +1083,20 @@ def build_wms_picking_product_lines(
 
     cohort_missing = _build_cohort_missing_line_rows(db, order_ids, tenant_id=tenant_id)
 
+    if recovery_mode:
+        lines = [ln for ln in lines if float(ln.remaining_to_pick or 0) > 1e-9]
+        logger.info(
+            "[wms.recovery.lines.fetch] order_id=%s cart_id=%s recovery_mode=recovery "
+            "product_count=%s cohort_order_count=%s",
+            order_ids[0] if order_ids else None,
+            cart_id,
+            len(lines),
+            len(order_ids),
+        )
+
+    recovery_completed = bool(recovery_mode and len(lines) == 0)
+    recovery_oid = int(order_ids[0]) if recovery_mode and order_ids else None
+
     return WmsPickingProductLinesResponse(
         products=lines,
         cohort_order_count=len(order_ids),
@@ -1028,6 +1105,9 @@ def build_wms_picking_product_lines(
         shortfalls=list(routing.shortfalls),
         warnings=list(routing.warnings),
         allow_continue_other_lines_after_shortage=allow_continue_other_lines,
+        picking_mode="recovery" if recovery_mode else "normal",
+        recovery_order_id=recovery_oid,
+        recovery_completed=recovery_completed,
     )
 
 
@@ -1041,6 +1121,7 @@ def build_wms_picking_product_detail(
     product_id: int,
     cart_id: Optional[int] = None,
     fixed_order_ids: list[int] | None = None,
+    recovery_mode: bool = False,
 ) -> Optional[WmsPickingProductDetailResponse]:
     lines_resp = build_wms_picking_product_lines(
         db,
@@ -1050,6 +1131,7 @@ def build_wms_picking_product_detail(
         order_type=order_type,
         cart_id=cart_id,
         fixed_order_ids=fixed_order_ids,
+        recovery_mode=recovery_mode,
     )
     row = next((p for p in lines_resp.products if int(p.product_id) == int(product_id)), None)
     if row is None:
@@ -1289,8 +1371,19 @@ def record_wms_quick_pick(
             raise ValueError("Zamówienie nie należy do tego magazynu / tenanta.")
         from .wms_recovery_pick_service import get_open_recovery_task_for_order
 
-        if get_open_recovery_task_for_order(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), order_id=oid) is None:
-            raise ValueError("Brak otwartego zadania dogrywki zbierki dla tego zamówienia.")
+        from .wms_recovery_pick_service import prepare_recovery_picking_for_order
+
+        prep = prepare_recovery_picking_for_order(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=oid,
+            cart_id=int(cart_id),
+        )
+        if not prep.get("ok"):
+            raise ValueError("Zamówienie dogrywki nie znalezione.")
+        if prep.get("completed"):
+            raise ValueError("Brak linii do dogrywki — braki zostały już rozwiązane.")
         order_ids = [oid]
     else:
         ot = _order_type_filter(order_type)
@@ -1635,16 +1728,24 @@ def report_wms_picking_product_shortage(
         forced_scope_ids = [int(oi_target.order_id)]
 
     if is_recovery and roid is not None:
-        from .wms_recovery_pick_service import get_open_recovery_task_for_order
+        from .wms_recovery_pick_service import prepare_recovery_picking_for_order
 
-        if get_open_recovery_task_for_order(
+        prep = prepare_recovery_picking_for_order(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
             order_id=int(roid),
-        ) is None:
+            cart_id=int(cart_id),
+        )
+        if not prep.get("ok"):
             _report_shortage_reject(
-                "Brak otwartego zadania dogrywki (recovery) dla tego zamówienia.",
+                "Zamówienie dogrywki nie znalezione.",
+                payload=payload_log,
+                order_id=roid,
+            )
+        if prep.get("completed"):
+            _report_shortage_reject(
+                "Brak linii do dogrywki — braki zostały już rozwiązane.",
                 payload=payload_log,
                 order_id=roid,
             )
@@ -2201,7 +2302,31 @@ def finalize_wms_recovery_picking_cart(
         .first()
     )
     if rt is None:
-        raise ValueError("Brak otwartego zadania dogrywki zbierki dla tego zamówienia.")
+        from .wms_recovery_pick_service import prepare_recovery_picking_for_order
+
+        prep = prepare_recovery_picking_for_order(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(order_id),
+            cart_id=int(cart_id),
+        )
+        if not prep.get("ok"):
+            raise ValueError("Zamówienie dogrywki nie znalezione.")
+        if prep.get("completed"):
+            raise ValueError("Brak linii do dogrywki — braki zostały już rozwiązane.")
+        rt = (
+            db.query(WmsRecoveryPickTask)
+            .filter(
+                WmsRecoveryPickTask.tenant_id == int(tenant_id),
+                WmsRecoveryPickTask.warehouse_id == int(warehouse_id),
+                WmsRecoveryPickTask.order_id == int(order_id),
+                WmsRecoveryPickTask.status == "open",
+            )
+            .first()
+        )
+        if rt is None:
+            raise ValueError("Brak otwartego zadania dogrywki zbierki dla tego zamówienia.")
     cart = (
         db.query(Cart)
         .filter(

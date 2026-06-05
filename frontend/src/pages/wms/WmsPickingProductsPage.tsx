@@ -142,6 +142,7 @@ export default function WmsPickingProductsPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [recoveryCompleted, setRecoveryCompleted] = useState(false);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeErr, setFinalizeErr] = useState<string | null>(null);
   const [finalizeShortageModal, setFinalizeShortageModal] = useState<
@@ -304,6 +305,7 @@ export default function WmsPickingProductsPage() {
     const seq = ++productLinesLoadSeqRef.current;
     setLoading(true);
     setErr(null);
+    setRecoveryCompleted(false);
     try {
       const data = await getWmsPickingProductLines(
         DAMAGE_TENANT_ID,
@@ -317,6 +319,8 @@ export default function WmsPickingProductsPage() {
       if (seq !== productLinesLoadSeqRef.current) {
         return;
       }
+      const completed = Boolean(data.recovery_completed);
+      setRecoveryCompleted(completed);
       const normalized = data.products.map((r) => ({
         ...r,
         picked_quantity: wmsPickingEffectivePickedQuantity(r),
@@ -326,11 +330,38 @@ export default function WmsPickingProductsPage() {
       setCohortMissingLines(data.cohort_missing_lines ?? []);
       setAllowContinueAfterShortage(data.allow_continue_other_lines_after_shortage !== false);
       setWarnings(data.warnings ?? []);
-    } catch {
+      if (completed) {
+        setErr(null);
+      }
+    } catch (e) {
       if (seq !== productLinesLoadSeqRef.current) {
         return;
       }
-      setErr("Nie udało się wczytać listy produktów.");
+      const ax = e as { response?: { status?: number; data?: { detail?: unknown } } };
+      const detail = ax.response?.data?.detail;
+      const code =
+        detail && typeof detail === "object" && detail !== null && "code" in detail
+          ? String((detail as { code: string }).code)
+          : "";
+      const apiErr =
+        detail && typeof detail === "object" && detail !== null && "error" in detail
+          ? String((detail as { error: string }).error)
+          : "";
+      if (
+        recoveryOrderId != null &&
+        recoveryOrderId > 0 &&
+        (code === "RECOVERY_ALREADY_COMPLETED" || code === "RECOVERY_ORDER_NOT_FOUND")
+      ) {
+        setRecoveryCompleted(code === "RECOVERY_ALREADY_COMPLETED");
+        setErr(
+          apiErr ||
+            (code === "RECOVERY_ALREADY_COMPLETED"
+              ? "Braki zostały już rozwiązane."
+              : "Nie znaleziono zamówienia dogrywki."),
+        );
+      } else {
+        setErr(apiErr || "Nie udało się wczytać listy produktów.");
+      }
       setRows([]);
       setCohortOrderCount(0);
       setWarnings([]);
@@ -786,7 +817,14 @@ export default function WmsPickingProductsPage() {
 
         {!loading && !err && rows.length === 0 ? (
           <p className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm font-bold text-slate-500 shadow-sm">
-            Brak pozycji do zbiórki dla tego statusu i filtra.
+            {recoveryCompleted
+              ? "Braki zostały już rozwiązane — nie ma linii do dogrywki."
+              : "Brak pozycji do zbiórki dla tego statusu i filtra."}
+          </p>
+        ) : null}
+        {recoveryCompleted && err ? (
+          <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-8 text-center text-sm font-bold text-emerald-900 shadow-sm">
+            {err}
           </p>
         ) : null}
 

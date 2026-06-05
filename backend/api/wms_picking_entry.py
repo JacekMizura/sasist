@@ -59,7 +59,7 @@ from ..services.wms_picking_product_list_service import (
     resolve_default_bulk_cart_for_warehouse,
     resolve_wms_picking_cart_row,
 )
-from ..services.wms_recovery_pick_service import get_open_recovery_task_for_order
+from ..services.wms_recovery_pick_service import get_open_recovery_task_for_order, prepare_recovery_picking_for_order
 from ..services.wms_audit_service import complete_wms_operation_session, touch_wms_operation_session
 from ..utils.ui_status_color import normalize_stored_color
 
@@ -452,7 +452,11 @@ def get_picking_product_lines(
     recovery_order_id: int | None = Query(
         None,
         ge=1,
-        description="Dogrywka recovery: tylko to zamówienie (wymaga otwartego zadania recovery_pick).",
+        description="Dogrywka recovery: tylko to zamówienie (auto-otwarcie zadania recovery_pick).",
+    ),
+    mode: str | None = Query(
+        None,
+        description="normal | recovery — jawny tryb (recovery wymaga recovery_order_id lub mode=recovery + order w query).",
     ),
     order_ids: list[int] | None = Query(
         None,
@@ -463,23 +467,53 @@ def get_picking_product_lines(
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """Agregat produktów do zbiórki (kolejność wg pierwszej lokalizacji na trasie — jak routing)."""
-    if recovery_order_id is not None:
-        if get_open_recovery_task_for_order(
+    recovery_mode = (
+        str(mode or "").strip().lower() == "recovery"
+        or recovery_order_id is not None
+    )
+    if recovery_mode and recovery_order_id is not None:
+        roid = int(recovery_order_id)
+        prep = prepare_recovery_picking_for_order(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
-            order_id=int(recovery_order_id),
-        ) is None:
-            raise HTTPException(status_code=404, detail="Brak otwartej dogrywki zbierki dla tego zamówienia.")
-        resp = build_wms_picking_product_lines(
-            db,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-            source_status_id=source_status_id,
-            order_type=order_type,
+            order_id=roid,
             cart_id=cart_id,
-            fixed_order_ids=[int(recovery_order_id)],
         )
+        if not prep.get("ok"):
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "RECOVERY_ORDER_NOT_FOUND",
+                    "error": "Zamówienie dogrywki nie znalezione w tym magazynie.",
+                },
+            )
+        if prep.get("completed"):
+            from ..schemas.wms_picking_products import WmsPickingProductLinesResponse
+
+            resp = WmsPickingProductLinesResponse(
+                products=[],
+                cohort_order_count=1,
+                cohort_missing_lines=[],
+                pick_list=[],
+                shortfalls=[],
+                warnings=["Braki zostały już rozwiązane — brak linii do dogrywki."],
+                allow_continue_other_lines_after_shortage=True,
+                picking_mode="recovery",
+                recovery_order_id=roid,
+                recovery_completed=True,
+            )
+        else:
+            resp = build_wms_picking_product_lines(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                source_status_id=source_status_id,
+                order_type=order_type,
+                cart_id=cart_id,
+                fixed_order_ids=[roid],
+                recovery_mode=True,
+            )
         if current_user is not None and current_user.id is not None:
             touch_wms_operation_session(
                 db,
@@ -539,6 +573,7 @@ def get_picking_product_detail(
         ge=1,
         description="Dogrywka recovery — ten sam filtr co lista produktów.",
     ),
+    mode: str | None = Query(None, description="normal | recovery"),
     order_ids: list[int] | None = Query(
         None,
         description="Opcjonalny zakres zadania kierownika — tylko wskazane zamówienia.",
@@ -548,15 +583,35 @@ def get_picking_product_detail(
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     fixed: list[int] | None = None
-    if recovery_order_id is not None:
-        if get_open_recovery_task_for_order(
+    recovery_detail_mode = (
+        str(mode or "").strip().lower() == "recovery" or recovery_order_id is not None
+    )
+    if recovery_detail_mode and recovery_order_id is not None:
+        roid = int(recovery_order_id)
+        prep = prepare_recovery_picking_for_order(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
-            order_id=int(recovery_order_id),
-        ) is None:
-            raise HTTPException(status_code=404, detail="Brak otwartej dogrywki zbierki dla tego zamówienia.")
-        fixed = [int(recovery_order_id)]
+            order_id=roid,
+            cart_id=cart_id,
+        )
+        if not prep.get("ok"):
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "RECOVERY_ORDER_NOT_FOUND",
+                    "error": "Zamówienie dogrywki nie znalezione.",
+                },
+            )
+        if prep.get("completed"):
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "RECOVERY_ALREADY_COMPLETED",
+                    "error": "Braki zostały już rozwiązane — brak produktów do dogrywki.",
+                },
+            )
+        fixed = [roid]
     elif order_ids:
         fixed = [int(v) for v in order_ids if int(v) > 0] or None
     elif order_ids_csv:
@@ -570,6 +625,7 @@ def get_picking_product_detail(
         product_id=product_id,
         cart_id=cart_id,
         fixed_order_ids=fixed,
+        recovery_mode=recovery_detail_mode and recovery_order_id is not None,
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Produkt nie występuje na liście zbiórki.")
