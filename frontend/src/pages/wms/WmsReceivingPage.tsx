@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Clock, Plus, RotateCcw, Truck, CheckCircle2, ScanLine, User } from "lucide-react";
 import { WmsNewDeliveryModal } from "../../components/wms/receiving/WmsNewDeliveryModal";
 import api from "../../api/axios";
 import { useWmsScanner } from "../../context/WmsScannerContext";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
 import { listWmsReceivingPz, type WmsReceivingPzListRow } from "../../api/wmsReceivingApi";
@@ -114,23 +114,24 @@ export default function WmsReceivingPage() {
   const [newDeliveryOpen, setNewDeliveryOpen] = useState(false);
 
   const { setActiveDocument, setScannerInputPlaceholder } = useWmsScanner();
-  const { setActiveContext } = useWarehouseExecution();
   const scanFx = useScanFeedback();
+  const workflowContext = useMemo(
+    () => ({
+      operationType: "PRZYJĘCIE",
+      currentStep: "Wybierz lub zeskanuj PZ",
+      scanHint: "Otwórz PZ, aby skanować nośnik i EAN",
+    }),
+    [],
+  );
 
   useEffect(() => {
     setActiveDocument({ kind: "custom", label: "Lista PZ" });
     setScannerInputPlaceholder("Skanuj numer PZ lub otwórz dokument");
-    setActiveContext({
-      taskLabel: "Przyjęcie",
-      stepLabel: "Wybierz lub zeskanuj PZ",
-      scanHint: "Otwórz PZ, aby skanować nośnik i EAN",
-    });
     return () => {
       setActiveDocument(null);
-      setActiveContext(null);
       setScannerInputPlaceholder("Wpisz lub wklej EAN (↑↓ historia)");
     };
-  }, [setActiveContext, setActiveDocument, setScannerInputPlaceholder]);
+  }, [setActiveDocument, setScannerInputPlaceholder]);
 
   useWmsPageScanHandler(() => {
     scanFx.warning("Otwórz wybraną PZ, aby skanować pozycje.");
@@ -175,8 +176,9 @@ export default function WmsReceivingPage() {
   }, [load, location.key]);
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-white p-4 sm:p-6 lg:p-8 flex flex-col">
-      {/* Kontener bez sztucznego max-w, co pozwala na pełną responsywność paska wyszukiwarki */}
+    <div className="min-h-full bg-white flex flex-col">
+      <ActiveOperationContextBar context={workflowContext} inline className="rounded-none border-x-0" />
+      <div className="p-4 sm:p-6 lg:p-8 flex flex-col flex-1">
       <div className="w-full flex-1 flex flex-col animate-in fade-in duration-500">
         
         {savedBanner != null && (
@@ -271,6 +273,7 @@ export default function WmsReceivingPage() {
           navigate(WMS_ROUTES.receivingPz(pzId), { state: { tenantId } });
         }}
       />
+      </div>
     </div>
   );
 }

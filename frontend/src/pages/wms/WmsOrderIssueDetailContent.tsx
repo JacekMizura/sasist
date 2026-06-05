@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
 import { WMS_OPERATIONAL_CONTAINER } from "../../components/wms/execution/wmsLayoutTokens";
@@ -11,7 +11,6 @@ import {
 import { extractApiErrorMessage } from "../../api/authApi";
 import { executionContextFromBrakiTask } from "../../components/wms/execution/syncExecutionContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { BrakiOperationalHeader } from "./BrakiOperationalHeader";
 import { BrakiForceRemoveModal, type BrakiForceRemoveMode } from "./BrakiForceRemoveModal";
 import { brakiOperationalActions, type BrakiOperationalAction } from "./brakiWorkflowCta";
@@ -63,7 +62,6 @@ export function WmsOrderIssueDetailContent({
   onArchiveError,
 }: WmsOrderIssueDetailContentProps) {
   const navigate = useNavigate();
-  const { activeContext, setActiveContext } = useWarehouseExecution();
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -97,14 +95,13 @@ export function WmsOrderIssueDetailContent({
     (ctx.relocation_lines?.length ?? 0) > 0 ||
     (ctx.packing_ready_lines?.length ?? 0) > 0;
 
-  useEffect(() => {
-    setActiveContext(
+  const workflowContext = useMemo(
+    () =>
       executionContextFromBrakiTask(task, {
         scanHint: "Zeskanuj inne zamówienie, aby przełączyć kartę",
       }),
-    );
-    return () => setActiveContext(null);
-  }, [setActiveContext, task]);
+    [task],
+  );
 
   const onArchiveShortage = useCallback(
     async (mode?: BrakiForceRemoveMode) => {
@@ -152,7 +149,7 @@ export function WmsOrderIssueDetailContent({
   return (
     <div className="flex w-full flex-col bg-white">
       <div className={`${WMS_OPERATIONAL_CONTAINER} flex-1 space-y-4 py-4 md:py-5`}>
-        <ActiveOperationContextBar context={activeContext} inline />
+        <ActiveOperationContextBar context={workflowContext} inline />
         <BrakiOperationalHeader task={task} />
 
         {actionError ? (

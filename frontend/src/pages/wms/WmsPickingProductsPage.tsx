@@ -15,8 +15,8 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { executionContextFromPicking } from "../../components/wms/execution/pickingExecutionContext";
+import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
@@ -86,7 +86,6 @@ export default function WmsPickingProductsPage() {
   const { user } = useAuth();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const { setActiveContext } = useWarehouseExecution();
   const { setPickingCart, clearPickingCart, snapshot } = useWmsPickingCart();
   const {
     registerScanHandler,
@@ -139,6 +138,7 @@ export default function WmsPickingProductsPage() {
   const productLinesLoadSeqRef = useRef(0);
   const productLinesLoadKeyRef = useRef("");
   const pickingListRefreshHandledRef = useRef<number | null>(null);
+  const recoveryExitRef = useRef(false);
   useEffect(() => {
     bootstrapAttemptedRef.current = null;
     productLinesLoadKeyRef.current = "";
@@ -640,8 +640,8 @@ export default function WmsPickingProductsPage() {
         playScanBeep();
         clearPickingCart();
         dispatchWmsShortagesUpdated();
-        showScannerToast("Dogrywka zakończona — zamówienie w kolejce pakowania");
-        navigate(WMS_ROUTES.packing, { replace: true });
+        showScannerToast("Dogrywka zakończona — wracasz do kolejki braków");
+        navigate(WMS_ROUTES.braki(), { replace: true });
         return;
       }
       const fin = await postWmsPickingFinalizeCart(
@@ -701,40 +701,115 @@ export default function WmsPickingProductsPage() {
   const totalToPickCount = rows.reduce((acc, curr) => acc + wmsPickingDisplayProgressParts(curr).total, 0);
   const totalPickedCount = rows.reduce((acc, curr) => acc + wmsPickingDisplayProgressParts(curr).pickedShown, 0);
 
-  useEffect(() => {
-    if (!mergedSession) {
-      setActiveContext(null);
-      return;
-    }
+  const workflowContext = useMemo(() => {
+    if (!mergedSession) return null;
     const remainingQty =
       recoveryOrderId != null && recoveryOrderId > 0
         ? recoveryRemainSummary.units
         : Math.max(0, totalToPickCount - totalPickedCount);
-    setActiveContext(
-      executionContextFromPicking({
-        recoveryOrderId,
-        orderNumber: recoveryOrderId != null ? String(recoveryOrderId) : null,
-        cartCode: mergedSession.cartCode,
-        cartName: mergedSession.cartName,
-        remainingQty,
-        remainingLines: recoveryOrderId != null ? recoveryRemainSummary.lines : undefined,
-        currentStep:
-          recoveryOrderId != null && recoveryOrderId > 0
-            ? `Pozostało ${recoveryRemainSummary.lines} linii`
-            : "Skanuj produkt z listy",
-        operatorName: formatOperatorDisplayName(user),
-      }),
-    );
-    return () => setActiveContext(null);
+    return executionContextFromPicking({
+      recoveryOrderId,
+      orderNumber: recoveryOrderId != null ? String(recoveryOrderId) : null,
+      cartCode: mergedSession.cartCode,
+      cartName: mergedSession.cartName,
+      remainingQty,
+      remainingLines: recoveryOrderId != null ? recoveryRemainSummary.lines : undefined,
+      currentStep:
+        recoveryOrderId != null && recoveryOrderId > 0
+          ? `Pozostało ${recoveryRemainSummary.lines} linii`
+          : "Skanuj produkt z listy",
+      operatorName: formatOperatorDisplayName(user),
+    });
   }, [
     mergedSession,
     recoveryOrderId,
     recoveryRemainSummary.lines,
     recoveryRemainSummary.units,
-    setActiveContext,
     totalPickedCount,
     totalToPickCount,
     user,
+  ]);
+
+  const exitRecoverySession = useCallback(
+    async (opts?: { finalize?: boolean; toast?: string }) => {
+      if (recoveryExitRef.current) return;
+      recoveryExitRef.current = true;
+      if (
+        opts?.finalize &&
+        activeCartId != null &&
+        warehouseId != null &&
+        recoveryOrderId != null &&
+        recoveryOrderId > 0
+      ) {
+        try {
+          await postWmsPickingRecoveryFinalize(
+            DAMAGE_TENANT_ID,
+            warehouseId,
+            recoveryOrderId,
+            activeCartId,
+          );
+        } catch (e: unknown) {
+          console.error("[recovery.exit]", e);
+        }
+      }
+      clearPickingCart();
+      setActiveDocument(null);
+      dispatchWmsShortagesUpdated();
+      if (opts?.toast) showScannerToast(opts.toast);
+      navigate(WMS_ROUTES.braki(), { replace: true });
+    },
+    [
+      activeCartId,
+      clearPickingCart,
+      navigate,
+      recoveryOrderId,
+      setActiveDocument,
+      showScannerToast,
+      warehouseId,
+    ],
+  );
+
+  const recoveryRedirecting = useMemo(() => {
+    if (recoveryOrderId == null || recoveryOrderId <= 0) return false;
+    if (loading || cartBootstrapping) return false;
+    if (recoveryCompleted) return true;
+    if (rows.length === 0) return true;
+    return (
+      allPicked &&
+      recoveryRemainSummary.lines === 0 &&
+      recoveryRemainSummary.units <= 1e-9
+    );
+  }, [
+    allPicked,
+    cartBootstrapping,
+    loading,
+    recoveryCompleted,
+    recoveryOrderId,
+    recoveryRemainSummary.lines,
+    recoveryRemainSummary.units,
+    rows.length,
+  ]);
+
+  useEffect(() => {
+    if (!recoveryRedirecting || recoveryExitRef.current) return;
+    const needsFinalize =
+      rows.length > 0 &&
+      allPicked &&
+      recoveryRemainSummary.lines === 0 &&
+      !recoveryCompleted;
+    void exitRecoverySession({
+      finalize: needsFinalize,
+      toast: needsFinalize
+        ? "Dogrywka zakończona — wracasz do kolejki braków"
+        : "Braki rozwiązane — wracasz do kolejki braków",
+    });
+  }, [
+    allPicked,
+    exitRecoverySession,
+    recoveryCompleted,
+    recoveryRedirecting,
+    recoveryRemainSummary.lines,
+    rows.length,
   ]);
 
   const completePriorityTask = async () => {
@@ -771,10 +846,21 @@ export default function WmsPickingProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePriorityTask, allPicked, loading, rows.length]);
 
+  if (recoveryRedirecting) {
+    return (
+      <WmsOperationalPageShell className="bg-slate-50/50 font-sans text-slate-900 select-none">
+        <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+          <Loader2 size={40} className="mb-4 animate-spin text-[#5a4fcf]" strokeWidth={2.5} />
+          <p className="text-sm font-bold">Wracasz do kolejki braków…</p>
+        </div>
+      </WmsOperationalPageShell>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50/50 font-sans text-slate-900 select-none">
-      
+    <WmsOperationalPageShell className="bg-slate-50/50 font-sans text-slate-900 select-none">
       <WmsPickingSessionTopBar
+        workflowContext={workflowContext}
         onBack={() => {
           if (
             activePriorityTask &&
@@ -825,7 +911,7 @@ export default function WmsPickingProductsPage() {
         </div>
       ) : null}
 
-      <div className="flex-1 w-full p-4 sm:p-6 lg:p-8 flex flex-col gap-6 animate-in fade-in duration-500">
+      <WmsOperationalPageBody className="flex flex-col gap-6 animate-in fade-in duration-500 !py-4 md:!py-6">
         
         {cartBootstrapErr && (
           <p className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-center text-sm font-bold text-red-900 shadow-sm">{cartBootstrapErr}</p>
@@ -867,14 +953,7 @@ export default function WmsPickingProductsPage() {
 
         {!loading && !err && rows.length === 0 ? (
           <p className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm font-bold text-slate-500 shadow-sm">
-            {recoveryCompleted
-              ? "Braki zostały już rozwiązane — nie ma linii do dogrywki."
-              : "Brak pozycji do zbiórki dla tego statusu i filtra."}
-          </p>
-        ) : null}
-        {recoveryCompleted && err ? (
-          <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-8 text-center text-sm font-bold text-emerald-900 shadow-sm">
-            {err}
+            Brak pozycji do zbiórki dla tego statusu i filtra.
           </p>
         ) : null}
 
@@ -1007,7 +1086,7 @@ export default function WmsPickingProductsPage() {
           </section>
         )}
 
-      </div>
+      </WmsOperationalPageBody>
 
       {finalizeShortageModal ? (
         <div
@@ -1112,6 +1191,6 @@ export default function WmsPickingProductsPage() {
           </div>
         </div>
       ) : null}
-    </div>
+    </WmsOperationalPageShell>
   );
 }

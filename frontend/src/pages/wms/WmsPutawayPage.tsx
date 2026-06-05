@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Clock, RotateCcw, MapPin, Package, User, ScanLine } from "lucide-react";
 import api from "../../api/axios";
+import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
 import { useWmsScanner } from "../../context/WmsScannerContext";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
 import { listWmsPutawayPz, type WmsReceivingPzListRow } from "../../api/wmsReceivingApi";
@@ -124,25 +124,24 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
 export default function WmsPutawayPage() {
   const location = useLocation();
   const { setActiveDocument, setScannerInputPlaceholder } = useWmsScanner();
-  const { setActiveContext } = useWarehouseExecution();
   const scanFx = useScanFeedback();
+  const workflowContext = useMemo(
+    () => ({
+      operationType: "ROZLOKOWANIE PZ",
+      currentStep: "Wybierz PZ do rozlokowania",
+      scanHint: "W linii: lokalizacja → EAN",
+    }),
+    [],
+  );
 
   useEffect(() => {
     setActiveDocument({ kind: "custom", label: "Lista PZ — rozlokowanie PZ" });
     setScannerInputPlaceholder("Skanuj PZ lub EAN produktu");
-    setActiveContext({
-      operationType: "ROZLOKOWANIE PZ",
-      currentStep: "Wybierz PZ do rozlokowania",
-      scanHint: "W linii: lokalizacja → EAN",
-      taskLabel: "Rozlokowanie PZ",
-      stepLabel: "Wybierz PZ do rozlokowania",
-    });
     return () => {
       setActiveDocument(null);
-      setActiveContext(null);
       setScannerInputPlaceholder("Wpisz lub wklej EAN (↑↓ historia)");
     };
-  }, [setActiveContext, setActiveDocument, setScannerInputPlaceholder]);
+  }, [setActiveDocument, setScannerInputPlaceholder]);
 
   useWmsPageScanHandler(() => {
     scanFx.warning("Wybierz PZ z listy, potem skanuj na ekranie rozlokowania.");
@@ -221,7 +220,9 @@ export default function WmsPutawayPage() {
   }, [rows, searchTerm]);
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-white p-4 sm:p-6 lg:p-8 flex flex-col">
+    <div className="min-h-full bg-white flex flex-col">
+      <ActiveOperationContextBar context={workflowContext} inline className="rounded-none border-x-0" />
+      <div className="p-4 sm:p-6 lg:p-8 flex flex-col flex-1">
       <div className="w-full flex-1 flex flex-col animate-in fade-in duration-500">
         
         {/* Pasek wyszukiwania / skaner - sklonowany z Przyjęć */}
@@ -280,6 +281,7 @@ export default function WmsPutawayPage() {
             ))}
           </ul>
         )}
+      </div>
       </div>
     </div>
   );

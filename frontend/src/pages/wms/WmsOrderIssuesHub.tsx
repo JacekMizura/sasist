@@ -5,7 +5,6 @@ import { ActiveOperationContextBar } from "../../components/wms/execution/Active
 import { WMS_OPERATIONAL_CONTAINER } from "../../components/wms/execution/wmsLayoutTokens";
 import { executionContextFromBrakiHub } from "../../components/wms/execution/syncExecutionContext";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import {
@@ -75,7 +74,6 @@ export default function WmsOrderIssuesHub() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const navigate = useNavigate();
-  const { activeContext, setActiveContext } = useWarehouseExecution();
   const [searchParams] = useSearchParams();
   const orderIdFromUrl = searchParams.get("order_id");
   const {
@@ -165,15 +163,14 @@ export default function WmsOrderIssuesHub() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    setActiveContext(
+  const workflowContext = useMemo(
+    () =>
       executionContextFromBrakiHub({
         queueCount: tasks.length,
         scanHint: "Zeskanuj EAN lub numer zamówienia — otworzy kartę braków",
       }),
-    );
-    return () => setActiveContext(null);
-  }, [setActiveContext, tasks.length]);
+    [tasks.length],
+  );
 
   useWmsShortagesRefresh(() => void load(), { debounceMs: 600 });
 
@@ -243,7 +240,7 @@ export default function WmsOrderIssuesHub() {
   return (
     <div className="flex w-full flex-col bg-white">
       <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-4 md:py-5`}>
-        <ActiveOperationContextBar context={activeContext} inline />
+        <ActiveOperationContextBar context={workflowContext} inline />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-bold text-slate-900 md:text-xl">

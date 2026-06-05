@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Loader2, MapPin, Package } from "lucide-react";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { getWmsRecoveryBatch, type WmsRecoveryBatchSessionApi } from "../../api/wmsRecoveryBatchApi";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "./wmsRoutes";
 
@@ -15,8 +15,6 @@ export default function WmsRecoveryBatchPage() {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const { setActiveContext } = useWarehouseExecution();
-
   const [batch, setBatch] = useState<WmsRecoveryBatchSessionApi | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -44,18 +42,14 @@ export default function WmsRecoveryBatchPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!batch) {
-      setActiveContext(null);
-      return;
-    }
-    setActiveContext({
+  const workflowContext = useMemo(() => {
+    if (!batch) return null;
+    return {
       operationType: batch.label || "DOGRYWKA BATCH",
       currentStep: `${batch.order_count} zamówień · ${batch.line_count} linii`,
       scanHint: "Wybierz lokalizację lub zamówienie do dogrywki",
-    });
-    return () => setActiveContext(null);
-  }, [batch, setActiveContext]);
+    };
+  }, [batch]);
 
   if (warehouseId == null) {
     return (
@@ -87,6 +81,9 @@ export default function WmsRecoveryBatchPage() {
 
   return (
     <div className="min-h-full bg-slate-50 pb-24">
+      {workflowContext ? (
+        <ActiveOperationContextBar context={workflowContext} inline className="rounded-none border-x-0" />
+      ) : null}
       <header className="border-b border-slate-200 bg-white px-4 py-4 md:px-6">
         <Link to={WMS_ROUTES.braki()} className="text-sm font-medium text-slate-600 hover:text-slate-900">
           ← Braki

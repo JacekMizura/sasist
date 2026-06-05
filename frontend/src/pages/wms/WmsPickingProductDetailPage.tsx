@@ -13,9 +13,10 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
+import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
 import { formatOperatorDisplayName } from "../../components/wms/execution/activeOperationContext";
 import { executionContextFromPicking } from "../../components/wms/execution/pickingExecutionContext";
+import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
@@ -115,7 +116,6 @@ export default function WmsPickingProductDetailPage() {
   const { user } = useAuth();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const { setActiveContext } = useWarehouseExecution();
   const { snapshot: pickingCartSnapshot } = useWmsPickingCart();
   const pickingTenantId = useMemo(() => resolveWmsPickingTenantId(warehouseId, pickingCartSnapshot), [warehouseId, pickingCartSnapshot]);
   const { registerScanHandler, setScannerInputPlaceholder, appendScanToHistory, refocusScannerInput, showScannerToast } = useWmsScanner();
@@ -241,35 +241,29 @@ export default function WmsPickingProductDetailPage() {
     return (code && String(code).trim()) || "—";
   }, [detail, selectedLocation]);
 
-  useEffect(() => {
-    if (!pickingSession || !detail) {
-      setActiveContext(null);
-      return;
-    }
+  const workflowContext = useMemo(() => {
+    if (!pickingSession || !detail) return null;
     const source =
       selectedLocation?.location_code ??
       detail.locations[0]?.location_code ??
       shortageLocationLabel;
-    setActiveContext(
-      executionContextFromPicking({
-        recoveryOrderId,
-        orderNumber: recoveryOrderId != null ? String(recoveryOrderId) : null,
-        cartCode: pickingSession.cartCode,
-        cartName: pickingSession.cartName,
-        sourceLocation: source !== "—" ? source : null,
-        remainingQty: remaining,
-        currentStep:
-          needsLocationScan && activeLocationId == null
-            ? "Skanuj lokalizację źródłową"
-            : `Zbierz: ${detail.name}`,
-        operatorName: formatOperatorDisplayName(user),
-        scanHint:
-          needsLocationScan && activeLocationId == null
-            ? "Najpierw potwierdź lokalizację skanem"
-            : "Skanuj EAN produktu",
-      }),
-    );
-    return () => setActiveContext(null);
+    return executionContextFromPicking({
+      recoveryOrderId,
+      orderNumber: recoveryOrderId != null ? String(recoveryOrderId) : null,
+      cartCode: pickingSession.cartCode,
+      cartName: pickingSession.cartName,
+      sourceLocation: source !== "—" ? source : null,
+      remainingQty: remaining,
+      currentStep:
+        needsLocationScan && activeLocationId == null
+          ? "Skanuj lokalizację źródłową"
+          : `Zbierz: ${detail.name}`,
+      operatorName: formatOperatorDisplayName(user),
+      scanHint:
+        needsLocationScan && activeLocationId == null
+          ? "Najpierw potwierdź lokalizację skanem"
+          : "Skanuj EAN produktu",
+    });
   }, [
     activeLocationId,
     detail,
@@ -278,7 +272,6 @@ export default function WmsPickingProductDetailPage() {
     recoveryOrderId,
     remaining,
     selectedLocation?.location_code,
-    setActiveContext,
     shortageLocationLabel,
     user,
   ]);
@@ -475,9 +468,11 @@ export default function WmsPickingProductDetailPage() {
   if (warehouseId == null || !pickingSession) return <div className="p-6 text-center text-sm font-medium text-slate-500">Przekierowanie…</div>;
 
   return (
-    <div className="min-h-screen w-full p-4 sm:p-6 lg:p-8 flex flex-col gap-6 bg-slate-50/50 font-sans text-slate-900 select-none">
-      
-      {/* NAGŁÓWEK AKCJI POWROTU */}
+    <WmsOperationalPageShell className="bg-slate-50/50 font-sans text-slate-900 select-none">
+      {workflowContext ? (
+        <ActiveOperationContextBar context={workflowContext} inline className="rounded-none border-x-0 border-t-0" />
+      ) : null}
+      <WmsOperationalPageBody className="flex flex-col gap-6 !py-4 md:!py-6">
       <div className="flex items-center justify-between px-1">
         <button type="button" onClick={goBackToList} className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm hover:bg-slate-50 transition-all active:scale-95">
           ← Wróć do listy produktów
@@ -614,6 +609,7 @@ export default function WmsPickingProductDetailPage() {
           </button>
         </ModalShell>
       )}
-    </div>
+      </WmsOperationalPageBody>
+    </WmsOperationalPageShell>
   );
 }
