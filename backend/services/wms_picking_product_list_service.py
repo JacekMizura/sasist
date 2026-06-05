@@ -390,36 +390,13 @@ def _missing_qty_by_product_from_orders(
 
 
 def _recovery_line_remaining_pick_qty(db: Session, order: Order, oi: OrderItem) -> float:
-    """Ilość do dogrywki na linii — tylko nierozwiązane, nieusunięte pozycje."""
-    from .braki_order_state_service import order_line_pick_still_possible, order_line_requires_oms_decision
-    from .order_fulfillment_recompute import order_item_needs_substitute_pick_completion
-    from .wms_operational_task_service import _line_remaining_qty
+    """Ilość do dogrywki na linii — ``get_unresolved_recovery_lines`` (jedno źródło prawdy)."""
+    from .wms_recovery_pick_service import get_unresolved_recovery_lines
 
-    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
-        return 0.0
-    if order_item_is_replaced_line(oi):
-        return 0.0
-    if int(oi.quantity or 0) <= 0:
-        return 0.0
-    raw_meta = getattr(oi, "metadata_json", None)
-    if raw_meta and str(raw_meta).strip():
-        try:
-            import json as _json
-
-            m = _json.loads(raw_meta)
-            if isinstance(m, dict) and m.get("oms_line_removed"):
-                return 0.0
-        except Exception:
-            pass
-    if order_line_requires_oms_decision(db, order, oi):
-        return 0.0
-    if not order_line_pick_still_possible(db, order, oi) and not order_item_needs_substitute_pick_completion(
-        db, order, oi
-    ):
-        return 0.0
-    remaining = float(_line_remaining_qty(db, order, oi))
-    missing = float(compute_line_missing_qty(db, order, oi))
-    return max(0.0, round(remaining - missing, 6))
+    for row in get_unresolved_recovery_lines(db, order, log=False):
+        if int(row["order_item_id"]) == int(oi.id):
+            return float(row["unresolved_qty"])
+    return 0.0
 
 
 def _recovery_demand_by_product_from_orders(
@@ -660,13 +637,22 @@ def _picking_line_resolved_for_finalize(
         if shortage > eps and picked + eps < qty:
             return True, "picked_plus_shortage"
         return True, "fully_picked"
-    rid = getattr(oi, "replaced_from_order_item_id", None)
-    st = (getattr(oi, "oms_line_status", None) or "").strip().upper()
-    is_substitute = (rid is not None and int(rid) > 0) or st == OMS_LINE_STATUS_TO_PICK
-    if is_substitute and order_item_needs_substitute_pick_completion(
-        db, order, oi, session_cart_id=cid
-    ):
-        return False, "substitute_pick_pending"
+
+    from .braki_order_state_service import order_line_pick_still_possible, order_line_requires_oms_decision
+    from .wms_recovery_pick_service import get_unresolved_recovery_lines
+
+    if order_line_requires_oms_decision(db, order, oi):
+        return False, "oms_decision_required"
+
+    for row in get_unresolved_recovery_lines(db, order, session_cart_id=cid, log=False):
+        if int(row["order_item_id"]) == int(oi.id):
+            return True, "recovery_deferred"
+
+    if order_item_needs_substitute_pick_completion(db, order, oi, session_cart_id=cid):
+        return True, "recovery_deferred_substitute"
+    if order_line_pick_still_possible(db, order, oi):
+        return True, "recovery_deferred"
+
     return False, "incomplete"
 
 
@@ -2062,11 +2048,14 @@ def _finalize_cohort_snapshot(
     cart_id: int,
 ) -> dict:
     """Diagnoza kohorty przed domknięciem wózka — log ``[wms.picking.finalize.start]``."""
+    from .wms_recovery_pick_service import get_unresolved_recovery_lines
+
     picked_lines = 0
     shortage_lines = 0
     replacement_lines = 0
     removed_lines = 0
     unresolved_lines = 0
+    recovery_deferred_lines = 0
     cid = int(cart_id)
     for order in orders:
         for oi in order.items or []:
@@ -2094,7 +2083,7 @@ def _finalize_cohort_snapshot(
                 replacement_lines += 1
             if float(getattr(oi, "oms_removed_qty", None) or 0.0) > 1e-9:
                 removed_lines += 1
-            resolved, _ = _picking_line_resolved_for_finalize(
+            resolved, reason = _picking_line_resolved_for_finalize(
                 db,
                 order,
                 oi,
@@ -2106,8 +2095,13 @@ def _finalize_cohort_snapshot(
                 shortage_lines += 1
             elif picked + 1e-9 >= qty:
                 picked_lines += 1
-            if not resolved:
+            if reason in ("recovery_deferred", "recovery_deferred_substitute"):
+                recovery_deferred_lines += 1
+            elif not resolved:
                 unresolved_lines += 1
+    recovery_deferred_lines = sum(
+        len(get_unresolved_recovery_lines(db, o, session_cart_id=cid, log=False)) for o in orders
+    )
     return {
         "cart_id": cid,
         "order_count": len(orders),
@@ -2116,6 +2110,7 @@ def _finalize_cohort_snapshot(
         "replacement_lines": replacement_lines,
         "removed_lines": removed_lines,
         "unresolved_lines": unresolved_lines,
+        "recovery_deferred_lines": recovery_deferred_lines,
     }
 
 
@@ -2210,29 +2205,6 @@ def finalize_wms_picking_cart(
         list(order_ids),
         len(order_ids),
     )
-    demand_by_product = _demand_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
-    missing_by_product = _missing_qty_by_product_for_finalize(
-        db, order_ids, tenant_id=tenant_id, cart_id=cid
-    )
-    picked_map = _picked_by_product(
-        db, tenant_id=tenant_id, warehouse_id=warehouse_id, order_ids=order_ids, cart_id=cid
-    )
-
-    for pid, need in demand_by_product.items():
-        pq = float(picked_map.get(pid, 0.0))
-        mq = float(missing_by_product.get(pid, 0.0))
-        if pq + mq + 1e-8 < float(need):
-            logger.warning(
-                "[picking.finalize] BLOCKED product_id=%s required=%s picked=%s shortage=%s reason=product_aggregate",
-                int(pid),
-                float(need),
-                pq,
-                mq,
-            )
-            raise ValueError(
-                "Nie zebrano wszystkich produktów — dokończ zbiórkę lub zgłoś brak dla pozostałych linii."
-            )
-
     orders = (
         db.query(Order)
         .options(joinedload(Order.items))
@@ -2245,6 +2217,41 @@ def finalize_wms_picking_cart(
             raise ValueError(
                 f"Zamówienie #{num} jest przypisane do innego wózka — dokończ na właściwej sesji."
             )
+
+    for o in orders:
+        for oi in o.items or []:
+            if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+                continue
+            if bool(getattr(oi, "is_bundle_parent", False)):
+                continue
+            if order_item_is_replaced_line(oi):
+                continue
+            qty = float(oi.quantity or 0)
+            if qty <= 1e-5:
+                continue
+            resolved, reason = _picking_line_resolved_for_finalize(
+                db,
+                o,
+                oi,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                cart_id=cid,
+            )
+            if not resolved:
+                num = str(o.number or o.id)
+                logger.warning(
+                    "[picking.finalize] BLOCKED order_id=%s order_item_id=%s product_id=%s "
+                    "reason=%s cart_id=%s",
+                    int(o.id),
+                    int(oi.id),
+                    int(oi.product_id or 0),
+                    reason,
+                    cid,
+                )
+                raise ValueError(
+                    f"Zamówienie #{num}: linia produktu nie jest domknięta "
+                    f"(zebrano + brak < wymagane lub wymagana decyzja OMS)."
+                )
 
     start_snap = _finalize_cohort_snapshot(
         db,
@@ -2397,6 +2404,23 @@ def finalize_wms_picking_cart(
             kind,
             pack_ok,
         )
+
+    from .wms_recovery_pick_service import (
+        ensure_recovery_pick_task,
+        log_recovery_lines_for_order,
+        order_has_recovery_pick_work,
+    )
+
+    for o in orders:
+        log_recovery_lines_for_order(db, o, session_cart_id=cid)
+        if order_has_recovery_pick_work(db, o):
+            ensure_recovery_pick_task(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order=o,
+                kind="other",
+            )
 
     for o in orders:
         recalculate_order_shortage_state(db, int(o.id), commit=False)

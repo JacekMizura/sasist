@@ -1,5 +1,14 @@
 # Change Log
 
+## 2026-06-04 — Finalize-cart: częściowa zbiórka + dogrywka (recovery deferred)
+
+- ``get_unresolved_recovery_lines`` — jedno źródło prawdy dla linii dogrywki; log ``[wms.recovery.lines]`` per linia.
+- ``finalize_wms_picking_cart`` — nie blokuje na niezebranych liniach recovery-eligible; po finalize: ``ensure_recovery_pick_task`` + ``FS_NEEDS_DECISION``.
+- ``_picking_line_resolved_for_finalize`` — ``recovery_deferred`` zamiast ``incomplete`` gdy możliwa dogrywka.
+- ``count_issue_queue_operational_lines`` — ``r_pend`` z ``get_unresolved_recovery_lines`` (spójność z UI Braki / recovery list).
+- ``_needs_recovery_picking`` — tworzenie tasku z SSOT (wcześniej ``r_pend=0`` blokowało task mimo nierozwiązanych linii).
+- Test: ``test_wms_picking_finalize_recovery_deferred.py``.
+
 ## 2026-06-04 — WMS finalize-cart 500 (timezone + błędy API)
 
 - **Przyczyna 500:** ``emit_wms_picking_finished`` / ``record_picking_cart_finalize_session`` porównywały ``picking_started_at`` (PG timestamptz, aware) z ``picking_finished_at`` (naive ``utcnow``) → ``TypeError``.
