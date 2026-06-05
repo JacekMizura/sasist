@@ -521,9 +521,13 @@ def format_braki_issue_summary_line(
     ws = str(workflow_status or "").strip()
     if ws == BRAKI_FILTER_READY_PACK:
         return "Zamówienie gotowe do pakowania"
-    if ws == BRAKI_FILTER_AWAITING or (oms_waiting and repl_pending <= 0 and unresolved <= 0):
+    if ws == BRAKI_FILTER_AWAITING:
         return "Oczekuje na decyzję OMS"
     if ws == BRAKI_FILTER_PICK:
+        if repl_pending > 0 and unresolved <= 0:
+            return "Oczekujące produkty do zebrania"
+        if repl_pending > 0:
+            return "Oczekujące produkty do zebrania"
         return format_issue_queue_summary_line(unresolved, repl_pending) or "Produkty do zebrania z magazynu"
     if ws in (BRAKI_FILTER_RELOCATION, BRAKI_FILTER_RELOCATION_PARTIAL):
         return "Wymagane rozlokowanie zebranych pozycji"
@@ -537,11 +541,11 @@ def format_braki_issue_summary_line(
 
 def format_issue_queue_status_label(unresolved: int, repl_pending: int) -> str:
     if unresolved > 0 and repl_pending > 0:
-        return "Wymaga decyzji — do zebrania po zamianie"
+        return "Decyzja OMS i produkty do zebrania"
     if unresolved > 0:
-        return "Wymaga decyzji (OMS)"
+        return "Wymaga decyzji OMS"
     if repl_pending > 0:
-        return "Oczekuje na kompletację"
+        return "Produkty do zebrania"
     return "Gotowe do zamknięcia"
 
 
@@ -603,6 +607,8 @@ def _classify_issue_detail_section(
     if ols_u == OMS_LINE_STATUS_TO_PICK and ordered > 1e-6 and picked + 1e-6 < ordered:
         return "remaining", "to_pick", "Do zebrania"
     if ordered > 1e-6 and picked + 1e-6 < ordered and missing <= 1e-6:
+        return "remaining", "to_pick", "Do zebrania"
+    if missing > 1e-6 and not waiting and ordered > 1e-6 and picked + 1e-6 < ordered:
         return "remaining", "to_pick", "Do zebrania"
 
     if missing > 1e-6 or waiting:
@@ -828,7 +834,11 @@ def build_shortage_lines_for_order(
             "sku": sku,
             "ean": ean,
             "line_kind": "shortage_unresolved",
-            "badge_label": "Oczekuje na decyzję OMS" if missing <= 1e-9 else "Brak do decyzji",
+            "badge_label": (
+                "Oczekuje na decyzję OMS"
+                if missing <= 1e-9 and order_line_awaiting_oms_attention(db, order, oi)
+                else "Do zebrania"
+            ),
             "pick_audit_summary": pick_summaries.get(int(oi.id)),
         }
         from .braki_order_state_service import enrich_shortage_line_location_fields

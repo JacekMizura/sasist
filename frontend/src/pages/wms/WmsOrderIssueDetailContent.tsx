@@ -16,37 +16,46 @@ function emptyContext(ctx: OrderIssueOrderContextApi | undefined): OrderIssueOrd
   return ctx ?? { collected_lines: [], shortage_decision_lines: [], remaining_pick_lines: [] };
 }
 
-function shortageLineToDetailLine(sl: {
-  missing_qty: number;
-  remaining_qty?: number;
-  order_item_id?: number;
-  product_id?: number;
-  product_name?: string | null;
-  sku?: string | null;
-  ean?: string | null;
-  nearest_location_code?: string | null;
-  location_code?: string | null;
-  image_url?: string | null;
-  picked_qty?: number;
-  ordered_qty?: number;
-  pick_audit_summary?: string | null;
-}): OrderIssueDetailLineApi {
+function shortageLineToDetailLine(
+  sl: {
+    missing_qty: number;
+    remaining_qty?: number;
+    order_item_id?: number;
+    product_id?: number;
+    product_name?: string | null;
+    sku?: string | null;
+    ean?: string | null;
+    nearest_location_code?: string | null;
+    location_code?: string | null;
+    image_url?: string | null;
+    picked_qty?: number;
+    ordered_qty?: number;
+    pick_audit_summary?: string | null;
+    badge_label?: string | null;
+  },
+  workflowStatus: string,
+): OrderIssueDetailLineApi {
+  const awaitingOms = workflowStatus === "awaiting";
+  const badge =
+    (sl.badge_label ?? "").trim() ||
+    (awaitingOms ? "Brak do decyzji OMS" : "Do zebrania");
   return {
     ...sl,
-    line_kind: "shortage_unresolved",
-    badge_label: "Brak do decyzji",
+    line_kind: awaitingOms ? "shortage_unresolved" : "remaining",
+    badge_label: badge,
     remaining_qty: sl.remaining_qty ?? sl.missing_qty,
     sku: sl.sku ?? "",
     ean: sl.ean ?? "",
   } as OrderIssueDetailLineApi;
 }
 
-function brakiQueueBucketLabel(bucket: string | undefined): string {
+function brakiQueueBucketLabel(bucket: string | undefined, workflowStatus: string): string {
   const b = (bucket ?? "").trim();
   if (b === "ready_pack") return "Gotowe do pakowania";
   if (b === "waiting_customer") return "Oczekuje na klienta";
-  if (b === "recovery_ready") return "Gotowe do dogrywki zbierki";
-  return "Oczekuje na decyzję OMS";
+  if (b === "recovery_ready") return "Możliwa dogrywka / zbieranie";
+  if (b === "awaiting_oms" || workflowStatus === "awaiting") return "Oczekuje na decyzję OMS";
+  return "Braki w realizacji";
 }
 
 export type WmsOrderIssueDetailContentProps = {
@@ -69,15 +78,15 @@ export function WmsOrderIssueDetailContent({
   const [relocationToast, setRelocationToast] = useState<string | null>(null);
 
   const ctx = emptyContext(task.order_context);
+  const workflowStatus = parseBrakiWorkflowStatus(task);
   const shortageAsDetail = (task.shortage_lines ?? [])
     .filter((l) => l.missing_qty > 1e-9)
-    .map(shortageLineToDetailLine);
+    .map((l) => shortageLineToDetailLine(l, workflowStatus));
   const remainingLines = (ctx.remaining_pick_lines ?? []).filter(
     (l) => (l.remaining_qty ?? l.missing_qty ?? 0) > 1e-9,
   );
   const collectedLines = ctx.collected_lines ?? [];
   const hasActiveShortageLines = shortageAsDetail.length > 0 || remainingLines.length > 0;
-  const workflowStatus = parseBrakiWorkflowStatus(task);
   const readyForPacking = workflowStatus === "ready_pack";
   const primaryCta = brakiPrimaryCta(task, navigate, {
     warehouseId,
@@ -86,7 +95,10 @@ export function WmsOrderIssueDetailContent({
   const needsRelocationChoice =
     workflowStatus === "relocation" || workflowStatus === "relocation_partial";
   const workflowLabel = (task.braki_workflow_status_label ?? "").trim();
-  const statusHeadline = workflowLabel || "—";
+  const statusHeadline =
+    workflowStatus === "awaiting"
+      ? workflowLabel || "Oczekuje na decyzję OMS"
+      : (task.issue_queue_summary_line ?? "").trim() || workflowLabel || "—";
   const showOmsLink = workflowStatus !== "awaiting";
   const canArchive = readyForPacking && !hasActiveShortageLines;
 
@@ -157,7 +169,7 @@ export function WmsOrderIssueDetailContent({
                 </h1>
               </div>
               <div className="hidden rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm md:block">
-                {brakiQueueBucketLabel(task.braki_queue_bucket)}
+                {brakiQueueBucketLabel(task.braki_queue_bucket, workflowStatus)}
               </div>
             </div>
 
@@ -208,7 +220,9 @@ export function WmsOrderIssueDetailContent({
               <IssueDetailSection title="Produkty zebrane" lines={collectedLines} variant="collected" />
               {hasActiveShortageLines ? (
                 <IssueDetailSection
-                  title="Braki do decyzji"
+                  title={
+                    workflowStatus === "awaiting" ? "Braki do decyzji OMS" : "Produkty do zebrania"
+                  }
                   lines={remainingLines.length > 0 ? remainingLines : shortageAsDetail}
                   variant="remaining"
                 />

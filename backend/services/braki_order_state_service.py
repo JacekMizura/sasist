@@ -40,14 +40,71 @@ def order_has_waiting_for_stock_lines(order: Order, *, db: Session | None = None
     return _impl(order, db=db)
 
 
-def order_has_pending_shortage_decision(db: Session, order: Order) -> bool:
+def order_line_pick_still_possible(db: Session, order: Order, oi: OrderItem) -> bool:
     """
-    Aktywna decyzja OMS wymagana — nie historyczne zgłoszenie braku ani praca magazynowa (zamiennik / rozlokowanie).
+    Magazyn może jeszcze zbierać / dogrywać linię — brak NIE wymaga jeszcze decyzji OMS.
     """
-    from .order_fulfillment_recompute import compute_line_missing_qty
+    from .fulfillment_event_service import line_picked_sum_for_order
+    from .order_fulfillment_recompute import (
+        _oms_waiting_for_stock,
+        compute_line_missing_qty,
+        order_item_needs_substitute_pick_completion,
+    )
+    from .wms_operational_task_service import _line_remaining_qty
 
+    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+        return False
+    if order_item_is_replaced_line(oi):
+        return False
+    if order_item_needs_substitute_pick_completion(db, order, oi):
+        return True
+
+    remaining = float(_line_remaining_qty(db, order, oi))
+    if remaining <= 1e-9:
+        return False
+
+    if _oms_waiting_for_stock(oi):
+        missing = float(compute_line_missing_qty(db, order, oi))
+        if missing <= 1e-9:
+            return False
+
+    ordered = float(oi.quantity or 0)
+    picked = float(line_picked_sum_for_order(db, int(oi.id), order))
+    return picked + 1e-9 < ordered
+
+
+def order_line_requires_oms_decision(db: Session, order: Order, oi: OrderItem) -> bool:
+    """
+    Linia wymaga decyzji OMS — dopiero po eskalacji / gdy magazyn nie może już kontynuować zbierania.
+    Samo ``missing_qty > 0`` przy możliwej dogrywce NIE wystarcza.
+    """
+    from .order_fulfillment_recompute import _oms_waiting_for_stock, compute_line_missing_qty
+
+    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+        return False
+    if order_item_is_replaced_line(oi):
+        return False
+
+    missing = float(compute_line_missing_qty(db, order, oi))
+
+    if _oms_waiting_for_stock(oi):
+        if order_line_pick_still_possible(db, order, oi) and missing <= 1e-9:
+            return False
+        return True
+
+    if missing <= 1e-9:
+        return False
+
+    if order_line_pick_still_possible(db, order, oi):
+        return False
+
+    return True
+
+
+def order_has_pending_shortage_decision(db: Session, order: Order) -> bool:
+    """Aktywna decyzja OMS — tylko gdy magazyn nie może już sam rozliczyć linii."""
     for oi in order.items or []:
-        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
+        if order_line_requires_oms_decision(db, order, oi):
             return True
     return False
 
@@ -118,16 +175,8 @@ def log_wms_order_status_compute(db: Session, order: Order, *, source: str = "")
 
 
 def order_line_awaiting_oms_attention(db: Session, order: Order, oi: OrderItem) -> bool:
-    """Linia wymaga aktywnej decyzji OMS — nie historycznego zgłoszenia braku po recovery."""
-    from .order_fulfillment_recompute import compute_line_missing_qty
-
-    missing = float(compute_line_missing_qty(db, order, oi))
-    if missing > 1e-9:
-        return True
-    meta = _order_item_meta_dict(oi)
-    if meta.get("oms_waiting_for_stock") and missing > 1e-9:
-        return True
-    return False
+    """Linia wymaga aktywnej decyzji OMS (alias ``order_line_requires_oms_decision``)."""
+    return order_line_requires_oms_decision(db, order, oi)
 
 
 def order_has_pending_relocation_work(
@@ -670,19 +719,18 @@ def ensure_relocation_for_order_item_picks(
 
 
 def count_issue_queue_operational_lines(db: Session, order: Order) -> tuple[int, int]:
-    """(linie OMS/brak, linie do zebrania) — rozszerzone o awaiting."""
-    from .order_fulfillment_recompute import (
-        compute_line_missing_qty,
-        order_item_needs_substitute_pick_completion,
-    )
+    """(linie wymagające decyzji OMS, linie do zebrania / dogrywki)."""
+    from .order_fulfillment_recompute import order_item_needs_substitute_pick_completion
 
     unresolved = 0
     repl_pending = 0
     for oi in sorted(order.items or [], key=lambda x: int(x.id)):
-        if order_line_awaiting_oms_attention(db, order, oi):
+        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+            continue
+        if order_line_requires_oms_decision(db, order, oi):
             unresolved += 1
-        elif float(compute_line_missing_qty(db, order, oi)) > 1e-9:
-            unresolved += 1
-        if order_item_needs_substitute_pick_completion(db, order, oi):
+        elif order_line_pick_still_possible(db, order, oi):
+            repl_pending += 1
+        elif order_item_needs_substitute_pick_completion(db, order, oi):
             repl_pending += 1
     return unresolved, repl_pending

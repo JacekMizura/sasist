@@ -51,19 +51,20 @@ def braki_queue_bucket(db: Session, order: Order, *, u_short: int, r_pend: int) 
         return "ready_pack"
     if order_has_waiting_customer_line(order):
         return "waiting_customer"
-    if int(r_pend) > 0:
-        return "recovery_ready"
-    if int(u_short) > 0:
-        return "awaiting_oms"
-    from .order_fulfillment_recompute import order_has_waiting_for_stock_lines
+    from .braki_order_state_service import order_has_pending_shortage_decision
+    from .braki_workflow_service import order_needs_warehouse_pick
 
-    if order_has_waiting_customer_line(order) or order_has_waiting_for_stock_lines(order):
+    if order_has_pending_shortage_decision(db, order):
         return "awaiting_oms"
+    if int(r_pend) > 0 or order_needs_warehouse_pick(db, order, r_pend=int(r_pend)):
+        return "recovery_ready"
     from .braki_order_state_service import order_can_show_ready_pack
 
     if order_can_show_ready_pack(db, order):
         return "ready_pack"
-    return "awaiting_oms"
+    if order_has_waiting_customer_line(order):
+        return "waiting_customer"
+    return "recovery_ready"
 
 
 def _needs_recovery_picking(db: Session, order: Order) -> bool:

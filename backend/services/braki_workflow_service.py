@@ -79,8 +79,12 @@ def order_needs_warehouse_pick(db: Session, order: Order, *, r_pend: int) -> boo
         order_id=int(order.id),
     ):
         return True
+    from .braki_order_state_service import order_line_pick_still_possible
+
     for oi in order.items or []:
         if order_item_needs_substitute_pick_completion(db, order, oi):
+            return True
+        if order_line_pick_still_possible(db, order, oi):
             return True
     return False
 
@@ -91,10 +95,11 @@ def resolve_braki_workflow_status(
     *,
     u_short: int | None = None,
     r_pend: int | None = None,
+    previous_status: str | None = None,
 ) -> str:
     """
     Jeden główny status operacyjny zamówienia w kolejce Braki.
-    Priorytet: oczekujące → pick+reloc → częściowe rozlokowanie → rozlokowanie → zbieranie → pakowanie.
+    Priorytet: pakowanie → zbieranie/rozlokowanie → decyzja OMS (tylko po eskalacji).
     """
     if u_short is None or r_pend is None:
         u_short, r_pend = count_issue_queue_operational_lines(db, order)
@@ -102,21 +107,6 @@ def resolve_braki_workflow_status(
     r_pend = int(r_pend)
 
     needs_pick = order_needs_warehouse_pick(db, order, r_pend=r_pend)
-    awaiting_flags = order_has_waiting_customer_line(order) or order_has_waiting_for_stock_lines(
-        order, db=db
-    )
-    from .order_fulfillment_recompute import compute_line_missing_qty
-
-    has_operational_missing = False
-    for oi in order.items or []:
-        if float(compute_line_missing_qty(db, order, oi)) > 1e-9:
-            has_operational_missing = True
-            break
-    awaiting = awaiting_flags and (
-        needs_pick
-        or has_operational_missing
-        or int(u_short) > 0
-    )
     reloc_pending, reloc_partial, _reloc_done = _order_relocation_alloc_states(
         db,
         tenant_id=int(order.tenant_id),
@@ -130,14 +120,15 @@ def resolve_braki_workflow_status(
         evaluate_order_braki_state,
         order_can_show_ready_pack,
         order_has_pending_shortage_decision,
+        order_line_pick_still_possible,
     )
 
     pack_ready = order_can_show_ready_pack(db, order)
-    pending_decision = order_has_pending_shortage_decision(db, order)
-    if pack_ready:
+    pending_oms = order_has_pending_shortage_decision(db, order)
+    recovery_possible = bool(needs_pick or int(r_pend) > 0)
+
+    if pack_ready and not pending_oms:
         status = BRAKI_FILTER_READY_PACK
-    elif awaiting:
-        status = BRAKI_FILTER_AWAITING
     elif needs_pick and (needs_reloc or needs_reloc_partial):
         status = BRAKI_FILTER_PICK_AND_RELOCATION
     elif needs_reloc_partial and not needs_pick:
@@ -148,7 +139,7 @@ def resolve_braki_workflow_status(
         status = BRAKI_FILTER_RELOCATION
     elif needs_pick:
         status = BRAKI_FILTER_PICK
-    elif pending_decision or has_operational_missing:
+    elif pending_oms:
         status = BRAKI_FILTER_AWAITING
     elif pack_ready:
         status = BRAKI_FILTER_READY_PACK
@@ -157,10 +148,33 @@ def resolve_braki_workflow_status(
 
     eval_snap = evaluate_order_braki_state(db, order, workflow_status=status)
     if status == BRAKI_FILTER_READY_PACK and not eval_snap.get("resolved"):
-        status = BRAKI_FILTER_AWAITING
+        if pending_oms:
+            status = BRAKI_FILTER_AWAITING
+        elif needs_pick:
+            status = BRAKI_FILTER_PICK
+        else:
+            status = BRAKI_FILTER_AWAITING
+
+    shortage_exists = any(
+        order_line_pick_still_possible(db, order, oi) or pending_oms
+        for oi in (order.items or [])
+        if getattr(oi, "parent_bundle_order_item_id", None) is None
+    )
+    logger.info(
+        "[wms.issue.state_transition] order_id=%s previous_status=%s next_status=%s "
+        "shortage_exists=%s escalation_sent=%s recovery_possible=%s unresolved_count=%s r_pend=%s",
+        getattr(order, "id", None),
+        previous_status or "—",
+        status,
+        shortage_exists,
+        pending_oms,
+        recovery_possible,
+        u_short,
+        r_pend,
+    )
     logger.debug(
-        "[braki.workflow] order_id=%s workflow_status=%s reason=resolve u_short=%s r_pend=%s "
-        "reloc_p=%s reloc_part=%s needs_pick=%s awaiting=%s resolved=%s",
+        "[braki.workflow] order_id=%s workflow_status=%s u_short=%s r_pend=%s "
+        "reloc_p=%s reloc_part=%s needs_pick=%s pending_oms=%s resolved=%s",
         getattr(order, "id", None),
         status,
         u_short,
@@ -168,7 +182,7 @@ def resolve_braki_workflow_status(
         reloc_pending,
         reloc_partial,
         needs_pick,
-        awaiting,
+        pending_oms,
         eval_snap.get("resolved"),
     )
     return status

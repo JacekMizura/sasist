@@ -1,5 +1,14 @@
 # Change Log
 
+## 2026-06-04 — Braki: fałszywy stan „Oczekuje na decyzję OMS”
+
+- `order_line_pick_still_possible` / `order_line_requires_oms_decision` — decyzja OMS tylko po eskalacji; sam brak przy możliwej dogrywce ≠ OMS.
+- `resolve_braki_workflow_status` — priorytet zbierania przed `awaiting`; log `[wms.issue.state_transition]`.
+- `braki_queue_bucket` — `awaiting_oms` tylko gdy `order_has_pending_shortage_decision`.
+- Liczniki kolejki: `u_short` (OMS) + `r_pend` (do zebrania); karta hub sumuje oba.
+- UI hub/szczegóły: Status „Braki”, Typ „Oczekujące produkty do zebrania” / „Możliwa dogrywka”.
+- Test: `test_braki_workflow_pick_vs_oms.py`.
+
 ## 2026-06-04 — Kolejka braków: wydajność listy
 
 - Lekki serializer `serialize_order_issue_task_list_card` (bez order_context, logów, lokalizacji); pełny payload tylko GET `/{id}`.

@@ -34,7 +34,7 @@ const BRAKI_WORKFLOW_FILTERS: { id: BrakiWorkflowFilterId; label: string }[] = [
 function normalizeWorkflowStatus(t: OrderIssueTaskListItemApi): BrakiWorkflowFilterId {
   const s = (t.braki_workflow_status ?? "").trim() as BrakiWorkflowFilterId;
   if (BRAKI_WORKFLOW_FILTERS.some((f) => f.id === s)) return s;
-  return "awaiting";
+  return "pick";
 }
 
 function displayOrderNumber(raw: string): string {
@@ -66,10 +66,12 @@ function openIssueTask(navigate: ReturnType<typeof useNavigate>, t: OrderIssueTa
 }
 
 function cardStatusLabel(t: OrderIssueTaskListItemApi): string {
-  const custom = (t.braki_workflow_status_label ?? "").trim();
-  if (custom) return custom;
   const wf = normalizeWorkflowStatus(t);
-  return BRAKI_WORKFLOW_FILTERS.find((f) => f.id === wf)?.label ?? "—";
+  if (wf === "awaiting") return "Oczekujące";
+  if (wf === "ready_pack") return "Gotowe do pakowania";
+  if (wf === "pick" || wf === "pick_and_relocation") return "Braki";
+  if (wf === "relocation" || wf === "relocation_partial") return "Rozlokowanie";
+  return (t.braki_workflow_status_label ?? "").trim() || "Braki";
 }
 
 function cardAccentForWorkflow(wf: BrakiWorkflowFilterId): {
@@ -373,12 +375,13 @@ export default function WmsOrderIssuesHub() {
             {filteredTasks.map((t) => {
               const sl = shortageLinesForCard(t);
               const uShort = t.unresolved_shortage_count ?? 0;
-              const lineCount = sl.length > 0 ? sl.length : Math.max(0, uShort);
+              const r = t.replacement_pick_pending_count ?? 0;
+              const activeLineCount = Math.max(0, uShort + r);
+              const lineCount = sl.length > 0 ? sl.length : activeLineCount;
               const totalMissing =
                 sl.length > 0
                   ? sl.reduce((s, l) => s + (Number(l.missing_qty) || 0), 0)
-                  : uShort;
-              const r = t.replacement_pick_pending_count ?? 0;
+                  : activeLineCount;
               const num = displayOrderNumber(t.order_number).replace("#", "");
               const wf = normalizeWorkflowStatus(t);
               const { accent, badge, status, icon } = cardAccentForWorkflow(wf);
@@ -389,13 +392,16 @@ export default function WmsOrderIssuesHub() {
 
               if (wf === "ready_pack") {
                 qtyLine = summaryFromApi || "Zamówienie gotowe do pakowania";
-              } else if (lineCount > 0) {
-                qtyLine = `${lineCount} ${plProduktyWord(lineCount)} · brak do zebrania`;
-              } else if (r > 0) {
-                missingNumber = r;
-                qtyLine = summaryFromApi || "Gotowe do zebrania po zamianie";
+              } else if (wf === "awaiting") {
+                missingNumber = Math.max(1, uShort);
+                qtyLine = summaryFromApi || "Oczekuje na decyzję OMS";
+              } else if (lineCount > 0 || r > 0) {
+                missingNumber = activeLineCount || lineCount;
+                qtyLine =
+                  summaryFromApi ||
+                  (r > 0 ? "Oczekujące produkty do zebrania" : `${lineCount} ${plProduktyWord(lineCount)} · brak do zebrania`);
               } else {
-                missingNumber = Math.max(1, t.unresolved_shortage_count ?? 0);
+                missingNumber = Math.max(1, uShort);
                 qtyLine = summaryFromApi || (t.issue_queue_status_label ?? "").trim() || "Wymaga uwagi";
               }
 
