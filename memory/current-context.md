@@ -1,5 +1,7 @@
 # Current Context
 
+- **GET /api/orders — odporność na 500 (2026-06-04):** `order_list_service.py` — `[orders.list.error]` logging (phase, sqlalchemy, order_id, field). Schema ensure przed query. Query failure → 503 `ORDERS_LIST_QUERY_FAILED`. Per-order `build_order_list_read_row` — degraded `wms_workflow_phase`/UI status przy błędzie resolvera. `compute_wms_workflow_phase` — try/except na braki/recovery checks. Testy: `test_orders_list_api.py`.
+
 - **Serie dokumentów ERP/WMS — spójność typów (2026-06-04):** SSOT: `document_series_catalog.py` (PZ/WZ/MM/RW/PW + FV/PA + KOR). Numeracja miesięczna: `{PREFIX}/{YEAR}/{MONTH}/{NUMBER}` (np. `MM/2026/06/000001`). `ensure_default_document_series(tenant, warehouse)` — idempotentny seed + **repair** legacy (promocja `is_default`, normalizacja prefix/format bez duplikatów). Wywołanie: GET `/api/document-series`, `require_warehouse_series`, lista `stock-documents` (gdy `warehouse_id`). API: per-row `_safe_series_to_read`, 503 zamiast 500. Frontend: `documentSeriesContext` mapuje `mm` → MM. Testy: `test_document_series_api.py`, `test_document_number_service.py`.
 
 - **WMS terminology (2026-06-04):** UI-only — **Rozlokowanie PZ** (putaway `/wms/putaway`), **Rozlokowanie produktów** (RELOCATION po zbieraniu), **Dogrywka** (recovery pick), **Przesunięcie magazynowe** (MM). Słownik: `frontend/src/pages/wms/wmsTerminology.ts`. Encje backendowe (`RELOCATION`, `putaway`, filtry API id) bez zmian.

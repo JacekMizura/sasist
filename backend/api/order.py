@@ -104,7 +104,13 @@ from ..services.order_custom_field_value_files_sync import (
 )
 from ..services.order_list_communication import batch_order_list_communication_fields
 from ..services.order_list_financial import batch_order_list_profit_metrics
-from ..services.wms_workflow_phase import compute_wms_workflow_phase
+from ..database import engine
+from ..services.order_list_service import (
+    build_order_list_read_row,
+    ensure_orders_list_schema,
+    log_orders_list_error,
+    sort_built_order_rows,
+)
 
 router = APIRouter(
     prefix="/orders",
@@ -725,99 +731,77 @@ def get_orders(
     """
     from .wms_returns import _customer_names_from_order
 
-    logger.info("ORDERS QUERY tenant_id=%s warehouse_id=%s", tenant_id, warehouse_id)
-    # DB debug: total count and last 10 orders
-    try:
-        total_in_db = db.query(func.count(Order.id)).scalar() or 0
-        sample = (
-            db.query(Order.id, Order.tenant_id, Order.warehouse_id, Order.number)
-            .order_by(Order.id.desc())
-            .limit(10)
-            .all()
-        )
-        logger.info("ORDERS DB: total count=%s, sample (id, tenant_id, warehouse_id, number)=%s", total_in_db, [(r.id, r.tenant_id, r.warehouse_id, r.number) for r in sample])
-    except Exception as e:
-        logger.warning("ORDERS DB debug query failed: %s", e)
-
-    built = _collect_order_list_built_rows(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        status=status,
-        order_type=order_type,
-        order_id=order_id,
-        volume_min=volume_min,
-        volume_max=volume_max,
-        search=search,
-        panel_order_ui_status_id=panel_order_ui_status_id,
-        panel_order_ui_unassigned=panel_order_ui_unassigned,
-        panel_order_ui_main_group=panel_order_ui_main_group,
-        panel_order_ui_status_ids=panel_order_ui_status_ids,
-        date_from=date_from,
-        date_to=date_to,
-        filter_shipping_method_id=filter_shipping_method_id,
-        source_contains=source_contains,
-        order_value_min=order_value_min,
-        order_value_max=order_value_max,
-        payment_status=payment_status,
-        paid_only=paid_only,
-        unpaid_only=unpaid_only,
-        with_document=with_document,
-        without_document=without_document,
-        include_archived_orders=include_archived,
+    logger.info(
+        "[orders.list] query tenant_id=%s warehouse_id=%s sort_by=%s limit=%s offset=%s",
+        tenant_id,
+        warehouse_id,
+        sort_by,
+        limit,
+        offset,
     )
+    try:
+        ensure_orders_list_schema(engine)
+    except Exception as exc:
+        log_orders_list_error(phase="schema_ensure", exc=exc)
+
+    try:
+        built = _collect_order_list_built_rows(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            status=status,
+            order_type=order_type,
+            order_id=order_id,
+            volume_min=volume_min,
+            volume_max=volume_max,
+            search=search,
+            panel_order_ui_status_id=panel_order_ui_status_id,
+            panel_order_ui_unassigned=panel_order_ui_unassigned,
+            panel_order_ui_main_group=panel_order_ui_main_group,
+            panel_order_ui_status_ids=panel_order_ui_status_ids,
+            date_from=date_from,
+            date_to=date_to,
+            filter_shipping_method_id=filter_shipping_method_id,
+            source_contains=source_contains,
+            order_value_min=order_value_min,
+            order_value_max=order_value_max,
+            payment_status=payment_status,
+            paid_only=paid_only,
+            unpaid_only=unpaid_only,
+            with_document=with_document,
+            without_document=without_document,
+            include_archived_orders=include_archived,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log_orders_list_error(phase="repository_query", exc=exc)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Nie udało się wczytać listy zamówień. Spróbuj ponownie za chwilę.",
+                "code": "ORDERS_LIST_QUERY_FAILED",
+            },
+        )
 
     sort_d = sort_dir or sort_direction
     profit_sort_map: dict[int, tuple[Optional[float], Optional[float]]] = {}
     if sort_by in ("gross_profit", "margin_percent"):
-        profit_sort_map = batch_order_list_profit_metrics(db, built)
-        reverse = (sort_d or "asc").lower() == "desc"
+        try:
+            profit_sort_map = batch_order_list_profit_metrics(db, built)
+        except Exception as exc:
+            log_orders_list_error(phase="profit_metrics", exc=exc)
+            profit_sort_map = {}
 
-        def _profit_sort_key(row: Tuple[Order, float, bool, int, int, List[OrderItem]]):
-            oid = int(row[0].id)
-            gp, mp = profit_sort_map.get(oid, (None, None))
-            v = gp if sort_by == "gross_profit" else mp
-            return float("-inf") if v is None else float(v)
-
-        built.sort(key=_profit_sort_key, reverse=reverse)
-    elif sort_by and sort_by in (
-        "id",
-        "number",
-        "status",
-        "order_date",
-        "total_volume",
-        "total_items",
-        "order_type",
-        "position_count",
-    ):
-        reverse = (sort_d or "asc").lower() == "desc"
-        if sort_by == "id":
-            built.sort(key=lambda x: x[0].id, reverse=reverse)
-        elif sort_by == "number":
-            built.sort(key=lambda x: (x[0].number or ""), reverse=reverse)
-        elif sort_by == "status":
-            built.sort(key=lambda x: (x[0].status or ""), reverse=reverse)
-        elif sort_by == "order_date":
-            with_d = [x for x in built if x[0].order_date is not None]
-            without_d = [x for x in built if x[0].order_date is None]
-
-            def _ts(row):
-                d = row[0].order_date
-                try:
-                    return d.timestamp()
-                except (TypeError, OSError, ValueError, AttributeError):
-                    return 0.0
-
-            with_d.sort(key=_ts, reverse=reverse)
-            built = with_d + without_d
-        elif sort_by == "total_volume":
-            built.sort(key=lambda x: x[1], reverse=reverse)
-        elif sort_by == "total_items":
-            built.sort(key=lambda x: x[3], reverse=reverse)
-        elif sort_by == "order_type":
-            built.sort(key=lambda x: x[2], reverse=reverse)
-        elif sort_by == "position_count":
-            built.sort(key=lambda x: x[4], reverse=reverse)
+    try:
+        built = sort_built_order_rows(
+            built,
+            sort_by=sort_by,
+            sort_dir=sort_d,
+            profit_sort_map=profit_sort_map,
+        )
+    except Exception as exc:
+        log_orders_list_error(phase="sort", exc=exc, field=sort_by)
 
     total_count = len(built)
     if offset is not None and offset > 0:
@@ -826,81 +810,54 @@ def get_orders(
         built = built[:limit]
 
     page_order_objs = [row[0] for row in built]
-    comm_by_id = batch_order_list_communication_fields(db, page_order_objs)
-    profit_map: dict[int, tuple[Optional[float], Optional[float]]] = (
-        profit_sort_map if sort_by in ("gross_profit", "margin_percent") else batch_order_list_profit_metrics(db, built)
-    )
+    comm_by_id: dict = {}
+    try:
+        comm_by_id = batch_order_list_communication_fields(db, page_order_objs)
+    except Exception as exc:
+        log_orders_list_error(phase="communication_batch", exc=exc)
 
-    result = []
+    profit_map: dict[int, tuple[Optional[float], Optional[float]]] = profit_sort_map
+    if sort_by not in ("gross_profit", "margin_percent"):
+        try:
+            profit_map = batch_order_list_profit_metrics(db, built)
+        except Exception as exc:
+            log_orders_list_error(phase="profit_metrics", exc=exc)
+            profit_map = {}
+
+    result: list[OrderListRead] = []
+    skipped = 0
     for o, total_volume, is_multi_item, total_items, position_count, list_active in built:
-        fn, ln = _customer_names_from_order(o)
-        display_lines = [_order_list_item_preview_from_line(it) for it in list_active]
-        preview = display_lines[:3]
-        ui_row = getattr(o, "order_ui_status", None)
-        if ui_row is None and getattr(o, "order_ui_status_id", None):
-            ui_row = db.query(OrderUiStatus).filter(OrderUiStatus.id == o.order_ui_status_id).first()
-        ship_name, ship_logo, ship_id = order_shipping_display(o)
-        wms_missing_line_count = sum(
-            1
-            for it in list_active
-            if float(getattr(it, "wms_picking_line_missing_qty", None) or 0) > 1e-9
+        row = build_order_list_read_row(
+            db,
+            order=o,
+            total_volume=total_volume,
+            is_multi_item=is_multi_item,
+            total_items=total_items,
+            position_count=position_count,
+            list_active=list_active,
+            comm_by_id=comm_by_id,
+            profit_map=profit_map,
+            customer_names_fn=_customer_names_from_order,
+            item_preview_fn=_order_list_item_preview_from_line,
+            brief_ui_status_fn=_brief_order_ui_status,
+            shipping_display_fn=order_shipping_display,
+            import_meta_fn=_order_import_meta_dict,
         )
-        meta_list = _order_import_meta_dict(o)
-        pay_st = meta_list.get("panel_payment_status")
-        pay_mt = meta_list.get("panel_payment_method")
-        pay_st_s = str(pay_st).strip()[:256] if pay_st is not None and str(pay_st).strip() else None
-        pay_mt_s = str(pay_mt).strip()[:256] if pay_mt is not None and str(pay_mt).strip() else None
-        cf = comm_by_id.get(int(o.id))
-        gp_mp = profit_map.get(int(o.id), (None, None))
-        preview_internal = (cf.latest_internal_note_preview if cf else None) or ""
-        has_internal_note_row = bool(cf and (cf.has_internal_note or bool(preview_internal.strip())))
-        pc_raw = getattr(o, "priority_color", None)
-        pc_norm = str(pc_raw).strip().lower() if pc_raw is not None and str(pc_raw).strip() else None
+        if row is None:
+            skipped += 1
+            continue
+        result.append(row)
 
-        result.append(
-            OrderListRead(
-                id=o.id,
-                number=o.number,
-                external_id=getattr(o, "external_id", None),
-                sales_document_number=getattr(o, "sales_document_number", None),
-                city=o.city,
-                country=o.country,
-                status=o.status,
-                order_date=o.order_date,
-                value=o.value,
-                created_at=o.created_at,
-                source=o.source,
-                shipping_method_id=ship_id,
-                shipping_method=ship_name,
-                shipping_method_logo_url=ship_logo,
-                currency=o.currency,
-                total_volume=total_volume,
-                is_multi_item=is_multi_item,
-                total_items=total_items,
-                position_count=position_count,
-                first_name=fn,
-                last_name=ln,
-                items_preview=preview,
-                items_display_lines=display_lines,
-                wms_missing_line_count=wms_missing_line_count,
-                order_ui_status=_brief_order_ui_status(ui_row),
-                panel_payment_status=pay_st_s,
-                panel_payment_method=pay_mt_s,
-                gross_profit=gp_mp[0],
-                margin_percent=gp_mp[1],
-                priority_color=pc_norm,
-                wms_packed_at=getattr(o, "packed_at", None),
-                wms_packed_by_label=None,
-                wms_workflow_phase=compute_wms_workflow_phase(o, db=db),
-                has_internal_note=has_internal_note_row,
-                has_customer_comment=cf.has_customer_comment if cf else False,
-                latest_internal_note_preview=cf.latest_internal_note_preview if cf else None,
-                latest_customer_comment_preview=cf.latest_customer_comment_preview if cf else None,
-            )
-        )
     if limit is not None or offset is not None:
         response.headers["X-Total-Count"] = str(total_count)
-    logger.info("ORDERS LIST: returned %s orders (tenant_id=%s warehouse_id=%s)", len(result), tenant_id, warehouse_id)
+    logger.info(
+        "[orders.list] returned=%s skipped=%s total=%s tenant_id=%s warehouse_id=%s",
+        len(result),
+        skipped,
+        total_count,
+        tenant_id,
+        warehouse_id,
+    )
     return result
 
 
