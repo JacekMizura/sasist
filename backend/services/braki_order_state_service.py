@@ -225,17 +225,19 @@ def order_has_active_braki_operations(db: Session, order: Order) -> bool:
 
 
 def order_fully_packed(db: Session, order: Order) -> bool:
-    """Wszystkie aktywne linie mają packing_quantity_packed >= quantity."""
+    """Wszystkie aktywne linie mają packing_quantity_packed >= wymaganej ilości (po brakach OMS)."""
+    from .wms_packing_service import order_item_required_pack_qty
+
     for oi in sorted(order.items or [], key=lambda x: int(x.id)):
         if getattr(oi, "parent_bundle_order_item_id", None) is not None:
             continue
         if order_item_is_replaced_line(oi) and float(oi.quantity or 0) <= 1e-9:
             continue
-        qty = int(oi.quantity or 0)
-        if qty < 1:
+        required = order_item_required_pack_qty(db, order, oi)
+        if required < 1:
             continue
         packed = int(getattr(oi, "packing_quantity_packed", 0) or 0)
-        if packed < qty:
+        if packed < required:
             return False
     return True
 

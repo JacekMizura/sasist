@@ -11,6 +11,7 @@ import {
   postWmsPackingOrderScan,
   postWmsPackingPackAll,
   wmsPackingApiErrorCode,
+  wmsPackingApiErrorMessage,
   type WmsPackingOrderDetailApi,
   type WmsPackingScanOutApi,
 } from "../../../api/wmsPackingApi";
@@ -28,6 +29,7 @@ import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import {
   firstIncompleteOrderItemId,
   isPackingOrderLinesFullyPacked,
+  lineQuantityRequired,
   scanErrorMessage,
   sortLinesForPacking,
 } from "./packingHelpers";
@@ -228,7 +230,8 @@ export function usePackingOrderController(
         return true;
       } catch (e) {
         const code = wmsPackingApiErrorCode(e);
-        showScannerToast(scanErrorMessage(code));
+        const apiMsg = wmsPackingApiErrorMessage(e);
+        showScannerToast(apiMsg || scanErrorMessage(code));
         if (import.meta.env.DEV) console.error("DOCUMENT CREATE FAILED / finish packing", e);
         return false;
       } finally {
@@ -250,7 +253,7 @@ export function usePackingOrderController(
       return;
     }
     const ln = d.lines.find((l) => l.order_item_id === lastPackedOrderItemId);
-    if (ln != null && ln.quantity_packed >= ln.quantity) {
+    if (ln != null && ln.quantity_packed >= lineQuantityRequired(ln)) {
       setActiveProductId(firstIncompleteOrderItemId(d.lines));
     } else {
       setActiveProductId(lastPackedOrderItemId);
@@ -287,11 +290,11 @@ export function usePackingOrderController(
   useEffect(() => {
     if (activeProductId == null || detail == null) return;
     const line = detail.lines.find((l) => l.order_item_id === activeProductId);
-    if (line == null || line.quantity_packed >= line.quantity) {
+    if (line == null || line.quantity_packed >= lineQuantityRequired(line)) {
       setActiveProductId(null);
       return;
     }
-    const maxRem = line.quantity - line.quantity_packed;
+    const maxRem = lineQuantityRequired(line) - line.quantity_packed;
     setPackQty((q) => Math.min(Math.max(0, q), maxRem));
   }, [detail, activeProductId]);
 
@@ -339,10 +342,10 @@ export function usePackingOrderController(
     const targetId = orderItemId ?? activeProductId;
     if (targetId == null || detail == null || warehouseId == null || actionBusyRef.current || linePackBusy) return;
     const line = detail.lines.find((l) => l.order_item_id === targetId);
-    if (line == null || line.quantity_packed >= line.quantity) return;
+    if (line == null || line.quantity_packed >= lineQuantityRequired(line)) return;
     const s = loadWmsPackingSession();
     if (!s?.mode) return;
-    const rem = line.quantity - line.quantity_packed;
+    const rem = lineQuantityRequired(line) - line.quantity_packed;
     if (rem <= 0) return;
     const baseQty = qtyOverride !== undefined ? qtyOverride : packQty;
     const q = Math.min(Math.max(0, baseQty), rem);

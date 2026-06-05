@@ -1,5 +1,6 @@
 import { memo, useCallback } from "react";
 import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
+import { lineQuantityRequired } from "./packingHelpers";
 import type { WmsPackingInterfaceDisplay } from "../../../types/wmsPackingSettings";
 import { LineDetailsBlock } from "./LineDetailsBlock";
 
@@ -26,7 +27,8 @@ function ActiveCardInner({
   onPackQtyChange,
   onConfirmPack,
 }: ActiveCardProps) {
-  const maxPack = Math.max(0, line.quantity - line.quantity_packed);
+  const qtyReq = lineQuantityRequired(line);
+  const maxPack = Math.max(0, qtyReq - line.quantity_packed);
   const loc = (line.location_label ?? "").trim();
   const locQty = line.location_bin_qty;
   const locBadge =

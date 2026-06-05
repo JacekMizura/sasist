@@ -108,25 +108,39 @@ def get_packing_orders(
         return []
 
 
+def _packing_scan_error_detail(exc: PackingScanError) -> dict:
+    detail: dict = {"code": str(exc.code)}
+    msg = getattr(exc, "message", None)
+    if msg and str(msg).strip():
+        detail["error"] = str(msg).strip()
+    oid = getattr(exc, "order_item_id", None)
+    if oid is not None and int(oid) > 0:
+        detail["order_item_id"] = int(oid)
+    return detail
+
+
 def _packing_scan_http_exception(exc: PackingScanError) -> HTTPException:
     code = str(exc.code)
+    detail = _packing_scan_error_detail(exc)
     if code == "PRODUCT_NOT_FOUND":
-        return HTTPException(status_code=404, detail={"code": code})
+        return HTTPException(status_code=404, detail=detail)
     if code == "ORDER_NOT_IN_QUEUE":
-        return HTTPException(status_code=404, detail={"code": code})
+        return HTTPException(status_code=404, detail=detail)
     if code in ("BASKET_NOT_FOUND", "BASKET_EMPTY", "BASKET_ORDER_NOT_IN_QUEUE"):
-        return HTTPException(status_code=404, detail={"code": code})
+        return HTTPException(status_code=404, detail=detail)
     if code in (
         "WRONG_PRODUCT",
         "ALREADY_PACKED",
         "INVALID_QUANTITY",
         "ORDER_NOT_FULLY_PACKED",
+        "LINE_NOT_FULLY_PACKED",
+        "UNRESOLVED_SHORTAGES",
         "CARTON_REQUIRED",
     ):
-        return HTTPException(status_code=400, detail={"code": code})
+        return HTTPException(status_code=400, detail=detail)
     if code == "FORBIDDEN_FINISH_WITHOUT_CARTON":
-        return HTTPException(status_code=403, detail={"code": code})
-    return HTTPException(status_code=400, detail={"code": code})
+        return HTTPException(status_code=403, detail=detail)
+    return HTTPException(status_code=400, detail=detail)
 
 
 @router.get("/packing/resolve-ean", response_model=WmsPackingResolveEanOut)
@@ -366,11 +380,33 @@ def post_packing_order_finish(
         raise _packing_scan_http_exception(e) from e
     except ValueError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+        msg = str(e).strip()
+        raise HTTPException(
+            status_code=400,
+            detail={"code": msg[:120] or "PACKING_FINISH_VALIDATION", "error": msg[:500]},
+        ) from e
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_packing_order_finish")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "PACKING_FINISH_DATABASE_ERROR",
+                "error": "Błąd bazy danych podczas domknięcia pakowania",
+                "message": str(e)[:400],
+            },
+        ) from None
+    except Exception as e:
+        db.rollback()
+        logger.exception("post_packing_order_finish")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "PACKING_FINISH_FAILED",
+                "error": "Nie udało się domknąć pakowania",
+                "message": str(e)[:400],
+            },
+        ) from None
 
 
 @router.post("/packing/orders/{order_id}/pack-all", response_model=WmsPackingScanOut)

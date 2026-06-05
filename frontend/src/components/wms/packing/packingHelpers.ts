@@ -1,13 +1,21 @@
 import type { MeResponse } from "../../../api/authApi";
 import type { WmsPackingOrderDetailApi, WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
 
+export function lineQuantityRequired(line: WmsPackingOrderLineApi): number {
+  const req = line.quantity_required;
+  if (typeof req === "number" && Number.isFinite(req) && req >= 0) {
+    return Math.floor(req);
+  }
+  return line.quantity;
+}
+
 export function sortLinesForPacking(
   lines: WmsPackingOrderLineApi[],
   pinFlashToEndId: number | null,
 ): WmsPackingOrderLineApi[] {
   return [...lines].sort((a, b) => {
-    const da = a.quantity_packed >= a.quantity;
-    const db = b.quantity_packed >= b.quantity;
+    const da = a.quantity_packed >= lineQuantityRequired(a);
+    const db = b.quantity_packed >= lineQuantityRequired(b);
     if (da !== db) return da ? 1 : -1;
     if (da && pinFlashToEndId != null) {
       if (a.order_item_id === pinFlashToEndId) return 1;
@@ -20,7 +28,7 @@ export function sortLinesForPacking(
 export function firstIncompleteOrderItemId(lines: WmsPackingOrderLineApi[]): number | null {
   const sorted = [...lines].sort((a, b) => a.order_item_id - b.order_item_id);
   for (const row of sorted) {
-    if (row.quantity_packed < row.quantity) return row.order_item_id;
+    if (row.quantity_packed < lineQuantityRequired(row)) return row.order_item_id;
   }
   return null;
 }
@@ -50,7 +58,13 @@ export function scanErrorMessage(code: string | null): string {
     case "ORDER_NOT_IN_QUEUE":
       return "Zamówienie poza kolejką";
     case "ORDER_NOT_FULLY_PACKED":
+    case "LINE_NOT_FULLY_PACKED":
       return "Nie można domknąć — zamówienie nie jest w pełni spakowane";
+    case "UNRESOLVED_SHORTAGES":
+      return "Zamówienie ma nierozwiązane braki — domknięcie pakowania zablokowane";
+    case "PACKING_FINISH_FAILED":
+    case "PACKING_FINISH_DATABASE_ERROR":
+      return "Błąd domknięcia pakowania — spróbuj ponownie lub skontaktuj kierownika";
     case "CARTON_REQUIRED":
       return "Wybierz opakowanie albo — jeśli masz uprawnienie — potwierdź kontynuację bez kartonu";
     case "FORBIDDEN_FINISH_WITHOUT_CARTON":
@@ -68,7 +82,7 @@ export function orderNumberLabel(raw: string): string {
 /** Wszystkie linie mają niedobór wyzerowany (EAN-level). */
 export function isPackingOrderLinesFullyPacked(detail: WmsPackingOrderDetailApi): boolean {
   if (!detail.lines.length) return false;
-  return detail.lines.every((item) => item.quantity_packed >= item.quantity);
+  return detail.lines.every((item) => item.quantity_packed >= lineQuantityRequired(item));
 }
 
 /**

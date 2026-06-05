@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Pakowanie: finish po workflow braków
+
+- ``order_item_required_pack_qty`` — wymagana ilość po ``oms_removed_qty`` / zbieraniu, nie surowe ``quantity``.
+- ``_packing_finish_validation_snapshot`` + log ``[wms.packing.finish.validation]``; finish blokuje tylko przy aktywnych brakach / niedospakowaniu.
+- ``pack-all`` / skan / ``_is_order_fully_packed_db`` używają ``quantity_required``; API pole ``quantity_required`` na linii.
+- Błędy finish: JSON ``{ code, error }`` zamiast gołego 500; frontend ``wmsPackingApiErrorMessage``.
+- Test: ``test_packing_finish_shortage_order.py``.
+
 ## 2026-06-04 — Braki: fałszywy stan „Oczekuje na decyzję OMS”
 
 - `order_line_pick_still_possible` / `order_line_requires_oms_decision` — decyzja OMS tylko po eskalacji; sam brak przy możliwej dogrywce ≠ OMS.

@@ -1,5 +1,6 @@
 import { memo, useCallback } from "react";
 import type { WmsPackingOrderLineApi } from "../../../api/wmsPackingApi";
+import { lineQuantityRequired } from "./packingHelpers";
 import type { WmsPackingInterfaceDisplay } from "../../../types/wmsPackingSettings";
 import { LineDetailsBlock } from "./LineDetailsBlock";
 
@@ -11,6 +12,7 @@ export type DefaultCardProps = {
 };
 
 function DefaultCardInner({ line, scanBusy, fieldVisibility, onActivate }: DefaultCardProps) {
+  const qtyReq = lineQuantityRequired(line);
   const loc = (line.location_label ?? "").trim();
   const locQty = line.location_bin_qty;
   const locBadge =
@@ -49,7 +51,7 @@ function DefaultCardInner({ line, scanBusy, fieldVisibility, onActivate }: Defau
         <div className="flex min-w-0 flex-1 flex-col items-center justify-center self-stretch text-center">
           <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">SPAKOWANO</span>
           <span className="mt-0.5 flex min-h-[2.5rem] items-center justify-center text-[26px] font-black leading-none tabular-nums text-slate-900 sm:text-[28px]">
-            {line.quantity_packed}/{line.quantity}
+            {line.quantity_packed}/{qtyReq}
           </span>
         </div>
         <div className="flex shrink-0 flex-col items-end justify-between gap-0.5 self-stretch">

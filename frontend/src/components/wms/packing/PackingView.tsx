@@ -11,6 +11,7 @@ import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { CourierBadge } from "./CourierBadge";
 import {
   isPackingOrderCompleted,
+  lineQuantityRequired,
   orderNumberLabel,
   packingCourierLabelCount,
   packingCourierName,
@@ -411,7 +412,7 @@ export function PackingView({
           ) : null}
           <ul className="grid list-none gap-3 [grid-template-columns:repeat(1,minmax(0,1fr))] p-0 lg:grid-cols-2 xl:grid-cols-3 lg:items-stretch">
             {sortedLines.map((line) => {
-              const done = line.quantity_packed >= line.quantity;
+              const done = line.quantity_packed >= lineQuantityRequired(line);
               const active = !done && activeProductId === line.order_item_id;
               const flash = flashItemId === line.order_item_id;
               return (

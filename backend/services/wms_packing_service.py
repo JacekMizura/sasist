@@ -105,9 +105,184 @@ def _packing_sku_from_item(it: OrderItem) -> Optional[str]:
 class PackingScanError(Exception):
     """Błąd skanu na ekranie pakowania — ``code`` dla mapowania komunikatów UI."""
 
-    def __init__(self, code: str) -> None:
-        super().__init__(code)
+    def __init__(
+        self,
+        code: str,
+        *,
+        message: str | None = None,
+        order_item_id: int | None = None,
+    ) -> None:
+        super().__init__(message or code)
         self.code = code
+        self.message = message
+        self.order_item_id = order_item_id
+
+
+def _order_item_operational_missing_qty(db: Session, order: Order, it: OrderItem) -> float:
+    from .order_fulfillment_recompute import compute_line_missing_qty
+
+    return float(compute_line_missing_qty(db, order, it))
+
+
+def order_item_required_pack_qty(db: Session, order: Order, it: OrderItem) -> int:
+    """Ile sztuk linii musi zostać spakowanych — stan biznesowy po brakach / decyzjach OMS."""
+    if not _order_item_active_for_packing(it):
+        return 0
+    ordered = int(it.quantity or 0)
+    if ordered <= 0:
+        return 0
+
+    from .fulfillment_event_service import line_picked_sum_for_order
+
+    removed = float(getattr(it, "oms_removed_qty", None) or 0.0)
+    replaced = float(getattr(it, "oms_replaced_qty", None) or 0.0)
+    picked = float(line_picked_sum_for_order(db, int(it.id), order))
+    fulfillable = max(0.0, float(ordered) - removed - replaced)
+
+    rep_oid = getattr(it, "replaced_from_order_item_id", None)
+    ols_u = str(getattr(it, "oms_line_status", None) or "").strip().upper()
+    substitute = (rep_oid is not None and int(rep_oid) > 0) or ols_u == OMS_LINE_STATUS_TO_PICK
+
+    if substitute:
+        return max(0, int(round(min(fulfillable, picked))))
+    if picked > 1e-9:
+        return max(0, int(round(min(fulfillable, picked))))
+    return max(0, int(round(fulfillable)))
+
+
+def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool = False) -> dict:
+    """Diagnoza gotowości do domknięcia pakowania."""
+    from .braki_order_state_service import count_issue_queue_operational_lines
+
+    items = order.items or []
+    active_lines = 0
+    removed_lines = 0
+    shortage_lines = 0
+    replacement_lines = 0
+    unresolved_lines: list[dict] = []
+
+    for it in items:
+        if getattr(it, "parent_bundle_order_item_id", None) is not None:
+            continue
+        meta_removed = False
+        raw_meta = getattr(it, "metadata_json", None)
+        if raw_meta and str(raw_meta).strip():
+            try:
+                m = json.loads(raw_meta)
+                meta_removed = isinstance(m, dict) and bool(m.get("oms_line_removed"))
+            except json.JSONDecodeError:
+                meta_removed = False
+        if order_item_is_replaced_line(it):
+            removed_lines += 1
+            continue
+        if int(it.quantity or 0) <= 0 or meta_removed:
+            removed_lines += 1
+            continue
+
+        rep_oid = getattr(it, "replaced_from_order_item_id", None)
+        if rep_oid is not None and int(rep_oid) > 0:
+            replacement_lines += 1
+
+        if not _order_item_active_for_packing(it):
+            continue
+        active_lines += 1
+
+        missing = _order_item_operational_missing_qty(db, order, it)
+        if missing > 1e-9:
+            shortage_lines += 1
+        required = order_item_required_pack_qty(db, order, it)
+        packed = int(getattr(it, "packing_quantity_packed", 0) or 0)
+
+        reason = ""
+        if missing > 1e-9:
+            reason = "unresolved_shortage"
+        elif packed < required:
+            reason = "underpacked"
+
+        if reason:
+            unresolved_lines.append(
+                {
+                    "order_item_id": int(it.id),
+                    "product_id": int(it.product_id),
+                    "reason": reason,
+                    "required": required,
+                    "packed": packed,
+                    "missing_qty": round(missing, 6),
+                }
+            )
+
+    u_short, r_pend = count_issue_queue_operational_lines(db, order)
+    lines_packed_complete = len(unresolved_lines) == 0
+    packable = lines_packed_complete and int(u_short) == 0
+
+    snap = {
+        "order_id": int(order.id),
+        "total_lines": len(items),
+        "active_lines": active_lines,
+        "removed_lines": removed_lines,
+        "shortage_lines": shortage_lines,
+        "replacement_lines": replacement_lines,
+        "unresolved_lines": unresolved_lines,
+        "unresolved_count": len(unresolved_lines),
+        "issue_queue_oms": int(u_short),
+        "issue_queue_pick": int(r_pend),
+        "lines_packed_complete": lines_packed_complete,
+        "packable": packable,
+    }
+    if log:
+        logger.info(
+            "[wms.packing.finish.validation] order_id=%s total_lines=%s active_lines=%s "
+            "removed_lines=%s shortage_lines=%s replacement_lines=%s unresolved_count=%s "
+            "issue_queue_oms=%s issue_queue_pick=%s packable=%s",
+            snap["order_id"],
+            snap["total_lines"],
+            snap["active_lines"],
+            snap["removed_lines"],
+            snap["shortage_lines"],
+            snap["replacement_lines"],
+            snap["unresolved_count"],
+            snap["issue_queue_oms"],
+            snap["issue_queue_pick"],
+            snap["packable"],
+        )
+        if unresolved_lines:
+            logger.info(
+                "[wms.packing.finish.validation.lines] order_id=%s unresolved=%s",
+                snap["order_id"],
+                unresolved_lines[:12],
+            )
+    return snap
+
+
+def _assert_order_packable_for_finish(db: Session, order: Order) -> None:
+    snap = _packing_finish_validation_snapshot(db, order, log=True)
+    if snap["packable"]:
+        return
+    if int(snap["issue_queue_oms"]) > 0:
+        raise PackingScanError(
+            "UNRESOLVED_SHORTAGES",
+            message="Zamówienie nadal ma nierozwiązane braki wymagające decyzji OMS",
+        )
+    if any(u["reason"] == "unresolved_shortage" for u in snap["unresolved_lines"]):
+        raise PackingScanError(
+            "UNRESOLVED_SHORTAGES",
+            message="Zamówienie ma nierozwiązane aktywne braki magazynowe",
+        )
+    unresolved = snap["unresolved_lines"]
+    if unresolved:
+        first = unresolved[0]
+        raise PackingScanError(
+            "LINE_NOT_FULLY_PACKED",
+            message=(
+                f"Nie można domknąć pakowania — linia {first['order_item_id']} "
+                f"wymaga {first['required']} szt., spakowano {first['packed']}"
+            ),
+            order_item_id=int(first["order_item_id"]),
+        )
+    raise PackingScanError(
+        "ORDER_NOT_FULLY_PACKED",
+        message="Nie można domknąć pakowania — zamówienie nie jest w pełni spakowane",
+    )
 
 
 def _packing_queue_status_ids(
@@ -576,21 +751,27 @@ def _packing_line_from_item(
     rep_oid = getattr(it, "replaced_from_order_item_id", None)
     ols_u = str(getattr(it, "oms_line_status", None) or "").strip().upper()
 
+    qty_required = q_ord
+    if enrich and db is not None and order is not None:
+        qty_required = order_item_required_pack_qty(db, order, it)
+
     picked_final = float(picked_qty)
     if order is not None and q_ord > 0:
         pf_o = getattr(order, "picking_finished_at", None) or getattr(order, "picked_at", None)
+        removed = float(getattr(it, "oms_removed_qty", None) or 0.0)
+        fulfillable = max(0.0, float(q_ord) - removed)
+        substitute_pending = (rep_oid is not None and int(rep_oid) > 0) or ols_u == OMS_LINE_STATUS_TO_PICK
         if pf_o is not None:
             if missing_qty > 1e-9:
-                picked_final = max(float(picked_qty), float(q_ord) - float(missing_qty))
+                picked_final = max(float(picked_qty), fulfillable - float(missing_qty))
+            elif substitute_pending:
+                picked_final = float(picked_qty)
+            elif float(picked_qty) > 1e-9:
+                picked_final = min(fulfillable, float(picked_qty))
             else:
-                # Nowa linia zamiennika (TO_PICK / ślad replaced_from) — nie udawaj pełnej zbiórki po domknięciu sesji.
-                substitute_pending = (rep_oid is not None and int(rep_oid) > 0) or ols_u == OMS_LINE_STATUS_TO_PICK
-                if float(picked_qty) + 1e-6 >= float(q_ord):
-                    picked_final = float(q_ord)
-                elif substitute_pending:
-                    picked_final = float(picked_qty)
-                else:
-                    picked_final = float(q_ord)
+                picked_final = fulfillable
+        elif float(picked_qty) > 1e-9:
+            picked_final = min(fulfillable, float(picked_qty))
 
     pid_out = int(p.id) if p is not None else 0
     rep_name = getattr(it, "replaced_from_product_name", None)
@@ -626,6 +807,7 @@ def _packing_line_from_item(
         order_item_id=int(it.id),
         product_id=pid_out,
         quantity=q_ord,
+        quantity_required=max(0, int(qty_required)),
         quantity_packed=q_packed,
         picked_quantity=picked_qty,
         picked_quantity_final=picked_final,
@@ -680,9 +862,14 @@ def _build_packing_order_card(
         if not _order_item_active_for_packing(it):
             continue
         q_ord = int(it.quantity or 0)
+        q_req = (
+            order_item_required_pack_qty(db, order, it)
+            if enrich and db is not None
+            else q_ord
+        )
         raw_packed = int(getattr(it, "packing_quantity_packed", 0) or 0)
-        q_packed = min(q_ord, max(0, raw_packed))
-        total_q += q_ord
+        q_packed = min(q_req, max(0, raw_packed))
+        total_q += q_req
         packed_q += q_packed
         lines_out.append(
             _packing_line_from_item(
@@ -1238,31 +1425,28 @@ def resolve_packed_order_ui_status_id(db: Session, *, tenant_id: int, warehouse_
     return int(rows[0].id)
 
 
-def _order_has_pending_packing_lines(order: Order) -> bool:
+def _order_has_pending_packing_lines(db: Session, order: Order) -> bool:
     for it in order.items or []:
         if not _order_item_active_for_packing(it):
             continue
-        qo = int(it.quantity or 0)
+        required = order_item_required_pack_qty(db, order, it)
         qp = int(getattr(it, "packing_quantity_packed", 0) or 0)
-        if qp < qo:
+        if qp < required:
             return True
     return False
 
 
 def _is_order_fully_packed_db(db: Session, order_id: int) -> bool:
-    not_replaced = func.upper(func.coalesce(OrderItem.oms_line_status, "")) != "REPLACED"
-    pending = (
-        db.query(func.count(OrderItem.id))
-        .filter(
-            OrderItem.order_id == int(order_id),
-            OrderItem.quantity > 0,
-            not_replaced,
-            OrderItem.quantity > func.coalesce(OrderItem.packing_quantity_packed, 0),
-        )
-        .scalar()
-        or 0
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(Order.id == int(order_id))
+        .first()
     )
-    return int(pending) == 0
+    if order is None:
+        return False
+    snap = _packing_finish_validation_snapshot(db, order, log=False)
+    return bool(snap["lines_packed_complete"])
 
 
 def _load_order_for_packing_mutation(
@@ -1355,8 +1539,7 @@ def _touch_order_wms_packing_timestamps(order: Order, *, fully_packed: bool) -> 
     for it in order.items or []:
         if not _order_item_active_for_packing(it):
             continue
-        qo = int(it.quantity or 0)
-        qp = min(qo, int(getattr(it, "packing_quantity_packed", 0) or 0))
+        qp = int(getattr(it, "packing_quantity_packed", 0) or 0)
         packed_sum += qp
     if packed_sum > 0 and getattr(order, "packing_started_at", None) is None:
         order.packing_started_at = now
@@ -1482,8 +1665,7 @@ def packing_finish_order(
     )
     if order is None:
         raise PackingScanError("ORDER_NOT_IN_QUEUE")
-    if not _is_order_fully_packed_db(db, int(order_id)):
-        raise PackingScanError("ORDER_NOT_FULLY_PACKED")
+    _assert_order_packable_for_finish(db, order)
 
     raw_sel = getattr(order, "selected_carton_id", None)
     sel = str(raw_sel).strip() if raw_sel else ""
@@ -1577,7 +1759,7 @@ def find_next_fifo_packing_order_id(
     for o in orders:
         if exclude_order_id is not None and int(o.id) == int(exclude_order_id):
             continue
-        if _order_has_pending_packing_lines(o):
+        if _order_has_pending_packing_lines(db, o):
             return int(o.id)
     return None
 
@@ -1618,9 +1800,9 @@ def packing_scan_increment(
             continue
         if int(it.product_id) != pid:
             continue
-        qo = int(it.quantity or 0)
+        required = order_item_required_pack_qty(db, order, it)
         qp = int(getattr(it, "packing_quantity_packed", 0) or 0)
-        if qp < qo:
+        if qp < required:
             target_item = it
             break
     if target_item is None:
@@ -1675,9 +1857,9 @@ def packing_apply_line_pack(
         raise PackingScanError("WRONG_PRODUCT")
     if not _order_item_active_for_packing(item):
         raise PackingScanError("WRONG_PRODUCT")
-    qo = int(item.quantity or 0)
+    required = order_item_required_pack_qty(db, order, item)
     qp = int(getattr(item, "packing_quantity_packed", 0) or 0)
-    rem = qo - qp
+    rem = required - qp
     if rem <= 0:
         raise PackingScanError("ALREADY_PACKED")
     q_add = int(quantity)
@@ -1728,12 +1910,12 @@ def packing_pack_all_lines(
     for it in items_sorted:
         if not _order_item_active_for_packing(it):
             continue
-        qo = int(it.quantity or 0)
+        required = order_item_required_pack_qty(db, order, it)
         qp = int(getattr(it, "packing_quantity_packed", 0) or 0)
-        delta = qo - qp
+        delta = required - qp
         if delta <= 0:
             continue
-        it.packing_quantity_packed = qo
+        it.packing_quantity_packed = qp + delta
         sku_pa = _packing_sku_from_item(it)
         audits.append((int(it.id), int(it.product_id), int(delta), sku_pa))
         last_oid = int(it.id)

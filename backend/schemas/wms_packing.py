@@ -89,6 +89,11 @@ class WmsPackingOrderLine(BaseModel):
     order_item_id: int = Field(..., ge=1)
     product_id: int = Field(..., ge=0, description="Katalog product.id dla agregacji braków w OMS")
     quantity: int = Field(..., ge=0)
+    quantity_required: int = Field(
+        default=0,
+        ge=0,
+        description="Ilość do spakowania po brakach / decyzjach OMS (≤ quantity); UI i walidacja finish.",
+    )
     quantity_packed: int = Field(..., ge=0, description="Ilość spakowana na stanowisku (packing_quantity_packed), max do ilości zamówienia")
     picked_quantity: float = Field(
         0,

@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { WmsPackingOrderLineApi } from "../../../../api/wmsPackingApi";
+import { lineQuantityRequired } from "../packingHelpers";
 
 export type ProductInlineItemProps = {
   line: WmsPackingOrderLineApi;
@@ -10,7 +11,8 @@ export type ProductInlineItemProps = {
 const IMG = 72;
 
 function ProductInlineItemInner({ line, onProductClick }: ProductInlineItemProps) {
-  const packed = line.quantity > 0 && line.quantity_packed >= line.quantity;
+  const qtyReq = lineQuantityRequired(line);
+  const packed = qtyReq > 0 && line.quantity_packed >= qtyReq;
   const ean = (line.ean ?? "").trim() || "—";
   const colorRaw = (line.color_name ?? "").trim();
   const title = `${line.quantity}x ${line.product_name}`;
@@ -61,7 +63,7 @@ function ProductInlineItemInner({ line, onProductClick }: ProductInlineItemProps
       <div className="flex min-w-0 flex-1 flex-col gap-1 leading-snug">
         {packed ? (
           <span className="inline-flex w-fit max-w-full items-center rounded-md border-2 border-emerald-400 bg-emerald-100 px-3 py-1.5 text-sm font-bold leading-tight text-emerald-900 shadow-sm">
-            Spakowane {line.quantity_packed}/{line.quantity}
+            Spakowane {line.quantity_packed}/{qtyReq}
           </span>
         ) : null}
         <p className="text-[15px] font-bold leading-snug text-[#1a1a1a] line-clamp-3 sm:text-base">{title}</p>

@@ -55,6 +55,8 @@ export type WmsPackingOrderLineApi = {
   /** Brak w starszej odpowiedzi API — grupowanie po order_item_id. */
   product_id?: number;
   quantity: number;
+  /** Ilość do spakowania po brakach OMS (≤ quantity). */
+  quantity_required?: number;
   quantity_packed: number;
   /** Suma Pick dla linii (OMS / WMS). */
   picked_quantity?: number;
@@ -495,6 +497,19 @@ export function wmsPackingApiErrorCode(err: unknown): string | null {
   const d = ax.response?.data?.detail;
   if (d && typeof d === "object" && d !== null && "code" in d) {
     return String((d as { code: string }).code);
+  }
+  return null;
+}
+
+/** Komunikat z API (pole ``error`` lub ``message``) — do toasta przy finish / skanie. */
+export function wmsPackingApiErrorMessage(err: unknown): string | null {
+  const ax = err as { response?: { data?: { detail?: unknown } } };
+  const d = ax.response?.data?.detail;
+  if (typeof d === "string" && d.trim()) return d.trim();
+  if (d && typeof d === "object" && d !== null) {
+    const o = d as { error?: string; message?: string };
+    const msg = (o.error ?? o.message ?? "").trim();
+    if (msg) return msg;
   }
   return null;
 }
