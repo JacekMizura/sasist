@@ -18,6 +18,7 @@ import { formatOperatorDisplayName } from "../../components/wms/execution/active
 import { executionContextFromPicking } from "../../components/wms/execution/pickingExecutionContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
+import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
 import type { WmsPickingProductsNavState } from "./wmsPickingFlowTypes";
@@ -457,6 +458,7 @@ export default function WmsPickingProductDetailPage() {
       console.info("[shortage.modal] API_OK", { line_id: lineId, qty: shortageQtyInput });
       const optimistic = applyWmsPickingShortageToDetail(detail, shortageQtyInput);
       applyDetailToState(optimistic);
+      dispatchWmsShortagesUpdated();
       playScanBeep();
       setShortageConfirmOpen(false);
       showScannerToast("Brak zapisany. Kontynuuj zbieranie.");

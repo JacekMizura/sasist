@@ -155,6 +155,10 @@ class ReportShortagePartialPickIntegrationTests(unittest.TestCase):
                 "backend.services.wms_picking_product_list_service.get_or_create_wms_picking_shortage_settings",
                 return_value=SimpleNamespace(allow_continue_other_lines_after_shortage=True),
             ),
+            patch(
+                "backend.services.wms_picking_product_list_service.upsert_order_issue_tasks_from_shortage",
+                return_value=[9001],
+            ) as upsert_mock,
         ):
             out = report_wms_picking_product_shortage(
                 db,
@@ -170,6 +174,13 @@ class ReportShortagePartialPickIntegrationTests(unittest.TestCase):
             )
         self.assertTrue(out["ok"])
         self.assertEqual(out["orders_updated"], 1)
+        self.assertEqual(out["order_issue_task_ids"], [9001])
+        upsert_mock.assert_called_once()
+        upsert_kwargs = upsert_mock.call_args.kwargs
+        self.assertEqual(upsert_kwargs["tenant_id"], 1)
+        self.assertEqual(upsert_kwargs["warehouse_id"], 1)
+        self.assertEqual(upsert_kwargs["shortage_product_id"], 77)
+        self.assertIn(500, upsert_kwargs["order_ids"])
 
 
 if __name__ == "__main__":

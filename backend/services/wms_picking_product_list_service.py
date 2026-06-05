@@ -71,7 +71,11 @@ from .order_fulfillment_recompute import (
     order_item_needs_substitute_pick_completion,
     recompute_order_fulfillment,
 )
-from .order_issue_task_service import count_issue_queue_operational_lines
+from .order_issue_task_service import (
+    count_issue_queue_operational_lines,
+    ensure_open_issue_task_for_order,
+    upsert_order_issue_tasks_from_shortage,
+)
 from .wms_picking_shortage_settings_service import get_or_create_wms_picking_shortage_settings
 from ..schemas.picking_routing import PickListRow
 from ..schemas.wms_picking_products import (
@@ -2040,13 +2044,27 @@ def report_wms_picking_product_shortage(
     )
     db.add(rep)
 
+    task_ids = upsert_order_issue_tasks_from_shortage(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_ids=list(aff_set),
+        shortage_product_id=pid,
+    )
+    logger.info(
+        "[shortage.report] braki_tasks order_ids=%s task_ids=%s product_id=%s",
+        aff_set,
+        task_ids,
+        pid,
+    )
+
     ss_ui = get_or_create_wms_picking_shortage_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     return {
         "ok": True,
         "orders_updated": len(aff_set),
         "target_status_id": None,
         "order_ids": aff_set,
-        "order_issue_task_ids": [],
+        "order_issue_task_ids": task_ids,
         "allow_continue_other_lines_after_shortage": bool(
             getattr(ss_ui, "allow_continue_other_lines_after_shortage", True)
         ),
@@ -2695,6 +2713,16 @@ def finalize_wms_picking_cart(
             bool(post.packing_allowed) if post is not None else False,
             post.state_hash if post is not None else None,
         )
+        if order_kinds.get(oid, "all_picked") != "all_picked":
+            try:
+                ensure_open_issue_task_for_order(db, o)
+            except Exception:
+                logger.exception(
+                    "[picking.finalize.braki_task] order_id=%s cart_id=%s source_status_id=%s",
+                    oid,
+                    cid,
+                    sid,
+                )
 
     try:
         cart.status = CartStatus.FULL

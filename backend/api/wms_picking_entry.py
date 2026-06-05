@@ -782,8 +782,9 @@ def post_picking_report_shortage(
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """
-    Zgłoszenie braku w trakcie sesji: zapis na linii (brak / status linii), bez zmiany statusu panelu zamówienia
-    i bez kolejki Braki — to następuje dopiero przy ``POST /wms/picking/finalize-cart``.
+    Zgłoszenie braku w trakcie sesji: zapis na linii, utworzenie/aktualizacja OPEN ``OrderIssueTask``
+    (kolejka Braki WMS) oraz przeliczenie fulfillment — bez zmiany statusu panelu zamówienia
+    (status panelu przy domknięciu wózka: ``POST /wms/picking/finalize-cart``).
     """
     import traceback
 
