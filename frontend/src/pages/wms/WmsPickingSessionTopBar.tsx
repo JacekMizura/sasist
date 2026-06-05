@@ -1,7 +1,5 @@
 import type { CSSProperties } from "react";
-import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
 import { WMS_OPERATIONAL_CONTAINER } from "../../components/wms/execution/wmsLayoutTokens";
-import type { ExecutionActiveContext } from "../../context/WarehouseExecutionContext";
 import { WmsSessionCounterPills } from "../../components/wms/WmsSessionCounterPills";
 import { ShoppingCart, User } from "lucide-react";
 
@@ -16,8 +14,6 @@ export type WmsPickingSessionTopBarProps = {
   statusBadgeStyle: CSSProperties;
   cartCode?: string | null;
   cartName?: string | null;
-  /** Workflow context rendered inline above session counters (not a fixed shell layer). */
-  workflowContext?: ExecutionActiveContext | null;
 };
 
 function IconBack() {
@@ -35,21 +31,13 @@ export function WmsPickingSessionTopBar({
   pickStats,
   cartCode,
   cartName,
-  workflowContext,
 }: WmsPickingSessionTopBarProps) {
   const hasCart = cartCode != null && cartCode.trim() !== "";
   const loggedUser = localStorage.getItem("user_username") || "Super Admin";
 
   return (
     <div className="shrink-0 border-b border-slate-200 bg-white">
-      {workflowContext ? (
-        <ActiveOperationContextBar
-          context={workflowContext}
-          inline
-          className="rounded-none border-0 border-b border-slate-100 bg-white"
-        />
-      ) : null}
-      <div className={`${WMS_OPERATIONAL_CONTAINER} py-3`}>
+      <div className={`${WMS_OPERATIONAL_CONTAINER} py-2`}>
       <div className="flex w-full items-center justify-between gap-4">
         
         {/* LEWA STRONA: Powrót + Liczniki sesji */}

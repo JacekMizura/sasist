@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
 import { WMS_OPERATIONAL_CONTAINER } from "../../components/wms/execution/wmsLayoutTokens";
 import {
   postWmsOrderIssueTaskArchive,
@@ -9,7 +8,6 @@ import {
   type OrderIssueTaskListItemApi,
 } from "../../api/wmsOrderIssueTasksApi";
 import { extractApiErrorMessage } from "../../api/authApi";
-import { executionContextFromBrakiTask } from "../../components/wms/execution/syncExecutionContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { BrakiOperationalHeader } from "./BrakiOperationalHeader";
 import { BrakiForceRemoveModal, type BrakiForceRemoveMode } from "./BrakiForceRemoveModal";
@@ -95,14 +93,6 @@ export function WmsOrderIssueDetailContent({
     (ctx.relocation_lines?.length ?? 0) > 0 ||
     (ctx.packing_ready_lines?.length ?? 0) > 0;
 
-  const workflowContext = useMemo(
-    () =>
-      executionContextFromBrakiTask(task, {
-        scanHint: "Zeskanuj inne zamówienie, aby przełączyć kartę",
-      }),
-    [task],
-  );
-
   const onArchiveShortage = useCallback(
     async (mode?: BrakiForceRemoveMode) => {
       setActionPending("archive");
@@ -148,8 +138,7 @@ export function WmsOrderIssueDetailContent({
 
   return (
     <div className="flex w-full flex-col bg-white">
-      <div className={`${WMS_OPERATIONAL_CONTAINER} flex-1 space-y-4 py-4 md:py-5`}>
-        <ActiveOperationContextBar context={workflowContext} inline />
+      <div className={`${WMS_OPERATIONAL_CONTAINER} flex-1 space-y-4 py-3 md:py-4`}>
         <BrakiOperationalHeader task={task} />
 
         {actionError ? (

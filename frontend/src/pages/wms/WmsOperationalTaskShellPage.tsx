@@ -12,12 +12,8 @@ import { ScanExecutionShell } from "../../components/wms/execution/ScanExecution
 import { ScanStepHero } from "../../components/wms/execution/ScanStepHero";
 import { ExecutionBottomBar } from "../../components/wms/execution/ExecutionBottomBar";
 import { ExecutionTouchButton } from "../../components/wms/execution/ExecutionTouchButton";
-import { executionContextFromOperationalDetail } from "../../components/wms/execution/syncExecutionContext";
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
-import { useAuth } from "../../context/AuthContext";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
-import { formatOperatorDisplayName } from "../../components/wms/execution/activeOperationContext";
 import { formatOperationalError } from "../../components/wms/execution/formatOperationalError";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 
@@ -29,8 +25,6 @@ export default function WmsOperationalTaskShellPage() {
   const { taskId: taskIdParam } = useParams();
   const taskId = Number(taskIdParam);
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { setActiveContext } = useWarehouseExecution();
   const scanFx = useScanFeedback();
 
   const [detail, setDetail] = useState<Awaited<ReturnType<typeof getWmsOperationalTaskDetail>> | null>(null);
@@ -55,16 +49,6 @@ export default function WmsOperationalTaskShellPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!detail) return;
-    setActiveContext(
-      executionContextFromOperationalDetail(detail, {
-        operatorName: detail.relocation_session?.operator_name ?? formatOperatorDisplayName(user),
-      }),
-    );
-    return () => setActiveContext(null);
-  }, [detail, setActiveContext, user]);
 
   const startRecollect = useCallback(() => {
     if (!detail?.order_id) return;

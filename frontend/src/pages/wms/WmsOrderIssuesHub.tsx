@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
 import { WMS_OPERATIONAL_CONTAINER } from "../../components/wms/execution/wmsLayoutTokens";
-import { executionContextFromBrakiHub } from "../../components/wms/execution/syncExecutionContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -163,15 +161,6 @@ export default function WmsOrderIssuesHub() {
     void load();
   }, [load]);
 
-  const workflowContext = useMemo(
-    () =>
-      executionContextFromBrakiHub({
-        queueCount: tasks.length,
-        scanHint: "Zeskanuj EAN lub numer zamówienia — otworzy kartę braków",
-      }),
-    [tasks.length],
-  );
-
   useWmsShortagesRefresh(() => void load(), { debounceMs: 600 });
 
   useEffect(() => {
@@ -239,9 +228,7 @@ export default function WmsOrderIssuesHub() {
 
   return (
     <div className="flex w-full flex-col bg-white">
-      <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-4 md:py-5`}>
-        <ActiveOperationContextBar context={workflowContext} inline />
-
+      <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-3 md:py-4`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-bold text-slate-900 md:text-xl">
             Zamówienia z brakami{" "}

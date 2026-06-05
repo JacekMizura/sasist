@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Loader2, MapPin, Package } from "lucide-react";
 import { extractApiErrorMessage } from "../../api/authApi";
@@ -42,15 +41,6 @@ export default function WmsRecoveryBatchPage() {
     void load();
   }, [load]);
 
-  const workflowContext = useMemo(() => {
-    if (!batch) return null;
-    return {
-      operationType: batch.label || "DOGRYWKA BATCH",
-      currentStep: `${batch.order_count} zamówień · ${batch.line_count} linii`,
-      scanHint: "Wybierz lokalizację lub zamówienie do dogrywki",
-    };
-  }, [batch]);
-
   if (warehouseId == null) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-6 text-slate-600">
@@ -81,10 +71,7 @@ export default function WmsRecoveryBatchPage() {
 
   return (
     <div className="min-h-full bg-slate-50 pb-24">
-      {workflowContext ? (
-        <ActiveOperationContextBar context={workflowContext} inline className="rounded-none border-x-0" />
-      ) : null}
-      <header className="border-b border-slate-200 bg-white px-4 py-4 md:px-6">
+      <header className="border-b border-slate-200 bg-white px-4 py-3 md:px-6">
         <Link to={WMS_ROUTES.braki()} className="text-sm font-medium text-slate-600 hover:text-slate-900">
           ← Braki
         </Link>

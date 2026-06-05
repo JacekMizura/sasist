@@ -21,7 +21,7 @@ export function WmsOperationalPageHeader({ children, className = "" }: ShellProp
 
 export function WmsOperationalPageBody({ children, className = "" }: ShellProps) {
   return (
-    <div className={`flex-1 py-4 md:py-6 ${className}`}>
+    <div className={`flex-1 py-3 md:py-4 ${className}`}>
       <div className={WMS_OPERATIONAL_CONTAINER}>{children}</div>
     </div>
   );

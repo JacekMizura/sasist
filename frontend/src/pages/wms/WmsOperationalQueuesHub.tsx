@@ -25,7 +25,7 @@ export default function WmsOperationalQueuesHub() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const navigate = useNavigate();
-  const { setActiveContext, isCoarsePointer } = useWarehouseExecution();
+  const { isCoarsePointer } = useWarehouseExecution();
 
   const [activeQueue, setActiveQueue] = useState<OperationalQueueId>("DO_DOGRYWKI");
   const [items, setItems] = useState<Awaited<ReturnType<typeof listWmsOperationalTasks>>["items"]>([]);
@@ -63,15 +63,6 @@ export default function WmsOperationalQueuesHub() {
   }, [load]);
 
   useWmsShortagesRefresh(() => void load(), { debounceMs: 800 });
-
-  useEffect(() => {
-    setActiveContext({
-      taskLabel: activeMeta?.label ?? "Kolejka",
-      stepLabel: "Zeskanuj produkt lub nośnik",
-      scanHint: "Skan otwiera następne zadanie na trasie",
-    });
-    return () => setActiveContext(null);
-  }, [activeMeta?.label, setActiveContext]);
 
   const { onScan, bindPlaceholder } = useWmsScanResolveNavigate({
     enabled: warehouseId != null,

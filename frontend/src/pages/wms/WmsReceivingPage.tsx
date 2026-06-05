@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActiveOperationContextBar } from "../../components/wms/execution/ActiveOperationContextBar";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Clock, Plus, RotateCcw, Truck, CheckCircle2, ScanLine, User } from "lucide-react";
 import { WmsNewDeliveryModal } from "../../components/wms/receiving/WmsNewDeliveryModal";
@@ -115,14 +114,6 @@ export default function WmsReceivingPage() {
 
   const { setActiveDocument, setScannerInputPlaceholder } = useWmsScanner();
   const scanFx = useScanFeedback();
-  const workflowContext = useMemo(
-    () => ({
-      operationType: "PRZYJĘCIE",
-      currentStep: "Wybierz lub zeskanuj PZ",
-      scanHint: "Otwórz PZ, aby skanować nośnik i EAN",
-    }),
-    [],
-  );
 
   useEffect(() => {
     setActiveDocument({ kind: "custom", label: "Lista PZ" });
@@ -177,7 +168,6 @@ export default function WmsReceivingPage() {
 
   return (
     <div className="min-h-full bg-white flex flex-col">
-      <ActiveOperationContextBar context={workflowContext} inline className="rounded-none border-x-0" />
       <div className="p-4 sm:p-6 lg:p-8 flex flex-col flex-1">
       <div className="w-full flex-1 flex flex-col animate-in fade-in duration-500">
         

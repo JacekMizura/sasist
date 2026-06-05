@@ -25,8 +25,6 @@ import { nextOperationalAction } from "../../components/wms/operational/operatio
 import {
   ScanStepHero,
   ExecutionTouchButton,
-  formatOperatorDisplayName,
-  executionContextFromOperationalDetail,
   formatOperationalError,
   useWmsPageScanHandler,
   useScanFeedback,
@@ -37,8 +35,6 @@ import {
   WmsOperationalPageShell,
 } from "../../components/wms/execution/WmsOperationalPageShell";
 import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
-import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
-
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
 }
@@ -79,7 +75,6 @@ export default function WmsRelocationDetailPage() {
 
   const { showScannerToast, setScannerInputPlaceholder, setActiveDocument, refocusScannerInput } =
     useWmsScanner();
-  const { setActiveContext } = useWarehouseExecution();
   const scanFx = useScanFeedback();
 
   const [detail, setDetail] = useState<WmsOperationalTaskDetailApi | null>(null);
@@ -302,26 +297,6 @@ export default function WmsRelocationDetailPage() {
     },
     canEdit,
   );
-
-  useEffect(() => {
-    if (!detail) return;
-    const target =
-      activeCarrier?.barcode ||
-      activeCarrier?.code ||
-      detail.relocation_session?.active_carrier_label ||
-      null;
-    setActiveContext(
-      executionContextFromOperationalDetail(detail, {
-        operationType: "ROZLOKOWANIE PRODUKTÓW",
-        targetLocation: target,
-        remainingQty: Math.max(0, totalQty - relocatedQty),
-        operatorName: detail.relocation_session?.operator_name ?? formatOperatorDisplayName(user),
-        currentStep: nextOperationalAction(detail).label,
-        scanHint: nextOperationalAction(detail).scanHint,
-      }),
-    );
-    return () => setActiveContext(null);
-  }, [activeCarrier, detail, relocatedQty, setActiveContext, totalQty, user]);
 
   if (warehouseId == null) {
     return (

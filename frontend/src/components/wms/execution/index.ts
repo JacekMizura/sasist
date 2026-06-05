@@ -9,8 +9,6 @@ export { ScanExecutionShell } from "./ScanExecutionShell";
 export { ScanStepHero } from "./ScanStepHero";
 export { ExecutionBottomBar, EXECUTION_BOTTOM_RESERVE } from "./ExecutionBottomBar";
 export { ExecutionTouchButton } from "./ExecutionTouchButton";
-export { ExecutionGlobalContextBar } from "./ExecutionGlobalContextBar";
-export { ActiveOperationContextBar } from "./ActiveOperationContextBar";
 export {
   ACTIVE_OPERATION_CONTEXT_BAR_OFFSET,
   normalizeOperationContext,
