@@ -15,7 +15,9 @@ import { ExecutionTouchButton } from "../../components/wms/execution/ExecutionTo
 import { executionContextFromOperationalDetail } from "../../components/wms/execution/syncExecutionContext";
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
+import { useAuth } from "../../context/AuthContext";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
+import { formatOperatorDisplayName } from "../../components/wms/execution/activeOperationContext";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 
 function fmtQty(n: number): string {
@@ -26,6 +28,7 @@ export default function WmsOperationalTaskShellPage() {
   const { taskId: taskIdParam } = useParams();
   const taskId = Number(taskIdParam);
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { setActiveContext } = useWarehouseExecution();
   const scanFx = useScanFeedback();
 
@@ -54,9 +57,13 @@ export default function WmsOperationalTaskShellPage() {
 
   useEffect(() => {
     if (!detail) return;
-    setActiveContext(executionContextFromOperationalDetail(detail));
+    setActiveContext(
+      executionContextFromOperationalDetail(detail, {
+        operatorName: detail.relocation_session?.operator_name ?? formatOperatorDisplayName(user),
+      }),
+    );
     return () => setActiveContext(null);
-  }, [detail, setActiveContext]);
+  }, [detail, setActiveContext, user]);
 
   const startRecollect = useCallback(() => {
     if (!detail?.order_id) return;

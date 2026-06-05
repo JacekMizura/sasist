@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — Unified Active Operation Context Bar
+
+- ``ActiveOperationContextBar`` + rozszerzony ``ExecutionActiveContext`` (typ operacji, zamówienie, wózek/batch, źródło, cel, pozostało, krok, operator).
+- Globalny pasek w ``WmsOperationalLayout`` na trasach wykonawczych; mappery ``executionContextFromPicking/Packing/OperationalDetail/Putaway``.
+- Podpięte: dogrywka (lista + detal produktu), rozlokowanie produktów, zadania operacyjne, pakowanie zamówienia.
+- ``ScanExecutionShell`` — offset nagłówka pod pasek; usunięto duplikat lokalnego paska w relocation.
+
 ## 2026-06-04 — WMS terminology UI normalization
 
 - Rozdzielono „Rozlokowanie” na **Rozlokowanie PZ** (putaway/inbound) i **Rozlokowanie produktów** (RELOCATION / nośniki po zbieraniu).

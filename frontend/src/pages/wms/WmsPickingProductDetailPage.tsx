@@ -10,8 +10,12 @@ import {
   type WmsPickingProductDetailApi,
   type WmsPickingProductLocationRowApi,
 } from "../../api/wmsPickingProductsApi";
+import { useAuth } from "../../context/AuthContext";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
+import { formatOperatorDisplayName } from "../../components/wms/execution/activeOperationContext";
+import { executionContextFromPicking } from "../../components/wms/execution/syncExecutionContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
@@ -107,8 +111,10 @@ export default function WmsPickingProductDetailPage() {
   const { productId: productIdParam } = useParams();
   const navigate = useNavigate();
   const routerLocation = useLocation();
+  const { user } = useAuth();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
+  const { setActiveContext } = useWarehouseExecution();
   const { snapshot: pickingCartSnapshot } = useWmsPickingCart();
   const pickingTenantId = useMemo(() => resolveWmsPickingTenantId(warehouseId, pickingCartSnapshot), [warehouseId, pickingCartSnapshot]);
   const { registerScanHandler, setScannerInputPlaceholder, appendScanToHistory, refocusScannerInput, showScannerToast } = useWmsScanner();
@@ -227,6 +233,50 @@ export default function WmsPickingProductDetailPage() {
 
   const toPickTotal = remaining;
   const pickQueueDone = detail != null && remaining <= 1e-9;
+
+  useEffect(() => {
+    if (!pickingSession || !detail) {
+      setActiveContext(null);
+      return;
+    }
+    const source =
+      selectedLocation?.location_code ??
+      detail.locations[0]?.location_code ??
+      shortageLocationLabel;
+    setActiveContext(
+      executionContextFromPicking({
+        recoveryOrderId,
+        orderNumber: recoveryOrderId != null ? String(recoveryOrderId) : null,
+        cartCode: pickingSession.cartCode,
+        cartName: pickingSession.cartName,
+        sourceLocation: source !== "—" ? source : null,
+        targetLocation: pickingSession.cartCode ?? "WÓZEK",
+        remainingQty: remaining,
+        currentStep:
+          needsLocationScan && activeLocationId == null
+            ? "Skanuj lokalizację źródłową"
+            : `Zbierz: ${detail.name}`,
+        operatorName: formatOperatorDisplayName(user),
+        scanHint:
+          needsLocationScan && activeLocationId == null
+            ? "Najpierw potwierdź lokalizację skanem"
+            : "Skanuj EAN produktu",
+      }),
+    );
+    return () => setActiveContext(null);
+  }, [
+    activeLocationId,
+    detail,
+    needsLocationScan,
+    pickingSession,
+    recoveryOrderId,
+    remaining,
+    selectedLocation?.location_code,
+    setActiveContext,
+    shortageLocationLabel,
+    user,
+  ]);
+
   const fullyPickedNoMissing = pickQueueDone && missingTotal <= 1e-9;
 
   const shortageLocationLabel = useMemo(() => {

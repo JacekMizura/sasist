@@ -12,8 +12,11 @@ import {
   type WmsPickingCohortMissingLineApi,
   type WmsPickingProductLineApi,
 } from "../../api/wmsPickingProductsApi";
+import { useAuth } from "../../context/AuthContext";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
+import { executionContextFromPicking } from "../../components/wms/execution/syncExecutionContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
@@ -35,6 +38,7 @@ import {
   wmsPickingProductLineComplete,
   wmsPickingRowScanEligible,
 } from "./wmsPickingUiGates";
+import { formatOperatorDisplayName } from "../../components/wms/execution/activeOperationContext";
 import { WmsPickingSessionTopBar } from "./WmsPickingSessionTopBar";
 import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
 import { dispatchWmsShortagesUpdated, WMS_ROUTES } from "./wmsRoutes";
@@ -78,8 +82,10 @@ export default function WmsPickingProductsPage() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const routeParams = useParams<{ orderId?: string }>();
+  const { user } = useAuth();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
+  const { setActiveContext } = useWarehouseExecution();
   const { setPickingCart, clearPickingCart, snapshot } = useWmsPickingCart();
   const {
     registerScanHandler,
@@ -693,6 +699,43 @@ export default function WmsPickingProductsPage() {
 
   const totalToPickCount = rows.reduce((acc, curr) => acc + wmsPickingDisplayProgressParts(curr).total, 0);
   const totalPickedCount = rows.reduce((acc, curr) => acc + wmsPickingDisplayProgressParts(curr).pickedShown, 0);
+
+  useEffect(() => {
+    if (!mergedSession) {
+      setActiveContext(null);
+      return;
+    }
+    const remainingQty =
+      recoveryOrderId != null && recoveryOrderId > 0
+        ? recoveryRemainSummary.units
+        : Math.max(0, totalToPickCount - totalPickedCount);
+    setActiveContext(
+      executionContextFromPicking({
+        recoveryOrderId,
+        orderNumber: recoveryOrderId != null ? String(recoveryOrderId) : null,
+        cartCode: mergedSession.cartCode,
+        cartName: mergedSession.cartName,
+        remainingQty,
+        remainingLines: recoveryOrderId != null ? recoveryRemainSummary.lines : undefined,
+        currentStep:
+          recoveryOrderId != null && recoveryOrderId > 0
+            ? `Pozostało ${recoveryRemainSummary.lines} linii`
+            : "Skanuj produkt z listy",
+        operatorName: formatOperatorDisplayName(user),
+      }),
+    );
+    return () => setActiveContext(null);
+  }, [
+    mergedSession,
+    recoveryOrderId,
+    recoveryRemainSummary.lines,
+    recoveryRemainSummary.units,
+    setActiveContext,
+    totalPickedCount,
+    totalToPickCount,
+    user,
+  ]);
+
   const completePriorityTask = async () => {
     if (!activePriorityTask) return;
     try {

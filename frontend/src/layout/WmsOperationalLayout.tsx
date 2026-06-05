@@ -1,6 +1,9 @@
+import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
 import DevScannerPanel from "../components/wms/DevScannerPanel";
+import { ACTIVE_OPERATION_CONTEXT_BAR_OFFSET } from "../components/wms/execution/activeOperationContext";
+import { ExecutionGlobalContextBar } from "../components/wms/execution/ExecutionGlobalContextBar";
 import { ScanFeedbackOverlay } from "../components/wms/execution/ScanFeedbackOverlay";
 import { isWarehouseExecutionRoute } from "../components/wms/execution/executionRoutes";
 import { WmsPickingCartProvider } from "../context/WmsPickingCartContext";
@@ -15,15 +18,26 @@ import WmsTopBar from "./WmsTopBar";
  */
 function WmsLayoutChrome() {
   const { pathname } = useLocation();
-  const { warehouseMode } = useWarehouseExecution();
+  const { warehouseMode, activeContext } = useWarehouseExecution();
   const hideMenuTopBar = pathname === WMS_ROUTES.menu;
   const hideForExecution = warehouseMode && isWarehouseExecutionRoute(pathname);
+  const showGlobalContextBar = hideForExecution && activeContext != null;
+
+  useEffect(() => {
+    if (showGlobalContextBar) {
+      document.documentElement.style.setProperty("--wms-active-ctx-offset", ACTIVE_OPERATION_CONTEXT_BAR_OFFSET);
+    } else {
+      document.documentElement.style.removeProperty("--wms-active-ctx-offset");
+    }
+    return () => document.documentElement.style.removeProperty("--wms-active-ctx-offset");
+  }, [showGlobalContextBar]);
 
   return (
     <div className="flex h-screen min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-white">
       {hideMenuTopBar || hideForExecution ? null : <WmsTopBar />}
       <ScanFeedbackOverlay />
       <main className="min-h-0 min-w-0 w-full flex-1 overflow-auto bg-white">
+        {showGlobalContextBar ? <ExecutionGlobalContextBar /> : null}
         <Outlet />
       </main>
     </div>

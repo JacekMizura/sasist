@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
 import { useWarehouseExecution } from "../../../context/WarehouseExecutionContext";
 import { useWmsScanner } from "../../../context/WmsScannerContext";
-import { ExecutionGlobalContextBar } from "./ExecutionGlobalContextBar";
+import { ACTIVE_OPERATION_CONTEXT_BAR_OFFSET } from "./activeOperationContext";
 import { EXECUTION_BOTTOM_RESERVE } from "./ExecutionBottomBar";
 import { useOfflineActionQueue } from "./useOfflineActionQueue";
 
@@ -29,7 +29,8 @@ export function ScanExecutionShell({
   headerRight,
   className = "",
 }: Props) {
-  const { warehouseMode, toggleWarehouseMode, isExecutionRoute } = useWarehouseExecution();
+  const { warehouseMode, toggleWarehouseMode, isExecutionRoute, activeContext } = useWarehouseExecution();
+  const headerStickyTop = activeContext ? ACTIVE_OPERATION_CONTEXT_BAR_OFFSET : "0px";
   const { scannerError, scannerToast } = useWmsScanner();
   const { pendingCount: offlineCount } = useOfflineActionQueue();
 
@@ -47,7 +48,10 @@ export function ScanExecutionShell({
     <div
       className={`flex min-h-full flex-col bg-[#E8EDF4] ${bottom ? EXECUTION_BOTTOM_RESERVE : "pb-8"} ${className}`}
     >
-      <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-slate-900 text-white">
+      <header
+        className="sticky z-30 shrink-0 border-b border-slate-200 bg-slate-900 text-white"
+        style={{ top: headerStickyTop }}
+      >
         <div className="flex min-h-[52px] items-center gap-2 px-3">
           <Link
             to={backTo}
@@ -83,8 +87,6 @@ export function ScanExecutionShell({
           </div>
         )}
       </header>
-
-      <ExecutionGlobalContextBar />
 
       <div className="mx-auto w-full max-w-3xl flex-1 px-3 py-3 sm:px-4">{children}</div>
 

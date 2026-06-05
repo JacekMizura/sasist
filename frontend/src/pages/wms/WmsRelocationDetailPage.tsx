@@ -18,7 +18,6 @@ import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { dispatchWmsShortagesUpdated, WMS_ROUTES } from "./wmsRoutes";
-import { ActiveWorkContextBar } from "../../components/wms/operational/ActiveWorkContextBar";
 import { CrossdockFlowBanner } from "../../components/wms/operational/CrossdockFlowBanner";
 import { OperationalWorkflowTimeline } from "../../components/wms/operational/OperationalWorkflowTimeline";
 import { nextOperationalAction } from "../../components/wms/operational/operationalWorkflow";
@@ -27,6 +26,8 @@ import {
   ScanStepHero,
   ExecutionBottomBar,
   ExecutionTouchButton,
+  ACTIVE_OPERATION_CONTEXT_BAR_OFFSET,
+  formatOperatorDisplayName,
   executionContextFromOperationalDetail,
   formatOperationalError,
   useWmsPageScanHandler,
@@ -74,7 +75,7 @@ export default function WmsRelocationDetailPage() {
 
   const { showScannerToast, setScannerInputPlaceholder, setActiveDocument, refocusScannerInput } =
     useWmsScanner();
-  const { setActiveContext } = useWarehouseExecution();
+  const { setActiveContext, activeContext } = useWarehouseExecution();
   const scanFx = useScanFeedback();
 
   const [detail, setDetail] = useState<WmsOperationalTaskDetailApi | null>(null);
@@ -300,14 +301,19 @@ export default function WmsRelocationDetailPage() {
 
   useEffect(() => {
     if (!detail) return;
+    const target =
+      activeCarrier?.barcode || activeCarrier?.code || detail.relocation_session?.active_carrier_label || "NOŚNIK";
     setActiveContext(
       executionContextFromOperationalDetail(detail, {
-        carrierLabel: activeCarrier?.barcode || activeCarrier?.code || undefined,
+        operationType: "ROZLOKOWANIE PRODUKTÓW",
+        targetLocation: target,
         remainingQty: Math.max(0, totalQty - relocatedQty),
+        operatorName: detail.relocation_session?.operator_name ?? formatOperatorDisplayName(user),
+        currentStep: nextOperationalAction(detail).label,
       }),
     );
     return () => setActiveContext(null);
-  }, [activeCarrier, detail, relocatedQty, setActiveContext, totalQty]);
+  }, [activeCarrier, detail, relocatedQty, setActiveContext, totalQty, user]);
 
   if (warehouseId == null) {
     return (
@@ -324,7 +330,10 @@ export default function WmsRelocationDetailPage() {
 
   return (
     <div className="min-h-full bg-[#F1F5F9] pb-32">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+      <header
+        className="sticky z-20 border-b border-slate-200 bg-white px-4 py-3 sm:px-6"
+        style={{ top: activeContext ? ACTIVE_OPERATION_CONTEXT_BAR_OFFSET : 0 }}
+      >
         <div className="mx-auto flex max-w-3xl items-center gap-3">
           <Link
             to={WMS_ROUTES.operatorHome}
@@ -425,15 +434,6 @@ export default function WmsRelocationDetailPage() {
             </div>
           </div>
         </div>
-      ) : null}
-
-      {detail && detail.status !== "done" ? (
-        <ActiveWorkContextBar
-          detail={detail}
-          sourceLabel={detail.picked_from_location}
-          targetLabel={carrierLabel}
-          remainingQty={Math.max(0, totalQty - relocatedQty)}
-        />
       ) : null}
 
       <main className="mx-auto max-w-3xl space-y-4 px-4 py-4 sm:px-6">

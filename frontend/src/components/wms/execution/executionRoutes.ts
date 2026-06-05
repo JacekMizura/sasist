@@ -1,6 +1,6 @@
 /** Routes where warehouse execution UX (fullscreen, sticky context) applies. */
 const EXECUTION_ROUTE_RE =
-  /^\/wms\/(operational-queues\/(relocation|task)\/\d+|receiving\/pz\/\d+|receiving\/\d+|putaway\/\d+\/item\/\d+(\/execute)?|putaway\/\d+|picking\/(products\/\d+|recovery\/\d+))(\/|$)/;
+  /^\/wms\/(operational-queues\/(relocation|task)\/\d+|receiving\/pz\/\d+|receiving\/\d+|putaway\/\d+\/item\/\d+(\/execute)?|putaway\/\d+|picking\/(products\/\d+|recovery\/\d+)|packing\/order\/\d+)(\/|$)/;
 
 const BRAKI_HUB_RE = /^\/wms\/(braki|issues)(\/|$)/;
 

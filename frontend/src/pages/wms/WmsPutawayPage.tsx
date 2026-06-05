@@ -131,9 +131,11 @@ export default function WmsPutawayPage() {
     setActiveDocument({ kind: "custom", label: "Lista PZ — rozlokowanie PZ" });
     setScannerInputPlaceholder("Skanuj PZ lub EAN produktu");
     setActiveContext({
+      operationType: "ROZLOKOWANIE PZ",
+      currentStep: "Wybierz PZ do rozlokowania",
+      scanHint: "W linii: lokalizacja → EAN",
       taskLabel: "Rozlokowanie PZ",
       stepLabel: "Wybierz PZ do rozlokowania",
-      scanHint: "W linii: lokalizacja → EAN",
     });
     return () => {
       setActiveDocument(null);

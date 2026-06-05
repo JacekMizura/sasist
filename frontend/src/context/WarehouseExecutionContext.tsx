@@ -18,14 +18,26 @@ const STORAGE_KEY = "wms.warehouseExecutionMode";
 export type ScanFeedbackKind = "success" | "error" | "conflict" | "warning";
 
 export type ExecutionActiveContext = {
+  /** Primary operation label, e.g. DOGRYWKA BRAKÓW, ROZLOKOWANIE PRODUKTÓW */
+  operationType?: string;
+  orderNumber?: string | null;
+  cartLabel?: string | null;
+  sourceLocation?: string | null;
+  targetLocation?: string | null;
+  remainingQty?: number;
+  currentStep?: string | null;
+  operatorName?: string | null;
+  scanHint?: string;
+  /** @deprecated Use operationType */
   taskLabel?: string;
   productName?: string;
   productSku?: string;
+  /** @deprecated Use targetLocation */
   carrierLabel?: string;
+  /** @deprecated Use sourceLocation */
   locationLabel?: string;
-  remainingQty?: number;
+  /** @deprecated Use currentStep */
   stepLabel?: string;
-  scanHint?: string;
 };
 
 export type WarehouseExecutionContextValue = {

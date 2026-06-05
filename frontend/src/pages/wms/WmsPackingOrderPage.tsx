@@ -13,7 +13,9 @@ import {
 } from "../../components/wms/packing/packingHelpers";
 import { usePackingOrderController } from "../../components/wms/packing/usePackingOrderController";
 import { useAuth } from "../../context/AuthContext";
+import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
+import { executionContextFromPacking } from "../../components/wms/execution/syncExecutionContext";
 import { isSuperRole } from "../../auth/isSuperRole";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds } from "./activePriorityTask";
@@ -32,6 +34,7 @@ export default function WmsPackingOrderPage() {
   const navigate = useNavigate();
   const { setActiveDocument, showScannerToast, appendScanToHistory, refocusScannerInput } = useWmsScanner();
   const { user } = useAuth();
+  const { setActiveContext } = useWarehouseExecution();
   const finishWithoutCartonRef = useRef(false);
 
   const ctrl = usePackingOrderController(orderId, finishWithoutCartonRef);
@@ -40,6 +43,7 @@ export default function WmsPackingOrderPage() {
   const activeOrderIds = priorityTaskOrderIds(activePackingTask);
   const [dismissPostPacking, setDismissPostPacking] = useState(false);
   const [resumeScanBusy, setResumeScanBusy] = useState(false);
+  const packerDisplayName = formatPackerDisplayName(user);
 
   useEffect(() => {
     setActiveDocument({ kind: "custom", label: "Pakowanie — zamówienie" });
@@ -47,12 +51,45 @@ export default function WmsPackingOrderPage() {
   }, [setActiveDocument]);
 
   useEffect(() => {
+    if (!ctrl.detail) {
+      setActiveContext(null);
+      return;
+    }
+    const d = ctrl.detail;
+    const remaining = Math.max(0, (d.total_quantity ?? 0) - (d.packed_quantity ?? 0));
+    const cartonLabel = d.selected_carton?.name ?? d.selected_carton_id ?? null;
+    setActiveContext(
+      executionContextFromPacking({
+        orderNumber: d.number,
+        orderId: d.order_id,
+        cartCode: ctrl.session?.cartCode ?? d.cart_display_code ?? d.wms_vehicle_label,
+        cartName: ctrl.session?.cartType,
+        remainingQty: remaining,
+        currentStep: ctrl.awaitingPostPackCarton
+          ? "Wybierz karton"
+          : ctrl.awaitingFinalizationRun
+            ? "Finalizacja zamówienia"
+            : "Skanuj produkt do spakowania",
+        operatorName: packerDisplayName,
+        targetLocation: cartonLabel ?? "KARTON",
+      }),
+    );
+    return () => setActiveContext(null);
+  }, [
+    ctrl.awaitingFinalizationRun,
+    ctrl.awaitingPostPackCarton,
+    ctrl.detail,
+    ctrl.session?.cartCode,
+    ctrl.session?.cartType,
+    packerDisplayName,
+    setActiveContext,
+  ]);
+
+  useEffect(() => {
     setDismissPostPacking(false);
     setResumeScanBusy(false);
     finishWithoutCartonRef.current = false;
   }, [orderId]);
-
-  const packerDisplayName = formatPackerDisplayName(user);
   const canFinishWithoutCarton =
     isSuperRole(user?.role) ||
     Boolean(user?.wms_profile?.packing_permissions?.includes("finish_without_carton"));
