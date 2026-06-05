@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Operator vs supervisor UX split
+
+- ``/wms/operational-queues`` → redirect na ``/wms/braki`` (operator home).
+- Pulpit KPI: ``WmsSupervisorDashboardGate`` (superadmin / ``analytics.warehouse_operations`` / ``VITE_WMS_SUPERVISOR_DASHBOARD``).
+- Back z relocation/task shell → Braki; heatmapa dashboardu bez linków do kolejek.
+
 ## 2026-06-04 — Braki detail: single resolver-driven CTA
 
 - ``brakiPrimaryAction()`` — jedna akcja z ``shortage_lifecycle_phase`` (SSOT).

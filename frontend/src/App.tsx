@@ -130,8 +130,7 @@ import WmsPickingProductDetailPage from "./pages/wms/WmsPickingProductDetailPage
 import WmsPickingProductsPage from "./pages/wms/WmsPickingProductsPage"
 import WmsPickingStatusPage from "./pages/wms/WmsPickingStatusPage"
 import WmsOrderIssuesHub from "./pages/wms/WmsOrderIssuesHub"
-import WmsOperationalQueuesHub from "./pages/wms/WmsOperationalQueuesHub"
-import WmsOperationalDashboardPage from "./pages/wms/WmsOperationalDashboardPage"
+import WmsSupervisorDashboardGate from "./pages/wms/WmsSupervisorDashboardGate"
 import WmsOperationalTaskShellPage from "./pages/wms/WmsOperationalTaskShellPage"
 import WmsRelocationDetailPage from "./pages/wms/WmsRelocationDetailPage"
 import WmsOrderIssueDetailPage from "./pages/wms/WmsOrderIssueDetailPage"
@@ -324,8 +323,8 @@ export const router = createBrowserRouter(
           <Route path="recovery/:orderId" element={<WmsPickingProductsPage />} />
           <Route path="locations" element={<WmsPickingPage />} />
         </Route>
-        <Route path="operational-queues" element={<WmsOperationalQueuesHub />} />
-        <Route path="operational-queues/dashboard" element={<WmsOperationalDashboardPage />} />
+        <Route path="operational-queues" element={<Navigate to="/wms/braki" replace />} />
+        <Route path="operational-queues/dashboard" element={<WmsSupervisorDashboardGate />} />
         <Route path="operational-queues/task/:taskId" element={<WmsOperationalTaskShellPage />} />
         <Route
           path="operational-queues/relocation/:taskId"

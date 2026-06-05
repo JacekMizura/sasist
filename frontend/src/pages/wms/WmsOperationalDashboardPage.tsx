@@ -78,16 +78,18 @@ export default function WmsOperationalDashboardPage() {
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-widest text-indigo-300">
-              Warstwa operacyjna WMS
+              Widok kierownika
             </p>
-            <h1 className="text-2xl font-black">Pulpit wykonawczy</h1>
-            <p className="mt-1 text-sm text-slate-400">Live status kolejek i batchy w toku</p>
+            <h1 className="text-2xl font-black">Pulpit operacyjny (KPI)</h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Monitoring kolejek — nie jest częścią flow operatora (Braki → wykonanie).
+            </p>
           </div>
           <Link
-            to={WMS_ROUTES.operationalQueues}
+            to="/analytics/warehouse-operations"
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold hover:bg-indigo-500"
           >
-            Kolejki <ArrowRight size={16} />
+            Centrum operacyjne <ArrowRight size={16} />
           </Link>
         </div>
 
@@ -128,17 +130,16 @@ export default function WmsOperationalDashboardPage() {
                   const intensity =
                     n === 0 ? "bg-slate-700" : n < 3 ? "bg-indigo-900" : n < 8 ? "bg-indigo-700" : "bg-indigo-500";
                   return (
-                    <Link
+                    <div
                       key={q.id}
-                      to={WMS_ROUTES.operationalQueues}
-                      className={`flex items-center justify-between rounded-xl px-4 py-3 ${intensity} transition hover:brightness-110`}
+                      className={`flex items-center justify-between rounded-xl px-4 py-3 ${intensity}`}
                     >
                       <div>
                         <p className="text-sm font-bold">{q.label}</p>
                         <p className="text-[10px] opacity-80">{queueRouteLabel(q.id)}</p>
                       </div>
                       <span className="text-xl font-black">{n}</span>
-                    </Link>
+                    </div>
                   );
                 })}
               </div>

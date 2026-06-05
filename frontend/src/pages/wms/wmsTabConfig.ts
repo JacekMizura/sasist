@@ -50,11 +50,7 @@ export const WMS_TAB_ITEMS: WmsTabConfigItem[] = [
 export function isWmsTabPathActive(pathname: string, tab: WmsTabConfigItem): boolean {
   const p = pathname;
   if (tab.id === "issues") {
-    return (
-      p.startsWith("/wms/braki") ||
-      p.startsWith("/wms/issues") ||
-      p.startsWith("/wms/operational-queues")
-    );
+    return p.startsWith("/wms/braki") || p.startsWith("/wms/issues");
   }
   return p === tab.path || p.startsWith(`${tab.path}/`);
 }

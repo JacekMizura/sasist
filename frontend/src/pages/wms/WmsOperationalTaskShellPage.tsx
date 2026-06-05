@@ -96,7 +96,7 @@ export default function WmsOperationalTaskShellPage() {
 
   if (!detail) {
     return (
-      <ScanExecutionShell title="Zadanie" backTo={WMS_ROUTES.operationalQueues}>
+      <ScanExecutionShell title="Zadanie" backTo={WMS_ROUTES.operatorHome}>
         <p className="text-red-800 bg-white">{err ?? "Brak zadania."}</p>
       </ScanExecutionShell>
     );
@@ -110,7 +110,7 @@ export default function WmsOperationalTaskShellPage() {
   return (
     <ScanExecutionShell
       title={detail.product_name}
-      backTo={WMS_ROUTES.operationalQueues}
+      backTo={WMS_ROUTES.operatorHome}
       bottom={
         isRecollect && detail.order_id ? (
           <ExecutionBottomBar>

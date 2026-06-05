@@ -18,7 +18,9 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
 import { WMS_ROUTES } from "./wmsRoutes";
 
-/** Product-centric WMS operational queues — route-first, scan-first. */
+/**
+ * @deprecated Operator flow uses Braki (`/wms/braki`). Route redirects — component retained for reference only.
+ */
 export default function WmsOperationalQueuesHub() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;

@@ -27,8 +27,14 @@ export const WMS_ROUTES = {
   packingOrders: "/wms/packing/orders",
   /** Ekran pakowania jednego zamówienia (skan EAN). */
   packingOrder: (orderId: number | string) => `/wms/packing/order/${orderId}`,
-  /** Kolejki operacyjne v2 (product-centric). */
+  /** Operator home — kolejka braków (scan → next action). */
+  operatorHome: "/wms/braki",
+  /**
+   * @deprecated Hub kolejek wykonawczych — przekierowanie na Braki dla operatorów.
+   * Głębokie linki task/relocation nadal działają.
+   */
   operationalQueues: "/wms/operational-queues",
+  /** Pulpit KPI — tylko supervisor (``WmsSupervisorDashboardGate``). */
   operationalDashboard: "/wms/operational-queues/dashboard",
   operationalTask: (taskId: number | string) => `/wms/operational-queues/task/${taskId}`,
   operationalRelocationTask: (taskId: number | string) =>

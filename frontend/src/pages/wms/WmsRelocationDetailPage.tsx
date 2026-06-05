@@ -229,7 +229,7 @@ export default function WmsRelocationDetailPage() {
         if (updated.status === "done") {
           scanFx.success("Rozlokowanie zakończone");
           dispatchWmsShortagesUpdated();
-          navigate(WMS_ROUTES.operationalQueues);
+          navigate(WMS_ROUTES.operatorHome);
           return;
         }
         scanFx.success(`Odłożono do ${activeCarrier.barcode || activeCarrier.code}`);
@@ -257,7 +257,7 @@ export default function WmsRelocationDetailPage() {
       if (updated.status === "done") {
         scanFx.success("Wszystko rozłożone — zadanie zamknięte");
         dispatchWmsShortagesUpdated();
-        navigate(WMS_ROUTES.operationalQueues);
+        navigate(WMS_ROUTES.operatorHome);
         return;
       }
       scanFx.success(`Przypisano do ${activeCarrier.barcode || activeCarrier.code}`);
@@ -327,11 +327,11 @@ export default function WmsRelocationDetailPage() {
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
           <Link
-            to={WMS_ROUTES.operationalQueues}
+            to={WMS_ROUTES.operatorHome}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700"
           >
             <ArrowLeft size={16} />
-            Kolejki
+            Braki
           </Link>
           <h1 className="text-lg font-black text-slate-900">Rozkład do nośników</h1>
         </div>
@@ -646,10 +646,10 @@ export default function WmsRelocationDetailPage() {
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
                 <p className="font-bold text-emerald-900">Rozlokowanie zakończone</p>
                 <Link
-                  to={WMS_ROUTES.operationalQueues}
+                  to={WMS_ROUTES.operatorHome}
                   className="mt-2 inline-block text-sm font-semibold text-emerald-800 underline"
                 >
-                  Wróć do kolejek
+                  Wróć do Braki
                 </Link>
               </div>
             ) : null}
