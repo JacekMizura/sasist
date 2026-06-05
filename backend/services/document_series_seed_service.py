@@ -79,6 +79,11 @@ def _repair_operational_series_row(row: DocumentSeries, spec: dict) -> bool:
         if int(getattr(row, "padding_length", None) or 0) != want_pad:
             row.padding_length = want_pad
             changed = True
+    if hasattr(row, "warehouse_effect"):
+        want_wh = bool(spec.get("warehouse_effect", str(spec.get("series_type", "")).upper() == "WAREHOUSE"))
+        if bool(getattr(row, "warehouse_effect", False)) is not want_wh:
+            row.warehouse_effect = want_wh
+            changed = True
     if changed:
         row.updated_at = datetime.utcnow()
         logger.info(
@@ -98,8 +103,10 @@ def _apply_spec_to_new_row(row: DocumentSeries, spec: dict) -> None:
     row.series_type = str(spec["series_type"])
     row.subtype = str(spec["subtype"])
     row.numbering_start = 1
-    row.numbering_format = str(spec.get("numbering_format") or "{PREFIX}/{NUMBER}")
+    row.numbering_format = str(spec.get("numbering_format") or DEFAULT_NUMBERING_FORMAT)
     row.reset_each_period = bool(spec.get("monthly_reset"))
+    if hasattr(row, "warehouse_effect"):
+        row.warehouse_effect = bool(spec.get("warehouse_effect", str(spec["series_type"]).upper() == "WAREHOUSE"))
     for attr in ("code", "padding_length", "yearly_reset", "monthly_reset", "is_default", "is_active"):
         if attr in spec and hasattr(DocumentSeries, attr):
             setattr(row, attr, spec[attr])
@@ -199,11 +206,29 @@ def ensure_default_document_series(db: Session, tenant_id: int, warehouse_id: in
 
     for raw in ALL_OPERATIONAL_SERIES:
         spec = normalize_series_spec(raw)
-        _, was_created = _ensure_series_row(db, tenant_id=tid, warehouse_id=wid, spec=spec)
-        if was_created:
-            created += 1
+        try:
+            _, was_created = _ensure_series_row(db, tenant_id=tid, warehouse_id=wid, spec=spec)
+            db.commit()
+            if was_created:
+                created += 1
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "[document_series.seed] failed tenant_id=%s warehouse_id=%s type=%s subtype=%s",
+                tid,
+                wid,
+                spec.get("series_type"),
+                spec.get("subtype"),
+            )
 
-    db.commit()
+    missing = missing_operational_subtypes(db, tid, wid)
+    if missing:
+        logger.warning(
+            "[document_series.seed] incomplete tenant_id=%s warehouse_id=%s missing_subtypes=%s",
+            tid,
+            wid,
+            missing,
+        )
     return created
 
 

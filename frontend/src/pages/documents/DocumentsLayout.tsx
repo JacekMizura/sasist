@@ -3,7 +3,11 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { TabsNav } from "../../components/layout/TabsNav";
 import { DOCUMENTS_TAB_ITEMS } from "./documentsTabConfig";
-import { getDocumentsSidebarSections } from "./documentsNavModule";
+import { buildDocumentsSidebarFromCatalog } from "./buildDocumentsNavFromCatalog";
+import {
+  OperationalDocumentSeriesProvider,
+  useOperationalDocumentSeries,
+} from "./OperationalDocumentSeriesContext";
 import { isNavPathActive } from "../../layout/navActive";
 import {
   parseDocumentsPathForSeriesContext,
@@ -23,10 +27,27 @@ function sideLinkCls(active: boolean) {
  * Dokumenty — jedna biała powierzchnia jak {@link ../../components/layout/PageContainer} / Wózki:
  * zewnętrzny gutter + **jeden** rounded workspace obejmujący sidebar, zakładki i treść (bez szarego tła między panelami).
  */
-export default function DocumentsLayout() {
+function DocumentsLayoutInner() {
   const { pathname } = useLocation();
+  const { catalog } = useOperationalDocumentSeries();
 
-  const sidebarSections = useMemo(() => getDocumentsSidebarSections(pathname), [pathname]);
+  const sidebarSections = useMemo(
+    () => buildDocumentsSidebarFromCatalog(pathname, catalog?.items),
+    [pathname, catalog?.items],
+  );
+
+  const tabItems = useMemo(() => {
+    const items = catalog?.items ?? [];
+    const hasSale = items.some((i) => i.series_type === "SALE");
+    const hasCorr = items.some((i) => i.series_type === "CORRECTION");
+    const hasWh = items.some((i) => i.series_type === "WAREHOUSE");
+    return DOCUMENTS_TAB_ITEMS.filter((t) => {
+      if (t.path === "/documents/sales") return hasSale;
+      if (t.path === "/documents/correcting") return hasCorr;
+      if (t.path === "/documents/warehouse") return hasWh;
+      return true;
+    });
+  }, [catalog?.items]);
 
   useEffect(() => {
     if (!pathname.startsWith("/documents")) return;
@@ -83,7 +104,7 @@ export default function DocumentsLayout() {
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div className="shrink-0 border-b border-slate-200 bg-white px-5 pt-4">
                 <TabsNav
-                  items={DOCUMENTS_TAB_ITEMS}
+                  items={tabItems}
                   variant="underline"
                   className="w-full gap-8 overflow-x-auto [-webkit-overflow-scrolling:touch]"
                   aria-label="Dokumenty — zakładki"
@@ -120,5 +141,13 @@ export default function DocumentsLayout() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DocumentsLayout() {
+  return (
+    <OperationalDocumentSeriesProvider>
+      <DocumentsLayoutInner />
+    </OperationalDocumentSeriesProvider>
   );
 }

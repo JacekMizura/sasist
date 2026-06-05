@@ -23,8 +23,11 @@ from ..schemas.document_series import (
     DocumentSeriesCreate,
     DocumentSeriesRead,
     DocumentSeriesUpdate,
+    OperationalDocumentCatalogOut,
+    OperationalDocumentSeriesOut,
     OrderUiStatusMiniOut,
 )
+from ..services.document_series_operational_service import build_operational_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -353,6 +356,50 @@ def _list_document_series_impl(
         if item is not None:
             out.append(item)
     return out
+
+
+@router.get("/operational-catalog", response_model=OperationalDocumentCatalogOut)
+def operational_document_catalog(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    """Series-driven operational document types for UI tabs, filters, and WMS gates."""
+    try:
+        ensure_document_series_extended_columns(engine)
+    except Exception:
+        logger.exception("ensure_document_series_extended_columns failed in operational_catalog")
+    try:
+        raw = build_operational_catalog(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            ensure_defaults=True,
+        )
+        return OperationalDocumentCatalogOut(
+            tenant_id=int(raw["tenant_id"]),
+            warehouse_id=int(raw["warehouse_id"]),
+            required_count=int(raw["required_count"]),
+            configured_count=int(raw["configured_count"]),
+            missing_required_subtypes=list(raw.get("missing_required_subtypes") or []),
+            bootstrap_complete=bool(raw.get("bootstrap_complete")),
+            items=[OperationalDocumentSeriesOut(**item) for item in raw.get("items") or []],
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "operational_document_catalog failed tenant=%s warehouse=%s",
+            tenant_id,
+            warehouse_id,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Nie udało się wczytać katalogu dokumentów operacyjnych.",
+                "code": "DOCUMENT_SERIES_CATALOG_FAILED",
+            },
+        )
 
 
 @router.get("", response_model=List[DocumentSeriesRead])

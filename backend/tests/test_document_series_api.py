@@ -86,6 +86,25 @@ class DocumentSeriesApiTests(unittest.TestCase):
         self.assertIsNone(out.vat_rate_percent)
 
 
+class OperationalCatalogApiTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.client = TestClient(app)
+
+    def test_operational_catalog_returns_required_types(self):
+        r = self.client.get(
+            "/api/document-series/operational-catalog",
+            params={"tenant_id": 1, "warehouse_id": 1},
+        )
+        self.assertEqual(r.status_code, 200, r.text[:500])
+        body = r.json()
+        self.assertTrue(body.get("bootstrap_complete"), body)
+        self.assertGreaterEqual(int(body.get("configured_count") or 0), 8)
+        codes = {str(x.get("operational_code") or "").upper() for x in body.get("items") or []}
+        for code in ("PZ", "WZ", "MM", "RW", "PW", "FV", "PA", "KOR"):
+            self.assertIn(code, codes, f"missing operational code {code}")
+
+
 class EnsureDefaultDocumentSeriesTests(unittest.TestCase):
     def test_ensure_idempotent(self):
         from backend.database import SessionLocal

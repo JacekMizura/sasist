@@ -190,6 +190,44 @@ function assertTenantWarehouse(tenantId: number, warehouseId: number, fn: string
   }
 }
 
+export type OperationalDocumentSeriesDto = {
+  series_id: string;
+  series_type: DocumentSeriesType;
+  subtype: DocumentSeriesSubtype;
+  operational_code: string;
+  prefix: string;
+  label: string;
+  warehouse_effect: boolean;
+  route_segment: string | null;
+  list_path: string | null;
+  stock_document_type: string | null;
+  is_default: boolean;
+  is_active: boolean;
+  numbering_format: string;
+};
+
+export type OperationalDocumentCatalogDto = {
+  tenant_id: number;
+  warehouse_id: number;
+  required_count: number;
+  configured_count: number;
+  missing_required_subtypes: string[];
+  bootstrap_complete: boolean;
+  items: OperationalDocumentSeriesDto[];
+};
+
+/** Series-driven operational document types (UI tabs, WMS gates). */
+export async function fetchOperationalDocumentCatalog(
+  tenantId: number,
+  warehouseId: number,
+): Promise<OperationalDocumentCatalogDto> {
+  assertTenantWarehouse(tenantId, warehouseId, "fetchOperationalDocumentCatalog");
+  const res = await api.get<OperationalDocumentCatalogDto>("document-series/operational-catalog", {
+    params: baseParams(tenantId, warehouseId),
+  });
+  return res.data;
+}
+
 /** Zawsze pełna lista dla tenant+magazyn (bez ?type=). Filtrowanie typu/podtypu tylko po stronie klienta. */
 export async function listDocumentSeries(tenantId: number, warehouseId: number): Promise<DocumentSeriesDto[]> {
   assertTenantWarehouse(tenantId, warehouseId, "listDocumentSeries");

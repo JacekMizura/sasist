@@ -148,3 +148,31 @@ class DocumentSeriesBulkDeleteBody(BaseModel):
 
 class DocumentSeriesBulkDeleteOut(BaseModel):
     deleted: int
+
+
+class OperationalDocumentSeriesOut(BaseModel):
+    """One operational document type derived from an active default series."""
+
+    series_id: str
+    series_type: str
+    subtype: str
+    operational_code: str
+    prefix: str
+    label: str
+    warehouse_effect: bool
+    route_segment: Optional[str] = None
+    list_path: Optional[str] = None
+    stock_document_type: Optional[str] = None
+    is_default: bool = True
+    is_active: bool = True
+    numbering_format: str = ""
+
+
+class OperationalDocumentCatalogOut(BaseModel):
+    tenant_id: int
+    warehouse_id: int
+    required_count: int
+    configured_count: int
+    missing_required_subtypes: List[str] = Field(default_factory=list)
+    bootstrap_complete: bool
+    items: List[OperationalDocumentSeriesOut] = Field(default_factory=list)

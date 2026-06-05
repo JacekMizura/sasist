@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { ClipboardList } from "lucide-react";
 import api from "../../api/axios";
 import {
@@ -40,6 +41,7 @@ import {
   documentsTableSelectCls,
   documentsTableTheadCls,
 } from "./documentsDashboardPrimitives";
+import { useOperationalDocumentSeries } from "./OperationalDocumentSeriesContext";
 
 type Tenant = { id: number; name: string };
 const WAREHOUSE_DOCS_PAGE_SIZE_KEY = "warehouse_docs.pageSize";
@@ -139,17 +141,19 @@ function parseQty(s: string): number | null {
   return n;
 }
 
-function warehouseTypeFromSegment(seg: string | undefined): WarehouseDocumentType | null {
-  const u = String(seg ?? "")
-    .trim()
-    .toLowerCase();
-  if (u === "pz" || u === "wz" || u === "mm") return u.toUpperCase() as WarehouseDocumentType;
-  return null;
-}
-
 export default function DocumentsWarehousePage() {
   const { docSegment } = useParams<{ docSegment: string }>();
-  const routeType = warehouseTypeFromSegment(docSegment);
+  const { warehouse } = useWarehouse();
+  const warehouseId = warehouse?.id ?? null;
+  const { warehouseTypes, firstWarehousePath, loading: seriesLoading, hasWarehouseType } = useOperationalDocumentSeries();
+
+  const routeType = useMemo((): WarehouseDocumentType | null => {
+    const seg = String(docSegment ?? "").trim().toLowerCase();
+    if (!seg) return null;
+    const hit = warehouseTypes.find((t) => (t.route_segment || "").toLowerCase() === seg);
+    if (!hit?.stock_document_type) return null;
+    return normalizeWarehouseDocType(hit.stock_document_type);
+  }, [docSegment, warehouseTypes]);
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
@@ -211,14 +215,19 @@ export default function DocumentsWarehousePage() {
     setLoading(true);
     setErr(null);
     try {
-      setRows(await listStockDocuments(tenantId, { document_type: docTab as WarehouseDocumentType }));
+      setRows(
+        await listStockDocuments(tenantId, {
+          document_type: docTab === "ALL" ? undefined : (docTab as WarehouseDocumentType),
+          warehouse_id: warehouseId ?? undefined,
+        }),
+      );
     } catch {
       setErr("Nie udało się wczytać dokumentów.");
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [tenantId, docTab]);
+  }, [tenantId, docTab, warehouseId]);
 
   useEffect(() => {
     void load();
@@ -615,8 +624,44 @@ export default function DocumentsWarehousePage() {
     ];
   }, [rows]);
 
+  if (seriesLoading) {
+    return (
+      <DocumentsSectionShell title="Dokumenty magazynowe" subtitle="Ładowanie konfiguracji serii…">
+        <div className="py-12 text-center text-sm text-slate-500">Ładowanie…</div>
+      </DocumentsSectionShell>
+    );
+  }
+
+  if (warehouseTypes.length === 0) {
+    return (
+      <DocumentsSectionShell
+        title="Dokumenty magazynowe"
+        subtitle="Brak skonfigurowanych serii magazynowych dla tego magazynu."
+      >
+        <DocumentsEmptyState
+          icon={ClipboardList}
+          title="Brak serii dokumentów magazynowych"
+          description="Skonfiguruj serie PZ, WZ, MM, RW lub PW w Ustawieniach → Serie dokumentów. Bez aktywnej serii typ dokumentu nie jest dostępny operacyjnie."
+        />
+      </DocumentsSectionShell>
+    );
+  }
+
   if (routeType == null) {
-    return <Navigate to="/documents/warehouse/pz" replace />;
+    if (firstWarehousePath) return <Navigate to={firstWarehousePath} replace />;
+    return <Navigate to="/documents/series" replace />;
+  }
+
+  if (!hasWarehouseType(routeType)) {
+    return (
+      <DocumentsSectionShell title={`Dokumenty magazynowe — ${docSegment?.toUpperCase() ?? ""}`}>
+        <DocumentsEmptyState
+          icon={ClipboardList}
+          title="Brak aktywnej serii"
+          description={`Brak aktywnej serii dokumentów ${docSegment?.toUpperCase() ?? ""} dla tego magazynu. Dodaj lub aktywuj serię w module Serii dokumentów.`}
+        />
+      </DocumentsSectionShell>
+    );
   }
 
   return (
