@@ -16,6 +16,7 @@ import {
 } from "../../components/wms/execution/WmsOperationalPageShell";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
+import { BrakiOperationalHeader } from "./BrakiOperationalHeader";
 import { BrakiForceRemoveModal, type BrakiForceRemoveMode } from "./BrakiForceRemoveModal";
 import { brakiOperationalActions, type BrakiOperationalAction } from "./brakiWorkflowCta";
 import { readBrakiOperationalState } from "./readBrakiOperationalState";
@@ -45,7 +46,7 @@ function actionButtonClass(action: BrakiOperationalAction): string {
     return `${base} border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 focus:ring-slate-100`;
   }
   if (action.variant === "secondary") {
-    return `${base} border border-indigo-300 bg-indigo-50 text-indigo-900 hover:bg-indigo-100 focus:ring-indigo-100`;
+    return `${base} border border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100 focus:ring-slate-100`;
   }
   return `${base} bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700 focus:ring-blue-100`;
 }
@@ -152,29 +153,25 @@ export function WmsOrderIssueDetailContent({
   );
 
   return (
-    <WmsOperationalPageShell className="bg-slate-50">
+    <WmsOperationalPageShell className="bg-slate-100">
       <WmsOperationalPageHeader>
-        <div className="flex h-14 items-center md:h-16">
+        <div className="flex min-h-[52px] items-center gap-3 py-2">
           <Link
             to={WMS_ROUTES.braki()}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 active:bg-slate-200"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
           >
-            <i className="fa-solid fa-arrow-left"></i>
+            <i className="fa-solid fa-arrow-left text-sm"></i>
             <span>Kolejka braków</span>
           </Link>
+          <h1 className="text-lg font-bold text-slate-900">Szczegóły braków</h1>
         </div>
       </WmsOperationalPageHeader>
 
       <WmsOperationalPageBody>
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 md:px-5">
-          <span className="font-medium text-slate-500">Klient: </span>
-          <span className="font-semibold text-slate-800">
-            {(task.customer_name ?? "").trim() || (task.delivery_name ?? "").trim() || "—"}
-          </span>
-        </div>
+        <BrakiOperationalHeader task={task} />
 
         {actionError ? (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
             {actionError}
           </div>
         ) : null}

@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractApiErrorMessage } from "../../api/authApi";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  WmsOperationalPageBody,
+  WmsOperationalPageHeader,
+  WmsOperationalPageShell,
+} from "../../components/wms/execution/WmsOperationalPageShell";
 import { executionContextFromBrakiHub } from "../../components/wms/execution/syncExecutionContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWarehouseExecution } from "../../context/WarehouseExecutionContext";
@@ -24,6 +29,7 @@ import {
 import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
 import { mergeQueueCards, type NormalizedShortageQueueCard } from "./normalizeShortageQueueCard";
 import { readBrakiQueueStage } from "./readBrakiOperationalState";
+import { brakiQueueCardAccent, type BrakiQueueWorkflowId } from "./brakiWorkstreamUi";
 
 type BrakiWorkflowFilterId =
   | "all"
@@ -66,44 +72,6 @@ function openIssueTask(navigate: ReturnType<typeof useNavigate>, t: OrderIssueTa
 
 function cardStatusLabel(card: NormalizedShortageQueueCard): string {
   return card.workflow_stage || (card.raw.braki_workflow_status_label ?? "").trim() || "Braki w realizacji";
-}
-
-function cardAccentForWorkflow(wf: BrakiWorkflowFilterId): {
-  accent: string;
-  badge: string;
-  status: string;
-  icon: string;
-} {
-  if (wf === "awaiting") {
-    return {
-      accent: "bg-red-500",
-      badge: "bg-red-50 border-red-200 text-red-700",
-      status: "bg-red-500",
-      icon: "fa-triangle-exclamation",
-    };
-  }
-  if (wf === "relocation_partial" || wf === "relocation" || wf === "pick_and_relocation") {
-    return {
-      accent: "bg-amber-500",
-      badge: "bg-amber-50 border-amber-200 text-amber-700",
-      status: "bg-amber-500",
-      icon: "fa-clock",
-    };
-  }
-  if (wf === "ready_pack") {
-    return {
-      accent: "bg-blue-500",
-      badge: "bg-blue-50 border-blue-200 text-blue-700",
-      status: "bg-blue-500",
-      icon: "fa-box",
-    };
-  }
-  return {
-    accent: "bg-emerald-500",
-    badge: "bg-emerald-50 border-emerald-200 text-emerald-700",
-    status: "bg-emerald-500",
-    icon: "fa-check",
-  };
 }
 
 export default function WmsOrderIssuesHub() {
@@ -276,41 +244,45 @@ export default function WmsOrderIssuesHub() {
   }
 
   return (
-    <div className="flex min-h-full w-full flex-col bg-slate-50 antialiased">
-      <header className="shrink-0 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4 sm:px-6 md:h-16">
-        <div className="flex items-center gap-3 md:gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-slate-500 transition-all hover:bg-slate-100 active:scale-95 md:h-9 md:w-9 md:border-slate-200"
-          >
-            <i className="fa-solid fa-arrow-left text-lg md:text-sm"></i>
-          </button>
-          <h1 className="text-lg font-bold leading-tight text-slate-800 md:text-xl">
-            Zamówienia z brakami <span className="font-medium text-slate-500">({queueCards.length})</span>
-          </h1>
+    <WmsOperationalPageShell className="bg-slate-100 antialiased">
+      <WmsOperationalPageHeader>
+        <div className="flex min-h-[52px] items-center justify-between gap-3 py-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link
+              to={WMS_ROUTES.menu}
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50"
+              aria-label="Menu WMS"
+            >
+              <i className="fa-solid fa-arrow-left text-sm"></i>
+            </Link>
+            <h1 className="truncate text-lg font-bold text-slate-900 md:text-xl">
+              Zamówienia z brakami{" "}
+              <span className="font-medium text-slate-500">({queueCards.length})</span>
+            </h1>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={batchPending}
+              onClick={() => void startRecoveryBatch()}
+              className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 md:flex"
+            >
+              {batchPending ? "Tworzenie…" : "Dogrywka batch"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void load({ sync: true })}
+              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <i className="fa-solid fa-rotate-right text-sm text-slate-500"></i>
+              <span className="hidden md:inline">Odśwież</span>
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={batchPending}
-            onClick={() => void startRecoveryBatch()}
-            className="hidden h-10 items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-sm font-bold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50 md:flex"
-          >
-            {batchPending ? "Tworzenie…" : "Dogrywka batch"}
-          </button>
-          <button
-            onClick={() => void load({ sync: true })}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-95 md:px-4"
-          >
-            <i className="fa-solid fa-rotate-right text-lg text-slate-500 md:text-sm"></i>
-            <span className="hidden text-sm md:inline">Odśwież</span>
-          </button>
-        </div>
-        </div>
-      </header>
+      </WmsOperationalPageHeader>
 
-      <div className="mx-auto flex w-full max-w-5xl shrink-0 flex-col gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6 md:py-4">
+      <WmsOperationalPageBody className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <button
           onClick={() => setIsFilterModalOpen(true)}
           className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 active:bg-slate-100 sm:w-72"
@@ -349,7 +321,6 @@ export default function WmsOrderIssuesHub() {
         </button>
       </div>
 
-      <div className="mx-auto w-full max-w-5xl px-4 pt-3 sm:px-6 md:pt-4">
         {err ? (
           <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950">
             <p className="font-semibold">{err}</p>
@@ -373,9 +344,7 @@ export default function WmsOrderIssuesHub() {
             </p>
           </div>
         ) : null}
-      </div>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4 pb-8 sm:px-6 md:py-6">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <i className="fa-solid fa-circle-notch animate-spin text-4xl"></i>
@@ -405,9 +374,10 @@ export default function WmsOrderIssuesHub() {
                 card.missing_count;
               const missingNumber = Math.max(1, badgeCount);
               const num = displayOrderNumber(t.order_number).replace("#", "");
-              const { accent, badge, status, icon } = cardAccentForWorkflow(
-                BRAKI_WORKFLOW_FILTERS.some((f) => f.id === wf) ? wf : "awaiting",
-              );
+              const wfId = (
+                BRAKI_WORKFLOW_FILTERS.some((f) => f.id === wf) ? wf : "awaiting"
+              ) as BrakiQueueWorkflowId;
+              const { accent, shortageBadge, statusBadge, icon } = brakiQueueCardAccent(wfId);
 
               const qtyLine =
                 (t.issue_queue_summary_line ?? "").trim() ||
@@ -424,7 +394,7 @@ export default function WmsOrderIssuesHub() {
                 <div
                   key={`${t.order_id}-${t.id}`}
                   onClick={() => openIssueTask(navigate, t)}
-                  className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all hover:border-slate-300 hover:shadow-md active:scale-[0.99] md:p-5"
+                  className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-slate-300 hover:shadow-md active:scale-[0.99] md:p-5"
                 >
                   <div className={`absolute bottom-0 left-0 top-0 w-1.5 ${accent}`}></div>
 
@@ -434,13 +404,13 @@ export default function WmsOrderIssuesHub() {
                         <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 md:text-xs">
                           Zamówienie nr
                         </div>
-                        <div className="text-xl font-black tracking-tight text-slate-900 transition-colors group-hover:text-blue-600 md:text-2xl">
+                        <div className="text-xl font-bold tracking-tight text-slate-900 transition-colors group-hover:text-blue-700 md:text-2xl">
                           {num}
                         </div>
                       </div>
-                      <div className={`rounded-lg border px-2.5 py-1.5 text-center shadow-sm ${badge}`}>
-                        <div className="mb-0.5 text-[9px] font-black uppercase">Braki</div>
-                        <div className="text-lg font-black leading-none md:text-xl">
+                      <div className={`rounded-lg border px-2.5 py-1.5 text-center ${shortageBadge}`}>
+                        <div className="mb-0.5 text-[9px] font-bold uppercase">Braki</div>
+                        <div className="text-lg font-bold leading-none md:text-xl">
                           {fmtQty(missingNumber)}
                           <span className="ml-0.5 text-[10px] md:text-xs">szt</span>
                         </div>
@@ -455,7 +425,7 @@ export default function WmsOrderIssuesHub() {
                       ) : null}
                       <div className="flex items-center gap-2">
                         <span
-                          className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${prBadge}`}
+                          className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${prBadge}`}
                         >
                           {prLabel}
                         </span>
@@ -470,7 +440,7 @@ export default function WmsOrderIssuesHub() {
                           Status:
                         </div>
                         <div
-                          className={`inline-flex items-center gap-1.5 rounded px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm ${status}`}
+                          className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge}`}
                         >
                           <i className={`fa-solid ${icon} text-[9px]`}></i> {statusLabel}
                         </div>
@@ -490,7 +460,7 @@ export default function WmsOrderIssuesHub() {
             })}
           </div>
         )}
-      </main>
+      </WmsOperationalPageBody>
 
       {isFilterModalOpen && (
         <div
@@ -541,6 +511,6 @@ export default function WmsOrderIssuesHub() {
           </div>
         </div>
       )}
-    </div>
+    </WmsOperationalPageShell>
   );
 }

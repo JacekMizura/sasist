@@ -1,8 +1,6 @@
 import { ScanLine, User } from "lucide-react";
-import type {
-  BrakiWorkstreamContext,
-  ExecutionActiveContext,
-} from "../../../context/WarehouseExecutionContext";
+import type { ExecutionActiveContext } from "../../../context/WarehouseExecutionContext";
+import { BrakiWorkstreamPill } from "../../../pages/wms/brakiWorkstreamUi";
 import { WMS_UI, relocationTargetRowLabel } from "../../../pages/wms/wmsTerminology";
 import { normalizeOperationContext } from "./activeOperationContext";
 import { WMS_OPERATIONAL_CONTAINER, WMS_WORKFLOW_BAR_SHELL } from "./wmsLayoutTokens";
@@ -18,21 +16,9 @@ type Props = {
   embedded?: boolean;
 };
 
-function BrakiQtyPill({ label, count, tone }: { label: string; count: number; tone: string }) {
-  if (count <= 0) return null;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tone}`}
-    >
-      {label}
-      <span className="font-black">{fmtQty(count)}</span>
-    </span>
-  );
-}
-
 /**
- * Unified sticky context for all WMS operational execution screens.
- * Separates picking tools (cart/basket) from logistics carriers (nośniki).
+ * Compact operational context for all WMS execution screens.
+ * Light surfaces — same visual system as ScanExecutionShell / operational pages.
  */
 export function ActiveOperationContextBar({ context, className = "", embedded = false }: Props) {
   const ctx = normalizeOperationContext(context);
@@ -69,76 +55,66 @@ export function ActiveOperationContextBar({ context, className = "", embedded = 
   const isBraki = (ctx.operationType ?? "").toUpperCase().includes("BRAKI");
 
   return (
-    <div
-      className={`${WMS_WORKFLOW_BAR_SHELL} ${className}`}
-      data-wms-active-operation-context
-    >
-      <div className={`${WMS_OPERATIONAL_CONTAINER} py-3`}>
+    <div className={`${WMS_WORKFLOW_BAR_SHELL} ${className}`} data-wms-active-operation-context>
+      <div className={`${WMS_OPERATIONAL_CONTAINER} py-2.5`}>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-300">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             {ctx.operationType}
           </p>
           {ctx.priorityLabel ? (
-            <span className="rounded-md border border-amber-400/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-100">
+            <span className="rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-800">
               {ctx.priorityLabel}
             </span>
           ) : null}
         </div>
 
-        <div className="mt-2 space-y-1">
-          {rows.map((row) => (
-            <p key={row.label} className="text-sm leading-snug text-indigo-50">
-              <span className="font-semibold text-indigo-200/90">{row.label}:</span>{" "}
-              <span className="font-bold text-white">{row.value}</span>
-            </p>
-          ))}
-        </div>
+        {rows.length > 0 ? (
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+            {rows.map((row) => (
+              <p key={row.label} className="text-sm leading-snug text-slate-700">
+                <span className="font-medium text-slate-500">{row.label}:</span>{" "}
+                <span className="font-semibold text-slate-900">{row.value}</span>
+              </p>
+            ))}
+          </div>
+        ) : null}
 
         {isBraki && ws ? (
-          <div className="mt-2 flex flex-wrap gap-1.5 border-t border-indigo-800/80 pt-2">
-            <BrakiQtyPill
-              label="Zebrane"
-              count={ws.collected_line_count ?? 0}
-              tone="border-emerald-400/40 bg-emerald-500/20 text-emerald-100"
-            />
-            <BrakiQtyPill
-              label="Dogrywka"
-              count={ws.pick_line_count ?? 0}
-              tone="border-amber-400/40 bg-amber-500/20 text-amber-100"
-            />
-            <BrakiQtyPill
+          <div className="mt-2 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2">
+            <BrakiWorkstreamPill label="Zebrane" count={ws.collected_line_count ?? 0} tone="emerald" />
+            <BrakiWorkstreamPill label="Dogrywka" count={ws.pick_line_count ?? 0} tone="amber" />
+            <BrakiWorkstreamPill
               label="Rozlokowanie"
               count={ws.relocation_line_count ?? 0}
-              tone="border-indigo-400/40 bg-indigo-500/30 text-indigo-100"
+              tone="indigo"
             />
-            <BrakiQtyPill
+            <BrakiWorkstreamPill
               label="Do pakowania"
               count={ws.packing_ready_line_count ?? 0}
-              tone="border-sky-400/40 bg-sky-500/20 text-sky-100"
+              tone="blue"
             />
           </div>
         ) : null}
 
         {isBraki && ws?.has_oms_pending ? (
           <div className="mt-2">
-            <span className="inline-flex items-center gap-1 rounded-md border border-red-400/40 bg-red-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-100">
-              Decyzja OMS
-              {(ws.oms_line_count ?? 0) > 0 ? (
-                <span className="font-black">({ws.oms_line_count})</span>
-              ) : null}
-            </span>
+            <BrakiWorkstreamPill
+              label="Decyzja OMS"
+              count={ws.oms_line_count ?? 0}
+              tone="red"
+            />
           </div>
         ) : null}
 
         {(ctx.currentStep || ctx.operatorName) && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-indigo-800/80 pt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
             {ctx.currentStep ? (
-              <span className="rounded-lg bg-indigo-800 px-2.5 py-1 text-xs font-bold text-indigo-100">
+              <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-800">
                 {isBraki ? ctx.currentStep : `Krok: ${ctx.currentStep}`}
               </span>
             ) : null}
             {ctx.operatorName ? (
-              <span className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-indigo-100">
+              <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
                 <User size={12} />
                 {ctx.operatorName}
               </span>
@@ -147,8 +123,8 @@ export function ActiveOperationContextBar({ context, className = "", embedded = 
         )}
 
         {ctx.scanHint ? (
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-indigo-200">
-            <ScanLine size={14} className="shrink-0" />
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+            <ScanLine size={14} className="shrink-0 text-slate-400" />
             {ctx.scanHint}
           </p>
         ) : null}

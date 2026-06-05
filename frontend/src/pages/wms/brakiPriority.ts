@@ -26,13 +26,13 @@ export function priorityLabelPl(level: ShortagePriorityLevel): string {
 export function priorityBadgeClass(level: ShortagePriorityLevel): string {
   switch (level) {
     case "CRITICAL":
-      return "bg-red-600 text-white border-red-700";
+      return "bg-orange-50 text-orange-900 border-orange-300";
     case "HIGH":
-      return "bg-orange-500 text-white border-orange-600";
+      return "bg-amber-50 text-amber-900 border-amber-200";
     case "NORMAL":
-      return "bg-slate-200 text-slate-800 border-slate-300";
+      return "bg-slate-50 text-slate-800 border-slate-200";
     default:
-      return "bg-slate-100 text-slate-600 border-slate-200";
+      return "bg-slate-50 text-slate-600 border-slate-200";
   }
 }
 

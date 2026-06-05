@@ -14,6 +14,6 @@ export const WMS_OPERATIONAL_CONTAINER = "mx-auto w-full max-w-5xl px-4 sm:px-6"
 export const WMS_TOP_NAV_SHELL =
   "shrink-0 border-b border-slate-700 bg-gradient-to-r from-slate-800 via-slate-800 to-slate-900 text-white";
 
-/** Global operational context bar — WMS purple/navy, lighter than top nav. */
+/** Global operational context bar — light industrial, same language as page headers. */
 export const WMS_WORKFLOW_BAR_SHELL =
-  "shrink-0 border-b border-indigo-500/40 bg-gradient-to-r from-indigo-800 via-indigo-700 to-violet-800 text-white shadow-sm";
+  "shrink-0 border-b border-slate-200 bg-white text-slate-900";

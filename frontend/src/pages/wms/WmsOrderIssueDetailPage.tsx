@@ -39,10 +39,10 @@ const SECTION_STYLES: Record<
     accent: "bg-amber-400",
   },
   relocation: {
-    title: "text-indigo-700",
+    title: "text-slate-700",
     icon: "fa-arrows-turn-to-dots",
-    card: "border-2 border-indigo-300 bg-indigo-50/40",
-    accent: "bg-indigo-500",
+    card: "border border-slate-200 bg-slate-50/80",
+    accent: "bg-amber-400",
   },
   packing_ready: {
     title: "text-blue-700",
@@ -77,7 +77,7 @@ export function IssueDetailSection({
 
   return (
     <div className={isCollected ? "mt-6 p-4 pt-0 md:mt-8 md:p-6 md:pt-0" : "mt-2 p-4 pt-0 md:p-6 md:pt-0"}>
-      <h2 className={`mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest ${sectionTitleClass}`}>
+      <h2 className={`mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${sectionTitleClass}`}>
         <i className={`fa-solid ${iconClass}`}></i> {title}
       </h2>
 
@@ -168,7 +168,7 @@ export function IssueDetailSection({
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="mb-2 text-sm font-black leading-tight text-slate-900 md:text-lg">
+                  <h3 className="mb-2 text-sm font-bold leading-tight text-slate-900 md:text-lg">
                     {name}
                   </h3>
                   <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
