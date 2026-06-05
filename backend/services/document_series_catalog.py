@@ -57,6 +57,8 @@ OPERATIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
     _wh("MM", name="MM — przesunięcia magazynowe"),
     _wh("RW", name="RW — rozchód wewnętrzny"),
     _wh("PW", name="PW — przychód wewnętrzny"),
+    _wh("ZW", name="ZW — zwrot"),
+    _wh("ZD", name="ZD — dowód dostawy"),
 ]
 
 OPERATIONAL_SALE_SERIES: list[OperationalSeriesSpec] = [
@@ -77,7 +79,6 @@ OPERATIONAL_CORRECTION_SERIES: list[OperationalSeriesSpec] = [
 
 # Optional — not auto-seeded unless extended; catalog knows routes for UI when configured.
 OPTIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
-    _wh("ZW", name="ZW — zwrot"),
     _wh("ZWZ", name="ZWZ — zwrot zewnętrzny"),
     _wh("INW", name="INW — inwentaryzacja"),
     _wh("RK", name="RK — korekta magazynowa"),

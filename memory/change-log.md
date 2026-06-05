@@ -1,5 +1,15 @@
 # Change Log
 
+## 2026-06-05 — Operational sales Phase 1 (direct-sales foundation)
+
+- Schema: `order_channel`, `fulfillment_mode`, location zones/priorities, `direct_sale_sessions`, `payments`, `operational_workstations` (`ensure_operational_sales_phase1_schema`).
+- Services: `wms_queue_eligibility`, `location_stock_service`, `location_priority_service`, `direct_sale_service`, `operational_sales_events`.
+- API: `GET /api/location-stock`, `POST /api/direct-sales/session`, `…/scan`, `…/suspend`.
+- WMS: picking + packing queues exclude `fulfillment_mode=IMMEDIATE`.
+- Catalog: ZW + ZD in operational warehouse bootstrap (10 series total).
+- Tests: `test_operational_sales_phase1.py` (11), picking finalize test updated for 3 eligibility clauses.
+- Docs: `memory/direct-sales-architecture.md` §19 final additions.
+
 ## 2026-06-04 — Braki queue fault tolerance + WMS mode strip
 
 - Backend: `braki_queue_normalize.py` — fallback karty zamiast skip; pola `partial_data`, `queue_warnings`.

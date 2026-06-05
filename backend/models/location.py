@@ -49,6 +49,11 @@ class Location(Base, BaseModelMixin):
         default="NORMAL",
         server_default="NORMAL",
     )
+    #: Obszar procesu operacyjnego (SALES, PICKUP, SHOWROOM, …) — nie mylić z ``location_type``.
+    operational_zone_type = Column(String(24), nullable=True, index=True)
+    sales_priority = Column(Integer, nullable=False, default=100)
+    picking_priority = Column(Integer, nullable=False, default=100)
+    replenishment_priority = Column(Integer, nullable=False, default=100)
 
     # Nearest walking-graph node (aisle/intersection). Set by assign_locations_to_graph_nodes.
     graph_node_id = Column(

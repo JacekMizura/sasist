@@ -326,6 +326,8 @@ def _packing_orders_base_query(
     )
     # cart_id ignorowany — ten sam zestaw zamówień we wszystkich trybach (etykieta trybu tylko w UI).
     _ = cart_id
+    from .wms_queue_eligibility import wms_queue_fulfillment_mode_clauses
+
     q = db.query(Order).filter(
         Order.tenant_id == int(tenant_id),
         Order.warehouse_id == int(warehouse_id),
@@ -333,6 +335,7 @@ def _packing_orders_base_query(
             Order.fulfillment_state == "READY_TO_PACK",
             and_(Order.fulfillment_state.is_(None), Order.order_ui_status_id.in_(status_ids)),
         ),
+        *wms_queue_fulfillment_mode_clauses(),
     )
     return q
 

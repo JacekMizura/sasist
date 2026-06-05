@@ -75,6 +75,8 @@ class OrderItem(Base):
 
     #: Kumulatywne zgłoszenie braku z WMS (sesja zbierania); ``wms_picking_line_missing_qty`` = wyjście po recompute.
     wms_shortage_declared_qty = Column(Float, nullable=True, server_default=text("0"), default=0)
+    #: Skąd wydano / sprzedano towar (lokalizacja magazynowa).
+    source_location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
 
     #: OMS: ilość zdjęta z braku (np. częściowe usunięcie z realizacji).
     oms_removed_qty = Column(Float, nullable=True, server_default=text("0"), default=0)

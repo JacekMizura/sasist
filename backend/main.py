@@ -164,6 +164,7 @@ from .db.schema_upgrade import (
     ensure_order_issue_tasks_lifecycle_columns,
     ensure_order_issue_task_items_table,
     ensure_wms_operational_tasks_table,
+    ensure_operational_sales_phase1_schema,
     ensure_orders_fulfillment_state_columns,
     ensure_orders_priority_color_column,
     ensure_orders_discount_columns,
@@ -281,6 +282,8 @@ from .api.wms_picking_config import router as wms_picking_config_router
 from .api.wms_picking_entry import router as wms_picking_entry_router
 from .api.wms_order_issue_tasks import router as wms_order_issue_tasks_router
 from .api.wms_operational_tasks import router as wms_operational_tasks_router
+from .api.location_stock import router as location_stock_router
+from .api.direct_sales import router as direct_sales_router
 from .api.wms_packing_entry import router as wms_packing_entry_router
 from .api.wms_packing_basket_entry import router as wms_packing_basket_entry_router
 from .api.wms_dashboard import router as wms_dashboard_router
@@ -1113,6 +1116,7 @@ def _upgrade_schema() -> None:
         ensure_order_issue_tasks_lifecycle_columns(engine)
         ensure_order_issue_task_items_table(engine)
         ensure_wms_operational_tasks_table(engine)
+        ensure_operational_sales_phase1_schema(engine)
         ensure_orders_fulfillment_state_columns(engine)
         ensure_orders_priority_color_column(engine)
         ensure_orders_discount_columns(engine)
@@ -1324,6 +1328,8 @@ _API_ROUTERS = (
     wms_picking_entry_router,
     wms_order_issue_tasks_router,
     wms_operational_tasks_router,
+    location_stock_router,
+    direct_sales_router,
     wms_packing_entry_router,
     wms_packing_basket_entry_router,
     wms_dashboard_router,

@@ -338,12 +338,15 @@ _PICKING_QUEUE_OPEN_FULFILLMENT = ("PICKING", "PARTIAL")
 
 def _picking_queue_eligibility_clauses():
     """Zamówienia operacyjnie otwarte na zbieranie (SSOT dla kohorty / workload)."""
+    from .wms_queue_eligibility import wms_queue_fulfillment_mode_clauses
+
     return (
         Order.picking_finished_at.is_(None),
         or_(
             Order.fulfillment_state.is_(None),
             Order.fulfillment_state.in_(_PICKING_QUEUE_OPEN_FULFILLMENT),
         ),
+        *wms_queue_fulfillment_mode_clauses(),
     )
 
 

@@ -39,6 +39,10 @@ class Order(Base):
     discount_value = Column(Float, nullable=True)
     created_at = Column(DateTime, nullable=True)
     source = Column(String)
+    #: Kanał sprzedaży (enum) — niezależny od ``source`` (etykieta importu).
+    order_channel = Column(String(32), nullable=True, index=True)
+    #: Tryb realizacji: WMS | IMMEDIATE | PICKUP | DELIVERY | RESERVATION.
+    fulfillment_mode = Column(String(32), nullable=True, index=True)
     #: Legacy free-text label (imports); display name should prefer ``shipping_method_row``.
     shipping_method = Column(String, nullable=True)
     shipping_method_id = Column(

@@ -128,6 +128,13 @@ from .wms_order_event import WmsOrderEvent  # noqa: F401
 from .warehouse_inventory_movement import WarehouseInventoryMovement  # noqa: F401
 from .wms_operation_session import WmsOperationSession  # noqa: F401
 from .wms_packing_session import WmsPackingSession  # noqa: F401
+from .commerce_operational import (  # noqa: F401 — Phase 1 operational sales
+    DirectSaleSession,
+    DirectSaleSessionLine,
+    OperationalWorkstation,
+    Payment,
+    PaymentTransaction,
+)
 from .permission_preset import PermissionPreset  # noqa: F401
 from .bdo_packaging import (  # noqa: F401
     BdoAuditLog,

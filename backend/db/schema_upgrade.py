@@ -4039,6 +4039,13 @@ def ensure_order_issue_task_items_table(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_operational_sales_phase1_schema(engine: Engine) -> None:
+    """Operational sales phase 1 — channel/mode, zones, sessions, payments."""
+    from .schema_introspection import ensure_operational_sales_phase1_schema as _impl
+
+    _impl(engine)
+
+
 
 def ensure_wms_operational_tasks_table(engine: Engine) -> None:
     """WMS operational tasks — product-centric work queue (source of truth)."""

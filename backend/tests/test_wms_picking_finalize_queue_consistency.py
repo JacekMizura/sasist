@@ -25,7 +25,7 @@ from backend.services.wms_picking_product_list_service import (
 class TestPickingQueueEligibility(unittest.TestCase):
     def test_eligibility_clauses_include_picking_finished_guard(self):
         clauses = _picking_queue_eligibility_clauses()
-        self.assertEqual(len(clauses), 2)
+        self.assertEqual(len(clauses), 3)
 
     @patch("backend.services.wms_picking_product_list_service._query_order_ids_for_status")
     def test_fixed_order_ids_intersect_eligible_cohort(self, mock_query):
