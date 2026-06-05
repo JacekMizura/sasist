@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import func
@@ -92,6 +92,15 @@ def _format_duration_pl(seconds: int) -> str:
         parts.append(f"{m} min")
     parts.append(f"{s}s")
     return " ".join(parts)
+
+
+def _naive_utc_dt(value: datetime | None) -> datetime | None:
+    """Normalize DB timestamps for safe naive UTC arithmetic (PG timestamptz vs utcnow)."""
+    if value is None:
+        return None
+    if getattr(value, "tzinfo", None) is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
 
 
 def location_display_label(db: Session, location_id: int) -> str:
@@ -386,8 +395,10 @@ def complete_wms_operation_session(
     sess.last_activity_at = done
     sess.completed_at = done
     sess.completed_reason = str(completed_reason or "finished")[:32]
-    if getattr(sess, "started_at", None) is not None:
-        sess.active_duration_seconds = max(0, int((done - sess.started_at).total_seconds()))
+    started = _naive_utc_dt(getattr(sess, "started_at", None))
+    if started is not None:
+        done_naive = _naive_utc_dt(done) or done
+        sess.active_duration_seconds = max(0, int((done_naive - started).total_seconds()))
     db.add(sess)
 
 
@@ -586,8 +597,8 @@ def emit_wms_picking_finished(
     operator_user_id: Optional[int],
     new_order_ui_status_id: Optional[int],
 ) -> None:
-    ps = getattr(order, "picking_started_at", None)
-    pf = getattr(order, "picking_finished_at", None) or getattr(order, "picked_at", None)
+    ps = _naive_utc_dt(getattr(order, "picking_started_at", None))
+    pf = _naive_utc_dt(getattr(order, "picking_finished_at", None) or getattr(order, "picked_at", None))
     dur_sec: Optional[int] = None
     if ps is not None and pf is not None and pf >= ps:
         dur_sec = int((pf - ps).total_seconds())
@@ -1036,11 +1047,12 @@ def record_picking_cart_finalize_session(
     orders: List[Order],
     completed_at: datetime,
 ) -> None:
-    starts = [getattr(o, "picking_started_at", None) for o in orders]
+    starts = [_naive_utc_dt(getattr(o, "picking_started_at", None)) for o in orders]
     starts_ok = [x for x in starts if x is not None]
-    started_at = min(starts_ok) if starts_ok else completed_at
+    completed_naive = _naive_utc_dt(completed_at) or completed_at
+    started_at = min(starts_ok) if starts_ok else completed_naive
     paused = 0
-    active = max(0, int((completed_at - started_at).total_seconds()) - paused)
+    active = max(0, int((completed_naive - started_at).total_seconds()) - paused)
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     meta = {"order_ids": [int(o.id) for o in orders], "cart_finalize": True}
     complete_wms_operation_session(

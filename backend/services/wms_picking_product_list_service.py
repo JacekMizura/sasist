@@ -100,6 +100,35 @@ OrderTypeFilter = Literal["single", "multi", "all"]
 logger = logging.getLogger(__name__)
 
 
+class PickingFinalizeError(Exception):
+    """Structured finalize failure — mapped to HTTP 400/422 with diagnostics."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: str,
+        order_id: int | None = None,
+        line_id: int | None = None,
+        step: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.order_id = order_id
+        self.line_id = line_id
+        self.step = step
+
+    def as_detail(self) -> dict:
+        out: dict = {"error": str(self), "reason": self.reason}
+        if self.order_id is not None:
+            out["order_id"] = int(self.order_id)
+        if self.line_id is not None:
+            out["line_id"] = int(self.line_id)
+        if self.step:
+            out["step"] = self.step
+        return out
+
+
 def _location_label_for_pick(db: Session, location_id: int) -> str:
     from ..models.location import Location
 
@@ -115,6 +144,8 @@ def _sync_fulfillment_qty_for_pick(db: Session, pick: Pick) -> None:
 
     from ..models.fulfillment_event import FulfillmentEvent
 
+    if pick.order_item_id is None:
+        return
     rows = (
         db.query(FulfillmentEvent)
         .filter(
@@ -201,7 +232,11 @@ def _apply_pick_lot_slices(
             )
         )
         if performed_by is not None:
-            exp_display = sl.expiry_date if sl.expiry_date < date(9999, 1, 1) else None
+            exp_display = (
+                sl.expiry_date
+                if sl.expiry_date is not None and sl.expiry_date < date(9999, 1, 1)
+                else None
+            )
             record_warehouse_product_operation(
                 db,
                 tenant_id=tid,
@@ -224,7 +259,11 @@ def _apply_pick_lot_slices(
         persist_pick_allocation(db, row, sl, picked_at=ts, picked_by=picker_uid)
         sync_pick_fulfillment_traceability(db, row)
 
-        exp_log = sl.expiry_date if sl.expiry_date < date(9999, 1, 1) else None
+        exp_log = (
+            sl.expiry_date
+            if sl.expiry_date is not None and sl.expiry_date < date(9999, 1, 1)
+            else None
+        )
         log_pick_allocation_debug(
             order_id=int(pick.order_id),
             product_id=pid,
@@ -689,6 +728,12 @@ def _classify_order_after_picking_session(
     fully_picked: list[bool] = []
     fully_missing: list[bool] = []
     for oi in lines:
+        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+            continue
+        if bool(getattr(oi, "is_bundle_parent", False)):
+            continue
+        if order_item_is_replaced_line(oi):
+            continue
         qty = float(oi.quantity or 0)
         if qty <= eps:
             fully_picked.append(True)
@@ -749,6 +794,8 @@ def _classify_order_after_picking_session(
             )
         fully_missing.append(miss + eps >= qty)
         fully_picked.append(miss < eps and picked + eps >= qty)
+    if not fully_picked and not fully_missing:
+        return "all_picked"
     if all(fully_picked):
         return "all_picked"
     if all(fully_missing):
@@ -2006,6 +2053,72 @@ def report_wms_picking_product_shortage(
     }
 
 
+def _finalize_cohort_snapshot(
+    db: Session,
+    orders: Sequence[Order],
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    cart_id: int,
+) -> dict:
+    """Diagnoza kohorty przed domknięciem wózka — log ``[wms.picking.finalize.start]``."""
+    picked_lines = 0
+    shortage_lines = 0
+    replacement_lines = 0
+    removed_lines = 0
+    unresolved_lines = 0
+    cid = int(cart_id)
+    for order in orders:
+        for oi in order.items or []:
+            if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+                continue
+            if bool(getattr(oi, "is_bundle_parent", False)):
+                continue
+            if order_item_is_replaced_line(oi):
+                removed_lines += 1
+                continue
+            qty = float(oi.quantity or 0)
+            if qty <= 1e-9:
+                continue
+            picked = _picked_qty_for_order_item_on_cart(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                order_item_id=int(oi.id),
+                cart_id=cid,
+            )
+            miss = line_shortage_qty_for_picking_finalize(
+                db, order, oi, session_cart_id=cid, picked=picked
+            )
+            if float(getattr(oi, "oms_replaced_qty", None) or 0.0) > 1e-9:
+                replacement_lines += 1
+            if float(getattr(oi, "oms_removed_qty", None) or 0.0) > 1e-9:
+                removed_lines += 1
+            resolved, _ = _picking_line_resolved_for_finalize(
+                db,
+                order,
+                oi,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                cart_id=cid,
+            )
+            if miss > 1e-9:
+                shortage_lines += 1
+            elif picked + 1e-9 >= qty:
+                picked_lines += 1
+            if not resolved:
+                unresolved_lines += 1
+    return {
+        "cart_id": cid,
+        "order_count": len(orders),
+        "picked_lines": picked_lines,
+        "shortage_lines": shortage_lines,
+        "replacement_lines": replacement_lines,
+        "removed_lines": removed_lines,
+        "unresolved_lines": unresolved_lines,
+    }
+
+
 def cohort_shortage_order_ids_from_orders(db: Session, orders: Iterable[Order]) -> list[int]:
     """Zamówienia z brakiem operacyjnym lub niepełną zbiórką zamiennika (jak kolejka Order Issues)."""
     out: list[int] = []
@@ -2133,6 +2246,15 @@ def finalize_wms_picking_cart(
                 f"Zamówienie #{num} jest przypisane do innego wózka — dokończ na właściwej sesji."
             )
 
+    start_snap = _finalize_cohort_snapshot(
+        db,
+        orders,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        cart_id=cid,
+    )
+    logger.info("[wms.picking.finalize.start] %s", start_snap)
+
     pending_picks = (
         db.query(Pick)
         .filter(
@@ -2203,34 +2325,77 @@ def finalize_wms_picking_cart(
             cart_id=cid,
         )
 
-    from .braki_order_state_service import order_can_show_ready_pack
+    from .braki_order_state_service import order_can_show_ready_pack, order_has_pending_relocation_work
+    from .wms_recovery_pick_service import get_open_recovery_task_for_order
 
     for o in orders:
-        kind = order_kinds[int(o.id)]
-        pack_ok = order_can_show_ready_pack(db, o)
-        panel_kind: OrderFinalizeKind = kind
-        if kind == "all_picked" and not pack_ok:
-            panel_kind = "some_missing"
-        if kind == "all_picked" and pack_ok:
-            fs = FS_READY_TO_PACK
-        elif kind == "all_missing":
-            fs = FS_MISSING
-        else:
-            fs = FS_NEEDS_DECISION
-        o.order_ui_status_id = _panel_status_after_picking_finalize(
-            shortage_reported_order_ui_status_id=rep_sid_i,
-            pc=pc,
-            kind=panel_kind,
+        oid = int(o.id)
+        wf_before = (getattr(o, "fulfillment_state", None) or "").strip() or None
+        kind = order_kinds[oid]
+        try:
+            pack_ok = order_can_show_ready_pack(db, o)
+            panel_kind: OrderFinalizeKind = kind
+            if kind == "all_picked" and not pack_ok:
+                panel_kind = "some_missing"
+            if kind == "all_picked" and pack_ok:
+                fs = FS_READY_TO_PACK
+            elif kind == "all_missing":
+                fs = FS_MISSING
+            else:
+                fs = FS_NEEDS_DECISION
+            o.order_ui_status_id = _panel_status_after_picking_finalize(
+                shortage_reported_order_ui_status_id=rep_sid_i,
+                pc=pc,
+                kind=panel_kind,
+            )
+            apply_fulfillment_state(o, fs, clear_cart=True, clear_session=True)
+            emit_wms_picking_finished(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order=o,
+                cart_id=cid,
+                operator_user_id=operator_user_id,
+                new_order_ui_status_id=int(o.order_ui_status_id) if getattr(o, "order_ui_status_id", None) else None,
+            )
+        except Exception as exc:
+            logger.exception(
+                "[wms.picking.finalize.error] order_id=%s step=apply_order_state cart_id=%s",
+                oid,
+                cid,
+            )
+            raise PickingFinalizeError(
+                f"Nie udało się domknąć zbierania zamówienia #{o.number or oid}: {exc}",
+                reason=exc.__class__.__name__,
+                order_id=oid,
+                step="apply_order_state",
+            ) from exc
+        recovery_required = (
+            get_open_recovery_task_for_order(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order_id=oid,
+            )
+            is not None
         )
-        apply_fulfillment_state(o, fs, clear_cart=True, clear_session=True)
-        emit_wms_picking_finished(
+        relocation_required = order_has_pending_relocation_work(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
-            order=o,
-            cart_id=cid,
-            operator_user_id=operator_user_id,
-            new_order_ui_status_id=int(o.order_ui_status_id) if getattr(o, "order_ui_status_id", None) else None,
+            order_id=oid,
+        )
+        logger.info(
+            "[wms.picking.finalize.order] order_id=%s workflow_state_before=%s workflow_state_after=%s "
+            "has_shortages=%s recovery_required=%s relocation_required=%s kind=%s pack_ok=%s",
+            oid,
+            wf_before,
+            (getattr(o, "fulfillment_state", None) or "").strip() or None,
+            kind != "all_picked",
+            recovery_required,
+            relocation_required,
+            kind,
+            pack_ok,
         )
 
     for o in orders:

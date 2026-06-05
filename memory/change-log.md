@@ -1,5 +1,14 @@
 # Change Log
 
+## 2026-06-04 — WMS finalize-cart 500 (timezone + błędy API)
+
+- **Przyczyna 500:** ``emit_wms_picking_finished`` / ``record_picking_cart_finalize_session`` porównywały ``picking_started_at`` (PG timestamptz, aware) z ``picking_finished_at`` (naive ``utcnow``) → ``TypeError``.
+- ``_naive_utc_dt`` w ``wms_audit_service`` — bezpieczna arytmetyka czasu sesji.
+- Logi: ``[wms.picking.finalize.start]``, ``[wms.picking.finalize.order]``, ``[wms.picking.finalize.error]``; snapshot kohorty (picked/shortage/unresolved).
+- ``PickingFinalizeError`` + endpoint zwraca ``{ error, reason, order_id, cart_id }`` zamiast gołego „Internal server error”.
+- ``_classify_order_after_picking_session`` pomija bundle parent / replaced / linie zestawu.
+- Test: ``test_wms_picking_finalize_datetime.py``.
+
 ## 2026-06-04 — RMZ: zapis „Przyjęty” jednym klikiem
 
 - ``WmsReturnsPage``: przy ``pendingNull === 1`` klik **PRZYJĘTY** od razu wywołuje zapis (bez kroku wyboru ilości); odrzucenie z 1 szt. przechodzi prosto do edytora powodu.

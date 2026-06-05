@@ -50,6 +50,7 @@ from ..services.wms_status_tile_config import wms_tile_cart_config
 from ..services.tenant_default_warehouse import resolve_quick_pick_warehouse_for_tenant
 from ..services.warehouse_service import WarehouseService
 from ..services.wms_picking_product_list_service import (
+    PickingFinalizeError,
     build_wms_picking_product_detail,
     build_wms_picking_product_lines,
     finalize_wms_picking_cart,
@@ -960,11 +961,39 @@ def post_picking_finalize_cart(
             performed_by=current_user,
         )
         db.commit()
+    except PickingFinalizeError as e:
+        db.rollback()
+        logger.exception(
+            "[wms.picking.finalize.error] cart_id=%s order_id=%s reason=%s step=%s",
+            cart_id,
+            e.order_id,
+            e.reason,
+            e.step,
+        )
+        raise HTTPException(status_code=422, detail=e.as_detail()) from e
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
-        logger.exception("post_picking_finalize_cart")
-        raise HTTPException(status_code=503, detail="Zakończenie zbiórki nie powiodło się.") from None
+        logger.exception("[wms.picking.finalize.error] cart_id=%s sqlalchemy", cart_id)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "Zakończenie zbiórki nie powiodło się (błąd bazy danych).",
+                "reason": e.__class__.__name__,
+                "cart_id": int(cart_id),
+            },
+        ) from e
+    except Exception as e:
+        db.rollback()
+        logger.exception("[wms.picking.finalize.error] cart_id=%s unexpected", cart_id)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(e).strip() or e.__class__.__name__,
+                "reason": e.__class__.__name__,
+                "cart_id": int(cart_id),
+            },
+        ) from e
     return WmsPickingFinalizeCartResponse(**out)

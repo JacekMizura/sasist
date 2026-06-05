@@ -645,16 +645,20 @@ export default function WmsPickingProductsPage() {
       let msg = "Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.";
       if (axios.isAxiosError(e)) {
         console.error("[picking.finalize]", e);
-        const d = e.response?.data as { detail?: string } | undefined;
-        if (d?.detail) {
-          const raw = String(d.detail).trim();
+        const d = e.response?.data as { detail?: string | { error?: string; reason?: string } } | undefined;
+        const detail = d?.detail;
+        if (detail != null) {
+          const raw =
+            typeof detail === "object" && detail !== null && typeof detail.error === "string"
+              ? detail.error.trim()
+              : String(detail).trim();
           if (
             raw.includes("domknięta") ||
             raw.includes("zebrano + brak") ||
             raw.includes("zebrane lub oznaczone jako brak")
           ) {
             msg = "Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.";
-          } else {
+          } else if (raw) {
             msg = raw;
           }
         }
