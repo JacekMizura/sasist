@@ -34,3 +34,9 @@ class OrderIssueTask(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     archived_at = Column(DateTime, nullable=True, index=True)
     archived_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
+
+    priority_level = Column(String(16), nullable=True, index=True)
+    priority_score = Column(Integer, nullable=True, default=0)
+    resolved_at = Column(DateTime, nullable=True, index=True)
+    resolved_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
+    resolve_reason = Column(String(64), nullable=True)

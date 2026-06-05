@@ -9,7 +9,10 @@ import unittest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from backend.db.schema_introspection import ensure_order_issue_tasks_archive_columns
+from backend.db.schema_introspection import (
+    ensure_order_issue_tasks_archive_columns,
+    ensure_order_issue_tasks_lifecycle_columns,
+)
 from backend.services.order_issue_task_service import list_open_order_issue_tasks_for_warehouse
 
 
@@ -50,6 +53,7 @@ class TestOrderIssueTasksListSchema(unittest.TestCase):
             conn.commit()
 
         ensure_order_issue_tasks_archive_columns(engine)
+        ensure_order_issue_tasks_lifecycle_columns(engine)
         Session = sessionmaker(bind=engine)
         db = Session()
         rows = list_open_order_issue_tasks_for_warehouse(db, tenant_id=1, warehouse_id=1)

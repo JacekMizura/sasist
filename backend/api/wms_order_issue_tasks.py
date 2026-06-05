@@ -595,7 +595,9 @@ def resolve_order_issue_task_scan(
             detail={"message": "Nie udało się wczytać zadania braków."},
         ) from exc
     if not order_requires_shortage_handling(db, o_full):
-        mark_task_done(db, t, "Braki rozwiązane — usunięto z kolejki WMS")
+        from ..services.order_issue_task_lifecycle import maybe_auto_resolve_issue_task
+
+        maybe_auto_resolve_issue_task(db, t, o_full)
         db.commit()
         raise HTTPException(status_code=404, detail="Brak aktywnych nierozwiązanych braków dla tego zamówienia.")
     if current_user is not None and current_user.id is not None:
@@ -666,7 +668,9 @@ def get_order_issue_task(
         len(item.shortage_lines or []),
     )
     if not order_requires_shortage_handling(db, o):
-        mark_task_done(db, t, "Braki rozwiązane — usunięto z kolejki WMS")
+        from ..services.order_issue_task_lifecycle import maybe_auto_resolve_issue_task
+
+        maybe_auto_resolve_issue_task(db, t, o_full)
         db.commit()
         raise HTTPException(status_code=404, detail="Brak aktywnych nierozwiązanych braków na tym zamówieniu.")
     if current_user is not None and current_user.id is not None:
@@ -771,7 +775,9 @@ def _build_order_issue_tasks_list(
                     )
                 item = serialize_order_issue_task_list_card(db, t, o)
                 if not order_requires_shortage_handling(db, o):
-                    mark_task_done(db, t, "Braki rozliczone — usunięto z kolejki WMS")
+                    from ..services.order_issue_task_lifecycle import maybe_auto_resolve_issue_task
+
+                    maybe_auto_resolve_issue_task(db, t, o)
                     continue
                 out.append(item)
             except Exception as exc:

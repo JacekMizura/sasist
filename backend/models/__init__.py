@@ -99,6 +99,7 @@ from .sale_document import SaleDocument  # noqa: F401
 from .picking_config import PickingConfig  # noqa: F401
 from .wms_picking_shortage_report import WmsPickingShortageReport  # noqa: F401
 from .order_issue_task import OrderIssueTask  # noqa: F401
+from .order_issue_task_item import OrderIssueTaskItem  # noqa: F401
 from .wms_operational_task import WmsOperationalTask  # noqa: F401
 from .complaint_ui_status import ComplaintUiStatus  # noqa: F401
 from .complaint import Complaint  # noqa: F401

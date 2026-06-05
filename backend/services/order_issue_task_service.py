@@ -149,71 +149,22 @@ def upsert_order_issue_tasks_from_shortage(
     warehouse_id: int,
     order_ids: list[int],
     shortage_product_id: int,
+    source_picking_cart_id: int | None = None,
+    source_operator_id: int | None = None,
 ) -> list[int]:
-    """
-    Dla każdego zamówienia: jedno otwarte zadanie (OPEN) — aktualizacja snapshotów przy ponownym braku.
-    Picki nie są kasowane; snapshoty odzwierciedlają bieżący stan zdarzeń realizacji + OrderItem.
-    """
-    if not order_ids:
-        return []
-    orders = (
-        db.query(Order)
-        .options(joinedload(Order.items))
-        .filter(
-            Order.id.in_(list(dict.fromkeys(order_ids))),
-            Order.deleted_at.is_(None),
-        )
-        .all()
+    """Idempotentny upsert — delegacja do ``order_issue_task_lifecycle`` (task + task_items)."""
+    from .order_issue_task_lifecycle import upsert_operational_shortage_tasks_for_orders
+
+    return upsert_operational_shortage_tasks_for_orders(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_ids=order_ids,
+        shortage_product_id=int(shortage_product_id),
+        source_event_id=f"wms_report_shortage:product:{int(shortage_product_id)}",
+        source_picking_cart_id=source_picking_cart_id,
+        source_operator_id=source_operator_id,
     )
-    created_or_updated: list[int] = []
-    for order in orders:
-        missing, picked, baseline = build_full_issue_payload_for_order(db, order=order)
-        existing = (
-            db.query(OrderIssueTask)
-            .filter(
-                OrderIssueTask.order_id == int(order.id),
-                OrderIssueTask.status == "OPEN",
-            )
-            .order_by(OrderIssueTask.id.desc())
-            .first()
-        )
-        now = datetime.utcnow()
-        payload_missing = json.dumps(missing, ensure_ascii=False)
-        payload_picked = json.dumps(picked, ensure_ascii=False)
-        payload_base = json.dumps(baseline, ensure_ascii=False)
-
-        if existing:
-            existing.type = "MIXED"
-            existing.missing_items = payload_missing
-            existing.picked_items = payload_picked
-            existing.baseline_order_lines_json = payload_base
-            existing.updated_at = now
-            _append_log(
-                existing,
-                f"Zaktualizowano braki (ponowne zgłoszenie, SKU #{int(shortage_product_id)})",
-                "shortage_reported",
-            )
-            created_or_updated.append(int(existing.id))
-        else:
-            t = OrderIssueTask(
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                order_id=int(order.id),
-                type="MIXED",
-                status="OPEN",
-                missing_items=payload_missing,
-                picked_items=payload_picked,
-                baseline_order_lines_json=payload_base,
-                logs_json="[]",
-                created_at=now,
-                updated_at=now,
-            )
-            db.add(t)
-            db.flush()
-            _append_log(t, "Utworzono zadanie po zgłoszeniu braku przy zbieraniu", "shortage_reported")
-            created_or_updated.append(int(t.id))
-
-    return created_or_updated
 
 
 def _total_picked_qty(picked_items: list[dict[str, Any]]) -> float:
@@ -957,50 +908,19 @@ def build_fallback_shortage_lines_from_task_snapshot(
 
 
 def ensure_open_issue_task_for_order(db: Session, order: Order) -> None:
-    """Utrzymuje OPEN ``OrderIssueTask`` dopóki zamówienie wymaga obsługi braków."""
+    """Utrzymuje aktywny task SHORTAGE dopóki zamówienie wymaga obsługi braków."""
     from ..services.order_fulfillment_recompute import order_requires_shortage_handling
+    from .order_issue_task_lifecycle import upsert_operational_shortage_task
 
     if not order_requires_shortage_handling(db, order):
         return
-    tid = int(order.tenant_id)
-    wid = int(order.warehouse_id)
-    missing, picked, baseline = build_full_issue_payload_for_order(db, order=order)
-    payload_missing = json.dumps(missing, ensure_ascii=False)
-    payload_picked = json.dumps(picked, ensure_ascii=False)
-    payload_base = json.dumps(baseline, ensure_ascii=False)
-    now = datetime.utcnow()
-    existing = (
-        db.query(OrderIssueTask)
-        .filter(
-            OrderIssueTask.order_id == int(order.id),
-            OrderIssueTask.status == "OPEN",
-        )
-        .order_by(OrderIssueTask.id.desc())
-        .first()
+    upsert_operational_shortage_task(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order=order,
+        log_kind="shortage_sync",
     )
-    if existing:
-        existing.type = "MIXED"
-        existing.missing_items = payload_missing
-        existing.picked_items = payload_picked
-        existing.baseline_order_lines_json = payload_base
-        existing.updated_at = now
-        return
-    t = OrderIssueTask(
-        tenant_id=tid,
-        warehouse_id=wid,
-        order_id=int(order.id),
-        type="MIXED",
-        status="OPEN",
-        missing_items=payload_missing,
-        picked_items=payload_picked,
-        baseline_order_lines_json=payload_base,
-        logs_json="[]",
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(t)
-    db.flush()
-    _append_log(t, "Utworzono zadanie — synchronizacja kolejki braków", "shortage_reported")
 
 
 def collect_shortage_queue_candidate_order_ids(
@@ -1070,12 +990,14 @@ def consolidate_duplicate_open_issue_tasks(
     import logging
 
     log = logging.getLogger(__name__)
+    from .order_issue_task_lifecycle import ACTIVE_SHORTAGE_TASK_STATUSES
+
     rows = (
         db.query(OrderIssueTask)
         .filter(
             OrderIssueTask.tenant_id == int(tenant_id),
             OrderIssueTask.warehouse_id == int(warehouse_id),
-            OrderIssueTask.status == "OPEN",
+            OrderIssueTask.status.in_(ACTIVE_SHORTAGE_TASK_STATUSES),
         )
         .order_by(OrderIssueTask.order_id.asc(), OrderIssueTask.id.desc())
         .all()
@@ -1108,27 +1030,22 @@ def sync_open_issue_tasks_for_warehouse(
     full_recalc: bool = False,
 ) -> None:
     """
-    Przed listą braków: deduplikacja OPEN zadań; opcjonalnie pełne przeliczenie stanów braków.
+    Przed listą braków: deduplikacja, auto-resolve, lifecycle task_items.
 
     ``full_recalc`` zachowany dla kompatybilności API — stan workflow pochodzi z resolvera (bez mutacji).
     """
+    from .order_issue_task_lifecycle import sync_open_issue_tasks_lifecycle
+
     purge_stale_open_order_issue_tasks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
-    consolidate_duplicate_open_issue_tasks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    sync_open_issue_tasks_lifecycle(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     _ = full_recalc
 
 
 def ensure_order_issue_task_table_schema(db: Session) -> None:
-    """Upewnij się, że kolumny archiwizacji istnieją (starsze DB bez migracji przy starcie)."""
-    from ..db.schema_introspection import ensure_order_issue_tasks_archive_columns, get_engine
+    """Upewnij się, że schema tasków + task_items jest aktualna (runtime patch)."""
+    from .order_issue_task_lifecycle import ensure_order_issue_task_lifecycle_schema
 
-    bind = db.get_bind()
-    if bind is None:
-        return
-    try:
-        get_engine(bind)
-    except TypeError:
-        return
-    ensure_order_issue_tasks_archive_columns(bind)
+    ensure_order_issue_task_lifecycle_schema(db)
 
 
 def list_open_order_issue_tasks_for_warehouse(
@@ -1137,16 +1054,22 @@ def list_open_order_issue_tasks_for_warehouse(
     tenant_id: int,
     warehouse_id: int,
 ) -> list[OrderIssueTask]:
-    """OPEN zadania braków — po deduplikacji po stronie API."""
+    """Aktywne zadania braków — po deduplikacji i auto-resolve po stronie API."""
+    from .order_issue_task_lifecycle import ACTIVE_SHORTAGE_TASK_STATUSES
+
     ensure_order_issue_task_table_schema(db)
     return (
         db.query(OrderIssueTask)
         .filter(
             OrderIssueTask.tenant_id == int(tenant_id),
             OrderIssueTask.warehouse_id == int(warehouse_id),
-            OrderIssueTask.status == "OPEN",
+            OrderIssueTask.status.in_(ACTIVE_SHORTAGE_TASK_STATUSES),
         )
-        .order_by(OrderIssueTask.order_id.asc(), OrderIssueTask.id.desc())
+        .order_by(
+            func.coalesce(OrderIssueTask.priority_score, 0).desc(),
+            OrderIssueTask.order_id.asc(),
+            OrderIssueTask.id.desc(),
+        )
         .all()
     )
 

@@ -161,6 +161,8 @@ from .db.schema_upgrade import (
     ensure_orders_customer_id_column,
     ensure_order_issue_tasks_table,
     ensure_order_issue_tasks_archive_columns,
+    ensure_order_issue_tasks_lifecycle_columns,
+    ensure_order_issue_task_items_table,
     ensure_wms_operational_tasks_table,
     ensure_orders_fulfillment_state_columns,
     ensure_orders_priority_color_column,
@@ -433,6 +435,8 @@ def _sqlite_only_schema_helper(fn):
 # Exceptions: dialect-agnostic runtime patches (see schema_introspection).
 _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_order_issue_tasks_archive_columns",
+    "ensure_order_issue_tasks_lifecycle_columns",
+    "ensure_order_issue_task_items_table",
 })
 if not _is_sqlite_engine():
     for _name, _fn in list(globals().items()):
@@ -1106,6 +1110,8 @@ def _upgrade_schema() -> None:
         ensure_orders_customer_id_column(engine)
         ensure_order_issue_tasks_table(engine)
         ensure_order_issue_tasks_archive_columns(engine)
+        ensure_order_issue_tasks_lifecycle_columns(engine)
+        ensure_order_issue_task_items_table(engine)
         ensure_wms_operational_tasks_table(engine)
         ensure_orders_fulfillment_state_columns(engine)
         ensure_orders_priority_color_column(engine)
@@ -1174,6 +1180,8 @@ try:
     ensure_orders_customer_id_column(engine)
     ensure_order_issue_tasks_table(engine)
     ensure_order_issue_tasks_archive_columns(engine)
+    ensure_order_issue_tasks_lifecycle_columns(engine)
+    ensure_order_issue_task_items_table(engine)
     ensure_wms_operational_tasks_table(engine)
     ensure_orders_fulfillment_state_columns(engine)
     ensure_orders_priority_color_column(engine)

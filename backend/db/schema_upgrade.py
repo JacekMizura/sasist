@@ -4025,6 +4025,20 @@ def ensure_order_issue_tasks_archive_columns(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_order_issue_tasks_lifecycle_columns(engine: Engine) -> None:
+    """Priority + resolve audit on ``order_issue_tasks`` (SQLite + PostgreSQL)."""
+    from .schema_introspection import ensure_order_issue_tasks_lifecycle_columns as _impl
+
+    _impl(engine)
+
+
+def ensure_order_issue_task_items_table(engine: Engine) -> None:
+    """Operational line items per Braki task."""
+    from .schema_introspection import ensure_order_issue_task_items_table as _impl
+
+    _impl(engine)
+
+
 
 def ensure_wms_operational_tasks_table(engine: Engine) -> None:
     """WMS operational tasks — product-centric work queue (source of truth)."""

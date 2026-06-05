@@ -2050,6 +2050,8 @@ def report_wms_picking_product_shortage(
         warehouse_id=int(warehouse_id),
         order_ids=list(aff_set),
         shortage_product_id=pid,
+        source_picking_cart_id=int(cid),
+        source_operator_id=operator_user_id,
     )
     logger.info(
         "[shortage.report] braki_tasks order_ids=%s task_ids=%s product_id=%s",

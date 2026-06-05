@@ -95,6 +95,75 @@ def ensure_order_issue_tasks_archive_columns(engine: Engine) -> None:
     )
 
 
+def ensure_order_issue_tasks_lifecycle_columns(engine: Engine) -> None:
+    """Priority + resolve audit columns on ``order_issue_tasks``."""
+    if not has_table(engine, "order_issue_tasks"):
+        return
+    cols = get_table_column_names(engine, "order_issue_tasks")
+    stmts: list[str] = []
+    if "priority_level" not in cols:
+        stmts.append("ALTER TABLE order_issue_tasks ADD COLUMN priority_level VARCHAR(16)")
+    if "priority_score" not in cols:
+        stmts.append("ALTER TABLE order_issue_tasks ADD COLUMN priority_score INTEGER DEFAULT 0")
+    if "resolved_at" not in cols:
+        stmts.append("ALTER TABLE order_issue_tasks ADD COLUMN resolved_at TIMESTAMP")
+    if "resolved_by_user_id" not in cols:
+        stmts.append(
+            "ALTER TABLE order_issue_tasks ADD COLUMN resolved_by_user_id INTEGER "
+            "REFERENCES app_users(id) ON DELETE SET NULL"
+        )
+    if "resolve_reason" not in cols:
+        stmts.append("ALTER TABLE order_issue_tasks ADD COLUMN resolve_reason VARCHAR(64)")
+    if not stmts:
+        return
+    with engine.begin() as conn:
+        for stmt in stmts:
+            conn.execute(text(stmt))
+    logger.info(
+        "[schema] order_issue_tasks lifecycle columns ensured dialect=%s added=%s",
+        engine.dialect.name,
+        len(stmts),
+    )
+
+
+def ensure_order_issue_task_items_table(engine: Engine) -> None:
+    """Operational line items for Braki tasks."""
+    if has_table(engine, "order_issue_task_items"):
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE order_issue_task_items (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL REFERENCES order_issue_tasks(id) ON DELETE CASCADE,
+                    order_item_id INTEGER NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
+                    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                    missing_qty REAL NOT NULL DEFAULT 0,
+                    recovered_qty REAL NOT NULL DEFAULT 0,
+                    status VARCHAR(24) NOT NULL DEFAULT 'OPEN',
+                    source_event_id VARCHAR(128),
+                    source_picking_cart_id INTEGER,
+                    source_operator_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+                    updated_at TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+                    UNIQUE(task_id, order_item_id)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text("CREATE INDEX ix_order_issue_task_items_task ON order_issue_task_items(task_id)")
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX ix_order_issue_task_items_product "
+                "ON order_issue_task_items(product_id, status)"
+            )
+        )
+    logger.info("[schema] order_issue_task_items table created dialect=%s", engine.dialect.name)
+
+
 def list_user_tables(bind: Engine | Connection) -> list[str]:
     """User tables (excludes SQLite internal tables)."""
     engine = get_engine(bind)
