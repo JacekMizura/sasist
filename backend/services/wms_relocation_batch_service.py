@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..models.order import Order
@@ -14,6 +15,10 @@ from ..models.product import Product
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.wms_operational_task import ACTIVE_STATUSES, TASK_RELOCATION, WmsOperationalTask
 from .relocation_reason import infer_relocation_reason, relocation_reason_is_actionable
+from .relocation_document_series_service import (
+    RELOCATION_DOCUMENT_SERIES_MISSING_MSG,
+    assert_relocation_document_series_configured,
+)
 from .wms_mm_internal_placeholder import get_or_create_mm_placeholder_fks
 from .wms_operational_task_service import (
     _allocation_row_status,
@@ -62,6 +67,11 @@ def get_or_create_zwk_draft_document(
     )
     if doc is not None:
         return doc
+    assert_relocation_document_series_configured(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
     sid, did = get_or_create_mm_placeholder_fks(db, tenant_id)
     now = datetime.utcnow()
     doc = StockDocument(
@@ -79,8 +89,16 @@ def get_or_create_zwk_draft_document(
         created_at=now,
         updated_at=now,
     )
-    db.add(doc)
-    db.flush()
+    try:
+        db.add(doc)
+        db.flush()
+    except SQLAlchemyError as exc:
+        logger.exception(
+            "[wms.relocation.zwk.create] tenant_id=%s warehouse_id=%s failed",
+            tenant_id,
+            warehouse_id,
+        )
+        raise ValueError(RELOCATION_DOCUMENT_SERIES_MISSING_MSG) from exc
     return doc
 
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, MapPin, X } from "lucide-react";
+import { extractApiErrorMessage } from "../../../api/authApi";
 import {
   fetchWmsRelocationBatchContext,
   postWmsRelocationAddItems,
@@ -50,8 +51,7 @@ export function RelocationBatchChoiceModal({
       const data = await fetchWmsRelocationBatchContext(tenantId, warehouseId, orderId);
       setCtx(data);
     } catch (e: unknown) {
-      const ax = e as { response?: { data?: { detail?: string } } };
-      setErr(String(ax.response?.data?.detail ?? "Nie udało się wczytać kontekstu rozlokowania."));
+      setErr(extractApiErrorMessage(e, "Nie udało się wczytać kontekstu rozlokowania."));
       setCtx(null);
     } finally {
       setLoadingCtx(false);
@@ -70,8 +70,7 @@ export function RelocationBatchChoiceModal({
       onAddOnly({ document_label: out.document_label, lines_added: out.lines_added });
       onClose();
     } catch (e: unknown) {
-      const ax = e as { response?: { data?: { detail?: string } } };
-      setErr(String(ax.response?.data?.detail ?? "Nie udało się dodać pozycji do dokumentu."));
+      setErr(extractApiErrorMessage(e, "Nie udało się dodać pozycji do dokumentu."));
     } finally {
       setActing(null);
     }
@@ -92,8 +91,7 @@ export function RelocationBatchChoiceModal({
       });
       onClose();
     } catch (e: unknown) {
-      const ax = e as { response?: { data?: { detail?: string } } };
-      setErr(String(ax.response?.data?.detail ?? "Nie udało się rozpocząć rozlokowania."));
+      setErr(extractApiErrorMessage(e, "Nie udało się rozpocząć rozlokowania."));
     } finally {
       setActing(null);
     }

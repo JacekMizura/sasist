@@ -83,6 +83,20 @@ class AddItemsWithoutSessionTests(unittest.TestCase):
         self.assertFalse(out["redirect_to_relocation"])
         mock_find_task.assert_called()
 
+    def test_get_or_create_without_series_raises(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        with patch(
+            "backend.services.wms_relocation_batch_service._assert_warehouse_for_tenant",
+        ), patch(
+            "backend.services.wms_relocation_batch_service.assert_relocation_document_series_configured",
+            side_effect=ValueError(
+                "Brak skonfigurowanej serii dokumentów dla rozlokowania (ZWK/MM)."
+            ),
+        ):
+            with self.assertRaises(ValueError):
+                get_or_create_zwk_draft_document(db, tenant_id=1, warehouse_id=2)
+
     def test_get_or_create_uses_zwk_type(self):
         db = MagicMock()
         existing = SimpleNamespace(
@@ -95,6 +109,9 @@ class AddItemsWithoutSessionTests(unittest.TestCase):
         db.query.return_value.filter.return_value.order_by.return_value.first.return_value = existing
         with patch(
             "backend.services.wms_relocation_batch_service._assert_warehouse_for_tenant",
+        ), patch(
+            "backend.services.wms_relocation_batch_service.assert_relocation_document_series_configured",
+            return_value=SimpleNamespace(id="series-1"),
         ):
             doc = get_or_create_zwk_draft_document(db, tenant_id=1, warehouse_id=2)
         self.assertIs(doc, existing)

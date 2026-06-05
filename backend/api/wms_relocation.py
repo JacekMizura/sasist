@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+from ..services.relocation_document_series_service import RELOCATION_DOCUMENT_SERIES_MISSING_MSG
 
 from ..auth.deps import get_current_user
 from ..database import get_db
@@ -25,6 +30,33 @@ from ..services.wms_relocation_batch_service import (
 from ..services.wms_workforce_activity import MODULE_PUTAWAY, log_wms_workforce_activity
 
 router = APIRouter(prefix="/wms", tags=["WMS relocation"])
+logger = logging.getLogger(__name__)
+
+
+def _relocation_error_detail(exc: Exception) -> dict[str, str]:
+    if isinstance(exc, ValueError):
+        msg = str(exc).strip()
+        if msg:
+            return {"message": msg}
+    raw = str(exc).lower()
+    if any(
+        token in raw
+        for token in (
+            "series",
+            "document_series",
+            "foreign key",
+            "integrity",
+            "not null",
+            "supplier",
+            "delivery",
+        )
+    ):
+        return {"message": RELOCATION_DOCUMENT_SERIES_MISSING_MSG}
+    return {"message": "Nie udało się przygotować dokumentu rozlokowania."}
+
+
+def _raise_relocation_http_error(exc: Exception) -> None:
+    raise HTTPException(status_code=400, detail=_relocation_error_detail(exc))
 
 
 @router.get("/relocation/batch-context", response_model=WmsRelocationBatchContextOut)
@@ -44,7 +76,13 @@ def get_wms_relocation_batch_context(
         )
         return WmsRelocationBatchContextOut(**ctx)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_relocation_error_detail(e))
+    except SQLAlchemyError as e:
+        logger.exception("[wms.relocation.batch-context] db error")
+        _raise_relocation_http_error(e)
+    except Exception as e:
+        logger.exception("[wms.relocation.batch-context] unexpected")
+        _raise_relocation_http_error(e)
 
 
 @router.post("/relocation/add-items", response_model=WmsRelocationAddItemsOut)
@@ -68,7 +106,15 @@ def post_wms_relocation_add_items(
         return WmsRelocationAddItemsOut(**out)
     except ValueError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_relocation_error_detail(e))
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("[wms.relocation.add-items] db error")
+        _raise_relocation_http_error(e)
+    except Exception as e:
+        db.rollback()
+        logger.exception("[wms.relocation.add-items] unexpected")
+        _raise_relocation_http_error(e)
 
 
 @router.post("/relocation/start-session", response_model=WmsRelocationStartSessionOut)
@@ -94,7 +140,15 @@ def post_wms_relocation_start_session(
         return WmsRelocationStartSessionOut(**out)
     except ValueError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_relocation_error_detail(e))
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("[wms.relocation.start-session] db error")
+        _raise_relocation_http_error(e)
+    except Exception as e:
+        db.rollback()
+        logger.exception("[wms.relocation.start-session] unexpected")
+        _raise_relocation_http_error(e)
 
 
 @router.patch("/relocation/pz/{document_id}/finalize", response_model=StockDocumentRead)

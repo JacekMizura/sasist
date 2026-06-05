@@ -18,6 +18,7 @@ import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { dispatchWmsShortagesUpdated, WMS_ROUTES } from "./wmsRoutes";
+import { ActiveWorkContextBar } from "../../components/wms/operational/ActiveWorkContextBar";
 import { CrossdockFlowBanner } from "../../components/wms/operational/CrossdockFlowBanner";
 import { OperationalWorkflowTimeline } from "../../components/wms/operational/OperationalWorkflowTimeline";
 import { nextOperationalAction } from "../../components/wms/operational/operationalWorkflow";

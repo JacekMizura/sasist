@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-04 — Relocation: series gate + UI crash fix
+
+- ``relocation_document_series_service`` — walidacja serii WAREHOUSE (RW/PW/ZWK) przed utworzeniem ZWK; auto-wybór gdy jedna seria RW.
+- ``POST /wms/relocation/add-items`` — brak surowego 500; ``400`` z ``detail.message`` (np. brak serii).
+- ``WmsRelocationDetailPage`` — import ``ActiveWorkContextBar`` (fix ReferenceError po starcie sesji).
+- ``RelocationBatchChoiceModal`` — ``extractApiErrorMessage`` dla komunikatów biznesowych z API.
+
 ## 2026-06-04 — Relocation workflow: resolver SSOT + self-heal (order #1197)
 
 - ``has_pending_relocation`` — tylko aktywne alokacje (pending/partial), nie historia ``done``.
