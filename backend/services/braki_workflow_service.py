@@ -158,7 +158,7 @@ def resolve_braki_workflow_status(
     eval_snap = evaluate_order_braki_state(db, order, workflow_status=status)
     if status == BRAKI_FILTER_READY_PACK and not eval_snap.get("resolved"):
         status = BRAKI_FILTER_AWAITING
-    logger.info(
+    logger.debug(
         "[braki.workflow] order_id=%s workflow_status=%s reason=resolve u_short=%s r_pend=%s "
         "reloc_p=%s reloc_part=%s needs_pick=%s awaiting=%s resolved=%s",
         getattr(order, "id", None),

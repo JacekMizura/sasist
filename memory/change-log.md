@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-06-04 — Kolejka braków: wydajność listy
+
+- Lekki serializer `serialize_order_issue_task_list_card` (bez order_context, logów, lokalizacji); pełny payload tylko GET `/{id}`.
+- Batch `_fetch_orders_by_id` + `selectinload` items/product — koniec N+1 Order w pętli.
+- `sync_open_issue_tasks_for_warehouse(full_recalc=False)` domyślnie; `?sync=true` przy ręcznym odświeżeniu.
+- Log `[wms.issue_queue.performance]` (db_fetch_ms, serialization_ms, sql_query_count).
+- Indeks `(tenant_id, warehouse_id, status)` na `order_issue_tasks`; hub używa `unresolved_shortage_count`.
+
 ## 2026-06-04 — Kolejka braków: `name 'order' is not defined`
 
 - `serialize_order_issue_task_item`: `braki_waiting_stock(o, …)` zamiast niezdefiniowanego `order`.

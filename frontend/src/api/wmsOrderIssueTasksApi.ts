@@ -113,12 +113,22 @@ export type OrderIssueTaskListResult = {
   filter_counts?: Record<string, number>;
 };
 
+export type ListWmsOrderIssueTasksOptions = {
+  /** Pełne przeliczenie stanów braków — wolniejsze; użyj przy ręcznym „Odśwież”. */
+  sync?: boolean;
+};
+
 export async function listWmsOrderIssueTasks(
   tenantId: number,
   warehouseId: number,
+  options?: ListWmsOrderIssueTasksOptions,
 ): Promise<OrderIssueTaskListResult> {
   const res = await api.get<OrderIssueTaskListResult>("/wms/order-issue-tasks", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      sync: options?.sync ? true : undefined,
+    },
   });
   return {
     success: res.data?.success ?? true,

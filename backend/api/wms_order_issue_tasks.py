@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from contextlib import contextmanager
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import event
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..auth.deps import get_optional_current_user
 from ..database import get_db
@@ -64,6 +67,45 @@ from ..services.wms_audit_service import complete_wms_operation_session, touch_w
 router = APIRouter(prefix="/wms", tags=["WMS order issues"])
 
 _SERIALIZE_ERROR_CODE = "TASK_SERIALIZATION_FAILED"
+
+
+@contextmanager
+def _noop_count():
+    yield
+
+
+@contextmanager
+def _count_sql_queries(engine, counter: list[int]):
+    """Licznik zapytań SQL w bloku (profilowanie kolejki)."""
+
+    def _before(_conn, _cursor, _statement, _parameters, _context, _executemany):
+        counter[0] += 1
+
+    event.listen(engine, "before_cursor_execute", _before)
+    try:
+        yield
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+
+
+def _fetch_orders_by_id(
+    db: Session,
+    order_ids: list[int],
+) -> dict[int, Order]:
+    """Jedno zapytanie z eager load — bez N+1 w pętli listy."""
+    if not order_ids:
+        return {}
+    rows = (
+        db.query(Order)
+        .options(
+            joinedload(Order.order_ui_status),
+            joinedload(Order.customer),
+            selectinload(Order.items).joinedload(OrderItem.product),
+        )
+        .filter(Order.id.in_(order_ids), Order.deleted_at.is_(None))
+        .all()
+    )
+    return {int(o.id): o for o in rows}
 
 
 def _public_serialize_error_message(exc: Exception) -> str:
@@ -261,6 +303,88 @@ def serialize_order_issue_task_item(
     )
 
 
+def serialize_order_issue_task_list_card(
+    db: Session,
+    t: OrderIssueTask,
+    o: Order | None,
+    *,
+    u_short: int,
+    r_pend: int,
+    workflow_status: str,
+) -> OrderIssueTaskListItem:
+    """
+    Lekka karta kolejki — bez order_context, logów, lokalizacji produktów ani pełnych shortage_lines.
+    Szczegóły: GET /order-issue-tasks/{id}.
+    """
+    from ..services.braki_order_state_service import build_order_issue_customer_fields
+    from ..services.wms_recovery_pick_service import order_has_waiting_customer_line
+
+    from ..services.braki_order_state_service import order_has_waiting_for_stock_lines as braki_waiting_stock
+
+    cust_fields = build_order_issue_customer_fields(o)
+    cust_name = cust_fields.get("customer_name") or order_customer_display_name(o)
+    ui_name = None
+    if o and o.order_ui_status is not None:
+        ui_name = str(o.order_ui_status.name or "").strip() or None
+
+    bucket = "awaiting_oms"
+    workflow_label = braki_workflow_status_label(workflow_status)
+    summary_line = ""
+    status_line = format_issue_queue_status_label(u_short, r_pend)
+    if o is not None:
+        bucket = braki_queue_bucket(db, o, u_short=u_short, r_pend=r_pend)
+        oms_wait = order_has_waiting_customer_line(o) or braki_waiting_stock(o, db=db)
+        summary_line = format_braki_issue_summary_line(
+            workflow_status,
+            unresolved=u_short,
+            repl_pending=r_pend,
+            oms_waiting=oms_wait,
+        )
+
+    _missing, _picked, logs = _parse_task_json_lists(t)
+    created = t.created_at.isoformat() + "Z" if isinstance(t.created_at, datetime) else str(t.created_at)
+    last_shortage_at = created
+    for e in reversed(logs):
+        if str(e.kind or "") == "shortage_reported" and str(e.at or "").strip():
+            last_shortage_at = str(e.at).strip()
+            break
+
+    return OrderIssueTaskListItem(
+        id=int(t.id),
+        order_id=int(t.order_id),
+        order_number=str(o.number or f"#{t.order_id}") if o else f"#{t.order_id}",
+        order_status=str(o.status or "") if o else "",
+        customer_name=cust_name,
+        delivery_name=cust_fields.get("delivery_name") or "—",
+        customer_phone=cust_fields.get("phone") or "—",
+        customer_email=cust_fields.get("email") or "—",
+        customer_address=cust_fields.get("address") or "—",
+        unresolved_shortage_count=int(u_short),
+        replacement_pick_pending_count=int(r_pend),
+        issue_queue_summary_line=summary_line,
+        issue_queue_status_label=status_line,
+        substitute_product_id=0,
+        substitute_product_name="",
+        order_ui_status_name=ui_name,
+        task_type=str(t.type),
+        recommended_action="MIXED",
+        ui_decision="PARTIAL",
+        new_product_lines=[],
+        shortage_lines=[],
+        order_context=OrderIssueOrderContext(),
+        status=str(t.status),
+        missing_items=[],
+        picked_items=[],
+        missing_skus_label="",
+        logs=[],
+        created_at=created,
+        last_shortage_at=last_shortage_at,
+        braki_queue_bucket=bucket,
+        braki_workflow_status=workflow_status,
+        braki_workflow_status_label=workflow_label,
+    )
+
+
 @router.get("/order-issue-tasks/resolve-scan", response_model=OrderIssueTaskListItem)
 def resolve_order_issue_task_scan(
     tenant_id: int = Query(..., ge=1),
@@ -271,7 +395,9 @@ def resolve_order_issue_task_scan(
 ):
     ensure_order_issue_task_table_schema(db)
     try:
-        sync_open_issue_tasks_for_warehouse(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+        sync_open_issue_tasks_for_warehouse(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), full_recalc=True
+        )
     except Exception:
         logger.exception("sync_open_issue_tasks_for_warehouse failed tenant=%s wh=%s", tenant_id, warehouse_id)
     db.commit()
@@ -406,152 +532,189 @@ def _build_order_issue_tasks_list(
     *,
     tenant_id: int,
     warehouse_id: int,
+    full_recalc: bool = False,
 ) -> OrderIssueTaskListResponse:
     ensure_order_issue_task_table_schema(db)
-    try:
-        sync_open_issue_tasks_for_warehouse(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
-    except Exception:
-        logger.exception(
-            "[wms.order_issue_tasks.fetch] sync_open_failed tenant_id=%s warehouse_id=%s",
-            tenant_id,
-            warehouse_id,
-        )
-    db.commit()
+    t0 = time.perf_counter()
+    sql_counter = [0]
+    bind = db.get_bind()
+    engine = bind.engine if bind is not None and hasattr(bind, "engine") else bind
+    cm = _count_sql_queries(engine, sql_counter) if engine is not None else _noop_count()
 
-    rows = list_open_order_issue_tasks_for_warehouse(
-        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
-    )
-    logger.info(
-        "[wms.order_issue_tasks.fetch] tenant_id=%s warehouse_id=%s open_tasks=%s",
-        tenant_id,
-        warehouse_id,
-        len(rows),
-    )
-
-    deduped_rows: list[OrderIssueTask] = []
-    seen_orders: set[int] = set()
-    for t in rows:
-        oid = int(t.order_id)
-        if oid in seen_orders:
-            logger.debug("[braki.dedupe] skip duplicate task_id=%s order_id=%s", t.id, oid)
-            continue
-        seen_orders.add(oid)
-        deduped_rows.append(t)
-    if len(deduped_rows) < len(rows):
-        logger.info(
-            "[braki.dedupe] list tenant=%s wh=%s tasks %s -> %s unique orders",
-            tenant_id,
-            warehouse_id,
-            len(rows),
-            len(deduped_rows),
-        )
-
-    out: list[OrderIssueTaskListItem] = []
-    skipped: list[OrderIssueTaskSkippedItem] = []
-    for t in deduped_rows:
-        o: Order | None = None
-        wf_status: str | None = None
+    with cm:
         try:
-            o = (
-                db.query(Order)
-                .options(
-                    joinedload(Order.order_ui_status),
-                    joinedload(Order.customer),
-                    joinedload(Order.items).joinedload(OrderItem.product),
-                )
-                .filter(Order.id == int(t.order_id))
-                .first()
+            sync_open_issue_tasks_for_warehouse(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                full_recalc=full_recalc,
             )
-            if o is None or getattr(o, "deleted_at", None) is not None:
-                mark_task_done(db, t, "Zamówienie usunięte — zamknięto zadanie braków")
-                continue
-            try:
-                u_short, r_pend = count_issue_queue_operational_lines(db, o)
-                wf_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
-            except Exception as wf_exc:
-                logger.warning(
-                    "[wms.order_issue_tasks.invalid_state] task_id=%s order_id=%s err=%s",
-                    getattr(t, "id", None),
-                    getattr(t, "order_id", None),
-                    wf_exc,
-                )
-                wf_status = "awaiting"
-            item = serialize_order_issue_task_item(db, t, o)
-            if not order_requires_shortage_handling(db, o):
-                mark_task_done(db, t, "Braki rozliczone — usunięto z kolejki WMS")
-                continue
-            out.append(item)
-        except Exception as exc:
-            err_public = _public_serialize_error_message(exc)
-            snap = order_issue_task_debug_snapshot(db, t, o, workflow_status=wf_status)
+        except Exception:
             logger.exception(
-                "[wms.order_issue.serialize] task_id=%s order_id=%s workflow_status=%s "
-                "relocation_required=%s archived=%s closed_at=%s error_code=%s err=%s",
-                snap.get("task_id"),
-                snap.get("order_id"),
-                snap.get("workflow_status"),
-                snap.get("relocation_required"),
-                snap.get("archived"),
-                snap.get("closed_at"),
-                _SERIALIZE_ERROR_CODE,
-                exc,
+                "[wms.order_issue_tasks.fetch] sync_open_failed tenant_id=%s warehouse_id=%s",
+                tenant_id,
+                warehouse_id,
             )
-            skipped.append(
-                OrderIssueTaskSkippedItem(
-                    task_id=int(t.id),
-                    order_id=int(t.order_id),
-                    order_number=str((o.number if o is not None else None) or f"#{t.order_id}"),
-                    error_code=_SERIALIZE_ERROR_CODE,
-                    error_message=err_public,
-                )
-            )
-            continue
-    try:
         db.commit()
-    except Exception:
-        logger.exception(
-            "[wms.order_issue_tasks.fetch] commit_after_list_failed tenant_id=%s warehouse_id=%s",
-            tenant_id,
-            warehouse_id,
-        )
-        db.rollback()
 
-    if skipped:
-        logger.warning(
-            "[wms.order_issue_tasks.fetch] skipped_count=%s tenant_id=%s warehouse_id=%s returned=%s",
-            len(skipped),
+        t_fetch_start = time.perf_counter()
+        rows = list_open_order_issue_tasks_for_warehouse(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+        )
+        db_fetch_ms = int((time.perf_counter() - t_fetch_start) * 1000)
+
+        deduped_rows: list[OrderIssueTask] = []
+        seen_orders: set[int] = set()
+        for t in rows:
+            oid = int(t.order_id)
+            if oid in seen_orders:
+                logger.debug("[braki.dedupe] skip duplicate task_id=%s order_id=%s", t.id, oid)
+                continue
+            seen_orders.add(oid)
+            deduped_rows.append(t)
+        if len(deduped_rows) < len(rows):
+            logger.info(
+                "[braki.dedupe] list tenant=%s wh=%s tasks %s -> %s unique orders",
+                tenant_id,
+                warehouse_id,
+                len(rows),
+                len(deduped_rows),
+            )
+
+        order_map = _fetch_orders_by_id(db, [int(t.order_id) for t in deduped_rows])
+
+        out: list[OrderIssueTaskListItem] = []
+        skipped: list[OrderIssueTaskSkippedItem] = []
+        t_serialize_start = time.perf_counter()
+        for t in deduped_rows:
+            o: Order | None = None
+            wf_status: str = "awaiting"
+            u_short = 0
+            r_pend = 0
+            try:
+                o = order_map.get(int(t.order_id))
+                if o is None:
+                    mark_task_done(db, t, "Zamówienie usunięte — zamknięto zadanie braków")
+                    continue
+                try:
+                    u_short, r_pend = count_issue_queue_operational_lines(db, o)
+                    wf_status = resolve_braki_workflow_status(db, o, u_short=u_short, r_pend=r_pend)
+                except Exception as wf_exc:
+                    logger.warning(
+                        "[wms.order_issue_tasks.invalid_state] task_id=%s order_id=%s err=%s",
+                        getattr(t, "id", None),
+                        getattr(t, "order_id", None),
+                        wf_exc,
+                    )
+                    wf_status = "awaiting"
+                item = serialize_order_issue_task_list_card(
+                    db,
+                    t,
+                    o,
+                    u_short=u_short,
+                    r_pend=r_pend,
+                    workflow_status=wf_status,
+                )
+                if not order_requires_shortage_handling(db, o):
+                    mark_task_done(db, t, "Braki rozliczone — usunięto z kolejki WMS")
+                    continue
+                out.append(item)
+            except Exception as exc:
+                err_public = _public_serialize_error_message(exc)
+                snap = order_issue_task_debug_snapshot(db, t, o, workflow_status=wf_status)
+                logger.exception(
+                    "[wms.order_issue.serialize] task_id=%s order_id=%s workflow_status=%s "
+                    "relocation_required=%s archived=%s closed_at=%s error_code=%s err=%s",
+                    snap.get("task_id"),
+                    snap.get("order_id"),
+                    snap.get("workflow_status"),
+                    snap.get("relocation_required"),
+                    snap.get("archived"),
+                    snap.get("closed_at"),
+                    _SERIALIZE_ERROR_CODE,
+                    exc,
+                )
+                skipped.append(
+                    OrderIssueTaskSkippedItem(
+                        task_id=int(t.id),
+                        order_id=int(t.order_id),
+                        order_number=str((o.number if o is not None else None) or f"#{t.order_id}"),
+                        error_code=_SERIALIZE_ERROR_CODE,
+                        error_message=err_public,
+                    )
+                )
+                continue
+        serialization_ms = int((time.perf_counter() - t_serialize_start) * 1000)
+
+        try:
+            db.commit()
+        except Exception:
+            logger.exception(
+                "[wms.order_issue_tasks.fetch] commit_after_list_failed tenant_id=%s warehouse_id=%s",
+                tenant_id,
+                warehouse_id,
+            )
+            db.rollback()
+
+        if skipped:
+            logger.warning(
+                "[wms.order_issue_tasks.fetch] skipped_count=%s tenant_id=%s warehouse_id=%s returned=%s",
+                len(skipped),
+                tenant_id,
+                warehouse_id,
+                len(out),
+            )
+        try:
+            filter_counts = compute_braki_filter_counts(out)
+        except Exception:
+            logger.exception(
+                "[wms.order_issue_tasks.fetch] filter_counts_failed tenant_id=%s warehouse_id=%s",
+                tenant_id,
+                warehouse_id,
+            )
+            filter_counts = {BRAKI_FILTER_ALL: len(out)}
+        if BRAKI_FILTER_ALL not in filter_counts:
+            filter_counts[BRAKI_FILTER_ALL] = len(out)
+
+        response_ms = int((time.perf_counter() - t0) * 1000)
+        logger.info(
+            "[wms.issue_queue.performance] tenant_id=%s warehouse_id=%s total_tasks=%s returned=%s "
+            "skipped=%s db_fetch_ms=%s serialization_ms=%s response_ms=%s sql_query_count=%s full_recalc=%s",
             tenant_id,
             warehouse_id,
+            len(deduped_rows),
             len(out),
+            len(skipped),
+            db_fetch_ms,
+            serialization_ms,
+            response_ms,
+            sql_counter[0],
+            full_recalc,
         )
-    try:
-        filter_counts = compute_braki_filter_counts(out)
-    except Exception:
-        logger.exception(
-            "[wms.order_issue_tasks.fetch] filter_counts_failed tenant_id=%s warehouse_id=%s",
-            tenant_id,
-            warehouse_id,
+        return OrderIssueTaskListResponse(
+            success=True,
+            tasks=out,
+            skipped_tasks=skipped,
+            filter_counts=filter_counts,
         )
-        filter_counts = {BRAKI_FILTER_ALL: len(out)}
-    if BRAKI_FILTER_ALL not in filter_counts:
-        filter_counts[BRAKI_FILTER_ALL] = len(out)
-    return OrderIssueTaskListResponse(
-        success=True,
-        tasks=out,
-        skipped_tasks=skipped,
-        filter_counts=filter_counts,
-    )
 
 
 @router.get("/order-issue-tasks", response_model=OrderIssueTaskListResponse)
 def list_order_issue_tasks(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Query(..., ge=1),
+    sync: bool = Query(
+        False,
+        description="Pełne przeliczenie stanów braków przed listą (wolniejsze; użyj przy ręcznym odświeżeniu)",
+    ),
     db: Session = Depends(get_db),
 ):
     try:
         return _build_order_issue_tasks_list(
-            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            full_recalc=bool(sync),
         )
     except SQLAlchemyError as exc:
         db.rollback()

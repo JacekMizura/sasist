@@ -1095,15 +1095,21 @@ def sync_open_issue_tasks_for_warehouse(
     *,
     tenant_id: int,
     warehouse_id: int,
+    full_recalc: bool = False,
 ) -> None:
     """
-    Przed listą braków: ``recalculate_order_shortage_state`` dla kandydatów
-    (nierozwiązany brak, zamiennik, czeka na towar, status panelu Braki, otwarte zadanie).
-    """
-    from ..services.order_fulfillment_recompute import recalculate_order_shortage_state
+    Przed listą braków: deduplikacja OPEN zadań; opcjonalnie pełne przeliczenie stanów braków.
 
+    ``full_recalc=False`` (domyślnie przy GET listy) — szybka ścieżka bez ``recalculate_order_shortage_state``.
+    ``full_recalc=True`` — ręczne odświeżenie / skan (wszystkie kandydatury).
+    """
     purge_stale_open_order_issue_tasks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     consolidate_duplicate_open_issue_tasks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    if not full_recalc:
+        return
+
+    from ..services.order_fulfillment_recompute import recalculate_order_shortage_state
+
     cand_ids = collect_shortage_queue_candidate_order_ids(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )

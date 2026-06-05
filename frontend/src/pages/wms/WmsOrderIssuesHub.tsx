@@ -144,7 +144,7 @@ export default function WmsOrderIssuesHub() {
     return tasks.filter((t) => normalizeWorkflowStatus(t) === activeFilterId);
   }, [tasks, activeFilterId]);
 
-  const load = useCallback(() => {
+  const load = useCallback((options?: { sync?: boolean }) => {
     if (warehouseId == null) {
       setTasks([]);
       setFilterCounts({});
@@ -153,7 +153,7 @@ export default function WmsOrderIssuesHub() {
     }
     setLoading(true);
     setErr(null);
-    listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId)
+    listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId, { sync: options?.sync })
       .then((res) => {
         setTasks(res.tasks);
         setFilterCounts(res.filter_counts ?? {});
@@ -265,7 +265,7 @@ export default function WmsOrderIssuesHub() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => void load()}
+            onClick={() => void load({ sync: true })}
             className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-95 md:px-4"
           >
             <i className="fa-solid fa-rotate-right text-lg text-slate-500 md:text-sm"></i>
@@ -319,7 +319,7 @@ export default function WmsOrderIssuesHub() {
             <p className="font-semibold">{err}</p>
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => void load({ sync: true })}
               className="mt-2 text-xs font-bold uppercase tracking-wide text-amber-900 underline"
             >
               Spróbuj ponownie
@@ -372,8 +372,12 @@ export default function WmsOrderIssuesHub() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
             {filteredTasks.map((t) => {
               const sl = shortageLinesForCard(t);
-              const lineCount = sl.length;
-              const totalMissing = sl.reduce((s, l) => s + (Number(l.missing_qty) || 0), 0);
+              const uShort = t.unresolved_shortage_count ?? 0;
+              const lineCount = sl.length > 0 ? sl.length : Math.max(0, uShort);
+              const totalMissing =
+                sl.length > 0
+                  ? sl.reduce((s, l) => s + (Number(l.missing_qty) || 0), 0)
+                  : uShort;
               const r = t.replacement_pick_pending_count ?? 0;
               const num = displayOrderNumber(t.order_number).replace("#", "");
               const wf = normalizeWorkflowStatus(t);

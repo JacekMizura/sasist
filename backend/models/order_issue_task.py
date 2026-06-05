@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
 
 from ..database import Base
 
 
 class OrderIssueTask(Base):
     __tablename__ = "order_issue_tasks"
+    __table_args__ = (
+        Index("ix_order_issue_tasks_tenant_wh_status", "tenant_id", "warehouse_id", "status"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
