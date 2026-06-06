@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 
+import { DirectSalesUnavailable } from "../../../components/operational/fallbacks/DirectSalesUnavailable";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { useOperationalRuntime } from "../../../hooks/runtime/useOperationalRuntime";
 import { CheckoutPanel } from "./components/CheckoutPanel";
@@ -17,7 +18,9 @@ export default function DirectSalesPage() {
   const warehouseId = warehouse?.id ?? null;
   const runtime = useOperationalRuntime();
   const [issueFlash, setIssueFlash] = useState(false);
-  const { stockSnap, lastProductId, refreshStock, clearStock } = useLocationStock(warehouseId);
+  const { stockSnap, refreshStock, clearStock } = useLocationStock(warehouseId, runtime.subscribe);
+
+  const salesEnabled = runtime.featuresLoaded && runtime.directSalesEnabled;
 
   const onProductAdded = useCallback(
     (productId: number) => {
@@ -26,8 +29,16 @@ export default function DirectSalesPage() {
     [refreshStock, stockSnap?.revision],
   );
 
-  const sessionState = useDirectSalesSession({ warehouseId, onProductAdded });
-  const productSearch = useProductSearch({ warehouseId, enabled: !sessionState.busy });
+  const sessionState = useDirectSalesSession({
+    warehouseId,
+    onProductAdded,
+    enabled: salesEnabled,
+  });
+  const productSearch = useProductSearch({
+    warehouseId,
+    enabled: salesEnabled && !sessionState.unavailable,
+    searchEnabled: runtime.directSalesSearchEnabled,
+  });
   const customer = useDirectSalesCustomer({
     sessionId: sessionState.session?.id ?? null,
     customerId: sessionState.session?.customer_id ?? null,
@@ -50,8 +61,25 @@ export default function DirectSalesPage() {
     productSearch.clear();
   }, [sessionState, clearStock, productSearch]);
 
+  const handleRefresh = useCallback(() => {
+    sessionState.resetAvailability();
+    void runtime.refreshFeatures();
+  }, [runtime, sessionState]);
+
   if (warehouseId == null) {
     return <div className="p-4 text-slate-600">Wybierz magazyn, aby rozpocząć sprzedaż bezpośrednią.</div>;
+  }
+
+  if (runtime.featuresLoaded && (!salesEnabled || sessionState.unavailable)) {
+    return <DirectSalesUnavailable onRefresh={handleRefresh} />;
+  }
+
+  if (!runtime.featuresLoaded) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-sm text-slate-500">
+        Sprawdzanie dostępności modułu…
+      </div>
+    );
   }
 
   return (

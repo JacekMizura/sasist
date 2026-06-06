@@ -3,6 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractApiErrorMessage } from "../../../../api/apiErrorMessage";
 import { useWmsScanner } from "../../../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../../../../constants/panelTenant";
+import {
+  classifyAxiosOperationalError,
+  handleOperationalApiError,
+  isOperationalUnavailableStatus,
+  OPERATIONAL_ENDPOINTS,
+} from "../../../../services/operational/operationalFeatureGuard";
 import { safeTrim } from "../../../../utils/safeStrings";
 import type { DirectSaleCompleteResult } from "../services/directSalesApi";
 import { lineTotal } from "../utils/lineTotal";
@@ -24,9 +30,22 @@ export type DocumentSubtype = "RECEIPT" | "INVOICE";
 type UseDirectSalesSessionArgs = {
   warehouseId: number | null;
   onProductAdded: (productId: number) => void;
+  enabled?: boolean;
 };
 
-export function useDirectSalesSession({ warehouseId, onProductAdded }: UseDirectSalesSessionArgs) {
+function friendlyError(err: unknown): string {
+  const status = classifyAxiosOperationalError(err);
+  if (isOperationalUnavailableStatus(status)) {
+    return "Sprzedaż bezpośrednia jest obecnie niedostępna.";
+  }
+  return extractApiErrorMessage(err);
+}
+
+export function useDirectSalesSession({
+  warehouseId,
+  onProductAdded,
+  enabled = true,
+}: UseDirectSalesSessionArgs) {
   const {
     scannerInputValue,
     setScannerInputPlaceholder,
@@ -42,7 +61,9 @@ export function useDirectSalesSession({ warehouseId, onProductAdded }: UseDirect
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [documentSubtype, setDocumentSubtype] = useState<DocumentSubtype>("RECEIPT");
   const [lastComplete, setLastComplete] = useState<DirectSaleCompleteResult | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const scanBusyRef = useRef(false);
+  const initRef = useRef(false);
 
   const total = useMemo(
     () => (session?.lines ?? []).reduce((sum, ln) => sum + lineTotal(ln), 0),
@@ -75,9 +96,18 @@ export function useDirectSalesSession({ warehouseId, onProductAdded }: UseDirect
   }, [busy, setScannerInputDisabled, setScannerInputPlaceholder]);
 
   useEffect(() => {
-    if (warehouseId == null) return;
-    void ensureSession().catch((e) => setError(extractApiErrorMessage(e)));
-  }, [warehouseId, ensureSession]);
+    if (!enabled || warehouseId == null) {
+      initRef.current = false;
+      return;
+    }
+    if (initRef.current) return;
+    initRef.current = true;
+    void ensureSession().catch((e) => {
+      handleOperationalApiError(e, OPERATIONAL_ENDPOINTS.DIRECT_SALES_SESSION);
+      setUnavailable(true);
+      setError(null);
+    });
+  }, [enabled, warehouseId, ensureSession]);
 
   const addByCode = useCallback(
     async (raw: string, sourceLocationId?: number | null) => {
@@ -98,9 +128,15 @@ export function useDirectSalesSession({ warehouseId, onProductAdded }: UseDirect
         onProductAdded(result.product_id);
         showScannerToast(`+ ${code}`, "success");
       } catch (e) {
-        const msg = extractApiErrorMessage(e);
-        setError(msg);
-        showScannerToast(msg, "error");
+        handleOperationalApiError(e, OPERATIONAL_ENDPOINTS.DIRECT_SALES_SESSION);
+        const msg = friendlyError(e);
+        if (isOperationalUnavailableStatus(classifyAxiosOperationalError(e))) {
+          setUnavailable(true);
+          setError(null);
+        } else {
+          setError(msg);
+          showScannerToast(msg, "error");
+        }
       } finally {
         setBusy(false);
         refocusScannerInput();
@@ -299,6 +335,7 @@ export function useDirectSalesSession({ warehouseId, onProductAdded }: UseDirect
   return {
     session,
     busy,
+    unavailable,
     error,
     total,
     paymentMethod,
@@ -317,5 +354,10 @@ export function useDirectSalesSession({ warehouseId, onProductAdded }: UseDirect
     suspend,
     startNewSession,
     clearLastComplete: () => setLastComplete(null),
+    resetAvailability: () => {
+      setUnavailable(false);
+      initRef.current = false;
+      setError(null);
+    },
   };
 }

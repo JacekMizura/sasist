@@ -14,7 +14,7 @@ export default function OperationsAlertsPage() {
       </header>
       {!runtimeAvailable ? (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Alerty na żywo wymagają włączonego centrum operacyjnego. Klasyczny WMS bez zmian.
+          Operacje live są obecnie niedostępne. Klasyczny WMS działa bez zmian.
         </p>
       ) : null}
       <AlertsFeed

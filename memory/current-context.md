@@ -14,6 +14,8 @@
 
 - **Operational safety hardening (2026-06-05):** `OperationalFeaturesContext` request-scoped (global→tenant→warehouse). Tabela `operational_feature_scopes`. Logi `[wms.eligibility]`, `[direct-sales.complete]`, `[order.operational-mode]`. Snapshot tests `test_wms_eligibility_snapshots.py`. NULL legacy permanent. Classic WMS wins on conflict.
 
+- **Operational stabilization (2026-06-04):** `GET /api/operational/features` capability probe. Frontend `operationalFeatureGuard.ts` — cache flags, block endpoints after 404/403, single `console.warn`. Direct sales + search graceful fallback UI. SSE → polling → off (no reconnect storm); token in stream URL; duplicate location-stock stream removed. Classic WMS untouched.
+
 - **Operations UX Phase 5A (2026-06-04):** `/wms/operations` → **Pulpit** (KPI, „Wymaga reakcji”, strefy, Puls magazynu). Pełne tłumaczenie PL (`services/operations/operationsTerminology.ts`). Uzupełnienia: kolumny operator-friendly, modal skanerowy 4 kroki. Zadania: Kanban PL. Operatorzy: `OperatorTable`. Alerty: `AlertsFeed` z CTA. Bez języka runtime/SSE/feature flags w UI. Frontend-only; classic WMS nietknięty.
 
 - **Direct Sales terminal UX (2026-06-04):** `/wms/direct-sales` — 3-kolumnowy terminal operatora: `ProductSearchPanel` (skan + debounced `GET /direct-sales/products/search`), `SessionLinesPanel` (qty ±, lokacja, rezerwacja), `CheckoutPanel` (klient, PA/FV, płatność, `SessionSummaryBar` bez reload). API: add-product, PATCH/DELETE lines, enriched session lines, `payment_context`. Komponenty ≤250 LOC; `normalizeDirectSales.ts` na granicy API.

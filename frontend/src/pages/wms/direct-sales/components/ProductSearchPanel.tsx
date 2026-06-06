@@ -108,16 +108,18 @@ export function ProductSearchPanel({ session, search, busy, error, onAddProduct,
             ref={inputRef}
             type="search"
             autoComplete="off"
-            disabled={busy}
+            disabled={busy || search.disabled}
             value={search.query}
             onChange={(e) => search.setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-200"
-            placeholder="Skan lub wpisz…"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-200 disabled:bg-slate-50 disabled:text-slate-400"
+            placeholder={search.disabled ? "Wyszukiwanie niedostępne" : "Skan lub wpisz…"}
           />
         </label>
+        {search.disabled ? (
+          <p className="mt-1 text-[10px] text-slate-500">Wyszukiwanie produktów tymczasowo wyłączone.</p>
+        ) : null}
         {search.loading ? <p className="mt-1 text-[10px] text-slate-400">Szukam…</p> : null}
-        {search.error ? <p className="mt-1 text-xs text-amber-700">{search.error}</p> : null}
         {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
       </div>
       {search.open ? (

@@ -1,38 +1,48 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { extractApiErrorMessage } from "../../../../api/apiErrorMessage";
 import { DAMAGE_TENANT_ID } from "../../../../constants/panelTenant";
+import {
+  handleOperationalApiError,
+  isEndpointBlocked,
+  OPERATIONAL_ENDPOINTS,
+} from "../../../../services/operational/operationalFeatureGuard";
 import { safeTrim } from "../../../../utils/safeStrings";
 import {
   searchDirectSaleProducts,
   type DirectSaleProductSearchHit,
 } from "../services/directSalesApi";
 
-const DEBOUNCE_MS = 120;
+const DEBOUNCE_MS = 300;
 
 type Args = {
   warehouseId: number | null;
   enabled?: boolean;
+  searchEnabled?: boolean;
 };
 
-export function useProductSearch({ warehouseId, enabled = true }: Args) {
+export function useProductSearch({ warehouseId, enabled = true, searchEnabled = true }: Args) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<DirectSaleProductSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [disabled, setDisabled] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const reqId = useRef(0);
+
+  const canSearch =
+    enabled &&
+    searchEnabled &&
+    !disabled &&
+    !isEndpointBlocked(OPERATIONAL_ENDPOINTS.DIRECT_SALES_SEARCH);
 
   const clear = useCallback(() => {
     setQuery("");
     setHits([]);
     setActiveIndex(-1);
-    setError(null);
   }, []);
 
   useEffect(() => {
     const q = safeTrim(query);
-    if (!enabled || warehouseId == null || q.length < 1) {
+    if (!canSearch || warehouseId == null || q.length < 1) {
       setHits([]);
       setLoading(false);
       setActiveIndex(-1);
@@ -51,13 +61,13 @@ export function useProductSearch({ warehouseId, enabled = true }: Args) {
           if (reqId.current !== id) return;
           setHits(rows);
           setActiveIndex(rows.length ? 0 : -1);
-          setError(null);
         })
-        .catch((e) => {
+        .catch((err) => {
           if (reqId.current !== id) return;
+          handleOperationalApiError(err, OPERATIONAL_ENDPOINTS.DIRECT_SALES_SEARCH);
           setHits([]);
           setActiveIndex(-1);
-          setError(extractApiErrorMessage(e));
+          setDisabled(true);
         })
         .finally(() => {
           if (reqId.current === id) setLoading(false);
@@ -65,7 +75,7 @@ export function useProductSearch({ warehouseId, enabled = true }: Args) {
     }, DEBOUNCE_MS);
 
     return () => window.clearTimeout(t);
-  }, [query, warehouseId, enabled]);
+  }, [query, warehouseId, canSearch]);
 
   const moveActive = useCallback(
     (delta: number) => {
@@ -85,11 +95,11 @@ export function useProductSearch({ warehouseId, enabled = true }: Args) {
     setQuery,
     hits,
     loading,
-    error,
+    disabled: disabled || !searchEnabled,
     activeIndex,
     setActiveIndex,
     moveActive,
     clear,
-    open: safeTrim(query).length > 0,
+    open: canSearch && safeTrim(query).length > 0,
   };
 }

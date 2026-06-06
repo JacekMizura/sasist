@@ -202,13 +202,27 @@ async def sse_live_stream(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Query(..., ge=1),
     since_id: int = Query(0, ge=0),
+    access_token: str | None = Query(None, description="Bearer token for EventSource (no custom headers)"),
     db: Session = Depends(get_db),
 ):
+    if access_token:
+        from ..auth.tokens import decode_access_token
+
+        try:
+            payload = decode_access_token(access_token)
+            if payload.get("typ") != "access":
+                raise ValueError("wrong token type")
+        except Exception as exc:
+            raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
     _require_runtime(db, tenant_id, warehouse_id)
     from ..database import SessionLocal
 
     return StreamingResponse(
         _sse_generator(SessionLocal, tenant_id, warehouse_id, since_id),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

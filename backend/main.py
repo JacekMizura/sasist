@@ -287,6 +287,7 @@ from .api.direct_sales import router as direct_sales_router
 from .api.document_generation_jobs import router as document_generation_jobs_router
 from .api.operational_pickup import router as operational_pickup_router
 from .api.operational_workstations import router as operational_workstations_router
+from .api.operational_features import router as operational_features_router
 from .api.operational_runtime import router as operational_runtime_router
 from .api.operational_replenishment import router as operational_replenishment_router
 from .api.operational_alerts import router as operational_alerts_router
@@ -383,6 +384,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Type", "Cache-Control", "Connection"],
 )
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1428,6 +1430,7 @@ _API_ROUTERS = (
     document_generation_jobs_router,
     operational_pickup_router,
     operational_workstations_router,
+    operational_features_router,
     operational_runtime_router,
     operational_replenishment_router,
     operational_alerts_router,

@@ -12,7 +12,7 @@ export default function OperationsOperatorsPage() {
       </header>
       {!runtimeAvailable ? (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Podgląd operatorów może być niepełny w trybie offline.
+          Połączenie live niedostępne — dane operatorów mogą być niepełne.
         </p>
       ) : null}
       <OperatorTable self={selfSnapshot} peers={peers} />

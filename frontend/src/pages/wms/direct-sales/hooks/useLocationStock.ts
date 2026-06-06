@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { useOperationalLiveStream } from "../../../../hooks/useOperationalLiveStream";
-import { fetchLocationStock, type LocationStockSnapshot } from "../services/locationStockApi";
+import type { LiveEvent } from "../../../../api/operationalRuntimeApi";
 import { DAMAGE_TENANT_ID } from "../../../../constants/panelTenant";
+import { fetchLocationStock, type LocationStockSnapshot } from "../services/locationStockApi";
 
-export function useLocationStock(warehouseId: number | null) {
+type SubscribeFn = (handler: (ev: LiveEvent) => void) => () => void;
+
+export function useLocationStock(warehouseId: number | null, subscribe?: SubscribeFn) {
   const [stockSnap, setStockSnap] = useState<LocationStockSnapshot | null>(null);
   const [lastProductId, setLastProductId] = useState<number | null>(null);
 
@@ -33,16 +35,10 @@ export function useLocationStock(warehouseId: number | null) {
     setLastProductId(null);
   }, []);
 
-  const { subscribe } = useOperationalLiveStream({
-    tenantId: DAMAGE_TENANT_ID,
-    warehouseId,
-    enabled: warehouseId != null,
-    eventTypes: ["stock.changed", "replenishment.alert"],
-    useSse: true,
-  });
-
   useEffect(() => {
+    if (!subscribe) return;
     return subscribe((ev) => {
+      if (ev.event_type !== "stock.changed" && ev.event_type !== "replenishment.alert") return;
       const pid = ev.payload?.product_id;
       if (typeof pid !== "number" || lastProductId == null || pid !== lastProductId) return;
       void refreshStock(pid, typeof ev.revision === "string" ? ev.revision : stockSnap?.revision);
