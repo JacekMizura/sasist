@@ -451,6 +451,11 @@ async def pdf_generation_unavailable_handler(request: Request, exc: PdfGeneratio
     return response
 
 
+def _is_direct_sales_complete_path(path: str) -> bool:
+    norm = (path or "").rstrip("/").lower()
+    return "/direct-sales/session/" in norm and norm.endswith("/complete")
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     print(
@@ -458,9 +463,27 @@ async def global_exception_handler(request: Request, exc: Exception):
         f"{type(exc).__name__}: {exc}",
         flush=True,
     )
+    print(traceback.format_exc(), flush=True)
     try:
         await record_error(request, exc)
-        response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        if _is_direct_sales_complete_path(request.url.path):
+            from .services.direct_sale.complete_debug_log import sqlalchemy_exception_details
+
+            details = sqlalchemy_exception_details(exc)
+            content = {
+                "error": "DIRECT_SALE_COMPLETE_FAILED",
+                "error_type": details["error_type"],
+                "message": details["message"],
+                "stage": "global_exception_handler",
+                "traceback": traceback.format_exc(),
+                "code": details["error_type"],
+                "path": request.url.path,
+            }
+            if details.get("orig_message"):
+                content["sqlalchemy_orig"] = details["orig_message"]
+            response = JSONResponse(status_code=500, content=content)
+        else:
+            response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
         for k, v in _cors_headers_for_request(request).items():
             response.headers[k] = v
         return response

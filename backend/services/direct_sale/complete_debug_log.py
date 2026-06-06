@@ -96,6 +96,66 @@ def log_unhandled_complete_exception(
     return tb
 
 
+def real_failure_json_response(
+    exc: BaseException,
+    *,
+    stage: str,
+    session_id: int | None = None,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+    traceback_str: str | None = None,
+):
+    """
+    TEMP debug: flat JSON body — never wrapped in HTTPException/detail/SESSION_INVALID.
+    Import JSONResponse at call site to avoid circular imports.
+    """
+    from starlette.responses import JSONResponse
+
+    tb = traceback_str or traceback.format_exc()
+    details = sqlalchemy_exception_details(exc)
+    log_unhandled_complete_exception(
+        exc,
+        session_id=session_id,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        stage=stage,
+        context="real_failure_json_response",
+    )
+    logger.exception(
+        "[direct_sales.complete] REAL FAILURE stage=%s session_id=%s",
+        stage,
+        session_id,
+    )
+    logger.error("[direct_sales.complete] REAL FAILURE TRACEBACK\n%s", tb)
+
+    content: dict[str, Any] = {
+        "error": "DIRECT_SALE_COMPLETE_FAILED",
+        "error_type": details["error_type"],
+        "message": details["message"],
+        "stage": stage,
+        "traceback": tb,
+        "code": details["error_type"],
+    }
+    if session_id is not None:
+        content["session_id"] = session_id
+    if details.get("orig_message"):
+        content["sqlalchemy_orig"] = details["orig_message"]
+    if details.get("orig_type"):
+        content["sqlalchemy_orig_type"] = details["orig_type"]
+    if details.get("repr"):
+        content["repr"] = details["repr"]
+    if details.get("cause_message"):
+        content["cause_message"] = details["cause_message"]
+    if details.get("cause_orig"):
+        content["cause_orig"] = details["cause_orig"]
+
+    response = JSONResponse(status_code=500, content=content)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+
 def build_debug_error_detail(
     exc: BaseException,
     *,

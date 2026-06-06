@@ -153,9 +153,17 @@ export function parseCompleteError(err: unknown): DirectSaleCompleteError {
   let step: string | null = null;
   let detailObj: Record<string, unknown> | null = null;
   if (err && typeof err === "object" && "response" in err) {
-    const ax = err as { response?: { data?: { detail?: unknown } } };
-    const detail = ax.response?.data?.detail;
-    if (typeof detail === "string") message = detail;
+    const ax = err as { response?: { data?: Record<string, unknown> } };
+    const data = ax.response?.data;
+    const detail = data?.detail;
+    const flat =
+      data && typeof data.error_type === "string" && typeof data.message === "string" ? data : null;
+    if (flat) {
+      detailObj = flat;
+      message = String(flat.message);
+      code = String(flat.error_type ?? flat.code ?? "");
+      if (typeof flat.stage === "string") step = flat.stage;
+    } else if (typeof detail === "string") message = detail;
     else if (detail && typeof detail === "object") {
       detailObj = detail as Record<string, unknown>;
       if (typeof detailObj.message === "string") message = detailObj.message;

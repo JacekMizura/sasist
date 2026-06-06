@@ -526,7 +526,7 @@ def post_session_start_payment(
         raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
 
 
-@router.post("/session/{session_id}/complete", response_model=DirectSaleCompleteResponse)
+@router.post("/session/{session_id}/complete")
 def post_session_complete(
     session_id: int,
     body: DirectSaleCompleteBody,
@@ -534,27 +534,31 @@ def post_session_complete(
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
+    """
+    TEMP: no response_model — errors return flat JSONResponse with real traceback.
+    Success returns DirectSaleCompleteResponse JSON.
+    """
     from ..services.direct_sale.complete_debug_log import (
-        build_debug_error_detail,
         commit_with_logging,
-        log_unhandled_complete_exception,
+        real_failure_json_response,
     )
+
     _complete_log = logging.getLogger(__name__)
     warehouse_id: int | None = None
-    sess = get_session_for_complete(db, session_id=session_id, tenant_id=tenant_id)
-    if sess is None:
-        raise HTTPException(status_code=404, detail="Direct sale session not found.")
-    warehouse_id = int(sess.warehouse_id)
     current_step = "validation"
-    _complete_log.info(
-        "[direct-sales.complete.validation] session_id=%s tenant_id=%s warehouse_id=%s status=%s lines=%s",
-        session_id,
-        tenant_id,
-        warehouse_id,
-        sess.status,
-        len(sess.lines or []),
-    )
     try:
+        sess = get_session_for_complete(db, session_id=session_id, tenant_id=tenant_id)
+        if sess is None:
+            raise HTTPException(status_code=404, detail="Direct sale session not found.")
+        warehouse_id = int(sess.warehouse_id)
+        _complete_log.info(
+            "[direct-sales.complete.validation] session_id=%s tenant_id=%s warehouse_id=%s status=%s lines=%s",
+            session_id,
+            tenant_id,
+            warehouse_id,
+            sess.status,
+            len(sess.lines or []),
+        )
         splits = None
         if body.payment_splits:
             splits = [{"method": s.method, "amount": float(s.amount)} for s in body.payment_splits]
@@ -578,14 +582,6 @@ def post_session_complete(
                     warehouse_id=warehouse_id,
                 )
             except Exception as commit_exc:
-                tb = log_unhandled_complete_exception(
-                    commit_exc,
-                    session_id=session_id,
-                    tenant_id=tenant_id,
-                    warehouse_id=warehouse_id,
-                    stage="commit",
-                    context="api_late_commit",
-                )
                 sess_reloaded = get_session(db, session_id=session_id, tenant_id=tenant_id)
                 replay = try_idempotent_complete_result(db, sess_reloaded) if sess_reloaded else None
                 if replay is not None:
@@ -604,10 +600,13 @@ def post_session_complete(
                     )
                     result = replay
                 else:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=build_debug_error_detail(commit_exc, stage="commit", traceback_str=tb),
-                    ) from commit_exc
+                    return real_failure_json_response(
+                        commit_exc,
+                        stage="commit",
+                        session_id=session_id,
+                        tenant_id=tenant_id,
+                        warehouse_id=warehouse_id,
+                    )
         current_step = "response"
         completion = None
         completion_read = None
@@ -616,21 +615,13 @@ def post_session_complete(
             if completion_read:
                 completion = DirectSaleCompletionRead(**completion_read)
         except Exception as read_exc:
-            log_unhandled_complete_exception(
-                read_exc,
-                session_id=session_id,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-                stage="response",
-                context="completion_read",
-            )
             _complete_log.warning(
                 "[direct-sales.complete.error] session_id=%s step=response read_model_failed=%s traceback=%s",
                 session_id,
                 read_exc,
                 traceback.format_exc(),
             )
-        return DirectSaleCompleteResponse(
+        payload = DirectSaleCompleteResponse(
             session_id=result.session_id,
             order_id=result.order_id,
             payment_id=result.payment_id,
@@ -641,44 +632,40 @@ def post_session_complete(
             payment_method=result.payment_method,
             completion=completion,
         )
-    except HTTPException:
-        raise
-    except DirectSaleError as exc:
-        step = getattr(exc, "step", None) or current_step
-        cause = exc.__cause__
-        _complete_log.error(
-            "[direct_sales.complete] DirectSaleError session_id=%s stage=%s code=%s message=%s cause=%s traceback=%s",
-            session_id,
-            step,
-            getattr(exc, "code", None),
-            exc.message,
-            f"{type(cause).__name__}: {cause}" if cause else None,
-            traceback.format_exc(),
-        )
-        raise HTTPException(
-            status_code=exc.http_status,
-            detail={
-                "error": "DIRECT_SALE_COMPLETE_FAILED",
-                "stage": step,
-                "step": step,
-                "error_type": type(cause).__name__ if cause else "DirectSaleError",
-                "message": str(cause) if cause else exc.message,
-                "code": getattr(exc, "code", None),
-            },
-        ) from exc
-    except Exception as exc:
-        tb = log_unhandled_complete_exception(
-            exc,
+        return payload
+    except HTTPException as http_exc:
+        if isinstance(http_exc.detail, dict):
+            return real_failure_json_response(
+                Exception(str(http_exc.detail.get("message") or http_exc.detail)),
+                stage=current_step,
+                session_id=session_id,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+            )
+        return real_failure_json_response(
+            Exception(str(http_exc.detail)),
+            stage=current_step,
             session_id=session_id,
             tenant_id=tenant_id,
             warehouse_id=warehouse_id,
-            stage=current_step,
-            context="api_complete",
         )
-        raise HTTPException(
-            status_code=500,
-            detail=build_debug_error_detail(exc, stage=current_step, traceback_str=tb),
-        ) from exc
+    except DirectSaleError as exc:
+        root = exc.__cause__ or exc
+        return real_failure_json_response(
+            root,
+            stage=getattr(exc, "step", None) or current_step,
+            session_id=session_id,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+        )
+    except Exception as exc:
+        return real_failure_json_response(
+            exc,
+            stage=current_step,
+            session_id=session_id,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+        )
 
 
 @router.post("/documents/{job_id}/reprint")

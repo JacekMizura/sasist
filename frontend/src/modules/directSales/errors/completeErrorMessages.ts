@@ -43,9 +43,9 @@ export function resolveCompleteOperatorMessage(error: DirectSaleCompleteError): 
   const message =
     CODE_MESSAGES[error.code ?? ""] ??
     CODE_MESSAGES[code] ??
-    (error.message && !/internal server error/i.test(error.message)
+    (error.message && error.message.trim().length > 0
       ? error.message
-      : CODE_MESSAGES.SESSION_INVALID);
+      : "Nie udało się zakończyć sprzedaży — brak szczegółów błędu z serwera.");
 
   const titles: Record<DirectSaleCompleteError["phase"], string> = {
     payment: "Błąd płatności",
