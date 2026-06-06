@@ -4,7 +4,8 @@ import api from "../api/axios";
 import { warn } from "../utils/logger";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
-import { activeBinsForRack, formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid, assignUniqueRackNamesToNewRacks, validateAllRackNamesInLayout, getProposedFirstRackLabelForStampFromCatalog, normalizeRowPrefixLetters, generateRackNames, validateGeneratedRackNames, countPlaceRowWithTemplateRacks, countEmptyRowSlotsInDraw, catalogItemTemplateKey, catalogItemFromTemplateKey, rowContainerTemplateIdFromCatalogItem, rackMatchesSlotRackId } from "../components/warehouse/warehouseUtils";
+import { activeBinsForRack, formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, getNextRackIndex, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid, assignUniqueRackNamesToNewRacks, validateAllRackNamesInLayout, validateLayoutEntityIntegrity, getProposedFirstRackLabelForStampFromCatalog, normalizeRowPrefixLetters, generateRackNames, validateGeneratedRackNames, countPlaceRowWithTemplateRacks, countEmptyRowSlotsInDraw, catalogItemTemplateKey, catalogItemFromTemplateKey, rowContainerTemplateIdFromCatalogItem, rackMatchesSlotRackId } from "../components/warehouse/warehouseUtils";
+import { logLayoutRackHydrate, logLayoutRackPersist } from "../components/warehouse/layoutRackLog";
 import {
   aisleHalfWidthCellsFromCm,
   collectPackingCentersCells,
@@ -1417,7 +1418,7 @@ export default function WarehouseDesigner() {
       const building_width_m = d.building_width_m != null && Number(d.building_width_m) > 0 ? Number(d.building_width_m) : undefined;
       const building_depth_m = d.building_depth_m != null && Number(d.building_depth_m) > 0 ? Number(d.building_depth_m) : (d.building_height_m != null && Number(d.building_height_m) > 0 ? Number(d.building_height_m) : undefined);
       const building_height_m = d.building_height_m != null && Number(d.building_height_m) >= 0 ? Number(d.building_height_m) : undefined;
-      setLayout(clampGridToBuilding({
+      const nextLayout = clampGridToBuilding({
         layout_id: d.layout_id ?? null,
         warehouse_id: d.warehouse_id ?? warehouseId,
         warehouse_name: d.warehouse_name ?? "",
@@ -1532,7 +1533,9 @@ export default function WarehouseDesigner() {
               gateType: we.gateType === "courier" || we.gateType === "supplier" || we.gateType === "both" ? we.gateType : undefined,
             }))
           : [],
-      }));
+      });
+      logLayoutRackHydrate(nextLayout.racks);
+      setLayout(nextLayout);
       // Sync product–location assignments from API so map shows products in correct slots
       const racksFromRes = (d.racks || []) as Array<{ bins?: Array<{ locationUUID?: string; location_uuid?: string; label?: string; location_id?: string }> }>;
       const resolveLabel = (locationUUID: string): string | null => {
@@ -1843,7 +1846,7 @@ export default function WarehouseDesigner() {
       ...prev,
       racks: [
         ...prev.racks,
-        ...assignUniqueRackNamesToNewRacks(duplicateRacksAtPosition([copiedRack], cell, prev.racks.length + 1), prev),
+        ...assignUniqueRackNamesToNewRacks(duplicateRacksAtPosition([copiedRack], cell, getNextRackIndex(prev.racks)), prev),
       ],
     }));
     setCopyPlacementMode(false);
@@ -2018,6 +2021,15 @@ export default function WarehouseDesigner() {
   const saveLayout = useCallback(async () => {
     const whId = selectedWarehouseId ?? layout.warehouse_id;
     if (whId == null) return;
+    const { valid: integrityValid, errors: integrityErrors } = validateLayoutEntityIntegrity(layout);
+    if (!integrityValid) {
+      const msg =
+        integrityErrors.length === 1
+          ? `Nie można zapisać układu — ${integrityErrors[0]}`
+          : `Nie można zapisać układu — ${integrityErrors.join(" · ")}`;
+      setSnackbar({ message: msg });
+      return;
+    }
     const { valid: layoutNamesValid, errors: layoutNameErrors } = validateAllRackNamesInLayout(layout);
     if (!layoutNamesValid) {
       const msg =
@@ -2050,7 +2062,7 @@ export default function WarehouseDesigner() {
         racks: layout.racks.map((r) => ({
           id: r.id,
           uuid: r.uuid ?? generateRackUuid(),
-          rack_type: r.rack_type ?? "warehouse",
+          rack_type: r.rack_type === "store" ? "store" : "warehouse",
           name: (r.name ?? "").trim() || getRackDisplayIdWithLayout(r),
           x: r.x,
           y: r.y,
@@ -2108,6 +2120,7 @@ export default function WarehouseDesigner() {
 
       await api.put(`/warehouse/${whId}/layout`, validated.payload, { params: { tenant_id: TENANT_ID } });
       setLastSavedAt(Date.now());
+      logLayoutRackPersist(layout.racks);
       for (const { rack_id, name } of rackNamesForPersistLog) {
         if (name) {
           logRackRename({ rack_id, old_name: name, new_name: name, persisted: true });

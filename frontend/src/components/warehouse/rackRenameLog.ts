@@ -1,3 +1,5 @@
+import { logLayoutRackRename } from "./layoutRackLog";
+
 /** Dev/staging log for rack rename persistence (layout designer). */
 export function logRackRename(payload: {
   rack_id: number | string;
@@ -5,5 +7,5 @@ export function logRackRename(payload: {
   new_name: string | null;
   persisted: boolean;
 }): void {
-  console.info("[rack.rename]", payload);
+  logLayoutRackRename({ ...payload, persisted: payload.persisted });
 }

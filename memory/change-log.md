@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-04 — Layout editor state corruption fix
+
+- `reindexGeometricRow` no longer overwrites rack names or regenerates bins (root cause of cross-rack mutation).
+- Stable rack identity: `rackEntityKey`, `getNextRackIndex`, integrity validation before save.
+- `rack_type` persisted explicitly (`store`/`warehouse`) through save payload + hydrate logs.
+
 ## 2026-06-04 — Rack editor sidebar UX + save flow
 
 - Rack name persists via layout state + PUT payload; `[rack.rename]` logging (local + persisted on save).

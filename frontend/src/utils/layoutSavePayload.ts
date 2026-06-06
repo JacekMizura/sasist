@@ -116,6 +116,7 @@ function coerceLayoutNumerics(payload: Record<string, unknown>): void {
     rack.levels = Math.round(finiteNum(rack.levels, 1));
     rack.bins_per_level = Math.round(finiteNum(rack.bins_per_level, 1));
     rack.rack_index = Math.round(finiteNum(rack.rack_index, 1));
+    rack.rack_type = rack.rack_type === "store" ? "store" : "warehouse";
     rack.length_cm = finiteNum(rack.length_cm, 80);
     rack.width_cm = finiteNum(rack.width_cm, 120);
     rack.height_cm = finiteNum(rack.height_cm, 200);
@@ -184,6 +185,28 @@ export function validateAndSanitizeLayoutPayload(payload: Record<string, unknown
   }
   if (!Array.isArray(cleaned.row_containers)) {
     return { ok: false, errors: ["row_containers must be an array after sanitize"] };
+  }
+
+  const rackIntegrityErrors: string[] = [];
+  const seenUuids = new Set<string>();
+  const seenNames = new Set<string>();
+  for (const r of cleaned.racks as Record<string, unknown>[]) {
+    if (!r || typeof r !== "object") continue;
+    const uuid = typeof r.uuid === "string" ? r.uuid.trim() : "";
+    if (!uuid) rackIntegrityErrors.push("regał bez uuid w payloadzie zapisu");
+    else if (seenUuids.has(uuid)) rackIntegrityErrors.push(`zduplikowany uuid regału: ${uuid}`);
+    else seenUuids.add(uuid);
+    const name = typeof r.name === "string" ? r.name.trim().toLowerCase() : "";
+    if (name) {
+      if (seenNames.has(name)) rackIntegrityErrors.push(`zduplikowana nazwa regału: ${r.name}`);
+      else seenNames.add(name);
+    }
+    if (r.rack_type !== "warehouse" && r.rack_type !== "store") {
+      rackIntegrityErrors.push(`nieprawidłowy rack_type: ${String(r.rack_type)}`);
+    }
+  }
+  if (rackIntegrityErrors.length) {
+    return { ok: false, errors: rackIntegrityErrors };
   }
 
   return { ok: true, payload: cleaned };

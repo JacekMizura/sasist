@@ -261,6 +261,82 @@ export function rackMatchesSlotRackId(
   return String(rack.id ?? rack.rack_index) === s;
 }
 
+/** Stable identity key for React keys, maps, and integrity checks (never array index). */
+export function rackEntityKey(rack: RackState): string {
+  if (rack.uuid != null && String(rack.uuid).trim() !== "") return `uuid:${rack.uuid}`;
+  if (rack.id != null) return `id:${rack.id}`;
+  return `idx:${rack.rack_index}`;
+}
+
+/** Next monotonic rack_index — avoids reusing indices after deletes. */
+export function getNextRackIndex(racks: RackState[]): number {
+  let max = 0;
+  for (const r of racks) {
+    const candidates = [r.rack_index, r.id];
+    for (const c of candidates) {
+      const n = Number(c);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+  }
+  return max + 1;
+}
+
+/** Deep-clone a rack for immutable layout updates. */
+export function cloneRackState(rack: RackState): RackState {
+  if (typeof structuredClone === "function") {
+    return structuredClone(rack);
+  }
+  return JSON.parse(JSON.stringify(rack)) as RackState;
+}
+
+export type LayoutEntityIntegrityResult = { valid: boolean; errors: string[] };
+
+/** Pre-save integrity: duplicate ids/names, missing rack_type, invalid coordinates. */
+export function validateLayoutEntityIntegrity(layout: LayoutState): LayoutEntityIntegrityResult {
+  const errors: string[] = [];
+  const uuids = new Set<string>();
+  const names = new Map<string, string>();
+  const rackIndexes = new Map<number, string>();
+
+  for (const r of layout.racks) {
+    const key = rackEntityKey(r);
+    const uuid = (r.uuid ?? "").trim();
+    if (!uuid) {
+      errors.push(`Brak uuid regału (${key})`);
+    } else if (uuids.has(uuid)) {
+      errors.push(`Zduplikowany uuid regału: ${uuid}`);
+    } else {
+      uuids.add(uuid);
+    }
+
+    const rt = r.rack_type;
+    if (rt !== "warehouse" && rt !== "store") {
+      errors.push(`Nieprawidłowy rack_type dla ${key}: ${String(rt)}`);
+    }
+
+    const name = (r.name ?? "").trim();
+    if (name) {
+      const nk = name.toLowerCase();
+      const prev = names.get(nk);
+      if (prev) errors.push(`Zduplikowana nazwa regału '${name}' (${prev} i ${key})`);
+      else names.set(nk, key);
+    }
+
+    const idx = Number(r.rack_index);
+    if (Number.isFinite(idx)) {
+      const prevIdx = rackIndexes.get(idx);
+      if (prevIdx && prevIdx !== key) errors.push(`Zduplikowany rack_index ${idx} (${prevIdx} i ${key})`);
+      else rackIndexes.set(idx, key);
+    }
+
+    if (!Number.isFinite(r.x) || !Number.isFinite(r.y) || !Number.isFinite(r.width) || !Number.isFinite(r.height)) {
+      errors.push(`Nieprawidłowe współrzędne regału ${key}`);
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 export function findRackForInternalLayoutModal(
   layout: LayoutState | undefined | null,
   internalLayoutRackId: number | string
@@ -1078,6 +1154,7 @@ export function duplicateRacksAtPosition(
       ...r,
       id: undefined,
       uuid: generateRackUuid(),
+      rack_type: r.rack_type === "store" ? "store" : "warehouse",
       x: cell.x + (i % 3) * (r.width + 1),
       y: cell.y + Math.floor(i / 3) * (r.height + 1),
       rack_index: nextRackIndexBase + i,
@@ -1088,102 +1165,69 @@ export function duplicateRacksAtPosition(
 }
 
 /**
- * Re-index racks in a row so labels stay sequential (e.g. C.1, C.2, C.3).
- * Racks with rowPrefix === prefix are sorted by position (x, then y), assigned indexInRow 1,2,3…, and bins regenerated.
+ * Re-index racks in a row — updates `indexInRow` only.
+ * Never rewrites `name` or regenerates bins (user names must stay stable).
  */
 export function reindexRowByPrefix(racks: RackState[], prefix: string): RackState[] {
-  const inRow = racks.filter((r) => r.rowPrefix === prefix);
-  if (inRow.length === 0) return racks;
-  const sorted = [...inRow].sort((a, b) => a.x !== b.x ? a.x - b.x : a.y - b.y);
-  const byRackId = new Map<number | undefined, { indexInRow: number }>();
-  sorted.forEach((r, i) => byRackId.set(r.rack_index, { indexInRow: i + 1 }));
+  const inRow = racks.filter((r) => (r.rowPrefix ?? "").trim() === prefix.trim());
+  if (inRow.length <= 1) return racks;
+  const sorted = [...inRow].sort((a, b) => (a.x !== b.x ? a.x - b.x : a.y - b.y));
+  const byKey = new Map<string, number>();
+  sorted.forEach((r, i) => byKey.set(rackEntityKey(r), i + 1));
   return racks.map((r) => {
-    if (r.rowPrefix !== prefix) return r;
-    const next = byRackId.get(r.rack_index);
-    if (next == null) return r;
-    const rackLabel = `${prefix}${next.indexInRow}`;
-    const lc = getLevelConfig(r);
-    const totalBins = getTotalLocations(lc);
-    const volPerBin = totalBins > 0
-      ? volumePerBinFromTotal(r.width_cm ?? 120, r.length_cm ?? 80, r.height_cm ?? 200, totalBins)
-      : 0;
-    const binTypeMap = buildBinTypeMapFromBins(r.bins);
-    const addrPattern = (r as { addressPattern?: string }).addressPattern ?? ROW_LABEL_ADDRESS_PATTERN;
-    const sectionStart = (r as { sectionStartIndex?: number }).sectionStartIndex ?? 1;
-    const binType = (r as { binNamingType?: "numeric" | "alpha" }).binNamingType ?? "numeric";
-    const bins = createBinsForRack(
-      r.aisle_letter,
-      r.rack_index,
-      r.levels,
-      r.bins_per_level,
-      volPerBin,
-      "M1",
-      undefined,
-      r.width_cm,
-      r.length_cm,
-      r.height_cm,
-      binTypeMap,
-      addrPattern,
-      rackLabel,
-      sectionStart,
-      binType,
-      lc
-    );
-    return { ...r, name: rackLabel, indexInRow: next.indexInRow, bins, rackLevels: binsToLevels(bins) };
+    const next = byKey.get(rackEntityKey(r));
+    if (next == null || r.indexInRow === next) return r;
+    return { ...r, indexInRow: next };
   });
 }
 
 /**
- * Re-index a geometric row (same y or same x) so labels are sequential (A1, A2, A3).
- * Used when a rack is dropped into a row; refRackId is the rack that defines the row.
+ * Updates `indexInRow` for racks sharing the same `rowPrefix` as the reference rack.
+ * Does NOT rename racks or regenerate bins — names are assigned only at creation/rename.
  */
 export function reindexGeometricRow(racks: RackState[], refRackId: number | string): RackState[] {
-  const ref = racks.find((r) => (r.id ?? r.rack_index) === refRackId);
+  const ref = racks.find((r) => rackMatchesSlotRackId(r, refRackId));
   if (!ref) return racks;
-  const horizontal = racks.filter((r) => r.y === ref.y);
-  const vertical = racks.filter((r) => r.x === ref.x);
-  const inRow = horizontal.length >= vertical.length ? horizontal : vertical;
-  const sortBy = horizontal.length >= vertical.length
-    ? (a: RackState, b: RackState) => (a.x !== b.x ? a.x - b.x : a.y - b.y)
-    : (a: RackState, b: RackState) => (a.y !== b.y ? a.y - b.y : a.x - b.x);
-  const sorted = [...inRow].sort(sortBy);
-  const prefix = sorted[0]?.rowPrefix ?? ref.rowPrefix ?? "A";
-  const byRackId = new Map<number | undefined, { indexInRow: number }>();
-  sorted.forEach((r, i) => byRackId.set(r.rack_index, { indexInRow: i + 1 }));
-  return racks.map((r) => {
-    if (!inRow.includes(r)) return r;
-    const next = byRackId.get(r.rack_index);
-    if (next == null) return r;
-    const rackLabel = `${prefix}${next.indexInRow}`;
-    const lc = getLevelConfig(r);
-    const totalBins = getTotalLocations(lc);
-    const volPerBin = totalBins > 0
-      ? volumePerBinFromTotal(r.width_cm ?? 120, r.length_cm ?? 80, r.height_cm ?? 200, totalBins)
-      : 0;
-    const binTypeMap = buildBinTypeMapFromBins(r.bins);
-    const addrPattern = (r as { addressPattern?: string }).addressPattern ?? ROW_LABEL_ADDRESS_PATTERN;
-    const sectionStart = (r as { sectionStartIndex?: number }).sectionStartIndex ?? 1;
-    const binType = (r as { binNamingType?: "numeric" | "alpha" }).binNamingType ?? "numeric";
-    const bins = createBinsForRack(
-      r.aisle_letter,
-      r.rack_index,
-      r.levels,
-      r.bins_per_level,
-      volPerBin,
-      "M1",
-      undefined,
-      r.width_cm,
-      r.length_cm,
-      r.height_cm,
-      binTypeMap,
-      addrPattern,
-      rackLabel,
-      sectionStart,
-      binType,
-      lc
-    );
-    return { ...r, name: rackLabel, rowPrefix: prefix, indexInRow: next.indexInRow, bins, rackLevels: binsToLevels(bins) };
+
+  const prefix = (ref.rowPrefix ?? "").trim();
+  if (!prefix) return racks;
+
+  const inRow = racks.filter((r) => (r.rowPrefix ?? "").trim() === prefix);
+  if (inRow.length <= 1) return racks;
+
+  const horizontalCount = inRow.filter((r) => r.y === ref.y).length;
+  const verticalCount = inRow.filter((r) => r.x === ref.x).length;
+  const sortHorizontal = horizontalCount >= verticalCount;
+  const sorted = [...inRow].sort((a, b) =>
+    sortHorizontal ? a.x - b.x || a.y - b.y : a.y - b.y || a.x - b.x
+  );
+
+  const byKey = new Map<string, number>();
+  sorted.forEach((r, i) => byKey.set(rackEntityKey(r), i + 1));
+
+  const beforeNames =
+    import.meta.env.DEV ? new Map(racks.map((r) => [rackEntityKey(r), (r.name ?? "").trim()])) : null;
+  const result = racks.map((r) => {
+    const next = byKey.get(rackEntityKey(r));
+    if (next == null || r.indexInRow === next) return r;
+    return { ...r, indexInRow: next };
   });
+  if (beforeNames) {
+    for (const r of result) {
+      const key = rackEntityKey(r);
+      const prevName = beforeNames.get(key);
+      const nextName = (r.name ?? "").trim();
+      if (prevName !== undefined && prevName !== nextName) {
+        console.warn("[layout.rack.cross-mutation]", {
+          context: "reindexGeometricRow",
+          local_id: key,
+          old_name: prevName || null,
+          new_name: nextName || null,
+        });
+      }
+    }
+  }
+  return result;
 }
 
 export function formatVolume(v: number): string {

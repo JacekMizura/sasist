@@ -19,11 +19,13 @@ import {
   reindexGeometricRow,
   binsToLevels,
   generateRackUuid,
+  getNextRackIndex,
   ROW_LABEL_ADDRESS_PATTERN,
   nextUniqueRackName,
   normalizeRowPrefixLetters,
   rackMatchesSlotRackId,
 } from "../../components/warehouse/warehouseUtils";
+import { logLayoutRackCreate } from "../../components/warehouse/layoutRackLog";
 import type { LevelConfigItem, StorageType } from "../../types/warehouse";
 import type { Dispatch, SetStateAction } from "react";
 import { layoutCmToCellsX, layoutCmToCellsY } from "../../utils/warehouseGridMetrics";
@@ -79,7 +81,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     const volPerBin = volumePerBin(template.width_cm, template.depth_cm, template.height_cm, template.levels, template.bins_per_level);
     const prefix = (template.aisle_letter || "A").trim() || "A";
     setLayout((prev) => {
-      const rackIndex = prev.racks.length + 1;
+      const rackIndex = getNextRackIndex(prev.racks);
       const indexInRow = getNextIndexInRow(prev.racks, prefix);
       const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, prev);
       const t = template as { addressPattern?: string; rowId?: string; sectionStartIndex?: number; binNamingType?: "numeric" | "alpha"; levelConfig?: LevelConfigItem[]; namingStrategy?: "pattern" | "rack-index" | "custom" | "manual"; namingOrientation?: "column-first" | "row-first"; namingPattern?: string; manualLabels?: Record<string, string>; overrides?: Record<string, string>; indexPadding?: number; startIndex?: number; naming_pattern?: string; bin_type_map?: Record<string, StorageType>; templateId?: string };
@@ -108,11 +110,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
         t.indexPadding,
         t.startIndex
       );
-      return {
-        ...prev,
-        racks: [
-          ...prev.racks,
-          {
+      const newRack = {
             uuid: generateRackUuid(),
             rack_type: rackType,
             x,
@@ -136,9 +134,9 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
             ...(t.sectionStartIndex != null ? { sectionStartIndex: t.sectionStartIndex } : {}),
             ...(t.binNamingType != null ? { binNamingType: t.binNamingType } : {}),
             ...(typeof t.templateId === "string" && t.templateId.trim() !== "" ? { templateId: t.templateId } : {}),
-          } as RackState,
-        ],
-      };
+          } as RackState;
+      logLayoutRackCreate(newRack);
+      return { ...prev, racks: [...prev.racks, newRack] };
     });
   }, [template, rackRotation, layout, ghostW, ghostH, aisleWidthCm, rackType, setLayout]);
 
@@ -183,7 +181,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       }
       const prefix = (row.rowPrefix || "A").trim() || "A";
       const indexInRow = 1 + row.slots.filter((s) => s.rackId != null).length;
-      const rackIndex = layout.racks.length + 1;
+      const rackIndex = getNextRackIndex(layout.racks);
       const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, layout);
       const bins = createBinsForRack(
         spec.aisle_letter,
@@ -281,10 +279,11 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
           if (slotForRack) return { ...r, x: slotForRack.x, y: slotForRack.y };
           return r;
         });
-        const nextRacks = [...updatedRacks, newRack];
+        const nextRacks = reindexGeometricRow([...updatedRacks, newRack], newRack.uuid ?? newRack.rack_index);
+        logLayoutRackCreate(newRack);
         return {
           ...prev,
-          racks: reindexGeometricRow(nextRacks, newRack.rack_index),
+          racks: nextRacks,
           row_containers: (prev.row_containers ?? []).map((rc) => (rc.id === rowId ? { ...rc, slots: newSlots } : rc)),
         };
       });
@@ -317,7 +316,7 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
     const y = snap ? Math.max(0, Math.min(layout.grid_rows - h, snap.y)) : Math.max(0, Math.min(layout.grid_rows - h, cell.y));
     const prefix = snap ? normalizeRowPrefixLetters(snap.rowPrefix) : normalizeRowPrefixLetters(rowPrefix ?? "A");
     const indexInRow = snap ? snap.indexInRow : getNextIndexInRow(layout.racks, prefix);
-    const rackIndex = layout.racks.length + 1;
+    const rackIndex = getNextRackIndex(layout.racks);
     const rackLabel = nextUniqueRackName(`${prefix}${indexInRow}`, layout);
     const bins = createBinsForRack(
       spec.aisle_letter,
@@ -374,7 +373,11 @@ export function useDesignerRackPlacement(params: UseDesignerRackPlacementParams)
       ...(item.type === "custom" ? { templateId: item.template.id } : {}),
       ...(spec.level_max_load_kg != null ? { level_max_load_kg: spec.level_max_load_kg } : {}),
     };
-    setLayout((prev) => ({ ...prev, racks: reindexGeometricRow([...prev.racks, newRack], newRack.rack_index) }));
+    logLayoutRackCreate(newRack);
+    setLayout((prev) => ({
+      ...prev,
+      racks: reindexGeometricRow([...prev.racks, newRack], newRack.uuid ?? newRack.rack_index),
+    }));
     setDraggingFromCatalog(null);
     setCatalogGhostPosition(null);
     setCatalogHoveredSlot(null);

@@ -20,6 +20,7 @@ import {
   binsToLevels,
   ROW_LABEL_ADDRESS_PATTERN,
   reindexGeometricRow,
+  getNextRackIndex,
   getNextIndexInRow,
   generateRackUuid,
   nextUniqueRackName,
@@ -78,7 +79,7 @@ function appendHorizontalRowWithTemplateFromCursor(
   const resolvedRackType: RackType = item.type === "custom" ? (item.template.rack_type ?? "warehouse") : defaultRackType;
   const newSlots: EmptyRowSlot[] = [];
   const newRacks: RackState[] = [];
-  let nextRackIndex = prev.racks.length + 1;
+  let nextRackIndex = getNextRackIndex(prev.racks);
   let indexInRow = 1;
   for (const cx of along) {
     const x = Math.max(0, Math.min(prev.grid_cols - cellW, cx));
@@ -142,7 +143,7 @@ function appendHorizontalRowWithTemplateFromCursor(
     nextRackIndex += 1;
     indexInRow += 1;
   }
-  const nextRacks = reindexGeometricRow([...prev.racks, ...newRacks], newRacks[0]?.rack_index ?? prev.racks.length + 1);
+  const nextRacks = reindexGeometricRow([...prev.racks, ...newRacks], newRacks[0]?.uuid ?? newRacks[0]?.rack_index ?? getNextRackIndex(prev.racks));
   return {
     ...prev,
     row_containers: [
@@ -225,7 +226,7 @@ function appendRowWithTemplateToLayoutState(
   const initialSlots: EmptyRowSlot[] = [{ x: clampedX, y: clampedY, w, h }];
   const newSlotsRaw: EmptyRowSlot[] = [];
   const newRacks: RackState[] = [];
-  let nextRackIndex = prev.racks.length + 1;
+  let nextRackIndex = getNextRackIndex(prev.racks);
   let indexInRow = 1;
   const toProcess = [...initialSlots];
   while (toProcess.length > 0) {
@@ -318,7 +319,10 @@ function appendRowWithTemplateToLayoutState(
     const slotForRack = newSlots.find((sl) => sl.rackId != null && rackMatchesSlotRackId(rack, sl.rackId));
     return { ...rack, x: slotForRack?.x ?? 0, y: slotForRack?.y ?? startY };
   });
-  const nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
+  const nextRacks = reindexGeometricRow(
+    [...updatedRacks, ...newRacksWithPos],
+    newRacksWithPos[0]?.uuid ?? newRacksWithPos[0]?.rack_index ?? getNextRackIndex(prev.racks)
+  );
   return {
     ...prev,
     row_containers: [
@@ -680,7 +684,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         if (!rc) return prev;
         const newSlotsRaw: EmptyRowSlot[] = [];
         const newRacks: RackState[] = [];
-        let nextRackIndex = prev.racks.length + 1;
+        let nextRackIndex = getNextRackIndex(prev.racks);
         let indexInRow = 1 + rc.slots.filter((s) => s.rackId != null).length;
         for (const s of rc.slots) {
           if (s.rackId != null) {
@@ -762,7 +766,10 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
           const slotForRack = newSlots.find((sl) => sl.rackId != null && rackMatchesSlotRackId(rack, sl.rackId));
           return { ...rack, x: slotForRack?.x ?? 0, y: slotForRack?.y ?? startY };
         });
-        let nextRacks = reindexGeometricRow([...updatedRacks, ...newRacksWithPos], newRacksWithPos[0]?.rack_index ?? prev.racks.length + 1);
+        let nextRacks = reindexGeometricRow(
+          [...updatedRacks, ...newRacksWithPos],
+          newRacksWithPos[0]?.uuid ?? newRacksWithPos[0]?.rack_index ?? getNextRackIndex(prev.racks)
+        );
         return {
           ...prev,
           racks: nextRacks,
@@ -892,7 +899,7 @@ export function useDesignerRowOperations(params: UseDesignerRowOperationsParams)
         const row = (layout.row_containers ?? []).find((rc) => rc.id === selectedRowContainerId);
         const prefix = normalizeRowPrefixLetters(row?.rowPrefix || "A");
         setLayout((prev) => {
-          const nextRackIndexBase = prev.racks.length + 1;
+          const nextRackIndexBase = getNextRackIndex(prev.racks);
           const startIndexInRow = getNextIndexInRow(prev.racks, prefix);
           const newRacks: RackState[] = [];
           for (let i = 0; i < rackStubs.length; i++) {
