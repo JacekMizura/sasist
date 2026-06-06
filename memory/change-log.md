@@ -1,5 +1,28 @@
 # Change log
 
+## 2026-06-04 — Direct sales TDZ fix (`issueStrategy`)
+
+- **Root cause:** `hooks/directSales/useDirectSalesSession.ts` — `ensureSession` / `startNewSession` referenced `issueStrategy` before `useMemo` declaration (temporal dead zone at render).
+- **Route:** `/wms/direct-sales` — confirmed via Playwright on production build with sourcemaps.
+- **Fix:** declare `issueStrategy` immediately after `total` useMemo, before callbacks.
+
+## 2026-06-04 — Production TDZ debug build + import hardening
+
+- `types/productListRow.ts`: API layer no longer imports from `pages/Products/productListMapper`.
+- `hooks/directSales/useLocationStock.ts`: moved out of pages; imports `api/locationStockApi` directly.
+- DirectSales UI: `DirectSalesTerminalState` / `DirectSalesCustomerState` / `DirectSalesProductSearchState` exported from hooks.
+- `App.tsx`: `RoutePathLogger` logs `[route.render] pathname`.
+- `main.tsx`: `window.onerror` includes `href`, `pathname`, `stack`.
+- Vite: `build.minify: false` + `sourcemap: true` for production stack traces.
+- madge/dpdm: 0 cycles from `src/main.tsx`.
+
+## 2026-06-04 — Inventory semantics + pricing panel restore
+
+- `stock_quantity` never derived from sum(locations); added `location_allocated_quantity`, `unallocated_quantity`, `reserved_quantity`, `available_quantity`.
+- `locations_load_incomplete` only on API load failure (not when unallocated > 0 is valid).
+- Pricing: `purchase_gross` in `current_cost`; frontend `resolveProductPricingDisplay` with VAT fallback + brutto/margin labels.
+- Magazyn tab: Stan całkowity / Na lokalizacjach / Nieprzypisane breakdown.
+
 ## 2026-06-04 — Frontend TDZ crash fix (circular imports)
 
 - Extracted `IssueDetailSection` → `WmsOrderIssueDetailSection.tsx` (broke Page ↔ Content cycle).

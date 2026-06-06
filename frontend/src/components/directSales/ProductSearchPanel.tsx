@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
-import type { useProductSearch } from "../../hooks/directSales/useProductSearch";
+import type { DirectSalesProductSearchState } from "../../hooks/directSales/useProductSearch";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
 import { safeDisplay, safeTrim } from "../../utils/safeStrings";
 import type { DirectSaleProductSearchHit } from "../../utils/normalizeDirectSales";
 import { sessionStatusPl } from "./directSalesTerminology";
 import { ProductSearchDropdown } from "./ProductSearchDropdown";
 
-type SearchState = ReturnType<typeof useProductSearch>;
+type SearchState = DirectSalesProductSearchState;
 
 type Props = {
   session: DirectSaleSession | null;

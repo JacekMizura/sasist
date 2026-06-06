@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import type { useDirectSalesCustomer } from "../../hooks/directSales/useDirectSalesCustomer";
+import type { DirectSalesCustomerState } from "../../hooks/directSales/useDirectSalesCustomer";
 import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 import { safeDisplay, safeTrim } from "../../utils/safeStrings";
 
-type CustomerState = ReturnType<typeof useDirectSalesCustomer>;
+type CustomerState = DirectSalesCustomerState;
 
 type Props = {
   customer: CustomerState;

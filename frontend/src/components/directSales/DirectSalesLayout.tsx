@@ -1,6 +1,6 @@
 import { OperationalStatusPanel } from "../operational/debug/OperationalStatusPanel";
 import { DirectSalesUnavailable } from "../operational/fallbacks/DirectSalesUnavailable";
-import type { useDirectSalesTerminal } from "../../hooks/directSales/useDirectSalesTerminal";
+import type { DirectSalesTerminalState } from "../../hooks/directSales/useDirectSalesTerminal";
 import { DirectSalesHistoryPanel } from "./history/DirectSalesHistoryPanel";
 import { CustomerPanel } from "./CustomerPanel";
 import { DocumentPanel } from "./DocumentPanel";
@@ -12,7 +12,7 @@ import { CompleteErrorModal } from "./overlays/CompleteErrorModal";
 import { TerminalStatusBar } from "./terminal/TerminalStatusBar";
 import { DirectSalesConfirmationScreen } from "./traceability/DirectSalesConfirmationScreen";
 
-type Terminal = ReturnType<typeof useDirectSalesTerminal>;
+type Terminal = DirectSalesTerminalState;
 
 type Props = {
   terminal: Terminal;

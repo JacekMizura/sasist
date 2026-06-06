@@ -1,5 +1,5 @@
 import api from "./axios";
-import type { ProductListRow } from "../pages/Products/productListMapper";
+import type { ProductListRow } from "../types/productListRow";
 
 export type ProductDuplicateResult = ProductListRow & {
   id: number;

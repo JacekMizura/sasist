@@ -89,6 +89,11 @@ export function useDirectSalesSession({
     [session?.lines],
   );
 
+  const issueStrategy = useMemo(
+    () => allocationStrategyToIssueStrategy(settings.allocation_strategy),
+    [settings.allocation_strategy],
+  );
+
   useEffect(() => {
     setCashReceived((prev) => (prev < total ? total : prev));
     setMixedCashAmount((prev) => (prev <= 0 ? total : prev));
@@ -168,11 +173,6 @@ export function useDirectSalesSession({
       "CASH";
     setPaymentMethod(first);
   }, [settings.payment_methods, warehouseId]);
-
-  const issueStrategy = useMemo(
-    () => allocationStrategyToIssueStrategy(settings.allocation_strategy),
-    [settings.allocation_strategy],
-  );
 
   const dismissCompleteError = useCallback(() => setCompleteError(null), []);
 

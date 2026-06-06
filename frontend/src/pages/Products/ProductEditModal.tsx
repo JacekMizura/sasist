@@ -53,6 +53,7 @@ import {
   parseProductImages,
   pickMainImageUrl,
 } from "../../utils/productLabelMetadata";
+import { formatMoneyZlDisplay, resolveProductPricingDisplay } from "./productPricingDisplay";
 
 export type ProductForm = {
   id?: number;
@@ -81,6 +82,7 @@ export type ProductForm = {
   last_purchase_currency?: string | null;
   current_cost?: {
     purchase_net?: number | null;
+    purchase_gross?: number | null;
     extra_cost_net?: number | null;
     landed_cost_net?: number | null;
     vat_percent?: number | null;
@@ -110,6 +112,10 @@ export type ProductForm = {
   gpsr_responsible_email?: string | null;
   unit?: string | null;
   stock_quantity?: number;
+  location_allocated_quantity?: number;
+  unallocated_quantity?: number;
+  reserved_quantity?: number;
+  available_quantity?: number;
   orientation_type?: "any" | "upright" | "no_stack";
   shape_type?: "box" | "cylinder";
   stack_compressible?: boolean;
@@ -664,18 +670,61 @@ export function ProductEditModal({
 
   const magazynEmptyLocationsMessage = useMemo(() => {
     if (magazynInventoryRows.length > 0) return "Brak stanu magazynowego";
-    const stock = product?.stock_quantity;
-    const hasStock = typeof stock === "number" && Number.isFinite(stock) && stock > 0;
-    if (hasStock || product?.locations_load_incomplete || product?.detail_degraded) {
+    if (product?.locations_load_incomplete) {
       return "Dane lokalizacji nie zostały załadowane";
     }
+    const unalloc = product?.unallocated_quantity;
+    if (typeof unalloc === "number" && unalloc > 0) {
+      return `Brak wierszy lokalizacji — ${unalloc} szt. nieprzypisanych (np. bufor / przyjęcie)`;
+    }
     return "Brak stanu magazynowego";
-  }, [
-    magazynInventoryRows.length,
-    product?.stock_quantity,
-    product?.locations_load_incomplete,
-    product?.detail_degraded,
-  ]);
+  }, [magazynInventoryRows.length, product?.locations_load_incomplete, product?.unallocated_quantity]);
+
+  const pricingDisplay = useMemo(
+    () =>
+      resolveProductPricingDisplay({
+        currentCost,
+        salePrice,
+        purchasePrice,
+        metadataVatRate: vatRate,
+        extraCostPackagingNet,
+        extraCostCommissionPercent,
+        extraCostOtherNet,
+      }),
+    [
+      currentCost,
+      salePrice,
+      purchasePrice,
+      vatRate,
+      extraCostPackagingNet,
+      extraCostCommissionPercent,
+      extraCostOtherNet,
+    ],
+  );
+
+  const inventoryBreakdown = useMemo(() => {
+    if (isNew) return null;
+    const total = product?.stock_quantity;
+    if (total == null || !Number.isFinite(Number(total))) return null;
+    const allocated =
+      product?.location_allocated_quantity ??
+      magazynInventoryRows.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+    const unallocated =
+      product?.unallocated_quantity ?? Math.max(0, Math.round(Number(total)) - Math.round(Number(allocated)));
+    return {
+      total: String(Math.round(Number(total))),
+      allocated: String(Math.round(Number(allocated))),
+      unallocated: String(Math.round(Number(unallocated))),
+      reserved:
+        product?.reserved_quantity != null && Number.isFinite(product.reserved_quantity)
+          ? String(Math.round(product.reserved_quantity))
+          : null,
+      available:
+        product?.available_quantity != null && Number.isFinite(product.available_quantity)
+          ? String(Math.round(product.available_quantity))
+          : null,
+    };
+  }, [isNew, product, magazynInventoryRows]);
 
   const productDimensions =
     typeof length === "number" && typeof width === "number" && typeof height === "number" && length > 0 && width > 0 && height > 0
@@ -1665,15 +1714,25 @@ export function ProductEditModal({
                   <span className="font-bold text-blue-900 tabular-nums">{physicalStockDisplay ?? "—"}</span>
                 </div>
                 <div className="flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-1">
-                  <span className="text-emerald-600 mr-1.5">Cena:</span>
+                  <span className="text-emerald-600 mr-1.5">Netto:</span>
                   <span className="font-bold text-emerald-900 tabular-nums">
-                    {formatMoneyZl(salePrice === "" ? null : typeof salePrice === "number" ? salePrice : parseDecimal(String(salePrice)) ?? null)}
+                    {formatMoneyZlDisplay(pricingDisplay.saleNet, "brak ceny")}
+                  </span>
+                </div>
+                <div className="flex items-center rounded border border-emerald-200/80 bg-emerald-50/80 px-2 py-1">
+                  <span className="text-emerald-600 mr-1.5">Brutto:</span>
+                  <span className="font-bold text-emerald-900 tabular-nums">
+                    {formatMoneyZlDisplay(pricingDisplay.saleGross, "brak danych")}
                   </span>
                 </div>
                 <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                  <span className="text-slate-500 mr-1.5">VAT:</span>
+                  <span className="font-bold text-slate-800 tabular-nums">{pricingDisplay.vatLabel}</span>
+                </div>
+                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
                   <span className="text-slate-500 mr-1.5">Marża:</span>
-                  <span className={`font-bold tabular-nums ${marginToneClass(currentCost?.margin_percent)}`}>
-                    {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(1)}%`}
+                  <span className={`font-bold tabular-nums ${marginToneClass(pricingDisplay.marginPercent)}`}>
+                    {pricingDisplay.marginLabel}
                   </span>
                 </div>
               </div>
@@ -2258,7 +2317,15 @@ export function ProductEditModal({
                           <dl className="space-y-3 text-sm text-slate-700 mt-5">
                             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                               <dt className="text-slate-500">Cena zakupu netto</dt>
-                              <dd className="tabular-nums">{formatMoneyZl(currentCost?.purchase_net ?? null)}</dd>
+                              <dd className="tabular-nums">{formatMoneyZlDisplay(pricingDisplay.purchaseNet)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Cena zakupu brutto</dt>
+                              <dd className="tabular-nums">{formatMoneyZlDisplay(pricingDisplay.purchaseGross)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Stawka VAT</dt>
+                              <dd className="tabular-nums">{pricingDisplay.vatLabel}</dd>
                             </div>
                             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                               <dt className="text-slate-500">Pakowanie</dt>
@@ -2274,22 +2341,30 @@ export function ProductEditModal({
                             </div>
                             <div className="flex items-center justify-between border-b border-slate-200 pb-3 mt-1">
                               <dt className="font-semibold text-slate-900">Łączny koszt netto (Landed)</dt>
-                              <dd className="tabular-nums font-bold text-slate-900">{formatMoneyZl(currentCost?.landed_cost_net ?? null)}</dd>
+                              <dd className="tabular-nums font-bold text-slate-900">
+                                {formatMoneyZlDisplay(pricingDisplay.landedCostNet)}
+                              </dd>
                             </div>
                             <div className="flex items-center justify-between pt-1 border-b border-slate-100 pb-2">
                               <dt className="text-slate-500">Cena sprzedaży netto</dt>
-                              <dd className="tabular-nums">{formatMoneyZl(currentCost?.sale_net ?? null)}</dd>
+                              <dd className="tabular-nums">{formatMoneyZlDisplay(pricingDisplay.saleNet)}</dd>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <dt className="text-slate-500">Cena sprzedaży brutto</dt>
+                              <dd className="tabular-nums font-semibold text-slate-900">
+                                {formatMoneyZlDisplay(pricingDisplay.saleGross)}
+                              </dd>
                             </div>
                             <div className="flex items-center justify-between pt-1">
                               <dt className="font-medium text-slate-900">Zysk (Marża PLN)</dt>
-                              <dd className={`tabular-nums font-semibold ${marginToneClass(currentCost?.margin_percent)}`}>
-                                {formatMoneyZl(currentCost?.margin_value ?? null)}
+                              <dd className={`tabular-nums font-semibold ${marginToneClass(pricingDisplay.marginPercent)}`}>
+                                {formatMoneyZlDisplay(pricingDisplay.marginValue)}
                               </dd>
                             </div>
                             <div className="flex items-center justify-between pt-1">
                               <dt className="font-medium text-slate-900">Rentowność (Marża %)</dt>
-                              <dd className={`tabular-nums text-lg font-bold ${marginToneClass(currentCost?.margin_percent)}`}>
-                                {currentCost?.margin_percent == null ? "—" : `${Number(currentCost.margin_percent).toFixed(2)}%`}
+                              <dd className={`tabular-nums text-lg font-bold ${marginToneClass(pricingDisplay.marginPercent)}`}>
+                                {pricingDisplay.marginLabel}
                               </dd>
                             </div>
                           </dl>
@@ -2341,6 +2416,11 @@ export function ProductEditModal({
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
                         <ProductWarehouseStockPanel
                           physicalStockDisplay={physicalStockDisplay}
+                          totalStockDisplay={inventoryBreakdown?.total ?? physicalStockDisplay}
+                          allocatedStockDisplay={inventoryBreakdown?.allocated ?? null}
+                          unallocatedStockDisplay={inventoryBreakdown?.unallocated ?? null}
+                          reservedDisplay={inventoryBreakdown?.reserved ?? null}
+                          availableDisplay={inventoryBreakdown?.available ?? null}
                           inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
                           showInventoryLink
                           emptyLocationsMessage={magazynEmptyLocationsMessage}

@@ -170,6 +170,7 @@ def get_product_current_cost(db: Session, tenant_id: int, product_id: int) -> Di
     if p is None:
         return {
             "purchase_net": None,
+            "purchase_gross": None,
             "extra_cost_net": None,
             "landed_cost_net": None,
             "vat_percent": 23.0,
@@ -211,11 +212,13 @@ def get_product_current_cost(db: Session, tenant_id: int, product_id: int) -> Di
 
     landed_cost_net = (purchase_net + extra_cost_net) if purchase_net is not None else None
     sale_gross = (sale_net * (1.0 + vat_percent / 100.0)) if sale_net is not None else None
+    purchase_gross = (purchase_net * (1.0 + vat_percent / 100.0)) if purchase_net is not None else None
     margin_value = (sale_net - landed_cost_net) if sale_net is not None and landed_cost_net is not None else None
     margin_percent = ((margin_value / sale_net) * 100.0) if margin_value is not None and sale_net and sale_net > 1e-12 else None
 
     return {
         "purchase_net": round(purchase_net, 4) if purchase_net is not None else None,
+        "purchase_gross": round(purchase_gross, 4) if purchase_gross is not None else None,
         "extra_cost_net": round(extra_cost_net, 4),
         "landed_cost_net": round(landed_cost_net, 4) if landed_cost_net is not None else None,
         "vat_percent": round(vat_percent, 2),

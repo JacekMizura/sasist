@@ -1,8 +1,15 @@
 """
 Single source of truth for product stock + location payloads (list + detail).
 
-Uses ``visible_on_hand_by_product`` for totals and ``_inventory_payload_for_product_ids``
-for location rows — same helpers, same filters.
+Semantics (do NOT conflate these):
+- ``stock_quantity`` / ``visible_on_hand``: total physical on-hand from ``inventory`` (all visible rows).
+- ``location_allocated_quantity``: sum of quantities in returned location/inventory rows (bin attribution).
+- ``unallocated_quantity``: max(0, stock_quantity - location_allocated_quantity) — e.g. buffer/receiving
+  rows hidden from badge payload, legacy filters, or stock not yet put away to named bins.
+- ``reserved_quantity``: active ``StockReservation`` rows (status ``reserved``); reduces *available*, not on-hand.
+- ``available_quantity``: on_hand - reserved (operational sellable/pickable hint).
+
+``stock_quantity`` is NEVER derived as sum(locations).
 """
 
 from __future__ import annotations
@@ -15,11 +22,43 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from sqlalchemy.orm import Session
 
 from ..models.product import Product
-from .product_inventory_snapshot_service import visible_on_hand_by_product
+from .product_inventory_snapshot_service import inventory_snapshots_for_products, visible_on_hand_by_product
 
 logger = logging.getLogger(__name__)
 
 StockKey = Tuple[int, int]  # (product_id, tenant_id)
+
+
+def _allocated_quantity_from_rows(
+    locations: Sequence[dict],
+    inventory: Sequence[dict],
+) -> int:
+    """Sum of quantities attributed to named locations in the API payload (not total on-hand)."""
+    rows = list(inventory) if inventory else list(locations)
+    total = 0.0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        total += float(row.get("quantity") or 0)
+    return int(round(total))
+
+
+def _inventory_operational_metrics(
+    db: Session,
+    *,
+    tenant_id: int,
+    product_id: int,
+    warehouse_id: Optional[int],
+    on_hand: int,
+) -> dict[str, int]:
+    snaps = inventory_snapshots_for_products(db, tenant_id, warehouse_id, [int(product_id)])
+    ops = snaps.get(int(product_id), {})
+    reserved = int(round(float(ops.get("reserved") or 0)))
+    available = int(round(float(ops.get("available") or max(0, on_hand - reserved))))
+    return {
+        "reserved_quantity": reserved,
+        "available_quantity": available,
+    }
 
 
 def _log_stock_event(
@@ -101,11 +140,13 @@ def get_product_inventory_display_snapshot(
     product_id: int,
     tenant_id: int,
     warehouse_id: Optional[int] = None,
+    locations_data_failed: bool = False,
 ) -> Dict[str, Any]:
     """
     Single-product inventory display snapshot for list + detail parity.
 
-    Keys: stock_quantity, locations, inventory, locations_load_incomplete (when stock>0 but no rows).
+    Keys: stock_quantity, location_allocated_quantity, unallocated_quantity, reserved_quantity,
+    available_quantity, locations, inventory, locations_load_incomplete (only on load failure).
     """
     product = (
         db.query(Product)
@@ -115,6 +156,10 @@ def get_product_inventory_display_snapshot(
     if product is None:
         return {
             "stock_quantity": 0,
+            "location_allocated_quantity": 0,
+            "unallocated_quantity": 0,
+            "reserved_quantity": 0,
+            "available_quantity": 0,
             "locations": [],
             "inventory": [],
             "locations_load_incomplete": False,
@@ -128,12 +173,18 @@ def get_product_inventory_display_snapshot(
     stock = int(stock_map.get((pid, tid), 0))
     locations = list(loc_map.get(pid, []))
     inventory = list(inv_map.get(pid, []))
-    incomplete = stock > 0 and len(locations) == 0 and len(inventory) == 0
+    allocated = _allocated_quantity_from_rows(locations, inventory)
+    unallocated = max(0, stock - allocated)
+    ops = _inventory_operational_metrics(db, tenant_id=tid, product_id=pid, warehouse_id=warehouse_id, on_hand=stock)
     return {
         "stock_quantity": stock,
+        "location_allocated_quantity": allocated,
+        "unallocated_quantity": unallocated,
+        "reserved_quantity": ops["reserved_quantity"],
+        "available_quantity": ops["available_quantity"],
         "locations": locations,
         "inventory": inventory,
-        "locations_load_incomplete": incomplete,
+        "locations_load_incomplete": bool(locations_data_failed),
     }
 
 
@@ -144,6 +195,7 @@ def apply_inventory_display_to_dict(
     *,
     warehouse_id: Optional[int] = None,
     log_tag: Optional[str] = None,
+    locations_data_failed: bool = False,
 ) -> None:
     """Mutates *out* with stock_quantity, locations, inventory from shared snapshot."""
     snap = get_product_inventory_display_snapshot(
@@ -151,8 +203,13 @@ def apply_inventory_display_to_dict(
         product_id=int(product.id),
         tenant_id=int(product.tenant_id),
         warehouse_id=warehouse_id,
+        locations_data_failed=locations_data_failed,
     )
     out["stock_quantity"] = snap["stock_quantity"]
+    out["location_allocated_quantity"] = snap["location_allocated_quantity"]
+    out["unallocated_quantity"] = snap["unallocated_quantity"]
+    out["reserved_quantity"] = snap["reserved_quantity"]
+    out["available_quantity"] = snap["available_quantity"]
     out["locations"] = snap["locations"]
     out["inventory"] = snap["inventory"]
     if snap.get("locations_load_incomplete"):

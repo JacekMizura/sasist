@@ -231,6 +231,14 @@ function RouterMountLogger() {
   return null;
 }
 
+function RoutePathLogger() {
+  const { pathname, search, hash } = useLocation();
+  useEffect(() => {
+    console.log("[route.render]", pathname, search || "", hash || "");
+  }, [pathname, search, hash]);
+  return null;
+}
+
 function AppRootLayout() {
   console.log("[APP] render")
   return (
@@ -238,6 +246,7 @@ function AppRootLayout() {
       <AuthProvider>
         <CartsRefreshProvider>
           <RouterMountLogger />
+          <RoutePathLogger />
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
           <PasswordChangeGate />
           <ErrorBoundary>

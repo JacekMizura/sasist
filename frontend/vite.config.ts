@@ -97,6 +97,7 @@ export default defineConfig(({ mode, command }) => {
     build: {
       // Temporary: readable stack traces for production TDZ / circular-import crashes.
       sourcemap: true,
+      minify: false,
     },
   }
 })

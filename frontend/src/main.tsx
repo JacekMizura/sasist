@@ -6,8 +6,16 @@ import "./index.css";
 
 console.log("[APP] boot start");
 
-window.onerror = (...args: unknown[]) => {
-  console.error("[window.onerror]", ...args);
+window.onerror = (message, source, lineno, colno, error) => {
+  console.error("[window.onerror]", {
+    message,
+    source,
+    lineno,
+    colno,
+    stack: error?.stack,
+    href: window.location.href,
+    pathname: window.location.pathname,
+  });
 };
 window.onunhandledrejection = (e: PromiseRejectionEvent) => {
   console.error("[promise rejection]", e.reason);

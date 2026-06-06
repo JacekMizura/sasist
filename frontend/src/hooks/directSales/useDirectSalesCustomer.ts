@@ -196,3 +196,5 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
     quickCreate,
   };
 }
+
+export type DirectSalesCustomerState = ReturnType<typeof useDirectSalesCustomer>;

@@ -10,7 +10,7 @@ import { useDirectSalesSession } from "./useDirectSalesSession";
 import { useProductSearch } from "./useProductSearch";
 import { useDirectSalesHistory } from "./useDirectSalesHistory";
 import { useSuspendedSessions } from "./useSuspendedSessions";
-import { useLocationStock } from "../../pages/wms/direct-sales/hooks/useLocationStock";
+import { useLocationStock } from "./useLocationStock";
 import { useDirectSalesResolvedSettings } from "./useDirectSalesResolvedSettings";
 
 export function useDirectSalesTerminal() {
@@ -138,3 +138,5 @@ export function useDirectSalesTerminal() {
     handleRestoreSuspended,
   };
 }
+
+export type DirectSalesTerminalState = ReturnType<typeof useDirectSalesTerminal>;

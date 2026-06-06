@@ -3,10 +3,12 @@
 ## Active goal
 Stable production bundle — no TDZ / circular-import crashes.
 
-## Recent fix (frontend crash)
-- Root cause: `WmsOrderIssueDetailPage` ↔ `WmsOrderIssueDetailContent` mutual import (`IssueDetailSection` accessed before init).
-- Also fixed: `normalizeOperationalApi` ↔ operational API modules (types moved to `types/operationalApiTypes.ts`).
-- Source maps enabled on production build.
+## Recent fix (frontend crash — ROOT CAUSE FOUND)
+- **Exact bug:** `useDirectSalesSession.ts` — `issueStrategy` used in `ensureSession` / `startNewSession` **before** `const issueStrategy = useMemo(...)`. Playwright on `/wms/direct-sales`: `Cannot access 'issueStrategy' before initialization`.
+- **Fix:** moved `issueStrategy` useMemo above dependent callbacks.
+- Debug infra: `minify: false`, `sourcemap: true`, `[route.render]`, `capture-runtime-errors.mjs`.
+- Prior TDZ: `WmsOrderIssueDetailSection`, `operationalApiTypes`, picking `wmsEvents`, `shortageLocationLabel`.
+- Import hardening: `productListRow` types, `useLocationStock` in hooks.
 
 ## Prior
 Product list vs detail inventory parity — shared stock/location source of truth.

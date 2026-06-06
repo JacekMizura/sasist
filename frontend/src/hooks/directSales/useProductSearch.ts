@@ -95,3 +95,5 @@ export function useProductSearch({ warehouseId, enabled = true, searchEnabled = 
     open: canSearch && safeTrim(query).length > 0,
   };
 }
+
+export type DirectSalesProductSearchState = ReturnType<typeof useProductSearch>;

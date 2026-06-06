@@ -1874,6 +1874,8 @@ def get_products(
     rows = q.all()
 
     from ..services.product_inventory_display_service import (
+        _allocated_quantity_from_rows,
+        _inventory_operational_metrics,
         _log_stock_event,
         inventory_display_maps_for_products,
     )
@@ -1942,8 +1944,18 @@ def get_products(
             d["days_of_stock"] = None
         d["locations"] = loc_map.get(p.id, [])
         d["inventory"] = inv_map.get(p.id, [])
-        if stock_qty > 0 and not d["locations"] and not d["inventory"]:
-            d["locations_load_incomplete"] = True
+        allocated = _allocated_quantity_from_rows(d["locations"], d["inventory"])
+        d["location_allocated_quantity"] = allocated
+        d["unallocated_quantity"] = max(0, int(stock_qty) - allocated)
+        ops = _inventory_operational_metrics(
+            db,
+            tenant_id=int(p.tenant_id),
+            product_id=int(p.id),
+            warehouse_id=warehouse_id,
+            on_hand=int(stock_qty),
+        )
+        d["reserved_quantity"] = ops["reserved_quantity"]
+        d["available_quantity"] = ops["available_quantity"]
         _log_stock_event(
             "product.list.stock",
             product_id=int(p.id),

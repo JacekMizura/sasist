@@ -232,6 +232,7 @@ def build_product_detail_payload(
             product,
             warehouse_id=warehouse_id,
             log_tag="product.detail.stock",
+            locations_data_failed=False,
         )
 
     if not _run_detail_stage(
@@ -241,8 +242,13 @@ def build_product_detail_payload(
         fn=_attach_inventory_display,
     ):
         out["stock_quantity"] = 0
+        out["location_allocated_quantity"] = 0
+        out["unallocated_quantity"] = 0
+        out["reserved_quantity"] = 0
+        out["available_quantity"] = 0
         out["locations"] = []
         out["inventory"] = []
+        out["locations_load_incomplete"] = True
         degraded_reason = degraded_reason or "inventory_display"
 
     if degraded_reason:

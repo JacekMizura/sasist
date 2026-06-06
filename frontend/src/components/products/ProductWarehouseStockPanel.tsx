@@ -8,6 +8,12 @@ const inputClass = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sla
 
 export type ProductWarehouseStockPanelProps = {
   physicalStockDisplay: string | null;
+  /** Total on-hand (same as stock_quantity). When set, shown as „Stan całkowity”. */
+  totalStockDisplay?: string | null;
+  /** Sum of quantities on named location rows. */
+  allocatedStockDisplay?: string | null;
+  /** max(0, total - allocated) — stock not attributed to listed bins. */
+  unallocatedStockDisplay?: string | null;
   /** When set with `availableDisplay`, shows three-line summary (carton). Omit for classic product copy. */
   reservedDisplay?: string | null;
   availableDisplay?: string | null;
@@ -27,6 +33,9 @@ export type ProductWarehouseStockPanelProps = {
  */
 export function ProductWarehouseStockPanel({
   physicalStockDisplay,
+  totalStockDisplay,
+  allocatedStockDisplay,
+  unallocatedStockDisplay,
   reservedDisplay,
   availableDisplay,
   inventoryRows,
@@ -37,11 +46,40 @@ export function ProductWarehouseStockPanel({
   emptyLocationsMessage = "Brak stanu magazynowego",
 }: ProductWarehouseStockPanelProps) {
   const showThree = reservedDisplay != null && availableDisplay != null;
+  const showBreakdown =
+    totalStockDisplay != null && allocatedStockDisplay != null && unallocatedStockDisplay != null;
 
   return (
     <div className="space-y-6">
       <WarehouseFormCard title="Stan magazynowy">
-        {showThree ? (
+        {showBreakdown ? (
+          <div className="space-y-2 text-sm text-slate-700">
+            <p>
+              Stan całkowity:{" "}
+              <span className="font-semibold text-slate-900 tabular-nums">{totalStockDisplay} szt.</span>
+            </p>
+            <p>
+              Na lokalizacjach:{" "}
+              <span className="font-semibold text-slate-900 tabular-nums">{allocatedStockDisplay} szt.</span>
+            </p>
+            <p>
+              Nieprzypisane:{" "}
+              <span className="font-semibold text-slate-900 tabular-nums">{unallocatedStockDisplay} szt.</span>
+            </p>
+            {reservedDisplay != null ? (
+              <p>
+                Zarezerwowano:{" "}
+                <span className="font-semibold text-slate-900 tabular-nums">{reservedDisplay} szt.</span>
+              </p>
+            ) : null}
+            {availableDisplay != null ? (
+              <p>
+                Dostępne:{" "}
+                <span className="font-semibold text-slate-900 tabular-nums">{availableDisplay} szt.</span>
+              </p>
+            ) : null}
+          </div>
+        ) : showThree ? (
           <>
             <p className="text-sm text-slate-700">
               Stan:{" "}
