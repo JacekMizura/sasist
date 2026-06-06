@@ -191,6 +191,8 @@ export default function ProductEditPage() {
                 locations: p.locations,
                 inventory: p.inventory,
                 stock_quantity: p.stock_quantity,
+                locations_load_incomplete: p.locations_load_incomplete,
+                detail_degraded: p.detail_degraded,
                 purchase_price: p.purchase_price,
                 extra_cost_packaging_net: p.extra_cost_packaging_net,
                 extra_cost_commission_percent: p.extra_cost_commission_percent,

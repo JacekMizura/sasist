@@ -1,27 +1,26 @@
 # Current context
 
 ## Active goal
-Warehouse layout designer refactor — separate interaction states, drag/click fix, consistent drawer, faster save.
+Stable production bundle — no TDZ / circular-import crashes.
 
-## State model (layout tab)
-- `selectedRackId` — single-click selection only (uuid-first via `rackPrimaryId`)
-- `previewRackId` — details drawer (double-click opens; independent from selection)
-- `editingRackId` — name field focus (hides floating toolbar)
-- `draggingRackId` — active after 5px pointer threshold
-
-## Interaction
-- Single click: select rack
-- Double click: open right drawer
-- Drag: move rack (never opens panel); 5px threshold before drag activates
-
-## Drawer
-- Always fixed right overlay (`RackPropertiesSidebar`), 420px desktop / 100vw mobile
-- ESC + backdrop close; unsaved name warning
-- Explicit `rack_type` selector (Magazyn / Sklep)
-
-## Save
-- `[layout.save.start|payload|success]` logs; removed post-save full reload (optimistic)
-- `rack_type` persisted explicitly on each rack in payload
+## Recent fix (frontend crash)
+- Root cause: `WmsOrderIssueDetailPage` ↔ `WmsOrderIssueDetailContent` mutual import (`IssueDetailSection` accessed before init).
+- Also fixed: `normalizeOperationalApi` ↔ operational API modules (types moved to `types/operationalApiTypes.ts`).
+- Source maps enabled on production build.
 
 ## Prior
-Direct sales terminal settings + complete-sale fixes.
+Product list vs detail inventory parity — shared stock/location source of truth.
+
+## Fix (product location bug)
+- Shared service: `backend/services/product_inventory_display_service.py`
+  - `inventory_display_maps_for_products` — batch stock + locations
+  - `get_product_inventory_display_snapshot` / alias `get_product_inventory_snapshot`
+  - `apply_inventory_display_to_dict` — used by GET detail
+- Both `GET /api/products` and `GET /api/products/{id}` use same helpers; optional `warehouse_id` query param.
+- Logs: `[product.list.stock]`, `[product.detail.stock]` with product_id, tenant_id, warehouse_id, total_stock, location_codes.
+- Location shape includes `id`, `code`, `name`, `quantity`, `warehouse_id`.
+- Flag `locations_load_incomplete` when stock > 0 but no location rows.
+- Frontend Magazyn tab: shows „Dane lokalizacji nie zostały załadowane” instead of fake zero when stock > 0 but inventory empty.
+
+## Prior
+Layout designer refactor; direct sales terminal fixes.

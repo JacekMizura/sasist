@@ -143,6 +143,7 @@ def build_product_detail_payload(
     *,
     product_id: int,
     tenant_id: Optional[int],
+    warehouse_id: Optional[int] = None,
 ) -> dict[str, Any]:
     ensure_product_detail_read_schema()
 
@@ -163,11 +164,10 @@ def build_product_detail_payload(
         _enrich_product_last_supplier,
         _enrich_product_manufacturer,
         _enrich_product_supplier_catalog_links,
-        _inventory_payload_for_product_ids,
         _product_to_dict,
-        _visible_stock_quantity_for_product,
     )
     from ..services.product_cost_service import calculate_product_margin
+    from ..services.product_inventory_display_service import apply_inventory_display_to_dict
 
     try:
         out = _product_to_dict(product)
@@ -225,24 +225,25 @@ def build_product_detail_payload(
         out["supplier_catalog_links"] = []
         degraded_reason = degraded_reason or "supplier_catalog"
 
+    def _attach_inventory_display() -> None:
+        apply_inventory_display_to_dict(
+            db,
+            out,
+            product,
+            warehouse_id=warehouse_id,
+            log_tag="product.detail.stock",
+        )
+
     if not _run_detail_stage(
         product_id=pid,
         tenant_id=tid,
-        stage="stock_quantity",
-        fn=lambda: out.update({"stock_quantity": _visible_stock_quantity_for_product(db, product)}),
+        stage="inventory_display",
+        fn=_attach_inventory_display,
     ):
         out["stock_quantity"] = 0
-        degraded_reason = degraded_reason or "stock_quantity"
-
-    def _attach_inventory() -> None:
-        loc_map, inv_map = _inventory_payload_for_product_ids(db, [pid])
-        out["locations"] = loc_map.get(pid, [])
-        out["inventory"] = inv_map.get(pid, [])
-
-    if not _run_detail_stage(product_id=pid, tenant_id=tid, stage="inventory_payload", fn=_attach_inventory):
         out["locations"] = []
         out["inventory"] = []
-        degraded_reason = degraded_reason or "inventory_payload"
+        degraded_reason = degraded_reason or "inventory_display"
 
     if degraded_reason:
         out["detail_degraded"] = True

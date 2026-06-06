@@ -35,12 +35,17 @@ export type ProductListRow = {
   image_url?: string;
   assignedLocations?: AssignedLocation[];
   locations?: {
+    id?: number;
+    code?: string;
     name: string;
     quantity: number;
     warehouse_id?: number;
     storage_type?: string;
     location_uuid?: string | null;
   }[];
+  locations_load_incomplete?: boolean;
+  detail_degraded?: boolean;
+  detail_degraded_reason?: string | null;
   inventory?: {
     location_id: number;
     location_code: string;
@@ -210,15 +215,27 @@ export function mapProductListRow(p: Record<string, unknown>): ProductListRow {
         ? (p.assignedLocations as AssignedLocation[])
         : undefined,
     locations: Array.isArray(p.locations)
-      ? (p.locations as Record<string, unknown>[]).map((loc) => ({
-          name: String(loc.name ?? "").trim() || "—",
-          quantity: Number(loc.quantity) || 0,
-          warehouse_id: loc.warehouse_id != null ? Number(loc.warehouse_id) : undefined,
-          storage_type: typeof loc.storage_type === "string" ? loc.storage_type : undefined,
-          location_uuid:
-            typeof loc.location_uuid === "string" && loc.location_uuid.trim() !== "" ? loc.location_uuid.trim() : null,
-        }))
+      ? (p.locations as Record<string, unknown>[]).map((loc) => {
+          const codeRaw = loc.code ?? loc.name;
+          const code = String(codeRaw ?? "").trim() || "—";
+          return {
+            id: loc.id != null && Number(loc.id) > 0 ? Number(loc.id) : undefined,
+            code,
+            name: String(loc.name ?? codeRaw ?? "").trim() || code,
+            quantity: Number(loc.quantity) || 0,
+            warehouse_id: loc.warehouse_id != null ? Number(loc.warehouse_id) : undefined,
+            storage_type: typeof loc.storage_type === "string" ? loc.storage_type : undefined,
+            location_uuid:
+              typeof loc.location_uuid === "string" && loc.location_uuid.trim() !== "" ? loc.location_uuid.trim() : null,
+          };
+        })
       : undefined,
+    locations_load_incomplete: Boolean(p.locations_load_incomplete),
+    detail_degraded: p.detail_degraded != null ? Boolean(p.detail_degraded) : undefined,
+    detail_degraded_reason:
+      typeof p.detail_degraded_reason === "string" && p.detail_degraded_reason.trim() !== ""
+        ? p.detail_degraded_reason.trim()
+        : null,
     inventory: Array.isArray(p.inventory)
       ? (p.inventory as Record<string, unknown>[]).map((row) => {
           const sdRaw = row.stock_disposition != null ? String(row.stock_disposition).trim() : "";

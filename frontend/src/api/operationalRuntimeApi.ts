@@ -5,26 +5,10 @@ import {
   OPERATIONAL_ENDPOINTS,
 } from "../services/operational/operationalFeatureGuard";
 import { normalizeLiveEvent } from "../utils/normalizeOperationalApi";
+import type { LiveEvent, OperatorContext } from "../types/operationalApiTypes";
 import api from "./axios";
 
-export type LiveEvent = {
-  id: number;
-  event_type: string;
-  channel: string;
-  revision?: string | null;
-  payload: Record<string, unknown>;
-  created_at?: string | null;
-};
-
-export type OperatorContext = {
-  operator_user_id: number;
-  context_type: string;
-  cart_id?: number | null;
-  zone_id?: number | null;
-  active_task_id?: number | null;
-  payload?: Record<string, unknown> | null;
-  updated_at?: string | null;
-};
+export type { LiveEvent, OperatorContext };
 
 function buildStreamUrl(tenantId: number, warehouseId: number, sinceId: number): string {
   const base = resolveAxiosBaseURL().replace(/\/+$/, "") || "/api";

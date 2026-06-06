@@ -1024,7 +1024,10 @@ def _parse_assigned_locations(raw: Any) -> List[dict]:
 
 
 def _inventory_payload_for_product_ids(
-    db: Session, product_ids: list[int]
+    db: Session,
+    product_ids: list[int],
+    *,
+    warehouse_id: Optional[int] = None,
 ) -> tuple[dict[int, list[dict]], dict[int, list[dict]]]:
     """
     From `inventory` table only: legacy `locations` (badges) + canonical `inventory` rows for qty > 0.
@@ -1032,12 +1035,13 @@ def _inventory_payload_for_product_ids(
     """
     if not product_ids:
         return {}, {}
-    inv_rows = (
-        db.query(Inventory)
-        .filter(Inventory.product_id.in_(product_ids), Inventory.quantity > 0)
-        .order_by(Inventory.product_id, Inventory.id)
-        .all()
+    inv_q = db.query(Inventory).filter(
+        Inventory.product_id.in_(product_ids),
+        Inventory.quantity > 0,
     )
+    if warehouse_id is not None:
+        inv_q = inv_q.filter(Inventory.warehouse_id == int(warehouse_id))
+    inv_rows = inv_q.order_by(Inventory.product_id, Inventory.id).all()
     if not inv_rows:
         return {}, {}
     loc_ids = {int(r.location_id) for r in inv_rows}
@@ -1163,6 +1167,8 @@ def _inventory_payload_for_product_ids(
         if pid not in locations_out:
             locations_out[pid] = []
         locations_out[pid].append({
+            "id": int(r.location_id),
+            "code": loc_code,
             "name": loc_name or None,
             "quantity": qty,
             "warehouse_id": r.warehouse_id,
@@ -1776,6 +1782,7 @@ def get_product_id_by_ean(
 @router.get("/")
 def get_products(
     tenant_id: Optional[int] = None,
+    warehouse_id: Optional[int] = Query(None, ge=1),
     manufacturer_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
     ean: Optional[str] = None,
@@ -1866,12 +1873,20 @@ def get_products(
         q = q.limit(limit)
     rows = q.all()
 
-    # SUM(inventory.quantity) per (product_id, tenant_id) in one query
-    stock_map = {}
+    from ..services.product_inventory_display_service import (
+        _log_stock_event,
+        inventory_display_maps_for_products,
+    )
+
+    stock_map: dict[tuple[int, int], int] = {}
     sales_map = {}  # product_id -> (sales_30d: int, rotation_30d: float)
+    loc_map: dict[int, list[dict]] = {}
+    inv_map: dict[int, list[dict]] = {}
     if rows:
         product_ids = [p.id for p in rows]
-        stock_map = _stock_map_visible_by_product_tenant(db, product_ids)
+        stock_map, loc_map, inv_map = inventory_display_maps_for_products(
+            db, rows, warehouse_id=warehouse_id
+        )
 
         # Sales last 30 days: SUM(order_items.quantity) grouped by product_id
         since = datetime.utcnow() - timedelta(days=30)
@@ -1887,8 +1902,6 @@ def get_products(
         for r in sales_rows:
             s30 = int(r.sales_30d) if r.sales_30d is not None else 0
             sales_map[r.product_id] = (s30, round(s30 / 30.0, 2))
-
-        loc_map, inv_map = _inventory_payload_for_product_ids(db, product_ids)
     else:
         loc_map, inv_map = {}, {}
 
@@ -1929,6 +1942,16 @@ def get_products(
             d["days_of_stock"] = None
         d["locations"] = loc_map.get(p.id, [])
         d["inventory"] = inv_map.get(p.id, [])
+        if stock_qty > 0 and not d["locations"] and not d["inventory"]:
+            d["locations_load_incomplete"] = True
+        _log_stock_event(
+            "product.list.stock",
+            product_id=int(p.id),
+            tenant_id=int(p.tenant_id),
+            warehouse_id=warehouse_id,
+            total_stock=int(stock_qty),
+            locations=d["locations"],
+        )
         items.append(d)
 
     if default_supplier_id is not None and items:
@@ -3054,11 +3077,17 @@ def get_product(
     product_id: int,
     db: Session = Depends(get_db),
     tenant_id: Optional[int] = None,
+    warehouse_id: Optional[int] = Query(None, ge=1),
 ):
     """Returns a single product by ID. tenant_id optional (when provided, scopes to that tenant)."""
     from ..services.product_detail_service import build_product_detail_payload
 
-    return build_product_detail_payload(db, product_id=product_id, tenant_id=tenant_id)
+    return build_product_detail_payload(
+        db,
+        product_id=product_id,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+    )
 
 
 class ProductInventoryTraceabilityBody(BaseModel):

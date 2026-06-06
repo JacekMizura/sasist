@@ -1,18 +1,8 @@
 import { normalizeOperationalAlert } from "../utils/normalizeOperationalApi";
+import type { OperationalAlert } from "../types/operationalApiTypes";
 import api from "./axios";
 
-export type OperationalAlert = {
-  id: number;
-  alert_type: string;
-  severity: string;
-  status: string;
-  title: string;
-  message?: string | null;
-  entity_type?: string | null;
-  entity_id?: number | null;
-  payload?: Record<string, unknown> | null;
-  created_at?: string | null;
-};
+export type { OperationalAlert };
 
 export async function fetchOperationalAlerts(
   tenantId: number,

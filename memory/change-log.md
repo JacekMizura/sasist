@@ -1,5 +1,19 @@
 # Change log
 
+## 2026-06-04 — Frontend TDZ crash fix (circular imports)
+
+- Extracted `IssueDetailSection` → `WmsOrderIssueDetailSection.tsx` (broke Page ↔ Content cycle).
+- Operational API types → `types/operationalApiTypes.ts` (broke normalize ↔ api cycles).
+- Vite `build.sourcemap: true` for readable production stack traces.
+- Madge: 0 circular dependencies (was 4).
+
+## 2026-06-04 — Product list/detail inventory parity
+
+- `product_inventory_display_service.py`: single source for stock + locations (list + detail).
+- `GET /products` and `GET /products/{id}` share `inventory_display_maps_for_products`; optional `warehouse_id`.
+- Logs `[product.list.stock]` / `[product.detail.stock]`; locations payload adds `id` + `code`.
+- `locations_load_incomplete` flag when stock > 0 but no rows; frontend warning instead of „Brak stanu magazynowego”.
+
 ## 2026-06-04 — Layout designer interaction refactor
 
 - Split rack state: `selectedRackId`, `previewRackId`, `editingRackId`, `draggingRackId` (uuid via `rackPrimaryId`).

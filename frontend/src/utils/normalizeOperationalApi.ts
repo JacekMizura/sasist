@@ -1,6 +1,4 @@
-import type { LiveEvent } from "../api/operationalRuntimeApi";
-import type { OperationalAlert } from "../api/operationalAlertsApi";
-import type { WmsOperationalTaskApi } from "../api/wmsOperationalTasksApi";
+import type { LiveEvent, OperationalAlert, WmsOperationalTaskApi } from "../types/operationalApiTypes";
 import { safeTrim } from "./safeStrings";
 
 /** Defensive normalization at API boundary — components must not trust raw payloads. */

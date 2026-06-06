@@ -136,12 +136,16 @@ export type ProductForm = {
   min_total_stock?: number | null;
   metadata_json?: Record<string, unknown> | null;
   locations?: {
+    id?: number;
+    code?: string;
     name: string;
     quantity: number;
     warehouse_id?: number;
     storage_type?: string;
     location_uuid?: string | null;
   }[];
+  locations_load_incomplete?: boolean;
+  detail_degraded?: boolean;
   inventory?: {
     inventory_id?: number | null;
     inventory_serial_ids?: number[];
@@ -657,6 +661,21 @@ export function ProductEditModal({
     });
     return rows;
   }, [inventoryOverride, product?.inventory]);
+
+  const magazynEmptyLocationsMessage = useMemo(() => {
+    if (magazynInventoryRows.length > 0) return "Brak stanu magazynowego";
+    const stock = product?.stock_quantity;
+    const hasStock = typeof stock === "number" && Number.isFinite(stock) && stock > 0;
+    if (hasStock || product?.locations_load_incomplete || product?.detail_degraded) {
+      return "Dane lokalizacji nie zostały załadowane";
+    }
+    return "Brak stanu magazynowego";
+  }, [
+    magazynInventoryRows.length,
+    product?.stock_quantity,
+    product?.locations_load_incomplete,
+    product?.detail_degraded,
+  ]);
 
   const productDimensions =
     typeof length === "number" && typeof width === "number" && typeof height === "number" && length > 0 && width > 0 && height > 0
@@ -2324,6 +2343,7 @@ export function ProductEditModal({
                           physicalStockDisplay={physicalStockDisplay}
                           inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
                           showInventoryLink
+                          emptyLocationsMessage={magazynEmptyLocationsMessage}
                           onEditTraceability={isNew ? undefined : (row) => setTraceEditRow(row)}
                           traceabilityEditDisabled={saving}
                         />

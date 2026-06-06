@@ -1,44 +1,8 @@
 import { normalizeWmsOperationalTask } from "../utils/normalizeOperationalApi";
+import type { WmsOperationalTaskApi } from "../types/operationalApiTypes";
 import api from "./axios";
 
-export type WmsOperationalTaskApi = {
-  id: number;
-  task_type: string;
-  status: string;
-  queue: string;
-  product_id?: number | null;
-  product_name: string;
-  product_sku?: string | null;
-  product_ean?: string | null;
-  image_url?: string | null;
-  order_id?: number | null;
-  order_number?: string | null;
-  order_item_id?: number | null;
-  quantity_required: number;
-  quantity_done: number;
-  quantity_remaining: number;
-  location_hint?: string | null;
-  substitute_product_id?: number | null;
-  substitute_for_product_name?: string | null;
-  group_key: string;
-  priority: number;
-  summary_line: string;
-  created_at?: string | null;
-  updated_at?: string | null;
-  picked_from_location?: string | null;
-  relocation_order_count?: number;
-  relocation_allocation_count?: number;
-  /** CARRIER = nośnik logistyczny; LOCATION = lokacja (z payload zadania RELOCATION). */
-  relocation_mode?: "CARRIER" | "LOCATION" | null;
-  target_zones?: string[];
-  waiting_order_count?: number;
-  waiting_oldest_at?: string | null;
-  orchestration_state?: string | null;
-  assigned_user_id?: number | null;
-  sla_due_at?: string | null;
-  blocked_reason?: string | null;
-  task_payload?: Record<string, unknown>;
-};
+export type { WmsOperationalTaskApi };
 
 export type WmsOperationalRelocationAllocationApi = {
   order_id: number;

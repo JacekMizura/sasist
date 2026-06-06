@@ -94,5 +94,9 @@ export default defineConfig(({ mode, command }) => {
       },
       extensions: ['.tsx', '.ts', '.jsx', '.js', '.json', '.mjs'],
     },
+    build: {
+      // Temporary: readable stack traces for production TDZ / circular-import crashes.
+      sourcemap: true,
+    },
   }
 })

@@ -16,7 +16,7 @@ import { readBrakiOperationalState } from "./readBrakiOperationalState";
 import { WMS_UI } from "./wmsTerminology";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
-import { IssueDetailSection } from "./WmsOrderIssueDetailPage";
+import { IssueDetailSection } from "./WmsOrderIssueDetailSection";
 
 function emptyContext(ctx: OrderIssueOrderContextApi | undefined): OrderIssueOrderContextApi {
   return (
