@@ -4039,6 +4039,13 @@ def ensure_order_issue_task_items_table(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_operational_core_orm_columns(engine: Engine) -> int:
+    """Core ORM column sync — safe at import before first request."""
+    from .schema_introspection import ensure_operational_core_orm_columns as _impl
+
+    return _impl(engine)
+
+
 def ensure_operational_sales_phase1_schema(engine: Engine) -> None:
     """Operational sales phase 1 — channel/mode, zones, sessions, payments."""
     from .schema_introspection import ensure_operational_sales_phase1_schema as _impl

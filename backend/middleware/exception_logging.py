@@ -39,6 +39,23 @@ async def outer_request_logger_middleware(request: Request, call_next: CallNext)
         return await call_next(request)
 
     print(f"[req] {request.method} {path}", flush=True)
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        try:
+            from ..observability.platform_debug import log_db_session, log_request_features
+
+            log_request_features(path=path)
+            log_db_session(phase="middleware_unhandled", path=path, error=f"{type(exc).__name__}: {exc}")
+        except Exception:
+            pass
+        raise
+    if response.status_code >= 500:
+        try:
+            from ..observability.platform_debug import log_request_features
+
+            log_request_features(path=path)
+        except Exception:
+            pass
     print(f"[req] done {response.status_code} {request.url.path}", flush=True)
     return response

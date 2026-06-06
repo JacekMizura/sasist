@@ -163,5 +163,25 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception as exc:
+        try:
+            from .observability.platform_debug import log_db_session
+
+            log_db_session(
+                phase="request_error",
+                dirty=bool(db.dirty),
+                active=db.is_active,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+        except Exception:
+            pass
+        raise
     finally:
+        try:
+            from .observability.platform_debug import log_db_session
+
+            if db.dirty or db.is_active:
+                log_db_session(phase="close", dirty=bool(db.dirty), active=db.is_active)
+        except Exception:
+            pass
         db.close()

@@ -21,12 +21,23 @@ def operational_features_for_request(
     warehouse_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ) -> Generator[OperationalFeaturesContext, None, None]:
-    ctx = build_operational_features_context(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-    token = bind_operational_features(ctx)
+    from ..observability.platform_debug import log_dependency_resolve
+
     try:
-        yield ctx
-    finally:
-        reset_operational_features(token)
+        ctx = build_operational_features_context(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+        token = bind_operational_features(ctx)
+        log_dependency_resolve(name="operational_features_for_request", ok=True)
+        try:
+            yield ctx
+        finally:
+            reset_operational_features(token)
+    except Exception as exc:
+        log_dependency_resolve(
+            name="operational_features_for_request",
+            ok=False,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        raise
 
 
 def operational_sales_sessions_for_request(

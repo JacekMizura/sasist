@@ -180,8 +180,13 @@ def _add_column_if_missing(engine: Engine, table: str, col: str, ddl: str) -> bo
     return True
 
 
-def ensure_operational_sales_phase1_schema(engine: Engine) -> None:
-    """Phase 1: order channel/mode, zones, sessions, payments, traceability."""
+def ensure_operational_core_orm_columns(engine: Engine) -> int:
+    """
+    Sync ORM columns on existing core tables (orders, locations, order_items).
+
+    Must run synchronously at import / before first HTTP request — classic OMS/WMS
+    queries use these models even when operational feature flags are OFF.
+    """
     added = 0
     if has_table(engine, "orders"):
         for col, ddl in (
@@ -200,13 +205,34 @@ def ensure_operational_sales_phase1_schema(engine: Engine) -> None:
             if _add_column_if_missing(engine, "locations", col, ddl):
                 added += 1
     if has_table(engine, "order_items"):
-        if _add_column_if_missing(
-            engine,
-            "order_items",
-            "source_location_id",
-            "ALTER TABLE order_items ADD COLUMN source_location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL",
+        for col, ddl in (
+            (
+                "source_location_id",
+                "ALTER TABLE order_items ADD COLUMN source_location_id INTEGER "
+                "REFERENCES locations(id) ON DELETE SET NULL",
+            ),
+            (
+                "source_movement_id",
+                "ALTER TABLE order_items ADD COLUMN source_movement_id INTEGER "
+                "REFERENCES warehouse_inventory_movements(id) ON DELETE SET NULL",
+            ),
+            (
+                "issue_session_id",
+                "ALTER TABLE order_items ADD COLUMN issue_session_id INTEGER "
+                "REFERENCES direct_sale_sessions(id) ON DELETE SET NULL",
+            ),
+            ("issued_by_user_id", "ALTER TABLE order_items ADD COLUMN issued_by_user_id INTEGER"),
         ):
-            added += 1
+            if _add_column_if_missing(engine, "order_items", col, ddl):
+                added += 1
+    if added:
+        logger.info("[startup.schema] operational_core_orm_columns added=%s", added)
+    return added
+
+
+def ensure_operational_sales_phase1_schema(engine: Engine) -> None:
+    """Phase 1: order channel/mode, zones, sessions, payments, traceability."""
+    added = ensure_operational_core_orm_columns(engine)
 
     if not has_table(engine, "operational_workstations"):
         with engine.begin() as conn:
@@ -361,22 +387,7 @@ def ensure_operational_sales_phase2_schema(engine: Engine) -> None:
         ):
             if _add_column_if_missing(engine, "stock_reservations", col, ddl):
                 added += 1
-    if has_table(engine, "order_items"):
-        for col, ddl in (
-            (
-                "source_movement_id",
-                "ALTER TABLE order_items ADD COLUMN source_movement_id INTEGER "
-                "REFERENCES warehouse_inventory_movements(id) ON DELETE SET NULL",
-            ),
-            (
-                "issue_session_id",
-                "ALTER TABLE order_items ADD COLUMN issue_session_id INTEGER "
-                "REFERENCES direct_sale_sessions(id) ON DELETE SET NULL",
-            ),
-            ("issued_by_user_id", "ALTER TABLE order_items ADD COLUMN issued_by_user_id INTEGER"),
-        ):
-            if _add_column_if_missing(engine, "order_items", col, ddl):
-                added += 1
+    added += ensure_operational_core_orm_columns(engine)
     if has_table(engine, "direct_sale_sessions"):
         for col, ddl in (
             ("customer_id", "ALTER TABLE direct_sale_sessions ADD COLUMN customer_id INTEGER"),

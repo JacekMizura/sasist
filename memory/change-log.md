@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Platform stability incident (RCA + fix)
+
+- **Root cause:** ORM models gained operational columns (`orders.order_channel`, `locations.operational_zone_type`, `order_items.source_movement_id`, …) but migrations ran only in async background `_upgrade_schema` — classic APIs failed with `no such column` before migration completed. Not ContextVar / feature-flag coupling.
+- **Fix:** `ensure_operational_core_orm_columns()` runs synchronously at import + startup sync hook; phase1/2/3/4 schema isolated in separate try/except blocks.
+- **Observability:** `backend/observability/platform_debug.py` — tags `[startup.schema]`, `[request.features]`, `[db.session]`, `[dependency.resolve]`, `[feature.scope]`; enable verbose with `PLATFORM_DEBUG=1`.
+
 ## 2026-06-05 — Replenishment execution UI Phase 6
 
 - Full replenishment table + scanner execution modal + execute-step API.

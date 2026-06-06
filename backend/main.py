@@ -164,6 +164,7 @@ from .db.schema_upgrade import (
     ensure_order_issue_tasks_lifecycle_columns,
     ensure_order_issue_task_items_table,
     ensure_wms_operational_tasks_table,
+    ensure_operational_core_orm_columns,
     ensure_operational_sales_phase1_schema,
     ensure_operational_sales_phase2_schema,
     ensure_operational_sales_phase3_schema,
@@ -636,6 +637,14 @@ ensure_orders_deleted_at_column(engine)
 ensure_rmz_line_split_columns(engine)
 ensure_rmz_line_damage_entries_json(engine)
 ensure_wms_refunds_columns(engine)
+# Core operational ORM columns — must exist before first request (classic OMS/WMS use Order/Location models).
+try:
+    _core_orm_added = ensure_operational_core_orm_columns(engine)
+    from .observability.platform_debug import log_startup_schema
+
+    log_startup_schema("import_operational_core_orm_columns", added=_core_orm_added)
+except Exception:
+    logging.getLogger(__name__).exception("[startup.schema] ensure_operational_core_orm_columns failed at import")
 # Panel return UI statuses: run at import so first request works even before startup hook.
 try:
     ensure_return_ui_statuses_and_column(engine)
@@ -822,6 +831,13 @@ async def upgrade_schema() -> None:
     import asyncio
 
     print("[startup] upgrade_schema: scheduled (background thread)", flush=True)
+    try:
+        from .observability.platform_debug import log_startup_schema
+
+        added = ensure_operational_core_orm_columns(engine)
+        log_startup_schema("startup_sync_operational_core_orm_columns", added=added)
+    except Exception as exc:
+        log_unhandled_exception("startup ensure_operational_core_orm_columns (sync)", exc)
 
     async def _run() -> None:
         try:
@@ -834,8 +850,13 @@ async def upgrade_schema() -> None:
 
 def _upgrade_schema() -> None:
     from . import models as _orm_models  # noqa: F401 — all tables on Base.metadata before create_all
+    from .observability.platform_debug import log_startup_schema
 
     print("[startup] upgrade_schema: begin", flush=True)
+    try:
+        log_startup_schema("background_begin", added=ensure_operational_core_orm_columns(engine))
+    except Exception:
+        logging.getLogger(__name__).exception("[startup.schema] core ORM sync failed at background begin")
     ensure_sqlite_tables(announce=True)
     ensure_locations_columns(engine)
     ensure_warehouse_layout_identity_columns(engine)
@@ -1127,14 +1148,26 @@ def _upgrade_schema() -> None:
         ensure_order_issue_tasks_lifecycle_columns(engine)
         ensure_order_issue_task_items_table(engine)
         ensure_wms_operational_tasks_table(engine)
-        ensure_operational_sales_phase1_schema(engine)
-        ensure_operational_sales_phase2_schema(engine)
-        ensure_operational_sales_phase3_schema(engine)
-        ensure_operational_runtime_phase4_schema(engine)
+        try:
+            ensure_operational_sales_phase1_schema(engine)
+        except Exception:
+            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_sales_phase1_schema failed")
+        try:
+            ensure_operational_sales_phase2_schema(engine)
+        except Exception:
+            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_sales_phase2_schema failed")
+        try:
+            ensure_operational_sales_phase3_schema(engine)
+        except Exception:
+            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_sales_phase3_schema failed")
+        try:
+            ensure_operational_runtime_phase4_schema(engine)
+        except Exception:
+            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_runtime_phase4_schema failed")
         try:
             ensure_operational_feature_scopes_schema(engine)
         except Exception:
-            logging.getLogger(__name__).exception("ensure_operational_feature_scopes_schema failed")
+            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_feature_scopes_schema failed")
         ensure_orders_fulfillment_state_columns(engine)
         ensure_orders_priority_color_column(engine)
         ensure_orders_discount_columns(engine)

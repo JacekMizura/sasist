@@ -1,5 +1,7 @@
 # Current Context
 
+- **Platform stability (2026-06-04):** Incident RCA complete. Classic API 503/500 caused by ORM/schema drift + async startup race — fixed via `ensure_operational_core_orm_columns` at import. Operational runtime remains optional (flags OFF). Debug logs in `observability/platform_debug.py` (`PLATFORM_DEBUG=1`).
+
 - **Replenishment execution Phase 6 (2026-06-05):** Pełna tabela uzupełnień + modal skanerowy (scan source→product→target→complete). Kanban zadań QUEUED…COMPLETED. API `POST …/tasks/{id}/execute-step`. Operator workload, actionable alerts, zone pressure v2, timeline. Testy: `test_replenishment_execution.py`.
 
 - **Visual operational runtime Phase 5 (2026-06-05):** WMS tab Operacje `/wms/operations` — live hub, uzupełnienia, zadania, operatorzy, alerty. Komponenty `components/operations/`, hooki `hooks/runtime/`. Direct sales: top bar + runtime footer. Graceful fallback gdy runtime OFF.

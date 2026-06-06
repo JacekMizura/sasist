@@ -145,12 +145,22 @@ def _load_scope_overrides(
             getattr(wh_row, "operational_runtime", None) if wh_row else None,
             getattr(wh_row, "replenishment_engine", None) if wh_row else None,
         )
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "[operational.features] scope lookup failed tenant_id=%s warehouse_id=%s",
             tenant_id,
             warehouse_id,
         )
+        try:
+            from ..observability.platform_debug import log_feature_scope
+
+            log_feature_scope(
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+        except Exception:
+            pass
         return None, None, None, None, None, None, None, None, None, None
 
 
@@ -175,7 +185,7 @@ def build_operational_features_context(
     repl, scope_repl = _tri_merge(bool(g["replenishment_engine"]), t_repl, w_repl)
     scopes = {scope_ops, scope_excl, scope_sess, scope_runtime, scope_repl}
     resolution = "warehouse" if "warehouse" in scopes else ("tenant" if "tenant" in scopes else "global")
-    return OperationalFeaturesContext(
+    ctx = OperationalFeaturesContext(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
         operational_sales=ops,
@@ -185,6 +195,17 @@ def build_operational_features_context(
         replenishment_engine=repl,
         resolution_scope=resolution,
     )
+    try:
+        from ..observability.platform_debug import log_feature_scope
+
+        log_feature_scope(
+            tenant_id=ctx.tenant_id,
+            warehouse_id=ctx.warehouse_id,
+            scope=ctx.resolution_scope,
+        )
+    except Exception:
+        pass
+    return ctx
 
 
 def get_bound_operational_features() -> OperationalFeaturesContext | None:
