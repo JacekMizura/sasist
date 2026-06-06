@@ -557,12 +557,6 @@ def post_session_complete(
             status_code=exc.http_status,
             detail={"message": exc.message, "code": getattr(exc, "code", None)},
         ) from exc
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail={"message": "Nie udało się zakończyć sprzedaży.", "code": "complete_failed"},
-        ) from exc
 
 
 @router.post("/documents/{job_id}/reprint")

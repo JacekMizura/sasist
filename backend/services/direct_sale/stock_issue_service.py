@@ -124,14 +124,17 @@ def issue_stock_for_allocations(
                 f"Brak rezerwacji dla produktu #{alloc.product_id} w lokalizacji #{alloc.location_id}.",
                 code="reservation_missing",
             )
-        slices = consume_inventory_fifo_slices(
-            db,
-            tenant_id=int(order.tenant_id),
-            warehouse_id=int(order.warehouse_id),
-            product_id=int(alloc.product_id),
-            location_id=int(alloc.location_id),
-            quantity=float(alloc.quantity),
-        )
+        try:
+            slices = consume_inventory_fifo_slices(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                product_id=int(alloc.product_id),
+                location_id=int(alloc.location_id),
+                quantity=float(alloc.quantity),
+            )
+        except ValueError as exc:
+            raise DirectSaleError(str(exc), code="insufficient_stock", http_status=409) from exc
         oi = order_items_by_line.get(int(alloc.session_line_id))
         if oi is None:
             raise DirectSaleError("Brak pozycji zamówienia dla linii sesji.", code="order_item_missing")

@@ -161,9 +161,22 @@ export function parseCompleteError(err: unknown): DirectSaleCompleteError {
     }
   }
   let phase: DirectSaleCompleteError["phase"] = "unknown";
-  const c = (code ?? "").toLowerCase();
-  if (c.includes("payment") || c.includes("pay")) phase = "payment";
-  else if (c.includes("document") || c.includes("job")) phase = "document";
-  else if (c.includes("reservation") || c.includes("issue") || c.includes("stock")) phase = "issue";
+  const c = (code ?? "").toUpperCase();
+  if (c === "PAYMENT_FAILED" || c.includes("PAYMENT")) phase = "payment";
+  else if (c === "DOCUMENT_GENERATION_FAILED" || c.includes("DOCUMENT") || c.includes("JOB")) phase = "document";
+  else if (
+    c === "OUT_OF_STOCK" ||
+    c === "ALLOCATION_FAILED" ||
+    c === "ISSUE_FAILED" ||
+    c.includes("STOCK") ||
+    c.includes("ISSUE") ||
+    c.includes("RESERVATION") ||
+    c.includes("LOCATION")
+  ) {
+    phase = "issue";
+  }
+  if (/internal server error/i.test(message)) {
+    message = "Nie udało się zakończyć sprzedaży.";
+  }
   return { message, code, phase };
 }

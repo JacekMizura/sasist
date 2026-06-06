@@ -4,12 +4,12 @@ import type { useDirectSalesTerminal } from "../../hooks/directSales/useDirectSa
 import { DirectSalesHistoryPanel } from "./history/DirectSalesHistoryPanel";
 import { CustomerPanel } from "./CustomerPanel";
 import { DocumentPanel } from "./DocumentPanel";
-import { PaymentPanel } from "./PaymentPanel";
+import { PaymentTerminalPanel } from "./payment/PaymentTerminalPanel";
 import { ProductSearchPanel } from "./ProductSearchPanel";
-import { ScannerStatusBar } from "./ScannerStatusBar";
 import { SessionLinesPanel } from "./SessionLinesPanel";
 import { SuspendedSessionsPanel } from "./SuspendedSessionsPanel";
-import { CompleteErrorRecovery } from "./traceability/CompleteErrorRecovery";
+import { CompleteErrorModal } from "./overlays/CompleteErrorModal";
+import { TerminalStatusBar } from "./terminal/TerminalStatusBar";
 import { DirectSalesConfirmationScreen } from "./traceability/DirectSalesConfirmationScreen";
 
 type Terminal = ReturnType<typeof useDirectSalesTerminal>;
@@ -77,11 +77,12 @@ export function DirectSalesLayout({ terminal }: Props) {
             void sessionState.refreshCompletion(sessionState.completionView!.session_id)
           }
         />
-        <ScannerStatusBar
+        <TerminalStatusBar
           health={runtime.health}
           connected={runtime.connected}
           scannerReady
           warehouseName={warehouse?.name}
+          sessionStatus="COMPLETED"
         />
       </div>
     );
@@ -104,13 +105,12 @@ export function DirectSalesLayout({ terminal }: Props) {
         </div>
       ) : null}
       {sessionState.completeError ? (
-        <div className="shrink-0 p-3">
-          <CompleteErrorRecovery
-            error={sessionState.completeError}
-            onRetry={() => void handleComplete()}
-            onNewSale={handleNewSession}
-          />
-        </div>
+        <CompleteErrorModal
+          error={sessionState.completeError}
+          onRetry={() => void handleComplete()}
+          onNewSale={handleNewSession}
+          onDismiss={sessionState.dismissCompleteError}
+        />
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-2 lg:flex-row">
         <div className="flex shrink-0 flex-col gap-2 lg:w-72">
@@ -160,23 +160,26 @@ export function DirectSalesLayout({ terminal }: Props) {
             onChange={sessionState.setDocumentSubtype}
             disabled={sessionState.busy}
           />
-          <PaymentPanel
+          <PaymentTerminalPanel
             total={sessionState.total}
             busy={sessionState.busy}
             hasSession={session != null}
             hasLines={hasLines}
             session={session}
             paymentMethod={sessionState.paymentMethod}
+            cashReceived={sessionState.cashReceived}
+            onCashReceivedChange={sessionState.setCashReceived}
             onPaymentMethodChange={sessionState.setPaymentMethod}
             onComplete={() => void handleComplete()}
           />
         </aside>
       </div>
-      <ScannerStatusBar
+      <TerminalStatusBar
         health={runtime.health}
         connected={runtime.connected}
         scannerReady={!sessionState.busy}
         warehouseName={warehouse?.name}
+        sessionStatus={session?.status ?? null}
       />
     </div>
   );

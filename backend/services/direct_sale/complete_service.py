@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from ...models.commerce_operational import DirectSaleSession
+from .complete_pipeline_log import log_complete_step
 from .document_pipeline_service import (
     DirectSaleDocumentRequest,
     enqueue_direct_sale_documents,
     process_direct_sale_document_job,
 )
 from .issue_plan_service import plan_issue_allocations
+from .operational_error_map import map_complete_exception
 from .order_service import create_order_from_session
 from .payment_service import orchestrate_direct_sale_payment
 from .errors import DirectSaleError
@@ -22,6 +26,8 @@ from .stock_issue_service import create_reservations_for_order, issue_stock_for_
 from ..operational_features_context import build_operational_features_context
 from ..operational_observability import log_direct_sale_complete
 from ..operational_sales_events import emit_operational_sales_event
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,6 +40,7 @@ class DirectSaleCompleteResult:
     total_amount: float
     payment_status: str | None = None
     payment_method: str | None = None
+    document_warning: str | None = None
 
 
 def _session_total(sess: DirectSaleSession) -> float:
@@ -54,11 +61,9 @@ def start_direct_sale_payment(
     performed_by_user_id: int | None = None,
 ) -> DirectSaleSession:
     if sess.status not in ("ACTIVE", "SUSPENDED"):
-        raise DirectSaleError("Sesja nie może rozpocząć płatności.", code="invalid_status")
+        raise DirectSaleError("Sesja nie może rozpocząć płatności.", code="SESSION_INVALID")
     if not (sess.lines or []):
-        raise DirectSaleError("Sesja nie ma pozycji.", code="empty_session")
-    import json
-
+        raise DirectSaleError("Sesja nie ma pozycji.", code="SESSION_INVALID")
     ctx = {
         "method": (payment_method or "CASH").strip().upper(),
         "amount": _session_total(sess),
@@ -91,99 +96,122 @@ def complete_direct_sale_session(
     document_subtype: str = "RECEIPT",
     performed_by_user_id: int | None = None,
 ) -> DirectSaleCompleteResult:
+    sid = int(sess.id)
     if sess.status not in ("ACTIVE", "CHECKOUT", "SUSPENDED"):
-        raise DirectSaleError("Sesja nie może być zakończona.", code="invalid_status")
+        raise DirectSaleError("Sesja nie może być zakończona.", code="SESSION_INVALID")
     if sess.order_id is not None:
-        raise DirectSaleError("Sesja już zakończona.", code="already_completed")
+        raise DirectSaleError("Sesja już zakończona.", code="SESSION_INVALID")
     if not (sess.lines or []):
-        raise DirectSaleError("Sesja nie ma pozycji.", code="empty_session")
+        raise DirectSaleError("Sesja nie ma pozycji.", code="SESSION_INVALID")
 
     lines = list(sess.lines or [])
+    document_warning: str | None = None
+    current_step = "create_order"
     try:
-        # 1. Order + OrderItems (anchor)
-        order, items_by_line = create_order_from_session(db, sess, lines=lines)
+        current_step = "create_order"
+        with log_complete_step(session_id=sid, step=current_step):
+            order, items_by_line = create_order_from_session(db, sess, lines=lines)
 
-        # 2. Plan issue allocations (issue_strategy)
-        allocations = plan_issue_allocations(db, sess, lines)
+        current_step = "plan_allocations"
+        with log_complete_step(session_id=sid, step=current_step):
+            allocations = plan_issue_allocations(db, sess, lines)
 
-        # 3. Reservations (before issue)
-        reservations = create_reservations_for_order(
-            db,
-            order=order,
-            sess=sess,
-            allocations=allocations,
-            performed_by_user_id=performed_by_user_id,
-        )
+        current_step = "reserve_stock"
+        with log_complete_step(session_id=sid, step=current_step):
+            reservations = create_reservations_for_order(
+                db,
+                order=order,
+                sess=sess,
+                allocations=allocations,
+                performed_by_user_id=performed_by_user_id,
+            )
 
-        # 4. Issue stock + movements
-        issue_stock_for_allocations(
-            db,
-            order=order,
-            sess=sess,
-            order_items_by_line=items_by_line,
-            allocations=allocations,
-            reservations=reservations,
-            performed_by_user_id=performed_by_user_id,
-        )
+        current_step = "issue_stock"
+        with log_complete_step(session_id=sid, step=current_step):
+            issue_stock_for_allocations(
+                db,
+                order=order,
+                sess=sess,
+                order_items_by_line=items_by_line,
+                allocations=allocations,
+                reservations=reservations,
+                performed_by_user_id=performed_by_user_id,
+            )
 
-        # 5. Payment orchestration
         total = _session_total(sess)
-        pay = orchestrate_direct_sale_payment(
-            db,
-            order=order,
-            sess=sess,
-            amount=total,
-            method=payment_method,
-            performed_by_user_id=performed_by_user_id,
-        )
+        current_step = "create_payment"
+        with log_complete_step(session_id=sid, step=current_step):
+            pay = orchestrate_direct_sale_payment(
+                db,
+                order=order,
+                sess=sess,
+                amount=total,
+                method=payment_method,
+                performed_by_user_id=performed_by_user_id,
+            )
 
-        # 6. Document generation pipeline (async job — worker generates, not inline)
-        doc_result = enqueue_direct_sale_documents(
-            db,
-            DirectSaleDocumentRequest(
+        doc_result = None
+        processed_number: str | None = None
+        current_step = "generate_documents"
+        with log_complete_step(session_id=sid, step=current_step):
+            doc_result = enqueue_direct_sale_documents(
+                db,
+                DirectSaleDocumentRequest(
+                    tenant_id=int(sess.tenant_id),
+                    warehouse_id=int(sess.warehouse_id),
+                    order_id=int(order.id),
+                    session_id=int(sess.id),
+                    document_subtype=document_subtype,
+                    performed_by_user_id=performed_by_user_id,
+                    device_id=int(sess.workstation_id) if sess.workstation_id else None,
+                ),
+            )
+            try:
+                processed = process_direct_sale_document_job(db, doc_result.job_id)
+                processed_number = processed.document_number
+                if str(processed.status or "").upper() in ("FAILED", "RETRYING") and not processed_number:
+                    document_warning = "Dokument zostanie wygenerowany asynchronicznie."
+            except Exception as doc_exc:
+                document_warning = "Dokument zostanie wygenerowany asynchronicznie."
+                logger.warning(
+                    "[direct-sales.complete] session_id=%s step=generate_documents soft_fail=%s",
+                    sid,
+                    doc_exc,
+                )
+
+        current_step = "complete_session"
+        with log_complete_step(session_id=sid, step=current_step):
+            now = datetime.utcnow()
+            sess.status = "COMPLETED"
+            sess.order_id = int(order.id)
+            sess.completed_at = now
+            sess.last_activity_at = now
+            sess.expires_at = None
+
+            emit_operational_sales_event(
+                db,
+                "direct_sale.completed",
                 tenant_id=int(sess.tenant_id),
                 warehouse_id=int(sess.warehouse_id),
                 order_id=int(order.id),
                 session_id=int(sess.id),
-                document_subtype=document_subtype,
+                source="direct_sales",
                 performed_by_user_id=performed_by_user_id,
                 device_id=int(sess.workstation_id) if sess.workstation_id else None,
-            ),
-        )
-        processed = process_direct_sale_document_job(db, doc_result.job_id)
-
-        # 7. Complete session
-        now = datetime.utcnow()
-        sess.status = "COMPLETED"
-        sess.order_id = int(order.id)
-        sess.completed_at = now
-        sess.last_activity_at = now
-        sess.expires_at = None
-
-        emit_operational_sales_event(
-            db,
-            "direct_sale.completed",
-            tenant_id=int(sess.tenant_id),
-            warehouse_id=int(sess.warehouse_id),
-            order_id=int(order.id),
-            session_id=int(sess.id),
-            source="direct_sales",
-            performed_by_user_id=performed_by_user_id,
-            device_id=int(sess.workstation_id) if sess.workstation_id else None,
-            extra={
-                "payment_id": int(pay.id),
-                "document_job_id": doc_result.job_id,
-                "document_number": processed.document_number,
-                "total_amount": total,
-            },
-        )
+                extra={
+                    "payment_id": int(pay.id),
+                    "document_job_id": doc_result.job_id if doc_result else None,
+                    "document_number": processed_number,
+                    "total_amount": total,
+                },
+            )
 
         db.flush()
         feat = build_operational_features_context(
             db, tenant_id=int(sess.tenant_id), warehouse_id=int(sess.warehouse_id)
         )
         log_direct_sale_complete(
-            session_id=int(sess.id),
+            session_id=sid,
             order_id=int(order.id),
             tenant_id=int(sess.tenant_id),
             warehouse_id=int(sess.warehouse_id),
@@ -192,22 +220,23 @@ def complete_direct_sale_session(
             features=feat.as_log_dict(),
         )
         return DirectSaleCompleteResult(
-            session_id=int(sess.id),
+            session_id=sid,
             order_id=int(order.id),
             payment_id=int(pay.id),
-            document_job_id=doc_result.job_id,
-            document_number=processed.document_number,
+            document_job_id=doc_result.job_id if doc_result else None,
+            document_number=processed_number,
             total_amount=total,
-            payment_status=str(pay.status or "") or None,
-            payment_method=str(pay.method or "") or None,
+            payment_status=str(getattr(pay, "status", None) or "") or None,
+            payment_method=str(getattr(pay, "method", None) or "") or None,
+            document_warning=document_warning,
         )
     except Exception as exc:
         log_direct_sale_complete(
-            session_id=int(sess.id),
+            session_id=sid,
             order_id=int(sess.order_id) if sess.order_id else None,
             tenant_id=int(sess.tenant_id),
             warehouse_id=int(sess.warehouse_id),
             status="error",
             error=str(exc),
         )
-        raise
+        raise map_complete_exception(exc, step=current_step) from exc

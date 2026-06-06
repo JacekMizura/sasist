@@ -61,6 +61,7 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [cashReceived, setCashReceived] = useState(0);
   const [documentSubtype, setDocumentSubtype] = useState<DocumentSubtype>("RECEIPT");
   const [lastComplete, setLastComplete] = useState<DirectSaleCompleteResult | null>(null);
   const [completionView, setCompletionView] = useState<DirectSaleCompletion | null>(null);
@@ -73,6 +74,10 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     () => (session?.lines ?? []).reduce((sum, ln) => sum + lineTotal(ln), 0),
     [session?.lines],
   );
+
+  useEffect(() => {
+    setCashReceived((prev) => (prev < total ? total : prev));
+  }, [total]);
 
   const apiScope = useCallback((): { tenantId: number; warehouseId: number } | null => {
     const wid = warehouseId ?? session?.warehouse_id ?? null;
@@ -121,6 +126,8 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     setCompleteError(null);
     void startNewSession();
   }, [startNewSession]);
+
+  const dismissCompleteError = useCallback(() => setCompleteError(null), []);
 
   const showHistoricalCompletion = useCallback(
     async (sessionId: number) => {
@@ -410,6 +417,9 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     total,
     paymentMethod,
     setPaymentMethod,
+    cashReceived,
+    setCashReceived,
+    dismissCompleteError,
     documentSubtype,
     setDocumentSubtype,
     lastComplete,
