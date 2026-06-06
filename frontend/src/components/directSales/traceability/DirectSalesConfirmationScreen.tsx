@@ -109,6 +109,12 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale, onRefresh
             >
               Pokaż zamówienie
             </Link>
+            <Link
+              to={docType === "FV" ? "/documents/sales/invoices" : "/documents/sales/receipts"}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-800"
+            >
+              Dokumenty sprzedaży
+            </Link>
             {completion.document?.job_id ? (
               <button
                 type="button"

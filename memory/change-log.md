@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-04 — Direct sales settings cache + sale documents
+
+- Terminal: localStorage cache-first settings (`directSalesSettingsCache`), instant render, silent API refresh via `settings_version`.
+- Document complete: auto-seed SALE series (PA/FV), `[direct_sales.document]` logging, `GET /sale-documents/` list wired to Dokumenty sprzedaży.
+
 ## 2026-06-04 — Unified pricing + inventory parity
 
 - `resolvedProductPricing.ts`: canonical `ResolvedProductPricing` DTO; list/detail/direct sales consume only resolver.

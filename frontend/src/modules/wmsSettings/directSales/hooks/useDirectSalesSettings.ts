@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { listOrderStatuses } from "../../../../api/orderStatusesApi";
 import type { OrderStatusOption } from "../../../../types/wmsPackingSettings";
+import { writeCachedDirectSalesSettings } from "../../../directSales/settings/directSalesSettingsCache";
 import { getDirectSalesSettings, saveDirectSalesSettings } from "../api/directSalesSettingsApi";
 import type { DirectSalesSettingsConfig, EditScope } from "../schemas/directSalesSettingsSchema";
 import { normalizeDirectSalesSettings } from "../schemas/directSalesSettingsSchema";
@@ -69,6 +70,9 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
     setDraft(normalized);
     setSavedScopeSnapshot(fingerprint(normalized));
     setHasWarehouseOverride(data.has_warehouse_override);
+    if (warehouseId != null && scope === "warehouse") {
+      writeCachedDirectSalesSettings(data);
+    }
   }, [draft, tenantId, warehouseId, scope, statusOptions]);
 
   const discard = useCallback(() => {

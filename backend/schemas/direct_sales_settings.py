@@ -64,6 +64,8 @@ class DirectSalesSettingsRead(BaseModel):
     tenant_defaults: DirectSalesSettingsConfig
     warehouse_overrides: DirectSalesSettingsConfig | None = None
     has_warehouse_override: bool = False
+    settings_version: str = ""
+    updated_at: Optional[str] = None
 
 
 class DirectSalesSettingsSave(BaseModel):

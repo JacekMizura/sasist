@@ -209,6 +209,21 @@ def complete_direct_sale_session(
             try:
                 processed = process_direct_sale_document_job(db, doc_result.job_id)
                 processed_number = processed.document_number
+                if str(processed.status or "").upper() == "GENERATED":
+                    logger.info(
+                        "[direct_sales.document] %s",
+                        json.dumps(
+                            {
+                                "session_id": sid,
+                                "document_type": str(processed.document_subtype or document_subtype),
+                                "document_id": processed.sale_document_id,
+                                "order_id": int(order.id),
+                                "status": "created",
+                                "document_number": processed_number,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    )
                 if str(processed.status or "").upper() in ("FAILED", "RETRYING") and not processed_number:
                     document_warning = "Dokument zostanie wygenerowany asynchronicznie."
             except Exception as doc_exc:

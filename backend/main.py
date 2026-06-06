@@ -286,6 +286,7 @@ from .api.wms_order_issue_tasks import router as wms_order_issue_tasks_router
 from .api.wms_operational_tasks import router as wms_operational_tasks_router
 from .api.location_stock import router as location_stock_router
 from .api.direct_sales import router as direct_sales_router
+from .api.sale_documents import router as sale_documents_router
 from .api.document_generation_jobs import router as document_generation_jobs_router
 from .api.operational_pickup import router as operational_pickup_router
 from .api.operational_workstations import router as operational_workstations_router
@@ -1453,6 +1454,7 @@ _API_ROUTERS = (
     wms_operational_tasks_router,
     location_stock_router,
     direct_sales_router,
+    sale_documents_router,
     document_generation_jobs_router,
     operational_pickup_router,
     operational_workstations_router,

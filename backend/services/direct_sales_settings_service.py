@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from datetime import datetime
@@ -167,6 +168,30 @@ def _get_or_create_row(db: Session, tenant_id: int, warehouse_id: int) -> Direct
     return row
 
 
+def _settings_version_for_read(
+    *,
+    tenant_row: DirectSalesSettings | None,
+    wh_row: DirectSalesSettings | None,
+    resolved: DirectSalesSettingsConfig,
+) -> tuple[str, str | None]:
+    """Stable version hash + latest updated_at for cache invalidation."""
+    parts: list[str] = []
+    latest: datetime | None = None
+    for row in (tenant_row, wh_row):
+        if row is None:
+            continue
+        parts.append(str(row.settings_json or "{}"))
+        ts = getattr(row, "updated_at", None) or getattr(row, "created_at", None)
+        if isinstance(ts, datetime):
+            parts.append(ts.isoformat())
+            if latest is None or ts > latest:
+                latest = ts
+    if not parts:
+        parts.append(resolved.model_dump_json())
+    digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+    return digest, latest.isoformat() if latest else None
+
+
 def resolve_direct_sales_settings(
     db: Session,
     *,
@@ -210,6 +235,11 @@ def resolve_direct_sales_settings(
         apply_status_fallbacks=resolve_wh is not None,
     )
 
+    version, updated_at = _settings_version_for_read(
+        tenant_row=tenant_row,
+        wh_row=wh_row,
+        resolved=resolved,
+    )
     return DirectSalesSettingsRead(
         tenant_id=int(tenant_id),
         warehouse_id=wh_id,
@@ -217,6 +247,8 @@ def resolve_direct_sales_settings(
         tenant_defaults=tenant_defaults,
         warehouse_overrides=warehouse_overrides if has_override else None,
         has_warehouse_override=has_override,
+        settings_version=version,
+        updated_at=updated_at,
     )
 
 

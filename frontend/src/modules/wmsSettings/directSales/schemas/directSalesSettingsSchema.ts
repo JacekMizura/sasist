@@ -56,6 +56,8 @@ export type DirectSalesSettingsRead = {
   tenant_defaults: DirectSalesSettingsConfig;
   warehouse_overrides: DirectSalesSettingsConfig | null;
   has_warehouse_override: boolean;
+  settings_version?: string;
+  updated_at?: string | null;
 };
 
 export type DirectSalesSettingsSave = {

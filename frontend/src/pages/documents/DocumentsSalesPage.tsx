@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Download, FileText, Plus, Upload } from "lucide-react";
 
+import { listSaleDocuments } from "../../api/saleDocumentsApi";
+import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "./documentsBadges";
 import type { BusinessDocStatus } from "./warehouseDocumentsUi";
 import DocumentsEmptyState from "./DocumentsEmptyState";
@@ -36,15 +39,54 @@ const btnSecondary =
 
 export default function DocumentsSalesPage() {
   const { pathname } = useLocation();
+  const { selectedWarehouseId } = useWarehouse();
   const isReceipts = pathname.endsWith("/receipts");
-  const [rows] = useState<SalesRow[]>([]);
+  const [rows, setRows] = useState<SalesRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const empty = useMemo(() => rows.length === 0, [rows.length]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void listSaleDocuments({
+      tenantId: DAMAGE_TENANT_ID,
+      warehouseId: selectedWarehouseId ?? undefined,
+      panelDocumentType: isReceipts ? "PARAGON" : "INVOICE",
+    })
+      .then((items) => {
+        if (cancelled) return;
+        setRows(
+          items.map((it) => ({
+            id: it.document_number || it.id,
+            orderNumber: it.order_number ?? `#${it.order_id}`,
+            client: it.client,
+            series: it.series,
+            docType: it.doc_type,
+            date: it.date ? new Date(it.date).toLocaleString("pl-PL") : "—",
+            net: `${Number(it.net).toFixed(2)} zł`,
+            gross: `${Number(it.gross).toFixed(2)} zł`,
+            paymentMethod: "—",
+            paid: true,
+            externalStatus: "NOWE" as BusinessDocStatus,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isReceipts, selectedWarehouseId]);
+
+  const empty = useMemo(() => !loading && rows.length === 0, [loading, rows.length]);
 
   const sectionTitle = isReceipts ? "Paragony" : "Faktury";
   const sectionSubtitle = isReceipts
-    ? "Dokumenty sprzedaży uproszczonej — lista zostanie zsynchronizowana z modułem sprzedaży."
-    : "Faktury VAT i powiązane dokumenty sprzedaży — widok operacyjny w jednym miejscu.";
+    ? "Paragony z terminala sprzedaży bezpośredniej i pakowania WMS."
+    : "Faktury VAT z terminala sprzedaży bezpośredniej i pakowania WMS.";
 
   const kpiItems = useMemo(() => {
     const countLabel = isReceipts ? "Liczba paragonów" : "Liczba faktur";
@@ -116,7 +158,11 @@ export default function DocumentsSalesPage() {
         </DocumentsFiltersToolbar>
       }
     >
-      {empty ? (
+      {loading ? (
+        <DocumentsTableCard>
+          <p className="px-4 py-8 text-center text-sm text-slate-500">Ładowanie dokumentów…</p>
+        </DocumentsTableCard>
+      ) : empty ? (
         <DocumentsTableCard>
           <DocumentsEmptyState
             icon={FileText}

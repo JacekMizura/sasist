@@ -42,7 +42,7 @@ export function useDirectSalesTerminal() {
   const sessionState = useDirectSalesSession({
     warehouseId,
     onProductAdded,
-    enabled: salesEnabled && !settingsState.loading && settingsState.error == null,
+    enabled: salesEnabled,
     onSuspended: () => setSuspendedKey((k) => k + 1),
   });
 
@@ -112,7 +112,6 @@ export function useDirectSalesTerminal() {
     enabled:
       salesEnabled &&
       !sessionState.unavailable &&
-      !settingsState.loading &&
       settingsState.resolvedDirectSalesSettings.keyboard_shortcuts,
     onCash: () => sessionState.setPaymentMethod("CASH"),
     onCard: () => sessionState.setPaymentMethod("CARD"),
@@ -124,7 +123,8 @@ export function useDirectSalesTerminal() {
     warehouse,
     warehouseId,
     resolvedDirectSalesSettings: settingsState.resolvedDirectSalesSettings,
-    settingsLoading: settingsState.loading,
+    settingsLoading: false,
+    settingsRefreshing: settingsState.refreshing,
     settingsError: settingsState.error,
     reloadSettings: settingsState.reload,
     runtime,

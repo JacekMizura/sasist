@@ -14,6 +14,8 @@ from ...models.document_generation_job import (
     DocumentGenerationJob,
 )
 from ...models.order import Order
+from ..document_number_service import resolve_default_document_series
+from ..document_series_seed_service import ensure_default_document_series
 from .series_resolution_service import (
     SeriesResolutionContext,
     resolve_document_series,
@@ -54,16 +56,41 @@ def enqueue_document_job(
     if order is None:
         raise DirectSaleError("Zamówienie nie istnieje.", code="order_not_found", http_status=404)
 
+    sub = str(document_subtype or "RECEIPT").strip().upper()
+    try:
+        ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
+    except Exception:
+        logger.exception(
+            "[document.pipeline] ensure_default_document_series failed tenant_id=%s warehouse_id=%s",
+            tenant_id,
+            warehouse_id,
+        )
     ctx = series_context_from_order(
         db,
         order,
         document_type=document_type,
-        document_subtype=document_subtype,
+        document_subtype=sub,
         fiscal_profile=fiscal_profile,
         operational_zone=operational_zone,
     )
     series = resolve_document_series(db, ctx)
+    if series is None:
+        series = resolve_default_document_series(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            series_type="SALE",
+            subtype=sub,
+        )
     series_id = str(series.id) if series else None
+    if series is None:
+        logger.warning(
+            "[document.pipeline] no SALE series tenant_id=%s warehouse_id=%s subtype=%s order_id=%s",
+            tenant_id,
+            warehouse_id,
+            sub,
+            order_id,
+        )
 
     payload = {
         "document_type": document_type,

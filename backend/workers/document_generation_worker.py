@@ -52,6 +52,28 @@ def process_document_job(db: Session, job: DocumentGenerationJob) -> DocumentGen
 
         series_id = job.series_id
         if not series_id:
+            from backend.services.document_number_service import resolve_default_document_series
+            from backend.services.document_series_seed_service import ensure_default_document_series
+
+            sub = str(job.document_subtype or "RECEIPT").strip().upper()
+            try:
+                ensure_default_document_series(db, int(job.tenant_id), int(job.warehouse_id))
+            except Exception:
+                logger.exception(
+                    "[direct_sales.document] ensure series failed job_id=%s",
+                    job.id,
+                )
+            hit = resolve_default_document_series(
+                db,
+                tenant_id=int(job.tenant_id),
+                warehouse_id=int(job.warehouse_id),
+                series_type="SALE",
+                subtype=sub,
+            )
+            if hit is not None:
+                series_id = str(hit.id)
+                job.series_id = series_id
+        if not series_id:
             job.status = JOB_FAILED
             job.error_message = "series_not_configured"
             job.completed_at = now
@@ -117,6 +139,20 @@ def process_document_job(db: Session, job: DocumentGenerationJob) -> DocumentGen
             order_id=int(job.order_id),
             status=JOB_GENERATED,
             document_number=doc_number,
+        )
+        logger.info(
+            "[direct_sales.document] %s",
+            json.dumps(
+                {
+                    "session_id": int(job.session_id) if job.session_id else None,
+                    "document_type": str(job.document_subtype or ""),
+                    "document_id": str(doc.id),
+                    "order_id": int(job.order_id),
+                    "status": "created",
+                    "document_number": doc_number,
+                },
+                ensure_ascii=False,
+            ),
         )
     except Exception as exc:
         job.error_message = str(exc)[:500]
