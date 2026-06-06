@@ -74,11 +74,19 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     [session?.lines],
   );
 
+  const apiScope = useCallback((): { tenantId: number; warehouseId: number } | null => {
+    const wid = warehouseId ?? session?.warehouse_id ?? null;
+    if (wid == null) return null;
+    return { tenantId: DAMAGE_TENANT_ID, warehouseId: wid };
+  }, [warehouseId, session?.warehouse_id]);
+
   const refreshSession = useCallback(async (sessionId: number) => {
-    const fresh = await getDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, sessionId });
+    const scope = apiScope();
+    if (!scope) return session;
+    const fresh = await getDirectSaleSession({ ...scope, sessionId });
     setSession(fresh);
     return fresh;
-  }, []);
+  }, [apiScope, session]);
 
   const ensureSession = useCallback(async () => {
     if (session?.status === "ACTIVE" || session?.status === "CHECKOUT") return session;
@@ -100,10 +108,12 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
   }, [warehouseId]);
 
   const refreshCompletion = useCallback(async (sessionId: number) => {
-    const fresh = await fetchDirectSaleCompletion({ tenantId: DAMAGE_TENANT_ID, sessionId });
+    const scope = apiScope();
+    if (!scope) return null;
+    const fresh = await fetchDirectSaleCompletion({ ...scope, sessionId });
     if (fresh) setCompletionView(fresh);
     return fresh;
-  }, []);
+  }, [apiScope]);
 
   const dismissCompletion = useCallback(() => {
     setCompletionView(null);
@@ -151,9 +161,10 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
       setError(null);
       try {
         const sess = await ensureSession();
-        if (!sess) return;
+        const scope = apiScope();
+        if (!sess || !scope) return;
         const result = await scanDirectSaleSession({
-          tenantId: DAMAGE_TENANT_ID,
+          ...scope,
           sessionId: sess.id,
           code,
           sourceLocationId,
@@ -176,7 +187,7 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
         refocusScannerInput();
       }
     },
-    [warehouseId, ensureSession, refreshSession, onProductAdded, showScannerToast, refocusScannerInput],
+    [warehouseId, apiScope, ensureSession, refreshSession, onProductAdded, showScannerToast, refocusScannerInput],
   );
 
   const addByProductId = useCallback(
@@ -186,16 +197,17 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
       setError(null);
       try {
         const sess = await ensureSession();
-        if (!sess) return;
+        const scope = apiScope();
+        if (!sess || !scope) return;
         const result = await addProductToDirectSaleSession({
-          tenantId: DAMAGE_TENANT_ID,
+          ...scope,
           sessionId: sess.id,
           productId,
           quantity: 1,
         });
         if (sourceLocationId != null && sourceLocationId > 0) {
           await patchDirectSaleLine({
-            tenantId: DAMAGE_TENANT_ID,
+            ...scope,
             sessionId: sess.id,
             lineId: result.line_id,
             sourceLocationId,
@@ -213,7 +225,7 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
         setBusy(false);
       }
     },
-    [warehouseId, ensureSession, refreshSession, onProductAdded, showScannerToast],
+    [warehouseId, apiScope, ensureSession, refreshSession, onProductAdded, showScannerToast],
   );
 
   const handleScan = useCallback(
@@ -238,11 +250,12 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
 
   const changeLineQty = useCallback(
     async (lineId: number, quantity: number) => {
-      if (!session) return;
+      const scope = apiScope();
+      if (!session || !scope) return;
       setBusy(true);
       try {
         const fresh = await patchDirectSaleLine({
-          tenantId: DAMAGE_TENANT_ID,
+          ...scope,
           sessionId: session.id,
           lineId,
           quantity,
@@ -254,16 +267,17 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
         setBusy(false);
       }
     },
-    [session],
+    [session, apiScope],
   );
 
   const changeLineLocation = useCallback(
     async (lineId: number, sourceLocationId: number | null) => {
-      if (!session) return;
+      const scope = apiScope();
+      if (!session || !scope) return;
       setBusy(true);
       try {
         const fresh = await patchDirectSaleLine({
-          tenantId: DAMAGE_TENANT_ID,
+          ...scope,
           sessionId: session.id,
           lineId,
           sourceLocationId,
@@ -275,16 +289,17 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
         setBusy(false);
       }
     },
-    [session],
+    [session, apiScope],
   );
 
   const removeLine = useCallback(
     async (lineId: number) => {
-      if (!session) return;
+      const scope = apiScope();
+      if (!session || !scope) return;
       setBusy(true);
       try {
         const fresh = await deleteDirectSaleLine({
-          tenantId: DAMAGE_TENANT_ID,
+          ...scope,
           sessionId: session.id,
           lineId,
         });
@@ -295,7 +310,7 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
         setBusy(false);
       }
     },
-    [session],
+    [session, apiScope],
   );
 
   const onCustomerAttached = useCallback((customerId: number | null) => {
@@ -303,10 +318,11 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
   }, []);
 
   const suspend = useCallback(async () => {
-    if (!session || warehouseId == null) return;
+    const scope = apiScope();
+    if (!session || !scope) return;
     setBusy(true);
     try {
-      await suspendDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, sessionId: session.id });
+      await suspendDirectSaleSession({ ...scope, sessionId: session.id });
       showScannerToast("Sesja zawieszona", "success");
       onSuspended?.();
       await startNewSession();
@@ -315,14 +331,16 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     } finally {
       setBusy(false);
     }
-  }, [session, warehouseId, showScannerToast, onSuspended, startNewSession]);
+  }, [session, apiScope, showScannerToast, onSuspended, startNewSession]);
 
   const restoreSession = useCallback(
     async (sessionId: number) => {
+      const scope = apiScope();
+      if (!scope) return null;
       setBusy(true);
       setError(null);
       try {
-        const fresh = await resumeDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, sessionId });
+        const fresh = await resumeDirectSaleSession({ ...scope, sessionId });
         setSession(fresh);
         showScannerToast(`Wznowiono sesję #${sessionId}`, "success");
         return fresh;
@@ -333,15 +351,16 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
         setBusy(false);
       }
     },
-    [showScannerToast],
+    [apiScope, showScannerToast],
   );
 
   const checkout = useCallback(async () => {
-    if (!session || session.lines.length === 0) return;
+    const scope = apiScope();
+    if (!session || !scope || session.lines.length === 0) return;
     setBusy(true);
     try {
       const s = await startDirectSalePayment({
-        tenantId: DAMAGE_TENANT_ID,
+        ...scope,
         sessionId: session.id,
         paymentMethod,
       });
@@ -351,23 +370,24 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     } finally {
       setBusy(false);
     }
-  }, [session, paymentMethod]);
+  }, [session, apiScope, paymentMethod]);
 
   const complete = useCallback(async () => {
-    if (!session || warehouseId == null) return null;
+    const scope = apiScope();
+    if (!session || !scope) return null;
     setBusy(true);
     setCompleteError(null);
     try {
       if (session.status === "ACTIVE" || session.status === "SUSPENDED") await checkout();
       const result = await completeDirectSaleSession({
-        tenantId: DAMAGE_TENANT_ID,
+        ...scope,
         sessionId: session.id,
         paymentMethod,
         documentSubtype,
       });
       setLastComplete(result);
       const bundle = result.completion ?? (await fetchDirectSaleCompletion({
-        tenantId: DAMAGE_TENANT_ID,
+        ...scope,
         sessionId: result.session_id,
       }));
       if (bundle) setCompletionView(bundle);
@@ -380,7 +400,7 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     } finally {
       setBusy(false);
     }
-  }, [session, warehouseId, paymentMethod, documentSubtype, checkout, showScannerToast]);
+  }, [session, apiScope, paymentMethod, documentSubtype, checkout, showScannerToast]);
 
   return {
     session,

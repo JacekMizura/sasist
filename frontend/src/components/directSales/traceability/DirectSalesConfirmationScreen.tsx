@@ -35,7 +35,9 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale, onRefresh
     setReprintBusy(true);
     setReprintMsg(null);
     try {
-      const res = await reprintDirectSaleDocument({ tenantId: DAMAGE_TENANT_ID, jobId });
+      const warehouseId = completion.warehouse_id;
+      if (warehouseId == null) throw new Error("missing warehouse_id");
+      const res = await reprintDirectSaleDocument({ tenantId: DAMAGE_TENANT_ID, warehouseId, jobId });
       setReprintMsg(res.message);
       onRefreshCompletion?.();
     } catch {

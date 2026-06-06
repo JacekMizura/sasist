@@ -388,6 +388,18 @@ app.add_middleware(
     expose_headers=["Content-Type", "Cache-Control", "Connection"],
 )
 
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from .middleware.direct_sales_raw_request import direct_sales_raw_request_middleware
+
+
+class _DirectSalesRawRequestLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        return await direct_sales_raw_request_middleware(request, call_next)
+
+
+app.add_middleware(_DirectSalesRawRequestLogMiddleware)
+
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 

@@ -1,4 +1,5 @@
 import api from "../axios";
+import { directSalesQuery } from "../../modules/directSales/api/directSalesQueryParams";
 import { normalizeDirectSaleSession, type DirectSaleSession } from "../../utils/normalizeDirectSales";
 import type {
   ClearDirectSalesCustomerParams,
@@ -9,16 +10,17 @@ import { extract422Detail, recordDirectSalesNetwork } from "../../modules/direct
 
 async function postDirectSalesMutation(
   path: string,
-  tenantId: number,
+  scope: { tenantId: number; warehouseId: number },
   requestBody: unknown,
 ): Promise<DirectSaleSession> {
+  const query = directSalesQuery(scope);
   try {
-    const { data } = await api.post(path, requestBody, { params: { tenant_id: tenantId } });
+    const { data } = await api.post(path, requestBody, { params: query });
     const session = normalizeDirectSaleSession(data);
     recordDirectSalesNetwork({
       method: "POST",
       path,
-      requestBody,
+      requestBody: { body: requestBody, _query: query },
       status: 200,
       responseBody: data,
     });
@@ -28,7 +30,7 @@ async function postDirectSalesMutation(
     recordDirectSalesNetwork({
       method: "POST",
       path,
-      requestBody,
+      requestBody: { body: requestBody, _query: query },
       status: res?.status,
       responseBody: res?.data,
       validationDetail: res?.status === 422 ? extract422Detail(res.data) : undefined,
@@ -41,10 +43,10 @@ async function postDirectSalesMutation(
 export async function setDirectSaleCustomer(params: SetDirectSalesCustomerParams): Promise<DirectSaleSession> {
   const body = mapSetDirectSalesCustomerBody(params.customerId);
   const path = `direct-sales/session/${params.sessionId}/set-customer`;
-  return postDirectSalesMutation(path, params.tenantId, body);
+  return postDirectSalesMutation(path, params, body);
 }
 
 export async function clearDirectSaleCustomer(params: ClearDirectSalesCustomerParams): Promise<DirectSaleSession> {
   const path = `direct-sales/session/${params.sessionId}/clear-customer`;
-  return postDirectSalesMutation(path, params.tenantId, {});
+  return postDirectSalesMutation(path, params, {});
 }

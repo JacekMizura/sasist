@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import json
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from ..api.operational_features_deps import operational_sales_sessions_for_request
@@ -42,6 +45,7 @@ from ..services.direct_sale.history_service import list_direct_sale_history
 from ..services.direct_sale.product_search_service import search_direct_sale_products
 from ..services.documents.generation_queue_service import enqueue_document_job
 from ..services.direct_sale.session_enrichment import enrich_session_lines
+from ..services.operational_feature_resolver import allow_operational_features_debug
 from ..services.direct_sale_service import (
     DirectSaleError,
     cancel_session,
@@ -58,6 +62,11 @@ router = APIRouter(
     prefix="/direct-sales",
     tags=["Direct sales"],
     dependencies=[Depends(operational_sales_sessions_for_request)],
+)
+
+_logger = logging.getLogger(__name__)
+_logger.info(
+    "[startup.direct-sales.router] registered add-product endpoint v2, set-customer v2, clear-customer, debug-echo"
 )
 
 
@@ -306,6 +315,32 @@ def post_session_scan(
         )
     except DirectSaleError as exc:
         raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.post("/debug/echo")
+async def post_direct_sales_debug_echo(request: Request):
+    """Temporary — verify frontend payloads (dev/staging only)."""
+    if not allow_operational_features_debug():
+        raise HTTPException(status_code=404, detail="Not found")
+    raw = await request.body()
+    parsed: object | None = None
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = None
+    return {
+        "method": request.method,
+        "path": str(request.url.path),
+        "query": dict(request.query_params),
+        "headers": {
+            k: v
+            for k, v in request.headers.items()
+            if k.lower() in ("content-type", "content-length", "accept")
+        },
+        "raw_body": raw.decode("utf-8", errors="replace") if raw else "",
+        "parsed_body": parsed,
+    }
 
 
 @router.post("/session/{session_id}/add-product", response_model=DirectSaleScanResponse)

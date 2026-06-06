@@ -100,6 +100,11 @@ function isCustomersApiRequest(config: InternalAxiosRequestConfig): boolean {
   return path === "customers" || path.startsWith("customers/") || path.startsWith("/customers");
 }
 
+function isDirectSalesApiRequest(config: InternalAxiosRequestConfig): boolean {
+  const path = String(config.url ?? "").replace(/^\/+/, "");
+  return path === "direct-sales" || path.startsWith("direct-sales/");
+}
+
 api.interceptors.request.use(
   (config) => {
     applySecureApiBaseToConfig(config);
@@ -108,6 +113,15 @@ api.interceptors.request.use(
     if (isCustomersApiRequest(config)) {
       console.trace("CUSTOMERS REQUEST (axios)", finalUrl);
       console.log("FULL REQUEST CONFIG", config);
+    }
+    if (isDirectSalesApiRequest(config)) {
+      console.log("[direct-sales.request]", {
+        url: finalUrl,
+        method: (config.method ?? "get").toUpperCase(),
+        params: config.params,
+        data: config.data,
+        contentType: (config.headers as Record<string, string> | undefined)?.["Content-Type"],
+      });
     }
     if (finalUrl.startsWith("http://")) {
       console.error("[api] BLOCKED insecure request URL:", finalUrl, {

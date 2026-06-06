@@ -1,7 +1,10 @@
 # Current context
 
 ## Active goal
-Direct Sales API contract single source of truth — fix 422 on add-product + set-customer.
+Direct Sales 422 resolved — missing `warehouse_id` query param on router dependency.
+
+## Root cause (confirmed)
+`direct_sales` router uses `Depends(operational_sales_sessions_for_request)` requiring **both** `tenant_id` and `warehouse_id` query params. Frontend mutations sent only `tenant_id` → FastAPI 422 `missing_query: warehouse_id` (before body validation).
 
 ## Contract layout
 - Backend: `backend/api/contracts/direct_sales/` (`AddDirectSalesProductRequest`, `SetDirectSalesCustomerRequest`)

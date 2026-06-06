@@ -16,12 +16,13 @@ import { safeTrim } from "../../utils/safeStrings";
 const DEBOUNCE_MS = 150;
 
 type Args = {
+  warehouseId: number | null;
   sessionId: number | null;
   customerId: number | null;
   onSessionUpdate: (customerId: number | null) => void;
 };
 
-export function useDirectSalesCustomer({ sessionId, customerId, onSessionUpdate }: Args) {
+export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onSessionUpdate }: Args) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<CustomerListRow[]>([]);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
@@ -75,14 +76,15 @@ export function useDirectSalesCustomer({ sessionId, customerId, onSessionUpdate 
 
   const attachCustomer = useCallback(
     async (id: number | null) => {
-      if (!sessionId) return;
+      if (!sessionId || warehouseId == null) return;
+      const scope = { tenantId: DAMAGE_TENANT_ID, warehouseId };
       setBusy(true);
       setError(null);
       try {
         if (id == null) {
-          await clearDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId });
+          await clearDirectSaleCustomer({ ...scope, sessionId });
         } else {
-          await setDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId, customerId: id });
+          await setDirectSaleCustomer({ ...scope, sessionId, customerId: id });
         }
         onSessionUpdate(id);
         if (id == null) {
@@ -96,7 +98,7 @@ export function useDirectSalesCustomer({ sessionId, customerId, onSessionUpdate 
         setBusy(false);
       }
     },
-    [sessionId, onSessionUpdate],
+    [warehouseId, sessionId, onSessionUpdate],
   );
 
   const lookupByNip = useCallback(

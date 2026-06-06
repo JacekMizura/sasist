@@ -51,7 +51,7 @@ export function useSuspendedSessions({ warehouseId, enabled = true, refreshKey =
       setBusyId(sessionId);
       setError(null);
       try {
-        await resumeDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, sessionId });
+        await resumeDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, warehouseId, sessionId });
         await refresh();
         return true;
       } catch (e) {
@@ -61,7 +61,7 @@ export function useSuspendedSessions({ warehouseId, enabled = true, refreshKey =
         setBusyId(null);
       }
     },
-    [refresh],
+    [refresh, warehouseId],
   );
 
   const cancel = useCallback(
@@ -69,7 +69,7 @@ export function useSuspendedSessions({ warehouseId, enabled = true, refreshKey =
       setBusyId(sessionId);
       setError(null);
       try {
-        await cancelDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, sessionId });
+        await cancelDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, warehouseId, sessionId });
         await refresh();
         return true;
       } catch (e) {
@@ -79,7 +79,7 @@ export function useSuspendedSessions({ warehouseId, enabled = true, refreshKey =
         setBusyId(null);
       }
     },
-    [refresh],
+    [refresh, warehouseId],
   );
 
   return { rows, loading, busyId, error, refresh, restore, cancel };

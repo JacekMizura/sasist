@@ -25,13 +25,13 @@ def _endpoint_suffix(path: str) -> str | None:
     return None
 
 
-def _missing_fields(errors: list[dict[str, Any]]) -> list[str]:
+def _missing_fields(errors: list[dict[str, Any]], loc_prefix: str) -> list[str]:
     out: list[str] = []
     for err in errors:
         if err.get("type") != "missing":
             continue
         loc = err.get("loc") or []
-        if loc:
+        if len(loc) >= 2 and str(loc[0]) == loc_prefix:
             out.append(str(loc[-1]))
     return out
 
@@ -41,19 +41,33 @@ def log_direct_sales_validation(request: Request, exc: RequestValidationError) -
     if "/direct-sales/" not in path:
         return
 
-    endpoint = _endpoint_suffix(path)
-    if endpoint is None:
-        return
-
     errors = exc.errors()
     body = getattr(exc, "body", None)
+    endpoint = _endpoint_suffix(path) or path.rsplit("/", 1)[-1]
+    schema = _ENDPOINT_SCHEMAS.get(endpoint or "", "n/a")
+
     logger.info(
-        "[direct-sales.validation] endpoint=%s schema=%s method=%s path=%s body=%s errors=%s missing=%s",
+        "[direct-sales.validation] endpoint=%s schema=%s method=%s path=%s query=%s body=%s errors=%s "
+        "missing_body=%s missing_query=%s",
         endpoint,
-        _ENDPOINT_SCHEMAS.get(endpoint, "unknown"),
+        schema,
         request.method,
         path,
+        dict(request.query_params),
         body,
         errors,
-        _missing_fields(errors),
+        _missing_fields(errors, "body"),
+        _missing_fields(errors, "query"),
+    )
+
+    logger.info(
+        "[direct-sales.raw-request] phase=validation_422 method=%s path=%s query=%s headers_content_type=%s "
+        "raw_body_repr=%r parsed_json=%s validation_errors=%s",
+        request.method,
+        path,
+        dict(request.query_params),
+        request.headers.get("content-type"),
+        body,
+        body,
+        errors,
     )

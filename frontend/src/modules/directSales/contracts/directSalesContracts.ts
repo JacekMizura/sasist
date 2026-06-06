@@ -1,5 +1,9 @@
 /** Single source of truth — operational direct-sales mutation request bodies (snake_case). */
 
+import type { DirectSalesScope } from "../api/directSalesQueryParams";
+
+export type { DirectSalesScope } from "../api/directSalesQueryParams";
+
 export type AddDirectSalesProductRequest = {
   product_id: number;
   quantity: number;
@@ -9,8 +13,7 @@ export type SetDirectSalesCustomerRequest = {
   customer_id: number;
 };
 
-export type AddDirectSalesProductParams = {
-  tenantId: number;
+export type AddDirectSalesProductParams = DirectSalesScope & {
   sessionId: number;
   productId: number;
   quantity?: number;
@@ -18,13 +21,11 @@ export type AddDirectSalesProductParams = {
   sourceLocationId?: number | null;
 };
 
-export type SetDirectSalesCustomerParams = {
-  tenantId: number;
+export type SetDirectSalesCustomerParams = DirectSalesScope & {
   sessionId: number;
   customerId: number;
 };
 
-export type ClearDirectSalesCustomerParams = {
-  tenantId: number;
+export type ClearDirectSalesCustomerParams = DirectSalesScope & {
   sessionId: number;
 };
