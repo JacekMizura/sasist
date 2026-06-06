@@ -28,7 +28,6 @@ export default function OperationsLayout() {
         health={runtime.health}
         connected={runtime.connected}
         eventLagMs={runtime.eventLagMs}
-        lastEventId={runtime.lastEventId}
         runtimeAvailable={runtime.runtimeAvailable}
       />
     </div>

@@ -7,7 +7,7 @@ import { ReplenishmentTable } from "../../../components/operations/replenishment
 import { useAuth } from "../../../context/AuthContext";
 import { useReplenishmentExecution } from "../../../hooks/replenishment/useReplenishmentExecution";
 import { useReplenishmentRealtime } from "../../../hooks/replenishment/useReplenishmentRealtime";
-import { toReplenishmentRow } from "../../../utils/replenishmentRowModel";
+import { orchColumn, toReplenishmentRow } from "../../../utils/replenishmentRowModel";
 import { WMS_ROUTES } from "../wmsRoutes";
 
 export default function OperationsReplenishmentPage() {
@@ -15,14 +15,13 @@ export default function OperationsReplenishmentPage() {
   const navigate = useNavigate();
   const { tasks, loading, scanning, runScan, refresh, runtimeAvailable } = useReplenishmentRealtime();
   const [statusFilter, setStatusFilter] = useState("all");
-
   const exec = useReplenishmentExecution(refresh);
 
   const rows = useMemo(() => {
     const mapped = tasks.map(toReplenishmentRow);
-    if (statusFilter === "open") return mapped.filter((r) => !["COMPLETED", "done"].includes(r.taskStatus));
-    if (statusFilter === "active") return mapped.filter((r) => ["ACTIVE", "in_progress"].includes(r.taskStatus));
-    if (statusFilter === "blocked") return mapped.filter((r) => ["BLOCKED", "blocked"].includes(r.taskStatus));
+    if (statusFilter === "open") return mapped.filter((r) => orchColumn(r.raw) !== "COMPLETED");
+    if (statusFilter === "active") return mapped.filter((r) => ["ACTIVE", "ASSIGNED"].includes(orchColumn(r.raw)));
+    if (statusFilter === "blocked") return mapped.filter((r) => orchColumn(r.raw) === "BLOCKED");
     return mapped;
   }, [tasks, statusFilter]);
 
@@ -43,9 +42,12 @@ export default function OperationsReplenishmentPage() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-base font-semibold text-slate-900">Wykonanie uzupełnień</h1>
+    <div className="flex h-full min-h-0 flex-col gap-3 p-2 md:p-3">
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Uzupełnienia</h1>
+          <p className="text-xs text-slate-500">Przenieś towar ze zaplecza na półki sprzedażowe</p>
+        </div>
         <ReplenishmentFilters
           statusFilter={statusFilter}
           onStatusChange={setStatusFilter}
@@ -53,10 +55,10 @@ export default function OperationsReplenishmentPage() {
           scanning={scanning}
           runtimeAvailable={runtimeAvailable}
         />
-      </div>
+      </header>
       {!runtimeAvailable ? (
-        <p className="text-xs text-amber-800">
-          Runtime wyłączony — tabela statyczna. Klasyczny WMS bez zmian.
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Tryb podglądu — lista może być niepełna. Klasyczny WMS działa bez zmian.
         </p>
       ) : null}
       <ReplenishmentTable

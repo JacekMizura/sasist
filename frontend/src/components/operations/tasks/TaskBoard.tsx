@@ -1,6 +1,7 @@
 import type { TaskGroupBy } from "../../../hooks/tasks/useRuntimeTasks";
 import { BOARD_COLUMNS } from "../../../hooks/tasks/useRuntimeTasks";
 import type { WmsOperationalTaskApi } from "../../../api/wmsOperationalTasksApi";
+import { TASK_COLUMN_LABELS, TASK_GROUP_LABELS } from "../../../services/operations/operationsTerminology";
 import { TaskColumn } from "./TaskColumn";
 
 type Props = {
@@ -10,36 +11,32 @@ type Props = {
   loading?: boolean;
 };
 
-const GROUP_OPTIONS: { id: TaskGroupBy; label: string }[] = [
-  { id: "task_type", label: "Typ" },
-  { id: "zone", label: "Strefa" },
-  { id: "operator", label: "Operator" },
-  { id: "priority", label: "Priorytet" },
-  { id: "sla", label: "SLA" },
-];
-
 export function TaskBoard({ byColumn, groupBy, onGroupByChange, loading }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-slate-500">Grupowanie:</span>
-        {GROUP_OPTIONS.map((o) => (
+        {(Object.keys(TASK_GROUP_LABELS) as TaskGroupBy[]).map((id) => (
           <button
-            key={o.id}
+            key={id}
             type="button"
-            onClick={() => onGroupByChange(o.id)}
+            onClick={() => onGroupByChange(id)}
             className={`rounded px-2 py-0.5 text-xs ${
-              groupBy === o.id ? "bg-slate-800 text-white" : "border border-slate-200 text-slate-600"
+              groupBy === id ? "bg-slate-800 text-white" : "border border-slate-200 text-slate-600"
             }`}
           >
-            {o.label}
+            {TASK_GROUP_LABELS[id]}
           </button>
         ))}
         {loading ? <span className="text-xs text-slate-400">Odświeżanie…</span> : null}
       </div>
       <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto pb-1">
         {BOARD_COLUMNS.map((col) => (
-          <TaskColumn key={col} title={col} tasks={byColumn.get(col) ?? []} />
+          <TaskColumn
+            key={col}
+            title={TASK_COLUMN_LABELS[col] ?? col}
+            tasks={byColumn.get(col) ?? []}
+          />
         ))}
       </div>
     </div>

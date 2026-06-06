@@ -14,6 +14,8 @@
 
 - **Operational safety hardening (2026-06-05):** `OperationalFeaturesContext` request-scoped (global→tenant→warehouse). Tabela `operational_feature_scopes`. Logi `[wms.eligibility]`, `[direct-sales.complete]`, `[order.operational-mode]`. Snapshot tests `test_wms_eligibility_snapshots.py`. NULL legacy permanent. Classic WMS wins on conflict.
 
+- **Operations UX Phase 5A (2026-06-04):** `/wms/operations` → **Pulpit** (KPI, „Wymaga reakcji”, strefy, Puls magazynu). Pełne tłumaczenie PL (`services/operations/operationsTerminology.ts`). Uzupełnienia: kolumny operator-friendly, modal skanerowy 4 kroki. Zadania: Kanban PL. Operatorzy: `OperatorTable`. Alerty: `AlertsFeed` z CTA. Bez języka runtime/SSE/feature flags w UI. Frontend-only; classic WMS nietknięty.
+
 - **Direct Sales terminal UX (2026-06-04):** `/wms/direct-sales` — 3-kolumnowy terminal operatora: `ProductSearchPanel` (skan + debounced `GET /direct-sales/products/search`), `SessionLinesPanel` (qty ±, lokacja, rezerwacja), `CheckoutPanel` (klient, PA/FV, płatność, `SessionSummaryBar` bez reload). API: add-product, PATCH/DELETE lines, enriched session lines, `payment_context`. Komponenty ≤250 LOC; `normalizeDirectSales.ts` na granicy API.
 
 - **Direct Sales — Phase 2 implemented (2026-06-05):** Atomowy pipeline sprzedaży operacyjnej. `complete_direct_sale_session`: Order (`DIRECT_SALE`+`IMMEDIATE`) → rezerwacje → issue (movements) → payment SM → document pipeline → complete session. API: `…/start-payment`, `…/complete`, `…/set-customer`. Issue strategies, traceability na `order_items`, event log `operational_commerce_events`. Schema phase2 w startup. Testy: `test_operational_sales_phase2.py`. **Następne:** Phase 3 — series resolution rules, async fiscal; Phase 4 — frontend terminal.

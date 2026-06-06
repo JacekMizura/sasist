@@ -1,27 +1,14 @@
 import type { RuntimeHealth } from "../../hooks/runtime/useOperationalRuntime";
+import { connectionStatusLabel } from "../../services/operations/operationsTerminology";
 
 type Props = {
   health: RuntimeHealth;
   connected: boolean;
   eventLagMs: number | null;
-  lastEventId: number;
   runtimeAvailable: boolean;
 };
 
-const HEALTH_LABEL: Record<RuntimeHealth, string> = {
-  live: "SSE live",
-  polling: "Polling",
-  offline: "Offline",
-  disabled: "Runtime wyłączony",
-};
-
-export function RuntimeStatusBar({
-  health,
-  connected,
-  eventLagMs,
-  lastEventId,
-  runtimeAvailable,
-}: Props) {
+export function RuntimeStatusBar({ health, connected, eventLagMs, runtimeAvailable }: Props) {
   const dot =
     health === "live"
       ? "bg-emerald-500"
@@ -31,19 +18,19 @@ export function RuntimeStatusBar({
           ? "bg-slate-300"
           : "bg-red-400";
 
+  const lagSec = eventLagMs != null ? Math.round(eventLagMs / 1000) : null;
+
   return (
     <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
       <div className="flex items-center gap-2">
         <span className={`inline-block h-2 w-2 rounded-full ${dot}`} aria-hidden />
-        <span>{HEALTH_LABEL[health]}</span>
+        <span>{connectionStatusLabel(health, connected)}</span>
         {!runtimeAvailable ? (
-          <span className="text-slate-400">— klasyczny WMS bez zmian</span>
+          <span className="text-slate-400">· tryb podglądu</span>
         ) : null}
       </div>
-      <div className="flex items-center gap-3 tabular-nums">
-        <span>Lag: {eventLagMs != null ? `${Math.round(eventLagMs / 1000)}s` : "—"}</span>
-        <span>Ev: #{lastEventId}</span>
-        <span>{connected ? "połączono" : "rozłączono"}</span>
+      <div className="tabular-nums text-slate-500">
+        {lagSec != null ? `Ostatnia aktualizacja: ${lagSec}s temu` : null}
       </div>
     </footer>
   );

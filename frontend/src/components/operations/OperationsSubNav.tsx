@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 
 const LINKS = [
-  { to: "/wms/operations", end: true, label: "Hub" },
+  { to: "/wms/operations", end: true, label: "Pulpit" },
   { to: "/wms/operations/replenishment", label: "Uzupełnienia" },
   { to: "/wms/operations/tasks", label: "Zadania" },
   { to: "/wms/operations/operators", label: "Operatorzy" },

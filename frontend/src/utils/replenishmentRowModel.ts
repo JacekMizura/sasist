@@ -1,4 +1,5 @@
 import type { WmsOperationalTaskApi } from "../api/wmsOperationalTasksApi";
+import { locationDisplay, taskStatusLabel } from "../services/operations/operationsTerminology";
 import { formatOperationalDurationSince } from "./formatOperationalDuration";
 import { safeDisplay, safeTrim, safeUpper } from "./safeStrings";
 
@@ -41,13 +42,13 @@ export function toReplenishmentRow(task: WmsOperationalTaskApi): ReplenishmentRo
     productName: safeDisplay(task.product_name, `Produkt #${task.product_id ?? task.id}`),
     skuEan,
     sourceZone,
-    sourceLocation: String(p.source_scan_code ?? p.source_location ?? task.location_hint ?? "—"),
+    sourceLocation: locationDisplay(p.source_scan_code ?? p.source_location, sourceZone),
     targetZone,
-    targetLocation: String(p.target_scan_code ?? p.target_location ?? "—"),
+    targetLocation: locationDisplay(p.target_scan_code ?? p.target_location, targetZone),
     currentQty: shelfQty,
     targetQty,
     suggestedQty: task.quantity_remaining,
-    taskStatus: safeDisplay(task.orchestration_state ?? task.status, "UNKNOWN"),
+    taskStatus: taskStatusLabel(task.orchestration_state ?? task.status),
     assignedOperatorId: task.assigned_user_id ?? null,
     slaDue: task.sla_due_at ?? null,
     ageLabel: formatOperationalDurationSince(task.created_at ?? undefined) || "—",

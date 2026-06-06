@@ -13,7 +13,10 @@ export function OperationalTimeline({ lines, title = "Puls magazynu" }: Props) {
       </div>
       <ul className="divide-y divide-slate-50">
         {lines.length === 0 ? (
-          <li className="px-3 py-4 text-sm text-slate-400">Oczekiwanie na zdarzenia…</li>
+          <li className="px-4 py-8 text-center text-sm text-slate-500">
+            <p className="font-medium text-slate-600">Cicho w magazynie</p>
+            <p className="mt-1 text-xs">Aktywność operatorów pojawi się tutaj na żywo.</p>
+          </li>
         ) : (
           lines.map((ln) => (
             <li key={ln.id} className="flex gap-2 px-3 py-2 text-sm">

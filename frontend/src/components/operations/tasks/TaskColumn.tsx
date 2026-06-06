@@ -14,7 +14,7 @@ export function TaskColumn({ title, tasks }: Props) {
       </div>
       <div className="flex max-h-[calc(100vh-220px)] flex-col gap-1 overflow-auto p-1.5">
         {tasks.length === 0 ? (
-          <p className="px-1 py-2 text-[10px] text-slate-400">—</p>
+          <p className="px-2 py-3 text-center text-[10px] text-slate-400">Brak zadań</p>
         ) : (
           tasks.map((t) => <TaskCard key={t.id} task={t} />)
         )}

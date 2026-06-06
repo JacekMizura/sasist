@@ -4,6 +4,7 @@ import { type LiveEvent, type OperatorContext } from "../../api/operationalRunti
 import { listWmsOperationalTasks, type WmsOperationalTaskApi } from "../../api/wmsOperationalTasksApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useAuth } from "../../context/AuthContext";
+import { operatorActivityLabel } from "../../services/operations/operationsTerminology";
 import { safeDisplay, safeTrim } from "../../utils/safeStrings";
 import { useOperationalRuntime } from "./useOperationalRuntime";
 
@@ -75,7 +76,7 @@ export function useOperatorRuntime() {
           [user.first_name, user.last_name].filter(Boolean).join(" ").trim() ||
           user.login ||
           `Operator #${user.id}`,
-        contextType: safeDisplay(selfContext?.context_type, "PICKING"),
+        contextType: operatorActivityLabel(selfContext?.context_type ?? "IDLE"),
         cartId: selfContext?.cart_id ?? null,
         zoneLabel: selfContext?.zone_id ? `Strefa #${selfContext.zone_id}` : "—",
         activeTaskId: selfContext?.active_task_id ?? null,
@@ -89,7 +90,7 @@ export function useOperatorRuntime() {
     .map((t, i) => ({
       operatorUserId: i + 1,
       displayName: safeTrim(safeTrim(t.summary_line).split("·")[0]) || `Zadanie #${t.id}`,
-      contextType: safeDisplay(t.task_type, "UNKNOWN"),
+      contextType: operatorActivityLabel(t.task_type),
       cartId: null,
       zoneLabel: safeDisplay(t.location_hint),
       activeTaskId: t.id,

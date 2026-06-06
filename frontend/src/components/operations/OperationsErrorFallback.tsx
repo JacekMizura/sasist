@@ -8,7 +8,7 @@ export function OperationsErrorFallback({ onRetry }: Props) {
     <div className="m-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
       <p className="font-semibold">Panel operacji tymczasowo niedostępny</p>
       <p className="mt-1 text-amber-800">
-        Dane runtime mogą być niepełne podczas wdrożenia. Klasyczny WMS i OMS działają bez zmian.
+        Dane centrum operacyjnego mogą być niepełne. Klasyczny WMS i OMS działają bez zmian.
       </p>
       {onRetry ? (
         <button

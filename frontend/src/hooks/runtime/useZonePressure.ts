@@ -54,15 +54,18 @@ export function useZonePressure() {
       const alertCount = zoneAlerts.length;
       let level: ZonePressure["level"] = "OK";
       let label = "OK";
-      if (alertCount > 0 || blockedTasks > 0) {
+      if (activeOperators === 0 && (openReplenishments > 0 || taskCount > 0)) {
         level = "BLOCKED";
-        label = "BLOKADA";
+        label = "Brak operatora";
+      } else if (alertCount > 0 || blockedTasks > 0) {
+        level = "BLOCKED";
+        label = "Zablokowane";
       } else if (queuePressure >= 45) {
         level = "PRESSURE";
-        label = `${queuePressure}%`;
+        label = "Wysokie obciążenie";
       } else if (openReplenishments > 0 || lowStockCount > 0) {
         level = "LOW";
-        label = "NISKI";
+        label = "Niski stan";
       }
       return {
         zone,

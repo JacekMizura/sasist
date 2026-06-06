@@ -31,7 +31,7 @@ export function ReplenishmentFilters({
         onClick={onScanRules}
         className="rounded bg-slate-800 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
       >
-        {scanning ? "Skan…" : "Skanuj reguły"}
+        {scanning ? "Szukam…" : "Wykryj uzupełnienia"}
       </button>
     </div>
   );
