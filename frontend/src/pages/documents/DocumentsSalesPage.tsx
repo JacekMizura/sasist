@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Download, FileText, Plus, Upload } from "lucide-react";
 
 import { listSaleDocuments } from "../../api/saleDocumentsApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { paymentMethodPl } from "../../components/directSales/directSalesTerminology";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "./documentsBadges";
 import type { BusinessDocStatus } from "./warehouseDocumentsUi";
 import DocumentsEmptyState from "./DocumentsEmptyState";
@@ -20,6 +21,7 @@ import {
 
 type SalesRow = {
   id: string;
+  documentNumber: string;
   orderNumber: string;
   client: string;
   series: string;
@@ -30,6 +32,7 @@ type SalesRow = {
   paymentMethod: string;
   paid: boolean | null;
   externalStatus: BusinessDocStatus;
+  detailPath: string;
 };
 
 const btnPrimary =
@@ -38,6 +41,7 @@ const btnSecondary =
   "inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50";
 
 export default function DocumentsSalesPage() {
+  const navigate = useNavigate();
   const { pathname } = useLocation();
   const { selectedWarehouseId } = useWarehouse();
   const isReceipts = pathname.endsWith("/receipts");
@@ -56,7 +60,8 @@ export default function DocumentsSalesPage() {
         if (cancelled) return;
         setRows(
           items.map((it) => ({
-            id: it.document_number || it.id,
+            id: it.id,
+            documentNumber: it.document_number,
             orderNumber: it.order_number ?? `#${it.order_id}`,
             client: it.client,
             series: it.series,
@@ -64,9 +69,10 @@ export default function DocumentsSalesPage() {
             date: it.date ? new Date(it.date).toLocaleString("pl-PL") : "—",
             net: `${Number(it.net).toFixed(2)} zł`,
             gross: `${Number(it.gross).toFixed(2)} zł`,
-            paymentMethod: "—",
-            paid: true,
+            paymentMethod: paymentMethodPl(it.payment_method),
+            paid: it.paid,
             externalStatus: "NOWE" as BusinessDocStatus,
+            detailPath: it.detail_path || `/documents/sales/${it.id}`,
           })),
         );
       })
@@ -210,8 +216,15 @@ export default function DocumentsSalesPage() {
                     role="button"
                     tabIndex={0}
                     className="cursor-pointer border-t border-slate-100 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/80"
+                    onClick={() => navigate(r.detailPath)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigate(r.detailPath);
+                      }
+                    }}
                   >
-                    <td className="px-4 py-3 font-mono text-sm font-semibold sm:px-5 sm:py-3.5">{r.id}</td>
+                    <td className="px-4 py-3 font-mono text-sm font-semibold sm:px-5 sm:py-3.5">{r.documentNumber}</td>
                     <td className="px-4 py-3 sm:px-5 sm:py-3.5">{r.orderNumber}</td>
                     <td className="max-w-[12rem] truncate px-4 py-3 sm:px-5 sm:py-3.5" title={r.client}>
                       {r.client}

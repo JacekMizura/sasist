@@ -1,9 +1,11 @@
-"""GET sale documents list (FV/PA) — includes direct sales and packing."""
+"""Sale documents list + detail (FV/PA) — direct sales and WMS packing."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..schemas.sale_document import SaleDocumentDetailRead
+from ..services.sale_document_detail_service import get_sale_document_detail
 from ..services.sale_documents_list_service import list_sale_documents
 
 router = APIRouter(prefix="/sale-documents", tags=["Sale documents"])
@@ -30,3 +32,15 @@ def get_sale_documents(
         offset=offset,
     )
     return {"items": items, "total": len(items)}
+
+
+@router.get("/{document_id}", response_model=SaleDocumentDetailRead)
+def get_sale_document(
+    document_id: str,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    detail = get_sale_document_detail(db, tenant_id=int(tenant_id), document_id=document_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Dokument sprzedaży nie istnieje.")
+    return detail

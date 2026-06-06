@@ -204,6 +204,7 @@ import BdoCorrectionsPage from "./pages/bdo/BdoCorrectionsPage"
 import BdoSettingsPage from "./pages/bdo/BdoSettingsPage"
 import DocumentsLayout from "./pages/documents/DocumentsLayout"
 import DocumentsSalesPage from "./pages/documents/DocumentsSalesPage"
+import DocumentsSalesDetailPage from "./pages/documents/DocumentsSalesDetailPage"
 import DocumentsCorrectingPage from "./pages/documents/DocumentsCorrectingPage"
 import DocumentsWarehousePage from "./pages/documents/DocumentsWarehousePage"
 import DocumentsPlaceholderPage from "./pages/documents/DocumentsPlaceholderPage"
@@ -212,6 +213,14 @@ import DocumentsExportsHubPage from "./pages/documents/DocumentsExportsHubPage"
 function RedirectLegacySettingsDocumentSeriesId() {
   const { legacyId } = useParams<{ legacyId: string }>()
   const to = legacyId ? `/documents/series/${encodeURIComponent(legacyId)}` : "/documents/series"
+  return <Navigate to={to} replace />
+}
+
+function RedirectPolishSaleDocumentDetail() {
+  const { documentId } = useParams<{ documentId: string }>()
+  const to = documentId
+    ? `/documents/sales/${encodeURIComponent(documentId)}`
+    : "/documents/sales/invoices"
   return <Navigate to={to} replace />
 }
 
@@ -451,12 +460,14 @@ export const router = createBrowserRouter(
                 />
                 <Route path="admin/message-templates/*" element={<MessageTemplatesModule />} />
                 <Route path="admin/print-templates/*" element={<LabelSystem />} />
+                <Route path="dokumenty/sprzedaz/:documentId" element={<RedirectPolishSaleDocumentDetail />} />
                 <Route path="documents" element={<DocumentsLayout />}>
                   <Route index element={<Navigate to="sales/invoices" replace />} />
                   <Route path="sales" element={<Outlet />}>
                     <Route index element={<Navigate to="invoices" replace />} />
                     <Route path="invoices" element={<DocumentsSalesPage />} />
                     <Route path="receipts" element={<DocumentsSalesPage />} />
+                    <Route path=":documentId" element={<DocumentsSalesDetailPage />} />
                   </Route>
                   <Route path="correcting" element={<DocumentsCorrectingPage />} />
                   <Route path="returns" element={<Navigate to="/documents/correcting" replace />} />

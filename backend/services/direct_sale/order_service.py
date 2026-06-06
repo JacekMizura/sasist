@@ -16,6 +16,7 @@ from ...models.order_ui_status import OrderUiStatus
 from ..barcode_generation import next_internal_order_number, next_order_barcode
 from ..direct_sales_settings_service import resolve_direct_sales_settings
 from ..order_default_new_panel_status import assign_default_new_panel_status_to_order
+from ..sale_document_financials import brutto_line_to_net_fields, product_vat_for_direct_sale
 from .errors import DirectSaleError
 
 
@@ -52,14 +53,16 @@ def create_order_from_session(
 
     tid = int(sess.tenant_id)
     wid = int(sess.warehouse_id)
-    goods_total = 0.0
+    goods_gross_total = 0.0
     for ln in active_lines:
-        qty = float(ln.quantity or 0)
+        qty = int(round(float(ln.quantity or 0)))
         if qty <= 0:
             continue
-        unit = float(ln.unit_price) if ln.unit_price is not None else 0.0
+        unit_gross = float(ln.unit_price) if ln.unit_price is not None else 0.0
         disc = float(ln.discount_amount or 0)
-        goods_total += max(0.0, unit * qty - disc)
+        vat_p = product_vat_for_direct_sale(db, int(ln.product_id))
+        fin = brutto_line_to_net_fields(unit_gross=unit_gross, qty=qty, discount=disc, vat_percent=vat_p)
+        goods_gross_total += float(fin["line_gross"])
 
     order = Order(
         tenant_id=tid,
@@ -68,7 +71,7 @@ def create_order_from_session(
         number=next_internal_order_number(db, tid, wid),
         barcode=next_order_barcode(db, tid),
         order_date=datetime.utcnow(),
-        value=round(goods_total, 2),
+        value=round(goods_gross_total, 2),
         source="direct-sales",
         order_channel="DIRECT_SALE",
         fulfillment_mode="IMMEDIATE",
@@ -107,15 +110,17 @@ def create_order_from_session(
         qty = int(round(float(ln.quantity or 0)))
         if qty <= 0:
             continue
-        unit = float(ln.unit_price) if ln.unit_price is not None else 0.0
+        unit_gross = float(ln.unit_price) if ln.unit_price is not None else 0.0
         disc = float(ln.discount_amount or 0)
-        total = max(0.0, unit * qty - disc)
+        vat_p = product_vat_for_direct_sale(db, int(ln.product_id))
+        fin = brutto_line_to_net_fields(unit_gross=unit_gross, qty=qty, discount=disc, vat_percent=vat_p)
         oi = OrderItem(
             order_id=int(order.id),
             product_id=int(ln.product_id),
             quantity=qty,
-            unit_price=unit if unit else None,
-            total_price=round(total, 2),
+            unit_price=float(fin["unit_price"]) if fin["unit_price"] else None,
+            total_price=round(float(fin["total_price"]), 2),
+            vat_percent=float(fin["vat_percent"]),
             source_location_id=int(ln.source_location_id) if ln.source_location_id else None,
             issue_session_id=int(sess.id),
         )
