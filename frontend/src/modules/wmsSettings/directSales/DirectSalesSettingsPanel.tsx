@@ -87,10 +87,10 @@ export const DirectSalesSettingsPanel = forwardRef<DirectSalesSettingsPanelHandl
               </button>
             </div>
           </div>
-          <ValidationWarnings config={state.draft} />
+          <ValidationWarnings config={state.draft} statusOptions={state.statusOptions} />
         </div>
         <WmsSettingsLayout sections={DIRECT_SALES_SETTINGS_NAV_SECTIONS} observeSections={sectionNavObserve}>
-          <GeneralSection config={state.draft} onChange={state.patch} />
+          <GeneralSection config={state.draft} statusOptions={state.statusOptions} onChange={state.patch} />
           <PaymentsSection config={state.draft} onChange={state.patch} />
           <StockSection config={state.draft} onChange={state.patch} />
           <PricingSection config={state.draft} onChange={state.patch} />

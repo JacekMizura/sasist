@@ -15,3 +15,17 @@ export function orderPanelStatusSelectLabel(opt: { id: number; name: string; mai
   const name = (opt.name || "").trim() || `Status #${opt.id}`;
   return `${name} — ${orderPanelGroupTitle(opt.main_group)}`;
 }
+
+/** Etykieta ustawień WMS: „Grupa → Status” (podgrupa zastępuje grupę główną gdy ustawiona). */
+export function orderPanelStatusGroupedSelectLabel(opt: {
+  id: number;
+  name: string;
+  main_group: string;
+  subgroup_name?: string | null;
+  group_display_name?: string | null;
+}): string {
+  const statusName = (opt.name || "").trim() || `Status #${opt.id}`;
+  const subgroup = (opt.subgroup_name || "").trim();
+  const groupLabel = subgroup || (opt.group_display_name || "").trim() || orderPanelGroupTitle(opt.main_group);
+  return `${groupLabel} → ${statusName}`;
+}

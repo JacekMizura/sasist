@@ -39,6 +39,10 @@ export interface UseDesignerKeyboardParams {
   setCopiedRack?: (v: RackState | null) => void;
   selectedWallElementId?: string | null;
   deleteSelectedWallElement?: () => void;
+  internalLayoutRackId?: number | string | null;
+  onCloseInternalLayout?: () => void;
+  onCloseRackPanel?: () => void;
+  rackPanelOpen?: boolean;
 }
 
 export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
@@ -78,6 +82,10 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
   setCopiedRack,
   selectedWallElementId = null,
   deleteSelectedWallElement,
+  internalLayoutRackId = null,
+  onCloseInternalLayout,
+  onCloseRackPanel,
+  rackPanelOpen = false,
   } = params;
 
   useEffect(() => {
@@ -106,6 +114,16 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
         if (placementMode) setRackRotation((prev) => (prev === "vertical" ? "horizontal" : "vertical"));
       }
       if (e.key === "Escape") {
+        if (internalLayoutRackId != null && onCloseInternalLayout) {
+          e.preventDefault();
+          onCloseInternalLayout();
+          return;
+        }
+        if (rackPanelOpen && onCloseRackPanel) {
+          e.preventDefault();
+          onCloseRackPanel();
+          return;
+        }
         if (copyPlacementMode && setCopyPlacementMode && setCopiedRack) {
           setCopyPlacementMode(false);
           setCopiedRack(null);
@@ -183,5 +201,5 @@ export function useDesignerKeyboard(params: UseDesignerKeyboardParams): void {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [placementMode, selectedObjectId, deleteObject, deleteSelectedRow, clipboard, getPastePosition, layout.racks, layout.visual_elements, mainView, selectedRackIds.length, selectedRowContainerId, selectedVisualIds.length, copyPlacementMode, setCopyPlacementMode, setCopiedRack, selectedWallElementId, deleteSelectedWallElement]);
+  }, [placementMode, selectedObjectId, deleteObject, deleteSelectedRow, clipboard, getPastePosition, layout.racks, layout.visual_elements, mainView, selectedRackIds.length, selectedRowContainerId, selectedVisualIds.length, copyPlacementMode, setCopyPlacementMode, setCopiedRack, selectedWallElementId, deleteSelectedWallElement, internalLayoutRackId, onCloseInternalLayout, onCloseRackPanel, rackPanelOpen]);
 }

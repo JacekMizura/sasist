@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { listOrderStatuses } from "../../../../api/orderStatusesApi";
+import type { OrderStatusOption } from "../../../../types/wmsPackingSettings";
 import { getDirectSalesSettings, saveDirectSalesSettings } from "../api/directSalesSettingsApi";
 import type { DirectSalesSettingsConfig, EditScope } from "../schemas/directSalesSettingsSchema";
 import { normalizeDirectSalesSettings } from "../schemas/directSalesSettingsSchema";
@@ -15,16 +17,21 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
   const [draft, setDraft] = useState<DirectSalesSettingsConfig | null>(null);
   const [savedScopeSnapshot, setSavedScopeSnapshot] = useState("");
   const [hasWarehouseOverride, setHasWarehouseOverride] = useState(false);
+  const [statusOptions, setStatusOptions] = useState<OrderStatusOption[]>([]);
 
   const load = useCallback(async () => {
     if (warehouseId == null) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await getDirectSalesSettings({ tenantId, warehouseId });
+      const [data, statuses] = await Promise.all([
+        getDirectSalesSettings({ tenantId, warehouseId }),
+        listOrderStatuses(tenantId, warehouseId).catch(() => [] as OrderStatusOption[]),
+      ]);
+      setStatusOptions(statuses);
       setHasWarehouseOverride(data.has_warehouse_override);
       const base = scope === "tenant" ? data.tenant_defaults : data.resolved;
-      const normalized = normalizeDirectSalesSettings(base);
+      const normalized = normalizeDirectSalesSettings(base, statuses);
       setDraft(normalized);
       setSavedScopeSnapshot(fingerprint(normalized));
     } catch {
@@ -55,11 +62,14 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
       warehouse_id: saveWh,
       settings: draft,
     });
-    const normalized = normalizeDirectSalesSettings(scope === "tenant" ? data.tenant_defaults : data.resolved);
+    const normalized = normalizeDirectSalesSettings(
+      scope === "tenant" ? data.tenant_defaults : data.resolved,
+      statusOptions,
+    );
     setDraft(normalized);
     setSavedScopeSnapshot(fingerprint(normalized));
     setHasWarehouseOverride(data.has_warehouse_override);
-  }, [draft, tenantId, warehouseId, scope]);
+  }, [draft, tenantId, warehouseId, scope, statusOptions]);
 
   const discard = useCallback(() => {
     void load();
@@ -80,6 +90,7 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
     save,
     discard,
     hasWarehouseOverride,
+    statusOptions,
     reload: load,
   };
 }

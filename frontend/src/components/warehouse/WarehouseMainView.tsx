@@ -25,6 +25,12 @@ export type WarehouseMainViewProps = WarehouseCanvasProps & {
   optimizeRoute: () => void;
   finishRoute: () => void;
   routePanelVisible: boolean;
+  rackPanelOpen: boolean;
+  onCloseRackPanel: () => void;
+  onSaveLayout?: () => void;
+  saving?: boolean;
+  lastSavedAt?: number | null;
+  warehouseLabel?: string;
 };
 
 export function WarehouseMainView(props: WarehouseMainViewProps) {
@@ -49,6 +55,12 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     optimizeRoute,
     finishRoute,
     routePanelVisible,
+    rackPanelOpen,
+    onCloseRackPanel,
+    onSaveLayout,
+    saving,
+    lastSavedAt,
+    warehouseLabel,
     isMultiSelect,
     selectedRackIds,
     setShowElevationForRackId,
@@ -71,7 +83,10 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
   return (
     <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-row items-stretch overflow-hidden">
       <div className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden p-0">
-        <div className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto">
+        <div
+          data-warehouse-canvas-scroll
+          className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto"
+        >
           <WarehouseCanvas {...canvasProps} />
         </div>
       </div>
@@ -339,31 +354,48 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
             </aside>
           );
         })()}
-        {(selectedRack || routePanelVisible) && selectedAisleIndex == null && selectedVisualIds.length === 0 && (
-          <RackPropertiesSidebar
-            layout={layout}
-            selectedRack={selectedRack}
-            selectedRacks={selectedRacks}
-            isMultiSelect={isMultiSelect}
-            selectedRackIds={selectedRackIds}
-            setLayout={setLayout}
-            setShowElevationForRackId={setShowElevationForRackId}
-            setInternalLayoutRackId={setInternalLayoutRackId}
-            setSelectedRackId={setSelectedRackId}
-            setSelectedRackIds={setSelectedRackIds}
-            routeRackIds={routeRackIds}
-            routeRackLabels={routeRackLabels}
-            routeLengthMeters={routeLengthMeters}
-            routeLegMeters={routeLegMeters}
-            routeStepIndex={routeStepIndex}
-            routeStepCount={routeStepCount}
-            onRouteStepNext={onRouteStepNext}
-            isRouteActive={isRouteActive}
-            clearRoute={clearRoute}
-            optimizeRoute={optimizeRoute}
-            finishRoute={finishRoute}
-          />
-        )}
+        {rackPanelOpen &&
+          (selectedRack || routePanelVisible) &&
+          selectedAisleIndex == null &&
+          selectedVisualIds.length === 0 && (
+            <>
+              <button
+                type="button"
+                aria-label="Zamknij panel właściwości"
+                className="fixed inset-x-0 bottom-0 z-30 bg-black/15"
+                style={{ top: "7.5rem" }}
+                onClick={onCloseRackPanel}
+              />
+              <RackPropertiesSidebar
+                layout={layout}
+                selectedRack={selectedRack}
+                selectedRacks={selectedRacks}
+                isMultiSelect={isMultiSelect}
+                selectedRackIds={selectedRackIds}
+                setLayout={setLayout}
+                setShowElevationForRackId={setShowElevationForRackId}
+                setInternalLayoutRackId={setInternalLayoutRackId}
+                setSelectedRackId={setSelectedRackId}
+                setSelectedRackIds={setSelectedRackIds}
+                routeRackIds={routeRackIds}
+                routeRackLabels={routeRackLabels}
+                routeLengthMeters={routeLengthMeters}
+                routeLegMeters={routeLegMeters}
+                routeStepIndex={routeStepIndex}
+                routeStepCount={routeStepCount}
+                onRouteStepNext={onRouteStepNext}
+                isRouteActive={isRouteActive}
+                clearRoute={clearRoute}
+                optimizeRoute={optimizeRoute}
+                finishRoute={finishRoute}
+                onClose={onCloseRackPanel}
+                onSaveLayout={onSaveLayout}
+                saving={saving}
+                lastSavedAt={lastSavedAt}
+                warehouseLabel={warehouseLabel}
+              />
+            </>
+          )}
     </div>
   );
 }

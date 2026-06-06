@@ -150,4 +150,6 @@ export type OrderStatusOption = {
   id: number;
   name: string;
   main_group: string;
+  subgroup_name?: string | null;
+  group_display_name?: string | null;
 };

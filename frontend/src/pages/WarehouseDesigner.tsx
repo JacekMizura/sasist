@@ -20,6 +20,7 @@ import {
   getRackRouteWaypoint,
 } from "../components/warehouse/aisleGraphRoute";
 import { buildWalkabilityGrid, nearestWalkableCell } from "../components/warehouse/gridRoutePathfinding";
+import { logRackRename } from "../components/warehouse/rackRenameLog";
 import { RackSidebar } from "../components/warehouse/RackSidebar";
 import { RackSideViewGrid } from "../components/warehouse/RackSideViewGrid";
 import { WarehouseModals } from "../components/warehouse/WarehouseModals";
@@ -615,6 +616,8 @@ export default function WarehouseDesigner() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [rackPanelDismissed, setRackPanelDismissed] = useState(false);
+  const layoutScrollRestoreRef = useRef<{ top: number; left: number } | null>(null);
   const [draggingFromCatalog, setDraggingFromCatalog] = useState<CatalogItem | null>(null);
   const [customTemplates, setCustomTemplates] = useState<CustomRackTemplate[]>([]);
   const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null);
@@ -2025,6 +2028,10 @@ export default function WarehouseDesigner() {
       return;
     }
     setSaving(true);
+    const rackNamesForPersistLog = layout.racks.map((r) => ({
+      rack_id: r.id ?? r.rack_index,
+      name: (r.name ?? "").trim() || null,
+    }));
     try {
       const payload: Record<string, unknown> = {
         ...(layout.layout_id != null ? { layout_id: layout.layout_id } : {}),
@@ -2044,7 +2051,7 @@ export default function WarehouseDesigner() {
           id: r.id,
           uuid: r.uuid ?? generateRackUuid(),
           rack_type: r.rack_type ?? "warehouse",
-          name: r.name ?? getRackDisplayIdWithLayout(r),
+          name: (r.name ?? "").trim() || getRackDisplayIdWithLayout(r),
           x: r.x,
           y: r.y,
           width: r.width,
@@ -2101,6 +2108,11 @@ export default function WarehouseDesigner() {
 
       await api.put(`/warehouse/${whId}/layout`, validated.payload, { params: { tenant_id: TENANT_ID } });
       setLastSavedAt(Date.now());
+      for (const { rack_id, name } of rackNamesForPersistLog) {
+        if (name) {
+          logRackRename({ rack_id, old_name: name, new_name: name, persisted: true });
+        }
+      }
       if (selectedWarehouseId) await loadLayout(selectedWarehouseId);
     } catch (err: unknown) {
       console.error("Save layout:", err);
@@ -2728,44 +2740,6 @@ export default function WarehouseDesigner() {
     exportJson(layout);
   }, [layout]);
 
-  useDesignerKeyboard({
-    placementMode,
-    setRackRotation,
-    setPlacementMode,
-    setLayoutMode,
-    setGhostPosition,
-    setRowToolTemplate,
-    setRowDrawStart,
-    setRowDrawEnd,
-    setSelectedRowContainerId,
-    setSelectedRowContainerIds,
-    setSelectedRackId,
-    setSelectedRackIds,
-    setSelectedVisualId,
-    setSelectedVisualIds,
-    setMarqueeStart,
-    setMarqueeEnd,
-    setAisleDrawStart,
-    setClipboard,
-    setLayout,
-    setSnackbar,
-    mainView,
-    selectedRowContainerId,
-    deleteSelectedRow,
-    selectedObjectId,
-    deleteObject,
-    clipboard,
-    getPastePosition,
-    layout,
-    selectedRackIds,
-    selectedVisualIds,
-    copyPlacementMode,
-    setCopyPlacementMode,
-    setCopiedRack,
-    selectedWallElementId,
-    deleteSelectedWallElement,
-  });
-
   const deleteSelectedRack = useCallback(() => {
     if (selectedRackId == null) return;
     setLayout((prev) => ({
@@ -3041,6 +3015,83 @@ export default function WarehouseDesigner() {
       : layout.racks.find((r) => rackMatchesSlotRackId(r, selectedRackId));
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.some((id) => rackMatchesSlotRackId(r, id)));
   const isMultiSelect = selectedRackIds.length > 1;
+  const routePanelVisible = isRouteActive || routeRackIds.length > 0;
+  const rackPropertiesPanelVisible =
+    mainView === "layout" &&
+    !rackPanelDismissed &&
+    (selectedRack != null || routePanelVisible) &&
+    selectedAisleIndex == null &&
+    selectedVisualIds.length === 0;
+
+  const closeRackPanel = useCallback(() => {
+    setRackPanelDismissed(true);
+    setSelectedRackId(null);
+    setSelectedRackIds([]);
+  }, []);
+
+  useEffect(() => {
+    if (mainView !== "layout") return;
+    if (selectedRackId != null || routePanelVisible) {
+      setRackPanelDismissed(false);
+    }
+  }, [mainView, selectedRackId, routePanelVisible]);
+
+  useEffect(() => {
+    if (mainView !== "layout") return;
+    const el = document.querySelector<HTMLElement>("[data-warehouse-canvas-scroll]");
+    if (internalLayoutRackId != null) {
+      if (el) layoutScrollRestoreRef.current = { top: el.scrollTop, left: el.scrollLeft };
+    } else if (layoutScrollRestoreRef.current && el) {
+      const saved = layoutScrollRestoreRef.current;
+      requestAnimationFrame(() => {
+        el.scrollTop = saved.top;
+        el.scrollLeft = saved.left;
+      });
+      layoutScrollRestoreRef.current = null;
+    }
+  }, [internalLayoutRackId, mainView]);
+
+  useDesignerKeyboard({
+    placementMode,
+    setRackRotation,
+    setPlacementMode,
+    setLayoutMode,
+    setGhostPosition,
+    setRowToolTemplate,
+    setRowDrawStart,
+    setRowDrawEnd,
+    setSelectedRowContainerId,
+    setSelectedRowContainerIds,
+    setSelectedRackId,
+    setSelectedRackIds,
+    setSelectedVisualId,
+    setSelectedVisualIds,
+    setMarqueeStart,
+    setMarqueeEnd,
+    setAisleDrawStart,
+    setClipboard,
+    setLayout,
+    setSnackbar,
+    mainView,
+    selectedRowContainerId,
+    deleteSelectedRow,
+    selectedObjectId,
+    deleteObject,
+    clipboard,
+    getPastePosition,
+    layout,
+    selectedRackIds,
+    selectedVisualIds,
+    copyPlacementMode,
+    setCopyPlacementMode,
+    setCopiedRack,
+    selectedWallElementId,
+    deleteSelectedWallElement,
+    internalLayoutRackId,
+    onCloseInternalLayout: () => setInternalLayoutRackId(null),
+    onCloseRackPanel: closeRackPanel,
+    rackPanelOpen: rackPropertiesPanelVisible,
+  });
 
   const fetchPathToRack = useCallback(async () => {
     if (!specialLocations.pick_start || !selectedRack) return;
@@ -4068,7 +4119,13 @@ export default function WarehouseDesigner() {
                 setSnackbar({ message: "Kolejność dopasowana (tryb wąż)." });
               },
               finishRoute: () => setIsRouteActive(false),
-              routePanelVisible: isRouteActive || routeRackIds.length > 0,
+              routePanelVisible,
+              rackPanelOpen: !rackPanelDismissed,
+              onCloseRackPanel: closeRackPanel,
+              onSaveLayout: saveLayout,
+              saving,
+              lastSavedAt,
+              warehouseLabel: layout.warehouse_name || activeWarehouse?.name || undefined,
             }}
           />
         ) : null}

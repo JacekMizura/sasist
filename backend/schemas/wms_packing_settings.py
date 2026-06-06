@@ -67,6 +67,8 @@ class OrderStatusOptionOut(BaseModel):
     id: int
     name: str
     main_group: str
+    subgroup_name: Optional[str] = None
+    group_display_name: Optional[str] = None
 
 
 class OrderStatusesListOut(BaseModel):

@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LayoutState } from "../../types/warehouse";
 import type { RackState, InternalStructure, InternalLevel, BinState, StorageType } from "./warehouseTypes";
 import {
   snapCm,
   binVolumeFromDimensions,
+  effectiveRackDisplayName,
   getDisplayLocationLabelPhysicalOrder,
   getRackDisplayId,
   isBinDirectionRtl,
@@ -17,6 +18,7 @@ import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 export type InternalLayoutModalProps = {
   layout?: LayoutState | null;
   rack: RackState;
+  warehouseLabel?: string;
   onSave: (internal_structure: InternalStructure, bins?: BinState[]) => void;
   onClose: () => void;
 };
@@ -88,8 +90,38 @@ function structureSignature(levels: InternalLevel[]): string {
   return `${levels.length}|${levelCounts}`;
 }
 
-export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: InternalLayoutModalProps) {
+export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSave, onClose }: InternalLayoutModalProps) {
   const rackWidthCm = rack.width_cm;
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const scrollRestoreRef = useRef(0);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const inInput =
+        document.activeElement &&
+        (document.activeElement.tagName === "INPUT" ||
+          document.activeElement.tagName === "TEXTAREA" ||
+          (document.activeElement as HTMLElement).isContentEditable);
+      if (inInput) return;
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    scrollRestoreRef.current = contentScrollRef.current?.scrollTop ?? 0;
+    return () => {
+      requestAnimationFrame(() => {
+        if (contentScrollRef.current) contentScrollRef.current.scrollTop = scrollRestoreRef.current;
+      });
+    };
+  }, []);
+
+  const rackTitle = layout ? effectiveRackDisplayName(rack, layout) : getRackDisplayId(rack, layout ?? undefined);
+  const warehousePart = warehouseLabel?.trim() || "Magazyn";
 
   /** Same rack row as in `layout.racks` (uuid, then id/rack_index) so row_container lookup matches slot `rackId`. */
   const rackFromLayout = useMemo(() => {
@@ -263,13 +295,37 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
         style={{ direction: "ltr" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
-          <h3 className="font-bold text-slate-800">Układ wewnętrzny – {getRackDisplayId(rack, layout ?? undefined)}</h3>
-          <div className="flex items-center gap-2">
-            <span className={`text-[11px] px-2 py-1 rounded border ${isVariantMode ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-slate-50 border-slate-200 text-slate-600"}`}>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0">
+            <nav className="mb-1 flex flex-wrap items-center gap-1 text-[11px] text-slate-500" aria-label="Nawigacja">
+              <button type="button" onClick={onClose} className="font-medium text-blue-700 hover:underline">
+                {warehousePart}
+              </button>
+              <span>/</span>
+              <button type="button" onClick={onClose} className="truncate font-medium text-blue-700 hover:underline">
+                Regał {rackTitle}
+              </button>
+              <span>/</span>
+              <span className="font-semibold text-slate-700">Układ wewnętrzny</span>
+            </nav>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                ← Wróć do planu
+              </button>
+              <h3 className="font-bold text-slate-800">Układ wewnętrzny</h3>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className={`rounded border px-2 py-1 text-[11px] ${isVariantMode ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
               {isVariantMode ? "Tryb wariantu" : "Tryb szablonu"}
             </span>
-            <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100">✕</button>
+            <button type="button" aria-label="Zamknij" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100">
+              ✕
+            </button>
           </div>
         </div>
         <p className="text-xs text-slate-500 px-5 py-1 shrink-0">Szerokość regału: {rackWidthCm} cm. Wysokość regału: {rack.height_cm} cm. Suma wysokości poziomów i suma szerokości lokalizacji na poziom nie mogą przekraczać limitów regału.</p>
@@ -279,7 +335,8 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
           </p>
         )}
         <div
-          className={`flex-1 min-h-0 flex flex-col p-5 ${fitsWithoutVerticalScroll ? "overflow-hidden" : "overflow-y-auto"}`}
+          ref={contentScrollRef}
+          className={`flex min-h-0 flex-1 flex-col p-4 ${fitsWithoutVerticalScroll ? "overflow-hidden" : "overflow-y-auto"}`}
           dir="ltr"
           style={{ direction: "ltr" }}
         >
@@ -553,10 +610,17 @@ export function InternalLayoutModal({ layout = null, rack, onSave, onClose }: In
             })}
           </div>
         </div>
-        <div className="flex gap-2 justify-end px-5 py-4 border-t border-slate-200 shrink-0">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700">Anuluj</button>
-          <button type="button" onClick={handleSave} disabled={!valid} className="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50">
-            Zapisz układ
+        <div className="sticky bottom-0 flex shrink-0 gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm">
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Zamknij
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!valid}
+            className="ml-auto rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+          >
+            Zapisz
           </button>
         </div>
       </div>

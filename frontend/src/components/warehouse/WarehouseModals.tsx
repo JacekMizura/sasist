@@ -85,7 +85,10 @@ export function WarehouseModals(props: WarehouseModalsProps) {
       {mainView === "layout" && showElevationForRackId != null && (() => {
         const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === showElevationForRackId);
         return rack ? (
-          <div className="fixed right-0 top-0 bottom-0 z-40 w-96 bg-white border-l border-[#E2E8F0] shadow-xl flex flex-col overflow-hidden">
+          <div
+            className="fixed right-0 z-40 flex w-96 max-h-[calc(100vh-7.5rem)] flex-col overflow-hidden rounded-l-xl border-l border-[#E2E8F0] bg-white shadow-xl"
+            style={{ top: "7.5rem" }}
+          >
             <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#E2E8F0]">
               <h3 className="font-bold text-[#1E293B]">Widok z boku – {getRackDisplayId(rack, layout)}</h3>
               <button type="button" onClick={() => { setShowElevationForRackId(null); setSelectedBinForFilter(null); }} className="p-2 rounded-lg hover:bg-slate-100 text-[#1E293B]">✕</button>
@@ -109,6 +112,7 @@ export function WarehouseModals(props: WarehouseModalsProps) {
           <InternalLayoutModal
             layout={layout}
             rack={rack}
+            warehouseLabel={layout.warehouse_name || undefined}
             onSave={onSaveInternalLayout}
             onClose={onCloseInternalLayout}
           />

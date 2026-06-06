@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-06-04 — Rack editor sidebar UX + save flow
+
+- Rack name persists via layout state + PUT payload; `[rack.rename]` logging (local + persisted on save).
+- Properties panel: overlay drawer (does not cover Zapisz układ), close/toggle/ESC/backdrop, resizable + compact mode.
+- Internal layout modal: breadcrumb navigation, back, ESC; elevation panel top offset.
+
+## 2026-06-04 — Direct sales status settings unified with order panel
+
+- Replaced hardcoded status strings with `order_ui_statuses.id` fields.
+- Shared `order_status_select_service` for `/order-statuses` (active only, subgroup labels).
+- Settings UI: dynamic grouped dropdown + optional workflow status fields.
+
 ## 2026-06-04 — Product detail API 500 fix
 
 - `GET /products/{id}` routed through `product_detail_service` with per-stage try/catch and degraded minimal payload.

@@ -1,8 +1,25 @@
+import type { OrderStatusOption } from "../../../../types/wmsPackingSettings";
 import type { DirectSalesSettingsConfig } from "../schemas/directSalesSettingsSchema";
 import { WarningBlock } from "./settingsUi";
 
-export function ValidationWarnings({ config }: { config: DirectSalesSettingsConfig }) {
+export function ValidationWarnings({
+  config,
+  statusOptions = [],
+}: {
+  config: DirectSalesSettingsConfig;
+  statusOptions?: OrderStatusOption[];
+}) {
   const warnings: string[] = [];
+  if (config.enabled && config.default_order_status_id == null) {
+    warnings.push("Brak statusu po zakończeniu sprzedaży — wybierz status z listy panelu zamówień.");
+  }
+  if (
+    config.default_order_status_id != null &&
+    statusOptions.length > 0 &&
+    !statusOptions.some((o) => o.id === config.default_order_status_id)
+  ) {
+    warnings.push("Zapisany status po sprzedaży nie istnieje lub jest nieaktywny — zostanie użyty domyślny po zapisie.");
+  }
   if (!config.allow_anonymous && !config.require_customer_for_invoice) {
     warnings.push("Każda sprzedaż będzie wymagała przypisanego klienta.");
   }

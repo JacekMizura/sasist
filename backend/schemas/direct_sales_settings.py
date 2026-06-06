@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-OrderStatusDefault = Literal["new", "paid", "ready", "completed"]
 DocumentTypeDefault = Literal["PA", "FV"]
 AllocationStrategy = Literal["auto", "store_first", "pick_face", "manual"]
 PriceDisplayMode = Literal["gross", "net", "both"]
@@ -22,7 +21,13 @@ class DirectSalesPaymentMethods(BaseModel):
 
 class DirectSalesSettingsConfig(BaseModel):
     enabled: bool = False
-    default_order_status: OrderStatusDefault = "paid"
+    #: Panel status assigned after sale complete (``order_ui_statuses.id``).
+    default_order_status_id: Optional[int] = Field(None, ge=1)
+    #: Optional workflow hooks for future operational automation.
+    session_created_order_status_id: Optional[int] = Field(None, ge=1)
+    paid_order_status_id: Optional[int] = Field(None, ge=1)
+    issued_order_status_id: Optional[int] = Field(None, ge=1)
+    cancelled_order_status_id: Optional[int] = Field(None, ge=1)
     default_document_type: DocumentTypeDefault = "PA"
     auto_start_new_session: bool = True
     payment_methods: DirectSalesPaymentMethods = Field(default_factory=DirectSalesPaymentMethods)

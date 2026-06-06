@@ -1,12 +1,26 @@
 import type { Dispatch, SetStateAction } from "react";
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import type { RackState, LayoutState } from "./warehouseTypes";
-import { getLevelConfig, getTotalLocations, getRackDisplayId, binsToLevels, getDisplayLocationLabel, validateRackName, effectiveRackDisplayName } from "./warehouseUtils";
+import {
+  getLevelConfig,
+  getTotalLocations,
+  getRackDisplayId,
+  binsToLevels,
+  getDisplayLocationLabel,
+  validateRackName,
+  effectiveRackDisplayName,
+  rackMatchesSlotRackId,
+} from "./warehouseUtils";
 import { UI_STRINGS } from "../../constants/uiStrings";
+import { logRackRename } from "./rackRenameLog";
+
+const DEFAULT_WIDTH = 300;
+const MIN_WIDTH = 260;
+const MAX_WIDTH = 420;
+const WIDTH_STORAGE_KEY = "wms.rackPropertiesSidebarWidth";
 
 export type RackPropertiesSidebarProps = {
-  /** Used for row direction-aware rack labels. */
   layout: LayoutState;
   selectedRack: RackState | null;
   selectedRacks: RackState[];
@@ -28,11 +42,26 @@ export type RackPropertiesSidebarProps = {
   clearRoute: () => void;
   optimizeRoute: () => void;
   finishRoute: () => void;
+  onClose: () => void;
+  onSaveLayout?: () => void;
+  saving?: boolean;
+  lastSavedAt?: number | null;
+  warehouseLabel?: string;
 };
 
 function racksMatchIdentity(a: RackState, b: RackState): boolean {
   if (a.uuid != null && b.uuid != null && String(a.uuid) === String(b.uuid)) return true;
   return String(a.id ?? a.rack_index) === String(b.id ?? b.rack_index);
+}
+
+function readStoredWidth(): number {
+  try {
+    const n = Number(localStorage.getItem(WIDTH_STORAGE_KEY));
+    if (Number.isFinite(n) && n >= MIN_WIDTH && n <= MAX_WIDTH) return n;
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_WIDTH;
 }
 
 export function RackPropertiesSidebar({
@@ -57,6 +86,11 @@ export function RackPropertiesSidebar({
   clearRoute,
   optimizeRoute,
   finishRoute,
+  onClose,
+  onSaveLayout,
+  saving = false,
+  lastSavedAt = null,
+  warehouseLabel,
 }: RackPropertiesSidebarProps) {
   const asideScrollRef = useRef<HTMLElement>(null);
   const scrollKey = `${selectedRack?.id ?? selectedRack?.rack_index ?? ""}-${routeStepIndex}-${isRouteActive}-${selectedRackIds.join(",")}`;
@@ -64,243 +98,426 @@ export function RackPropertiesSidebar({
 
   const [nameDraft, setNameDraft] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
+  const [nameSaveHint, setNameSaveHint] = useState<"idle" | "dirty" | "saved" | "error">("idle");
+  const [compact, setCompact] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(readStoredWidth);
+  const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
+  const lastCommittedNameRef = useRef<string | null>(null);
+
   const rackSelKey = selectedRack ? `${selectedRack.uuid ?? ""}-${selectedRack.id ?? selectedRack.rack_index}` : "";
   const nameSaved = (selectedRack?.name ?? "").trim();
   const effectiveRackLabel = selectedRack ? effectiveRackDisplayName(selectedRack, layout) : "";
-  /** When `rack.name` is empty, re-sync draft if auto label (slot / generated) changes; when name is set, only selection or saved name matters. */
   const rackDraftSyncKey = selectedRack ? `${rackSelKey}|${nameSaved}|${nameSaved ? "" : effectiveRackLabel}` : "";
+
   useEffect(() => {
     if (!selectedRack) {
       setNameDraft("");
+      lastCommittedNameRef.current = null;
     } else {
-      setNameDraft(effectiveRackDisplayName(selectedRack, layout));
+      const label = effectiveRackDisplayName(selectedRack, layout);
+      setNameDraft(label);
+      lastCommittedNameRef.current = (selectedRack.name ?? "").trim() || null;
     }
     setNameError(null);
-  }, [rackDraftSyncKey, selectedRack]);
+    setNameSaveHint("idle");
+  }, [rackDraftSyncKey, selectedRack, layout]);
+
+  const commitRackName = useCallback(
+    (raw: string, _source: "blur" | "enter" | "save") => {
+      if (!selectedRack) return true;
+      const trimmed = raw.trim();
+      const nextName = trimmed === "" ? undefined : trimmed;
+      const id = { id: selectedRack.id, rack_index: selectedRack.rack_index, uuid: selectedRack.uuid };
+      const vr = validateRackName(raw, layout, id);
+      const oldName = lastCommittedNameRef.current;
+      const newName = nextName ?? null;
+
+      if (!vr.valid) {
+        setNameError(vr.error ?? `Regał o nazwie '${trimmed || "?"}' już istnieje`);
+        setNameSaveHint("error");
+        logRackRename({
+          rack_id: selectedRack.id ?? selectedRack.rack_index,
+          old_name: oldName,
+          new_name: newName,
+          persisted: false,
+        });
+        return false;
+      }
+
+      setNameError(null);
+      setLayout((prev) => ({
+        ...prev,
+        racks: prev.racks.map((rack) =>
+          racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack
+        ),
+      }));
+      lastCommittedNameRef.current = newName;
+      const changed = (oldName ?? "") !== (newName ?? "");
+      if (changed) {
+        setNameSaveHint("saved");
+        logRackRename({
+          rack_id: selectedRack.id ?? selectedRack.rack_index,
+          old_name: oldName,
+          new_name: newName,
+          persisted: false,
+        });
+      } else {
+        setNameSaveHint("idle");
+      }
+      return true;
+    },
+    [layout, selectedRack, setLayout]
+  );
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const delta = resizeRef.current.startX - e.clientX;
+      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizeRef.current.startW + delta));
+      setPanelWidth(next);
+    };
+    const onUp = () => {
+      if (!resizeRef.current) return;
+      resizeRef.current = null;
+      try {
+        localStorage.setItem(WIDTH_STORAGE_KEY, String(panelWidth));
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [panelWidth]);
+
+  const rackTitle = selectedRack ? effectiveRackDisplayName(selectedRack, layout) : "Regał";
+  const saveStatusLabel = saving
+    ? "Zapisywanie…"
+    : nameSaveHint === "error"
+      ? "Błąd zapisu nazwy"
+      : nameSaveHint === "saved" && lastSavedAt == null
+        ? "Zmiany lokalne — zapisz układ"
+        : lastSavedAt != null
+          ? "Zapisano"
+          : null;
 
   return (
     <aside
       ref={asideScrollRef}
-      className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-y-auto overscroll-y-contain rounded-xl border border-slate-100 bg-white p-3 shadow-md"
-      style={{ overscrollBehavior: "contain" }}
+      className={`fixed right-0 z-40 flex max-h-[calc(100vh-7.5rem)] min-h-0 flex-col overflow-hidden rounded-l-xl border border-slate-200 bg-white shadow-xl ${
+        compact ? "text-[11px]" : ""
+      }`}
+      style={{ top: "7.5rem", width: panelWidth, overscrollBehavior: "contain" }}
+      role="dialog"
+      aria-label="Właściwości regału"
     >
-      <h2 className="text-xs font-black uppercase text-slate-600 mb-2">{UI_STRINGS.warehouse.rackProperties.title}</h2>
-      {selectedRack && isMultiSelect ? (
-        <>
-          <p className="text-[#1E293B] text-sm font-semibold">Wybrano: {selectedRacks.length} regałów</p>
-          <div className="mt-2 space-y-2">
-            <div>
-              <label className="block text-[10px] text-slate-500 uppercase">Wysokość (cm)</label>
-              <p className="text-[11px] text-slate-700 mt-0.5">
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-200/60"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          resizeRef.current = { startX: e.clientX, startW: panelWidth };
+        }}
+      />
+      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-100 px-3 py-2">
+        <div className="min-w-0 pl-1">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            {warehouseLabel ? `Magazyn / ${warehouseLabel}` : "Magazyn"} / {rackTitle}
+          </p>
+          <h2 className="truncate text-xs font-bold uppercase text-slate-700">
+            {UI_STRINGS.warehouse.rackProperties.title}
+          </h2>
+          {saveStatusLabel ? (
+            <p
+              className={`mt-0.5 text-[10px] ${
+                saving || nameSaveHint === "error" ? "text-amber-700" : "text-emerald-700"
+              }`}
+            >
+              {saveStatusLabel}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            title={compact ? "Tryb normalny" : "Tryb kompaktowy"}
+            onClick={() => setCompact((v) => !v)}
+            className="rounded-md border border-slate-200 px-1.5 py-1 text-[10px] text-slate-600 hover:bg-slate-50"
+          >
+            {compact ? "▣" : "▢"}
+          </button>
+          <button
+            type="button"
+            aria-label="Zamknij panel"
+            onClick={onClose}
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          >
+            ✕
+          </button>
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
+        {selectedRack && isMultiSelect ? (
+          <>
+            <p className="text-sm font-semibold text-slate-800">Wybrano: {selectedRacks.length} regałów</p>
+            <div className="mt-2 space-y-1.5 text-[11px] text-slate-600">
+              <p>
+                Wysokość:{" "}
                 {(() => {
                   const heights = selectedRacks.map((r) => r.height_cm);
-                  const allSame = heights.every((h) => h === heights[0]);
-                  return allSame ? heights[0] : "różne";
+                  return heights.every((h) => h === heights[0]) ? heights[0] : "różne";
                 })()}
               </p>
-            </div>
-            <div>
-              <label className="block text-[10px] text-slate-500 uppercase">Poziomy</label>
-              <p className="text-[11px] text-slate-700 mt-0.5">
+              <p>
+                Poziomy:{" "}
                 {(() => {
                   const levels = selectedRacks.map((r) => r.levels);
-                  const allSame = levels.every((l) => l === levels[0]);
-                  return allSame ? levels[0] : "różne";
+                  return levels.every((l) => l === levels[0]) ? levels[0] : "różne";
                 })()}
               </p>
             </div>
-          </div>
-        </>
-      ) : (
-        <>
-          {selectedRack ? (
-            <div className="space-y-1">
-              <label className="block text-[10px] font-semibold uppercase text-slate-500">Nazwa regału</label>
-              <input
-                type="text"
-                value={nameDraft}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setNameDraft(v);
-                  if (!selectedRack) return;
-                  const id = { id: selectedRack.id, rack_index: selectedRack.rack_index, uuid: selectedRack.uuid };
-                  const nextName = v.trim() === "" ? undefined : v.trim();
-                  const vr = validateRackName(v, layout, id);
-                  if (vr.valid) {
-                    setNameError(null);
-                  } else {
-                    setNameError(vr.error ?? `Regał o nazwie '${v.trim() || v || "?"}' już istnieje`);
-                  }
-                  setLayout((prev) => ({
-                    ...prev,
-                    racks: prev.racks.map((rack) =>
-                      racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack
-                    ),
-                  }));
-                }}
-                placeholder={getRackDisplayId(selectedRack, layout)}
-                className={`w-full rounded-lg border px-2 py-1.5 text-sm text-slate-800 ${
-                  nameError ? "border-red-400 ring-1 ring-red-200" : "border-slate-200"
-                }`}
-              />
-              {nameError ? <p className="text-[11px] text-red-600">{nameError}</p> : null}
-            </div>
-          ) : (
-            <p className="text-[#1E293B] font-semibold">Brak wybranego regalu</p>
-          )}
-          {selectedRack && (
-            <>
-          <dl className="text-[11px] text-slate-500 mt-2 space-y-0.5">
-            <dt className="text-slate-500">Wymiary</dt>
-            <dd className="text-slate-700">{selectedRack.width_cm} × {selectedRack.length_cm} × {selectedRack.height_cm} cm</dd>
-            <dt className="text-slate-500">{UI_STRINGS.warehouse.rackProperties.levelsBins}</dt>
-            <dd className="text-slate-700">
-              {(() => {
-                const lc = getLevelConfig(selectedRack);
-                const total = getTotalLocations(lc);
-                return lc.every((r) => r.locations === lc[0].locations)
-                  ? `${lc.length} / ${lc[0]?.locations ?? 0}`
-                  : `${lc.length} poz., Suma: ${total} lok.`;
-              })()}
-            </dd>
-          </dl>
-          <label className="flex items-center gap-2 mt-2 text-[11px] text-slate-600">
-            <input
-              type="checkbox"
-              checked={selectedRack.show_label !== false}
-              onChange={(e) => {
-                const v = e.target.checked;
-                setLayout((prev) => ({
-                  ...prev,
-                  racks: prev.racks.map((rack) =>
-                    (rack.id ?? rack.rack_index) === (selectedRack.id ?? selectedRack.rack_index) ? { ...rack, show_label: v } : rack
-                  ),
-                }));
-              }}
-              className="rounded"
-            />
-            Pokaż etykietę na mapie
-          </label>
-          {/* Lokalizacje zgrupowane po poziomie */}
-          {(() => {
-            const levels = selectedRack.rackLevels ?? (selectedRack.bins?.length ? binsToLevels(selectedRack.bins) : []);
-            if (levels.length === 0) return null;
-            return (
-              <div className="mt-3 pt-3 border-t border-slate-100">
-                <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">Lokalizacje</p>
-                <div className="max-h-48 overflow-y-auto space-y-2">
-                  {levels.map((lev) => (
-                    <div key={lev.levelIndex} className="text-[10px]">
-                      <p className="font-semibold text-slate-600 mb-0.5">Poziom {lev.levelIndex}</p>
-                      <div className="pl-2 space-y-0.5">
-                        {lev.positions.map((pos, posIndex) => {
-                          const bin = selectedRack.bins?.find((b) => (b.locationUUID ?? "").trim() === (pos.locationUUID ?? "").trim());
-                          const line =
-                            bin != null
-                              ? getDisplayLocationLabel(selectedRack, bin, layout)
-                              : pos.locationAddress || pos.locationUUID || `Pozycja ${posIndex + 1}`;
-                          return (
-                            <div key={pos.locationUUID} className="font-mono text-slate-700 truncate" title={pos.locationUUID}>
-                              {line}
+          </>
+        ) : (
+          <>
+            {selectedRack ? (
+              <div className="space-y-1">
+                <label className="block text-[10px] font-semibold uppercase text-slate-500">Nazwa regału</label>
+                <input
+                  type="text"
+                  value={nameDraft}
+                  onChange={(e) => {
+                    setNameDraft(e.target.value);
+                    setNameSaveHint("dirty");
+                    const v = e.target.value;
+                    if (!selectedRack) return;
+                    const id = { id: selectedRack.id, rack_index: selectedRack.rack_index, uuid: selectedRack.uuid };
+                    const vr = validateRackName(v, layout, id);
+                    setNameError(vr.valid ? null : vr.error ?? "Nieprawidłowa nazwa");
+                    const nextName = v.trim() === "" ? undefined : v.trim();
+                    setLayout((prev) => ({
+                      ...prev,
+                      racks: prev.racks.map((rack) =>
+                        racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack
+                      ),
+                    }));
+                  }}
+                  onBlur={() => {
+                    void commitRackName(nameDraft, "blur");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitRackName(nameDraft, "enter");
+                      (e.target as HTMLInputElement).blur();
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      onClose();
+                    }
+                  }}
+                  placeholder={getRackDisplayId(selectedRack, layout)}
+                  className={`w-full rounded-lg border px-2 py-1.5 text-sm text-slate-800 ${
+                    nameError ? "border-red-400 ring-1 ring-red-200" : "border-slate-200"
+                  }`}
+                />
+                {nameError ? <p className="text-[11px] text-red-600">{nameError}</p> : null}
+              </div>
+            ) : (
+              <p className="text-sm font-medium text-slate-600">Wybierz regał na planie lub zamknij panel.</p>
+            )}
+            {selectedRack && (
+              <>
+                <dl className="mt-2 space-y-0.5 text-[11px] text-slate-500">
+                  <dt>Wymiary</dt>
+                  <dd className="text-slate-700">
+                    {selectedRack.width_cm} × {selectedRack.length_cm} × {selectedRack.height_cm} cm
+                  </dd>
+                  <dt>{UI_STRINGS.warehouse.rackProperties.levelsBins}</dt>
+                  <dd className="text-slate-700">
+                    {(() => {
+                      const lc = getLevelConfig(selectedRack);
+                      const total = getTotalLocations(lc);
+                      return lc.every((r) => r.locations === lc[0].locations)
+                        ? `${lc.length} / ${lc[0]?.locations ?? 0}`
+                        : `${lc.length} poz., Suma: ${total} lok.`;
+                    })()}
+                  </dd>
+                </dl>
+                <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={selectedRack.show_label !== false}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setLayout((prev) => ({
+                        ...prev,
+                        racks: prev.racks.map((rack) =>
+                          racksMatchIdentity(rack, selectedRack) ? { ...rack, show_label: v } : rack
+                        ),
+                      }));
+                    }}
+                    className="rounded"
+                  />
+                  Pokaż etykietę na mapie
+                </label>
+                {(() => {
+                  const levels =
+                    selectedRack.rackLevels ?? (selectedRack.bins?.length ? binsToLevels(selectedRack.bins) : []);
+                  if (levels.length === 0) return null;
+                  return (
+                    <div className="mt-2 border-t border-slate-100 pt-2">
+                      <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">Lokalizacje</p>
+                      <div className="max-h-36 space-y-1.5 overflow-y-auto">
+                        {levels.map((lev) => (
+                          <div key={lev.levelIndex} className="text-[10px]">
+                            <p className="font-semibold text-slate-600">Poziom {lev.levelIndex}</p>
+                            <div className="space-y-0.5 pl-2">
+                              {lev.positions.map((pos, posIndex) => {
+                                const bin = selectedRack.bins?.find(
+                                  (b) => (b.locationUUID ?? "").trim() === (pos.locationUUID ?? "").trim()
+                                );
+                                const line =
+                                  bin != null
+                                    ? getDisplayLocationLabel(selectedRack, bin, layout)
+                                    : pos.locationAddress || pos.locationUUID || `Pozycja ${posIndex + 1}`;
+                                return (
+                                  <div key={pos.locationUUID} className="truncate font-mono text-slate-700" title={pos.locationUUID}>
+                                    {line}
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-            </>
-          )}
-          <div className="mt-3 pt-3 border-t border-slate-100">
-            <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">Trasa kompletacji</p>
-            {routeRackIds.length === 0 ? (
-              <p className="text-[11px] text-slate-500">
-                {isRouteActive
-                  ? "Tryb aktywny — kliknij pierwszy regał"
-                  : "Włącz „Planuj trasę” w pasku, aby ustawić kolejność regałów."}
-              </p>
-            ) : (
-              <>
-                {isRouteActive && routeRackIds.length === 1 && (
-                  <p className="text-[11px] text-slate-600 mb-1.5">Kliknij kolejny regał, aby kontynuować</p>
-                )}
-                {routeRackIds.length >= 2 && (
-                  <p className="text-[11px] text-slate-600 mb-1">
-                    Krok:{" "}
-                    <span className="font-semibold text-slate-800">
-                      {routeStepIndex + 1} / {routeStepCount}
-                    </span>
-                  </p>
-                )}
-                {routeRackIds.length >= 2 && (
-                  <p className="text-[11px] text-slate-600 mb-1">
-                    Odcinek: <span className="font-semibold text-slate-700">{routeLegMeters.toFixed(1)} m</span>
-                  </p>
-                )}
-                <p className="text-[11px] text-slate-600 mb-1">
-                  Całość: <span className="font-semibold text-slate-700">{routeLengthMeters.toFixed(1)} m</span>
-                </p>
-                <ul className="max-h-28 overflow-y-auto space-y-1">
-                  {routeRackLabels.map((label, idx) => (
-                    <li
-                      key={`${label}-${idx}`}
-                      className={`text-[11px] rounded px-1.5 py-0.5 ${
-                        routeRackIds.length >= 2 && idx === routeStepIndex ? "bg-blue-50 text-blue-900 font-semibold ring-1 ring-blue-200" : "text-slate-700"
-                      }`}
-                    >
-                      <span className="inline-flex items-center justify-center w-4 h-4 mr-1 rounded bg-teal-100 text-teal-800 text-[10px] font-bold">
-                        {idx + 1}
-                      </span>
-                      {label}
-                    </li>
-                  ))}
-                </ul>
-                {routeRackIds.length >= 2 && onRouteStepNext != null && (
-                  <button
-                    type="button"
-                    onClick={onRouteStepNext}
-                    disabled={routeStepIndex >= routeStepCount - 1}
-                    className="mt-2 w-full px-2 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-semibold hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Następny krok
-                  </button>
-                )}
-                <div className="mt-2 flex gap-1.5">
-                  <button type="button" onClick={clearRoute} className="px-2 py-1 rounded border border-slate-300 text-[11px] hover:bg-slate-50">
-                    Wyczyść trasę
-                  </button>
-                  <button type="button" onClick={finishRoute} className="px-2 py-1 rounded border border-slate-300 text-[11px] hover:bg-slate-50">
-                    Zakończ
-                  </button>
-                </div>
+                  );
+                })()}
               </>
             )}
-          </div>
-        </>
-      )}
-      <div className="flex flex-col gap-1.5 mt-3">
-        {selectedRack && (
-          <>
-        <button type="button" onClick={() => setShowElevationForRackId(selectedRack.id ?? selectedRack.rack_index)} className="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-xs font-semibold hover:bg-cyan-500">Widok z boku</button>
-        <button type="button" onClick={() => setInternalLayoutRackId(selectedRack.id ?? selectedRack.rack_index)} className="px-3 py-1.5 rounded-lg bg-slate-100 text-[#1E293B] text-xs font-semibold hover:bg-slate-200 border border-[#E2E8F0]">Układ wewnętrzny</button>
-        <button
-          type="button"
-          onClick={() => {
-            const ids = new Set(selectedRackIds);
-            setLayout((prev) => ({ ...prev, racks: prev.racks.filter((r) => !ids.has(r.id ?? r.rack_index)) }));
-            setSelectedRackId(null);
-            setSelectedRackIds([]);
-          }}
-          className="px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-xs font-semibold hover:bg-red-200 border border-red-200"
-        >
-          Usuń wybrane
-        </button>
+            <div className="mt-2 border-t border-slate-100 pt-2">
+              <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">Trasa kompletacji</p>
+              {routeRackIds.length === 0 ? (
+                <p className="text-[11px] text-slate-500">
+                  {isRouteActive ? "Tryb aktywny — kliknij pierwszy regał" : "Włącz „Planuj trasę” w pasku narzędzi."}
+                </p>
+              ) : (
+                <>
+                  {routeRackIds.length >= 2 && (
+                    <p className="mb-1 text-[11px] text-slate-600">
+                      Krok {routeStepIndex + 1}/{routeStepCount} · Odcinek {routeLegMeters.toFixed(1)} m · Całość{" "}
+                      {routeLengthMeters.toFixed(1)} m
+                    </p>
+                  )}
+                  <ul className="max-h-24 space-y-0.5 overflow-y-auto">
+                    {routeRackLabels.map((label, idx) => (
+                      <li
+                        key={`${label}-${idx}`}
+                        className={`rounded px-1.5 py-0.5 text-[11px] ${
+                          routeRackIds.length >= 2 && idx === routeStepIndex
+                            ? "bg-blue-50 font-semibold text-blue-900 ring-1 ring-blue-200"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        {idx + 1}. {label}
+                      </li>
+                    ))}
+                  </ul>
+                  {routeRackIds.length >= 2 && onRouteStepNext != null && (
+                    <button
+                      type="button"
+                      onClick={onRouteStepNext}
+                      disabled={routeStepIndex >= routeStepCount - 1}
+                      className="mt-1.5 w-full rounded-lg bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
+                    >
+                      Następny krok
+                    </button>
+                  )}
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    <button type="button" onClick={optimizeRoute} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] hover:bg-slate-50">
+                      Optymalizuj
+                    </button>
+                    <button type="button" onClick={clearRoute} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] hover:bg-slate-50">
+                      Wyczyść
+                    </button>
+                    <button type="button" onClick={finishRoute} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] hover:bg-slate-50">
+                      Zakończ
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </>
         )}
       </div>
+
+      <footer className="flex shrink-0 gap-2 border-t border-slate-100 bg-slate-50/90 px-3 py-2">
+        {selectedRack && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowElevationForRackId(selectedRack.id ?? selectedRack.rack_index)}
+              className="flex-1 rounded-lg bg-cyan-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-500"
+            >
+              Widok z boku
+            </button>
+            <button
+              type="button"
+              onClick={() => setInternalLayoutRackId(selectedRack.id ?? selectedRack.rack_index)}
+              className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-50"
+            >
+              Układ wewn.
+            </button>
+          </>
+        )}
+        {onSaveLayout ? (
+          <button
+            type="button"
+            disabled={saving || Boolean(nameError)}
+            onClick={() => {
+              if (selectedRack) commitRackName(nameDraft, "save");
+              onSaveLayout();
+            }}
+            className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {saving ? "Zapisywanie…" : "Zapisz"}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Zamknij
+        </button>
+      </footer>
+      {selectedRack && !isMultiSelect && (
+        <div className="border-t border-slate-100 px-3 py-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              const ids = new Set(selectedRackIds);
+              setLayout((prev) => ({ ...prev, racks: prev.racks.filter((r) => !ids.has(r.id ?? r.rack_index)) }));
+              onClose();
+            }}
+            className="w-full rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+          >
+            Usuń wybrane
+          </button>
+        </div>
+      )}
     </aside>
   );
+}
+
+/** Flush pending rack name edits before layout PUT (called from parent save). */
+export function flushRackNameFromLayoutRack(rack: RackState | null, layout: LayoutState): RackState | null {
+  if (!rack) return rack;
+  const found = layout.racks.find((r) => rackMatchesSlotRackId(r, rack.id ?? rack.rack_index));
+  return found ?? rack;
 }

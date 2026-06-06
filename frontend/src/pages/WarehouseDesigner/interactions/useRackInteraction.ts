@@ -73,6 +73,8 @@ export function useRackInteraction(params: UseRackInteractionParams) {
   const { moveRackWithinRowRef } = refs;
   // Sticky snapping: keep last snapped position until user moves clearly away.
   const lastSnapRef = useRef<{ x: number; y: number } | null>(null);
+  /** Re-click on already-selected rack (no drag) toggles panel closed. */
+  const wasSelectedOnDownRef = useRef(false);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, cell: { x: number; y: number }) => {
@@ -97,6 +99,8 @@ export function useRackInteraction(params: UseRackInteractionParams) {
         setSelectedRackIds((prev) => (prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]));
         setSelectedRackId(rid);
       } else {
+        wasSelectedOnDownRef.current =
+          selectedRackIds.length === 1 && selectedRackIds[0] === rid;
         setSelectedRackId(rid);
         setSelectedRackIds((prev) => (prev.includes(rid) ? prev : [rid]));
         setDraggingRackId(rid);
@@ -192,6 +196,25 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     if (draggingRackId == null) return;
     const rack = layout.racks.find((r) => rackMatchesSlotRackId(r, draggingRackId));
     const finalPos = rackDragPreviewPosition ?? (rack ? { x: rack.x, y: rack.y } : { x: 0, y: 0 });
+    if (
+      !magazynMapInteractions &&
+      !routeMode &&
+      rack &&
+      wasSelectedOnDownRef.current &&
+      selectedRackIds.length === 1 &&
+      finalPos.x === rack.x &&
+      finalPos.y === rack.y
+    ) {
+      setSelectedRackId(null);
+      setSelectedRackIds([]);
+      setDraggingRackId(null);
+      setDragOffset(null);
+      setRackDragPreviewPosition(null);
+      lastSnapRef.current = null;
+      wasSelectedOnDownRef.current = false;
+      return;
+    }
+    wasSelectedOnDownRef.current = false;
     if (selectedRackIds.length > 1 && rack) {
       const groupIds = new Set(selectedRackIds);
       const groupIdStrings = new Set<string>();
@@ -304,7 +327,7 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     setDraggingRackId(null);
     setDragOffset(null);
     lastSnapRef.current = null;
-  }, [draggingRackId, rackDragPreviewPosition, layout, selectedRackIds, helpers, refs, setLayout, setDraggingRackId, setDragOffset, setRackDragPreviewPosition]);
+  }, [draggingRackId, rackDragPreviewPosition, layout, selectedRackIds, magazynMapInteractions, routeMode, helpers, refs, setLayout, setDraggingRackId, setDragOffset, setRackDragPreviewPosition, setSelectedRackId, setSelectedRackIds]);
 
   return { handleMouseDown, handleMouseMove, handleMouseUp };
 }
