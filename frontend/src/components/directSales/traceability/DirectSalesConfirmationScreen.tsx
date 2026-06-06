@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { CheckCircle2, RotateCcw, Printer, FileText, ShoppingCart, ArrowRight } from "lucide-react";
 
 import { reprintDirectSaleDocument } from "../../../api/directSalesApi";
 import { DAMAGE_TENANT_ID } from "../../../constants/panelTenant";
@@ -18,7 +19,13 @@ type Props = {
 function formatCompletedAt(iso: string | null): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("pl-PL");
+    return new Date(iso).toLocaleString("pl-PL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -48,88 +55,73 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale, onRefresh
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-emerald-50/40 p-3 md:p-4">
-      <div className="mx-auto w-full max-w-5xl space-y-4">
-        <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex-1 overflow-y-auto bg-white p-4 lg:p-8 custom-scrollbar">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        
+        {/* Karta Sukcesu */}
+        <div className="bg-white rounded-[2rem] border-2 border-emerald-100 p-8 shadow-[0_20px_50px_-15px_rgba(16,185,129,0.15)] relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-12 opacity-5">
+            <CheckCircle2 size={200} />
+          </div>
+
+          <div className="flex flex-wrap items-start justify-between gap-6 relative z-10">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Sprzedaż zaksięgowana</p>
-              <h2 className="mt-1 text-2xl font-bold text-slate-900">{completion.total_amount.toFixed(2)} zł</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Zamówienie{" "}
-                <strong>{completion.order_number ?? `#${completion.order_id}`}</strong>
+              <div className="inline-flex items-center gap-2 text-emerald-600 font-black uppercase tracking-widest text-xs mb-3">
+                <CheckCircle2 size={16} /> Sprzedaż zakończona pomyślnie
+              </div>
+              <h2 className="text-5xl font-black text-slate-900 tracking-tight">
+                {completion.total_amount.toFixed(2)} <span className="text-2xl text-slate-400">zł</span>
+              </h2>
+              <p className="mt-4 text-slate-500 font-medium">
+                Zamówienie <strong className="text-slate-900">{completion.order_number ?? `#${completion.order_id}`}</strong>
                 {completion.document_number ? (
-                  <>
-                    {" "}
-                    · Dokument <strong>{completion.document_number}</strong> ({docType})
-                  </>
+                  <> • Dok. <strong className="text-slate-900">{completion.document_number}</strong> ({docType})</>
                 ) : null}
               </p>
             </div>
+            
             <DocumentStatusBadge
               status={completion.document?.status}
               statusLabel={completion.document?.status_label ?? "Dokument"}
               fiscalStatus={completion.document?.fiscal_status}
             />
           </div>
-          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600 md:grid-cols-4">
-            <div>
-              <dt className="text-slate-400">Płatność</dt>
-              <dd className="font-medium text-slate-800">
-                {paymentMethodPl(completion.payment_method)} · {completion.payment_status ?? "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-slate-400">Operator</dt>
-              <dd>{completion.operator_label ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-400">Data</dt>
-              <dd>{formatCompletedAt(completion.completed_at)}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-400">Sesja</dt>
-              <dd>#{completion.session_id}</dd>
-            </div>
-          </dl>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onNewSale}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
-            >
-              Nowa sprzedaż
+
+          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6 border-t border-slate-100 pt-6">
+            {[
+              { label: "Płatność", val: `${paymentMethodPl(completion.payment_method)}` },
+              { label: "Operator", val: completion.operator_label ?? "—" },
+              { label: "Data", val: formatCompletedAt(completion.completed_at) },
+              { label: "Sesja", val: `#${completion.session_id}` },
+            ].map((item, i) => (
+              <div key={i}>
+                <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">{item.label}</div>
+                <div className="text-sm font-bold text-slate-800 mt-0.5">{item.val}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button type="button" onClick={onNewSale} className="flex items-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 font-bold transition-all">
+              <ShoppingCart size={18} /> Nowa sprzedaż
             </button>
-            <button type="button" onClick={() => window.print()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">
-              Drukuj dokument
+            <button type="button" onClick={() => window.print()} className="flex items-center gap-2 rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 px-6 py-3 font-bold transition-all">
+              <Printer size={18} /> Drukuj
             </button>
-            <Link
-              to={`/orders/${completion.order_id}`}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-800"
-            >
-              Pokaż zamówienie
-            </Link>
-            <Link
-              to={docType === "FV" ? "/documents/sales/invoices" : "/documents/sales/receipts"}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-800"
-            >
-              Dokumenty sprzedaży
+            <Link to={`/orders/${completion.order_id}`} className="flex items-center gap-2 rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 px-6 py-3 font-bold transition-all">
+              <FileText size={18} /> Zamówienie
             </Link>
             {completion.document?.job_id ? (
-              <button
-                type="button"
-                disabled={reprintBusy}
-                onClick={() => void handleReprint()}
-                className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 disabled:opacity-50"
-              >
-                {reprintBusy ? "Zlecanie…" : "Wygeneruj ponownie"}
+              <button type="button" disabled={reprintBusy} onClick={() => void handleReprint()} className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 px-6 py-3 font-bold transition-all">
+                <RotateCcw size={18} /> {reprintBusy ? "Zlecanie…" : "Wygeneruj ponownie"}
               </button>
             ) : null}
           </div>
-          {reprintMsg ? <p className="mt-2 text-xs text-amber-800">{reprintMsg}</p> : null}
+          {reprintMsg ? <p className="mt-4 text-xs font-bold text-amber-700">{reprintMsg}</p> : null}
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-3">
+        {/* Traceability i Płatność */}
+        <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <DirectSalesTraceabilityPanel completion={completion} />
           </div>

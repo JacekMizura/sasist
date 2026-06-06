@@ -158,7 +158,7 @@ def _issue_wz_allocations(
             raise DirectSaleError("Brak pozycji zamówienia dla linii sesji.", code="order_item_missing")
 
         for sl in slices:
-            op = append_issue_operation(
+            op, inv_mov = append_issue_operation(
                 db,
                 wz,
                 wz_line,
@@ -175,7 +175,7 @@ def _issue_wz_allocations(
                 },
             )
             db.flush()
-            movement_id = None
+            movement_id = int(inv_mov.id) if getattr(inv_mov, "id", None) is not None else None
             db.add(
                 StockMovement(
                     tenant_id=int(order.tenant_id),
@@ -199,9 +199,14 @@ def _issue_wz_allocations(
                 source="direct_sales",
                 performed_by_user_id=performed_by_user_id,
                 device_id=int(sess.workstation_id) if sess.workstation_id else None,
-                extra={"stock_operation_id": int(op.id), "wz_id": int(wz.id)},
+                extra={
+                    "stock_operation_id": int(op.id),
+                    "movement_id": movement_id,
+                    "wz_id": int(wz.id),
+                },
             )
-            issued_by_line[int(alloc.session_line_id)] = int(op.id)
+            if movement_id is not None:
+                issued_by_line[int(alloc.session_line_id)] = movement_id
 
         res.status = "picked"
         oi.source_location_id = int(alloc.location_id)

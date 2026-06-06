@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { MapPin, Trash2, Plus, Minus, Image as ImageIcon } from "lucide-react";
 
 import { fetchLocationStock } from "../../api/locationStockApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
@@ -23,7 +24,10 @@ type Props = {
   onRemove: (lineId: number) => void;
 };
 
-function lineMetaParts(line: DirectSaleSessionLine, settings: ReturnType<typeof useResolvedDirectSalesSettings>): string[] {
+function lineMetaParts(
+  line: DirectSaleSessionLine,
+  settings: ReturnType<typeof useResolvedDirectSalesSettings>,
+): string[] {
   const parts: string[] = [];
   if (settings.show_sku) {
     const sku = safeDisplay(line.product_sku, "");
@@ -40,7 +44,14 @@ function lineMetaParts(line: DirectSaleSessionLine, settings: ReturnType<typeof 
   return parts;
 }
 
-export function SessionLineCard({ line, warehouseId, busy, onQtyChange, onLocationChange, onRemove }: Props) {
+export function SessionLineCard({
+  line,
+  warehouseId,
+  busy,
+  onQtyChange,
+  onLocationChange,
+  onRemove,
+}: Props) {
   const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const [locOpen, setLocOpen] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
@@ -98,89 +109,119 @@ export function SessionLineCard({ line, warehouseId, busy, onQtyChange, onLocati
 
   return (
     <>
-      <li className="border-b border-slate-100 py-2 last:border-0">
-        <div className="flex gap-2">
-          {resolvedDirectSalesSettings.show_product_images && line.image_url ? (
-            <img src={line.image_url} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
-          ) : (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] text-slate-400">
-              —
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-slate-900">
+      {/* Przechodzimy z płaskiej listy <li> na nowoczesne, odrębne karty */}
+      <li className="bg-white rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-blue-50/80 flex flex-col xl:flex-row xl:items-center gap-6 group hover:border-blue-200 transition-colors">
+        
+        {/* Obrazek i Informacje o produkcie */}
+        <div className="flex gap-5 flex-1 min-w-0">
+          
+          {/* Obrazek z nowoczesnym zaokrągleniem i pastelowym tłem na wypadek braku */}
+          <div className="w-20 h-20 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-inner">
+            {resolvedDirectSalesSettings.show_product_images && line.image_url ? (
+              <img src={line.image_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <ImageIcon size={24} className="text-slate-300" />
+            )}
+          </div>
+          
+          <div className="flex flex-col justify-center min-w-0">
+            <h3 className="text-lg font-bold text-slate-900 leading-tight truncate">
               {safeDisplay(line.product_name, `Produkt #${line.product_id}`)}
-            </div>
-            <div className="text-xs text-slate-500">{meta.length ? meta.join(" · ") : "—"}</div>
-            <div className="mt-1 flex flex-wrap items-center gap-1">
+            </h3>
+            
+            <p className="text-sm text-slate-500 mt-1 font-medium truncate">
+              {meta.length ? meta.join(" • ") : "—"}
+            </p>
+            
+            {/* Tagi lokalizacji / stocku / rezerwacji */}
+            <div className="flex flex-wrap gap-2 mt-3">
               <LocationBadge code={line.source_location_code} zoneType={line.operational_zone_type} />
+              
               {resolvedDirectSalesSettings.show_stock ? (
                 <LineStockBadge available={line.available_qty_hint} orderedQty={line.quantity} inCart />
               ) : null}
+              
               {line.has_reservation ? (
-                <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-800">Zarezerwowano</span>
+                <span className="bg-violet-50 text-violet-700 border border-violet-100 px-2 py-1 rounded-lg text-xs font-bold tracking-wide">
+                  REZERWACJA
+                </span>
               ) : null}
             </div>
           </div>
-          <div className="shrink-0 text-right">
-            <div className="text-sm font-semibold text-slate-900">
+        </div>
+
+        {/* Kontrolki Ilości, Cena i Akcje */}
+        <div className="flex flex-col sm:flex-row items-center gap-6 xl:gap-8 justify-between xl:justify-end border-t xl:border-t-0 border-blue-50 pt-5 xl:pt-0">
+          
+          {/* Zintegrowany Stepper Ilości */}
+          <div className="flex items-center bg-white border-2 border-blue-50 rounded-xl overflow-hidden shadow-sm focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onQtyChange(line.id, Math.max(1, line.quantity - 1))}
+              className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-blue-50 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+            >
+              <Minus size={18} />
+            </button>
+            <input
+              type="text"
+              inputMode="decimal"
+              disabled={busy}
+              value={qtyDraft}
+              onChange={(e) => setQtyDraft(e.target.value)}
+              onBlur={commitQty}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitQty();
+                }
+              }}
+              className="w-14 h-12 text-center font-bold text-lg text-slate-900 border-x-2 border-blue-50 bg-transparent focus:outline-none disabled:opacity-50"
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onQtyChange(line.id, line.quantity + 1)}
+              className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-blue-50 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+
+          {/* Cena (Duża kwota całkowita i mała informacja o cenie jednostkowej) */}
+          <div className="text-right flex-shrink-0 min-w-[100px]">
+            <div className="text-2xl font-black text-slate-900 whitespace-nowrap">
               {lineTotalLabel}
             </div>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-xs font-medium text-slate-400 mt-1 whitespace-nowrap">
               {unitLabel ? `${unitLabel} × ${line.quantity}` : `× ${line.quantity}`}
             </div>
           </div>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-1">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onQtyChange(line.id, Math.max(1, line.quantity - 1))}
-            className="h-8 w-8 rounded border border-slate-300 text-sm disabled:opacity-50"
-          >
-            −
-          </button>
-          <input
-            type="text"
-            inputMode="decimal"
-            disabled={busy}
-            value={qtyDraft}
-            onChange={(e) => setQtyDraft(e.target.value)}
-            onBlur={commitQty}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitQty();
-              }
-            }}
-            className="h-8 w-12 rounded border border-slate-300 text-center text-sm disabled:opacity-50"
-          />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onQtyChange(line.id, line.quantity + 1)}
-            className="h-8 w-8 rounded border border-slate-300 text-sm disabled:opacity-50"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setLocOpen(true)}
-            className="rounded border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 disabled:opacity-50"
-          >
-            Lokalizacja
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onRemove(line.id)}
-            className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
-          >
-            Usuń
-          </button>
+
+          {/* Przyciski Akcji (Lokalizacja, Usuń) */}
+          <div className="flex sm:flex-col gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setLocOpen(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 transition-colors"
+            >
+              <MapPin size={14} /> <span className="sm:hidden xl:inline">Lokalizacja</span>
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onRemove(line.id)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 hover:text-red-700 disabled:opacity-50 transition-colors"
+            >
+              <Trash2 size={14} /> <span className="sm:hidden xl:inline">Usuń</span>
+            </button>
+          </div>
+
         </div>
       </li>
+
+      {/* Modal wyboru pozostaje bez zmian wizualnych na tym etapie */}
       <LocationPickerModal
         open={locOpen}
         loading={locLoading}

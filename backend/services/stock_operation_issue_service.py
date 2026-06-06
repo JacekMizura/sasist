@@ -35,7 +35,7 @@ def append_issue_operation(
     performed_by: Optional["AppUser"] = None,
     operator_admin_id: int | None = None,
     metadata: dict | None = None,
-) -> StockOperation:
+) -> tuple[StockOperation, object]:
     """Insert one ISSUE row and record warehouse inventory movement tied to WZ."""
     if qty <= 1e-12:
         raise ValueError("issue qty must be positive")
@@ -92,4 +92,4 @@ def append_issue_operation(
         qty,
         getattr(mov, "id", None),
     )
-    return op
+    return op, mov

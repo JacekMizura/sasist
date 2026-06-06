@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { ScanLine, PauseCircle, PlayCircle } from "lucide-react";
 
 import type { DirectSalesProductSearchState } from "../../hooks/directSales/useProductSearch";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
@@ -73,15 +74,27 @@ export function ProductSearchPanel({
   );
 
   return (
-    <aside className="flex w-full shrink-0 flex-col md:w-64 lg:w-72">
-      <div className="rounded-xl border border-slate-200 bg-white p-3">
-        <h1 className="text-base font-semibold text-slate-900">Terminal sprzedaży</h1>
-        <p className="mt-0.5 text-xs text-slate-500">Skan · wyszukiwanie · Enter dodaje</p>
-        <div className="mt-2 rounded border border-slate-100 bg-slate-50 px-2 py-1 text-xs text-slate-600">
-          Sesja {session ? `#${session.id}` : "—"} · {sessionStatusPl(session?.status)}
+    <aside className="flex w-full shrink-0 flex-col md:w-72 lg:w-[24rem] bg-white border-r border-blue-50 p-4 lg:p-6 z-30 h-full relative">
+      
+      {/* Opcjonalny mały nagłówek, jeśli TopBar nie jest widoczny w trybie mobilnym.
+          Mocno wtopiony w tło, aby nie odwracał uwagi */}
+      <div className="mb-6 flex-shrink-0">
+        <p className="text-[10px] font-bold text-blue-900/40 uppercase tracking-wider mb-1">
+          Wyszukiwanie i skan
+        </p>
+        <div className="inline-flex items-center gap-2 bg-blue-50/50 px-2.5 py-1 rounded-md border border-blue-50 text-xs font-semibold text-blue-800">
+          Sesja {session ? `#${session.id}` : "—"} 
+          <span className="text-blue-300">•</span> 
+          {sessionStatusPl(session?.status)}
         </div>
-        <label className="mt-3 block text-xs font-medium text-slate-700">
-          EAN / SKU / nazwa / nr katalogowy
+      </div>
+
+      {/* Pływająca Wyszukiwarka / Skaner */}
+      <div className="relative flex-shrink-0 z-50">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-900/40">
+            <ScanLine size={20} />
+          </div>
           <input
             ref={inputRef}
             type="search"
@@ -90,35 +103,50 @@ export function ProductSearchPanel({
             value={search.query}
             onChange={(e) => search.setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-200 disabled:bg-slate-50 disabled:text-slate-400"
-            placeholder={search.disabled ? "Wyszukiwanie niedostępne" : "Skan lub wpisz…"}
+            className="w-full pl-11 pr-4 py-4 bg-white border-2 border-blue-100 rounded-2xl focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm font-bold shadow-sm disabled:bg-slate-50 disabled:text-slate-400"
+            placeholder={search.disabled ? "Wyszukiwanie niedostępne" : "Skan lub wpisz... (Enter dodaje)"}
+            aria-label="Wyszukaj produkt po EAN, SKU, nazwie lub numerze katalogowym"
           />
-        </label>
-        {search.loading ? <p className="mt-1 text-[10px] text-slate-400">Szukam…</p> : null}
-        <div className="mt-3 flex gap-1">
-          <button
-            type="button"
-            disabled={busy || !session}
-            onClick={onSuspend}
-            className="flex-1 rounded border border-slate-300 px-2 py-1 text-[10px] text-slate-700 disabled:opacity-50"
-          >
-            Zawieś
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onNewSession}
-            className="flex-1 rounded border border-slate-300 px-2 py-1 text-[10px] text-slate-700 disabled:opacity-50"
-          >
-            Nowa sesja
-          </button>
         </div>
+        
+        {search.loading ? (
+          <p className="absolute -bottom-6 left-2 text-[10px] font-semibold text-blue-400 animate-pulse">
+            Szukam…
+          </p>
+        ) : null}
+
+        {/* Dropdown wyników wyświetlany jako warstwa pływająca */}
+        {search.open && search.hits.length > 0 ? (
+          <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-blue-100 overflow-hidden z-50 flex flex-col max-h-[50vh]">
+            <ProductSearchDropdown 
+              hits={search.hits} 
+              activeIndex={search.activeIndex} 
+              onPick={pickHit} 
+            />
+          </div>
+        ) : null}
       </div>
-      {search.open ? (
-        <div className="mt-2 max-h-80 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <ProductSearchDropdown hits={search.hits} activeIndex={search.activeIndex} onPick={pickHit} />
-        </div>
-      ) : null}
+
+      {/* Przyciski akcji zepchnięte na dół przy pomocy mt-auto */}
+      <div className="grid grid-cols-2 gap-3 mt-auto pt-6 border-t border-blue-50 flex-shrink-0">
+        <button
+          type="button"
+          disabled={busy || !session}
+          onClick={onSuspend}
+          className="flex items-center justify-center gap-2 py-3 px-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-white"
+        >
+          <PauseCircle size={18} /> Zawieś
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onNewSession}
+          className="flex items-center justify-center gap-2 py-3 px-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-white"
+        >
+          <PlayCircle size={18} /> Nowa sesja
+        </button>
+      </div>
+
     </aside>
   );
 }

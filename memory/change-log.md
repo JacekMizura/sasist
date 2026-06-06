@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-04 — Direct Sales /complete root cause + fix
+
+- `OperationalError`: missing `sale_documents.document_type_id` at `generate_documents` — `ensure_sale_documents_extended_columns` in complete schema bootstrap.
+- `IntegrityError`: `order_items.source_movement_id` FK — WZ path now stores `warehouse_inventory_movements.id`, not `stock_operations.id`.
+- Logging: removed reserved `message` key from `complete_debug_log` extra dict.
+- Tests: `test_direct_sale_complete_schema.py`; e2e `scripts/repro_complete_e2e.py` passes.
+
 ## 2026-06-06 — Sale document UI/data unification
 
 - **`sale_document_mapper.py`** — single canonical DTO for list + detail + Direct Sales summary.

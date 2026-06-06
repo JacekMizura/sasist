@@ -46,11 +46,13 @@ def _ensure_direct_sale_complete_schema() -> None:
         ensure_direct_sales_settings_table,
         ensure_operational_sales_phase2_schema,
         ensure_operational_sales_phase3_schema,
+        ensure_sale_documents_extended_columns,
     )
 
     ensure_direct_sales_settings_table(engine)
     ensure_operational_sales_phase2_schema(engine)
     ensure_operational_sales_phase3_schema(engine)
+    ensure_sale_documents_extended_columns(engine)
     _complete_schema_ready = True
 
 

@@ -25,10 +25,20 @@ export function resolveStockLevel(available: number | null | undefined, orderedQ
   return "ok";
 }
 
+// Nowoczesne, subtelne kolory tagów stanów magazynowych
 export const STOCK_BADGE: Record<StockLevel, { label: string; className: string }> = {
-  ok: { label: "Dostępny", className: "bg-emerald-100 text-emerald-800" },
-  low: { label: "Niski stan", className: "bg-amber-100 text-amber-900" },
-  out: { label: "Brak", className: "bg-red-100 text-red-800" },
+  ok: { 
+    label: "Dostępny", 
+    className: "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+  },
+  low: { 
+    label: "Niski stan", 
+    className: "bg-amber-50 text-amber-700 border border-amber-200" 
+  },
+  out: { 
+    label: "Brak", 
+    className: "bg-red-50 text-red-700 border border-red-200" 
+  },
 };
 
 export function paymentMethodPl(method: string | null | undefined): string {

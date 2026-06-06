@@ -68,15 +68,11 @@ def log_unhandled_complete_exception(
     tb = traceback.format_exc()
     details = sqlalchemy_exception_details(exc)
     logger.exception(
-        "[direct_sales.complete] UNHANDLED EXCEPTION context=%s",
+        "[direct_sales.complete] UNHANDLED EXCEPTION context=%s stage=%s session_id=%s error_type=%s",
         context,
-        extra={
-            "session_id": session_id,
-            "tenant_id": tenant_id,
-            "warehouse_id": warehouse_id,
-            "stage": stage,
-            **details,
-        },
+        stage,
+        session_id,
+        details.get("error_type"),
     )
     logger.error(
         "[direct_sales.complete] TRACEBACK session_id=%s stage=%s\n%s",
@@ -209,16 +205,11 @@ def commit_with_logging(
         tb = traceback.format_exc()
         details = sqlalchemy_exception_details(exc)
         logger.exception(
-            "[direct_sales.commit] FAILED stage=%s session_id=%s",
+            "[direct_sales.commit] FAILED stage=%s session_id=%s tenant_id=%s error_type=%s",
             stage,
             session_id,
-            extra={
-                "session_id": session_id,
-                "tenant_id": tenant_id,
-                "warehouse_id": warehouse_id,
-                "stage": stage,
-                **details,
-            },
+            tenant_id,
+            details.get("error_type"),
         )
         logger.error(
             "[direct_sales.commit] FAILED TRACEBACK stage=%s session_id=%s\n%s",

@@ -6,22 +6,29 @@ type Props = {
 
 function badgeClass(status: string): string {
   const s = status.toUpperCase();
-  if (s === "GENERATED" || s === "COMPLETED" || s === "DONE") return "bg-emerald-100 text-emerald-800";
-  if (s === "PROCESSING") return "bg-sky-100 text-sky-800";
-  if (s === "PENDING" || s === "RETRYING") return "bg-amber-100 text-amber-900";
-  if (s === "FAILED" || s === "CANCELLED") return "bg-red-100 text-red-800";
-  return "bg-slate-100 text-slate-700";
+  // Zaktualizowano na pastelowe odcienie z obwódką
+  if (s === "GENERATED" || s === "COMPLETED" || s === "DONE") 
+    return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+  if (s === "PROCESSING") 
+    return "bg-blue-50 text-blue-700 border border-blue-200";
+  if (s === "PENDING" || s === "RETRYING") 
+    return "bg-amber-50 text-amber-700 border border-amber-200";
+  if (s === "FAILED" || s === "CANCELLED") 
+    return "bg-red-50 text-red-700 border border-red-200";
+  return "bg-slate-50 text-slate-600 border border-slate-200";
 }
 
 export function DocumentStatusBadge({ status, statusLabel, fiscalStatus }: Props) {
   const label = statusLabel ?? status ?? "—";
+  
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${badgeClass(String(status ?? ""))}`}>
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide border ${badgeClass(String(status ?? ""))}`}>
         {label}
       </span>
+      
       {fiscalStatus ? (
-        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-800">
+        <span className="rounded-lg bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
           {fiscalStatus === "PENDING" ? "Oczekuje na fiskalizację" : fiscalStatus}
         </span>
       ) : null}

@@ -11,14 +11,19 @@ export function CashChangePanel({ total, received, onReceivedChange, disabled }:
   const change = Math.max(0, received - total);
 
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
-      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-        <div>
-          <div className="text-slate-500">Do zapłaty</div>
-          <div className="text-lg font-bold text-slate-900">{total.toFixed(2)}</div>
+    <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100">
+      
+      {/* Wizualne równanie matematyczne (Do zapłaty - Wpłacono = Reszta) */}
+      <div className="flex justify-between items-center mb-5">
+        <div className="text-center">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Do zapłaty</div>
+          <div className="text-xl font-black text-slate-900">{total.toFixed(2)}</div>
         </div>
-        <div>
-          <div className="text-slate-500">Wpłacono</div>
+        
+        <div className="text-slate-300 font-light text-xl">-</div>
+        
+        <div className="text-center w-24">
+          <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wide mb-1">Wpłacono</div>
           <input
             type="number"
             min={0}
@@ -26,22 +31,27 @@ export function CashChangePanel({ total, received, onReceivedChange, disabled }:
             disabled={disabled}
             value={Number.isFinite(received) ? received : 0}
             onChange={(e) => onReceivedChange(Number(e.target.value) || 0)}
-            className="mt-0.5 w-full rounded border border-slate-300 bg-white px-2 py-1 text-center text-lg font-bold text-slate-900 disabled:opacity-50"
+            className="w-full text-center text-xl font-black text-blue-700 bg-white border border-blue-200 rounded-xl py-1 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 transition-all shadow-sm"
           />
         </div>
-        <div>
-          <div className="text-slate-500">Reszta</div>
-          <div className="text-lg font-bold text-emerald-800">{change.toFixed(2)}</div>
+        
+        <div className="text-slate-300 font-light text-xl">=</div>
+        
+        <div className="text-center">
+          <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-1">Reszta</div>
+          <div className="text-xl font-black text-emerald-600">{change.toFixed(2)}</div>
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap gap-1">
+
+      {/* Szybkie nominały */}
+      <div className="grid grid-cols-5 gap-2">
         {QUICK.map((inc) => (
           <button
             key={inc}
             type="button"
             disabled={disabled}
             onClick={() => onReceivedChange(Math.round((received + inc) * 100) / 100)}
-            className="rounded border border-emerald-300 bg-white px-2 py-1 text-xs font-medium text-emerald-900 disabled:opacity-50"
+            className="py-2.5 bg-white border border-blue-100 rounded-xl text-xs font-bold text-slate-700 hover:bg-blue-100 hover:text-blue-800 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-slate-700"
           >
             +{inc}
           </button>
@@ -50,11 +60,12 @@ export function CashChangePanel({ total, received, onReceivedChange, disabled }:
           type="button"
           disabled={disabled}
           onClick={() => onReceivedChange(total)}
-          className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 disabled:opacity-50"
+          className="py-2.5 bg-white border border-blue-100 rounded-xl text-xs font-bold text-slate-700 hover:bg-blue-100 hover:text-blue-800 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-slate-700"
         >
-          Dokładnie
+          Dokł.
         </button>
       </div>
+      
     </div>
   );
 }

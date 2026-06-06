@@ -1,7 +1,13 @@
 # Current context
 
 ## Active goal
-Direct Sales completion must be staged, idempotent, and recoverable — no SESSION_INVALID on commit/pipeline failures.
+Direct Sales /complete root cause fixed: missing `sale_documents.document_type_id` column at `generate_documents` stage.
+
+## Real exception (2026-06-04)
+- `sqlalchemy.exc.OperationalError`: `no such column: sale_documents.document_type_id`
+- Stage: `generate_documents` (`pipeline_orchestrator.py:233`)
+- Fix: `ensure_sale_documents_extended_columns` in `_ensure_direct_sale_complete_schema`
+- Secondary: logging `extra.message` KeyError in `complete_debug_log.py` — fixed
 
 ## Staged pipeline (2026-06-04)
 - `pipeline_orchestrator.run_staged_complete_pipeline` — 5 commits per request
