@@ -77,7 +77,14 @@ export default function ProductEditPage() {
     }
     void api
       .get<Record<string, unknown>>(`/products/${pid}/`, { params })
-      .then((res) => setProductRow(mapProductListRow(res.data)))
+      .then((res) => {
+        try {
+          setProductRow(mapProductListRow(res.data));
+        } catch {
+          setError("Nie udało się wczytać produktu.");
+          setProductRow(null);
+        }
+      })
       .catch(() => {
         setError("Nie udało się wczytać produktu.");
         setProductRow(null);
@@ -98,9 +105,16 @@ export default function ProductEditPage() {
       if (document.visibilityState !== "visible") return;
       void api
         .get<Record<string, unknown>>(`/products/${pid}/`, { params })
-        .then((res) => setProductRow(mapProductListRow(res.data)))
+        .then((res) => {
+          try {
+            setProductRow(mapProductListRow(res.data));
+          } catch {
+            setError("Nie udało się wczytać produktu.");
+            setProductRow(null);
+          }
+        })
         .catch(() => {
-          /* zachowaj ostatni stan */
+          setError("Nie udało się wczytać produktu.");
         });
     };
     document.addEventListener("visibilitychange", onVis);

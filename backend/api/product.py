@@ -261,20 +261,13 @@ _product_read_schema_ready = False
 
 
 def _ensure_product_read_schema() -> None:
-    """Apply migrations required before product GET (StockDocument creator + inventory_serials)."""
+    """Synchronous schema sync before product GET (detail + inventory enrichment)."""
     global _product_read_schema_ready
     if _product_read_schema_ready:
         return
-    from ..db.schema_upgrade import ensure_inventory_serials_table, ensure_stock_documents_created_by_columns
+    from ..services.product_detail_service import ensure_product_detail_read_schema
 
-    try:
-        ensure_stock_documents_created_by_columns(engine)
-    except Exception:
-        logger.exception("ensure_stock_documents_created_by_columns failed in product read")
-    try:
-        ensure_inventory_serials_table(engine)
-    except Exception:
-        logger.exception("ensure_inventory_serials_table failed in product read")
+    ensure_product_detail_read_schema()
     _product_read_schema_ready = True
 
 
@@ -1339,19 +1332,31 @@ def _resolved_product_stack_from_body(body: ProductBody) -> dict:
     }
 
 
+def _round_float(v: Optional[float], decimals: int) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        return round(float(v), decimals)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_product_float(value: object) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _product_to_dict(p: Product) -> dict:
     """Serialize product to dict with assigned_locations as list for API response. Volume always rounded to 2 decimals."""
-    vol = p.volume
-    if vol is not None:
-        vol = round(float(vol), 2)
-    sale = getattr(p, "sale_price", None)
-    sale_float = float(sale) if sale is not None else None
-    purchase = getattr(p, "purchase_price", None)
-    purchase_float = float(purchase) if purchase is not None else None
-    prev_purchase = getattr(p, "previous_purchase_price", None)
-    prev_purchase_float = float(prev_purchase) if prev_purchase is not None else None
-    purchase_orig = getattr(p, "purchase_price_original", None)
-    purchase_orig_float = float(purchase_orig) if purchase_orig is not None else None
+    vol = _round_float(_safe_product_float(p.volume), 2)
+    sale_float = _round_float(_safe_product_float(getattr(p, "sale_price", None)), 2)
+    purchase_float = _round_float(_safe_product_float(getattr(p, "purchase_price", None)), 2)
+    prev_purchase_float = _round_float(_safe_product_float(getattr(p, "previous_purchase_price", None)), 2)
+    purchase_orig_float = _round_float(_safe_product_float(getattr(p, "purchase_price_original", None)), 4)
     mn_pick = getattr(p, "min_pick_quantity", None)
     mx_pick = getattr(p, "max_pick_quantity", None)
     esa = getattr(p, "enable_stock_alert", None)
@@ -1474,7 +1479,7 @@ def _enrich_product_manufacturer(db: Session, d: dict, p: Product) -> None:
     logo = (m.logo_url or "").strip() if m and m.logo_url else None
     d["manufacturer_id"] = int(mid) if mid is not None else None
     d["manufacturer_brief"] = (
-        {"id": m.id, "name": m.name, "logo_url": logo or None}
+        {"id": int(m.id), "name": (m.name or "").strip() or None, "logo_url": logo or None}
         if m
         else None
     )
@@ -1488,7 +1493,9 @@ def _enrich_product_default_supplier(db: Session, d: dict, p: Product) -> None:
         d["default_supplier_brief"] = None
         return
     s = db.query(Supplier).filter(Supplier.id == int(sid), Supplier.tenant_id == p.tenant_id).first()
-    d["default_supplier_brief"] = {"id": s.id, "name": s.name} if s else None
+    d["default_supplier_brief"] = (
+        {"id": int(s.id), "name": (s.name or "").strip() or None} if s else None
+    )
 
 
 def _enrich_product_last_supplier(db: Session, d: dict, p: Product) -> None:
@@ -1497,7 +1504,9 @@ def _enrich_product_last_supplier(db: Session, d: dict, p: Product) -> None:
         d["last_supplier_brief"] = None
         return
     s = db.query(Supplier).filter(Supplier.id == int(sid), Supplier.tenant_id == p.tenant_id).first()
-    d["last_supplier_brief"] = {"id": s.id, "name": s.name} if s else None
+    d["last_supplier_brief"] = (
+        {"id": int(s.id), "name": (s.name or "").strip() or None} if s else None
+    )
 
 
 def _ensure_supplier_product_link(db: Session, product: Product) -> None:
@@ -1540,19 +1549,24 @@ def _enrich_product_supplier_catalog_links(db: Session, d: dict, p: Product) -> 
     links = []
     ds = getattr(p, "default_supplier_id", None)
     for sp, s in pairs:
-        spp = sp.purchase_price
-        moq = sp.min_order_qty
-        links.append(
-            {
-                "id": sp.id,
-                "supplier_id": sp.supplier_id,
-                "supplier_name": (s.name or "").strip(),
-                "purchase_price": float(spp) if spp is not None else None,
-                "lead_time_days": int(sp.lead_time_days) if sp.lead_time_days is not None else None,
-                "min_order_qty": float(moq) if moq is not None else None,
-                "is_default": ds is not None and int(ds) == int(sp.supplier_id),
-            }
-        )
+        if sp is None or s is None:
+            continue
+        try:
+            spp = sp.purchase_price
+            moq = sp.min_order_qty
+            links.append(
+                {
+                    "id": int(sp.id),
+                    "supplier_id": int(sp.supplier_id),
+                    "supplier_name": (s.name or "").strip() if s else "",
+                    "purchase_price": _round_float(float(spp), 4) if spp is not None else None,
+                    "lead_time_days": int(sp.lead_time_days) if sp.lead_time_days is not None else None,
+                    "min_order_qty": _round_float(float(moq), 4) if moq is not None else None,
+                    "is_default": ds is not None and int(ds) == int(sp.supplier_id),
+                }
+            )
+        except (TypeError, ValueError):
+            continue
     d["supplier_catalog_links"] = links
 
 
@@ -2377,15 +2391,6 @@ def get_replacement_suggestions(
     )
 
 
-def _round_float(v: Optional[float], decimals: int) -> Optional[float]:
-    if v is None:
-        return None
-    try:
-        return round(float(v), decimals)
-    except (TypeError, ValueError):
-        return None
-
-
 def _volume_from_dimensions_dm3(length_cm: Optional[float], width_cm: Optional[float], height_cm: Optional[float]) -> Optional[float]:
     """Volume in dm³: (length_cm * width_cm * height_cm) / 1000, rounded to 2 decimals."""
     if length_cm is None or width_cm is None or height_cm is None:
@@ -3051,26 +3056,9 @@ def get_product(
     tenant_id: Optional[int] = None,
 ):
     """Returns a single product by ID. tenant_id optional (when provided, scopes to that tenant)."""
-    _ensure_product_read_schema()
-    q = db.query(Product).filter(Product.id == product_id)
-    if tenant_id is not None:
-        q = q.filter(Product.tenant_id == tenant_id)
-    product = q.first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    if getattr(product, "deleted_at", None) is not None:
-        raise HTTPException(status_code=404, detail="Product not found")
-    out = _product_to_dict(product)
-    out["current_cost"] = calculate_product_margin(db, product.tenant_id, product.id)
-    _enrich_product_manufacturer(db, out, product)
-    _enrich_product_default_supplier(db, out, product)
-    _enrich_product_last_supplier(db, out, product)
-    _enrich_product_supplier_catalog_links(db, out, product)
-    out["stock_quantity"] = _visible_stock_quantity_for_product(db, product)
-    loc_map, inv_map = _inventory_payload_for_product_ids(db, [product.id])
-    out["locations"] = loc_map.get(product.id, [])
-    out["inventory"] = inv_map.get(product.id, [])
-    return out
+    from ..services.product_detail_service import build_product_detail_payload
+
+    return build_product_detail_payload(db, product_id=product_id, tenant_id=tenant_id)
 
 
 class ProductInventoryTraceabilityBody(BaseModel):

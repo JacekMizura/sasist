@@ -6866,6 +6866,54 @@ def ensure_products_receiving_requirements_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_products_sku_barcode_columns(engine: Engine) -> None:
+    """Add PRD scan fields on products when missing (older DBs)."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "products"):
+            conn.commit()
+            return
+        cols = _table_column_names(conn, "products")
+        if "sku" not in cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN sku VARCHAR"))
+        if "barcode" not in cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN barcode VARCHAR(64)"))
+        conn.commit()
+
+
+def ensure_products_detail_read_schema(engine: Engine) -> None:
+    """Synchronous schema sync required before GET /products/{id} (never background)."""
+    steps = [
+        ensure_products_physical_columns,
+        ensure_products_stack_columns,
+        ensure_products_stack_behavior_column,
+        ensure_products_import_metadata_columns,
+        ensure_products_replenishment_levels_columns,
+        ensure_products_reserve_replenishment_columns,
+        ensure_products_stock_alert_columns,
+        ensure_products_carton_columns,
+        ensure_products_carton_stacking_columns,
+        ensure_products_receiving_requirements_columns,
+        ensure_products_deleted_at_column,
+        ensure_products_purchase_snapshot_columns,
+        ensure_products_extra_cost_columns,
+        ensure_product_track_batch_expiry_columns,
+        ensure_products_sku_barcode_columns,
+        ensure_manufacturers_table_and_product_manufacturer_id,
+        ensure_supplier_assortment_columns_and_product_default_supplier,
+        ensure_inventory_location_uuid_columns,
+        ensure_inventory_carrier_id_column,
+        ensure_product_barcodes_table,
+        ensure_inventory_serials_table,
+        ensure_stock_documents_created_by_columns,
+        ensure_stock_document_item_ordered_received_columns,
+    ]
+    for step in steps:
+        try:
+            step(engine)
+        except Exception:
+            logger.exception("ensure_products_detail_read_schema: %s failed", step.__name__)
+
+
 def ensure_order_item_pick_allocations_table(engine: Engine) -> None:
     """Normalized pick allocations (location + batch + expiry per order line)."""
     dialect = engine.dialect.name

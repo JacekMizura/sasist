@@ -1,6 +1,14 @@
 # Current context
 
 ## Active goal
+Product detail API (`GET /api/products/{id}`) — staged serialization, schema sync, degraded fallback.
+
+## Product detail fix
+- `backend/services/product_detail_service.py` — staged build, `[product.detail]` / `[product.detail.error]` logs, never HTTP 500 on enrichment failure
+- `ensure_products_detail_read_schema()` — synchronous product/inventory/stock-doc column sync before detail GET
+- Frontend edit/detail pages: safe mapper + "Nie udało się wczytać produktu."
+
+## Prior (done)
 Direct Sales complete() 500 fix + terminal UX hardening.
 
 ## Complete pipeline

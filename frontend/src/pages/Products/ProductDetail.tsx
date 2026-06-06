@@ -39,7 +39,10 @@ export default function ProductDetail() {
     api
       .get<Product>(`/products/${id}/`, { params: { tenant_id: tenantId } })
       .then((res) => setProduct(res.data))
-      .catch(() => setError("Nie znaleziono produktu"))
+      .catch((err: unknown) => {
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        setError(status === 404 ? "Nie znaleziono produktu." : "Nie udało się wczytać produktu.");
+      })
       .finally(() => setLoading(false));
   }, [id, tenantId]);
 

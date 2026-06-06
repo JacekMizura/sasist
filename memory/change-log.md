@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-04 — Product detail API 500 fix
+
+- `GET /products/{id}` routed through `product_detail_service` with per-stage try/catch and degraded minimal payload.
+- Logging: `[product.detail]` (stage success) and `[product.detail.error]` (product_id, tenant_id, stage, exception).
+- `ensure_products_detail_read_schema()` + `ensure_products_sku_barcode_columns()` for sync schema before detail read.
+- Null-safe supplier/manufacturer enrichment; frontend edit page catches mapper failures.
+
 ## 2026-06-04 — Direct Sales API contract drift fix
 
 - Canonical request schemas: `backend/api/contracts/direct_sales/` + `frontend/src/modules/directSales/contracts/`.
