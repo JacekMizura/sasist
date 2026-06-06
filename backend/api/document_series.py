@@ -105,6 +105,11 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         type=series_type,  # type: ignore[arg-type]
         subtype=_coerce_subtype(row.subtype, series_type),  # type: ignore[arg-type]
         correction_series_id=str(row.correction_series_id).strip() if row.correction_series_id else None,
+        warehouse_document_series_id=(
+            str(row.warehouse_document_series_id).strip()
+            if getattr(row, "warehouse_document_series_id", None)
+            else None
+        ),
         print_template=str(row.print_template or ""),
         print_template_id=int(row.print_template_id) if getattr(row, "print_template_id", None) is not None else None,
         email_notification_enabled=bool(row.email_notification_enabled),
@@ -209,6 +214,36 @@ def _assert_correction_series(
         raise HTTPException(status_code=400, detail="correction_series_id not found for tenant/warehouse.")
 
 
+def _assert_warehouse_document_series(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    series_id: Optional[str],
+    self_id: Optional[str],
+) -> None:
+    if not series_id or not str(series_id).strip():
+        return
+    sid = str(series_id).strip()
+    if self_id and sid == str(self_id).strip():
+        raise HTTPException(status_code=400, detail="warehouse_document_series_id cannot point to self.")
+    r = (
+        db.query(DocumentSeries)
+        .filter(
+            DocumentSeries.id == sid,
+            DocumentSeries.tenant_id == int(tenant_id),
+            DocumentSeries.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if not r:
+        raise HTTPException(status_code=400, detail="warehouse_document_series_id not found for tenant/warehouse.")
+    st = str(getattr(r, "series_type", "") or "").strip().upper()
+    sub = str(getattr(r, "subtype", "") or "").strip().upper()
+    if st != "WAREHOUSE" or sub != "WZ":
+        raise HTTPException(status_code=400, detail="warehouse_document_series_id must reference an active WZ series.")
+
+
 def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
     """Assign scalar fields from create/update body onto ORM row."""
     row.name = body.name.strip()
@@ -218,6 +253,10 @@ def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
     row.series_type = str(body.type).strip().upper()
     row.subtype = str(body.subtype).strip().upper()
     row.correction_series_id = body.correction_series_id.strip() if body.correction_series_id else None
+    if hasattr(row, "warehouse_document_series_id"):
+        row.warehouse_document_series_id = (
+            body.warehouse_document_series_id.strip() if body.warehouse_document_series_id else None
+        )
     row.print_template = (body.print_template or "").strip()
     row.print_template_id = int(body.print_template_id) if body.print_template_id is not None else None
     row.email_notification_enabled = bool(body.email_notification_enabled)
@@ -452,6 +491,13 @@ def create_document_series(body: DocumentSeriesCreate, db: Session = Depends(get
         series_id=body.correction_series_id,
         self_id=None,
     )
+    _assert_warehouse_document_series(
+        db,
+        tenant_id=body.tenant_id,
+        warehouse_id=body.warehouse_id,
+        series_id=body.warehouse_document_series_id,
+        self_id=None,
+    )
     row = DocumentSeries(
         tenant_id=body.tenant_id,
         warehouse_id=body.warehouse_id,
@@ -533,6 +579,13 @@ def update_document_series(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         series_id=body.correction_series_id,
+        self_id=str(row.id),
+    )
+    _assert_warehouse_document_series(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        series_id=body.warehouse_document_series_id,
         self_id=str(row.id),
     )
     _apply_body_to_row(row, body)

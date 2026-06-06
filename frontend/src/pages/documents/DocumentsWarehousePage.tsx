@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ClipboardList } from "lucide-react";
 import api from "../../api/axios";
@@ -143,6 +143,7 @@ function parseQty(s: string): number | null {
 
 export default function DocumentsWarehousePage() {
   const { docSegment } = useParams<{ docSegment: string }>();
+  const [searchParams] = useSearchParams();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const { warehouseTypes, firstWarehousePath, loading: seriesLoading, hasWarehouseType } = useOperationalDocumentSeries();
@@ -301,6 +302,14 @@ export default function DocumentsWarehousePage() {
     },
     [tenantId],
   );
+
+  useEffect(() => {
+    const raw = searchParams.get("id");
+    const openId = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(openId) || openId <= 0) return;
+    if (detailId === openId && detailOpen) return;
+    void openDetail(openId);
+  }, [searchParams, openDetail, detailId, detailOpen]);
 
   const receiveAll = useCallback(() => {
     if (!detail) return;

@@ -1,4 +1,4 @@
-"""Sale document list + detail DTOs."""
+"""Unified sale document DTOs — list and detail share the same financial/payment core."""
 
 from __future__ import annotations
 
@@ -7,26 +7,12 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
-class SaleDocumentListItem(BaseModel):
-    id: str
-    order_id: int
-    order_number: Optional[str] = None
-    client: str
-    series: str
-    doc_type: str
-    document_number: str
-    date: Optional[str] = None
-    net: float
-    gross: float
-    vat: float = 0.0
-    payment_method: Optional[str] = None
-    payment_status: Optional[str] = None
-    paid: bool = False
-    external_status: str = "NOWE"
-    source: Optional[str] = None
-    panel_document_type: str
-    document_subtype: Optional[str] = None
-    detail_path: str
+class SaleDocumentFinancialsRead(BaseModel):
+    total_net: float
+    total_gross: float
+    total_vat: float
+    lines: list[dict[str, Any]] = Field(default_factory=list)
+    vat_rows: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class SaleDocumentPaymentTransactionRead(BaseModel):
@@ -42,6 +28,10 @@ class SaleDocumentPaymentRead(BaseModel):
     payment_id: Optional[int] = None
     method: Optional[str] = None
     status: Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+    payment_label_pl: str = "—"
+    paid: bool = False
     amount: float = 0.0
     currency: str = "PLN"
     captured_at: Optional[str] = None
@@ -85,34 +75,61 @@ class SaleDocumentVatRowRead(BaseModel):
     gross: float
 
 
-class SaleDocumentDetailRead(BaseModel):
+class SaleDocumentBaseRead(BaseModel):
+    """Shared core for list, detail, and Direct Sales summary embedding."""
+
     id: str
-    document_number: str
-    document_type_id: str
-    document_series_id: str
-    document_subtype: str
-    panel_document_type: str
-    doc_type: str
-    series_type: str
     order_id: int
     order_number: str
     tenant_id: int
     warehouse_id: int
-    warehouse_name: Optional[str] = None
+    document_series_id: str
+    document_type_id: str
+    document_subtype: str
+    panel_document_type: str
+    doc_type: str
+    series_type: str
+    series: str
+    client: str
     source: Optional[str] = None
     order_channel: Optional[str] = None
     created_at: Optional[str] = None
-    currency: str
+    date: Optional[str] = None
+    currency: str = "PLN"
+    document_number: str
+    document_number_raw: str
+    numbering_status: str
+    numbering_legacy: bool = False
+    financials: SaleDocumentFinancialsRead
     total_net: float
     total_gross: float
     total_vat: float
+    net: float
+    gross: float
+    vat: float
+    payment: SaleDocumentPaymentRead
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+    payment_label_pl: str = "—"
+    paid: bool = False
+    external_status: str = "NOWE"
+    detail_path: str
+
+
+class SaleDocumentListItemRead(SaleDocumentBaseRead):
+    pass
+
+
+class SaleDocumentDetailRead(SaleDocumentBaseRead):
+    warehouse_name: Optional[str] = None
     lines: list[SaleDocumentLineRead]
     vat_rows: list[SaleDocumentVatRowRead]
     buyer: SaleDocumentPartyRead
     seller: SaleDocumentPartyRead
-    payment: SaleDocumentPaymentRead
-    series: dict[str, Any]
+    series_meta: dict[str, Any]
     warehouse_effects: dict[str, Any]
+    related: dict[str, Any]
     history: list[dict[str, Any]]
     print: dict[str, Any]
     export: dict[str, Any]
+    status_badges: dict[str, Any]

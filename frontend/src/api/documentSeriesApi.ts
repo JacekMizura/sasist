@@ -30,6 +30,8 @@ export type DocumentSeriesDto = {
   type: DocumentSeriesType;
   subtype: DocumentSeriesSubtype;
   correction_series_id: string | null;
+  /** Linked WZ series for SALE documents (Seria dokumentu magazynowego). */
+  warehouse_document_series_id: string | null;
   print_template: string;
   print_template_id: number | null;
   email_notification_enabled: boolean;
@@ -108,6 +110,7 @@ export function createDefaultDocumentSeriesWrite(): DocumentSeriesWritePayload {
     type: "SALE",
     subtype: "INVOICE",
     correction_series_id: null,
+    warehouse_document_series_id: null,
     print_template: "",
     print_template_id: null,
     email_notification_enabled: false,

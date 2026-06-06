@@ -19,6 +19,7 @@ from ...models.order_item import OrderItem
 from ...models.product import Product
 from ...models.stock_reservation import StockReservation
 from ...models.warehouse_inventory_movement import WarehouseInventoryMovement
+from ..sale_document_mapper import payment_method_label_pl, resolve_document_number_fields
 from .session_service import get_session
 
 
@@ -266,6 +267,8 @@ def build_direct_sale_completion_read(
 
     completed_at = sess.completed_at or order.order_date or order.created_at
     operator = _operator_label(db, sess.operator_user_id or sess.created_by_user_id)
+    num_info = resolve_document_number_fields(doc_num)
+    display_doc_num = num_info["document_number"]
 
     return {
         "session_id": int(sess.id),
@@ -273,11 +276,14 @@ def build_direct_sale_completion_read(
         "order_number": str(order.number or "") or None,
         "payment_id": int(payment.id) if payment else None,
         "document_job_id": int(doc_job.id) if doc_job else None,
-        "document_number": doc_num,
+        "document_number": display_doc_num,
+        "document_number_raw": num_info["document_number_raw"],
+        "numbering_legacy": bool(num_info["numbering_legacy"]),
         "document_subtype": doc_subtype or None,
         "total_amount": float(order.value or 0),
         "payment_status": str(payment.status or "") if payment else None,
         "payment_method": str(payment.method or "") if payment else None,
+        "payment_method_label": payment_method_label_pl(payment.method) if payment else None,
         "completed_at": completed_at.isoformat() if completed_at else None,
         "operator_label": operator,
         "warehouse_id": int(sess.warehouse_id),
@@ -287,6 +293,7 @@ def build_direct_sale_completion_read(
         "payment": {
             "payment_id": int(payment.id) if payment else None,
             "method": str(payment.method or "") if payment else None,
+            "method_label": payment_method_label_pl(payment.method) if payment else None,
             "status": str(payment.status or "") if payment else None,
             "amount": float(payment.amount or 0) if payment else None,
             "authorization_reference": str(payment.authorization_reference or "") or None if payment else None,
@@ -307,7 +314,9 @@ def build_direct_sale_completion_read(
         else None,
         "document": {
             "job_id": int(doc_job.id) if doc_job else None,
-            "document_number": doc_num,
+            "document_number": display_doc_num,
+            "document_number_raw": num_info["document_number_raw"],
+            "numbering_legacy": bool(num_info["numbering_legacy"]),
             "document_subtype": doc_subtype or None,
             "status": str(doc_job.status or "") if doc_job else None,
             "status_label": _document_status_pl(doc_job.status) if doc_job else None,

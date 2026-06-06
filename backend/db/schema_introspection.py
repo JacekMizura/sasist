@@ -677,11 +677,88 @@ def ensure_operational_sales_phase3_schema(engine: Engine) -> None:
             if _add_column_if_missing(engine, "wms_operational_tasks", col, ddl):
                 added += 1
 
+    added += _ensure_sale_warehouse_document_link_schema(engine)
+
     logger.info(
         "[schema] operational_sales_phase3 ensured dialect=%s changes=%s",
         engine.dialect.name,
         added,
     )
+
+
+def _ensure_sale_warehouse_document_link_schema(engine: Engine) -> int:
+    """PA/FV ↔ WZ linkage: series FK, stock_documents context, sale_document_stock_links."""
+    added = 0
+
+    if has_table(engine, "document_series"):
+        if _add_column_if_missing(
+            engine,
+            "document_series",
+            "warehouse_document_series_id",
+            "ALTER TABLE document_series ADD COLUMN warehouse_document_series_id VARCHAR(36) "
+            "REFERENCES document_series(id) ON DELETE SET NULL",
+        ):
+            added += 1
+
+    if has_table(engine, "stock_documents"):
+        for col, ddl in (
+            (
+                "order_id",
+                "ALTER TABLE stock_documents ADD COLUMN order_id INTEGER "
+                "REFERENCES orders(id) ON DELETE SET NULL",
+            ),
+            (
+                "source_sale_document_id",
+                "ALTER TABLE stock_documents ADD COLUMN source_sale_document_id VARCHAR(36) "
+                "REFERENCES sale_documents(id) ON DELETE SET NULL",
+            ),
+            (
+                "direct_sale_session_id",
+                "ALTER TABLE stock_documents ADD COLUMN direct_sale_session_id INTEGER "
+                "REFERENCES direct_sale_sessions(id) ON DELETE SET NULL",
+            ),
+        ):
+            if _add_column_if_missing(engine, "stock_documents", col, ddl):
+                added += 1
+
+    if not has_table(engine, "sale_document_stock_links"):
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE sale_document_stock_links (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        sale_document_id VARCHAR(36) NOT NULL
+                            REFERENCES sale_documents(id) ON DELETE CASCADE,
+                        stock_document_id INTEGER NOT NULL
+                            REFERENCES stock_documents(id) ON DELETE CASCADE,
+                        link_type VARCHAR(16) NOT NULL DEFAULT 'WZ',
+                        created_at TIMESTAMP DEFAULT (datetime('now'))
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX ix_sale_doc_stock_links_sale "
+                    "ON sale_document_stock_links(sale_document_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX ix_sale_doc_stock_links_stock "
+                    "ON sale_document_stock_links(stock_document_id)"
+                )
+            )
+        added += 1
+
+    if added:
+        logger.info(
+            "[schema] sale_warehouse_document_link ensured dialect=%s changes=%s",
+            engine.dialect.name,
+            added,
+        )
+    return added
 
 
 def ensure_operational_runtime_phase4_schema(engine: Engine) -> None:

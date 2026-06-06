@@ -26,7 +26,8 @@ from .order_service import create_order_from_session
 from .payment_service import orchestrate_direct_sale_payment
 from .errors import DirectSaleError
 from .constants import SUSPEND_TTL_MINUTES, reservation_expires_at
-from .stock_issue_service import create_reservations_for_order, issue_stock_for_allocations
+from ...models.sale_document import SaleDocument
+from .wz_service import create_and_post_wz_for_direct_sale
 from ..operational_features_context import build_operational_features_context
 from ..operational_observability import log_direct_sale_complete
 from ..operational_sales_events import emit_operational_sales_event
@@ -309,28 +310,6 @@ def complete_direct_sale_session(
         with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             allocations = plan_issue_allocations(db, sess, lines)
 
-        current_step = "reserve_stock"
-        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
-            reservations = create_reservations_for_order(
-                db,
-                order=order,
-                sess=sess,
-                allocations=allocations,
-                performed_by_user_id=performed_by_user_id,
-            )
-
-        current_step = "issue_stock"
-        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
-            issue_stock_for_allocations(
-                db,
-                order=order,
-                sess=sess,
-                order_items_by_line=items_by_line,
-                allocations=allocations,
-                reservations=reservations,
-                performed_by_user_id=performed_by_user_id,
-            )
-
         total = _session_total(sess)
         current_step = "create_payment"
         with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
@@ -345,6 +324,7 @@ def complete_direct_sale_session(
             )
 
         doc_result = None
+        processed = None
         processed_number: str | None = None
         current_step = "generate_documents"
         with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
@@ -387,6 +367,38 @@ def complete_direct_sale_session(
                     sid,
                     doc_exc,
                 )
+
+        sale_doc: SaleDocument | None = None
+        if processed is not None and str(processed.status or "").upper() == "GENERATED":
+            sale_doc_id = str(getattr(processed, "sale_document_id", None) or "").strip()
+            if sale_doc_id:
+                sale_doc = (
+                    db.query(SaleDocument)
+                    .filter(
+                        SaleDocument.id == sale_doc_id,
+                        SaleDocument.tenant_id == int(sess.tenant_id),
+                    )
+                    .first()
+                )
+
+        current_step = "create_wz"
+        if sale_doc is not None:
+            with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
+                create_and_post_wz_for_direct_sale(
+                    db,
+                    order=order,
+                    sess=sess,
+                    sale_document=sale_doc,
+                    allocations=allocations,
+                    order_items_by_line=items_by_line,
+                    performed_by_user_id=performed_by_user_id,
+                )
+        else:
+            document_warning = document_warning or "Brak dokumentu PA/FV — WZ nie został utworzony."
+            logger.warning(
+                "[direct-sales.complete] session_id=%s step=create_wz skipped reason=no_sale_document",
+                sid,
+            )
 
         current_step = "complete_session"
         with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):

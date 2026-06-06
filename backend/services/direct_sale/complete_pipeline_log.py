@@ -35,10 +35,9 @@ def log_session_state_transition(
 STEPS = (
     "create_order",
     "plan_allocations",
-    "reserve_stock",
-    "issue_stock",
     "create_payment",
     "generate_documents",
+    "create_wz",
     "complete_session",
 )
 
@@ -46,10 +45,9 @@ STEPS = (
 _STEP_TAG = {
     "create_order": "validation",
     "plan_allocations": "inventory",
-    "reserve_stock": "inventory",
-    "issue_stock": "inventory",
     "create_payment": "payment",
     "generate_documents": "document",
+    "create_wz": "inventory",
     "complete_session": "commit",
 }
 

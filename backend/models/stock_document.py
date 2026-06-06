@@ -21,8 +21,21 @@ class StockDocument(Base):
     rmz_id = Column(Integer, ForeignKey("wms_order_returns.id", ondelete="SET NULL"), nullable=True, index=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=True, index=True)
     delivery_id = Column(Integer, ForeignKey("deliveries.id", ondelete="RESTRICT"), nullable=True, index=True)
-    #: PANEL = z zamówienia / panelu; WMS = ad-hoc przyjęcie magazynowe (pusta PZ).
+    #: PANEL = z zamówienia / panelu; WMS = ad-hoc przyjęcie magazynowe (pusta PZ); DIRECT_SALE = sprzedaż bezpośrednia.
     creation_source = Column(String(16), nullable=False, default="PANEL", server_default=text("'PANEL'"), index=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_sale_document_id = Column(
+        String(36),
+        ForeignKey("sale_documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    direct_sale_session_id = Column(
+        Integer,
+        ForeignKey("direct_sale_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=True, index=True)
     location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True, index=True)
     # MM (internal transfer): source / target bins (header audit; lines + stock_operations carry lots).

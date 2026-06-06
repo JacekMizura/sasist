@@ -34,7 +34,7 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
 
     msg = _msg_lower(exc)
     if isinstance(exc, SaOperationalError) or "no such table" in msg or "no column named" in msg:
-        if step in ("reserve_stock", "issue_stock"):
+        if step in ("create_wz", "reserve_stock", "issue_stock"):
             return DirectSaleError(
                 "Nie udało się zdjąć towaru z magazynu.",
                 code="ISSUE_FAILED",
@@ -76,7 +76,7 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
             http_status=409,
             step=step,
         )
-    if step in ("reserve_stock", "issue_stock"):
+    if step in ("create_wz", "reserve_stock", "issue_stock"):
         return DirectSaleError(
             "Nie udało się zdjąć towaru z magazynu.",
             code="ISSUE_FAILED",
@@ -112,7 +112,7 @@ def _normalize_direct_sale_code(code: str, *, step: str) -> str:
         return "PAYMENT_FAILED"
     if step == "plan_allocations":
         return "ALLOCATION_FAILED"
-    if step in ("reserve_stock", "issue_stock"):
+    if step in ("create_wz", "reserve_stock", "issue_stock"):
         return "ISSUE_FAILED"
     return "SESSION_INVALID"
 

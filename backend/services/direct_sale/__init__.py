@@ -40,6 +40,7 @@ from .stock_issue_service import (
     issue_stock_for_allocations,
     release_session_reservations,
 )
+from .wz_service import create_and_post_wz_for_direct_sale
 
 __all__ = [
     "DirectSaleCompleteResult",
@@ -51,6 +52,7 @@ __all__ = [
     "RESERVATION_STATUS_ACTIVE",
     "RESERVATION_STATUS_CONSUMED",
     "complete_direct_sale_session",
+    "create_and_post_wz_for_direct_sale",
     "create_order_from_session",
     "create_reservations_for_order",
     "cancel_session",

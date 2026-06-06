@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 
@@ -114,6 +115,10 @@ def create_order_from_session(
         disc = float(ln.discount_amount or 0)
         vat_p = product_vat_for_direct_sale(db, int(ln.product_id))
         fin = brutto_line_to_net_fields(unit_gross=unit_gross, qty=qty, discount=disc, vat_percent=vat_p)
+        line_meta = {
+            "line_gross_total": float(fin["line_gross"]),
+            "price_input_mode": "BRUTTO",
+        }
         oi = OrderItem(
             order_id=int(order.id),
             product_id=int(ln.product_id),
@@ -121,6 +126,7 @@ def create_order_from_session(
             unit_price=float(fin["unit_price"]) if fin["unit_price"] else None,
             total_price=round(float(fin["total_price"]), 2),
             vat_percent=float(fin["vat_percent"]),
+            metadata_json=json.dumps(line_meta, ensure_ascii=False),
             source_location_id=int(ln.source_location_id) if ln.source_location_id else None,
             issue_session_id=int(sess.id),
         )

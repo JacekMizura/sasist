@@ -129,12 +129,31 @@ def compute_order_line_financials(item: OrderItem, product: Product | None) -> d
         line_net = round(unit_net * qty, 2)
 
     vat_p = _vat_percent_for_item(item, product)
+    meta = _order_item_meta_dict(item)
+    line_gross_meta: Optional[float] = None
+    raw_gross = meta.get("line_gross_total")
+    if raw_gross is not None:
+        try:
+            line_gross_meta = round(float(raw_gross), 2)
+        except (TypeError, ValueError):
+            pass
+
     unit_gross: Optional[float] = None
     line_vat_amt: Optional[float] = None
     line_gross: Optional[float] = None
-    if unit_net is not None:
+    if line_gross_meta is not None and line_gross_meta >= 0:
+        line_gross = line_gross_meta
+        if line_net is not None:
+            line_vat_amt = round(line_gross - line_net, 2)
+        else:
+            ln, lv = net_vat_from_gross(line_gross, vat_p)
+            line_net = ln
+            line_vat_amt = lv
+        if unit_net is not None and qty > 0:
+            unit_gross = round(line_gross / qty, 4)
+    elif unit_net is not None:
         unit_gross = round(unit_net * (1.0 + float(vat_p) / 100.0), 4)
-    if line_net is not None:
+    if line_gross is None and line_net is not None:
         line_vat_amt = round(line_net * (float(vat_p) / 100.0), 2)
         line_gross = round(line_net + float(line_vat_amt), 2)
 
@@ -194,6 +213,34 @@ def compute_sale_totals_from_order(order: Order) -> dict[str, Any]:
                 "line_gross": float(lg),
             }
         )
+
+    # Legacy direct-sales: single line without line_gross_total — use order.value as brutto anchor.
+    order_value = getattr(order, "value", None)
+    if (
+        len(lines_out) == 1
+        and order_value is not None
+        and abs(float(lines_out[0]["line_gross"]) - float(order_value)) > 0.02
+    ):
+        try:
+            ov = round(float(order_value), 2)
+            vp = float(lines_out[0]["vat_percent"])
+            ln, lv = net_vat_from_gross(ov, vp)
+            lines_out[0]["line_net"] = ln
+            lines_out[0]["line_vat"] = lv
+            lines_out[0]["line_gross"] = ov
+            if int(lines_out[0]["quantity"]) > 0:
+                lines_out[0]["unit_net"] = round(ln / int(lines_out[0]["quantity"]), 4)
+                lines_out[0]["unit_gross"] = round(ov / int(lines_out[0]["quantity"]), 4)
+            total_net = ln
+            total_vat = lv
+            total_gross = ov
+            vat_buckets = defaultdict(lambda: {"net": 0.0, "vat": 0.0, "gross": 0.0})
+            key = f"{vp:g}"
+            vat_buckets[key]["net"] = ln
+            vat_buckets[key]["vat"] = lv
+            vat_buckets[key]["gross"] = ov
+        except (TypeError, ValueError):
+            pass
 
     vat_rows = []
     for rate_key in sorted(vat_buckets.keys(), key=lambda k: float(k), reverse=True):

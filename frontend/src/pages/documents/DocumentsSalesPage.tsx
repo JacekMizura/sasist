@@ -5,7 +5,6 @@ import { Download, FileText, Plus, Upload } from "lucide-react";
 import { listSaleDocuments } from "../../api/saleDocumentsApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { paymentMethodPl } from "../../components/directSales/directSalesTerminology";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "./documentsBadges";
 import type { BusinessDocStatus } from "./warehouseDocumentsUi";
 import DocumentsEmptyState from "./DocumentsEmptyState";
@@ -61,15 +60,17 @@ export default function DocumentsSalesPage() {
         setRows(
           items.map((it) => ({
             id: it.id,
-            documentNumber: it.document_number,
+            documentNumber: it.numbering_legacy
+              ? "Numer legacy (wymaga korekty)"
+              : it.document_number,
             orderNumber: it.order_number ?? `#${it.order_id}`,
             client: it.client,
             series: it.series,
             docType: it.doc_type,
             date: it.date ? new Date(it.date).toLocaleString("pl-PL") : "—",
-            net: `${Number(it.net).toFixed(2)} zł`,
-            gross: `${Number(it.gross).toFixed(2)} zł`,
-            paymentMethod: paymentMethodPl(it.payment_method),
+            net: `${Number(it.total_net ?? it.net).toFixed(2)} zł`,
+            gross: `${Number(it.total_gross ?? it.gross).toFixed(2)} zł`,
+            paymentMethod: it.payment_label_pl || "—",
             paid: it.paid,
             externalStatus: "NOWE" as BusinessDocStatus,
             detailPath: it.detail_path || `/documents/sales/${it.id}`,

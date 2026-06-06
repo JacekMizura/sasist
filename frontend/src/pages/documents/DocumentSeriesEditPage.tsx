@@ -85,6 +85,7 @@ function dtoToWrite(d: DocumentSeriesDto): DocumentSeriesWritePayload {
     type: d.type,
     subtype: d.subtype,
     correction_series_id: d.correction_series_id,
+    warehouse_document_series_id: d.warehouse_document_series_id ?? null,
     print_template: d.print_template,
     print_template_id: d.print_template_id ?? null,
     email_notification_enabled: d.email_notification_enabled,
@@ -212,6 +213,11 @@ export default function DocumentSeriesEditPage() {
 
   const correctionOptions = useMemo(
     () => allSeries.filter((s) => s.type === "CORRECTION" && s.id !== id),
+    [allSeries, id],
+  );
+
+  const warehouseSeriesOptions = useMemo(
+    () => allSeries.filter((s) => s.type === "WAREHOUSE" && s.subtype === "WZ" && s.id !== id),
     [allSeries, id],
   );
 
@@ -419,6 +425,23 @@ export default function DocumentSeriesEditPage() {
                   ))}
                 </select>
               </label>
+              {draft.type === "SALE" ? (
+                <label className={lab}>
+                  Seria dokumentu magazynowego (WZ)
+                  <select
+                    className={inpSm}
+                    value={draft.warehouse_document_series_id ?? ""}
+                    onChange={(e) => setField("warehouse_document_series_id", e.target.value || null)}
+                  >
+                    <option value="">Domyślna seria WZ</option>
+                    {warehouseSeriesOptions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label className={lab}>
                 Szablon druku
                 <select

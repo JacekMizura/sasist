@@ -42,6 +42,13 @@ class DocumentSeries(Base):
         nullable=True,
         index=True,
     )
+    #: Linked WZ series for SALE series (Seria dokumentu magazynowego).
+    warehouse_document_series_id = Column(
+        String(36),
+        ForeignKey("document_series.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     print_template = Column(String(512), nullable=False, default="")
     #: Preset document layout id for PDF/HTML generation (optional; falls back to ``print_template`` path/slug).
@@ -119,6 +126,11 @@ class DocumentSeries(Base):
     tenant = relationship("Tenant")
     warehouse = relationship("Warehouse")
     correction_series = relationship("DocumentSeries", remote_side=[id], foreign_keys=[correction_series_id])
+    warehouse_document_series = relationship(
+        "DocumentSeries",
+        remote_side=[id],
+        foreign_keys=[warehouse_document_series_id],
+    )
     status_on_create = relationship("OrderUiStatus", foreign_keys=[status_on_create_id])
     status_on_delete = relationship("OrderUiStatus", foreign_keys=[status_on_delete_id])
     status_on_error = relationship("OrderUiStatus", foreign_keys=[status_on_error_id])

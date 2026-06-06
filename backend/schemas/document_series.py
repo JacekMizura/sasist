@@ -51,6 +51,11 @@ class DocumentSeriesBase(BaseModel):
     type: DocumentSeriesType
     subtype: DocumentSeriesSubtype
     correction_series_id: Optional[str] = Field(None, max_length=36)
+    warehouse_document_series_id: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="Linked WZ series for SALE documents (Seria dokumentu magazynowego).",
+    )
     print_template: str = Field("", max_length=512)
     print_template_id: Optional[int] = Field(None, ge=1, le=999999)
     email_notification_enabled: bool = False
