@@ -25,7 +25,15 @@ from .issue_plan_service import IssueAllocation, plan_issue_allocations
 from .order_service import create_order_from_session
 from .payment_service import orchestrate_direct_sale_payment
 from .scan_service import session_scan_add_line
-from .session_service import create_session, get_session, set_session_customer, suspend_session
+from .session_service import (
+    cancel_session,
+    create_session,
+    get_session,
+    list_suspended_sessions,
+    resume_session,
+    set_session_customer,
+    suspend_session,
+)
 from .soft_hold_service import create_soft_hold_for_scan, soft_hold_enabled
 from .stock_issue_service import (
     create_reservations_for_order,
@@ -45,10 +53,13 @@ __all__ = [
     "complete_direct_sale_session",
     "create_order_from_session",
     "create_reservations_for_order",
+    "cancel_session",
     "create_session",
     "create_soft_hold_for_scan",
     "enqueue_direct_sale_documents",
     "get_session",
+    "list_suspended_sessions",
+    "resume_session",
     "issue_stock_for_allocations",
     "legacy_status_to_lifecycle",
     "lifecycle_to_legacy_status",

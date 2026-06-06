@@ -97,3 +97,63 @@ def set_session_customer(
     sess.customer_id = int(customer_id) if customer_id else None
     sess.last_activity_at = datetime.utcnow()
     return sess
+
+
+def list_suspended_sessions(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    limit: int = 20,
+) -> list[DirectSaleSession]:
+    lim = max(1, min(int(limit), 50))
+    return (
+        db.query(DirectSaleSession)
+        .options(joinedload(DirectSaleSession.lines))
+        .filter(
+            DirectSaleSession.tenant_id == int(tenant_id),
+            DirectSaleSession.warehouse_id == int(warehouse_id),
+            DirectSaleSession.status == "SUSPENDED",
+        )
+        .order_by(DirectSaleSession.suspended_at.desc(), DirectSaleSession.id.desc())
+        .limit(lim)
+        .all()
+    )
+
+
+def resume_session(db: Session, sess: DirectSaleSession) -> DirectSaleSession:
+    if sess.status != "SUSPENDED":
+        raise DirectSaleError("Można wznowić tylko zawieszoną sesję.", code="invalid_status")
+    now = datetime.utcnow()
+    sess.status = "ACTIVE"
+    sess.suspended_at = None
+    sess.expires_at = None
+    sess.last_activity_at = now
+    emit_operational_sales_event(
+        db,
+        "direct_sale.resumed",
+        tenant_id=int(sess.tenant_id),
+        warehouse_id=int(sess.warehouse_id),
+        session_id=int(sess.id),
+        source="direct_sales",
+    )
+    return sess
+
+
+def cancel_session(db: Session, sess: DirectSaleSession) -> DirectSaleSession:
+    if sess.status in ("COMPLETED", "CANCELLED"):
+        raise DirectSaleError("Sesja jest już zamknięta.", code="session_closed")
+    now = datetime.utcnow()
+    release_session_reservations_lifecycle(db, sess=sess, reason="session_cancelled")
+    sess.status = "CANCELLED"
+    sess.completed_at = now
+    sess.last_activity_at = now
+    emit_operational_sales_event(
+        db,
+        "direct_sale.cancelled",
+        tenant_id=int(sess.tenant_id),
+        warehouse_id=int(sess.warehouse_id),
+        session_id=int(sess.id),
+        source="direct_sales",
+    )
+    return sess

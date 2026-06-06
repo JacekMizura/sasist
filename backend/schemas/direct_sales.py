@@ -40,6 +40,7 @@ class DirectSaleProductSearchHit(BaseModel):
     name: str
     sku: str | None = None
     ean: str | None = None
+    catalog_number: str | None = None
     image_url: str | None = None
     unit_price: float | None = None
     available_qty: float = 0.0
@@ -123,3 +124,14 @@ class DirectSaleCompleteResponse(BaseModel):
     total_amount: float
     payment_status: str | None = None
     payment_method: str | None = None
+
+
+class DirectSaleSuspendedSummaryRead(BaseModel):
+    id: int
+    operator_user_id: int | None = None
+    operator_label: str | None = None
+    line_count: int = 0
+    total_amount: float = 0.0
+    suspended_at: datetime | None = None
+    started_at: datetime | None = None
+    age_minutes: int | None = None

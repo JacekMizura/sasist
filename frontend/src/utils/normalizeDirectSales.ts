@@ -41,6 +41,7 @@ export type DirectSaleProductSearchHit = {
   name: string;
   sku: string | null;
   ean: string | null;
+  catalog_number: string | null;
   image_url: string | null;
   unit_price: number | null;
   available_qty: number;
@@ -130,6 +131,7 @@ export function normalizeProductSearchHit(raw: unknown): DirectSaleProductSearch
     name: safeDisplay(r.name, "Produkt"),
     sku: strOrNull(r.sku),
     ean: strOrNull(r.ean),
+    catalog_number: strOrNull(r.catalog_number),
     image_url: strOrNull(r.image_url),
     unit_price: numOrNull(r.unit_price),
     available_qty: num(r.available_qty),

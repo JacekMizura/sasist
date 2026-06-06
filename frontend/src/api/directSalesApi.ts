@@ -136,6 +136,56 @@ export async function setDirectSaleCustomer(params: {
   return normalizeDirectSaleSession(data);
 }
 
+export type DirectSaleSuspendedSummary = {
+  id: number;
+  operator_user_id: number | null;
+  operator_label: string | null;
+  line_count: number;
+  total_amount: number;
+  suspended_at: string | null;
+  started_at: string | null;
+  age_minutes: number | null;
+};
+
+export async function listSuspendedDirectSaleSessions(params: {
+  tenantId: number;
+  warehouseId: number;
+  limit?: number;
+}): Promise<DirectSaleSuspendedSummary[]> {
+  const { data } = await api.get<DirectSaleSuspendedSummary[]>("direct-sales/sessions/suspended", {
+    params: {
+      tenant_id: params.tenantId,
+      warehouse_id: params.warehouseId,
+      limit: params.limit ?? 20,
+    },
+  });
+  return Array.isArray(data) ? data : [];
+}
+
+export async function resumeDirectSaleSession(params: {
+  tenantId: number;
+  sessionId: number;
+}): Promise<DirectSaleSession> {
+  const { data } = await api.post(
+    `direct-sales/session/${params.sessionId}/resume`,
+    {},
+    { params: { tenant_id: params.tenantId } },
+  );
+  return normalizeDirectSaleSession(data);
+}
+
+export async function cancelDirectSaleSession(params: {
+  tenantId: number;
+  sessionId: number;
+}): Promise<DirectSaleSession> {
+  const { data } = await api.post(
+    `direct-sales/session/${params.sessionId}/cancel`,
+    {},
+    { params: { tenant_id: params.tenantId } },
+  );
+  return normalizeDirectSaleSession(data);
+}
+
 export async function suspendDirectSaleSession(params: {
   tenantId: number;
   sessionId: number;

@@ -8,7 +8,7 @@ export function directSalesUnavailableMessage(reason: OperationalUnavailableReas
     case "off":
       return {
         title: "Moduł został wyłączony konfiguracją systemową",
-        body: "Sprzedaż bezpośrednia nie jest włączona dla tego magazynu. Klasyczny WMS działa bez zmian.",
+        body: "Sprzedaż bezpośrednia nie została jeszcze aktywowana dla tego magazynu. Klasyczny WMS działa bez zmian.",
       };
     case "network":
       return {

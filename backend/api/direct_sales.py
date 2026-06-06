@@ -23,6 +23,7 @@ from ..schemas.direct_sales import (
     DirectSaleSessionRead,
     DirectSaleSetCustomerBody,
     DirectSaleStartPaymentBody,
+    DirectSaleSuspendedSummaryRead,
 )
 from ..services.direct_sale_complete_service import (
     complete_direct_sale_session,
@@ -38,8 +39,11 @@ from ..services.direct_sale.product_search_service import search_direct_sale_pro
 from ..services.direct_sale.session_enrichment import enrich_session_lines
 from ..services.direct_sale_service import (
     DirectSaleError,
+    cancel_session,
     create_session,
     get_session,
+    list_suspended_sessions,
+    resume_session,
     session_scan_add_line,
     set_session_customer,
     suspend_session,
@@ -117,6 +121,44 @@ def _session_to_read(db: Session, sess: DirectSaleSession) -> DirectSaleSessionR
     )
 
 
+def _line_total_amount(line: DirectSaleSessionLine) -> float:
+    qty = float(line.quantity or 0)
+    price = float(line.unit_price) if line.unit_price is not None else 0.0
+    discount = float(line.discount_amount or 0)
+    return max(0.0, qty * price - discount)
+
+
+def _suspended_summary(db: Session, sess: DirectSaleSession) -> DirectSaleSuspendedSummaryRead:
+    from datetime import datetime
+
+    from ..models.app_user import AppUser
+
+    operator_label = None
+    if sess.operator_user_id:
+        user = db.query(AppUser).filter(AppUser.id == int(sess.operator_user_id)).first()
+        if user:
+            name = " ".join(
+                p for p in (getattr(user, "first_name", None), getattr(user, "last_name", None)) if p
+            ).strip()
+            operator_label = name or str(getattr(user, "login", None) or f"#{user.id}")
+    lines = list(sess.lines or [])
+    total = sum(_line_total_amount(ln) for ln in lines)
+    age_minutes = None
+    ref = sess.suspended_at or sess.started_at
+    if ref is not None:
+        age_minutes = max(0, int((datetime.utcnow() - ref).total_seconds() // 60))
+    return DirectSaleSuspendedSummaryRead(
+        id=int(sess.id),
+        operator_user_id=int(sess.operator_user_id) if sess.operator_user_id else None,
+        operator_label=operator_label,
+        line_count=len(lines),
+        total_amount=round(total, 2),
+        suspended_at=sess.suspended_at,
+        started_at=sess.started_at,
+        age_minutes=age_minutes,
+    )
+
+
 def _require_session(
     db: Session,
     *,
@@ -168,6 +210,17 @@ def get_direct_sale_product_search(
         limit=limit,
     )
     return [DirectSaleProductSearchHit(**row) for row in rows]
+
+
+@router.get("/sessions/suspended", response_model=list[DirectSaleSuspendedSummaryRead])
+def get_suspended_sessions(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    limit: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    rows = list_suspended_sessions(db, tenant_id=tenant_id, warehouse_id=warehouse_id, limit=limit)
+    return [_suspended_summary(db, row) for row in rows]
 
 
 @router.get("/session/{session_id}", response_model=DirectSaleSessionRead)
@@ -280,6 +333,38 @@ def delete_session_line(
     sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
     try:
         remove_session_line(db, sess, line_id=line_id)
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(db, sess)
+    except DirectSaleError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.post("/session/{session_id}/resume", response_model=DirectSaleSessionRead)
+def post_session_resume(
+    session_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        resume_session(db, sess)
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(db, sess)
+    except DirectSaleError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.post("/session/{session_id}/cancel", response_model=DirectSaleSessionRead)
+def post_session_cancel(
+    session_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        cancel_session(db, sess)
         db.commit()
         db.refresh(sess)
         return _session_to_read(db, sess)

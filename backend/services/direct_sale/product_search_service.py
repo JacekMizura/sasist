@@ -38,6 +38,7 @@ def search_direct_sale_products(
                 Product.bulk_ean.ilike(pattern),
                 Product.sku.ilike(pattern),
                 Product.symbol.ilike(pattern),
+                Product.catalog_number.ilike(pattern),
                 Product.barcode.ilike(pattern),
             ),
         )
@@ -120,6 +121,7 @@ def search_direct_sale_products(
                 "name": str(p.name or ""),
                 "sku": str(p.sku or p.symbol or "") or None,
                 "ean": str(p.ean or "") or None,
+                "catalog_number": str(getattr(p, "catalog_number", None) or "") or None,
                 "image_url": str(p.image_url or "") or None,
                 "unit_price": price,
                 "available_qty": round(inv_by_pid.get(pid, 0.0), 3),
