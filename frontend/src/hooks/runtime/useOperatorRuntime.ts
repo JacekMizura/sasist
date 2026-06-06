@@ -4,6 +4,7 @@ import { type LiveEvent, type OperatorContext } from "../../api/operationalRunti
 import { listWmsOperationalTasks, type WmsOperationalTaskApi } from "../../api/wmsOperationalTasksApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useAuth } from "../../context/AuthContext";
+import { safeDisplay, safeTrim } from "../../utils/safeStrings";
 import { useOperationalRuntime } from "./useOperationalRuntime";
 
 export type OperatorSnapshot = {
@@ -74,7 +75,7 @@ export function useOperatorRuntime() {
           [user.first_name, user.last_name].filter(Boolean).join(" ").trim() ||
           user.login ||
           `Operator #${user.id}`,
-        contextType: selfContext?.context_type ?? "PICKING",
+        contextType: safeDisplay(selfContext?.context_type, "PICKING"),
         cartId: selfContext?.cart_id ?? null,
         zoneLabel: selfContext?.zone_id ? `Strefa #${selfContext.zone_id}` : "—",
         activeTaskId: selfContext?.active_task_id ?? null,
@@ -83,14 +84,14 @@ export function useOperatorRuntime() {
     : null;
 
   const peers: OperatorSnapshot[] = activeTasks
-    .filter((t) => t.summary_line)
+    .filter((t) => safeTrim(t.summary_line))
     .slice(0, 8)
     .map((t, i) => ({
       operatorUserId: i + 1,
-      displayName: t.summary_line.split("·")[0]?.trim() || `Zadanie #${t.id}`,
-      contextType: t.task_type,
+      displayName: safeTrim(safeTrim(t.summary_line).split("·")[0]) || `Zadanie #${t.id}`,
+      contextType: safeDisplay(t.task_type, "UNKNOWN"),
       cartId: null,
-      zoneLabel: t.location_hint ?? "—",
+      zoneLabel: safeDisplay(t.location_hint),
       activeTaskId: t.id,
       idleLabel: idleLabelFrom(t.updated_at),
     }));

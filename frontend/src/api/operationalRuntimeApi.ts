@@ -1,3 +1,4 @@
+import { normalizeLiveEvent } from "../utils/normalizeOperationalApi";
 import api from "./axios";
 
 export type LiveEvent = {
@@ -33,7 +34,7 @@ export async function fetchLiveEvents(params: {
       limit: params.limit ?? 50,
     },
   });
-  return data;
+  return (data ?? []).map(normalizeLiveEvent);
 }
 
 export function openOperationalLiveStream(params: {
@@ -52,7 +53,7 @@ export function openOperationalLiveStream(params: {
   const es = new EventSource(url.toString());
   es.onmessage = (msg) => {
     try {
-      const parsed = JSON.parse(msg.data) as LiveEvent;
+      const parsed = normalizeLiveEvent(JSON.parse(msg.data) as LiveEvent);
       params.onEvent(parsed);
     } catch (e) {
       params.onError?.(e);

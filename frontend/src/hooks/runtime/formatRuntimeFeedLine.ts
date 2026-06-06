@@ -1,4 +1,5 @@
 import type { LiveEvent } from "../../api/operationalRuntimeApi";
+import { safeTrim } from "../../utils/safeStrings";
 
 export type FeedLine = {
   id: string;
@@ -10,7 +11,8 @@ export type FeedLine = {
 export function formatLiveEventFeedLine(ev: LiveEvent): FeedLine {
   const p = ev.payload ?? {};
   const at = ev.created_at ?? null;
-  switch (ev.event_type) {
+  const eventType = safeTrim(ev.event_type) || "unknown";
+  switch (eventType) {
     case "replenishment.alert":
       return {
         id: `ev-${ev.id}`,
@@ -92,7 +94,7 @@ export function formatLiveEventFeedLine(ev: LiveEvent): FeedLine {
       return {
         id: `ev-${ev.id}`,
         tone: "muted",
-        text: ev.event_type,
+        text: eventType,
         at,
       };
   }

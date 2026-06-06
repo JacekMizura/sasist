@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { safeIncludes, safeTrim, safeUpper } from "../../utils/safeStrings";
 import { orchColumn } from "../../utils/replenishmentRowModel";
 import { useOperationalAlerts } from "./useOperationalAlerts";
 import { useOperatorRuntime } from "./useOperatorRuntime";
@@ -29,20 +30,25 @@ export function useZonePressure() {
     return ZONES.map((zone) => {
       const zoneTasks = tasks.filter((t) => {
         const p = (t.task_payload ?? {}) as Record<string, unknown>;
-        const zt = String(p.zone_type ?? "").toUpperCase();
-        const hint = (t.location_hint ?? t.summary_line ?? "").toUpperCase();
-        return zt === zone || hint.includes(zone) || t.task_type.includes(zone.slice(0, 4));
+        const zt = safeUpper(p.zone_type);
+        const hint = safeUpper(t.location_hint ?? t.summary_line);
+        const taskType = safeTrim(t.task_type);
+        return (
+          zt === zone ||
+          safeIncludes(hint, zone) ||
+          (taskType ? safeIncludes(taskType, zone.slice(0, 4)) : false)
+        );
       });
       const zoneAlerts = alerts.filter((a) => {
-        const blob = `${a.title} ${a.message ?? ""} ${JSON.stringify(a.payload ?? {})}`.toUpperCase();
-        return blob.includes(zone);
+        const blob = safeUpper(`${a.title ?? ""} ${a.message ?? ""} ${JSON.stringify(a.payload ?? {})}`);
+        return safeIncludes(blob, zone);
       });
-      const lowStockCount = zoneAlerts.filter((a) => a.alert_type.toUpperCase().includes("LOW")).length;
+      const lowStockCount = zoneAlerts.filter((a) => safeIncludes(a.alert_type, "LOW")).length;
       const openReplenishments = zoneTasks.filter((t) => t.status !== "done").length;
       const blockedTasks = zoneTasks.filter((t) => orchColumn(t) === "BLOCKED").length;
       const activeOperators =
-        peers.filter((p) => p.zoneLabel.toUpperCase().includes(zone)).length +
-        (selfSnapshot?.zoneLabel.toUpperCase().includes(zone) ? 1 : 0);
+        peers.filter((p) => safeIncludes(p.zoneLabel, zone)).length +
+        (selfSnapshot && safeIncludes(selfSnapshot.zoneLabel, zone) ? 1 : 0);
       const queuePressure = Math.min(100, openReplenishments * 15 + blockedTasks * 25);
       const taskCount = zoneTasks.length;
       const alertCount = zoneAlerts.length;

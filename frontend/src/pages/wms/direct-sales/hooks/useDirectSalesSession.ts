@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractApiErrorMessage } from "../../../../api/apiErrorMessage";
 import { useWmsScanner } from "../../../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../../../../constants/panelTenant";
+import { safeTrim } from "../../../../utils/safeStrings";
 import { lineTotal } from "../utils/lineTotal";
 import {
   completeDirectSaleSession,
@@ -66,7 +67,7 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
 
   const handleScan = useCallback(
     async (raw: string) => {
-      const code = raw.trim();
+      const code = safeTrim(raw);
       if (!code || warehouseId == null || scanBusyRef.current) return;
       scanBusyRef.current = true;
       setBusy(true);
@@ -101,7 +102,7 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
   );
 
   useEffect(() => {
-    const v = scannerInputValue.trim();
+    const v = safeTrim(scannerInputValue);
     if (!v) return;
     void handleScan(v);
   }, [scannerInputValue, handleScan]);

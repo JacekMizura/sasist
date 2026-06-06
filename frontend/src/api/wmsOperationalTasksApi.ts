@@ -1,3 +1,4 @@
+import { normalizeWmsOperationalTask } from "../utils/normalizeOperationalApi";
 import api from "./axios";
 
 export type WmsOperationalTaskApi = {
@@ -170,7 +171,11 @@ export async function listWmsOperationalTasks(
       sync: opts?.sync !== false,
     },
   });
-  return res.data;
+  const data = res.data;
+  return {
+    ...data,
+    items: (data.items ?? []).map(normalizeWmsOperationalTask),
+  };
 }
 
 export async function getWmsOperationalTaskDetail(

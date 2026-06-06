@@ -376,7 +376,14 @@ export const router = createBrowserRouter(
           <Route path="alerts" element={<OperationsAlertsPage />} />
           <Route path="tasks" element={<OperationsTasksPage />} />
         </Route>
-        <Route path="direct-sales" element={<WmsDirectSalesPage />} />
+        <Route
+          path="direct-sales"
+          element={
+            <ErrorBoundary>
+              <WmsDirectSalesPage />
+            </ErrorBoundary>
+          }
+        />
         <Route path="packing" element={<Outlet />}>
           <Route index element={<WmsPackingStatusPage />} />
           <Route path="mode" element={<WmsPackingModePage />} />

@@ -1,5 +1,6 @@
 import type { WmsOperationalTaskApi } from "../api/wmsOperationalTasksApi";
 import { formatOperationalDurationSince } from "./formatOperationalDuration";
+import { safeDisplay, safeTrim, safeUpper } from "./safeStrings";
 
 export type ReplenishmentRow = {
   taskId: number;
@@ -30,14 +31,14 @@ export function toReplenishmentRow(task: WmsOperationalTaskApi): ReplenishmentRo
   const targetQty = shelfQty + Number(task.quantity_required ?? 0);
   const sourceZone = String(p.preferred_source_zone ?? p.source_zone ?? "BACKROOM");
   const targetZone = String(p.zone_type ?? task.location_hint ?? "SALES");
-  const sku = task.product_sku ?? "";
-  const ean = task.product_ean ?? "";
+  const sku = safeTrim(task.product_sku);
+  const ean = safeTrim(task.product_ean);
   const skuEan = [sku, ean].filter(Boolean).join(" / ") || "—";
 
   return {
     taskId: task.id,
     priority: task.priority,
-    productName: task.product_name || `Produkt #${task.product_id}`,
+    productName: safeDisplay(task.product_name, `Produkt #${task.product_id ?? task.id}`),
     skuEan,
     sourceZone,
     sourceLocation: String(p.source_scan_code ?? p.source_location ?? task.location_hint ?? "—"),
@@ -46,7 +47,7 @@ export function toReplenishmentRow(task: WmsOperationalTaskApi): ReplenishmentRo
     currentQty: shelfQty,
     targetQty,
     suggestedQty: task.quantity_remaining,
-    taskStatus: task.orchestration_state ?? task.status,
+    taskStatus: safeDisplay(task.orchestration_state ?? task.status, "UNKNOWN"),
     assignedOperatorId: task.assigned_user_id ?? null,
     slaDue: task.sla_due_at ?? null,
     ageLabel: formatOperationalDurationSince(task.created_at ?? undefined) || "—",
@@ -55,10 +56,11 @@ export function toReplenishmentRow(task: WmsOperationalTaskApi): ReplenishmentRo
 }
 
 export function orchColumn(task: WmsOperationalTaskApi): string {
-  const o = (task.orchestration_state ?? "").toUpperCase();
+  const o = safeUpper(task.orchestration_state);
   if (o) return o;
-  if (task.status === "done") return "COMPLETED";
-  if (task.status === "in_progress") return "ACTIVE";
-  if (task.status === "cancelled") return "BLOCKED";
+  const status = safeTrim(task.status);
+  if (status === "done") return "COMPLETED";
+  if (status === "in_progress") return "ACTIVE";
+  if (status === "cancelled") return "BLOCKED";
   return "QUEUED";
 }

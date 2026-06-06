@@ -1,5 +1,11 @@
 # Change Log
 
+## 2026-06-04 — Frontend safeStrings (operational UI crash fix)
+
+- `utils/safeStrings.ts` + `normalizeOperationalApi.ts` — null-safe trim/upper/includes at API boundary.
+- Fixed `AlertsActionablePanel`, `useZonePressure` (`alert_type.toUpperCase` crash), direct-sales scanner, replenishment/task hooks.
+- ErrorBoundary on `/wms/operations` outlet + `/wms/direct-sales`. Test: `safeStrings.test.ts`.
+
 ## 2026-06-04 — Production recovery hardening
 
 - **Postgres Tier0 fix:** `sync_tier0_orm_columns_from_models()` — dialect-agnostic ORM→DB column sync (legacy `schema_upgrade` helpers are SQLite no-ops on Postgres).

@@ -4,6 +4,7 @@ import { executeReplenishmentStep } from "../../api/operationalReplenishmentApi"
 import { assignOperationalTask, transitionOperationalTask } from "../../api/operationalOrchestrationApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import type { ReplenishmentRow } from "../../utils/replenishmentRowModel";
+import { safeTrim } from "../../utils/safeStrings";
 
 export type ExecutionStep = "scan_source" | "scan_product" | "scan_target" | "complete";
 
@@ -60,13 +61,13 @@ export function useReplenishmentExecution(onDone: () => void) {
   );
 
   const submitScan = useCallback(async () => {
-    if (!activeRow || !scanBuffer.trim()) return;
+    if (!activeRow || !safeTrim(scanBuffer)) return;
     setBusy(true);
     setError(null);
     try {
       await executeReplenishmentStep(DAMAGE_TENANT_ID, activeRow.taskId, {
         step,
-        scan_code: scanBuffer.trim(),
+        scan_code: safeTrim(scanBuffer),
       });
       if (step === "scan_source") setStep("scan_product");
       else if (step === "scan_product") setStep("scan_target");

@@ -1,4 +1,5 @@
 import type { OperationalAlert } from "../../api/operationalAlertsApi";
+import { safeIncludes, safeUpper } from "../../utils/safeStrings";
 
 type Props = {
   alerts: OperationalAlert[];
@@ -9,10 +10,11 @@ type Props = {
 };
 
 function suggestAction(alert: OperationalAlert): string | null {
-  const t = alert.alert_type.toUpperCase();
-  if (t.includes("LOW") || t.includes("REPLENISH")) return "Uzupełnij";
-  if (t.includes("PICKUP")) return "Przypisz";
-  if (t.includes("BLOCK")) return "Eskaluj";
+  const t = safeUpper(alert.alert_type);
+  if (!t) return null;
+  if (safeIncludes(t, "LOW") || safeIncludes(t, "REPLENISH")) return "Uzupełnij";
+  if (safeIncludes(t, "PICKUP")) return "Przypisz";
+  if (safeIncludes(t, "BLOCK")) return "Eskaluj";
   return null;
 }
 
