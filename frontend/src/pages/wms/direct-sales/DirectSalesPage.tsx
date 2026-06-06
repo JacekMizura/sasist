@@ -1,8 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
+import { OperationalStatusPanel } from "../../../components/operational/debug/OperationalStatusPanel";
 import { DirectSalesUnavailable } from "../../../components/operational/fallbacks/DirectSalesUnavailable";
 import { useWarehouse } from "../../../context/WarehouseContext";
+import { useOperationalStatus } from "../../../hooks/operational/useOperationalStatus";
 import { useOperationalRuntime } from "../../../hooks/runtime/useOperationalRuntime";
+import { resolveDirectSalesUnavailableReason } from "../../../services/operational/operationalFeatureGuard";
 import { CheckoutPanel } from "./components/CheckoutPanel";
 import { DirectSalesRuntimeFooter } from "./components/DirectSalesRuntimeFooter";
 import { DirectSalesTopBar } from "./components/DirectSalesTopBar";
@@ -12,13 +15,19 @@ import { useDirectSalesCustomer } from "./hooks/useDirectSalesCustomer";
 import { useDirectSalesSession } from "./hooks/useDirectSalesSession";
 import { useLocationStock } from "./hooks/useLocationStock";
 import { useProductSearch } from "./hooks/useProductSearch";
-
 export default function DirectSalesPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const runtime = useOperationalRuntime();
   const [issueFlash, setIssueFlash] = useState(false);
   const { stockSnap, refreshStock, clearStock } = useLocationStock(warehouseId, runtime.subscribe);
+
+  const status = useOperationalStatus({
+    warehouseId,
+    health: runtime.health,
+    connected: runtime.connected,
+    liveMode: runtime.liveMode,
+  });
 
   const salesEnabled = runtime.featuresLoaded && runtime.directSalesEnabled;
 
@@ -45,6 +54,11 @@ export default function DirectSalesPage() {
     onSessionUpdate: sessionState.onCustomerAttached,
   });
 
+  const unavailableReason = useMemo(
+    () => resolveDirectSalesUnavailableReason(status.features, sessionState.unavailable),
+    [status.features, sessionState.unavailable],
+  );
+
   const handleComplete = useCallback(async () => {
     const result = await sessionState.complete();
     if (result) {
@@ -64,14 +78,11 @@ export default function DirectSalesPage() {
   const handleRefresh = useCallback(() => {
     sessionState.resetAvailability();
     void runtime.refreshFeatures();
-  }, [runtime, sessionState]);
+    void status.refreshDebug();
+  }, [runtime, sessionState, status]);
 
   if (warehouseId == null) {
     return <div className="p-4 text-slate-600">Wybierz magazyn, aby rozpocząć sprzedaż bezpośrednią.</div>;
-  }
-
-  if (runtime.featuresLoaded && (!salesEnabled || sessionState.unavailable)) {
-    return <DirectSalesUnavailable onRefresh={handleRefresh} />;
   }
 
   if (!runtime.featuresLoaded) {
@@ -82,8 +93,36 @@ export default function DirectSalesPage() {
     );
   }
 
+  if (!salesEnabled || sessionState.unavailable) {
+    return (
+      <div className="flex h-full flex-col gap-2 p-2">
+        {status.showDebug ? (
+          <OperationalStatusPanel
+            features={status.features}
+            debugBundle={status.debugBundle}
+            backendReachable={runtime.backendReachable}
+            sseStatus={status.sseStatus}
+            onRefresh={() => void handleRefresh()}
+          />
+        ) : null}
+        <DirectSalesUnavailable reason={unavailableReason ?? "off"} onRefresh={handleRefresh} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {status.showDebug ? (
+        <div className="shrink-0 px-2 pt-2 md:px-4">
+          <OperationalStatusPanel
+            features={status.features}
+            debugBundle={status.debugBundle}
+            backendReachable={runtime.backendReachable}
+            sseStatus={status.sseStatus}
+            onRefresh={() => void status.refreshDebug()}
+          />
+        </div>
+      ) : null}
       <DirectSalesTopBar session={sessionState.session} runtimeHealth={runtime.health} />
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-2 md:flex-row md:p-4">
         <ProductSearchPanel

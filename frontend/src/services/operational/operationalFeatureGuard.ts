@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { logOperationalOnce } from "./operationalLog";
+import type { OperationalUnavailableReason } from "./operationalUnavailableCopy";
 
 export type OperationalFeaturesPayload = {
   direct_sales: boolean;
@@ -9,16 +10,23 @@ export type OperationalFeaturesPayload = {
 };
 
 export type OperationalFeatureState = {
+  /** Raw flag from GET /operational/features */
+  directSalesFlag: boolean;
+  runtimeFlag: boolean;
+  replenishmentFlag: boolean;
   directSalesEnabled: boolean;
   runtimeEnabled: boolean;
   replenishmentEnabled: boolean;
   directSalesSearchEnabled: boolean;
+  backendReachable: boolean;
   loaded: boolean;
   loading: boolean;
-  error: string | null;
+  unavailableReason: OperationalUnavailableReason;
+  rawPayload: OperationalFeaturesPayload | null;
+  blockedEndpoints: string[];
 };
 
-const ENDPOINT = {
+export const OPERATIONAL_ENDPOINTS = {
   FEATURES: "operational/features",
   DIRECT_SALES_SESSION: "direct-sales/session",
   DIRECT_SALES_SEARCH: "direct-sales/products/search",
@@ -26,10 +34,9 @@ const ENDPOINT = {
   RUNTIME_STREAM: "operational-runtime/stream",
 } as const;
 
-type EndpointKey = (typeof ENDPOINT)[keyof typeof ENDPOINT];
-
 let cacheKey = "";
 let features: OperationalFeaturesPayload | null = null;
+let featuresFetchFailed = false;
 let inflight: Promise<OperationalFeaturesPayload | null> | null = null;
 const blockedEndpoints = new Set<string>();
 const listeners = new Set<() => void>();
@@ -44,6 +51,12 @@ function notify(): void {
   listeners.forEach((fn) => fn());
 }
 
+function clearDirectSalesBlocksIfEnabled(payload: OperationalFeaturesPayload): void {
+  if (!payload.direct_sales) return;
+  blockedEndpoints.delete(OPERATIONAL_ENDPOINTS.DIRECT_SALES_SESSION);
+  blockedEndpoints.delete(OPERATIONAL_ENDPOINTS.DIRECT_SALES_SEARCH);
+}
+
 export function subscribeOperationalFeatures(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -55,17 +68,15 @@ export function isOperationalUnavailableStatus(status: number | undefined): bool
 
 export function markEndpointUnavailable(endpoint: string, status?: number): void {
   blockedEndpoints.add(endpoint);
-  if (endpoint.includes("direct-sales/products/search")) {
-    logOperationalOnce("ds-search", "[operations] direct sales search unavailable, using fallback mode");
+  if (endpoint.includes("operational/features")) {
+    featuresFetchFailed = true;
+    logOperationalOnce("features-fail", "[operations] feature probe failed, using fallback mode");
+  } else if (endpoint.includes("direct-sales/products/search")) {
+    logOperationalOnce("ds-search", "[operations] direct sales search unavailable");
   } else if (endpoint.includes("direct-sales")) {
-    features = { ...(features ?? DEFAULT_FEATURES), direct_sales: false };
-    logOperationalOnce("ds", "[operations] direct sales unavailable, using fallback mode");
+    logOperationalOnce("ds-session", "[operations] direct sales session endpoint unavailable");
   } else if (endpoint.includes("operational-runtime")) {
-    features = { ...(features ?? DEFAULT_FEATURES), runtime: false };
-    logOperationalOnce("runtime", "[operations] runtime unavailable, using fallback mode");
-  } else if (endpoint.includes("operational-replenishment") || endpoint.includes("replenishment")) {
-    features = { ...(features ?? DEFAULT_FEATURES), replenishment: false };
-    logOperationalOnce("replenishment", "[operations] replenishment unavailable, using fallback mode");
+    logOperationalOnce("runtime", "[operations] runtime endpoint unavailable");
   }
   if (status != null && isOperationalUnavailableStatus(status)) {
     logOperationalOnce(`http-${endpoint}`, `[operations] ${endpoint} returned ${status}`);
@@ -93,22 +104,43 @@ export function handleOperationalApiError(err: unknown, endpoint: string): void 
   }
 }
 
+function resolveUnavailableReason(f: OperationalFeaturesPayload): OperationalUnavailableReason {
+  if (featuresFetchFailed) return "network";
+  if (!f.direct_sales) return "off";
+  if (isEndpointBlocked(OPERATIONAL_ENDPOINTS.DIRECT_SALES_SESSION)) return "backend";
+  return null;
+}
+
 function buildState(): OperationalFeatureState {
   const f = features ?? DEFAULT_FEATURES;
-  const searchBlocked = isEndpointBlocked(ENDPOINT.DIRECT_SALES_SEARCH);
+  const searchBlocked = isEndpointBlocked(OPERATIONAL_ENDPOINTS.DIRECT_SALES_SEARCH);
   return {
-    directSalesEnabled: f.direct_sales && !isEndpointBlocked(ENDPOINT.DIRECT_SALES_SESSION),
-    runtimeEnabled: f.runtime && !isEndpointBlocked(ENDPOINT.RUNTIME_EVENTS),
+    directSalesFlag: f.direct_sales,
+    runtimeFlag: f.runtime,
+    replenishmentFlag: f.replenishment,
+    directSalesEnabled: f.direct_sales && !isEndpointBlocked(OPERATIONAL_ENDPOINTS.DIRECT_SALES_SESSION),
+    runtimeEnabled: f.runtime && !isEndpointBlocked(OPERATIONAL_ENDPOINTS.RUNTIME_EVENTS),
     replenishmentEnabled: f.replenishment,
     directSalesSearchEnabled: f.direct_sales && !searchBlocked,
-    loaded: features != null,
+    backendReachable: features != null && !featuresFetchFailed,
+    loaded: features != null || featuresFetchFailed,
     loading: inflight != null,
-    error: null,
+    unavailableReason: resolveUnavailableReason(f),
+    rawPayload: features,
+    blockedEndpoints: [...blockedEndpoints],
   };
 }
 
 export function getOperationalFeatureState(): OperationalFeatureState {
   return buildState();
+}
+
+export function applyOperationalFeaturesPayload(payload: OperationalFeaturesPayload): void {
+  features = payload;
+  featuresFetchFailed = false;
+  clearDirectSalesBlocksIfEnabled(payload);
+  console.info("[operational.features]", payload);
+  notify();
 }
 
 export async function loadOperationalFeatures(
@@ -117,18 +149,22 @@ export async function loadOperationalFeatures(
   fetcher: (tenantId: number, warehouseId: number) => Promise<OperationalFeaturesPayload>,
 ): Promise<OperationalFeatureState> {
   const key = `${tenantId}:${warehouseId}`;
-  if (features && cacheKey === key) return buildState();
+  if (features && cacheKey === key && !featuresFetchFailed) return buildState();
 
   if (!inflight) {
     inflight = fetcher(tenantId, warehouseId)
       .then((payload) => {
         features = payload;
+        featuresFetchFailed = false;
         cacheKey = key;
+        clearDirectSalesBlocksIfEnabled(payload);
+        console.info("[operational.features]", payload);
         return payload;
       })
       .catch((err) => {
-        handleOperationalApiError(err, ENDPOINT.FEATURES);
+        handleOperationalApiError(err, OPERATIONAL_ENDPOINTS.FEATURES);
         features = DEFAULT_FEATURES;
+        featuresFetchFailed = true;
         cacheKey = key;
         logOperationalOnce("features-fail", "[operations] feature probe failed, using fallback mode");
         return null;
@@ -146,8 +182,18 @@ export async function loadOperationalFeatures(
 export function resetOperationalFeatureCache(): void {
   features = null;
   cacheKey = "";
+  featuresFetchFailed = false;
   blockedEndpoints.clear();
   notify();
 }
 
-export { ENDPOINT as OPERATIONAL_ENDPOINTS };
+export function resolveDirectSalesUnavailableReason(
+  features: OperationalFeatureState,
+  sessionUnavailable: boolean,
+): OperationalUnavailableReason {
+  if (!features.backendReachable) return "network";
+  if (!features.directSalesFlag) return "off";
+  if (sessionUnavailable || isEndpointBlocked(OPERATIONAL_ENDPOINTS.DIRECT_SALES_SESSION)) return "backend";
+  if (!features.directSalesEnabled) return "backend";
+  return null;
+}

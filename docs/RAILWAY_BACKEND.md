@@ -155,6 +155,23 @@ FEATURE_OPERATIONAL_SALES_SESSIONS=0
 FEATURE_IMMEDIATE_WMS_EXCLUSION=0
 ```
 
+### Incremental operational rollout (staging / post-recovery)
+
+Enable direct sales first; keep runtime and replenishment OFF until validated:
+
+```env
+PLATFORM_RECOVERY_MODE=0
+FEATURE_OPERATIONAL_SALES=1
+FEATURE_OPERATIONAL_SALES_SESSIONS=1
+FEATURE_OPERATIONAL_RUNTIME=0
+FEATURE_REPLENISHMENT_ENGINE=0
+DEBUG_OPERATIONAL_FEATURES=1
+```
+
+- `GET /api/operational/features` — always 200 when authenticated; logs `[feature.resolve]` on each call.
+- `GET /api/operational/features/debug` — DEV/STAGING only (`DEBUG_OPERATIONAL_FEATURES=1` or `APP_ENV=staging`).
+- Frontend dev/staging builds show `OperationalStatusPanel` on `/wms/direct-sales` and `/wms/operations`.
+
 `PLATFORM_RECOVERY_MODE=1` forces operational features OFF even if DB scope rows exist.
 
 ### 3. Startup logs to confirm

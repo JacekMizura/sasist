@@ -1,7 +1,7 @@
 """
 Request-scoped operational feature flags — single resolver per request/operation.
 
-Resolution: global env → tenant scope → warehouse scope (most specific wins).
+Resolution: warehouse override → tenant override → global env → default false (NULL scope = inherit).
 Legacy NULL order columns remain permanent — see order_operational_mode.py.
 """
 
@@ -202,16 +202,6 @@ def build_operational_features_context(
         replenishment_engine=repl,
         resolution_scope=resolution,
     )
-    try:
-        from ..observability.platform_debug import log_feature_scope
-
-        log_feature_scope(
-            tenant_id=ctx.tenant_id,
-            warehouse_id=ctx.warehouse_id,
-            scope=ctx.resolution_scope,
-        )
-    except Exception:
-        pass
     return ctx
 
 

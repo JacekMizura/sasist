@@ -1,15 +1,18 @@
+import type { OperationalUnavailableReason } from "../../../services/operational/operationalUnavailableCopy";
+import { directSalesUnavailableMessage } from "../../../services/operational/operationalUnavailableCopy";
+
 type Props = {
+  reason: OperationalUnavailableReason;
   onRefresh: () => void;
 };
 
-export function DirectSalesUnavailable({ onRefresh }: Props) {
+export function DirectSalesUnavailable({ reason, onRefresh }: Props) {
+  const copy = directSalesUnavailableMessage(reason);
   return (
     <div className="flex h-full min-h-[320px] flex-col items-center justify-center p-6 text-center">
       <div className="max-w-md rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-sm">
-        <p className="text-lg font-semibold text-slate-900">Sprzedaż bezpośrednia jest obecnie wyłączona</p>
-        <p className="mt-2 text-sm text-slate-600">
-          Moduł operacyjny nie jest dostępny na tym środowisku. Klasyczny WMS działa bez zmian.
-        </p>
+        <p className="text-lg font-semibold text-slate-900">{copy.title}</p>
+        <p className="mt-2 text-sm text-slate-600">{copy.body}</p>
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           <button
             type="button"
