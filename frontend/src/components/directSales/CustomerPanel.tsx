@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { User, UserPlus, Building2, MapPin, Search, X, Loader2 } from "lucide-react";
 
 import type { DirectSalesCustomerState } from "../../hooks/directSales/useDirectSalesCustomer";
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
@@ -23,160 +24,125 @@ export function CustomerPanel({ customer, customerId, documentSubtype, disabled 
   const [postal, setPostal] = useState("");
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+    <div className="bg-white rounded-3xl p-5 border border-blue-50 shadow-sm space-y-4">
+      {/* NAGŁÓWEK */}
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Klient</h3>
+        <h3 className="text-xs font-bold text-blue-900/50 uppercase tracking-wider">Klient</h3>
         {customerId && resolvedDirectSalesSettings.allow_anonymous ? (
           <button
             type="button"
             disabled={disabled || customer.busy}
             onClick={() => void customer.attachCustomer(null)}
-            className="text-[10px] text-slate-500 hover:text-slate-800 disabled:opacity-50"
+            className="text-[10px] font-bold text-red-500 hover:text-red-600 transition-colors"
           >
-            Sprzedaż anonimowa
+            Anuluj wybór
           </button>
         ) : null}
       </div>
+
+      {/* WYBRANY KLIENT */}
       {customer.detail ? (
-        <div className="rounded-lg bg-slate-50 p-2 text-xs text-slate-700">
-          <div className="font-medium text-slate-900">
-            {safeDisplay(customer.detail.company_name, `${customer.detail.first_name} ${customer.detail.last_name}`)}
-          </div>
-          {customer.detail.nip ? <div>NIP: {customer.detail.nip}</div> : null}
-          {customer.detail.addresses[0] ? (
-            <div>
-              {customer.detail.addresses[0].street} {customer.detail.addresses[0].house_number},{" "}
-              {customer.detail.addresses[0].postal_code} {customer.detail.addresses[0].city}
+        <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+              <User size={20} />
             </div>
-          ) : null}
+            <div className="min-w-0">
+              <div className="font-bold text-slate-900 truncate">
+                {safeDisplay(customer.detail.company_name, `${customer.detail.first_name} ${customer.detail.last_name}`)}
+              </div>
+              {customer.detail.nip && <div className="text-[10px] font-bold text-blue-600">NIP: {customer.detail.nip}</div>}
+            </div>
+          </div>
         </div>
       ) : (
-        <>
-          <input
-            type="search"
-            disabled={disabled || customer.busy}
-            value={customer.search}
-            onChange={(e) => customer.setSearch(e.target.value)}
-            placeholder="Szukaj klienta (nazwa, tel, NIP)…"
-            className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm disabled:opacity-50"
-          />
-          {customer.loading ? <p className="text-[10px] text-slate-400">Szukam…</p> : null}
-          {customer.results.length ? (
-            <ul className="max-h-28 overflow-auto rounded border border-slate-100">
+        /* WYSZUKIWARKA KLIENTA */
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 text-blue-300" size={18} />
+            <input
+              type="search"
+              disabled={disabled || customer.busy}
+              value={customer.search}
+              onChange={(e) => customer.setSearch(e.target.value)}
+              placeholder="Szukaj (nazwa, NIP, tel)…"
+              className="w-full pl-10 pr-4 py-3 bg-white border-2 border-blue-50 rounded-2xl focus:border-blue-500 focus:outline-none transition-all shadow-sm text-sm font-medium"
+            />
+          </div>
+          
+          {customer.loading && <div className="text-xs font-bold text-blue-400 animate-pulse">Wyszukiwanie...</div>}
+
+          {customer.results.length > 0 && (
+            <ul className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
               {customer.results.map((row) => (
                 <li key={row.id}>
                   <button
                     type="button"
-                    disabled={disabled || customer.busy}
                     onClick={() => void customer.attachCustomer(row.id)}
-                    className="flex w-full flex-col px-2 py-1.5 text-left text-xs hover:bg-sky-50 disabled:opacity-50"
+                    className="w-full text-left p-3 rounded-xl hover:bg-blue-50 transition-colors group"
                   >
-                    <span className="font-medium text-slate-900">{row.display_name}</span>
-                    <span className="text-slate-500">
-                      {[row.phone, row.email, row.nip].filter(Boolean).join(" · ") || "—"}
-                    </span>
+                    <div className="text-sm font-bold text-slate-900 group-hover:text-blue-700">{row.display_name}</div>
+                    <div className="text-[10px] text-slate-400 font-medium">{[row.phone, row.email, row.nip].filter(Boolean).join(" • ")}</div>
                   </button>
                 </li>
               ))}
             </ul>
-          ) : null}
-        </>
+          )}
+        </div>
       )}
+
+      {/* FORMULARZ FV / SZYBKI KLIENT */}
       {documentSubtype === "INVOICE" && resolvedDirectSalesSettings.require_customer_for_invoice && !customerId ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
-          Faktura wymaga przypisanego klienta z danymi firmy.
-        </p>
+        <div className="p-3 bg-amber-50 text-amber-800 text-[10px] font-bold rounded-xl border border-amber-200">
+          Faktura wymaga klienta z danymi firmy.
+        </div>
       ) : null}
+
+      {/* ROZWIJANY FORMULARZ DANYCH FV */}
       {documentSubtype === "INVOICE" ? (
-        <div className="space-y-1.5 border-t border-slate-100 pt-2">
-          <p className="text-[10px] font-medium text-slate-600">Dane do FV</p>
-          <div className="flex gap-1">
-            <input
-              value={nip}
-              onChange={(e) => setNip(e.target.value)}
-              placeholder="NIP"
-              className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-xs"
-            />
-            <button
-              type="button"
-              disabled={disabled || customer.nipLookupLoading}
-              onClick={() => void customer.lookupByNip(nip)}
-              className="shrink-0 rounded bg-slate-700 px-2 py-1 text-[10px] text-white disabled:opacity-50"
+        <div className="space-y-2 pt-2 border-t border-blue-50">
+          <div className="flex gap-2">
+            <input value={nip} onChange={(e) => setNip(e.target.value)} placeholder="NIP" className="flex-1 p-2 text-xs border border-blue-100 rounded-lg" />
+            <button 
+              onClick={() => void customer.lookupByNip(nip)} 
+              className="bg-slate-800 text-white px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-slate-900"
             >
-              {customer.nipLookupLoading ? "…" : "Pobierz"}
+              {customer.nipLookupLoading ? <Loader2 className="animate-spin" size={12} /> : "Pobierz"}
             </button>
           </div>
-          <input
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            placeholder="Nazwa firmy"
-            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
-          />
-          <input
-            value={street}
-            onChange={(e) => setStreet(e.target.value)}
-            placeholder="Ulica"
-            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
-          />
-          <div className="grid grid-cols-2 gap-1">
-            <input
-              value={postal}
-              onChange={(e) => setPostal(e.target.value)}
-              placeholder="Kod pocztowy"
-              className="rounded border border-slate-300 px-2 py-1 text-xs"
-            />
-            <input
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="Miasto"
-              className="rounded border border-slate-300 px-2 py-1 text-xs"
-            />
+          <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Nazwa firmy" className="w-full p-2 text-xs border border-blue-100 rounded-lg" />
+          <input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="Ulica i nr" className="w-full p-2 text-xs border border-blue-100 rounded-lg" />
+          <div className="grid grid-cols-2 gap-2">
+            <input value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="Kod" className="p-2 text-xs border border-blue-100 rounded-lg" />
+            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Miasto" className="p-2 text-xs border border-blue-100 rounded-lg" />
           </div>
           <button
-            type="button"
-            disabled={disabled || customer.busy || !safeTrim(company)}
-            onClick={() =>
-              void customer.quickCreate({
-                firstName: "FV",
-                lastName: safeTrim(company) || "Klient",
-                nip,
-                companyName: company,
-                street,
-                city,
-                postalCode: postal,
-              })
-            }
-            className="w-full rounded bg-slate-800 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+            onClick={() => void customer.quickCreate({ firstName: "FV", lastName: safeTrim(company) || "Klient", nip, companyName: company, street, city, postalCode: postal })}
+            className="w-full bg-blue-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors"
           >
             Zapisz i przypisz do FV
           </button>
         </div>
       ) : resolvedDirectSalesSettings.quick_create_customer ? (
         <button
-          type="button"
-          disabled={disabled || customer.busy}
           onClick={() => setShowInvoice((v) => !v)}
-          className="text-xs font-medium text-sky-700 disabled:opacity-50"
+          className="w-full py-2 text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center justify-center gap-1"
         >
-          {showInvoice ? "Ukryj szybkiego klienta" : "+ Szybki klient (paragon)"}
+          {showInvoice ? <X size={12} /> : <UserPlus size={12} />} 
+          {showInvoice ? "Ukryj szybkie tworzenie" : "Dodaj szybkiego klienta"}
         </button>
       ) : null}
-      {resolvedDirectSalesSettings.quick_create_customer && showInvoice && documentSubtype !== "INVOICE" ? (
+
+      {showInvoice && documentSubtype !== "INVOICE" && (
         <button
-          type="button"
-          disabled={disabled || customer.busy}
-          onClick={() =>
-            void customer.quickCreate({
-              firstName: "Klient",
-              lastName: "Terminal",
-            })
-          }
-          className="w-full rounded border border-slate-300 py-1.5 text-xs disabled:opacity-50"
+          onClick={() => void customer.quickCreate({ firstName: "Klient", lastName: "Terminal" })}
+          className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
         >
           Utwórz anonimowego klienta
         </button>
-      ) : null}
-      {customer.error ? <p className="text-xs text-red-600">{customer.error}</p> : null}
+      )}
+
+      {customer.error && <p className="text-[10px] font-bold text-red-500">{customer.error}</p>}
     </div>
   );
 }
