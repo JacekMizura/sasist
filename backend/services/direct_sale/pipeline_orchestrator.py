@@ -25,9 +25,9 @@ from .document_pipeline_service import (
 )
 from .errors import DirectSaleError
 from .issue_plan_service import IssueAllocation, plan_issue_allocations
-from .operational_error_map import map_complete_exception
 from .order_service import create_order_from_session, load_order_for_session
 from .payment_service import orchestrate_direct_sale_payment, load_payment_for_session
+from .complete_debug_log import commit_with_logging
 from .pipeline_log import new_transaction_id, pipeline_stage_span
 from .pipeline_state import (
     PIPELINE_COMPLETED,
@@ -100,7 +100,13 @@ def _session_total(sess: DirectSaleSession) -> float:
 
 def _commit_stage(db: Session, sess: DirectSaleSession, *, stage: str, entities: StageEntities) -> None:
     mark_pipeline_success(sess, stage=stage, entity_patch=entities.as_dict())
-    db.commit()
+    commit_with_logging(
+        db,
+        stage=stage,
+        session_id=int(sess.id),
+        tenant_id=int(sess.tenant_id),
+        warehouse_id=int(sess.warehouse_id),
+    )
     db.refresh(sess)
 
 
@@ -110,8 +116,27 @@ def _fail_stage(db: Session, sess: DirectSaleSession, *, stage: str, exc: Except
     if sess is None:
         raise DirectSaleError("Sesja nie istnieje po błędzie pipeline.", code="pipeline_failed", step=stage) from exc
     mark_pipeline_failed(sess, stage=stage, exc=exc, entity_patch=entities.as_dict())
-    db.commit()
-    raise map_complete_exception(exc, step=stage) from exc
+    try:
+        commit_with_logging(
+            db,
+            stage=f"{stage}_failure_persist",
+            session_id=int(sess.id),
+            tenant_id=int(sess.tenant_id),
+            warehouse_id=int(sess.warehouse_id),
+        )
+    except Exception as commit_exc:
+        from .complete_debug_log import log_unhandled_complete_exception
+
+        log_unhandled_complete_exception(
+            commit_exc,
+            session_id=int(sess.id),
+            tenant_id=int(sess.tenant_id),
+            warehouse_id=int(sess.warehouse_id),
+            stage=f"{stage}_failure_persist",
+            context="fail_stage_commit",
+        )
+        raise commit_exc from exc
+    raise exc
 
 
 def _load_entities_from_session(sess: DirectSaleSession) -> StageEntities:

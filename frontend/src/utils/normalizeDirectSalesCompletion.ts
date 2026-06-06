@@ -151,15 +151,18 @@ export function parseCompleteError(err: unknown): DirectSaleCompleteError {
   let message = "Nie udało się zakończyć sprzedaży.";
   let code: string | null = null;
   let step: string | null = null;
+  let detailObj: Record<string, unknown> | null = null;
   if (err && typeof err === "object" && "response" in err) {
     const ax = err as { response?: { data?: { detail?: unknown } } };
     const detail = ax.response?.data?.detail;
     if (typeof detail === "string") message = detail;
     else if (detail && typeof detail === "object") {
-      const d = detail as Record<string, unknown>;
-      if (typeof d.message === "string") message = d.message;
-      if (typeof d.code === "string") code = d.code;
-      if (typeof d.step === "string") step = d.step;
+      detailObj = detail as Record<string, unknown>;
+      if (typeof detailObj.message === "string") message = detailObj.message;
+      if (typeof detailObj.code === "string") code = detailObj.code;
+      if (typeof detailObj.step === "string") step = detailObj.step;
+      if (typeof detailObj.stage === "string" && !step) step = detailObj.stage;
+      if (typeof detailObj.error_type === "string" && !code) code = detailObj.error_type;
     }
   }
   let phase: DirectSaleCompleteError["phase"] = "unknown";
@@ -190,10 +193,15 @@ export function parseCompleteError(err: unknown): DirectSaleCompleteError {
       phase = "issue";
     }
   }
-  if (/internal server error/i.test(message)) {
+  if (/internal server error/i.test(message) && detailObj) {
+    const detailMsg = typeof detailObj.message === "string" ? detailObj.message : "";
+    if (detailMsg) message = detailMsg;
+    if (typeof detailObj.error_type === "string") code = detailObj.error_type;
+    if (typeof detailObj.stage === "string" && !step) step = detailObj.stage;
+  } else if (/internal server error/i.test(message)) {
     message = "Błąd serwera podczas zakończenia sprzedaży — szczegóły w logach operacyjnych.";
     if (!step) step = "commit";
-    if (!code) code = "SESSION_INVALID";
+    if (!code) code = "SERVER_ERROR";
   }
   return { message, code, step, phase };
 }

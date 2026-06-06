@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import traceback
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -15,7 +16,7 @@ from ...workers.document_generation_worker import get_job_document_number
 from .complete_pipeline_log import log_session_state_transition
 from .constants import SUSPEND_TTL_MINUTES, reservation_expires_at
 from .errors import DirectSaleError
-from .operational_error_map import map_complete_exception
+from .complete_debug_log import log_unhandled_complete_exception
 from .pipeline_orchestrator import run_staged_complete_pipeline
 from .pipeline_state import (
     PIPELINE_COMPLETED,
@@ -259,7 +260,20 @@ def complete_direct_sale_session(
     except DirectSaleError:
         raise
     except Exception as exc:
-        raise map_complete_exception(exc, step="pipeline") from exc
+        log_unhandled_complete_exception(
+            exc,
+            session_id=sid,
+            tenant_id=int(sess.tenant_id),
+            warehouse_id=int(sess.warehouse_id),
+            stage="pipeline",
+            context="complete_service",
+        )
+        logger.error(
+            "[direct_sales.complete] UNHANDLED EXCEPTION pipeline session_id=%s\n%s",
+            sid,
+            traceback.format_exc(),
+        )
+        raise
 
     if not entities.order_id or not entities.payment_id:
         raise DirectSaleError(
