@@ -2,56 +2,53 @@ import { useCallback, useState } from "react";
 
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { useOperationalRuntime } from "../../../hooks/runtime/useOperationalRuntime";
+import { CheckoutPanel } from "./components/CheckoutPanel";
 import { DirectSalesRuntimeFooter } from "./components/DirectSalesRuntimeFooter";
 import { DirectSalesTopBar } from "./components/DirectSalesTopBar";
-import { PaymentPanel } from "./components/PaymentPanel";
-import { ScannerPanel } from "./components/ScannerPanel";
+import { ProductSearchPanel } from "./components/ProductSearchPanel";
 import { SessionLinesPanel } from "./components/SessionLinesPanel";
+import { useDirectSalesCustomer } from "./hooks/useDirectSalesCustomer";
 import { useDirectSalesSession } from "./hooks/useDirectSalesSession";
 import { useLocationStock } from "./hooks/useLocationStock";
+import { useProductSearch } from "./hooks/useProductSearch";
 
 export default function DirectSalesPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const runtime = useOperationalRuntime();
-  const [documentHint, setDocumentHint] = useState<string | null>(null);
   const [issueFlash, setIssueFlash] = useState(false);
   const { stockSnap, lastProductId, refreshStock, clearStock } = useLocationStock(warehouseId);
 
-  const onScanSuccess = useCallback(
+  const onProductAdded = useCallback(
     (productId: number) => {
       void refreshStock(productId, stockSnap?.revision);
     },
     [refreshStock, stockSnap?.revision],
   );
 
-  const {
-    session,
-    busy,
-    error,
-    total,
-    paymentMethod,
-    setPaymentMethod,
-    checkout,
-    complete,
-    suspend,
-  } = useDirectSalesSession({ warehouseId, onScanSuccess });
+  const sessionState = useDirectSalesSession({ warehouseId, onProductAdded });
+  const productSearch = useProductSearch({ warehouseId, enabled: !sessionState.busy });
+  const customer = useDirectSalesCustomer({
+    sessionId: sessionState.session?.id ?? null,
+    customerId: sessionState.session?.customer_id ?? null,
+    onSessionUpdate: sessionState.onCustomerAttached,
+  });
 
   const handleComplete = useCallback(async () => {
-    const result = await complete();
+    const result = await sessionState.complete();
     if (result) {
       clearStock();
       setIssueFlash(true);
       window.setTimeout(() => setIssueFlash(false), 800);
-      setDocumentHint(
-        result.document_job_id
-          ? `Dokument w kolejce #${result.document_job_id}`
-          : result.document_number
-            ? `Dokument ${result.document_number}`
-            : "Sprzedaż zakończona",
-      );
     }
-  }, [complete, clearStock]);
+  }, [sessionState, clearStock]);
+
+  const handleNewSession = useCallback(() => {
+    void sessionState.startNewSession();
+    sessionState.clearLastComplete();
+    clearStock();
+    productSearch.clear();
+  }, [sessionState, clearStock, productSearch]);
 
   if (warehouseId == null) {
     return <div className="p-4 text-slate-600">Wybierz magazyn, aby rozpocząć sprzedaż bezpośrednią.</div>;
@@ -59,33 +56,45 @@ export default function DirectSalesPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <DirectSalesTopBar session={session} runtimeHealth={runtime.health} />
+      <DirectSalesTopBar session={sessionState.session} runtimeHealth={runtime.health} />
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-2 md:flex-row md:p-4">
-        <ScannerPanel
-          session={session}
-          paymentMethod={paymentMethod}
-          error={error}
-          onPaymentMethodChange={setPaymentMethod}
+        <ProductSearchPanel
+          session={sessionState.session}
+          search={productSearch}
+          busy={sessionState.busy}
+          error={sessionState.error}
+          onAddProduct={(id, loc) => void sessionState.addByProductId(id, loc)}
+          onScanCode={(code) => void sessionState.addByCode(code)}
         />
-        <div className={issueFlash ? "rounded-lg ring-2 ring-emerald-300 transition-all" : ""}>
-          <SessionLinesPanel session={session} stockSnap={stockSnap} lastProductId={lastProductId} />
-        </div>
-        <PaymentPanel
-          total={total}
-          busy={busy}
-          hasSession={session != null}
-          hasLines={(session?.lines.length ?? 0) > 0}
-          sessionStatus={session?.status}
-          documentHint={documentHint}
-          onCheckout={() => void checkout()}
+        <SessionLinesPanel
+          session={sessionState.session}
+          warehouseId={warehouseId}
+          busy={sessionState.busy}
+          highlight={issueFlash}
+          onQtyChange={(id, qty) => void sessionState.changeLineQty(id, qty)}
+          onLocationChange={(id, loc) => void sessionState.changeLineLocation(id, loc)}
+          onRemove={(id) => void sessionState.removeLine(id)}
+        />
+        <CheckoutPanel
+          total={sessionState.total}
+          busy={sessionState.busy}
+          session={sessionState.session}
+          customer={customer}
+          paymentMethod={sessionState.paymentMethod}
+          documentSubtype={sessionState.documentSubtype}
+          lastComplete={sessionState.lastComplete}
+          onPaymentMethodChange={sessionState.setPaymentMethod}
+          onDocumentSubtypeChange={sessionState.setDocumentSubtype}
+          onCheckout={() => void sessionState.checkout()}
           onComplete={() => void handleComplete()}
-          onSuspend={() => void suspend()}
+          onSuspend={() => void sessionState.suspend()}
+          onNewSession={handleNewSession}
         />
       </div>
       <DirectSalesRuntimeFooter
         health={runtime.health}
         connected={runtime.connected}
-        scannerReady={!busy}
+        scannerReady={!sessionState.busy}
       />
     </div>
   );

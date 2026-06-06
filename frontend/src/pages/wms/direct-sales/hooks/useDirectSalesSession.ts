@@ -4,23 +4,29 @@ import { extractApiErrorMessage } from "../../../../api/apiErrorMessage";
 import { useWmsScanner } from "../../../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../../../../constants/panelTenant";
 import { safeTrim } from "../../../../utils/safeStrings";
+import type { DirectSaleCompleteResult } from "../services/directSalesApi";
 import { lineTotal } from "../utils/lineTotal";
 import {
+  addProductToDirectSaleSession,
   completeDirectSaleSession,
   createDirectSaleSession,
+  deleteDirectSaleLine,
   getDirectSaleSession,
+  patchDirectSaleLine,
   scanDirectSaleSession,
   startDirectSalePayment,
   suspendDirectSaleSession,
   type DirectSaleSession,
 } from "../services/directSalesApi";
 
+export type DocumentSubtype = "RECEIPT" | "INVOICE";
+
 type UseDirectSalesSessionArgs = {
   warehouseId: number | null;
-  onScanSuccess: (productId: number) => void;
+  onProductAdded: (productId: number) => void;
 };
 
-export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectSalesSessionArgs) {
+export function useDirectSalesSession({ warehouseId, onProductAdded }: UseDirectSalesSessionArgs) {
   const {
     scannerInputValue,
     setScannerInputPlaceholder,
@@ -34,12 +40,20 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [documentSubtype, setDocumentSubtype] = useState<DocumentSubtype>("RECEIPT");
+  const [lastComplete, setLastComplete] = useState<DirectSaleCompleteResult | null>(null);
   const scanBusyRef = useRef(false);
 
   const total = useMemo(
     () => (session?.lines ?? []).reduce((sum, ln) => sum + lineTotal(ln), 0),
     [session?.lines],
   );
+
+  const refreshSession = useCallback(async (sessionId: number) => {
+    const fresh = await getDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, sessionId });
+    setSession(fresh);
+    return fresh;
+  }, []);
 
   const ensureSession = useCallback(async () => {
     if (session || warehouseId == null) return session;
@@ -52,7 +66,7 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
   }, [session, warehouseId]);
 
   useEffect(() => {
-    setScannerInputPlaceholder("Skanuj EAN / SKU…");
+    setScannerInputPlaceholder("Skanuj EAN → Enter");
     setScannerInputDisabled(busy);
     return () => {
       setScannerInputPlaceholder(null);
@@ -65,11 +79,10 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
     void ensureSession().catch((e) => setError(extractApiErrorMessage(e)));
   }, [warehouseId, ensureSession]);
 
-  const handleScan = useCallback(
-    async (raw: string) => {
+  const addByCode = useCallback(
+    async (raw: string, sourceLocationId?: number | null) => {
       const code = safeTrim(raw);
-      if (!code || warehouseId == null || scanBusyRef.current) return;
-      scanBusyRef.current = true;
+      if (!code || warehouseId == null) return;
       setBusy(true);
       setError(null);
       try {
@@ -79,26 +92,63 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
           tenantId: DAMAGE_TENANT_ID,
           sessionId: sess.id,
           code,
+          sourceLocationId,
         });
-        const fresh = await getDirectSaleSession({
-          tenantId: DAMAGE_TENANT_ID,
-          sessionId: sess.id,
-        });
-        setSession(fresh);
-        onScanSuccess(result.product_id);
+        await refreshSession(sess.id);
+        onProductAdded(result.product_id);
         showScannerToast(`+ ${code}`, "success");
-        clearScannerInput();
       } catch (e) {
         const msg = extractApiErrorMessage(e);
         setError(msg);
         showScannerToast(msg, "error");
       } finally {
-        scanBusyRef.current = false;
         setBusy(false);
         refocusScannerInput();
       }
     },
-    [warehouseId, ensureSession, onScanSuccess, showScannerToast, clearScannerInput, refocusScannerInput],
+    [warehouseId, ensureSession, refreshSession, onProductAdded, showScannerToast, refocusScannerInput],
+  );
+
+  const addByProductId = useCallback(
+    async (productId: number, sourceLocationId?: number | null) => {
+      if (warehouseId == null) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const sess = await ensureSession();
+        if (!sess) return;
+        const result = await addProductToDirectSaleSession({
+          tenantId: DAMAGE_TENANT_ID,
+          sessionId: sess.id,
+          productId,
+          sourceLocationId,
+        });
+        await refreshSession(sess.id);
+        onProductAdded(result.product_id);
+        showScannerToast("Dodano pozycję", "success");
+      } catch (e) {
+        const msg = extractApiErrorMessage(e);
+        setError(msg);
+        showScannerToast(msg, "error");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [warehouseId, ensureSession, refreshSession, onProductAdded, showScannerToast],
+  );
+
+  const handleScan = useCallback(
+    async (raw: string) => {
+      if (scanBusyRef.current) return;
+      scanBusyRef.current = true;
+      try {
+        await addByCode(raw);
+        clearScannerInput();
+      } finally {
+        scanBusyRef.current = false;
+      }
+    },
+    [addByCode, clearScannerInput],
   );
 
   useEffect(() => {
@@ -106,6 +156,75 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
     if (!v) return;
     void handleScan(v);
   }, [scannerInputValue, handleScan]);
+
+  const changeLineQty = useCallback(
+    async (lineId: number, quantity: number) => {
+      if (!session) return;
+      setBusy(true);
+      try {
+        const fresh = await patchDirectSaleLine({
+          tenantId: DAMAGE_TENANT_ID,
+          sessionId: session.id,
+          lineId,
+          quantity,
+        });
+        setSession(fresh);
+      } catch (e) {
+        setError(extractApiErrorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [session],
+  );
+
+  const changeLineLocation = useCallback(
+    async (lineId: number, sourceLocationId: number | null) => {
+      if (!session) return;
+      setBusy(true);
+      try {
+        const fresh = await patchDirectSaleLine({
+          tenantId: DAMAGE_TENANT_ID,
+          sessionId: session.id,
+          lineId,
+          sourceLocationId,
+        });
+        setSession(fresh);
+      } catch (e) {
+        setError(extractApiErrorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [session],
+  );
+
+  const removeLine = useCallback(
+    async (lineId: number) => {
+      if (!session) return;
+      setBusy(true);
+      try {
+        const fresh = await deleteDirectSaleLine({
+          tenantId: DAMAGE_TENANT_ID,
+          sessionId: session.id,
+          lineId,
+        });
+        setSession(fresh);
+      } catch (e) {
+        setError(extractApiErrorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [session],
+  );
+
+  const onCustomerAttached = useCallback(
+    (customerId: number | null) => {
+      setSession((s) => (s ? { ...s, customer_id: customerId } : s));
+    },
+    [],
+  );
 
   const suspend = useCallback(async () => {
     if (!session) return;
@@ -138,16 +257,30 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
     }
   }, [session, paymentMethod]);
 
+  const startNewSession = useCallback(async () => {
+    if (warehouseId == null) return;
+    setLastComplete(null);
+    setError(null);
+    const created = await createDirectSaleSession({
+      tenantId: DAMAGE_TENANT_ID,
+      warehouseId,
+    });
+    setSession(created);
+    return created;
+  }, [warehouseId]);
+
   const complete = useCallback(async () => {
-    if (!session || warehouseId == null) return;
+    if (!session || warehouseId == null) return null;
     setBusy(true);
     try {
-      if (session.status === "ACTIVE") await checkout();
+      if (session.status === "ACTIVE" || session.status === "SUSPENDED") await checkout();
       const result = await completeDirectSaleSession({
         tenantId: DAMAGE_TENANT_ID,
         sessionId: session.id,
         paymentMethod,
+        documentSubtype,
       });
+      setLastComplete(result);
       showScannerToast(`Zakończono #${result.order_id}`, "success");
       const created = await createDirectSaleSession({
         tenantId: DAMAGE_TENANT_ID,
@@ -161,7 +294,7 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
     } finally {
       setBusy(false);
     }
-  }, [session, warehouseId, paymentMethod, checkout, showScannerToast]);
+  }, [session, warehouseId, paymentMethod, documentSubtype, checkout, showScannerToast]);
 
   return {
     session,
@@ -170,8 +303,19 @@ export function useDirectSalesSession({ warehouseId, onScanSuccess }: UseDirectS
     total,
     paymentMethod,
     setPaymentMethod,
+    documentSubtype,
+    setDocumentSubtype,
+    lastComplete,
+    addByCode,
+    addByProductId,
+    changeLineQty,
+    changeLineLocation,
+    removeLine,
+    onCustomerAttached,
     checkout,
     complete,
     suspend,
+    startNewSession,
+    clearLastComplete: () => setLastComplete(null),
   };
 }

@@ -1,0 +1,110 @@
+"""Direct sale session line mutations — qty, location, remove."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime
+
+from sqlalchemy.orm import Session
+
+from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
+from .errors import DirectSaleError
+from .scan_service import session_add_product_line
+
+
+def _require_mutable_session(sess: DirectSaleSession) -> None:
+    if sess.status not in ("ACTIVE", "SUSPENDED", "CHECKOUT"):
+        raise DirectSaleError("Sesja zamknięta.", code="session_closed")
+
+
+def _get_line(sess: DirectSaleSession, line_id: int) -> DirectSaleSessionLine:
+    for ln in sess.lines or []:
+        if int(ln.id) == int(line_id):
+            return ln
+    raise DirectSaleError("Nie znaleziono pozycji.", code="line_not_found", http_status=404)
+
+
+def _touch_soft_hold_qty(line: DirectSaleSessionLine, qty: float) -> None:
+    if not line.metadata_json:
+        return
+    try:
+        meta = json.loads(line.metadata_json)
+        hold = meta.get("soft_hold")
+        if isinstance(hold, dict):
+            hold["qty"] = float(qty)
+            meta["soft_hold"] = hold
+            line.metadata_json = json.dumps(meta, ensure_ascii=False)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+
+def update_session_line_quantity(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    line_id: int,
+    quantity: float,
+) -> DirectSaleSessionLine | None:
+    _require_mutable_session(sess)
+    line = _get_line(sess, line_id)
+    qty = float(quantity)
+    if qty <= 0:
+        db.delete(line)
+        sess.last_activity_at = datetime.utcnow()
+        db.flush()
+        return None
+    line.quantity = qty
+    _touch_soft_hold_qty(line, qty)
+    sess.last_activity_at = datetime.utcnow()
+    db.flush()
+    return line
+
+
+def update_session_line_location(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    line_id: int,
+    source_location_id: int | None,
+) -> DirectSaleSessionLine:
+    _require_mutable_session(sess)
+    line = _get_line(sess, line_id)
+    line.source_location_id = int(source_location_id) if source_location_id else None
+    if line.metadata_json:
+        try:
+            meta = json.loads(line.metadata_json)
+            hold = meta.get("soft_hold")
+            if isinstance(hold, dict) and source_location_id:
+                hold["location_id"] = int(source_location_id)
+                meta["soft_hold"] = hold
+                line.metadata_json = json.dumps(meta, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    sess.last_activity_at = datetime.utcnow()
+    db.flush()
+    return line
+
+
+def remove_session_line(db: Session, sess: DirectSaleSession, *, line_id: int) -> None:
+    _require_mutable_session(sess)
+    line = _get_line(sess, line_id)
+    db.delete(line)
+    sess.last_activity_at = datetime.utcnow()
+    db.flush()
+
+
+def add_product_to_session(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    product_id: int,
+    quantity: float = 1.0,
+    source_location_id: int | None = None,
+) -> tuple[DirectSaleSessionLine, list[dict]]:
+    return session_add_product_line(
+        db,
+        sess,
+        product_id=int(product_id),
+        quantity=float(quantity),
+        source_location_id=source_location_id,
+    )

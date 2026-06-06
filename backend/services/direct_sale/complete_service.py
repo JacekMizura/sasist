@@ -32,6 +32,8 @@ class DirectSaleCompleteResult:
     document_job_id: int | None
     document_number: str | None
     total_amount: float
+    payment_status: str | None = None
+    payment_method: str | None = None
 
 
 def _session_total(sess: DirectSaleSession) -> float:
@@ -196,6 +198,8 @@ def complete_direct_sale_session(
             document_job_id=doc_result.job_id,
             document_number=processed.document_number,
             total_amount=total,
+            payment_status=str(pay.status or "") or None,
+            payment_method=str(pay.method or "") or None,
         )
     except Exception as exc:
         log_direct_sale_complete(

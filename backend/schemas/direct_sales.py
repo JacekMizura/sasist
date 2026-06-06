@@ -25,6 +25,38 @@ class DirectSaleSessionLineRead(BaseModel):
     source_location_id: int | None = None
     suggested_location_id: int | None = None
     sort_order: int = 0
+    product_name: str | None = None
+    product_sku: str | None = None
+    product_ean: str | None = None
+    image_url: str | None = None
+    source_location_code: str | None = None
+    operational_zone_type: str | None = None
+    available_qty_hint: float | None = None
+    has_reservation: bool = False
+
+
+class DirectSaleProductSearchHit(BaseModel):
+    product_id: int
+    name: str
+    sku: str | None = None
+    ean: str | None = None
+    image_url: str | None = None
+    unit_price: float | None = None
+    available_qty: float = 0.0
+    preferred_location_id: int | None = None
+    preferred_location_code: str | None = None
+    operational_zone_type: str | None = None
+
+
+class DirectSaleAddProductBody(BaseModel):
+    product_id: int = Field(..., ge=1)
+    quantity: float = Field(1.0, gt=0)
+    source_location_id: int | None = None
+
+
+class DirectSaleLinePatchBody(BaseModel):
+    quantity: float | None = Field(None, gt=0)
+    source_location_id: int | None = None
 
 
 class DirectSaleSessionRead(BaseModel):
@@ -44,6 +76,7 @@ class DirectSaleSessionRead(BaseModel):
     completed_at: datetime | None = None
     customer_id: int | None = None
     expires_at: datetime | None = None
+    payment_context: dict | None = None
     lines: list[DirectSaleSessionLineRead] = Field(default_factory=list)
 
 
@@ -88,3 +121,5 @@ class DirectSaleCompleteResponse(BaseModel):
     document_job_id: int | None = None
     document_number: str | None = None
     total_amount: float
+    payment_status: str | None = None
+    payment_method: str | None = None

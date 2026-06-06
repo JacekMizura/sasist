@@ -1,31 +1,14 @@
 import api from "./axios";
+import {
+  normalizeCompleteResult,
+  normalizeDirectSaleSession,
+  normalizeProductSearchHit,
+  type DirectSaleCompleteResult,
+  type DirectSaleProductSearchHit,
+  type DirectSaleSession,
+} from "../utils/normalizeDirectSales";
 
-export type DirectSaleSessionLine = {
-  id: number;
-  product_id: number;
-  quantity: number;
-  unit_price: number | null;
-  discount_amount: number;
-  source_location_id: number | null;
-  suggested_location_id: number | null;
-  sort_order: number;
-};
-
-export type DirectSaleSession = {
-  id: number;
-  tenant_id: number;
-  warehouse_id: number;
-  operator_user_id: number | null;
-  workstation_id: number | null;
-  operational_zone_id: number | null;
-  status: string;
-  order_id: number | null;
-  issue_strategy: string;
-  reservation_scope: string;
-  customer_id: number | null;
-  expires_at: string | null;
-  lines: DirectSaleSessionLine[];
-};
+export type { DirectSaleSession, DirectSaleSessionLine, DirectSaleCompleteResult, DirectSaleProductSearchHit } from "../utils/normalizeDirectSales";
 
 export type DirectSaleScanResult = {
   session_id: number;
@@ -35,36 +18,44 @@ export type DirectSaleScanResult = {
   suggested_locations: Array<{ location_id: number; suggested_qty?: number; available?: number }>;
 };
 
-export type DirectSaleCompleteResult = {
-  session_id: number;
-  order_id: number;
-  payment_id: number;
-  document_job_id: number | null;
-  document_number: string | null;
-  total_amount: number;
-};
-
 export async function createDirectSaleSession(params: {
   tenantId: number;
   warehouseId: number;
   workstationId?: number | null;
 }): Promise<DirectSaleSession> {
-  const { data } = await api.post<DirectSaleSession>(
+  const { data } = await api.post(
     "direct-sales/session",
     { workstation_id: params.workstationId ?? null },
     { params: { tenant_id: params.tenantId, warehouse_id: params.warehouseId } },
   );
-  return data;
+  return normalizeDirectSaleSession(data);
 }
 
 export async function getDirectSaleSession(params: {
   tenantId: number;
   sessionId: number;
 }): Promise<DirectSaleSession> {
-  const { data } = await api.get<DirectSaleSession>(`direct-sales/session/${params.sessionId}`, {
+  const { data } = await api.get(`direct-sales/session/${params.sessionId}`, {
     params: { tenant_id: params.tenantId },
   });
-  return data;
+  return normalizeDirectSaleSession(data);
+}
+
+export async function searchDirectSaleProducts(params: {
+  tenantId: number;
+  warehouseId: number;
+  q: string;
+  limit?: number;
+}): Promise<DirectSaleProductSearchHit[]> {
+  const { data } = await api.get("direct-sales/products/search", {
+    params: {
+      tenant_id: params.tenantId,
+      warehouse_id: params.warehouseId,
+      q: params.q,
+      limit: params.limit ?? 12,
+    },
+  });
+  return Array.isArray(data) ? data.map(normalizeProductSearchHit) : [];
 }
 
 export async function scanDirectSaleSession(params: {
@@ -72,25 +63,89 @@ export async function scanDirectSaleSession(params: {
   sessionId: number;
   code: string;
   quantity?: number;
+  sourceLocationId?: number | null;
 }): Promise<DirectSaleScanResult> {
   const { data } = await api.post<DirectSaleScanResult>(
     `direct-sales/session/${params.sessionId}/scan`,
-    { code: params.code, quantity: params.quantity ?? 1 },
+    {
+      code: params.code,
+      quantity: params.quantity ?? 1,
+      source_location_id: params.sourceLocationId ?? null,
+    },
     { params: { tenant_id: params.tenantId } },
   );
   return data;
+}
+
+export async function addProductToDirectSaleSession(params: {
+  tenantId: number;
+  sessionId: number;
+  productId: number;
+  quantity?: number;
+  sourceLocationId?: number | null;
+}): Promise<DirectSaleScanResult> {
+  const { data } = await api.post<DirectSaleScanResult>(
+    `direct-sales/session/${params.sessionId}/add-product`,
+    {
+      product_id: params.productId,
+      quantity: params.quantity ?? 1,
+      source_location_id: params.sourceLocationId ?? null,
+    },
+    { params: { tenant_id: params.tenantId } },
+  );
+  return data;
+}
+
+export async function patchDirectSaleLine(params: {
+  tenantId: number;
+  sessionId: number;
+  lineId: number;
+  quantity?: number;
+  sourceLocationId?: number | null;
+}): Promise<DirectSaleSession> {
+  const body: Record<string, number | null> = {};
+  if (params.quantity != null) body.quantity = params.quantity;
+  if (params.sourceLocationId !== undefined) body.source_location_id = params.sourceLocationId;
+  const { data } = await api.patch(`direct-sales/session/${params.sessionId}/lines/${params.lineId}`, body, {
+    params: { tenant_id: params.tenantId },
+  });
+  return normalizeDirectSaleSession(data);
+}
+
+export async function deleteDirectSaleLine(params: {
+  tenantId: number;
+  sessionId: number;
+  lineId: number;
+}): Promise<DirectSaleSession> {
+  const { data } = await api.delete(`direct-sales/session/${params.sessionId}/lines/${params.lineId}`, {
+    params: { tenant_id: params.tenantId },
+  });
+  return normalizeDirectSaleSession(data);
+}
+
+export async function setDirectSaleCustomer(params: {
+  tenantId: number;
+  sessionId: number;
+  customerId: number | null;
+}): Promise<DirectSaleSession> {
+  const { data } = await api.post(
+    `direct-sales/session/${params.sessionId}/set-customer`,
+    { customer_id: params.customerId },
+    { params: { tenant_id: params.tenantId } },
+  );
+  return normalizeDirectSaleSession(data);
 }
 
 export async function suspendDirectSaleSession(params: {
   tenantId: number;
   sessionId: number;
 }): Promise<DirectSaleSession> {
-  const { data } = await api.post<DirectSaleSession>(
+  const { data } = await api.post(
     `direct-sales/session/${params.sessionId}/suspend`,
     {},
     { params: { tenant_id: params.tenantId } },
   );
-  return data;
+  return normalizeDirectSaleSession(data);
 }
 
 export async function startDirectSalePayment(params: {
@@ -98,12 +153,12 @@ export async function startDirectSalePayment(params: {
   sessionId: number;
   paymentMethod?: string;
 }): Promise<DirectSaleSession> {
-  const { data } = await api.post<DirectSaleSession>(
+  const { data } = await api.post(
     `direct-sales/session/${params.sessionId}/start-payment`,
     { payment_method: params.paymentMethod ?? "CASH" },
     { params: { tenant_id: params.tenantId } },
   );
-  return data;
+  return normalizeDirectSaleSession(data);
 }
 
 export async function completeDirectSaleSession(params: {
@@ -112,7 +167,7 @@ export async function completeDirectSaleSession(params: {
   paymentMethod?: string;
   documentSubtype?: string;
 }): Promise<DirectSaleCompleteResult> {
-  const { data } = await api.post<DirectSaleCompleteResult>(
+  const { data } = await api.post(
     `direct-sales/session/${params.sessionId}/complete`,
     {
       payment_method: params.paymentMethod ?? "CASH",
@@ -120,5 +175,5 @@ export async function completeDirectSaleSession(params: {
     },
     { params: { tenant_id: params.tenantId } },
   );
-  return data;
+  return normalizeCompleteResult(data);
 }

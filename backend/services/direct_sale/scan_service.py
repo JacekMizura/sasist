@@ -32,6 +32,43 @@ def _resolve_product_from_scan(
     return int(pid)
 
 
+def _product_unit_price(pr: Product | None) -> float | None:
+    if pr is None:
+        return None
+    if getattr(pr, "sale_price", None) is not None:
+        return float(pr.sale_price)
+    if getattr(pr, "base_price", None) is not None:
+        return float(pr.base_price)
+    return None
+
+
+def session_add_product_line(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    product_id: int,
+    quantity: float,
+    source_location_id: int | None = None,
+) -> tuple[DirectSaleSessionLine, list[dict]]:
+    if sess.status not in ("ACTIVE", "SUSPENDED", "CHECKOUT"):
+        raise DirectSaleError("Sesja nie przyjmuje pozycji.", code="session_closed")
+    if sess.status == "SUSPENDED":
+        sess.status = "ACTIVE"
+        sess.suspended_at = None
+    pid = int(product_id)
+    pr = db.query(Product).filter(Product.id == pid, Product.tenant_id == int(sess.tenant_id)).first()
+    if pr is None:
+        raise DirectSaleError("Produkt niedostępny.", code="product_not_found", http_status=404)
+    return _add_line_for_product(
+        db,
+        sess,
+        product_id=pid,
+        product=pr,
+        quantity=quantity,
+        source_location_id=source_location_id,
+    )
+
+
 def session_scan_add_line(
     db: Session,
     sess: DirectSaleSession,
@@ -40,12 +77,33 @@ def session_scan_add_line(
     quantity: float,
     source_location_id: int | None = None,
 ) -> tuple[DirectSaleSessionLine, list[dict]]:
-    if sess.status not in ("ACTIVE", "SUSPENDED"):
+    if sess.status not in ("ACTIVE", "SUSPENDED", "CHECKOUT"):
         raise DirectSaleError("Sesja nie przyjmuje skanów.", code="session_closed")
     if sess.status == "SUSPENDED":
         sess.status = "ACTIVE"
         sess.suspended_at = None
     pid = _resolve_product_from_scan(db, tenant_id=int(sess.tenant_id), code=code)
+    pr = db.query(Product).filter(Product.id == pid).first()
+    return _add_line_for_product(
+        db,
+        sess,
+        product_id=pid,
+        product=pr,
+        quantity=quantity,
+        source_location_id=source_location_id,
+    )
+
+
+def _add_line_for_product(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    product_id: int,
+    product: Product | None,
+    quantity: float,
+    source_location_id: int | None,
+) -> tuple[DirectSaleSessionLine, list[dict]]:
+    pid = int(product_id)
     qty = float(quantity)
     if qty <= 0:
         raise DirectSaleError("Ilość musi być > 0.", code="invalid_qty")
@@ -59,12 +117,11 @@ def session_scan_add_line(
     suggested_lid = int(suggestions[0]["location_id"]) if suggestions else None
     src_lid = int(source_location_id) if source_location_id else suggested_lid
     sort_order = len(sess.lines or [])
-    pr = db.query(Product).filter(Product.id == pid).first()
     line = DirectSaleSessionLine(
         session_id=int(sess.id),
         product_id=pid,
         quantity=qty,
-        unit_price=float(pr.base_price) if pr and getattr(pr, "base_price", None) else None,
+        unit_price=_product_unit_price(product),
         source_location_id=src_lid,
         suggested_location_id=suggested_lid,
         sort_order=sort_order,
