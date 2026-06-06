@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-04 — Direct Sales API contract drift fix
+
+- Canonical request schemas: `backend/api/contracts/direct_sales/` + `frontend/src/modules/directSales/contracts/`.
+- Mappers for add-product and set-customer; no inline mutation payloads in hooks.
+- Unified `[direct-sales.validation]` logging on 422 (endpoint, body, errors, missing fields, schema name).
+- `POST /clear-customer` for anonymous sales; set-customer requires `customer_id >= 1`.
+- Dev/staging network debug panel in `OperationalStatusPanel`.
+
 ## 2026-06-04 — Phase 3.6 Completion + Traceability
 
 - Confirmation screen after complete with order/doc/payment/operator/stock traceability.

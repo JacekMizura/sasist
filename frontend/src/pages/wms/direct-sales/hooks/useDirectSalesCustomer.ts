@@ -10,7 +10,7 @@ import {
 } from "../../../../api/customersApi";
 import { DAMAGE_TENANT_ID } from "../../../../constants/panelTenant";
 import { safeTrim } from "../../../../utils/safeStrings";
-import { setDirectSaleCustomer } from "../services/directSalesApi";
+import { clearDirectSaleCustomer, setDirectSaleCustomer } from "../services/directSalesApi";
 
 const DEBOUNCE_MS = 150;
 
@@ -77,11 +77,11 @@ export function useDirectSalesCustomer({ sessionId, customerId, onSessionUpdate 
       setBusy(true);
       setError(null);
       try {
-        await setDirectSaleCustomer({
-          tenantId: DAMAGE_TENANT_ID,
-          sessionId,
-          customerId: id,
-        });
+        if (id == null) {
+          await clearDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId });
+        } else {
+          await setDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId, customerId: id });
+        }
         onSessionUpdate(id);
         if (id == null) {
           setDetail(null);

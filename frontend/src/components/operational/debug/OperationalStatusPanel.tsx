@@ -1,6 +1,7 @@
 import type { OperationalFeaturesDebugPayload } from "../../../api/operationalFeaturesApi";
-import type { OperationalFeatureState } from "../../../services/operational/operationalFeatureGuard";
 import type { SseStatusLabel } from "../../../hooks/operational/useOperationalStatus";
+import type { OperationalFeatureState } from "../../../services/operational/operationalFeatureGuard";
+import { DirectSalesNetworkDebugSection } from "./DirectSalesNetworkDebugSection";
 
 type Props = {
   features: OperationalFeatureState;
@@ -71,6 +72,7 @@ export function OperationalStatusPanel({
       {features.blockedEndpoints.length ? (
         <p className="mt-1 text-amber-800">Blocked: {features.blockedEndpoints.join(", ")}</p>
       ) : null}
+      <DirectSalesNetworkDebugSection />
     </div>
   );
 }

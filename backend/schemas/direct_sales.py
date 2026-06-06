@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from ..api.contracts.direct_sales.add_product_request import AddDirectSalesProductRequest
+from ..api.contracts.direct_sales.set_customer_request import SetDirectSalesCustomerRequest
 from .commerce_enums import (
     DirectSaleSessionStatus,
     FulfillmentMode,
@@ -49,10 +51,7 @@ class DirectSaleProductSearchHit(BaseModel):
     operational_zone_type: str | None = None
 
 
-class DirectSaleAddProductBody(BaseModel):
-    product_id: int = Field(..., ge=1)
-    quantity: float = Field(1.0, gt=0)
-    source_location_id: int | None = None
+DirectSaleAddProductBody = AddDirectSalesProductRequest
 
 
 class DirectSaleLinePatchBody(BaseModel):
@@ -102,8 +101,7 @@ class DirectSaleScanResponse(BaseModel):
     suggested_locations: list[dict] = Field(default_factory=list)
 
 
-class DirectSaleSetCustomerBody(BaseModel):
-    customer_id: int | None = None
+DirectSaleSetCustomerBody = SetDirectSalesCustomerRequest
 
 
 class DirectSaleStartPaymentBody(BaseModel):

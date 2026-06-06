@@ -1,19 +1,22 @@
 # Current context
 
 ## Active goal
-Phase 3.6 — Direct Sales Completion + Stock Traceability UI.
+Direct Sales API contract single source of truth — fix 422 on add-product + set-customer.
 
-## Completion flow
-- `complete()` shows `DirectSalesConfirmationScreen` (no silent reset)
-- Traceability: lines, stock deltas, movement timeline, payment + document detail
-- `GET /api/direct-sales/history`, `GET /api/direct-sales/session/{id}/completion`
-- `POST /api/direct-sales/documents/{job_id}/reprint` — explicit re-generation
-- Error recovery panel for payment/document/issue failures (session stays active)
+## Contract layout
+- Backend: `backend/api/contracts/direct_sales/` (`AddDirectSalesProductRequest`, `SetDirectSalesCustomerRequest`)
+- Frontend: `frontend/src/modules/directSales/contracts/` + `mappers/`
+- Validation logs: `[direct-sales.validation]` in Railway for add-product + set-customer 422s
 
-## OMS visibility
-- Order list: badges Sprzedaż bezpośrednia / Natychmiastowe wydanie
-- Filters: `order_channel=DIRECT_SALE`, `fulfillment_mode=IMMEDIATE`
+## Customer attach/detach
+- `POST /set-customer` — body `{ customer_id: int >= 1 }`
+- `POST /clear-customer` — anonymous sale (no body)
+
+## Add product
+- Body `{ product_id, quantity }` only; preferred location applied via line patch after add
+
+## Debug (dev/staging)
+- `OperationalStatusPanel` → Direct-sales network trace (req/res/422 detail)
 
 ## Rollout env (unchanged)
 - `FEATURE_OPERATIONAL_SALES=1`, `FEATURE_OPERATIONAL_SALES_SESSIONS=1`
-- Runtime/replenishment remain OFF until validated

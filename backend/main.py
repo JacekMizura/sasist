@@ -420,9 +420,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
-    from .services.direct_sale.add_product_validation_log import log_add_product_validation
+    from .services.direct_sale.direct_sales_validation_log import log_direct_sales_validation
 
-    log_add_product_validation(request, exc)
+    log_direct_sales_validation(request, exc)
     response = JSONResponse(status_code=422, content={"detail": exc.errors()})
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v

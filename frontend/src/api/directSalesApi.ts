@@ -80,7 +80,12 @@ export async function scanDirectSaleSession(params: {
 }
 
 export { addProductToDirectSaleSession } from "./directSales/addProductApi";
-export type { AddDirectSalesProductParams, AddDirectSalesProductRequest } from "./directSales/contracts";
+export { setDirectSaleCustomer, clearDirectSaleCustomer } from "./directSales/setCustomerApi";
+export type {
+  AddDirectSalesProductParams,
+  AddDirectSalesProductRequest,
+  SetDirectSalesCustomerRequest,
+} from "../modules/directSales/contracts/directSalesContracts";
 
 export async function patchDirectSaleLine(params: {
   tenantId: number;
@@ -109,18 +114,6 @@ export async function deleteDirectSaleLine(params: {
   return normalizeDirectSaleSession(data);
 }
 
-export async function setDirectSaleCustomer(params: {
-  tenantId: number;
-  sessionId: number;
-  customerId: number | null;
-}): Promise<DirectSaleSession> {
-  const { data } = await api.post(
-    `direct-sales/session/${params.sessionId}/set-customer`,
-    { customer_id: params.customerId },
-    { params: { tenant_id: params.tenantId } },
-  );
-  return normalizeDirectSaleSession(data);
-}
 
 export type DirectSaleSuspendedSummary = {
   id: number;

@@ -322,8 +322,7 @@ def post_session_add_product(
             db,
             sess,
             product_id=body.product_id,
-            quantity=body.quantity,
-            source_location_id=body.source_location_id,
+            quantity=float(body.quantity),
         )
         if _operator_id(user) and not sess.operator_user_id:
             sess.operator_user_id = _operator_id(user)
@@ -441,6 +440,22 @@ def post_session_set_customer(
     sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
     try:
         set_session_customer(db, sess, customer_id=body.customer_id)
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(db, sess)
+    except DirectSaleError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.post("/session/{session_id}/clear-customer", response_model=DirectSaleSessionRead)
+def post_session_clear_customer(
+    session_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        set_session_customer(db, sess, customer_id=None)
         db.commit()
         db.refresh(sess)
         return _session_to_read(db, sess)

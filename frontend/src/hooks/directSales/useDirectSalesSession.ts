@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { extractApiErrorMessage } from "../../api/apiErrorMessage";
-import { formatDirectSalesAddProductError } from "../../api/directSales/directSalesErrors";
+import { formatDirectSalesMutationError } from "../../modules/directSales/errors/directSalesMutationErrors";
 import {
   addProductToDirectSaleSession,
   completeDirectSaleSession,
@@ -192,13 +192,20 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
           sessionId: sess.id,
           productId,
           quantity: 1,
-          sourceLocationId,
         });
+        if (sourceLocationId != null && sourceLocationId > 0) {
+          await patchDirectSaleLine({
+            tenantId: DAMAGE_TENANT_ID,
+            sessionId: sess.id,
+            lineId: result.line_id,
+            sourceLocationId,
+          });
+        }
         await refreshSession(sess.id);
         onProductAdded(result.product_id);
         showScannerToast("Dodano pozycję", "success");
       } catch (e) {
-        const { message, devDetail } = formatDirectSalesAddProductError(e);
+        const { message, devDetail } = formatDirectSalesMutationError(e, "add-product");
         const display = devDetail ? `${message}\n${devDetail}` : message;
         setError(display);
         showScannerToast(message, "error");

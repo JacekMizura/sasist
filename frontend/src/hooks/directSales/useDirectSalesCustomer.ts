@@ -8,7 +8,8 @@ import {
   type CustomerDetail,
   type CustomerListRow,
 } from "../../api/customersApi";
-import { setDirectSaleCustomer } from "../../api/directSalesApi";
+import { clearDirectSaleCustomer, setDirectSaleCustomer } from "../../api/directSalesApi";
+import { formatDirectSalesMutationError } from "../../modules/directSales/errors/directSalesMutationErrors";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { safeTrim } from "../../utils/safeStrings";
 
@@ -78,14 +79,19 @@ export function useDirectSalesCustomer({ sessionId, customerId, onSessionUpdate 
       setBusy(true);
       setError(null);
       try {
-        await setDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId, customerId: id });
+        if (id == null) {
+          await clearDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId });
+        } else {
+          await setDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId, customerId: id });
+        }
         onSessionUpdate(id);
         if (id == null) {
           setDetail(null);
           setSearch("");
         }
       } catch (e) {
-        setError(extractApiErrorMessage(e));
+        const { message, devDetail } = formatDirectSalesMutationError(e, "set-customer");
+        setError(devDetail ? `${message} (${devDetail})` : message);
       } finally {
         setBusy(false);
       }
