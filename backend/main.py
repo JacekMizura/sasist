@@ -14,6 +14,7 @@ import traceback
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.responses import JSONResponse
@@ -412,6 +413,17 @@ def _cors_headers_for_request(request: Request) -> dict[str, str]:
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    for k, v in _cors_headers_for_request(request).items():
+        response.headers[k] = v
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+    from .services.direct_sale.add_product_validation_log import log_add_product_validation
+
+    log_add_product_validation(request, exc)
+    response = JSONResponse(status_code=422, content={"detail": exc.errors()})
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
     return response

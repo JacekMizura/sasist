@@ -40,7 +40,9 @@ export function SessionLinesPanel({
         ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-3">
-        {error ? <p className="mb-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700">{error}</p> : null}
+        {error ? (
+          <div className="mb-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700 whitespace-pre-wrap">{error}</div>
+        ) : null}
         {lines.length ? (
           <ul>
             {lines.map((ln) => (

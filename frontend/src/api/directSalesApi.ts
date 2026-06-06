@@ -79,24 +79,8 @@ export async function scanDirectSaleSession(params: {
   return data;
 }
 
-export async function addProductToDirectSaleSession(params: {
-  tenantId: number;
-  sessionId: number;
-  productId: number;
-  quantity?: number;
-  sourceLocationId?: number | null;
-}): Promise<DirectSaleScanResult> {
-  const { data } = await api.post<DirectSaleScanResult>(
-    `direct-sales/session/${params.sessionId}/add-product`,
-    {
-      product_id: params.productId,
-      quantity: params.quantity ?? 1,
-      source_location_id: params.sourceLocationId ?? null,
-    },
-    { params: { tenant_id: params.tenantId } },
-  );
-  return data;
-}
+export { addProductToDirectSaleSession } from "./directSales/addProductApi";
+export type { AddDirectSalesProductParams, AddDirectSalesProductRequest } from "./directSales/contracts";
 
 export async function patchDirectSaleLine(params: {
   tenantId: number;

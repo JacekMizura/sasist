@@ -37,7 +37,9 @@ export function ProductSearchPanel({
 
   const pickHit = useCallback(
     (hit: DirectSaleProductSearchHit) => {
-      onAddProduct(hit.product_id, hit.preferred_location_id);
+      const productId = Number(hit.product_id);
+      if (!Number.isFinite(productId) || productId < 1) return;
+      onAddProduct(productId, hit.preferred_location_id ?? null);
       search.clear();
       inputRef.current?.focus();
     },

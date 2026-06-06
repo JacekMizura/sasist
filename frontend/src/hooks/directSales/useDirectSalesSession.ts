@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { extractApiErrorMessage } from "../../api/apiErrorMessage";
+import { formatDirectSalesAddProductError } from "../../api/directSales/directSalesErrors";
 import {
   addProductToDirectSaleSession,
   completeDirectSaleSession,
@@ -190,15 +191,17 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
           tenantId: DAMAGE_TENANT_ID,
           sessionId: sess.id,
           productId,
+          quantity: 1,
           sourceLocationId,
         });
         await refreshSession(sess.id);
         onProductAdded(result.product_id);
         showScannerToast("Dodano pozycję", "success");
       } catch (e) {
-        const msg = extractApiErrorMessage(e);
-        setError(msg);
-        showScannerToast(msg, "error");
+        const { message, devDetail } = formatDirectSalesAddProductError(e);
+        const display = devDetail ? `${message}\n${devDetail}` : message;
+        setError(display);
+        showScannerToast(message, "error");
       } finally {
         setBusy(false);
       }
