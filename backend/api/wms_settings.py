@@ -28,6 +28,11 @@ from ..schemas.wms_packing_settings import (
 from ..schemas.wms_return import ReturnsMode, WmsSettingsRead, WmsSettingsSave, WmsSettingsUpsert
 from ..schemas.wms_picking_shortage_settings import WmsPickingShortageSettingsRead, WmsPickingShortageSettingsSave
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
+from ..schemas.direct_sales_settings import DirectSalesSettingsRead, DirectSalesSettingsSave
+from ..services.direct_sales_settings_service import (
+    resolve_direct_sales_settings,
+    save_direct_sales_settings,
+)
 from ..services.wms_picking_shortage_settings_service import (
     get_or_create_wms_picking_shortage_settings,
     touch_wms_picking_shortage_settings_row,
@@ -457,3 +462,27 @@ def save_wms_picking_shortage_settings(
     db.commit()
     db.refresh(row)
     return _shortage_settings_row_to_read(row)
+
+
+@router.get("/direct-sales", response_model=DirectSalesSettingsRead)
+def get_wms_direct_sales_settings(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    return resolve_direct_sales_settings(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
+@router.put("/direct-sales", response_model=DirectSalesSettingsRead)
+def put_wms_direct_sales_settings(
+    body: DirectSalesSettingsSave,
+    db: Session = Depends(get_db),
+):
+    result = save_direct_sales_settings(
+        db,
+        tenant_id=body.tenant_id,
+        warehouse_id=body.warehouse_id,
+        settings=body.settings,
+    )
+    db.commit()
+    return result

@@ -1640,6 +1640,34 @@ def ensure_order_items_packing_quantity_packed_column(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_direct_sales_settings_table(engine: Engine) -> None:
+    """Direct sales WMS business settings per tenant + warehouse (warehouse_id=0 = tenant default)."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "direct_sales_settings"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE direct_sales_settings (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL DEFAULT 0,
+                        settings_json TEXT NOT NULL DEFAULT '{}',
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        UNIQUE(tenant_id, warehouse_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_direct_sales_settings_tenant ON direct_sales_settings(tenant_id)")
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_direct_sales_settings_wh ON direct_sales_settings(warehouse_id)")
+            )
+        conn.commit()
+
+
 def ensure_wms_packing_settings_table(engine: Engine) -> None:
     """WMS packing automation + panel status bindings per tenant + warehouse."""
     with engine.connect() as conn:

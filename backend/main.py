@@ -145,6 +145,7 @@ from .db.schema_upgrade import (
     ensure_carts_code_column,
     ensure_esp_scan_code_columns,
     ensure_order_items_packing_quantity_packed_column,
+    ensure_direct_sales_settings_table,
     ensure_wms_packing_settings_table,
     ensure_shipping_methods_table_and_order_fk,
     ensure_warehouse_materials_tables,
@@ -1161,6 +1162,7 @@ def _upgrade_schema_background() -> None:
         ensure_picking_config_workflow_columns(engine)
         ensure_picking_shortage_support(engine)
         ensure_order_items_packing_quantity_packed_column(engine)
+        ensure_direct_sales_settings_table(engine)
         ensure_wms_packing_settings_table(engine)
         ensure_shipping_methods_table_and_order_fk(engine)
         ensure_warehouse_materials_tables(engine)

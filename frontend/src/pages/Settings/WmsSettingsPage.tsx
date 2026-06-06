@@ -28,6 +28,10 @@ import { tabsNavItemClassName } from "../../components/layout/TabsNav";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import toast from "react-hot-toast";
 import { useBlocker } from "react-router-dom";
+import {
+  DirectSalesSettingsPanel,
+  type DirectSalesSettingsPanelHandle,
+} from "../../modules/wmsSettings/directSales/DirectSalesSettingsPanel";
 import WmsPackingSettingsPanel, { type WmsPackingSettingsPanelHandle } from "./WmsPackingSettingsPanel";
 import WmsReturnsSettingsPanel from "./WmsReturnsSettingsPanel";
 import WmsSmartMatchingSettingsPanel from "./WmsSmartMatchingSettingsPanel";
@@ -105,6 +109,7 @@ const WMS_SETTINGS_TABS = [
   { id: "common", label: "Ustawienia wspólne" },
   { id: "packing", label: "Pakowanie" },
   { id: "picking", label: "Zbieranie" },
+  { id: "direct_sales", label: "Sprzedaż bezpośrednia" },
   { id: "complaints", label: "Reklamacje" },
   { id: "returns", label: "Zwroty" },
   { id: "crossdocking", label: "Crossdocking" },
@@ -2580,22 +2585,24 @@ export default function WmsSettingsPage() {
   const [activeTab, setActiveTab] = useState<WmsSettingsTabId>("common");
 
   const packingRef = useRef<WmsPackingSettingsPanelHandle>(null);
+  const directSalesRef = useRef<DirectSalesSettingsPanelHandle>(null);
   const pickingActionsRef = useRef<WmsPickingSettingsActions | null>(null);
 
   const [packingDirty, setPackingDirty] = useState(false);
+  const [directSalesDirty, setDirectSalesDirty] = useState(false);
   const [pickingDirty, setPickingDirty] = useState(false);
   const [globalSaving, setGlobalSaving] = useState(false);
 
-  const isDirty = packingDirty || pickingDirty;
+  const isDirty = packingDirty || directSalesDirty || pickingDirty;
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!packingDirty && !pickingDirty) return;
+      if (!packingDirty && !directSalesDirty && !pickingDirty) return;
       e.preventDefault();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [packingDirty, pickingDirty]);
+  }, [packingDirty, directSalesDirty, pickingDirty]);
 
   const blocker = useBlocker(isDirty);
 
@@ -2612,6 +2619,7 @@ export default function WmsSettingsPage() {
     setGlobalSaving(true);
     try {
       if (packingDirty && packingRef.current) await packingRef.current.saveAll();
+      if (directSalesDirty && directSalesRef.current) await directSalesRef.current.saveAll();
       if (pickingDirty && pickingActionsRef.current) await pickingActionsRef.current.saveAll();
       toast.success("Zapisano ustawienia WMS.");
     } catch {
@@ -2619,16 +2627,17 @@ export default function WmsSettingsPage() {
     } finally {
       setGlobalSaving(false);
     }
-  }, [packingDirty, pickingDirty]);
+  }, [packingDirty, directSalesDirty, pickingDirty]);
 
   const handleGlobalDiscard = useCallback(async () => {
     try {
       if (packingDirty && packingRef.current) await packingRef.current.discardUnsaved();
+      if (directSalesDirty && directSalesRef.current) await directSalesRef.current.discardUnsaved();
       if (pickingDirty && pickingActionsRef.current) await pickingActionsRef.current.discardUnsaved();
     } catch {
       toast.error("Nie udało się przywrócić zapisanych ustawień.");
     }
-  }, [packingDirty, pickingDirty]);
+  }, [packingDirty, directSalesDirty, pickingDirty]);
 
   const handleSave = handleGlobalSave;
   const handleReset = handleGlobalDiscard;
@@ -2694,6 +2703,14 @@ export default function WmsSettingsPage() {
                   sectionNavObserve={activeTab === "packing"}
                 />
               </div>
+              <div className={activeTab === "direct_sales" ? "block" : "hidden"} aria-hidden={activeTab !== "direct_sales"}>
+                <DirectSalesSettingsPanel
+                  ref={directSalesRef}
+                  warehouseId={warehouseIdTop}
+                  onDirtyChange={setDirectSalesDirty}
+                  sectionNavObserve={activeTab === "direct_sales"}
+                />
+              </div>
               <div className={activeTab === "returns" ? "block" : "hidden"} aria-hidden={activeTab !== "returns"}>
                 <WmsReturnsSettingsPanel warehouseId={warehouseIdTop} />
               </div>
@@ -2705,6 +2722,7 @@ export default function WmsSettingsPage() {
               </div>
               {activeTab !== "picking" &&
               activeTab !== "packing" &&
+              activeTab !== "direct_sales" &&
               activeTab !== "returns" &&
               activeTab !== "smart_matching" &&
               activeTab !== "three_d_matching" ? (
