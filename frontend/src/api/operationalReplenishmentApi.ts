@@ -49,3 +49,24 @@ export async function scanReplenishment(
   );
   return data;
 }
+
+export type ReplenishmentExecuteStepResult = {
+  task_id: number;
+  orchestration_state: string | null;
+  status: string;
+  quantity_done: number;
+  task_payload: Record<string, unknown>;
+};
+
+export async function executeReplenishmentStep(
+  tenantId: number,
+  taskId: number,
+  body: { step: string; scan_code?: string; note?: string },
+): Promise<ReplenishmentExecuteStepResult> {
+  const { data } = await api.post<ReplenishmentExecuteStepResult>(
+    `operational-replenishment/tasks/${taskId}/execute-step`,
+    body,
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}

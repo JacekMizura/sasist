@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { useOperationalRuntime } from "../../../hooks/runtime/useOperationalRuntime";
@@ -14,6 +14,8 @@ export default function DirectSalesPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const runtime = useOperationalRuntime();
+  const [documentHint, setDocumentHint] = useState<string | null>(null);
+  const [issueFlash, setIssueFlash] = useState(false);
   const { stockSnap, lastProductId, refreshStock, clearStock } = useLocationStock(warehouseId);
 
   const onScanSuccess = useCallback(
@@ -37,7 +39,18 @@ export default function DirectSalesPage() {
 
   const handleComplete = useCallback(async () => {
     const result = await complete();
-    if (result) clearStock();
+    if (result) {
+      clearStock();
+      setIssueFlash(true);
+      window.setTimeout(() => setIssueFlash(false), 800);
+      setDocumentHint(
+        result.document_job_id
+          ? `Dokument w kolejce #${result.document_job_id}`
+          : result.document_number
+            ? `Dokument ${result.document_number}`
+            : "Sprzedaż zakończona",
+      );
+    }
   }, [complete, clearStock]);
 
   if (warehouseId == null) {
@@ -54,12 +67,16 @@ export default function DirectSalesPage() {
           error={error}
           onPaymentMethodChange={setPaymentMethod}
         />
-        <SessionLinesPanel session={session} stockSnap={stockSnap} lastProductId={lastProductId} />
+        <div className={issueFlash ? "rounded-lg ring-2 ring-emerald-300 transition-all" : ""}>
+          <SessionLinesPanel session={session} stockSnap={stockSnap} lastProductId={lastProductId} />
+        </div>
         <PaymentPanel
           total={total}
           busy={busy}
           hasSession={session != null}
           hasLines={(session?.lines.length ?? 0) > 0}
+          sessionStatus={session?.status}
+          documentHint={documentHint}
           onCheckout={() => void checkout()}
           onComplete={() => void handleComplete()}
           onSuspend={() => void suspend()}

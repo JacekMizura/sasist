@@ -1,5 +1,7 @@
 # Current Context
 
+- **Replenishment execution Phase 6 (2026-06-05):** Pełna tabela uzupełnień + modal skanerowy (scan source→product→target→complete). Kanban zadań QUEUED…COMPLETED. API `POST …/tasks/{id}/execute-step`. Operator workload, actionable alerts, zone pressure v2, timeline. Testy: `test_replenishment_execution.py`.
+
 - **Visual operational runtime Phase 5 (2026-06-05):** WMS tab Operacje `/wms/operations` — live hub, uzupełnienia, zadania, operatorzy, alerty. Komponenty `components/operations/`, hooki `hooks/runtime/`. Direct sales: top bar + runtime footer. Graceful fallback gdy runtime OFF.
 
 - **Operational runtime Phase 4 (2026-06-05):** Replenishment engine (`services/replenishment/`), live events + SSE (`services/live/`), operator/device runtime (`services/runtime/`), task orchestration (`services/orchestration/`), alerts (`services/alerts/`). API: `/operational-runtime`, `/operational-replenishment`, `/operational-alerts`, `/operational-orchestration`. Flags `FEATURE_OPERATIONAL_RUNTIME`, `FEATURE_REPLENISHMENT_ENGINE` (OFF). Classic WMS unaffected when flags off. Frontend `useOperationalLiveStream`. Testy: `test_operational_runtime_phase4.py`.

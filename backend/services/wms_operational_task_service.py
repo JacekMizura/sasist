@@ -1295,6 +1295,11 @@ def serialize_task_list_item(db: Session, task: WmsOperationalTask) -> WmsOperat
         target_zones=target_zones,
         waiting_order_count=waiting_order_count,
         waiting_oldest_at=waiting_oldest_at,
+        orchestration_state=(task.orchestration_state or "").strip() or None,
+        assigned_user_id=int(task.assigned_user_id) if task.assigned_user_id else None,
+        sla_due_at=task.sla_due_at,
+        blocked_reason=(task.blocked_reason or "").strip() or None,
+        task_payload=payload if isinstance(payload, dict) else {},
     )
 
 

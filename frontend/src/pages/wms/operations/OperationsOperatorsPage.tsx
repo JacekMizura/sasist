@@ -1,4 +1,4 @@
-import { OperatorRuntimePanel } from "../../../components/operations/OperatorRuntimePanel";
+import { OperatorWorkloadTable } from "../../../components/operations/OperatorWorkloadTable";
 import { useOperatorRuntime } from "../../../hooks/runtime/useOperatorRuntime";
 
 export default function OperationsOperatorsPage() {
@@ -6,11 +6,11 @@ export default function OperationsOperatorsPage() {
 
   return (
     <div className="space-y-3 p-3">
-      <h1 className="text-base font-semibold text-slate-900">Operatorzy — runtime</h1>
+      <h1 className="text-base font-semibold text-slate-900">Obciążenie operatorów</h1>
       {!runtimeAvailable ? (
-        <p className="text-sm text-slate-500">Runtime wyłączony — widok offline.</p>
+        <p className="text-sm text-slate-500">Runtime wyłączony — dane mogą być niepełne.</p>
       ) : null}
-      <OperatorRuntimePanel self={selfSnapshot} peers={peers} />
+      <OperatorWorkloadTable self={selfSnapshot} peers={peers} />
     </div>
   );
 }

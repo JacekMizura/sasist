@@ -22,7 +22,19 @@ export function SessionLinesPanel({ session, stockSnap, lastProductId }: Props) 
 
   return (
     <main className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white p-3">
-      <h2 className="mb-2 text-sm font-semibold text-slate-800">Pozycje sesji</h2>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold text-slate-800">Pozycje sesji</h2>
+        {session?.reservation_scope ? (
+          <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-800">
+            Rezerwacja: {session.reservation_scope}
+          </span>
+        ) : null}
+        {session?.status === "CHECKOUT" ? (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
+            Płatność
+          </span>
+        ) : null}
+      </div>
       {session?.lines.length ? (
         <ul className="divide-y divide-slate-100">
           {session.lines.map((ln) => (

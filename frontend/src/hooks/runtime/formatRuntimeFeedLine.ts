@@ -67,6 +67,27 @@ export function formatLiveEventFeedLine(ev: LiveEvent): FeedLine {
         text: `Operator #${p.operator_user_id ?? "?"} → ${p.context_type ?? "workflow"}`,
         at,
       };
+    case "reservation.updated":
+      return {
+        id: `ev-${ev.id}`,
+        tone: "warn",
+        text: `Rezerwacja — produkt #${p.product_id ?? "?"}`,
+        at,
+      };
+    case "document.generated":
+      return {
+        id: `ev-${ev.id}`,
+        tone: "success",
+        text: `Dokument wygenerowany — zamówienie #${p.order_id ?? "?"}`,
+        at,
+      };
+    case "document.failed":
+      return {
+        id: `ev-${ev.id}`,
+        tone: "warn",
+        text: `Błąd dokumentu — job #${p.job_id ?? "?"}`,
+        at,
+      };
     default:
       return {
         id: `ev-${ev.id}`,

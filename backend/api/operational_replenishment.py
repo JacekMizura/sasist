@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..models.wms_operational_task import WmsOperationalTask
 from ..schemas.operational_replenishment import (
+    ReplenishmentExecuteStepBody,
+    ReplenishmentExecuteStepResult,
     ReplenishmentRuleRead,
     ReplenishmentRuleUpsertBody,
     ReplenishmentScanResult,
@@ -110,3 +113,46 @@ def post_replenishment_scan(
     )
     db.commit()
     return ReplenishmentScanResult(**result)
+
+
+@router.post("/tasks/{task_id}/execute-step", response_model=ReplenishmentExecuteStepResult)
+def post_replenishment_execute_step(
+    task_id: int,
+    body: ReplenishmentExecuteStepBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.replenishment.execution_service import advance_replenishment_execution
+    import json
+
+    task = (
+        db.query(WmsOperationalTask)
+        .filter(WmsOperationalTask.id == int(task_id), WmsOperationalTask.tenant_id == int(tenant_id))
+        .first()
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    _require_replenishment(db, tenant_id, int(task.warehouse_id))
+    try:
+        advance_replenishment_execution(
+            db,
+            task,
+            step=body.step,
+            scan_code=body.scan_code,
+            note=body.note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    payload = {}
+    try:
+        payload = json.loads(task.payload_json or "{}")
+    except Exception:
+        pass
+    return ReplenishmentExecuteStepResult(
+        task_id=int(task.id),
+        orchestration_state=task.orchestration_state,
+        status=str(task.status),
+        quantity_done=float(task.quantity_done or 0),
+        task_payload=payload if isinstance(payload, dict) else {},
+    )

@@ -2,7 +2,7 @@ import { AlertsPanel } from "../../../components/operations/AlertsPanel";
 import { OperationsSidebar } from "../../../components/operations/OperationsSidebar";
 import { OperatorRuntimePanel } from "../../../components/operations/OperatorRuntimePanel";
 import { ReplenishmentQueue } from "../../../components/operations/ReplenishmentQueue";
-import { RuntimeTaskFeed } from "../../../components/operations/RuntimeTaskFeed";
+import { OperationalTimeline } from "../../../components/operations/OperationalTimeline";
 import { ZonePressureCards } from "../../../components/operations/ZonePressureCards";
 import { useOperationalAlerts } from "../../../hooks/runtime/useOperationalAlerts";
 import { useOperatorRuntime } from "../../../hooks/runtime/useOperatorRuntime";
@@ -22,7 +22,7 @@ export default function OperationsRuntimePage() {
       <OperationsSidebar replenishmentCount={openCount} alertCount={alerts.length} />
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
         <h1 className="text-base font-semibold text-slate-900">Operacje — runtime na żywo</h1>
-        <RuntimeTaskFeed lines={feedLines} />
+        <OperationalTimeline lines={feedLines} />
         <ReplenishmentQueue tasks={tasks} compact />
       </section>
       <aside className="flex w-full shrink-0 flex-col gap-2 md:w-56">

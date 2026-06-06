@@ -22,7 +22,10 @@ export function ZonePressureCards({ zones }: Props) {
           <div className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{z.zone}</div>
           <div className="text-sm font-bold">{z.label}</div>
           <div className="text-[10px] opacity-70">
-            zad: {z.taskCount} · alert: {z.alertCount}
+            uzupełn.: {z.openReplenishments} · blok: {z.blockedTasks} · niski: {z.lowStockCount}
+          </div>
+          <div className="text-[10px] opacity-60">
+            op: {z.activeOperators} · kolejka: {z.queuePressure}%
           </div>
         </div>
       ))}

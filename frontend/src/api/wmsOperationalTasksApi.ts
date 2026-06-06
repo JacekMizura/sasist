@@ -32,6 +32,11 @@ export type WmsOperationalTaskApi = {
   target_zones?: string[];
   waiting_order_count?: number;
   waiting_oldest_at?: string | null;
+  orchestration_state?: string | null;
+  assigned_user_id?: number | null;
+  sla_due_at?: string | null;
+  blocked_reason?: string | null;
+  task_payload?: Record<string, unknown>;
 };
 
 export type WmsOperationalRelocationAllocationApi = {

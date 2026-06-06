@@ -1,5 +1,12 @@
 # Change Log
 
+## 2026-06-05 — Replenishment execution UI Phase 6
+
+- Full replenishment table + scanner execution modal + execute-step API.
+- Kanban task board (QUEUED→COMPLETED), operator workload table, actionable alerts.
+- Zone pressure metrics evolution; operational timeline; direct sales live badges.
+- Tests: `test_replenishment_execution.py`.
+
 ## 2026-06-05 — Visual operational runtime Phase 5 (WMS UI)
 
 - WMS tab **Operacje** → `/wms/operations` (hub, replenishment, tasks, operators, alerts).

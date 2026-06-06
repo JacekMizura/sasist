@@ -3,6 +3,8 @@ type Props = {
   busy: boolean;
   hasSession: boolean;
   hasLines: boolean;
+  sessionStatus?: string | null;
+  documentHint?: string | null;
   onCheckout: () => void;
   onComplete: () => void;
   onSuspend: () => void;
@@ -13,6 +15,8 @@ export function PaymentPanel({
   busy,
   hasSession,
   hasLines,
+  sessionStatus,
+  documentHint,
   onCheckout,
   onComplete,
   onSuspend,
@@ -22,6 +26,12 @@ export function PaymentPanel({
       <div className="rounded-xl border border-slate-200 bg-white p-3">
         <div className="text-xs text-slate-500">Suma</div>
         <div className="text-2xl font-bold text-slate-900">{total.toFixed(2)} zł</div>
+        {sessionStatus ? (
+          <div className="mt-1 text-[10px] uppercase text-slate-500">Status: {sessionStatus}</div>
+        ) : null}
+        {documentHint ? (
+          <div className="mt-0.5 text-[10px] text-emerald-700">{documentHint}</div>
+        ) : null}
       </div>
       <button
         type="button"

@@ -40,3 +40,17 @@ class ReplenishmentScanResult(BaseModel):
     created: int
     tasks: list[dict[str, Any]]
     skipped: str | None = None
+
+
+class ReplenishmentExecuteStepBody(BaseModel):
+    step: str = Field(..., min_length=1, max_length=24)
+    scan_code: str | None = Field(None, max_length=128)
+    note: str | None = Field(None, max_length=256)
+
+
+class ReplenishmentExecuteStepResult(BaseModel):
+    task_id: int
+    orchestration_state: str | None = None
+    status: str
+    quantity_done: float
+    task_payload: dict[str, Any] = Field(default_factory=dict)

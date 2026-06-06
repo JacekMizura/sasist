@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -61,6 +61,11 @@ class WmsOperationalTaskListItem(BaseModel):
     target_zones: List[str] = Field(default_factory=list)
     waiting_order_count: int = 0
     waiting_oldest_at: Optional[datetime] = None
+    orchestration_state: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+    sla_due_at: Optional[datetime] = None
+    blocked_reason: Optional[str] = None
+    task_payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 class WmsOperationalTaskDetail(WmsOperationalTaskListItem):
