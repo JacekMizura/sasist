@@ -1,15 +1,14 @@
 # Current context
 
 ## Active goal
-Direct sales must use WZ as the sole warehouse-effect document — PA/FV are commercial only.
+Direct Sales completion must be staged, idempotent, and recoverable — no SESSION_INVALID on commit/pipeline failures.
 
-## WZ refactor (2026-06-04)
-- Pipeline: `create_order → plan_allocations → create_payment → generate_documents (PA/FV) → create_wz → complete_session`
-- Stock/FIFO only in `direct_sale/wz_service.py` via `stock_operation_issue_service.py`
-- Removed `reserve_stock` / `issue_stock` from `complete_service.py`
-- Schema: `document_series.warehouse_document_series_id`, `sale_document_stock_links`, `stock_documents` order/sale/session FKs
-- Series UI: "Seria dokumentu magazynowego (WZ)" on SALE series edit
-- Detail: PA/FV shows linked WZ badges + FIFO movements from WZ source
+## Staged pipeline (2026-06-04)
+- `pipeline_orchestrator.run_staged_complete_pipeline` — 5 commits per request
+- States: OPEN → PAYMENT_STARTED → PAYMENT_CONFIRMED → DOCUMENTS_CREATED → WAREHOUSE_ISSUED → COMPLETED | FAILED
+- `pipeline_status`, `pipeline_failed_stage`, `pipeline_state_json` on `direct_sale_sessions`
+- FAILED sessions retryable; partial entity IDs preserved
+- API: no blanket rollback on DirectSaleError; commit failures → PIPELINE_FAILED
 
-## Prior: PA/FV commercial parity
-- Shared `create_sale_document`, canonical mapper, commercial detail UI
+## Prior: WZ as warehouse-effect doc
+- PA/FV commercial only; WZ performs FIFO/stock issue

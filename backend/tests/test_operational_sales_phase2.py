@@ -124,38 +124,18 @@ class TestCompleteIdempotency(unittest.TestCase):
 
 
 class TestCompletePipelineOrder(unittest.TestCase):
-    @patch("backend.services.direct_sale.complete_service.create_and_post_wz_for_direct_sale")
-    @patch("backend.services.direct_sale.complete_service.process_direct_sale_document_job")
-    @patch("backend.services.direct_sale.complete_service.enqueue_direct_sale_documents")
-    @patch("backend.services.direct_sale.complete_service.orchestrate_direct_sale_payment")
-    @patch("backend.services.direct_sale.complete_service.plan_issue_allocations")
-    @patch("backend.services.direct_sale.complete_service.create_order_from_session")
-    @patch("backend.services.direct_sale.complete_service.emit_operational_sales_event")
-    def test_complete_calls_in_order(
-        self,
-        _ev,
-        mock_order,
-        mock_plan,
-        mock_pay,
-        mock_docs,
-        mock_process_job,
-        mock_wz,
-    ):
+    @patch("backend.services.direct_sale.complete_service.run_staged_complete_pipeline")
+    def test_complete_delegates_to_staged_pipeline(self, mock_pipeline):
+        from backend.services.direct_sale.pipeline_orchestrator import StageEntities
         from backend.services.direct_sale.complete_service import complete_direct_sale_session
 
-        order = SimpleNamespace(id=100, tenant_id=1, warehouse_id=1, currency="PLN")
-        oi = SimpleNamespace(id=200)
-        mock_order.return_value = (order, {10: oi})
-        mock_plan.return_value = [IssueAllocation(10, 5, 22, 1.0)]
-        mock_pay.return_value = SimpleNamespace(id=300)
-        mock_docs.return_value = SimpleNamespace(job_id=55, document_number=None, document_subtype="RECEIPT", status="PENDING")
-        mock_process_job.return_value = SimpleNamespace(
+        mock_pipeline.return_value = StageEntities(
+            order_id=100,
+            payment_id=300,
+            document_job_id=55,
             document_number="PA1",
-            document_subtype="RECEIPT",
-            status="GENERATED",
-            sale_document_id="sale-doc-uuid-1",
+            stock_document_id=901,
         )
-        mock_wz.return_value = SimpleNamespace(stock_document_id=901, document_number="WZ/1", link_id=1)
 
         line = SimpleNamespace(
             id=10, product_id=5, quantity=1.0, unit_price=10.0, discount_amount=0.0, sort_order=0
@@ -165,20 +145,27 @@ class TestCompletePipelineOrder(unittest.TestCase):
             tenant_id=1,
             warehouse_id=1,
             status="CHECKOUT",
+            pipeline_status="PAYMENT_STARTED",
+            pipeline_state_json=None,
+            pipeline_failed_stage=None,
             order_id=None,
             lines=[line],
             issue_strategy="STRICT_LOCATION",
             reservation_scope="SESSION",
             workstation_id=None,
         )
-        sale_doc = SimpleNamespace(id="sale-doc-uuid-1", document_series_id="series-1", tenant_id=1)
+        pay = SimpleNamespace(id=300, status="PAID", method="CASH")
+        order = SimpleNamespace(id=100, value=10.0)
         db = MagicMock()
 
         def query_side(model):
             q = MagicMock()
             q.filter.return_value = q
-            if getattr(model, "__name__", "") == "SaleDocument":
-                q.first.return_value = sale_doc
+            name = getattr(model, "__name__", "")
+            if name == "Payment":
+                q.first.return_value = pay
+            elif name == "Order":
+                q.first.return_value = order
             else:
                 q.first.return_value = None
             return q
@@ -187,14 +174,7 @@ class TestCompletePipelineOrder(unittest.TestCase):
         result = complete_direct_sale_session(db, sess, performed_by_user_id=7)
         self.assertEqual(result.order_id, 100)
         self.assertEqual(result.payment_id, 300)
-        mock_order.assert_called_once()
-        mock_plan.assert_called_once()
-        mock_pay.assert_called_once()
-        mock_docs.assert_called_once()
-        mock_process_job.assert_called_once()
-        mock_wz.assert_called_once()
-        self.assertEqual(sess.status, "COMPLETED")
-        self.assertEqual(sess.order_id, 100)
+        mock_pipeline.assert_called_once()
 
 
 if __name__ == "__main__":

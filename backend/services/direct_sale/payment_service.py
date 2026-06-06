@@ -20,6 +20,37 @@ _PROVIDER_FOR_METHOD = {
 }
 
 
+def load_payment_for_session(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    order_id: int | None = None,
+) -> Payment | None:
+    """Idempotent — return existing payment for session/order."""
+    pay = (
+        db.query(Payment)
+        .filter(
+            Payment.direct_sale_session_id == int(sess.id),
+            Payment.tenant_id == int(sess.tenant_id),
+        )
+        .order_by(Payment.id.desc())
+        .first()
+    )
+    if pay is not None:
+        return pay
+    if order_id:
+        return (
+            db.query(Payment)
+            .filter(
+                Payment.order_id == int(order_id),
+                Payment.tenant_id == int(sess.tenant_id),
+            )
+            .order_by(Payment.id.desc())
+            .first()
+        )
+    return None
+
+
 def orchestrate_direct_sale_payment(
     db: Session,
     *,
@@ -30,6 +61,10 @@ def orchestrate_direct_sale_payment(
     payment_splits: list[dict] | None = None,
     performed_by_user_id: int | None = None,
 ) -> Payment:
+    existing = load_payment_for_session(db, sess, order_id=int(order.id))
+    if existing is not None:
+        return existing
+
     amt = round(float(amount or 0), 2)
     if amt <= 0:
         raise DirectSaleError("Kwota płatności musi być > 0.", code="invalid_payment_amount")

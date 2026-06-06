@@ -690,6 +690,25 @@ def _ensure_sale_warehouse_document_link_schema(engine: Engine) -> int:
     """PA/FV ↔ WZ linkage: series FK, stock_documents context, sale_document_stock_links."""
     added = 0
 
+    if has_table(engine, "direct_sale_sessions"):
+        for col, ddl in (
+            (
+                "pipeline_status",
+                "ALTER TABLE direct_sale_sessions ADD COLUMN pipeline_status VARCHAR(32) "
+                "NOT NULL DEFAULT 'OPEN'",
+            ),
+            (
+                "pipeline_failed_stage",
+                "ALTER TABLE direct_sale_sessions ADD COLUMN pipeline_failed_stage VARCHAR(32)",
+            ),
+            (
+                "pipeline_state_json",
+                "ALTER TABLE direct_sale_sessions ADD COLUMN pipeline_state_json TEXT",
+            ),
+        ):
+            if _add_column_if_missing(engine, "direct_sale_sessions", col, ddl):
+                added += 1
+
     if has_table(engine, "document_series"):
         if _add_column_if_missing(
             engine,

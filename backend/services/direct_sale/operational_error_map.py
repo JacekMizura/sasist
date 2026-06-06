@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy.exc import OperationalError as SaOperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError as SaOperationalError
 
 from .errors import DirectSaleError
 
@@ -13,6 +13,7 @@ OPERATIONAL_CODES = frozenset(
         "ISSUE_FAILED",
         "PAYMENT_FAILED",
         "DOCUMENT_GENERATION_FAILED",
+        "PIPELINE_FAILED",
         "SESSION_INVALID",
     }
 )
@@ -33,7 +34,7 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
         )
 
     msg = _msg_lower(exc)
-    if isinstance(exc, SaOperationalError) or "no such table" in msg or "no column named" in msg:
+    if isinstance(exc, (SaOperationalError, IntegrityError)) or "no such table" in msg or "no column named" in msg:
         if step in ("create_wz", "reserve_stock", "issue_stock"):
             return DirectSaleError(
                 "Nie udało się zdjąć towaru z magazynu.",
@@ -41,10 +42,17 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
                 http_status=409,
                 step=step,
             )
-        if step == "create_order":
+        if step in ("create_order", "create_order_and_payment"):
             return DirectSaleError(
                 "Nie udało się utworzyć zamówienia sprzedaży.",
-                code="SESSION_INVALID",
+                code="PIPELINE_FAILED",
+                http_status=422,
+                step=step,
+            )
+        if step == "commit":
+            return DirectSaleError(
+                "Błąd zapisu transakcji — spróbuj ponownie.",
+                code="PIPELINE_FAILED",
                 http_status=422,
                 step=step,
             )
@@ -55,7 +63,7 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
             http_status=409,
             step=step,
         )
-    if "payment" in msg or step == "create_payment":
+    if "payment" in msg or step in ("create_payment", "create_order_and_payment"):
         return DirectSaleError(
             "Nie udało się zaksięgować płatności.",
             code="PAYMENT_FAILED",
@@ -69,7 +77,7 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
             http_status=422,
             step=step,
         )
-    if step == "plan_allocations":
+    if step in ("plan_allocations", "lock_and_validate"):
         return DirectSaleError(
             "Nie udało się zaplanować wydania towaru z magazynu.",
             code="ALLOCATION_FAILED",
@@ -86,13 +94,13 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
     if step == "create_order":
         return DirectSaleError(
             "Nie udało się utworzyć zamówienia sprzedaży.",
-            code="SESSION_INVALID",
+            code="PIPELINE_FAILED",
             http_status=422,
             step=step,
         )
     return DirectSaleError(
-        "Nie udało się zakończyć sprzedaży.",
-        code="SESSION_INVALID",
+        "Nie udało się zakończyć sprzedaży — etap pipeline nieudany.",
+        code="PIPELINE_FAILED",
         http_status=422,
         step=step,
     )
@@ -102,19 +110,23 @@ def _normalize_direct_sale_code(code: str, *, step: str) -> str:
     raw = (code or "").strip().lower()
     if raw in ("insufficient_stock", "single_location_unavailable", "missing_source_location"):
         return "OUT_OF_STOCK"
-    if raw in ("reservation_missing", "order_item_missing"):
+    if raw in ("reservation_missing", "order_item_missing", "wz_line_missing"):
         return "ISSUE_FAILED"
     if raw in ("invalid_status", "already_completed", "empty_session"):
         return "SESSION_INVALID"
+    if raw in ("pipeline_failed", "pipeline_incomplete", "order_missing", "order_not_found"):
+        return "PIPELINE_FAILED"
     if raw.startswith("job_") or "document" in raw:
         return "DOCUMENT_GENERATION_FAILED"
     if "payment" in raw:
         return "PAYMENT_FAILED"
-    if step == "plan_allocations":
+    if step in ("plan_allocations", "lock_and_validate"):
         return "ALLOCATION_FAILED"
     if step in ("create_wz", "reserve_stock", "issue_stock"):
         return "ISSUE_FAILED"
-    return "SESSION_INVALID"
+    if step in ("commit", "pipeline", "complete_session"):
+        return "PIPELINE_FAILED"
+    return "PIPELINE_FAILED"
 
 
 def _http_for_code(code: str) -> int:
@@ -122,6 +134,8 @@ def _http_for_code(code: str) -> int:
         return 409
     if code in ("ALLOCATION_FAILED", "ISSUE_FAILED"):
         return 409
+    if code == "SESSION_INVALID":
+        return 400
     return 422
 
 
@@ -132,6 +146,7 @@ def _operator_message(code: str, fallback: str) -> str:
         "ISSUE_FAILED": "Nie udało się zdjąć towaru z magazynu.",
         "PAYMENT_FAILED": "Nie udało się zaksięgować płatności.",
         "DOCUMENT_GENERATION_FAILED": "Błąd generowania dokumentu sprzedaży.",
-        "SESSION_INVALID": "Sesja sprzedaży jest w nieprawidłowym stanie.",
+        "PIPELINE_FAILED": "Sprzedaż nie została zakończona — można spróbować ponownie.",
+        "SESSION_INVALID": "Sesja sprzedaży jest niedostępna (zamknięta lub wygasła).",
     }
     return messages.get(code, fallback)

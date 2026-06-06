@@ -42,12 +42,67 @@ def _resolve_panel_status_id(
     return int(row.id) if row is not None else None
 
 
+def load_order_for_session(
+    db: Session,
+    sess: DirectSaleSession,
+) -> tuple[Order | None, dict[int, OrderItem]]:
+    """Idempotent — return existing order + line map for this session."""
+    from ...models.commerce_operational import Payment
+
+    order_id = int(sess.order_id) if getattr(sess, "order_id", None) else None
+    if not order_id:
+        pay = (
+            db.query(Payment)
+            .filter(
+                Payment.direct_sale_session_id == int(sess.id),
+                Payment.tenant_id == int(sess.tenant_id),
+            )
+            .order_by(Payment.id.desc())
+            .first()
+        )
+        if pay is not None and getattr(pay, "order_id", None):
+            order_id = int(pay.order_id)
+    if not order_id:
+        return None, {}
+
+    order = (
+        db.query(Order)
+        .filter(Order.id == int(order_id), Order.tenant_id == int(sess.tenant_id))
+        .first()
+    )
+    if order is None:
+        return None, {}
+
+    items = (
+        db.query(OrderItem)
+        .filter(OrderItem.order_id == int(order.id), OrderItem.issue_session_id == int(sess.id))
+        .all()
+    )
+    if not items:
+        items = db.query(OrderItem).filter(OrderItem.order_id == int(order.id)).all()
+    by_line: dict[int, OrderItem] = {}
+    line_ids = {int(ln.id) for ln in (sess.lines or [])}
+    for oi in items:
+        if int(getattr(oi, "issue_session_id", 0) or 0) == int(sess.id):
+            for ln in sess.lines or []:
+                if int(ln.product_id) == int(oi.product_id):
+                    by_line[int(ln.id)] = oi
+                    break
+        elif not by_line and line_ids:
+            by_line[int(list(line_ids)[0])] = oi
+    return order, by_line
+
+
 def create_order_from_session(
     db: Session,
     sess: DirectSaleSession,
     *,
     lines: list[DirectSaleSessionLine] | None = None,
 ) -> tuple[Order, dict[int, OrderItem]]:
+    existing, existing_items = load_order_for_session(db, sess)
+    if existing is not None:
+        return existing, existing_items
+
     active_lines = list(lines or sess.lines or [])
     if not active_lines:
         raise DirectSaleError("Sesja nie ma pozycji.", code="empty_session")

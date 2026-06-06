@@ -43,6 +43,10 @@ class DirectSaleSession(Base):
     workstation_id = Column(Integer, ForeignKey("operational_workstations.id", ondelete="SET NULL"), nullable=True)
     operational_zone_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
     status = Column(String(16), nullable=False, default="ACTIVE", index=True)
+    #: Explicit completion pipeline state (never infer from side effects).
+    pipeline_status = Column(String(32), nullable=False, default="OPEN", index=True)
+    pipeline_failed_stage = Column(String(32), nullable=True)
+    pipeline_state_json = Column(Text, nullable=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
     payment_context_json = Column(Text, nullable=True)

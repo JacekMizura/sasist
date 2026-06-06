@@ -233,6 +233,23 @@ def _issue_wz_allocations(
     )
 
 
+def load_wz_for_sale_document(
+    db: Session,
+    *,
+    sale_document_id: str,
+) -> StockDocument | None:
+    """Idempotent — WZ already linked to this sale document."""
+    link = (
+        db.query(SaleDocumentStockLink)
+        .filter(SaleDocumentStockLink.sale_document_id == str(sale_document_id))
+        .order_by(SaleDocumentStockLink.id.asc())
+        .first()
+    )
+    if link is None:
+        return None
+    return db.query(StockDocument).filter(StockDocument.id == int(link.stock_document_id)).first()
+
+
 def create_and_post_wz_for_direct_sale(
     db: Session,
     *,
@@ -247,6 +264,23 @@ def create_and_post_wz_for_direct_sale(
     Create linked WZ, reserve stock, FIFO issue — sole warehouse-effect path for direct sales.
     PA/FV (``sale_document``) must already exist; stock is never removed by commercial docs.
     """
+    existing = load_wz_for_sale_document(db, sale_document_id=str(sale_document.id))
+    if existing is not None:
+        label = str(getattr(existing, "document_number", None) or "")
+        link = (
+            db.query(SaleDocumentStockLink)
+            .filter(
+                SaleDocumentStockLink.sale_document_id == str(sale_document.id),
+                SaleDocumentStockLink.stock_document_id == int(existing.id),
+            )
+            .first()
+        )
+        return DirectSaleWzResult(
+            stock_document_id=int(existing.id),
+            document_number=label,
+            link_id=int(link.id) if link is not None else 0,
+        )
+
     sale_series = (
         db.query(DocumentSeries)
         .filter(DocumentSeries.id == str(sale_document.document_series_id))

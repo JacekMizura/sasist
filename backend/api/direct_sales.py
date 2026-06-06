@@ -558,25 +558,26 @@ def post_session_complete(
             payment_splits=splits,
             performed_by_user_id=_operator_id(user),
         )
-        current_step = "commit"
-        try:
-            db.commit()
-        except Exception as commit_exc:
-            db.rollback()
-            sess_reloaded = get_session(db, session_id=session_id, tenant_id=tenant_id)
-            replay = try_idempotent_complete_result(db, sess_reloaded) if sess_reloaded else None
-            if replay is not None:
-                _complete_log.info(
-                    "[direct_sales.complete] commit_replay session_id=%s order_id=%s after=%s",
-                    session_id,
-                    replay.order_id,
-                    type(commit_exc).__name__,
-                )
-                db.commit()
-                result = replay
-            else:
-                raise commit_exc
         current_step = "response"
+        if db.new or db.dirty or db.deleted:
+            try:
+                db.commit()
+            except Exception as commit_exc:
+                sess_reloaded = get_session(db, session_id=session_id, tenant_id=tenant_id)
+                replay = try_idempotent_complete_result(db, sess_reloaded) if sess_reloaded else None
+                if replay is not None:
+                    _complete_log.info(
+                        "[direct_sales.complete] late_commit_replay session_id=%s order_id=%s after=%s",
+                        session_id,
+                        replay.order_id,
+                        type(commit_exc).__name__,
+                    )
+                    db.commit()
+                    result = replay
+                else:
+                    from ..services.direct_sale.operational_error_map import map_complete_exception
+
+                    raise map_complete_exception(commit_exc, step="commit") from commit_exc
         completion = None
         completion_read = None
         try:
@@ -601,7 +602,6 @@ def post_session_complete(
             completion=completion,
         )
     except DirectSaleError as exc:
-        db.rollback()
         step = getattr(exc, "step", None) or current_step
         _complete_log.error(
             "[direct_sales.complete] %s",
@@ -627,7 +627,6 @@ def post_session_complete(
             },
         ) from exc
     except Exception as exc:
-        db.rollback()
         _complete_log.error(
             "[direct_sales.complete] %s",
             json.dumps(
@@ -647,13 +646,16 @@ def post_session_complete(
             current_step,
             exc,
         )
+        from ..services.direct_sale.operational_error_map import map_complete_exception
+
+        mapped = map_complete_exception(exc, step=current_step)
         raise HTTPException(
-            status_code=422,
+            status_code=mapped.http_status,
             detail={
                 "error": "DIRECT_SALE_COMPLETE_FAILED",
-                "step": current_step,
-                "message": str(exc),
-                "code": "SESSION_INVALID",
+                "step": mapped.step or current_step,
+                "message": mapped.message,
+                "code": mapped.code,
             },
         ) from exc
 
