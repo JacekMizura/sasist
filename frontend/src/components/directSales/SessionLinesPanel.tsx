@@ -1,3 +1,4 @@
+import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
 import { sessionStatusPl } from "./directSalesTerminology";
 import { SessionLineCard } from "./SessionLineCard";
@@ -5,9 +6,9 @@ import { SessionLineCard } from "./SessionLineCard";
 type Props = {
   session: DirectSaleSession | null;
   warehouseId: number;
+  settings: DirectSalesSettingsConfig;
   busy: boolean;
   highlight?: boolean;
-  error?: string | null;
   onQtyChange: (lineId: number, qty: number) => void;
   onLocationChange: (lineId: number, locationId: number | null) => void;
   onRemove: (lineId: number) => void;
@@ -16,9 +17,9 @@ type Props = {
 export function SessionLinesPanel({
   session,
   warehouseId,
+  settings,
   busy,
   highlight,
-  error,
   onQtyChange,
   onLocationChange,
   onRemove,
@@ -40,14 +41,12 @@ export function SessionLinesPanel({
         ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-3">
-        {error ? (
-          <div className="mb-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700 whitespace-pre-wrap">{error}</div>
-        ) : null}
         {lines.length ? (
           <ul>
             {lines.map((ln) => (
               <SessionLineCard
                 key={ln.id}
+                settings={settings}
                 line={ln}
                 warehouseId={warehouseId}
                 busy={busy}

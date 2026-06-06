@@ -27,8 +27,13 @@ import {
   isOperationalUnavailableStatus,
   OPERATIONAL_ENDPOINTS,
 } from "../../services/operational/operationalFeatureGuard";
+import { allocationStrategyToIssueStrategy } from "../../utils/directSales/allocationStrategy";
 import { lineTotal } from "../../utils/directSales/lineTotal";
 import { safeTrim } from "../../utils/safeStrings";
+import {
+  DEFAULT_DIRECT_SALES_SETTINGS,
+  type DirectSalesSettingsConfig,
+} from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 
 export type DocumentSubtype = "RECEIPT" | "INVOICE";
 
@@ -37,6 +42,7 @@ type Args = {
   onProductAdded: (productId: number) => void;
   enabled?: boolean;
   onSuspended?: () => void;
+  settings?: DirectSalesSettingsConfig;
 };
 
 function friendlyError(err: unknown): string {
@@ -47,7 +53,13 @@ function friendlyError(err: unknown): string {
   return extractApiErrorMessage(err);
 }
 
-export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = true, onSuspended }: Args) {
+export function useDirectSalesSession({
+  warehouseId,
+  onProductAdded,
+  enabled = true,
+  onSuspended,
+  settings = DEFAULT_DIRECT_SALES_SETTINGS,
+}: Args) {
   const {
     scannerInputValue,
     setScannerInputPlaceholder,
@@ -61,6 +73,8 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [mixedCashAmount, setMixedCashAmount] = useState(0);
+  const [mixedCardAmount, setMixedCardAmount] = useState(0);
   const [cashReceived, setCashReceived] = useState(0);
   const [documentSubtype, setDocumentSubtype] = useState<DocumentSubtype>("RECEIPT");
   const [lastComplete, setLastComplete] = useState<DirectSaleCompleteResult | null>(null);
@@ -77,6 +91,8 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
 
   useEffect(() => {
     setCashReceived((prev) => (prev < total ? total : prev));
+    setMixedCashAmount((prev) => (prev <= 0 ? total : prev));
+    setMixedCardAmount(0);
   }, [total]);
 
   const apiScope = useCallback((): { tenantId: number; warehouseId: number } | null => {
@@ -96,10 +112,14 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
   const ensureSession = useCallback(async () => {
     if (session?.status === "ACTIVE" || session?.status === "CHECKOUT") return session;
     if (session || warehouseId == null) return session;
-    const created = await createDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, warehouseId });
+    const created = await createDirectSaleSession({
+      tenantId: DAMAGE_TENANT_ID,
+      warehouseId,
+      issueStrategy,
+    });
     setSession(created);
     return created;
-  }, [session, warehouseId]);
+  }, [session, warehouseId, issueStrategy]);
 
   const startNewSession = useCallback(async () => {
     if (warehouseId == null) return null;
@@ -107,10 +127,14 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     setCompletionView(null);
     setCompleteError(null);
     setError(null);
-    const created = await createDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, warehouseId });
+    const created = await createDirectSaleSession({
+      tenantId: DAMAGE_TENANT_ID,
+      warehouseId,
+      issueStrategy,
+    });
     setSession(created);
     return created;
-  }, [warehouseId]);
+  }, [warehouseId, issueStrategy]);
 
   const refreshCompletion = useCallback(async (sessionId: number) => {
     const scope = apiScope();
@@ -124,8 +148,31 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     setCompletionView(null);
     setLastComplete(null);
     setCompleteError(null);
-    void startNewSession();
-  }, [startNewSession]);
+    if (settings.auto_start_new_session) {
+      void startNewSession();
+    }
+  }, [settings.auto_start_new_session, startNewSession]);
+
+  useEffect(() => {
+    setDocumentSubtype(settings.default_document_type === "FV" ? "INVOICE" : "RECEIPT");
+  }, [settings.default_document_type, warehouseId]);
+
+  useEffect(() => {
+    const pm = settings.payment_methods;
+    const first =
+      (pm.cash && "CASH") ||
+      (pm.card && "CARD") ||
+      (pm.blik && "BLIK") ||
+      (pm.transfer && "TRANSFER") ||
+      (pm.mixed && "MIXED") ||
+      "CASH";
+    setPaymentMethod(first);
+  }, [settings.payment_methods, warehouseId]);
+
+  const issueStrategy = useMemo(
+    () => allocationStrategyToIssueStrategy(settings.allocation_strategy),
+    [settings.allocation_strategy],
+  );
 
   const dismissCompleteError = useCallback(() => setCompleteError(null), []);
 
@@ -386,11 +433,19 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     setCompleteError(null);
     try {
       if (session.status === "ACTIVE" || session.status === "SUSPENDED") await checkout();
+      const paymentSplits =
+        paymentMethod === "MIXED"
+          ? [
+              ...(mixedCashAmount > 0 ? [{ method: "CASH", amount: mixedCashAmount }] : []),
+              ...(mixedCardAmount > 0 ? [{ method: "CARD", amount: mixedCardAmount }] : []),
+            ]
+          : undefined;
       const result = await completeDirectSaleSession({
         ...scope,
         sessionId: session.id,
         paymentMethod,
         documentSubtype,
+        paymentSplits,
       });
       setLastComplete(result);
       const bundle = result.completion ?? (await fetchDirectSaleCompletion({
@@ -407,7 +462,16 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     } finally {
       setBusy(false);
     }
-  }, [session, apiScope, paymentMethod, documentSubtype, checkout, showScannerToast]);
+  }, [
+    session,
+    apiScope,
+    paymentMethod,
+    documentSubtype,
+    mixedCashAmount,
+    mixedCardAmount,
+    checkout,
+    showScannerToast,
+  ]);
 
   return {
     session,
@@ -419,6 +483,10 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     setPaymentMethod,
     cashReceived,
     setCashReceived,
+    mixedCashAmount,
+    setMixedCashAmount,
+    mixedCardAmount,
+    setMixedCardAmount,
     dismissCompleteError,
     documentSubtype,
     setDocumentSubtype,

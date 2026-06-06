@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 
+import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 import type { useProductSearch } from "../../hooks/directSales/useProductSearch";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
 import { safeDisplay, safeTrim } from "../../utils/safeStrings";
@@ -12,6 +13,7 @@ type SearchState = ReturnType<typeof useProductSearch>;
 type Props = {
   session: DirectSaleSession | null;
   search: SearchState;
+  settings: DirectSalesSettingsConfig;
   busy: boolean;
   onAddProduct: (productId: number, sourceLocationId?: number | null) => void;
   onScanCode: (code: string) => void;
@@ -22,6 +24,7 @@ type Props = {
 export function ProductSearchPanel({
   session,
   search,
+  settings,
   busy,
   onAddProduct,
   onScanCode,
@@ -119,6 +122,7 @@ export function ProductSearchPanel({
           <ProductSearchDropdown
             hits={search.hits}
             activeIndex={search.activeIndex}
+            settings={settings}
             onPick={pickHit}
           />
         </div>

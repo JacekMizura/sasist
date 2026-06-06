@@ -150,6 +150,7 @@ export function normalizeHistoryEntry(raw: unknown): DirectSaleHistoryEntry {
 export function parseCompleteError(err: unknown): DirectSaleCompleteError {
   let message = "Nie udało się zakończyć sprzedaży.";
   let code: string | null = null;
+  let step: string | null = null;
   if (err && typeof err === "object" && "response" in err) {
     const ax = err as { response?: { data?: { detail?: unknown } } };
     const detail = ax.response?.data?.detail;
@@ -158,25 +159,39 @@ export function parseCompleteError(err: unknown): DirectSaleCompleteError {
       const d = detail as Record<string, unknown>;
       if (typeof d.message === "string") message = d.message;
       if (typeof d.code === "string") code = d.code;
+      if (typeof d.step === "string") step = d.step;
     }
   }
   let phase: DirectSaleCompleteError["phase"] = "unknown";
-  const c = (code ?? "").toUpperCase();
-  if (c === "PAYMENT_FAILED" || c.includes("PAYMENT")) phase = "payment";
-  else if (c === "DOCUMENT_GENERATION_FAILED" || c.includes("DOCUMENT") || c.includes("JOB")) phase = "document";
+  const stepKey = (step ?? "").toLowerCase();
+  if (stepKey === "create_payment" || stepKey === "payment") phase = "payment";
+  else if (stepKey === "generate_documents" || stepKey === "document") phase = "document";
   else if (
-    c === "OUT_OF_STOCK" ||
-    c === "ALLOCATION_FAILED" ||
-    c === "ISSUE_FAILED" ||
-    c.includes("STOCK") ||
-    c.includes("ISSUE") ||
-    c.includes("RESERVATION") ||
-    c.includes("LOCATION")
+    stepKey === "plan_allocations" ||
+    stepKey === "reserve_stock" ||
+    stepKey === "issue_stock" ||
+    stepKey === "inventory"
   ) {
     phase = "issue";
   }
-  if (/internal server error/i.test(message)) {
-    message = "Nie udało się zakończyć sprzedaży.";
+  const c = (code ?? "").toUpperCase();
+  if (phase === "unknown") {
+    if (c === "PAYMENT_FAILED" || c.includes("PAYMENT")) phase = "payment";
+    else if (c === "DOCUMENT_GENERATION_FAILED" || c.includes("DOCUMENT") || c.includes("JOB")) phase = "document";
+    else if (
+      c === "OUT_OF_STOCK" ||
+      c === "ALLOCATION_FAILED" ||
+      c === "ISSUE_FAILED" ||
+      c.includes("STOCK") ||
+      c.includes("ISSUE") ||
+      c.includes("RESERVATION") ||
+      c.includes("LOCATION")
+    ) {
+      phase = "issue";
+    }
   }
-  return { message, code, phase };
+  if (/internal server error/i.test(message) && !step) {
+    message = "Błąd serwera podczas zakończenia sprzedaży — szczegóły w logach operacyjnych.";
+  }
+  return { message, code, step, phase };
 }

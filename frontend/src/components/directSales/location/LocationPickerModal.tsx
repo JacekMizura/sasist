@@ -13,7 +13,8 @@ type Props = {
 function zoneLabel(zone: string | null): string {
   const kind = resolveLocationZoneKind(zone);
   if (kind === "store") return "Sklep";
-  if (kind === "backroom") return "Magazyn";
+  if (kind === "reserve") return "Rezerwa";
+  if (kind === "blocked") return "Zablokowane";
   if (kind === "showroom") return "Ekspozycja";
   return "Lokacja";
 }
@@ -31,7 +32,8 @@ export function LocationPickerModal({
   const sorted = [...rows].sort((a, b) => {
     const za = resolveLocationZoneKind(a.operational_zone_type);
     const zb = resolveLocationZoneKind(b.operational_zone_type);
-    const rank = (k: string) => (k === "store" ? 0 : k === "showroom" ? 1 : k === "primary" ? 2 : 3);
+    const rank = (k: string) =>
+      k === "store" ? 0 : k === "primary" ? 1 : k === "reserve" ? 2 : k === "showroom" ? 3 : k === "blocked" ? 9 : 4;
     const dr = rank(za) - rank(zb);
     if (dr !== 0) return dr;
     return (b.sales_priority ?? 0) - (a.sales_priority ?? 0);

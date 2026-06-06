@@ -23,8 +23,13 @@ export function CompleteErrorModal({ error, onRetry, onNewSale, onDismiss }: Pro
         </h2>
         <p className="mt-2 text-sm text-slate-800">{copy.message}</p>
         <p className="mt-1 text-xs text-slate-600">{copy.hint}</p>
+        {error.step ? (
+          <p className="mt-2 text-xs text-slate-500">
+            Etap: <span className="font-medium text-slate-700">{error.step}</span>
+          </p>
+        ) : null}
         {error.code ? (
-          <p className="mt-2 font-mono text-[10px] text-slate-400">Kod: {error.code}</p>
+          <p className="mt-1 font-mono text-[10px] text-slate-400">Kod: {error.code}</p>
         ) : null}
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button

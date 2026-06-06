@@ -11,10 +11,12 @@ import { useProductSearch } from "./useProductSearch";
 import { useDirectSalesHistory } from "./useDirectSalesHistory";
 import { useSuspendedSessions } from "./useSuspendedSessions";
 import { useLocationStock } from "../../pages/wms/direct-sales/hooks/useLocationStock";
+import { useDirectSalesResolvedSettings } from "./useDirectSalesResolvedSettings";
 
 export function useDirectSalesTerminal() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
+  const settingsState = useDirectSalesResolvedSettings(warehouseId);
   const runtime = useOperationalRuntime();
   const [issueFlash, setIssueFlash] = useState(false);
   const [suspendedKey, setSuspendedKey] = useState(0);
@@ -42,6 +44,7 @@ export function useDirectSalesTerminal() {
     onProductAdded,
     enabled: salesEnabled,
     onSuspended: () => setSuspendedKey((k) => k + 1),
+    settings: settingsState.config,
   });
 
   const suspended = useSuspendedSessions({
@@ -107,7 +110,7 @@ export function useDirectSalesTerminal() {
   );
 
   useDirectSalesKeyboard({
-    enabled: salesEnabled && !sessionState.unavailable,
+    enabled: salesEnabled && !sessionState.unavailable && settingsState.config.keyboard_shortcuts,
     onCash: () => sessionState.setPaymentMethod("CASH"),
     onCard: () => sessionState.setPaymentMethod("CARD"),
     onBlik: () => sessionState.setPaymentMethod("BLIK"),
@@ -117,6 +120,8 @@ export function useDirectSalesTerminal() {
   return {
     warehouse,
     warehouseId,
+    settings: settingsState.config,
+    settingsLoading: settingsState.loading,
     runtime,
     status,
     salesEnabled,

@@ -49,7 +49,8 @@ def enrich_session_lines(db: Session, sess: DirectSaleSession) -> list[dict]:
                     product_id=pid,
                     available_only=False,
                 )
-                stock_cache[pid] = float(snap.get("total_available") or 0)
+                summary = snap.get("summary") if isinstance(snap.get("summary"), dict) else {}
+                stock_cache[pid] = float(summary.get("available") or snap.get("total_available") or 0)
             except Exception:
                 stock_cache[pid] = 0.0
         has_hold = bool(ln.stock_reservation_id)

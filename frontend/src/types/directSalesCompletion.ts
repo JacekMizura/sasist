@@ -95,5 +95,6 @@ export type DirectSaleHistoryEntry = {
 export type DirectSaleCompleteError = {
   message: string;
   code: string | null;
+  step: string | null;
   phase: "payment" | "document" | "issue" | "unknown";
 };

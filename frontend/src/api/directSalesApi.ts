@@ -24,10 +24,14 @@ export type DirectSaleScanResult = {
 
 export async function createDirectSaleSession(params: DirectSalesScope & {
   workstationId?: number | null;
+  issueStrategy?: string;
 }): Promise<DirectSaleSession> {
   const { data } = await api.post(
     "direct-sales/session",
-    { workstation_id: params.workstationId ?? null },
+    {
+      workstation_id: params.workstationId ?? null,
+      issue_strategy: params.issueStrategy ?? "AUTO_SPLIT",
+    },
     { params: directSalesQuery(params) },
   );
   return normalizeDirectSaleSession(data);
@@ -179,12 +183,14 @@ export async function completeDirectSaleSession(params: DirectSalesScope & {
   sessionId: number;
   paymentMethod?: string;
   documentSubtype?: string;
+  paymentSplits?: Array<{ method: string; amount: number }>;
 }): Promise<DirectSaleCompleteResult> {
   const { data } = await api.post(
     `direct-sales/session/${params.sessionId}/complete`,
     {
       payment_method: params.paymentMethod ?? "CASH",
       document_subtype: params.documentSubtype ?? "RECEIPT",
+      payment_splits: params.paymentSplits?.length ? params.paymentSplits : undefined,
     },
     { params: directSalesQuery(params) },
   );

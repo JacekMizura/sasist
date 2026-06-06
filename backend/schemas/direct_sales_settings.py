@@ -38,9 +38,13 @@ class DirectSalesSettingsConfig(BaseModel):
     allocation_strategy: AllocationStrategy = "store_first"
     hide_empty_locations: bool = True
     price_display: PriceDisplayMode = "gross"
+    show_ean: bool = True
+    show_sku: bool = True
+    show_catalog_number: bool = True
     show_margin: bool = False
     show_stock: bool = True
     show_product_images: bool = True
+    prefer_store_locations: bool = True
     allow_anonymous: bool = True
     require_customer_for_invoice: bool = True
     auto_save_customers: bool = True

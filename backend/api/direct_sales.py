@@ -529,17 +529,44 @@ def post_session_complete(
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
+    _complete_log = logging.getLogger(__name__)
     sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    current_step = "validation"
+    _complete_log.info(
+        "[direct-sales.complete.validation] session_id=%s tenant_id=%s warehouse_id=%s status=%s lines=%s",
+        session_id,
+        tenant_id,
+        int(sess.warehouse_id),
+        sess.status,
+        len(sess.lines or []),
+    )
     try:
+        splits = None
+        if body.payment_splits:
+            splits = [{"method": s.method, "amount": float(s.amount)} for s in body.payment_splits]
         result = complete_direct_sale_session(
             db,
             sess,
             payment_method=body.payment_method,
             document_subtype=body.document_subtype,
+            payment_splits=splits,
             performed_by_user_id=_operator_id(user),
         )
+        current_step = "commit"
         db.commit()
-        completion = build_direct_sale_completion_read(db, tenant_id=tenant_id, session_id=int(sess.id))
+        current_step = "response"
+        completion = None
+        completion_read = None
+        try:
+            completion_read = build_direct_sale_completion_read(db, tenant_id=tenant_id, session_id=int(sess.id))
+            if completion_read:
+                completion = DirectSaleCompletionRead(**completion_read)
+        except Exception as read_exc:
+            _complete_log.warning(
+                "[direct-sales.complete.error] session_id=%s step=response read_model_failed=%s",
+                session_id,
+                read_exc,
+            )
         return DirectSaleCompleteResponse(
             session_id=result.session_id,
             order_id=result.order_id,
@@ -549,13 +576,43 @@ def post_session_complete(
             total_amount=result.total_amount,
             payment_status=result.payment_status,
             payment_method=result.payment_method,
-            completion=DirectSaleCompletionRead(**completion) if completion else None,
+            completion=completion,
         )
     except DirectSaleError as exc:
         db.rollback()
+        step = getattr(exc, "step", None) or current_step
+        _complete_log.error(
+            "[direct-sales.complete.error] session_id=%s step=%s code=%s message=%s",
+            session_id,
+            step,
+            exc.code,
+            exc.message,
+        )
         raise HTTPException(
             status_code=exc.http_status,
-            detail={"message": exc.message, "code": getattr(exc, "code", None)},
+            detail={
+                "error": "DIRECT_SALE_COMPLETE_FAILED",
+                "step": step,
+                "message": exc.message,
+                "code": getattr(exc, "code", None),
+            },
+        ) from exc
+    except Exception as exc:
+        db.rollback()
+        _complete_log.exception(
+            "[direct-sales.complete.error] session_id=%s step=%s unhandled=%s",
+            session_id,
+            current_step,
+            exc,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "DIRECT_SALE_COMPLETE_FAILED",
+                "step": current_step,
+                "message": str(exc),
+                "code": "SESSION_INVALID",
+            },
         ) from exc
 
 

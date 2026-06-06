@@ -108,9 +108,15 @@ class DirectSaleStartPaymentBody(BaseModel):
     payment_method: str = Field("CASH", max_length=24)
 
 
+class DirectSalePaymentSplit(BaseModel):
+    method: str = Field(..., max_length=24)
+    amount: float = Field(..., gt=0)
+
+
 class DirectSaleCompleteBody(BaseModel):
     payment_method: str = Field("CASH", max_length=24)
     document_subtype: str = Field("RECEIPT", description="RECEIPT or INVOICE")
+    payment_splits: list[DirectSalePaymentSplit] | None = None
 
 
 class DirectSalePaymentTransactionRead(BaseModel):

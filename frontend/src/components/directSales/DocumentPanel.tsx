@@ -1,12 +1,16 @@
 import type { DocumentSubtype } from "../../hooks/directSales/useDirectSalesSession";
+import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 
 type Props = {
   value: DocumentSubtype;
+  settings: DirectSalesSettingsConfig;
+  hasCustomer: boolean;
   onChange: (v: DocumentSubtype) => void;
   disabled?: boolean;
 };
 
-export function DocumentPanel({ value, onChange, disabled }: Props) {
+export function DocumentPanel({ value, settings, hasCustomer, onChange, disabled }: Props) {
+  const invoiceBlocked = settings.require_customer_for_invoice && !hasCustomer;
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Dokument sprzedaży</div>
@@ -23,7 +27,8 @@ export function DocumentPanel({ value, onChange, disabled }: Props) {
         </button>
         <button
           type="button"
-          disabled={disabled}
+          disabled={disabled || invoiceBlocked}
+          title={invoiceBlocked ? "Przypisz klienta przed wystawieniem FV" : undefined}
           onClick={() => onChange("INVOICE")}
           className={`flex-1 rounded-md px-2 py-2 text-xs font-semibold transition ${
             value === "INVOICE" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"

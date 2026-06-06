@@ -30,9 +30,13 @@ export type DirectSalesSettingsConfig = {
   allocation_strategy: AllocationStrategy;
   hide_empty_locations: boolean;
   price_display: PriceDisplayMode;
+  show_ean: boolean;
+  show_sku: boolean;
+  show_catalog_number: boolean;
   show_margin: boolean;
   show_stock: boolean;
   show_product_images: boolean;
+  prefer_store_locations: boolean;
   allow_anonymous: boolean;
   require_customer_for_invoice: boolean;
   auto_save_customers: boolean;
@@ -79,9 +83,13 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
   allocation_strategy: "store_first",
   hide_empty_locations: true,
   price_display: "gross",
+  show_ean: true,
+  show_sku: true,
+  show_catalog_number: true,
   show_margin: false,
   show_stock: true,
   show_product_images: true,
+  prefer_store_locations: true,
   allow_anonymous: true,
   require_customer_for_invoice: true,
   auto_save_customers: true,

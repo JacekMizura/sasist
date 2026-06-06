@@ -10,6 +10,8 @@ from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionL
 from ...models.order import Order
 from ...models.order_item import OrderItem
 from ..barcode_generation import next_internal_order_number, next_order_barcode
+from ..direct_sales_settings_service import resolve_direct_sales_settings
+from ..order_default_new_panel_status import assign_default_new_panel_status_to_order
 from .errors import DirectSaleError
 
 
@@ -51,6 +53,14 @@ def create_order_from_session(
         packed_at=datetime.utcnow(),
     )
     db.add(order)
+    db.flush()
+
+    settings = resolve_direct_sales_settings(db, tenant_id=tid, warehouse_id=wid)
+    panel_status_id = settings.resolved.default_order_status_id
+    if panel_status_id is not None and int(panel_status_id) > 0:
+        order.order_ui_status_id = int(panel_status_id)
+    else:
+        assign_default_new_panel_status_to_order(db, order)
     db.flush()
 
     items_by_line: dict[int, OrderItem] = {}

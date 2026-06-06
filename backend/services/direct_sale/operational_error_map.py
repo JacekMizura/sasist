@@ -23,7 +23,12 @@ def _msg_lower(exc: Exception) -> str:
 def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
     if isinstance(exc, DirectSaleError):
         code = _normalize_direct_sale_code(exc.code, step=step)
-        return DirectSaleError(_operator_message(code, exc.message), code=code, http_status=_http_for_code(code))
+        return DirectSaleError(
+            _operator_message(code, exc.message),
+            code=code,
+            http_status=_http_for_code(code),
+            step=getattr(exc, "step", None) or step,
+        )
 
     msg = _msg_lower(exc)
     if isinstance(exc, ValueError) or "brak stanu" in msg or "insufficient" in msg:
@@ -31,41 +36,48 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
             "Brak wystarczającego stanu do wydania towaru.",
             code="OUT_OF_STOCK",
             http_status=409,
+            step=step,
         )
     if "payment" in msg or step == "create_payment":
         return DirectSaleError(
             "Nie udało się zaksięgować płatności.",
             code="PAYMENT_FAILED",
             http_status=422,
+            step=step,
         )
     if "document" in msg or "series" in msg or step == "generate_documents":
         return DirectSaleError(
             "Sprzedaż nie została zakończona — błąd generowania dokumentu.",
             code="DOCUMENT_GENERATION_FAILED",
             http_status=422,
+            step=step,
         )
     if step == "plan_allocations":
         return DirectSaleError(
             "Nie udało się zaplanować wydania towaru z magazynu.",
             code="ALLOCATION_FAILED",
             http_status=409,
+            step=step,
         )
     if step in ("reserve_stock", "issue_stock"):
         return DirectSaleError(
             "Nie udało się zdjąć towaru z magazynu.",
             code="ISSUE_FAILED",
             http_status=409,
+            step=step,
         )
     if step == "create_order":
         return DirectSaleError(
             "Nie udało się utworzyć zamówienia sprzedaży.",
             code="SESSION_INVALID",
             http_status=422,
+            step=step,
         )
     return DirectSaleError(
         "Nie udało się zakończyć sprzedaży.",
         code="SESSION_INVALID",
         http_status=422,
+        step=step,
     )
 
 

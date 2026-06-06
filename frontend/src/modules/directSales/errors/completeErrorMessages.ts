@@ -12,6 +12,21 @@ const CODE_MESSAGES: Record<string, string> = {
   missing_source_location: "Brak lokalizacji źródłowej. Wybierz lokalizację dla pozycji.",
 };
 
+const STEP_HINTS: Record<string, string> = {
+  validation: "Sprawdź dane sesji, klienta i dokument sprzedaży.",
+  create_order: "Nie udało się utworzyć zamówienia — rozpocznij nową sesję.",
+  plan_allocations: "Popraw lokalizacje pozycji lub włącz sprzedaż ponad stan w ustawieniach.",
+  reserve_stock: "Rezerwacja stanu nie powiodła się — odśwież stany i spróbuj ponownie.",
+  issue_stock: "Wydanie z magazynu nie powiodło się — sprawdź stany w wybranych lokalizacjach.",
+  create_payment: "Zmień metodę płatności lub kwoty i spróbuj ponownie.",
+  generate_documents: "Sprzedaż mogła się udać — sprawdź historię i kolejkę dokumentów.",
+  complete_session: "Finalizacja sesji nie powiodła się — spróbuj ponownie.",
+  inventory: "Problem z alokacją lub wydaniem towaru z magazynu.",
+  payment: "Problem z zaksięgowaniem płatności.",
+  document: "Problem z generowaniem dokumentu sprzedaży.",
+  commit: "Problem z zapisem transakcji — spróbuj ponownie.",
+};
+
 const PHASE_HINTS: Record<DirectSaleCompleteError["phase"], string> = {
   payment: "Sesja pozostaje aktywna — możesz zmienić metodę płatności i spróbować ponownie.",
   document: "Sesja może być zakończona — sprawdź historię sprzedaży i kolejkę dokumentów.",
@@ -39,9 +54,11 @@ export function resolveCompleteOperatorMessage(error: DirectSaleCompleteError): 
     unknown: "Nie udało się zakończyć sprzedaży",
   };
 
+  const stepHint = error.step ? STEP_HINTS[error.step] : null;
+
   return {
     title: titles[error.phase],
     message,
-    hint: PHASE_HINTS[error.phase],
+    hint: stepHint ?? PHASE_HINTS[error.phase],
   };
 }

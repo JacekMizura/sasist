@@ -94,9 +94,17 @@ def complete_direct_sale_session(
     *,
     payment_method: str = "CASH",
     document_subtype: str = "RECEIPT",
+    payment_splits: list[dict] | None = None,
     performed_by_user_id: int | None = None,
 ) -> DirectSaleCompleteResult:
     sid = int(sess.id)
+    logger.info(
+        "[direct-sales.complete.start] session_id=%s tenant_id=%s warehouse_id=%s status=%s",
+        sid,
+        int(sess.tenant_id),
+        int(sess.warehouse_id),
+        sess.status,
+    )
     if sess.status not in ("ACTIVE", "CHECKOUT", "SUSPENDED"):
         raise DirectSaleError("Sesja nie może być zakończona.", code="SESSION_INVALID")
     if sess.order_id is not None:
@@ -147,6 +155,7 @@ def complete_direct_sale_session(
                 sess=sess,
                 amount=total,
                 method=payment_method,
+                payment_splits=payment_splits,
                 performed_by_user_id=performed_by_user_id,
             )
 

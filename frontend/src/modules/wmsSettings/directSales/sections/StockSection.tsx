@@ -33,6 +33,12 @@ export function StockSection({ config, onChange }: Props) {
         </select>
       </FieldRow>
       <ToggleRow
+        label="Preferuj lokalizacje sklepowe"
+        hint="W terminalu i wyborze lokacji najpierw pokazuj strefę sklepu."
+        checked={config.prefer_store_locations}
+        onChange={(prefer_store_locations) => onChange({ prefer_store_locations })}
+      />
+      <ToggleRow
         label="Ukrywaj lokalizacje bez stanu"
         checked={config.hide_empty_locations}
         onChange={(hide_empty_locations) => onChange({ hide_empty_locations })}

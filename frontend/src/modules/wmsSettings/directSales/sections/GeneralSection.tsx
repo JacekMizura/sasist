@@ -32,10 +32,10 @@ export function GeneralSection({ config, statusOptions, onChange }: Props) {
           onChange={(default_order_status_id) => onChange({ default_order_status_id })}
         />
       </FieldRow>
-      <details className="rounded-lg border border-slate-200/90 bg-slate-50/60 p-3 text-sm">
-        <summary className="cursor-pointer font-medium text-slate-800">Statusy operacyjne (opcjonalne)</summary>
+      <details className="rounded-lg border border-slate-200/90 bg-slate-50/60 p-3 text-sm" open>
+        <summary className="cursor-pointer font-medium text-slate-800">Statusy operacyjne workflow</summary>
         <p className="mt-2 text-xs text-slate-500">
-          Przygotowane pod przyszłe automatyzacje workflow — nie zmieniają jeszcze zachowania terminala.
+          Statusy z panelu zamówień (grupa / podgrupa). Zapis jako ID — etykiety ładują się dynamicznie z API.
         </p>
         <div className="mt-3 space-y-3">
           <FieldRow label="Status po utworzeniu sesji">

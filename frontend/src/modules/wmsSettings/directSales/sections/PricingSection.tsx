@@ -20,6 +20,9 @@ export function PricingSection({ config, onChange }: Props) {
           <option value="both">Netto + brutto</option>
         </select>
       </FieldRow>
+      <ToggleRow label="Pokazuj EAN na karcie produktu" checked={config.show_ean} onChange={(show_ean) => onChange({ show_ean })} />
+      <ToggleRow label="Pokazuj SKU na karcie produktu" checked={config.show_sku} onChange={(show_sku) => onChange({ show_sku })} />
+      <ToggleRow label="Pokazuj numer katalogowy" checked={config.show_catalog_number} onChange={(show_catalog_number) => onChange({ show_catalog_number })} />
       <ToggleRow label="Pokazuj marżę operatorowi" checked={config.show_margin} onChange={(show_margin) => onChange({ show_margin })} />
       <ToggleRow label="Pokazuj stan magazynowy operatorowi" checked={config.show_stock} onChange={(show_stock) => onChange({ show_stock })} />
       <ToggleRow label="Pokazuj zdjęcia produktów" checked={config.show_product_images} onChange={(show_product_images) => onChange({ show_product_images })} />

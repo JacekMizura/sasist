@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-04 — Direct sales terminal + complete-sale hardening
+
+- Terminal reads resolved settings (`useDirectSalesResolvedSettings`): EAN/SKU/catalog, stock/images, payments, customer/FV rules, allocation strategy.
+- Fixed stock hint always 0 (`session_enrichment` → `summary.available`).
+- Complete pipeline: structured errors with `step`, validation log, soft-fail completion read; `allow_oversell` in issue plan.
+- Payment: cash change UI; MIXED split (cash + card) via `payment_splits`.
+- Error modal shows backend step + message (no generic 500).
+
 ## 2026-06-04 — Layout editor state corruption fix
 
 - `reindexGeometricRow` no longer overwrites rack names or regenerates bins (root cause of cross-rack mutation).

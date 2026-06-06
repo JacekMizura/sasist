@@ -27,6 +27,7 @@ def orchestrate_direct_sale_payment(
     sess: DirectSaleSession,
     amount: float,
     method: str = "CASH",
+    payment_splits: list[dict] | None = None,
     performed_by_user_id: int | None = None,
 ) -> Payment:
     amt = round(float(amount or 0), 2)
@@ -34,7 +35,23 @@ def orchestrate_direct_sale_payment(
         raise DirectSaleError("Kwota płatności musi być > 0.", code="invalid_payment_amount")
     m = (method or "CASH").strip().upper()
 
-    provider = _PROVIDER_FOR_METHOD.get(m, "CASH")
+    split_rows: list[tuple[str, float]] = []
+    if m == "MIXED" and payment_splits:
+        for row in payment_splits:
+            sm = str(row.get("method") or "").strip().upper()
+            sa = round(float(row.get("amount") or 0), 2)
+            if sm and sa > 0:
+                split_rows.append((sm, sa))
+        split_sum = round(sum(x[1] for x in split_rows), 2)
+        if abs(split_sum - amt) > 0.02:
+            raise DirectSaleError(
+                f"Suma płatności mieszanej ({split_sum}) musi równać się kwocie sprzedaży ({amt}).",
+                code="invalid_payment_amount",
+            )
+    if not split_rows:
+        split_rows = [(m, amt)]
+
+    provider = _PROVIDER_FOR_METHOD.get(m if m != "MIXED" else split_rows[0][0], "CASH")
     terminal_id = str(sess.workstation_id) if sess.workstation_id else None
     pay = Payment(
         tenant_id=int(order.tenant_id),
@@ -54,13 +71,14 @@ def orchestrate_direct_sale_payment(
     db.add(pay)
     db.flush()
 
-    txn_auth = PaymentTransaction(
-        payment_id=int(pay.id),
-        method=m,
-        amount=amt,
-        status="AUTHORIZED",
-    )
-    db.add(txn_auth)
+    for sm, sa in split_rows:
+        txn_auth = PaymentTransaction(
+            payment_id=int(pay.id),
+            method=sm,
+            amount=sa,
+            status="AUTHORIZED",
+        )
+        db.add(txn_auth)
     db.flush()
 
     emit_operational_sales_event(
@@ -76,14 +94,15 @@ def orchestrate_direct_sale_payment(
         extra={"payment_id": int(pay.id), "amount": amt, "method": m},
     )
 
-    txn_settle = PaymentTransaction(
-        payment_id=int(pay.id),
-        method=m,
-        amount=amt,
-        status="PAID",
-        external_ref=f"DS-{sess.id}-{pay.id}",
-    )
-    db.add(txn_settle)
+    for sm, sa in split_rows:
+        txn_settle = PaymentTransaction(
+            payment_id=int(pay.id),
+            method=sm,
+            amount=sa,
+            status="PAID",
+            external_ref=f"DS-{sess.id}-{pay.id}-{sm}",
+        )
+        db.add(txn_settle)
     pay.status = "PAID"
     pay.captured_at = datetime.utcnow()
     pay.settlement_state = "SETTLED"
