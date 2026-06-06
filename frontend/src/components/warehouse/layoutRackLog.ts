@@ -42,6 +42,28 @@ export function logLayoutRackPersist(racks: RackState[]): void {
   );
 }
 
+export function logLayoutSaveStart(meta: { warehouse_id: number | string; rack_count: number }): void {
+  console.info("[layout.save.start]", meta);
+}
+
+export function logLayoutSavePayload(meta: {
+  warehouse_id: number | string;
+  rack_count: number;
+  changed_rack_count: number;
+  payload_bytes: number;
+}): void {
+  console.info("[layout.save.payload]", meta);
+}
+
+export function logLayoutSaveDuration(meta: {
+  warehouse_id: number | string;
+  duration_ms: number;
+  success: boolean;
+}): void {
+  const tag = meta.success ? "[layout.save.success]" : "[layout.save.error]";
+  console.info(tag, { warehouse_id: meta.warehouse_id, duration_ms: meta.duration_ms });
+}
+
 export function logLayoutRackHydrate(racks: RackState[]): void {
   console.info(
     "[layout.rack.hydrate]",

@@ -157,6 +157,7 @@ export type WarehouseCanvasProps = {
   /** Racks outside building boundary; drawn with red stroke. */
   outsideRackIds?: Array<number | string>;
   selectedRack: RackState | undefined;
+  editingRackId?: number | string | null;
   isMultiSelect: boolean;
   setInternalLayoutRackId: (id: number | string | null) => void;
   setShowElevationForRackId: (id: number | string | null) => void;
@@ -346,6 +347,7 @@ function WarehouseCanvasInner({
   onReadModeCanvasBackgroundClick,
   outsideRackIds,
   selectedRack,
+  editingRackId = null,
   isMultiSelect,
   setInternalLayoutRackId,
   setShowElevationForRackId,
@@ -1479,6 +1481,8 @@ function WarehouseCanvasInner({
                     part="toolbar"
                     selectedRack={selectedRack}
                     isMultiSelect={isMultiSelect}
+                    draggingRackId={draggingRackId}
+                    editingRackId={editingRackId}
                     cellPx={cellPx}
                     setInternalLayoutRackId={setInternalLayoutRackId}
                     setShowElevationForRackId={setShowElevationForRackId}

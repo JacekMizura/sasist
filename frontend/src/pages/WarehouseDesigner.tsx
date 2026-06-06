@@ -5,7 +5,13 @@ import { warn } from "../utils/logger";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
 import { activeBinsForRack, formatVolume, createBinsForRack, binsToLevels, volumePerBin, volumePerBinFromTotal, cmToCells, cellsToCm, getCatalogItemSpec, getLevelConfig, getTotalLocations, getNextIndexInRow, getNextRackIndex, ROW_LABEL_ADDRESS_PATTERN, reindexGeometricRow, findSnapToRowPosition, getDragSlotHighlights, binUsedVolumeDm3, binVolumeDm3, getRackDisplayId, getAllPositionsFromRacks, clampGridToBuilding, metersToCells, duplicateRacksAtPosition, generateRackUuid, assignUniqueRackNamesToNewRacks, validateAllRackNamesInLayout, validateLayoutEntityIntegrity, getProposedFirstRackLabelForStampFromCatalog, normalizeRowPrefixLetters, generateRackNames, validateGeneratedRackNames, countPlaceRowWithTemplateRacks, countEmptyRowSlotsInDraw, catalogItemTemplateKey, catalogItemFromTemplateKey, rowContainerTemplateIdFromCatalogItem, rackMatchesSlotRackId } from "../components/warehouse/warehouseUtils";
-import { logLayoutRackHydrate, logLayoutRackPersist } from "../components/warehouse/layoutRackLog";
+import {
+  logLayoutRackHydrate,
+  logLayoutRackPersist,
+  logLayoutSaveDuration,
+  logLayoutSavePayload,
+  logLayoutSaveStart,
+} from "../components/warehouse/layoutRackLog";
 import {
   aisleHalfWidthCellsFromCm,
   collectPackingCentersCells,
@@ -290,6 +296,10 @@ export default function WarehouseDesigner() {
     return errors.join(" · ");
   }, [layout]);
   const [selectedRackId, setSelectedRackId] = useState<number | string | null>(null);
+  /** Details drawer — opened by double-click, independent from selection. */
+  const [previewRackId, setPreviewRackId] = useState<number | string | null>(null);
+  /** Name field focus in properties drawer — suppresses floating toolbar. */
+  const [editingRackId, setEditingRackId] = useState<number | string | null>(null);
   const [pathPoints, setPathPoints] = useState<{ x: number; y: number }[] | null>(null);
   const [pathSegments, setPathSegments] = useState<{ x: number; y: number }[][] | null>(null);
   const [pathMarkers, setPathMarkers] = useState<{ x: number; y: number; label: string }[] | null>(null);
@@ -2040,6 +2050,8 @@ export default function WarehouseDesigner() {
       return;
     }
     setSaving(true);
+    const saveStarted = performance.now();
+    logLayoutSaveStart({ warehouse_id: whId, rack_count: layout.racks.length });
     const rackNamesForPersistLog = layout.racks.map((r) => ({
       rack_id: r.id ?? r.rack_index,
       name: (r.name ?? "").trim() || null,
@@ -2115,18 +2127,27 @@ export default function WarehouseDesigner() {
         const msg = `Nie można zapisać — nieprawidłowy układ: ${validated.errors.join(" · ")}`;
         console.error("[saveLayout] validation failed:", validated.errors);
         setSnackbar({ message: msg });
+        logLayoutSaveDuration({ warehouse_id: whId, duration_ms: Math.round(performance.now() - saveStarted), success: false });
         return;
       }
+
+      const payloadJson = JSON.stringify(validated.payload);
+      logLayoutSavePayload({
+        warehouse_id: whId,
+        rack_count: layout.racks.length,
+        changed_rack_count: layout.racks.length,
+        payload_bytes: payloadJson.length,
+      });
 
       await api.put(`/warehouse/${whId}/layout`, validated.payload, { params: { tenant_id: TENANT_ID } });
       setLastSavedAt(Date.now());
       logLayoutRackPersist(layout.racks);
+      logLayoutSaveDuration({ warehouse_id: whId, duration_ms: Math.round(performance.now() - saveStarted), success: true });
       for (const { rack_id, name } of rackNamesForPersistLog) {
         if (name) {
           logRackRename({ rack_id, old_name: name, new_name: name, persisted: true });
         }
       }
-      if (selectedWarehouseId) await loadLayout(selectedWarehouseId);
     } catch (err: unknown) {
       console.error("Save layout:", err);
       const ax = err as { response?: { status?: number; data?: unknown } };
@@ -2290,6 +2311,8 @@ export default function WarehouseDesigner() {
       setLayout,
       setSelectedRackId,
       setSelectedRackIds,
+      setPreviewRackId,
+      setRackPanelDismissed,
       setSelectedVisualId,
       setSelectedVisualIds,
       setSelectedAisleIndex,
@@ -3026,28 +3049,43 @@ export default function WarehouseDesigner() {
     selectedRackId == null
       ? undefined
       : layout.racks.find((r) => rackMatchesSlotRackId(r, selectedRackId));
+  const previewRack =
+    previewRackId == null
+      ? undefined
+      : layout.racks.find((r) => rackMatchesSlotRackId(r, previewRackId));
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.some((id) => rackMatchesSlotRackId(r, id)));
   const isMultiSelect = selectedRackIds.length > 1;
   const routePanelVisible = isRouteActive || routeRackIds.length > 0;
   const rackPropertiesPanelVisible =
     mainView === "layout" &&
     !rackPanelDismissed &&
-    (selectedRack != null || routePanelVisible) &&
+    (previewRack != null || routePanelVisible) &&
     selectedAisleIndex == null &&
     selectedVisualIds.length === 0;
 
   const closeRackPanel = useCallback(() => {
     setRackPanelDismissed(true);
-    setSelectedRackId(null);
-    setSelectedRackIds([]);
+    setPreviewRackId(null);
+    setEditingRackId(null);
   }, []);
 
   useEffect(() => {
     if (mainView !== "layout") return;
-    if (selectedRackId != null || routePanelVisible) {
+    if (routePanelVisible) {
       setRackPanelDismissed(false);
     }
-  }, [mainView, selectedRackId, routePanelVisible]);
+  }, [mainView, routePanelVisible]);
+
+  useEffect(() => {
+    if (previewRackId == null || selectedRackId == null) return;
+    const sameRack = layout.racks.some(
+      (r) => rackMatchesSlotRackId(r, previewRackId) && rackMatchesSlotRackId(r, selectedRackId),
+    );
+    if (!sameRack) {
+      setPreviewRackId(null);
+      setRackPanelDismissed(true);
+    }
+  }, [selectedRackId, previewRackId, layout.racks]);
 
   useEffect(() => {
     if (mainView !== "layout") return;
@@ -4024,6 +4062,9 @@ export default function WarehouseDesigner() {
               collisionRackId,
               collisionRackIds,
               selectedRack,
+              propertiesRack: previewRack ?? selectedRack,
+              editingRackId,
+              setEditingRackId,
               isMultiSelect,
               onRackClickPassthrough: undefined,
               isRoutePlanningMode: isRouteActive,

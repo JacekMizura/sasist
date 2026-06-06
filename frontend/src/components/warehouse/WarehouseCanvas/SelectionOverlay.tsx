@@ -2,6 +2,7 @@ import React from "react";
 import { log } from "../../../utils/logger";
 import type { RackState } from "../../../types/warehouse";
 import type { LayoutState } from "../../../types/warehouse";
+import { rackMatchesSlotRackId, rackPrimaryId } from "../warehouseUtils";
 import { cellToPx } from "../renderUtils";
 import { radius } from "../../../layout/designTokens";
 
@@ -24,6 +25,8 @@ type ToolbarProps = {
   part: "toolbar";
   selectedRack: RackState | undefined;
   isMultiSelect: boolean;
+  draggingRackId?: number | string | null;
+  editingRackId?: number | string | null;
   cellPx: number;
   setInternalLayoutRackId: (id: number | string | null) => void;
   setShowElevationForRackId: (id: number | string | null) => void;
@@ -89,6 +92,8 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
   const {
     selectedRack,
     isMultiSelect,
+    draggingRackId = null,
+    editingRackId = null,
     cellPx,
     setInternalLayoutRackId,
     setShowElevationForRackId,
@@ -98,7 +103,9 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     onCopyRack,
   } = props;
   if (!selectedRack || isMultiSelect) return null;
-  const rackKey = selectedRack.id ?? selectedRack.rack_index;
+  if (draggingRackId != null) return null;
+  if (editingRackId != null && rackMatchesSlotRackId(selectedRack, editingRackId)) return null;
+  const rackKey = rackPrimaryId(selectedRack);
   return (
     <div
       className="absolute z-[50] flex gap-0.5 shadow-lg rounded overflow-hidden border border-cyan-500/50 bg-slate-800"
@@ -153,7 +160,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           log("DELETE CLICK", selectedRack);
           setLayout((prev) => ({
             ...prev,
-            racks: prev.racks.filter((r) => String(r.id ?? r.rack_index) !== String(rackKey)),
+            racks: prev.racks.filter((r) => !rackMatchesSlotRackId(r, rackKey)),
           }));
           setSelectedRackId(null);
           setSelectedRackIds([]);

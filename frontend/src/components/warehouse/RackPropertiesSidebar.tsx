@@ -11,13 +11,14 @@ import {
   validateRackName,
   effectiveRackDisplayName,
   rackMatchesSlotRackId,
+  rackPrimaryId,
 } from "./warehouseUtils";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { logRackRename } from "./rackRenameLog";
 
-const DEFAULT_WIDTH = 300;
-const MIN_WIDTH = 260;
-const MAX_WIDTH = 420;
+const DEFAULT_WIDTH = 420;
+const MIN_WIDTH = 320;
+const MAX_WIDTH = 480;
 const WIDTH_STORAGE_KEY = "wms.rackPropertiesSidebarWidth";
 
 export type RackPropertiesSidebarProps = {
@@ -43,6 +44,8 @@ export type RackPropertiesSidebarProps = {
   optimizeRoute: () => void;
   finishRoute: () => void;
   onClose: () => void;
+  editingRackId?: number | string | null;
+  onEditingRackIdChange?: (id: number | string | null) => void;
   onSaveLayout?: () => void;
   saving?: boolean;
   lastSavedAt?: number | null;
@@ -87,6 +90,8 @@ export function RackPropertiesSidebar({
   optimizeRoute,
   finishRoute,
   onClose,
+  editingRackId = null,
+  onEditingRackIdChange,
   onSaveLayout,
   saving = false,
   lastSavedAt = null,
@@ -193,6 +198,25 @@ export function RackPropertiesSidebar({
     };
   }, [panelWidth]);
 
+  const requestClose = useCallback(() => {
+    if (nameSaveHint === "dirty" && !window.confirm("Masz niezapisane zmiany nazwy regału. Zamknąć panel bez zapisu układu?")) {
+      return;
+    }
+    onEditingRackIdChange?.(null);
+    onClose();
+  }, [nameSaveHint, onClose, onEditingRackIdChange]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        requestClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [requestClose]);
+
   const rackTitle = selectedRack ? effectiveRackDisplayName(selectedRack, layout) : "Regał";
   const saveStatusLabel = saving
     ? "Zapisywanie…"
@@ -207,10 +231,10 @@ export function RackPropertiesSidebar({
   return (
     <aside
       ref={asideScrollRef}
-      className={`fixed right-0 z-40 flex max-h-[calc(100vh-7.5rem)] min-h-0 flex-col overflow-hidden rounded-l-xl border border-slate-200 bg-white shadow-xl ${
+      className={`fixed right-0 top-0 z-[40] flex h-screen min-h-0 w-full max-w-[100vw] flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl md:max-w-none ${
         compact ? "text-[11px]" : ""
       }`}
-      style={{ top: "7.5rem", width: panelWidth, overscrollBehavior: "contain" }}
+      style={{ width: `min(100vw, ${panelWidth}px)`, overscrollBehavior: "contain" }}
       role="dialog"
       aria-label="Właściwości regału"
     >
@@ -253,7 +277,7 @@ export function RackPropertiesSidebar({
           <button
             type="button"
             aria-label="Zamknij panel"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
           >
             ✕
@@ -290,6 +314,9 @@ export function RackPropertiesSidebar({
                 <input
                   type="text"
                   value={nameDraft}
+                  onFocus={() => {
+                    if (selectedRack) onEditingRackIdChange?.(rackPrimaryId(selectedRack));
+                  }}
                   onChange={(e) => {
                     setNameDraft(e.target.value);
                     setNameSaveHint("dirty");
@@ -308,6 +335,7 @@ export function RackPropertiesSidebar({
                   }}
                   onBlur={() => {
                     void commitRackName(nameDraft, "blur");
+                    onEditingRackIdChange?.(null);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -317,7 +345,7 @@ export function RackPropertiesSidebar({
                     }
                     if (e.key === "Escape") {
                       e.preventDefault();
-                      onClose();
+                      requestClose();
                     }
                   }}
                   placeholder={getRackDisplayId(selectedRack, layout)}
@@ -326,6 +354,25 @@ export function RackPropertiesSidebar({
                   }`}
                 />
                 {nameError ? <p className="text-[11px] text-red-600">{nameError}</p> : null}
+                <div className="mt-2">
+                  <label className="block text-[10px] font-semibold uppercase text-slate-500">Typ regału</label>
+                  <select
+                    value={selectedRack.rack_type === "store" ? "store" : "warehouse"}
+                    onChange={(e) => {
+                      const rack_type = e.target.value === "store" ? "store" : "warehouse";
+                      setLayout((prev) => ({
+                        ...prev,
+                        racks: prev.racks.map((rack) =>
+                          racksMatchIdentity(rack, selectedRack) ? { ...rack, rack_type } : rack
+                        ),
+                      }));
+                    }}
+                    className="mt-0.5 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-800"
+                  >
+                    <option value="warehouse">Magazyn</option>
+                    <option value="store">Sklep</option>
+                  </select>
+                </div>
               </div>
             ) : (
               <p className="text-sm font-medium text-slate-600">Wybierz regał na planie lub zamknij panel.</p>

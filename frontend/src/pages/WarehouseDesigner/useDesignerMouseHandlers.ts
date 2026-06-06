@@ -96,6 +96,8 @@ export interface UseDesignerMouseHandlersSetters {
   setLayout: Dispatch<SetStateAction<LayoutState>>;
   setSelectedRackId: Dispatch<SetStateAction<number | string | null>>;
   setSelectedRackIds: Dispatch<SetStateAction<Array<number | string>>>;
+  setPreviewRackId: Dispatch<SetStateAction<number | string | null>>;
+  setRackPanelDismissed: Dispatch<SetStateAction<boolean>>;
   setSelectedVisualId: Dispatch<SetStateAction<string | null>>;
   setSelectedVisualIds: Dispatch<SetStateAction<string[]>>;
   setSelectedAisleIndex: Dispatch<SetStateAction<number | null>>;
@@ -219,6 +221,8 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     setLayout,
     setSelectedRackId,
     setSelectedRackIds,
+    setPreviewRackId,
+    setRackPanelDismissed,
     setSelectedVisualId,
     setSelectedVisualIds,
     setSelectedAisleIndex,
@@ -376,6 +380,8 @@ export function useDesignerMouseHandlers(params: UseDesignerMouseHandlersParams)
     },
     setSelectedRackId,
     setSelectedRackIds,
+    setPreviewRackId,
+    setRackPanelDismissed,
     setDraggingRackId,
     setDragOffset,
     setRackDragPreviewPosition,

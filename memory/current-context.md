@@ -1,14 +1,27 @@
 # Current context
 
 ## Active goal
-Direct sales terminal — settings-driven UI, complete-sale reliability, payment/location UX.
+Warehouse layout designer refactor — separate interaction states, drag/click fix, consistent drawer, faster save.
 
-## Recent fixes
-- **Stock hint bug:** `session_enrichment` used wrong key `total_available` → always 0; now reads `summary.available`.
-- **Settings wired to terminal:** EAN/SKU/catalog, stock/images, payment methods, customer rules, document FV gate, allocation strategy on session create.
-- **Complete sale:** structured errors (`step`, `code`, `message`), validation log, soft-fail completion read; order gets `order_ui_status_id` from settings.
-- **Payment:** cash change panel; MIXED split (cash + card) with backend `payment_splits`.
-- **Locations:** zone badge colors; store-first sort; no false "Brak" on cart lines.
+## State model (layout tab)
+- `selectedRackId` — single-click selection only (uuid-first via `rackPrimaryId`)
+- `previewRackId` — details drawer (double-click opens; independent from selection)
+- `editingRackId` — name field focus (hides floating toolbar)
+- `draggingRackId` — active after 5px pointer threshold
+
+## Interaction
+- Single click: select rack
+- Double click: open right drawer
+- Drag: move rack (never opens panel); 5px threshold before drag activates
+
+## Drawer
+- Always fixed right overlay (`RackPropertiesSidebar`), 420px desktop / 100vw mobile
+- ESC + backdrop close; unsaved name warning
+- Explicit `rack_type` selector (Magazyn / Sklep)
+
+## Save
+- `[layout.save.start|payload|success]` logs; removed post-save full reload (optimistic)
+- `rack_type` persisted explicitly on each rack in payload
 
 ## Prior
-Warehouse layout editor — rack name/type corruption fix (`reindexGeometricRow`).
+Direct sales terminal settings + complete-sale fixes.

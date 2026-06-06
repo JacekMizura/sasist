@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-04 — Layout designer interaction refactor
+
+- Split rack state: `selectedRackId`, `previewRackId`, `editingRackId`, `draggingRackId` (uuid via `rackPrimaryId`).
+- Drag vs click: 5px threshold; double-click opens drawer; single click selects only.
+- Properties panel always fixed right drawer (420px); ESC/backdrop/unsaved warning.
+- Floating toolbar hidden while dragging or editing name.
+- Save: `[layout.save.*]` logs, skip full reload after PUT; explicit `rack_type` in sidebar + payload.
+
 ## 2026-06-04 — Direct sales terminal + complete-sale hardening
 
 - Terminal reads resolved settings (`useDirectSalesResolvedSettings`): EAN/SKU/catalog, stock/images, payments, customer/FV rules, allocation strategy.

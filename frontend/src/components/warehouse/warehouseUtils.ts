@@ -261,6 +261,12 @@ export function rackMatchesSlotRackId(
   return String(rack.id ?? rack.rack_index) === s;
 }
 
+/** Canonical interaction id — prefer uuid for selection, drag, and panel state. */
+export function rackPrimaryId(rack: RackState): string {
+  if (rack.uuid != null && String(rack.uuid).trim() !== "") return String(rack.uuid);
+  return String(rack.id ?? rack.rack_index);
+}
+
 /** Stable identity key for React keys, maps, and integrity checks (never array index). */
 export function rackEntityKey(rack: RackState): string {
   if (rack.uuid != null && String(rack.uuid).trim() !== "") return `uuid:${rack.uuid}`;

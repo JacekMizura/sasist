@@ -26,6 +26,10 @@ export type WarehouseMainViewProps = WarehouseCanvasProps & {
   finishRoute: () => void;
   routePanelVisible: boolean;
   rackPanelOpen: boolean;
+  /** Rack shown in properties drawer (may differ from canvas selection). */
+  propertiesRack?: RackState | null;
+  editingRackId?: number | string | null;
+  setEditingRackId?: (id: number | string | null) => void;
   onCloseRackPanel: () => void;
   onSaveLayout?: () => void;
   saving?: boolean;
@@ -42,6 +46,9 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     selectedAisleIndex,
     setSelectedAisleIndex,
     selectedRack,
+    propertiesRack,
+    editingRackId,
+    setEditingRackId,
     selectedRacks,
     routeRackIds,
     routeRackLabels,
@@ -355,20 +362,21 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
           );
         })()}
         {rackPanelOpen &&
-          (selectedRack || routePanelVisible) &&
+          ((propertiesRack ?? selectedRack) || routePanelVisible) &&
           selectedAisleIndex == null &&
           selectedVisualIds.length === 0 && (
             <>
               <button
                 type="button"
                 aria-label="Zamknij panel właściwości"
-                className="fixed inset-x-0 bottom-0 z-30 bg-black/15"
-                style={{ top: "7.5rem" }}
+                className="fixed inset-0 z-[35] bg-black/20 md:bg-black/15"
                 onClick={onCloseRackPanel}
               />
               <RackPropertiesSidebar
                 layout={layout}
-                selectedRack={selectedRack}
+                selectedRack={propertiesRack ?? selectedRack ?? null}
+                editingRackId={editingRackId ?? null}
+                onEditingRackIdChange={setEditingRackId}
                 selectedRacks={selectedRacks}
                 isMultiSelect={isMultiSelect}
                 selectedRackIds={selectedRackIds}
