@@ -1,4 +1,5 @@
 import api from "./axios";
+import type { DirectSaleCompletion, DirectSaleHistoryEntry } from "../types/directSalesCompletion";
 import {
   normalizeCompleteResult,
   normalizeDirectSaleSession,
@@ -7,6 +8,7 @@ import {
   type DirectSaleProductSearchHit,
   type DirectSaleSession,
 } from "../utils/normalizeDirectSales";
+import { normalizeCompletion, normalizeHistoryEntry } from "../utils/normalizeDirectSalesCompletion";
 
 export type { DirectSaleSession, DirectSaleSessionLine, DirectSaleCompleteResult, DirectSaleProductSearchHit } from "../utils/normalizeDirectSales";
 
@@ -226,4 +228,47 @@ export async function completeDirectSaleSession(params: {
     { params: { tenant_id: params.tenantId } },
   );
   return normalizeCompleteResult(data);
+}
+
+export async function fetchDirectSaleCompletion(params: {
+  tenantId: number;
+  sessionId: number;
+}): Promise<DirectSaleCompletion | null> {
+  const { data } = await api.get(`direct-sales/session/${params.sessionId}/completion`, {
+    params: { tenant_id: params.tenantId },
+  });
+  return normalizeCompletion(data);
+}
+
+export async function fetchDirectSaleHistory(params: {
+  tenantId: number;
+  warehouseId: number;
+  todayOnly?: boolean;
+  limit?: number;
+}): Promise<DirectSaleHistoryEntry[]> {
+  const { data } = await api.get<unknown[]>("direct-sales/history", {
+    params: {
+      tenant_id: params.tenantId,
+      warehouse_id: params.warehouseId,
+      today_only: params.todayOnly ?? false,
+      limit: params.limit ?? 30,
+    },
+  });
+  return Array.isArray(data) ? data.map(normalizeHistoryEntry) : [];
+}
+
+export async function reprintDirectSaleDocument(params: {
+  tenantId: number;
+  jobId: number;
+}): Promise<{ new_job_id: number; message: string }> {
+  const { data } = await api.post(
+    `direct-sales/documents/${params.jobId}/reprint`,
+    {},
+    { params: { tenant_id: params.tenantId } },
+  );
+  const d = (data ?? {}) as Record<string, unknown>;
+  return {
+    new_job_id: Number(d.new_job_id) || 0,
+    message: String(d.message ?? "Zlecono ponowne generowanie."),
+  };
 }

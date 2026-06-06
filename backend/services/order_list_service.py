@@ -209,6 +209,8 @@ def build_order_list_read_row(
             has_customer_comment=cf.has_customer_comment if cf else False,
             latest_internal_note_preview=cf.latest_internal_note_preview if cf else None,
             latest_customer_comment_preview=cf.latest_customer_comment_preview if cf else None,
+            order_channel=getattr(order, "order_channel", None),
+            fulfillment_mode=getattr(order, "fulfillment_mode", None),
         )
     except Exception as exc:
         log_orders_list_error(phase="serializer", exc=exc, order_id=oid, field="OrderListRead")

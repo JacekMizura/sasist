@@ -8,6 +8,7 @@ import { useDirectSalesCustomer } from "./useDirectSalesCustomer";
 import { useDirectSalesKeyboard } from "./useDirectSalesKeyboard";
 import { useDirectSalesSession } from "./useDirectSalesSession";
 import { useProductSearch } from "./useProductSearch";
+import { useDirectSalesHistory } from "./useDirectSalesHistory";
 import { useSuspendedSessions } from "./useSuspendedSessions";
 import { useLocationStock } from "../../pages/wms/direct-sales/hooks/useLocationStock";
 
@@ -17,6 +18,7 @@ export function useDirectSalesTerminal() {
   const runtime = useOperationalRuntime();
   const [issueFlash, setIssueFlash] = useState(false);
   const [suspendedKey, setSuspendedKey] = useState(0);
+  const [historyKey, setHistoryKey] = useState(0);
   const { stockSnap, refreshStock, clearStock } = useLocationStock(warehouseId, runtime.subscribe);
 
   const status = useOperationalStatus({
@@ -48,6 +50,12 @@ export function useDirectSalesTerminal() {
     refreshKey: suspendedKey,
   });
 
+  const history = useDirectSalesHistory({
+    warehouseId,
+    enabled: salesEnabled,
+    refreshKey: historyKey,
+  });
+
   const productSearch = useProductSearch({
     warehouseId,
     enabled: salesEnabled && !sessionState.unavailable,
@@ -72,14 +80,15 @@ export function useDirectSalesTerminal() {
       setIssueFlash(true);
       window.setTimeout(() => setIssueFlash(false), 800);
       setSuspendedKey((k) => k + 1);
+      setHistoryKey((k) => k + 1);
     }
   }, [sessionState, clearStock]);
 
   const handleNewSession = useCallback(() => {
-    void sessionState.startNewSession();
-    sessionState.clearLastComplete();
+    sessionState.dismissCompletion();
     clearStock();
     productSearch.clear();
+    setHistoryKey((k) => k + 1);
   }, [sessionState, clearStock, productSearch]);
 
   const handleRefresh = useCallback(() => {
@@ -115,6 +124,7 @@ export function useDirectSalesTerminal() {
     productSearch,
     customer,
     suspended,
+    history,
     issueFlash,
     handleComplete,
     handleNewSession,

@@ -381,6 +381,8 @@ export default function OrderList() {
     if (af.withDocument) params.set("with_document", "true");
     if (af.withoutDocument) params.set("without_document", "true");
     if (af.includeArchived) params.set("include_archived", "true");
+    if (af.directSalesOnly) params.set("order_channel", "DIRECT_SALE");
+    if (af.immediateFulfillmentOnly) params.set("fulfillment_mode", "IMMEDIATE");
 
     api
       .get(`/orders/?${params.toString()}`)

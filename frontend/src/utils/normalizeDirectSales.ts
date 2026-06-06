@@ -1,3 +1,5 @@
+import type { DirectSaleCompletion } from "../types/directSalesCompletion";
+import { normalizeCompletion } from "./normalizeDirectSalesCompletion";
 import { safeDisplay, safeTrim } from "./safeStrings";
 
 export type DirectSaleSessionLine = {
@@ -59,6 +61,7 @@ export type DirectSaleCompleteResult = {
   total_amount: number;
   payment_status: string | null;
   payment_method: string | null;
+  completion: DirectSaleCompletion | null;
 };
 
 function num(v: unknown, fallback = 0): number {
@@ -152,5 +155,6 @@ export function normalizeCompleteResult(raw: unknown): DirectSaleCompleteResult 
     total_amount: num(r.total_amount),
     payment_status: strOrNull(r.payment_status),
     payment_method: strOrNull(r.payment_method),
+    completion: normalizeCompletion(r.completion),
   };
 }

@@ -34,6 +34,8 @@ const ORDER_EXTRA_FLAG_OPTIONS: FilterMutexFlagOption[] = [
   { id: "with_doc", label: "Tylko z dokumentem", mutexWith: ["without_doc"] },
   { id: "without_doc", label: "Tylko bez dokumentu", mutexWith: ["with_doc"] },
   { id: "archived", label: "Pokaż archiwalne" },
+  { id: "direct_sales", label: "Tylko sprzedaż bezpośrednia" },
+  { id: "immediate", label: "Tylko natychmiastowe wydanie" },
 ];
 
 function extraFlagIdsFromDraft(d: AppliedOrderListFilters): string[] {
@@ -43,6 +45,8 @@ function extraFlagIdsFromDraft(d: AppliedOrderListFilters): string[] {
   if (d.withDocument) o.push("with_doc");
   if (d.withoutDocument) o.push("without_doc");
   if (d.includeArchived) o.push("archived");
+  if (d.directSalesOnly) o.push("direct_sales");
+  if (d.immediateFulfillmentOnly) o.push("immediate");
   return o;
 }
 
@@ -54,6 +58,8 @@ function draftPatchFromExtraFlags(ids: string[]): Partial<AppliedOrderListFilter
     withDocument: s.has("with_doc"),
     withoutDocument: s.has("without_doc"),
     includeArchived: s.has("archived"),
+    directSalesOnly: s.has("direct_sales"),
+    immediateFulfillmentOnly: s.has("immediate"),
   };
 }
 

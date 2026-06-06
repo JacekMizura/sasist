@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-04 — Phase 3.6 Completion + Traceability
+
+- Confirmation screen after complete with order/doc/payment/operator/stock traceability.
+- Backend: `completion_read_service`, `/history`, `/session/{id}/completion`, `/documents/{id}/reprint`.
+- OMS: direct sales + immediate fulfillment filters and list badges.
+
 ## 2026-06-04 — Phase 3.5 Direct Sales Terminal UX
 
 - Rebuilt `/wms/direct-sales` as operational terminal (left/center/right/bottom layout).

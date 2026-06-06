@@ -115,6 +115,85 @@ class DirectSaleCompleteBody(BaseModel):
     document_subtype: str = Field("RECEIPT", description="RECEIPT or INVOICE")
 
 
+class DirectSalePaymentTransactionRead(BaseModel):
+    id: int
+    method: str
+    amount: float
+    status: str
+    external_ref: str | None = None
+
+
+class DirectSalePaymentDetailRead(BaseModel):
+    payment_id: int | None = None
+    method: str | None = None
+    status: str | None = None
+    amount: float | None = None
+    authorization_reference: str | None = None
+    external_transaction_id: str | None = None
+    settlement_state: str | None = None
+    transactions: list[DirectSalePaymentTransactionRead] = Field(default_factory=list)
+
+
+class DirectSaleDocumentDetailRead(BaseModel):
+    job_id: int | None = None
+    document_number: str | None = None
+    document_subtype: str | None = None
+    status: str | None = None
+    status_label: str | None = None
+    fiscal_status: str | None = None
+    sale_document_id: str | None = None
+    error_message: str | None = None
+
+
+class DirectSaleLineTraceRead(BaseModel):
+    product_id: int
+    product_name: str | None = None
+    sku: str | None = None
+    source_location_code: str | None = None
+    issued_qty: float = 0.0
+    movement_id: int | None = None
+    reservation_id: int | None = None
+    stock_before: float | None = None
+    stock_after: float | None = None
+    issued_at: str | None = None
+
+
+class DirectSaleStockDeltaRead(BaseModel):
+    location_code: str
+    product_name: str
+    qty_issued: float
+    stock_before: float | None = None
+    stock_after: float | None = None
+
+
+class DirectSaleTimelineEventRead(BaseModel):
+    at: str | None = None
+    kind: str
+    label: str
+    detail: str | None = None
+
+
+class DirectSaleCompletionRead(BaseModel):
+    session_id: int
+    order_id: int
+    order_number: str | None = None
+    payment_id: int | None = None
+    document_job_id: int | None = None
+    document_number: str | None = None
+    document_subtype: str | None = None
+    total_amount: float = 0.0
+    payment_status: str | None = None
+    payment_method: str | None = None
+    completed_at: str | None = None
+    operator_label: str | None = None
+    warehouse_id: int | None = None
+    lines: list[DirectSaleLineTraceRead] = Field(default_factory=list)
+    stock_deltas: list[DirectSaleStockDeltaRead] = Field(default_factory=list)
+    timeline: list[DirectSaleTimelineEventRead] = Field(default_factory=list)
+    payment: DirectSalePaymentDetailRead | None = None
+    document: DirectSaleDocumentDetailRead | None = None
+
+
 class DirectSaleCompleteResponse(BaseModel):
     session_id: int
     order_id: int
@@ -124,6 +203,24 @@ class DirectSaleCompleteResponse(BaseModel):
     total_amount: float
     payment_status: str | None = None
     payment_method: str | None = None
+    completion: DirectSaleCompletionRead | None = None
+
+
+class DirectSaleHistoryEntryRead(BaseModel):
+    session_id: int
+    order_id: int | None = None
+    order_number: str | None = None
+    operator_user_id: int | None = None
+    operator_label: str | None = None
+    workstation_id: int | None = None
+    total_amount: float = 0.0
+    payment_method: str | None = None
+    payment_status: str | None = None
+    document_number: str | None = None
+    document_subtype: str | None = None
+    document_status: str | None = None
+    status: str
+    completed_at: str | None = None
 
 
 class DirectSaleSuspendedSummaryRead(BaseModel):

@@ -714,6 +714,14 @@ class OrderListRead(BaseModel):
     has_customer_comment: bool = False
     latest_internal_note_preview: Optional[str] = None
     latest_customer_comment_preview: Optional[str] = None
+    order_channel: Optional[str] = Field(
+        None,
+        description="DIRECT_SALE | ONLINE | … — kanał sprzedaży.",
+    )
+    fulfillment_mode: Optional[str] = Field(
+        None,
+        description="IMMEDIATE | WMS | DELIVERY_ONLY | … — tryb realizacji.",
+    )
 
     class Config:
         from_attributes = True

@@ -25,6 +25,7 @@ import {
   panelListDenseThSort,
   panelListDenseTheadClass,
 } from "../../operational";
+import { OrderDirectSalesBadge } from "./OrderDirectSalesBadge";
 import { OrderWmsOperationalBadge } from "./OrderWmsOperationalBadge";
 import { shouldShowOrderWmsOperationalBadge } from "../../../utils/orderWmsOperationalBadgeVisibility";
 import { HoverPopover } from "../../ui/HoverPopover";
@@ -89,6 +90,8 @@ export type OrderListDenseOrder = {
   has_customer_comment?: boolean;
   latest_internal_note_preview?: string | null;
   latest_customer_comment_preview?: string | null;
+  order_channel?: string | null;
+  fulfillment_mode?: string | null;
 };
 
 type SortKey =
@@ -379,6 +382,7 @@ export function OrderListDenseTable({
                 <div className="flex flex-wrap items-center gap-1">
                   <OrderUiStatusConfigRowPresent variant="inline" status={o.order_ui_status ?? null} />
                 </div>
+                <OrderDirectSalesBadge orderChannel={o.order_channel} fulfillmentMode={o.fulfillment_mode} />
                 {shouldShowOrderWmsOperationalBadge({
                   workflowPhase: o.wms_workflow_phase,
                   packedAtIso: o.wms_packed_at,

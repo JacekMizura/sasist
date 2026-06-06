@@ -1,14 +1,16 @@
 import { OperationalStatusPanel } from "../operational/debug/OperationalStatusPanel";
 import { DirectSalesUnavailable } from "../operational/fallbacks/DirectSalesUnavailable";
 import type { useDirectSalesTerminal } from "../../hooks/directSales/useDirectSalesTerminal";
+import { DirectSalesHistoryPanel } from "./history/DirectSalesHistoryPanel";
 import { CustomerPanel } from "./CustomerPanel";
 import { DocumentPanel } from "./DocumentPanel";
 import { PaymentPanel } from "./PaymentPanel";
 import { ProductSearchPanel } from "./ProductSearchPanel";
 import { ScannerStatusBar } from "./ScannerStatusBar";
 import { SessionLinesPanel } from "./SessionLinesPanel";
-import { SessionSummaryBar } from "./SessionSummaryBar";
 import { SuspendedSessionsPanel } from "./SuspendedSessionsPanel";
+import { CompleteErrorRecovery } from "./traceability/CompleteErrorRecovery";
+import { DirectSalesConfirmationScreen } from "./traceability/DirectSalesConfirmationScreen";
 
 type Terminal = ReturnType<typeof useDirectSalesTerminal>;
 
@@ -28,6 +30,7 @@ export function DirectSalesLayout({ terminal }: Props) {
     productSearch,
     customer,
     suspended,
+    history,
     issueFlash,
     handleComplete,
     handleNewSession,
@@ -64,6 +67,26 @@ export function DirectSalesLayout({ terminal }: Props) {
     );
   }
 
+  if (sessionState.completionView) {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-slate-100">
+        <DirectSalesConfirmationScreen
+          completion={sessionState.completionView}
+          onNewSale={handleNewSession}
+          onRefreshCompletion={() =>
+            void sessionState.refreshCompletion(sessionState.completionView!.session_id)
+          }
+        />
+        <ScannerStatusBar
+          health={runtime.health}
+          connected={runtime.connected}
+          scannerReady
+          warehouseName={warehouse?.name}
+        />
+      </div>
+    );
+  }
+
   const session = sessionState.session;
   const hasLines = (session?.lines.length ?? 0) > 0;
 
@@ -77,6 +100,15 @@ export function DirectSalesLayout({ terminal }: Props) {
             backendReachable={runtime.backendReachable}
             sseStatus={status.sseStatus}
             onRefresh={() => void status.refreshDebug()}
+          />
+        </div>
+      ) : null}
+      {sessionState.completeError ? (
+        <div className="shrink-0 p-3">
+          <CompleteErrorRecovery
+            error={sessionState.completeError}
+            onRetry={() => void handleComplete()}
+            onNewSale={handleNewSession}
           />
         </div>
       ) : null}
@@ -98,6 +130,13 @@ export function DirectSalesLayout({ terminal }: Props) {
             onRestore={(id) => void handleRestoreSuspended(id)}
             onCancel={(id) => void suspended.cancel(id)}
           />
+          <DirectSalesHistoryPanel
+            rows={history.rows}
+            loading={history.loading}
+            todayOnly={history.todayOnly}
+            onToggleToday={history.toggleToday}
+            onSelect={(id) => void sessionState.showHistoricalCompletion(id)}
+          />
         </div>
         <SessionLinesPanel
           session={session}
@@ -110,13 +149,6 @@ export function DirectSalesLayout({ terminal }: Props) {
           onRemove={(id) => void sessionState.removeLine(id)}
         />
         <aside className="flex w-full shrink-0 flex-col gap-2 lg:w-72">
-          {sessionState.lastComplete ? (
-            <SessionSummaryBar
-              result={sessionState.lastComplete}
-              onPrint={() => window.print()}
-              onNewSession={handleNewSession}
-            />
-          ) : null}
           <CustomerPanel
             customer={customer}
             customerId={session?.customer_id ?? null}

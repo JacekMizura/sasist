@@ -14,6 +14,8 @@ from ..schemas.direct_sales import (
     DirectSaleAddProductBody,
     DirectSaleCompleteBody,
     DirectSaleCompleteResponse,
+    DirectSaleCompletionRead,
+    DirectSaleHistoryEntryRead,
     DirectSaleLinePatchBody,
     DirectSaleProductSearchHit,
     DirectSaleScanBody,
@@ -35,7 +37,10 @@ from ..services.direct_sale.line_service import (
     update_session_line_location,
     update_session_line_quantity,
 )
+from ..services.direct_sale.completion_read_service import build_direct_sale_completion_read
+from ..services.direct_sale.history_service import list_direct_sale_history
 from ..services.direct_sale.product_search_service import search_direct_sale_products
+from ..services.documents.generation_queue_service import enqueue_document_job
 from ..services.direct_sale.session_enrichment import enrich_session_lines
 from ..services.direct_sale_service import (
     DirectSaleError,
@@ -159,6 +164,13 @@ def _suspended_summary(db: Session, sess: DirectSaleSession) -> DirectSaleSuspen
     )
 
 
+def _completion_read_or_404(db: Session, *, tenant_id: int, session_id: int) -> DirectSaleCompletionRead:
+    bundle = build_direct_sale_completion_read(db, tenant_id=tenant_id, session_id=session_id)
+    if bundle is None:
+        raise HTTPException(status_code=404, detail="Brak danych zakończenia sesji.")
+    return DirectSaleCompletionRead(**bundle)
+
+
 def _require_session(
     db: Session,
     *,
@@ -210,6 +222,37 @@ def get_direct_sale_product_search(
         limit=limit,
     )
     return [DirectSaleProductSearchHit(**row) for row in rows]
+
+
+@router.get("/history", response_model=list[DirectSaleHistoryEntryRead])
+def get_direct_sale_history(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    today_only: bool = Query(False),
+    operator_user_id: int | None = Query(None, ge=1),
+    workstation_id: int | None = Query(None, ge=1),
+    limit: int = Query(30, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    rows = list_direct_sale_history(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        today_only=today_only,
+        operator_user_id=operator_user_id,
+        workstation_id=workstation_id,
+        limit=limit,
+    )
+    return [DirectSaleHistoryEntryRead(**row) for row in rows]
+
+
+@router.get("/session/{session_id}/completion", response_model=DirectSaleCompletionRead)
+def get_session_completion(
+    session_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    return _completion_read_or_404(db, tenant_id=tenant_id, session_id=session_id)
 
 
 @router.get("/sessions/suspended", response_model=list[DirectSaleSuspendedSummaryRead])
@@ -446,6 +489,7 @@ def post_session_complete(
             performed_by_user_id=_operator_id(user),
         )
         db.commit()
+        completion = build_direct_sale_completion_read(db, tenant_id=tenant_id, session_id=int(sess.id))
         return DirectSaleCompleteResponse(
             session_id=result.session_id,
             order_id=result.order_id,
@@ -455,10 +499,53 @@ def post_session_complete(
             total_amount=result.total_amount,
             payment_status=result.payment_status,
             payment_method=result.payment_method,
+            completion=DirectSaleCompletionRead(**completion) if completion else None,
         )
     except DirectSaleError as exc:
         db.rollback()
-        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+        raise HTTPException(
+            status_code=exc.http_status,
+            detail={"message": exc.message, "code": getattr(exc, "code", None)},
+        ) from exc
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Nie udało się zakończyć sprzedaży.") from exc
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Nie udało się zakończyć sprzedaży.", "code": "complete_failed"},
+        ) from exc
+
+
+@router.post("/documents/{job_id}/reprint")
+def post_reprint_document(
+    job_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    """Explicit document re-generation — never silent."""
+    from ..models.document_generation_job import DocumentGenerationJob
+
+    prev = (
+        db.query(DocumentGenerationJob)
+        .filter(DocumentGenerationJob.id == int(job_id), DocumentGenerationJob.tenant_id == int(tenant_id))
+        .first()
+    )
+    if prev is None:
+        raise HTTPException(status_code=404, detail="Zadanie dokumentu nie istnieje.")
+    enq = enqueue_document_job(
+        db,
+        tenant_id=int(prev.tenant_id),
+        warehouse_id=int(prev.warehouse_id),
+        order_id=int(prev.order_id),
+        session_id=int(prev.session_id) if prev.session_id else None,
+        document_type=str(prev.document_type or "SALE"),
+        document_subtype=str(prev.document_subtype or "RECEIPT"),
+        performed_by_user_id=_operator_id(user),
+    )
+    db.commit()
+    return {
+        "previous_job_id": int(prev.id),
+        "new_job_id": int(enq.job_id),
+        "status": enq.status,
+        "message": "Ponowne generowanie dokumentu zostało zlecone.",
+    }

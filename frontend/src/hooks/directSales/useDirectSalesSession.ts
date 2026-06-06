@@ -6,6 +6,7 @@ import {
   completeDirectSaleSession,
   createDirectSaleSession,
   deleteDirectSaleLine,
+  fetchDirectSaleCompletion,
   getDirectSaleSession,
   patchDirectSaleLine,
   resumeDirectSaleSession,
@@ -15,6 +16,8 @@ import {
   type DirectSaleCompleteResult,
   type DirectSaleSession,
 } from "../../api/directSalesApi";
+import type { DirectSaleCompleteError, DirectSaleCompletion } from "../../types/directSalesCompletion";
+import { parseCompleteError } from "../../utils/normalizeDirectSalesCompletion";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import {
@@ -59,6 +62,8 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [documentSubtype, setDocumentSubtype] = useState<DocumentSubtype>("RECEIPT");
   const [lastComplete, setLastComplete] = useState<DirectSaleCompleteResult | null>(null);
+  const [completionView, setCompletionView] = useState<DirectSaleCompletion | null>(null);
+  const [completeError, setCompleteError] = useState<DirectSaleCompleteError | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const scanBusyRef = useRef(false);
   const initRef = useRef(false);
@@ -85,11 +90,34 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
   const startNewSession = useCallback(async () => {
     if (warehouseId == null) return null;
     setLastComplete(null);
+    setCompletionView(null);
+    setCompleteError(null);
     setError(null);
     const created = await createDirectSaleSession({ tenantId: DAMAGE_TENANT_ID, warehouseId });
     setSession(created);
     return created;
   }, [warehouseId]);
+
+  const refreshCompletion = useCallback(async (sessionId: number) => {
+    const fresh = await fetchDirectSaleCompletion({ tenantId: DAMAGE_TENANT_ID, sessionId });
+    if (fresh) setCompletionView(fresh);
+    return fresh;
+  }, []);
+
+  const dismissCompletion = useCallback(() => {
+    setCompletionView(null);
+    setLastComplete(null);
+    setCompleteError(null);
+    void startNewSession();
+  }, [startNewSession]);
+
+  const showHistoricalCompletion = useCallback(
+    async (sessionId: number) => {
+      const fresh = await refreshCompletion(sessionId);
+      return fresh;
+    },
+    [refreshCompletion],
+  );
 
   useEffect(() => {
     setScannerInputPlaceholder("Skanuj EAN → Enter");
@@ -318,6 +346,7 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
   const complete = useCallback(async () => {
     if (!session || warehouseId == null) return null;
     setBusy(true);
+    setCompleteError(null);
     try {
       if (session.status === "ACTIVE" || session.status === "SUSPENDED") await checkout();
       const result = await completeDirectSaleSession({
@@ -327,16 +356,21 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
         documentSubtype,
       });
       setLastComplete(result);
+      const bundle = result.completion ?? (await fetchDirectSaleCompletion({
+        tenantId: DAMAGE_TENANT_ID,
+        sessionId: result.session_id,
+      }));
+      if (bundle) setCompletionView(bundle);
       showScannerToast(`Zakończono #${result.order_id}`, "success");
-      await startNewSession();
       return result;
     } catch (e) {
-      setError(extractApiErrorMessage(e));
+      setCompleteError(parseCompleteError(e));
+      setError(null);
       return null;
     } finally {
       setBusy(false);
     }
-  }, [session, warehouseId, paymentMethod, documentSubtype, checkout, showScannerToast, startNewSession]);
+  }, [session, warehouseId, paymentMethod, documentSubtype, checkout, showScannerToast]);
 
   return {
     session,
@@ -349,6 +383,11 @@ export function useDirectSalesSession({ warehouseId, onProductAdded, enabled = t
     documentSubtype,
     setDocumentSubtype,
     lastComplete,
+    completionView,
+    completeError,
+    refreshCompletion,
+    dismissCompletion,
+    showHistoricalCompletion,
     addByCode,
     addByProductId,
     changeLineQty,

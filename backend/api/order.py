@@ -496,6 +496,8 @@ def _collect_order_list_built_rows(
     with_document: bool = False,
     without_document: bool = False,
     include_archived_orders: bool = False,
+    order_channel: Optional[str] = None,
+    fulfillment_mode: Optional[str] = None,
 ) -> List[Tuple[Order, float, bool, int, int, List[OrderItem]]]:
     """Same filtering as GET /orders/ before sort / pagination — single source of truth."""
     q = (
@@ -530,6 +532,10 @@ def _collect_order_list_built_rows(
         q = q.filter(Order.shipping_method_id == str(filter_shipping_method_id).strip())
     if source_contains and str(source_contains).strip():
         q = q.filter(Order.source.ilike(f"%{str(source_contains).strip()}%"))
+    if order_channel and str(order_channel).strip():
+        q = q.filter(Order.order_channel == str(order_channel).strip().upper())
+    if fulfillment_mode and str(fulfillment_mode).strip():
+        q = q.filter(Order.fulfillment_mode == str(fulfillment_mode).strip().upper())
     if order_value_min is not None:
         q = q.filter(Order.value.isnot(None)).filter(Order.value >= float(order_value_min))
     if order_value_max is not None:
@@ -723,6 +729,14 @@ def get_orders(
         False,
         description="Gdy true — uwzględnij zamówienia zarchiwizowane (orders.deleted_at)",
     ),
+    order_channel: Optional[str] = Query(
+        None,
+        description="Filtr kanału: DIRECT_SALE, ONLINE, …",
+    ),
+    fulfillment_mode: Optional[str] = Query(
+        None,
+        description="Filtr realizacji: IMMEDIATE, WMS, …",
+    ),
 ):
     """
     Zamówienia z total_volume (dm³), is_multi_item, total_items.
@@ -771,6 +785,8 @@ def get_orders(
             with_document=with_document,
             without_document=without_document,
             include_archived_orders=include_archived,
+            order_channel=order_channel,
+            fulfillment_mode=fulfillment_mode,
         )
     except HTTPException:
         raise

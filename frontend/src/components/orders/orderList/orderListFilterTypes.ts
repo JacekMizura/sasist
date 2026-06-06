@@ -19,6 +19,10 @@ export type AppliedOrderListFilters = {
   withoutDocument: boolean;
   /** Lista GET /orders — pokaż zamówienia zarchiwizowane (orders.deleted_at). */
   includeArchived: boolean;
+  /** order_channel=DIRECT_SALE */
+  directSalesOnly: boolean;
+  /** fulfillment_mode=IMMEDIATE */
+  immediateFulfillmentOnly: boolean;
 };
 
 export const DEFAULT_APPLIED_ORDER_LIST_FILTERS: AppliedOrderListFilters = {
@@ -38,4 +42,6 @@ export const DEFAULT_APPLIED_ORDER_LIST_FILTERS: AppliedOrderListFilters = {
   withDocument: false,
   withoutDocument: false,
   includeArchived: false,
+  directSalesOnly: false,
+  immediateFulfillmentOnly: false,
 };

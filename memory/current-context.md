@@ -1,22 +1,19 @@
 # Current context
 
 ## Active goal
-Phase 3.5 — Direct Sales Terminal UX (usable operator flow). Classic WMS untouched.
+Phase 3.6 — Direct Sales Completion + Stock Traceability UI.
 
-## Direct sales terminal
-- Layout: left (search + suspended) · center (lines) · right (customer + document + payment) · bottom scanner bar
-- Components: `frontend/src/components/directSales/`
-- Hooks: `frontend/src/hooks/directSales/`
-- `DirectSalesPage` < 10 LOC — logic in `useDirectSalesTerminal` + `DirectSalesLayout`
+## Completion flow
+- `complete()` shows `DirectSalesConfirmationScreen` (no silent reset)
+- Traceability: lines, stock deltas, movement timeline, payment + document detail
+- `GET /api/direct-sales/history`, `GET /api/direct-sales/session/{id}/completion`
+- `POST /api/direct-sales/documents/{job_id}/reprint` — explicit re-generation
+- Error recovery panel for payment/document/issue failures (session stays active)
 
-## New backend endpoints
-- `GET /api/direct-sales/sessions/suspended`
-- `POST /api/direct-sales/session/{id}/resume`
-- `POST /api/direct-sales/session/{id}/cancel`
+## OMS visibility
+- Order list: badges Sprzedaż bezpośrednia / Natychmiastowe wydanie
+- Filters: `order_channel=DIRECT_SALE`, `fulfillment_mode=IMMEDIATE`
 
-## Operator UX
-- Product search 150ms debounce, keyboard dropdown, catalog number
-- F1/F2/F3 payment, Ctrl+Enter complete
-- Stock badges: Dostępny / Niski stan / Brak
-- FV flow: NIP lookup via customer search + compact invoice form
-- Polish status labels throughout
+## Rollout env (unchanged)
+- `FEATURE_OPERATIONAL_SALES=1`, `FEATURE_OPERATIONAL_SALES_SESSIONS=1`
+- Runtime/replenishment remain OFF until validated
