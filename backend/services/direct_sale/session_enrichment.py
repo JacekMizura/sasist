@@ -12,6 +12,16 @@ from ...models.product import Product
 from ..location_stock_service import build_location_stock
 
 
+def _margin_percent(sale: float | None, purchase: float | None) -> float | None:
+    if sale is None or purchase is None:
+        return None
+    s = float(sale)
+    p = float(purchase)
+    if s <= 0 or p < 0:
+        return None
+    return round((s - p) / s * 100.0, 1)
+
+
 def enrich_session_lines(db: Session, sess: DirectSaleSession) -> list[dict]:
     lines = list(sess.lines or [])
     if not lines:
@@ -60,12 +70,16 @@ def enrich_session_lines(db: Session, sess: DirectSaleSession) -> list[dict]:
                 has_hold = bool(meta.get("soft_hold"))
             except (json.JSONDecodeError, TypeError):
                 pass
+        sale = float(pr.sale_price) if pr and pr.sale_price is not None else None
+        purchase = float(pr.purchase_price) if pr and pr.purchase_price is not None else None
         out.append(
             {
                 "line": ln,
                 "product_name": str(pr.name) if pr else None,
                 "product_sku": str(pr.sku or pr.symbol or "") if pr else None,
                 "product_ean": str(pr.ean or "") if pr else None,
+                "product_catalog_number": str(getattr(pr, "catalog_number", None) or "") or None if pr else None,
+                "margin_percent": _margin_percent(sale, purchase),
                 "image_url": str(pr.image_url or "") if pr and pr.image_url else None,
                 "source_location_code": str(src.name) if src else None,
                 "operational_zone_type": (

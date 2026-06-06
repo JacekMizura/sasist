@@ -14,6 +14,8 @@ export type DirectSaleSessionLine = {
   product_name: string | null;
   product_sku: string | null;
   product_ean: string | null;
+  product_catalog_number: string | null;
+  margin_percent: number | null;
   image_url: string | null;
   source_location_code: string | null;
   operational_zone_type: string | null;
@@ -94,6 +96,8 @@ export function normalizeDirectSaleLine(raw: unknown): DirectSaleSessionLine {
     product_name: strOrNull(r.product_name),
     product_sku: strOrNull(r.product_sku),
     product_ean: strOrNull(r.product_ean),
+    product_catalog_number: strOrNull(r.product_catalog_number),
+    margin_percent: numOrNull(r.margin_percent),
     image_url: strOrNull(r.image_url),
     source_location_code: strOrNull(r.source_location_code),
     operational_zone_type: strOrNull(r.operational_zone_type),

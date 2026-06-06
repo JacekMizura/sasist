@@ -56,19 +56,24 @@ def suggest_sales_locations(
     rows: list[dict],
     *,
     quantity: float,
+    prefer_store_locations: bool = True,
 ) -> list[dict]:
-    """Sort location rows for direct sales issue (prefer SALES → SHOWROOM → BACKROOM via zone)."""
+    """Sort location rows for direct sales issue (prefer SALES → SHOWROOM when store-first)."""
     need = float(quantity)
     if need <= 0:
         return []
-    sorted_rows = sorted(
-        rows,
-        key=lambda r: sales_sort_key(
+    if prefer_store_locations:
+        sort_key = lambda r: sales_sort_key(
             operational_zone_type=r.get("operational_zone_type"),
             sales_priority=r.get("sales_priority"),
             location_id=int(r.get("location_id") or 0),
-        ),
-    )
+        )
+    else:
+        sort_key = lambda r: (
+            int(r.get("location_id") or 0),
+            str(r.get("code") or r.get("location_code") or ""),
+        )
+    sorted_rows = sorted(rows, key=sort_key)
     out: list[dict] = []
     rem = need
     for r in sorted_rows:

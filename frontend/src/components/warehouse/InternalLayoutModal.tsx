@@ -5,7 +5,6 @@ import {
   snapCm,
   binVolumeFromDimensions,
   effectiveRackDisplayName,
-  getDisplayLocationLabelPhysicalOrder,
   getRackDisplayId,
   isBinDirectionRtl,
   levelHeightsForRack,
@@ -13,6 +12,7 @@ import {
   segmentIndexForVisualSlot,
 } from "./warehouseUtils";
 import { getStorageTypeStyle, normalizeStorageType, STORAGE_TYPE_OPTIONS } from "../../utils/storageTypes";
+import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
 export type InternalLayoutModalProps = {
@@ -387,16 +387,21 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                       const binIndex = segmentIndexForVisualSlot(vis, locs, binDirectionRtl);
                       const loc = lev.locations[binIndex]!;
                       const binState = rackFromLayout.bins.find((b) => b.level_index === levIdx && b.segment_index === binIndex);
-                      const templateCodeLabel = `${getColumnLetter(binIndex)}-${levelNumber}`;
-                      /** Physical segment order only: `getDisplayLocationLabel` mirrors RTL in `getBinDisplayLabel`, which would show A…D left→right even when tiles are D…A. */
-                      const displayLocationLabel =
-                        layout && binState
-                          ? getDisplayLocationLabelPhysicalOrder(rackFromLayout, binState, layout)
-                          : templateCodeLabel;
                       const cellKey = binKey(levIdx, binIndex);
                       const customName = customNames[cellKey]?.trim() ?? "";
+                      const resolved =
+                        layout && binState
+                          ? resolveWarehouseLocation(rackFromLayout, binState, layout)
+                          : {
+                              label: `${getColumnLetter(binIndex)}-${levelNumber}`,
+                              storageType: normalizeStorageType(getBinStorageType(levIdx, binIndex)),
+                            };
+                      const displayLocationLabel = resolved.label;
                       const showPrimaryName = customName || displayLocationLabel;
-                      const storageType = getBinStorageType(levIdx, binIndex);
+                      const storageType =
+                        layout && binState
+                          ? resolved.storageType
+                          : getBinStorageType(levIdx, binIndex);
                       const storageStyle = getStorageTypeStyle(storageType);
                       const slotsInLevel = Math.max(1, lev.locations.length);
                       const equalWidthFallback =
@@ -473,7 +478,7 @@ export function InternalLayoutModal({ layout = null, rack, warehouseLabel, onSav
                                       <span className="inline-flex items-center rounded-md bg-white/80 border border-slate-200 px-2 py-0.5 text-[16px] font-bold text-slate-800 max-w-full truncate leading-tight">
                                         {showPrimaryName}
                                       </span>
-                                      {customName ? (
+                                      {customName && customName !== displayLocationLabel ? (
                                         <span className="block mt-0.5 text-[10px] text-slate-500 font-mono">
                                           {displayLocationLabel}
                                         </span>

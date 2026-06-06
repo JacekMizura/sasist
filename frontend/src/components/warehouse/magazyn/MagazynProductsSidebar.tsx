@@ -3,7 +3,8 @@ import { warn } from "../../../utils/logger";
 import { Link } from "react-router-dom";
 import type { LayoutState, NormalizedStorageType, RackState, WarehouseProduct } from "../../../types/warehouse";
 import { ConfirmModal } from "../../ui/ConfirmModal";
-import { activeBinsForRack, compareLocationUuidsByLayoutOrder, getDisplayLocationLabel } from "../warehouseUtils";
+import { activeBinsForRack, compareLocationUuidsByLayoutOrder } from "../warehouseUtils";
+import { resolveWarehouseLocation } from "../../../utils/resolvedWarehouseLocation";
 import { normalizeInventoryLocationUuid, type InventoryMaps, type InventoryRow } from "../../../pages/WarehouseDesigner/inventoryMaps";
 import { normalizeStorageType } from "../../../utils/storageTypes";
 
@@ -212,7 +213,7 @@ export function MagazynProductsSidebar({
   };
 
   function getLocationTypeBadge(storageType?: NormalizedStorageType): { icon: string; label: string; className: string } | null {
-    const normalized = normalizeStorageType(storageType);
+    const normalized = storageType ?? "unknown";
     if (normalized === "reserve") {
       return {
         icon: "🔒",
@@ -290,31 +291,42 @@ export function MagazynProductsSidebar({
     );
   }
 
-  /** UUID → full display line (same as location picker / rack props). */
-  const uuidToDisplayLabel: Record<string, string> = {};
-  for (const rack of layout.racks) {
-    for (const bin of activeBinsForRack(rack)) {
-      const u = (bin.locationUUID ?? "").trim();
-      if (u) uuidToDisplayLabel[u] = getDisplayLocationLabel(rack, bin, layout).replace(/\s+/g, " ").trim();
+  /** UUID → resolved label (single source of truth with badge type). */
+  const uuidToResolved = useMemo(() => {
+    const labels: Record<string, string> = {};
+    const types = new Map<string, NormalizedStorageType>();
+    for (const rack of layout.racks) {
+      for (const bin of activeBinsForRack(rack)) {
+        const u = (bin.locationUUID ?? "").trim();
+        if (!u) continue;
+        const resolved = resolveWarehouseLocation(rack, bin, layout);
+        labels[u] = resolved.label;
+        types.set(u, resolved.storageType);
+      }
     }
-  }
+    return { labels, types };
+  }, [layout]);
+  const uuidToDisplayLabel = uuidToResolved.labels;
 
   const selectedBin = selectedLocationForProducts != null && selectedRackForMagazyn
     ? selectedRackForMagazyn.bins.find((b) => b.level_index === selectedLocationForProducts.level_index && b.segment_index === selectedLocationForProducts.segment_index)
     : null;
-  const selectedBinLabel = selectedBin ? (selectedBin.label ?? selectedBin.location_id ?? "").trim() || null : null;
+  const selectedBinLabel =
+    selectedBin && selectedRackForMagazyn
+      ? resolveWarehouseLocation(selectedRackForMagazyn, selectedBin, layout).label
+      : null;
   const selectedBinUUID = selectedBin?.locationUUID ?? null;
   const filterToSingleBin = selectedBinLabel != null && !showAllProductsInSidebar;
   const usingInventory = inventoryMaps != null;
   const rackKey = selectedRackForMagazyn ? String(selectedRackForMagazyn.id ?? selectedRackForMagazyn.rack_index) : null;
 
   const uuidToStorageType = useMemo(() => {
-    const map = new Map<string, NormalizedStorageType>();
+    const map = new Map<string, NormalizedStorageType>(uuidToResolved.types);
     for (const rack of layout.racks) {
       for (const bin of activeBinsForRack(rack)) {
         const u = (bin.locationUUID ?? "").trim();
-        if (!u) continue;
-        map.set(u, normalizeStorageType(bin.storage_type));
+        if (!u || map.has(u)) continue;
+        map.set(u, resolveWarehouseLocation(rack, bin, layout).storageType);
       }
     }
     return map;
@@ -492,7 +504,11 @@ export function MagazynProductsSidebar({
       return (a.name ?? "").localeCompare(b.name ?? "", "pl", { sensitivity: "base" });
     });
   }, [baseList, productSearchQuery, rackProductMode]);
-  const selectedLocationBadge = getLocationTypeBadge(selectedBin?.storage_type);
+  const selectedLocationBadge = getLocationTypeBadge(
+    selectedBin && selectedRackForMagazyn
+      ? resolveWarehouseLocation(selectedRackForMagazyn, selectedBin, layout).storageType
+      : undefined,
+  );
 
   return (
     <aside className="flex h-full min-h-0 w-[380px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain rounded-r-xl border-l border-slate-700/90 bg-slate-800 designer-rail-scroll">
@@ -606,8 +622,8 @@ export function MagazynProductsSidebar({
                     if (!ck) continue;
                     const q = safeQuantity(inv.quantity);
                     if (q <= 0) continue;
-                    const raw = (inv.location_name ?? "").trim() || String(inv.location_id);
-                    if (!invDisplayByCanonical.has(ck)) {
+                    const raw = uuidToDisplayLabel[ck] ?? "";
+                    if (!invDisplayByCanonical.has(ck) && raw) {
                       invDisplayByCanonical.set(ck, raw.replace(/\s+/g, " ").trim());
                     }
                     qtyByLoc.set(ck, (qtyByLoc.get(ck) ?? 0) + q);
@@ -674,7 +690,7 @@ export function MagazynProductsSidebar({
                     if (!ck) continue;
                     const q = safeQuantity(inv.quantity);
                     if (q <= 0) continue;
-                    const raw = (inv.location_name ?? "").trim() || String(inv.location_id);
+                    const raw = uuidToDisplayLabel[ck] || ck;
                     if (!invDisplayByCanonicalRack.has(ck)) {
                       invDisplayByCanonicalRack.set(ck, raw.replace(/\s+/g, " ").trim());
                     }

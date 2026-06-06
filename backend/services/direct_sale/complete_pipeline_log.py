@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import traceback
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, Generator
 
 logger = logging.getLogger(__name__)
 
@@ -32,29 +33,82 @@ _STEP_TAG = {
 }
 
 
+def log_complete_stage(
+    *,
+    session_id: int,
+    stage: str,
+    payment_method: str | None = None,
+    totals: float | None = None,
+    order_status: int | None = None,
+    issue_strategy: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "session_id": int(session_id),
+        "stage": str(stage),
+        "payment_method": payment_method,
+        "totals": round(float(totals), 2) if totals is not None else None,
+        "order_status": order_status,
+        "issue_strategy": issue_strategy,
+    }
+    if extra:
+        payload.update(extra)
+    logger.info("[direct_sales.complete] %s", json.dumps(payload, ensure_ascii=False, default=str))
+
+
 @contextmanager
-def log_complete_step(*, session_id: int, step: str) -> Generator[None, None, None]:
+def log_complete_step(
+    *,
+    session_id: int,
+    step: str,
+    context: dict[str, Any] | None = None,
+) -> Generator[None, None, None]:
     tag = _STEP_TAG.get(step, step)
+    ctx = dict(context or {})
+    log_complete_stage(
+        session_id=session_id,
+        stage=step,
+        payment_method=ctx.get("payment_method"),
+        totals=ctx.get("totals"),
+        order_status=ctx.get("order_status"),
+        issue_strategy=ctx.get("issue_strategy"),
+        extra={k: v for k, v in ctx.items() if k not in {"payment_method", "totals", "order_status", "issue_strategy"}},
+    )
     started = time.perf_counter()
     try:
         yield
     except Exception as exc:
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         logger.exception(
-            "[direct-sales.complete.error] session_id=%s step=%s tag=%s elapsed_ms=%s exception=%s",
-            session_id,
-            step,
-            tag,
-            elapsed_ms,
-            f"{type(exc).__name__}: {exc}",
+            "[direct_sales.complete] %s",
+            json.dumps(
+                {
+                    "session_id": int(session_id),
+                    "stage": step,
+                    "status": "error",
+                    "tag": tag,
+                    "elapsed_ms": elapsed_ms,
+                    "exception": f"{type(exc).__name__}: {exc}",
+                    "traceback": traceback.format_exc(),
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
         )
         raise
     else:
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         logger.info(
-            "[direct-sales.complete.%s] session_id=%s step=%s elapsed_ms=%s status=ok",
-            tag,
-            session_id,
-            step,
-            elapsed_ms,
+            "[direct_sales.complete] %s",
+            json.dumps(
+                {
+                    "session_id": int(session_id),
+                    "stage": step,
+                    "status": "ok",
+                    "tag": tag,
+                    "elapsed_ms": elapsed_ms,
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
         )

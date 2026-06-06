@@ -255,5 +255,11 @@ def build_product_detail_payload(
         out["detail_degraded"] = True
         out["detail_degraded_reason"] = degraded_reason
 
-    _log_detail_stage(product_id=pid, tenant_id=tid, serializer_stage="complete", success=True)
+    _log_detail_stage(
+        product_id=pid,
+        tenant_id=tid,
+        serializer_stage="complete",
+        success=True,
+        warehouse_id=warehouse_id,
+    )
     return out

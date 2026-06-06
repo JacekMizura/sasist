@@ -1873,22 +1873,11 @@ def get_products(
         q = q.limit(limit)
     rows = q.all()
 
-    from ..services.product_inventory_display_service import (
-        _allocated_quantity_from_rows,
-        _inventory_operational_metrics,
-        _log_stock_event,
-        inventory_display_maps_for_products,
-    )
+    from ..services.product_inventory_display_service import apply_inventory_display_to_dict
 
-    stock_map: dict[tuple[int, int], int] = {}
     sales_map = {}  # product_id -> (sales_30d: int, rotation_30d: float)
-    loc_map: dict[int, list[dict]] = {}
-    inv_map: dict[int, list[dict]] = {}
     if rows:
         product_ids = [p.id for p in rows]
-        stock_map, loc_map, inv_map = inventory_display_maps_for_products(
-            db, rows, warehouse_id=warehouse_id
-        )
 
         # Sales last 30 days: SUM(order_items.quantity) grouped by product_id
         since = datetime.utcnow() - timedelta(days=30)
@@ -1904,8 +1893,6 @@ def get_products(
         for r in sales_rows:
             s30 = int(r.sales_30d) if r.sales_30d is not None else 0
             sales_map[r.product_id] = (s30, round(s30 / 30.0, 2))
-    else:
-        loc_map, inv_map = {}, {}
 
     avg_map: dict[int, Optional[float]] = {}
     if rows:
@@ -1925,8 +1912,14 @@ def get_products(
         _enrich_product_manufacturer(db, d, p)
         _enrich_product_default_supplier(db, d, p)
         _enrich_product_last_supplier(db, d, p)
-        stock_qty = stock_map.get((p.id, p.tenant_id), 0)
-        d["stock_quantity"] = stock_qty
+        apply_inventory_display_to_dict(
+            db,
+            d,
+            p,
+            warehouse_id=warehouse_id,
+            log_tag="product.list.stock",
+        )
+        stock_qty = int(d.get("stock_quantity") or 0)
         avg = avg_map.get(p.id)
         d["average_purchase_price"] = avg
         if stock_qty <= 0:
@@ -1942,28 +1935,6 @@ def get_products(
             d["days_of_stock"] = int(round(stock_qty / rot))
         else:
             d["days_of_stock"] = None
-        d["locations"] = loc_map.get(p.id, [])
-        d["inventory"] = inv_map.get(p.id, [])
-        allocated = _allocated_quantity_from_rows(d["locations"], d["inventory"])
-        d["location_allocated_quantity"] = allocated
-        d["unallocated_quantity"] = max(0, int(stock_qty) - allocated)
-        ops = _inventory_operational_metrics(
-            db,
-            tenant_id=int(p.tenant_id),
-            product_id=int(p.id),
-            warehouse_id=warehouse_id,
-            on_hand=int(stock_qty),
-        )
-        d["reserved_quantity"] = ops["reserved_quantity"]
-        d["available_quantity"] = ops["available_quantity"]
-        _log_stock_event(
-            "product.list.stock",
-            product_id=int(p.id),
-            tenant_id=int(p.tenant_id),
-            warehouse_id=warehouse_id,
-            total_stock=int(stock_qty),
-            locations=d["locations"],
-        )
         items.append(d)
 
     if default_supplier_id is not None and items:

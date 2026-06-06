@@ -190,8 +190,10 @@ export function parseCompleteError(err: unknown): DirectSaleCompleteError {
       phase = "issue";
     }
   }
-  if (/internal server error/i.test(message) && !step) {
+  if (/internal server error/i.test(message)) {
     message = "Błąd serwera podczas zakończenia sprzedaży — szczegóły w logach operacyjnych.";
+    if (!step) step = "commit";
+    if (!code) code = "SESSION_INVALID";
   }
   return { message, code, step, phase };
 }

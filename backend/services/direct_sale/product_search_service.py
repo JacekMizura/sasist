@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from ...models.inventory import Inventory
 from ...models.location import Location
 from ...models.product import Product
+from ..direct_sales_settings_service import resolve_direct_sales_settings
+from ..location_priority_service import suggest_sales_locations
 from ..wms_mm_transfer_service import _assert_warehouse_for_tenant
 
 
@@ -23,6 +25,11 @@ def search_direct_sale_products(
     if len(q) < 1:
         return []
     _assert_warehouse_for_tenant(db, tenant_id, warehouse_id)
+    try:
+        ds_cfg = resolve_direct_sales_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)).resolved
+        prefer_store_locations = bool(ds_cfg.prefer_store_locations)
+    except Exception:
+        prefer_store_locations = True
     lim = max(1, min(int(limit), 24))
     pattern = f"%{q}%"
     q_lower = q.lower()
@@ -77,7 +84,7 @@ def search_direct_sale_products(
     pids = [int(p.id) for p in picked]
 
     inv_by_pid: dict[int, float] = {}
-    best_loc_by_pid: dict[int, tuple[int, float]] = {}
+    loc_rows_by_pid: dict[int, list[dict]] = {}
     inv_rows = (
         db.query(
             Inventory.product_id,
@@ -94,16 +101,19 @@ def search_direct_sale_products(
         .group_by(Inventory.product_id, Inventory.location_id)
         .all()
     )
+    loc_ids_set: set[int] = set()
     for pid, lid, qty_raw in inv_rows:
         pid_i = int(pid)
         qty = float(qty_raw or 0)
         inv_by_pid[pid_i] = inv_by_pid.get(pid_i, 0.0) + qty
         if lid is not None:
-            prev = best_loc_by_pid.get(pid_i)
-            if prev is None or qty > prev[1]:
-                best_loc_by_pid[pid_i] = (int(lid), qty)
+            lid_i = int(lid)
+            loc_ids_set.add(lid_i)
+            loc_rows_by_pid.setdefault(pid_i, []).append(
+                {"location_id": lid_i, "available": qty, "suggested_qty": qty}
+            )
 
-    loc_ids = [lid for lid, _ in best_loc_by_pid.values()]
+    loc_ids = list(loc_ids_set)
     loc_map: dict[int, Location] = {}
     if loc_ids:
         for loc in db.query(Location).filter(Location.id.in_(loc_ids)).all():
@@ -112,8 +122,25 @@ def search_direct_sale_products(
     out: list[dict] = []
     for p in picked:
         pid = int(p.id)
-        pref = best_loc_by_pid.get(pid)
-        loc = loc_map.get(pref[0]) if pref else None
+        ranked = suggest_sales_locations(
+            [
+                {
+                    **row,
+                    "operational_zone_type": (
+                        str(getattr(loc_map.get(int(row["location_id"])), "operational_zone_type", None) or "")
+                        or None
+                        if loc_map.get(int(row["location_id"]))
+                        else None
+                    ),
+                    "sales_priority": getattr(loc_map.get(int(row["location_id"])), "sales_priority", None),
+                }
+                for row in loc_rows_by_pid.get(pid, [])
+            ],
+            quantity=1.0,
+            prefer_store_locations=prefer_store_locations,
+        )
+        pref_lid = int(ranked[0]["location_id"]) if ranked else None
+        loc = loc_map.get(pref_lid) if pref_lid else None
         price = float(p.sale_price) if getattr(p, "sale_price", None) is not None else None
         out.append(
             {

@@ -11,6 +11,9 @@ import {
 import { getSlotting, type SlottingProduct } from "../../api/analysisApi";
 import { layoutService } from "../../services/layoutService";
 import api from "../../api/axios";
+import type { LayoutState } from "../../types/warehouse";
+import { rawLayoutRackToRackState, type RawLayoutRack } from "../../components/warehouse/warehouseUtils";
+import { resolveWarehouseLocation, syncLayoutDisplayFields } from "../../utils/resolvedWarehouseLocation";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -18,26 +21,6 @@ const ABC_COLORS: Record<string, string> = {
   A: "#ef4444",
   B: "#f97316",
   C: "#22c55e",
-};
-
-/** Raw layout from API (racks with bins, visual zones, grid). */
-type SlottingLayout = {
-  layout_id: number | null;
-  warehouse_id: number;
-  grid_cols: number;
-  grid_rows: number;
-  racks: Array<{
-    id: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    levels: number;
-    bins_per_level: number;
-    color?: string;
-    bins: Array<{ id?: number; label: string; level_index: number; segment_index: number }>;
-  }>;
-  aisles: Array<{ id?: number; x: number; y: number; width: number; height: number }>;
 };
 
 type Warehouse = { id: number; name: string };
@@ -75,7 +58,7 @@ export default function SlottingPage() {
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>(DEFAULT_SORT);
   const [sortAsc, setSortAsc] = useState(DEFAULT_ASC);
-  const [layout, setLayout] = useState<SlottingLayout | null>(null);
+  const [layout, setLayout] = useState<LayoutState | null>(null);
   const [layoutLoading, setLayoutLoading] = useState(false);
   const [binTooltip, setBinTooltip] = useState<{
     product: SlottingProduct;
@@ -128,16 +111,18 @@ export default function SlottingPage() {
     layoutService
       .getLayout({ tenant_id: DEFAULT_TENANT_ID, warehouse_id: warehouseId })
       .then((res) => {
-        const d = res.data as SlottingLayout | undefined;
+        const d = res.data as Record<string, unknown> | undefined;
         if (!cancelled && d && typeof d === "object") {
-          setLayout({
-            layout_id: d.layout_id ?? null,
-            warehouse_id: d.warehouse_id ?? warehouseId,
+          const rawRacks = Array.isArray(d.racks) ? d.racks : [];
+          const base: LayoutState = {
+            layout_id: (d.layout_id as number | null) ?? null,
+            warehouse_id: Number(d.warehouse_id) || warehouseId,
             grid_cols: Number(d.grid_cols) || 24,
             grid_rows: Number(d.grid_rows) || 16,
-            racks: Array.isArray(d.racks) ? d.racks : [],
-            aisles: Array.isArray(d.aisles) ? d.aisles : [],
-          });
+            racks: rawRacks.map((r) => rawLayoutRackToRackState(r as RawLayoutRack)),
+            aisles: Array.isArray(d.aisles) ? (d.aisles as LayoutState["aisles"]) : [],
+          };
+          setLayout(syncLayoutDisplayFields(base));
         } else if (!cancelled) {
           setLayout(null);
         }
@@ -596,7 +581,7 @@ function SlottingLayoutMap({
                 const lev = Math.min(bin.level_index, levels - 1);
                 const x = r.x + 0.02 + seg * cellW;
                 const y = r.y + 0.02 + lev * cellH;
-                const label = (bin.label ?? "").trim();
+                const label = resolveWarehouseLocation(r, bin, layout).label;
                 const product = label ? slottingByAddress[label] : undefined;
                 const fill = product ? (ABC_COLORS[product.abc_class] ?? rackFill) : rackFill;
                 const address = label || `L${bin.level_index}-S${bin.segment_index}`;

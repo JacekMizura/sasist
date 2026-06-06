@@ -22,6 +22,12 @@ import { useTranslation } from "../../locales";
 import { LocationTypeBadge } from "../../components/warehouse/LocationTypeBadge";
 import { getManufacturer } from "../../api/manufacturersApi";
 import { mapProductListRow, type ProductListRow } from "./productListMapper";
+import { useWarehouse } from "../../context/WarehouseContext";
+import {
+  formatResolvedSalePrice,
+  resolveProductPricingFromRow,
+  resolvedSaleNetForFilter,
+} from "../../utils/resolvedProductPricing";
 import { ProductBulkActionModal } from "./ProductBulkActionModal";
 import { ProductBulkDeleteModal } from "./ProductBulkDeleteModal";
 import { ProductBulkHubModal } from "./ProductBulkHubModal";
@@ -74,11 +80,9 @@ type Product = ProductListRow;
 const CLIENT_BATCH_LIMIT = 8000;
 
 function formatPurchasePriceZl(p: Product): string {
-  const v = p.purchase_price;
-  if (v == null) return "";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "";
-  return `${n.toFixed(2)} zł`;
+  const pricing = resolveProductPricingFromRow(p);
+  if (pricing.purchaseNet == null) return "";
+  return `${pricing.purchaseNet.toFixed(2)} zł netto`;
 }
 
 function formatDimensionsCm(p: Product): string {
@@ -327,7 +331,7 @@ function applyClientFilters(products: Product[], f: UiFilters): Product[] {
       const n = Number.parseFloat(f.stockMax.replace(",", "."));
       if (Number.isFinite(n) && stock > n) return false;
     }
-    const price = p.sale_price ?? p.purchase_price ?? null;
+    const price = resolvedSaleNetForFilter(resolveProductPricingFromRow(p));
     if (f.priceMin.trim() !== "") {
       const n = Number.parseFloat(f.priceMin.replace(",", "."));
       if (!Number.isFinite(n) || price == null || price < n) return false;
@@ -366,9 +370,8 @@ function applyClientFilters(products: Product[], f: UiFilters): Product[] {
 }
 
 function formatPriceZl(p: Product): string {
-  const v = p.sale_price ?? p.purchase_price;
-  if (v == null || Number.isNaN(Number(v))) return "";
-  return `${Number(v).toFixed(2)} zł`;
+  const pricing = resolveProductPricingFromRow(p);
+  return formatResolvedSalePrice(pricing, "both", "");
 }
 
 /** Stan × średnia ważona z RECEIPT (operacje magazynowe). */
@@ -391,14 +394,19 @@ type SortKey = "id" | "name" | "ean" | "symbol" | "volume" | "weight" | "invento
 export default function ProductList() {
   const t = useTranslation();
   const navigate = useNavigate();
+  const { selectedWarehouseId } = useWarehouse();
   /** Nawigacja do karty produktu — używana przez cały wiersz tabeli (bez checkboxa i akcji). */
   const openProductEdit = useCallback(
     (p: Product) => {
       navigate(`/products/${p.id}/edit`, {
-        state: { tenantId: p.tenant_id ?? undefined },
+        state: {
+          tenantId: p.tenant_id ?? undefined,
+          listStockQuantity: p.stock_quantity ?? undefined,
+          warehouseId: selectedWarehouseId ?? undefined,
+        },
       });
     },
-    [navigate],
+    [navigate, selectedWarehouseId],
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const manufacturerFilterId = useMemo(() => {
@@ -552,7 +560,7 @@ export default function ProductList() {
         relatedLocationUuids: related.length > 0 ? related : [focusedUuid],
       });
     },
-    [tenantFilter],
+    [tenantFilter, selectedWarehouseId],
   );
 
   useEffect(() => {
@@ -572,6 +580,7 @@ export default function ProductList() {
     params.set("offset", String((page - 1) * rowsPerPage));
     if (sortBy) params.set("sort_by", sortBy);
     params.set("sort_dir", sortDir);
+    if (selectedWarehouseId != null) params.set("warehouse_id", String(selectedWarehouseId));
 
     api
       .get(`/products/?${params.toString()}`)
@@ -594,6 +603,7 @@ export default function ProductList() {
     page,
     sortBy,
     sortDir,
+    selectedWarehouseId,
   ]);
 
   const fetchClientBatch = useCallback(() => {
@@ -609,6 +619,7 @@ export default function ProductList() {
     params.set("offset", "0");
     if (sortBy) params.set("sort_by", sortBy);
     params.set("sort_dir", sortDir);
+    if (selectedWarehouseId != null) params.set("warehouse_id", String(selectedWarehouseId));
 
     api
       .get(`/products/?${params.toString()}`)
@@ -621,7 +632,7 @@ export default function ProductList() {
       })
       .catch(() => log("Błąd pobierania produktów"))
       .finally(() => setLoading(false));
-  }, [tenantFilter, manufacturerFilterId, appliedFilters, sortBy, sortDir]);
+  }, [tenantFilter, manufacturerFilterId, appliedFilters, sortBy, sortDir, selectedWarehouseId]);
 
   useEffect(() => {
     if (!clientMode) return;

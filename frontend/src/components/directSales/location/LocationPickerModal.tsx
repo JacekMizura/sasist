@@ -1,4 +1,6 @@
 import type { LocationStockRow } from "../../../api/locationStockApi";
+import { sortDirectSalesLocationRows } from "../../../modules/directSales/settings/sortLocationRows";
+import { useResolvedDirectSalesSettings } from "../../../modules/directSales/settings/resolvedDirectSalesSettings";
 import { resolveLocationZoneKind, ZONE_BADGE_CLASS } from "../stock/stockZoneStyles";
 
 type Props = {
@@ -27,17 +29,11 @@ export function LocationPickerModal({
   onClose,
   onPick,
 }: Props) {
+  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
+
   if (!open) return null;
 
-  const sorted = [...rows].sort((a, b) => {
-    const za = resolveLocationZoneKind(a.operational_zone_type);
-    const zb = resolveLocationZoneKind(b.operational_zone_type);
-    const rank = (k: string) =>
-      k === "store" ? 0 : k === "primary" ? 1 : k === "reserve" ? 2 : k === "showroom" ? 3 : k === "blocked" ? 9 : 4;
-    const dr = rank(za) - rank(zb);
-    if (dr !== 0) return dr;
-    return (b.sales_priority ?? 0) - (a.sales_priority ?? 0);
-  });
+  const sorted = sortDirectSalesLocationRows(rows, resolvedDirectSalesSettings);
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/35 p-3">

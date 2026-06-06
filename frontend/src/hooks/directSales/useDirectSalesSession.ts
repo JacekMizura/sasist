@@ -30,10 +30,7 @@ import {
 import { allocationStrategyToIssueStrategy } from "../../utils/directSales/allocationStrategy";
 import { lineTotal } from "../../utils/directSales/lineTotal";
 import { safeTrim } from "../../utils/safeStrings";
-import {
-  DEFAULT_DIRECT_SALES_SETTINGS,
-  type DirectSalesSettingsConfig,
-} from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
+import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 
 export type DocumentSubtype = "RECEIPT" | "INVOICE";
 
@@ -42,7 +39,6 @@ type Args = {
   onProductAdded: (productId: number) => void;
   enabled?: boolean;
   onSuspended?: () => void;
-  settings?: DirectSalesSettingsConfig;
 };
 
 function friendlyError(err: unknown): string {
@@ -58,8 +54,8 @@ export function useDirectSalesSession({
   onProductAdded,
   enabled = true,
   onSuspended,
-  settings = DEFAULT_DIRECT_SALES_SETTINGS,
 }: Args) {
+  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const {
     scannerInputValue,
     setScannerInputPlaceholder,
@@ -90,9 +86,13 @@ export function useDirectSalesSession({
   );
 
   const issueStrategy = useMemo(
-    () => allocationStrategyToIssueStrategy(settings.allocation_strategy),
-    [settings.allocation_strategy],
+    () => allocationStrategyToIssueStrategy(resolvedDirectSalesSettings.allocation_strategy),
+    [resolvedDirectSalesSettings.allocation_strategy],
   );
+
+  useEffect(() => {
+    setDocumentSubtype(resolvedDirectSalesSettings.default_document_type === "FV" ? "INVOICE" : "RECEIPT");
+  }, [resolvedDirectSalesSettings.default_document_type]);
 
   useEffect(() => {
     setCashReceived((prev) => (prev < total ? total : prev));
@@ -153,17 +153,13 @@ export function useDirectSalesSession({
     setCompletionView(null);
     setLastComplete(null);
     setCompleteError(null);
-    if (settings.auto_start_new_session) {
+    if (resolvedDirectSalesSettings.auto_start_new_session) {
       void startNewSession();
     }
-  }, [settings.auto_start_new_session, startNewSession]);
+  }, [resolvedDirectSalesSettings.auto_start_new_session, startNewSession]);
 
   useEffect(() => {
-    setDocumentSubtype(settings.default_document_type === "FV" ? "INVOICE" : "RECEIPT");
-  }, [settings.default_document_type, warehouseId]);
-
-  useEffect(() => {
-    const pm = settings.payment_methods;
+    const pm = resolvedDirectSalesSettings.payment_methods;
     const first =
       (pm.cash && "CASH") ||
       (pm.card && "CARD") ||
@@ -172,7 +168,7 @@ export function useDirectSalesSession({
       (pm.mixed && "MIXED") ||
       "CASH";
     setPaymentMethod(first);
-  }, [settings.payment_methods, warehouseId]);
+  }, [resolvedDirectSalesSettings.payment_methods, warehouseId]);
 
   const dismissCompleteError = useCallback(() => setCompleteError(null), []);
 

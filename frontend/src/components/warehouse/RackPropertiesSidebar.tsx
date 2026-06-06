@@ -7,14 +7,15 @@ import {
   getTotalLocations,
   getRackDisplayId,
   binsToLevels,
-  getDisplayLocationLabel,
   validateRackName,
   effectiveRackDisplayName,
   rackMatchesSlotRackId,
   rackPrimaryId,
 } from "./warehouseUtils";
+import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { logRackRename } from "./rackRenameLog";
+import { syncRackBinsDisplayFields } from "../../utils/resolvedWarehouseLocation";
 
 const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 320;
@@ -150,12 +151,20 @@ export function RackPropertiesSidebar({
       }
 
       setNameError(null);
-      setLayout((prev) => ({
-        ...prev,
-        racks: prev.racks.map((rack) =>
-          racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack
-        ),
-      }));
+      setLayout((prev) => {
+        const renamedRacks = prev.racks.map((rack) =>
+          racksMatchIdentity(rack, selectedRack) ? { ...rack, name: nextName } : rack,
+        );
+        const layoutDraft = { ...prev, racks: renamedRacks };
+        return {
+          ...prev,
+          racks: renamedRacks.map((rack) =>
+            racksMatchIdentity(rack, selectedRack)
+              ? { ...rack, bins: syncRackBinsDisplayFields(rack, layoutDraft) }
+              : rack,
+          ),
+        };
+      });
       lastCommittedNameRef.current = newName;
       const changed = (oldName ?? "") !== (newName ?? "");
       if (changed) {
@@ -430,7 +439,7 @@ export function RackPropertiesSidebar({
                                 );
                                 const line =
                                   bin != null
-                                    ? getDisplayLocationLabel(selectedRack, bin, layout)
+                                    ? resolveWarehouseLocation(selectedRack, bin, layout).label
                                     : pos.locationAddress || pos.locationUUID || `Pozycja ${posIndex + 1}`;
                                 return (
                                   <div key={pos.locationUUID} className="truncate font-mono text-slate-700" title={pos.locationUUID}>

@@ -30,6 +30,8 @@ class DirectSaleSessionLineRead(BaseModel):
     product_name: str | None = None
     product_sku: str | None = None
     product_ean: str | None = None
+    product_catalog_number: str | None = None
+    margin_percent: float | None = None
     image_url: str | None = None
     source_location_code: str | None = None
     operational_zone_type: str | None = None

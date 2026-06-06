@@ -1,16 +1,16 @@
 import type { DocumentSubtype } from "../../hooks/directSales/useDirectSalesSession";
-import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
+import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 
 type Props = {
   value: DocumentSubtype;
-  settings: DirectSalesSettingsConfig;
   hasCustomer: boolean;
   onChange: (v: DocumentSubtype) => void;
   disabled?: boolean;
 };
 
-export function DocumentPanel({ value, settings, hasCustomer, onChange, disabled }: Props) {
-  const invoiceBlocked = settings.require_customer_for_invoice && !hasCustomer;
+export function DocumentPanel({ value, hasCustomer, onChange, disabled }: Props) {
+  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
+  const invoiceBlocked = resolvedDirectSalesSettings.require_customer_for_invoice && !hasCustomer;
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Dokument sprzedaży</div>

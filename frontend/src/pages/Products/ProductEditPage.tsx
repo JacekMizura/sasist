@@ -4,10 +4,15 @@ import api from "../../api/axios";
 import PageLayout from "../../components/layout/PageLayout";
 import { ProductEditModal, type ProductEditTabId } from "./ProductEditModal";
 import { mapProductListRow } from "./productListMapper";
+import { useWarehouse } from "../../context/WarehouseContext";
 
 type Tenant = { id: number; name: string };
 
-type LocationState = { tenantId?: number } | null;
+type LocationState = {
+  tenantId?: number;
+  listStockQuantity?: number;
+  warehouseId?: number;
+} | null;
 
 /**
  * /products/:id/edit — full-page product edit (no modal).
@@ -43,6 +48,13 @@ export default function ProductEditPage() {
       : tenantFromQuery != null && tenantFromQuery !== ""
         ? Number(tenantFromQuery)
         : null;
+  const { selectedWarehouseId } = useWarehouse();
+  const warehouseHint =
+    (location.state as LocationState)?.warehouseId != null &&
+    Number.isFinite((location.state as LocationState)?.warehouseId)
+      ? Number((location.state as LocationState)?.warehouseId)
+      : selectedWarehouseId;
+  const listStockHint = (location.state as LocationState)?.listStockQuantity;
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +87,9 @@ export default function ProductEditPage() {
     if (tenantHint != null && Number.isFinite(tenantHint)) {
       params.tenant_id = String(tenantHint);
     }
+    if (warehouseHint != null && Number.isFinite(warehouseHint)) {
+      params.warehouse_id = String(warehouseHint);
+    }
     void api
       .get<Record<string, unknown>>(`/products/${pid}/`, { params })
       .then((res) => {
@@ -90,7 +105,7 @@ export default function ProductEditPage() {
         setProductRow(null);
       })
       .finally(() => setLoading(false));
-  }, [id, tenantHint]);
+  }, [id, tenantHint, warehouseHint]);
 
   // Po powrocie z innej karty/okna (np. zakończenie PZ) – odśwież produkt bez zacinania pełnoekranowego loadera.
   useEffect(() => {
@@ -100,6 +115,9 @@ export default function ProductEditPage() {
     const params: Record<string, string> = {};
     if (tenantHint != null && Number.isFinite(tenantHint)) {
       params.tenant_id = String(tenantHint);
+    }
+    if (warehouseHint != null && Number.isFinite(warehouseHint)) {
+      params.warehouse_id = String(warehouseHint);
     }
     const onVis = () => {
       if (document.visibilityState !== "visible") return;
@@ -119,7 +137,7 @@ export default function ProductEditPage() {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [id, tenantHint]);
+  }, [id, tenantHint, warehouseHint]);
 
   const goProducts = () => navigate("/products", { replace: true });
 
@@ -174,6 +192,9 @@ export default function ProductEditPage() {
               focusPlanLocations={false}
               initialTab={initialTab}
               scrollToWmsValidation={tabParam === "wms-validation"}
+              listStockHint={
+                listStockHint != null && Number.isFinite(listStockHint) ? Number(listStockHint) : undefined
+              }
               product={{
                 ...p,
                 name: p.name ?? "",

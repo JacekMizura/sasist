@@ -9,10 +9,32 @@ from sqlalchemy.orm import Session
 from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
 from ...models.order import Order
 from ...models.order_item import OrderItem
+from ...models.order_ui_status import OrderUiStatus
 from ..barcode_generation import next_internal_order_number, next_order_barcode
 from ..direct_sales_settings_service import resolve_direct_sales_settings
 from ..order_default_new_panel_status import assign_default_new_panel_status_to_order
 from .errors import DirectSaleError
+
+
+def _resolve_panel_status_id(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    configured_id: int | None,
+) -> int | None:
+    if configured_id is None or int(configured_id) <= 0:
+        return None
+    row = (
+        db.query(OrderUiStatus)
+        .filter(
+            OrderUiStatus.id == int(configured_id),
+            OrderUiStatus.tenant_id == int(tenant_id),
+            OrderUiStatus.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    return int(row.id) if row is not None else None
 
 
 def create_order_from_session(
@@ -56,8 +78,13 @@ def create_order_from_session(
     db.flush()
 
     settings = resolve_direct_sales_settings(db, tenant_id=tid, warehouse_id=wid)
-    panel_status_id = settings.resolved.default_order_status_id
-    if panel_status_id is not None and int(panel_status_id) > 0:
+    panel_status_id = _resolve_panel_status_id(
+        db,
+        tenant_id=tid,
+        warehouse_id=wid,
+        configured_id=settings.resolved.default_order_status_id,
+    )
+    if panel_status_id is not None:
         order.order_ui_status_id = int(panel_status_id)
     else:
         assign_default_new_panel_status_to_order(db, order)

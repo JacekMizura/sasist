@@ -36,7 +36,6 @@ export function DirectSalesLayout({ terminal }: Props) {
     handleNewSession,
     handleRefresh,
     handleRestoreSuspended,
-    settings,
   } = terminal;
 
   if (warehouseId == null) {
@@ -118,7 +117,6 @@ export function DirectSalesLayout({ terminal }: Props) {
           <ProductSearchPanel
             session={session}
             search={productSearch}
-            settings={settings}
             busy={sessionState.busy}
             onAddProduct={(id, loc) => void sessionState.addByProductId(id, loc)}
             onScanCode={(code) => void sessionState.addByCode(code)}
@@ -143,7 +141,6 @@ export function DirectSalesLayout({ terminal }: Props) {
         <SessionLinesPanel
           session={session}
           warehouseId={warehouseId}
-          settings={settings}
           busy={sessionState.busy}
           highlight={issueFlash}
           onQtyChange={(id, qty) => void sessionState.changeLineQty(id, qty)}
@@ -155,18 +152,15 @@ export function DirectSalesLayout({ terminal }: Props) {
             customer={customer}
             customerId={session?.customer_id ?? null}
             documentSubtype={sessionState.documentSubtype}
-            settings={settings}
             disabled={sessionState.busy}
           />
           <DocumentPanel
             value={sessionState.documentSubtype}
-            settings={settings}
             hasCustomer={session?.customer_id != null}
             onChange={sessionState.setDocumentSubtype}
             disabled={sessionState.busy}
           />
           <PaymentTerminalPanel
-            settings={settings}
             total={sessionState.total}
             busy={sessionState.busy}
             hasSession={session != null}

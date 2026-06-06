@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import type { LayoutState, WarehouseProduct } from "../../../types/warehouse";
-import { activeBinsForRack, compareLocationUuidsByLayoutOrder, getDisplayLocationLabel } from "../warehouseUtils";
+import { activeBinsForRack, compareLocationUuidsByLayoutOrder } from "../warehouseUtils";
 import { normalizeInventoryLocationUuid, type InventoryMaps } from "../../../pages/WarehouseDesigner/inventoryMaps";
+import { buildUuidToResolvedLocation } from "../../../utils/resolvedWarehouseLocation";
 
 export interface ProductLocatorSidebarProps {
   product: WarehouseProduct;
@@ -24,17 +25,7 @@ export function ProductLocatorSidebar({
   getProductImageUrl,
   onSelectLocation,
 }: ProductLocatorSidebarProps) {
-  const uuidToBinMeta = useMemo(() => {
-    const map = new Map<string, { locationLabel: string; storageType?: string }>();
-    for (const rack of layout.racks) {
-      for (const bin of activeBinsForRack(rack)) {
-        const u = normalizeInventoryLocationUuid(bin.locationUUID);
-        if (!u) continue;
-        map.set(u, { locationLabel: getDisplayLocationLabel(rack, bin, layout), storageType: bin.storage_type });
-      }
-    }
-    return map;
-  }, [layout]);
+  const uuidToResolved = useMemo(() => buildUuidToResolvedLocation(layout), [layout]);
 
   type LocationRow = { locationUUID: string; locationLabel: string; quantity: number; isReserve: boolean };
 
@@ -52,20 +43,15 @@ export function ProductLocatorSidebar({
 
       return Array.from(qtyByUuid.entries())
         .map(([locUuid, qty]) => {
-          const meta = uuidToBinMeta.get(locUuid);
-          const fallbackLabel = (() => {
-            const rows = inventoryMaps.byLocationUuid.get(locUuid) ?? [];
-            const first = rows[0];
-            const raw = first ? (first.location_name ?? "").trim() || String(first.location_id) : "";
-            return raw.replace(/\s+/g, " ").trim() || locUuid;
-          })();
+          const resolved = uuidToResolved.get(locUuid);
           return {
             locationUUID: locUuid,
-            locationLabel: meta?.locationLabel ?? fallbackLabel,
+            locationLabel: resolved?.label ?? locUuid,
             quantity: qty,
-            isReserve: meta?.storageType === "reserve",
+            isReserve: resolved?.storageType === "reserve",
           };
         })
+        .filter((row) => row.locationLabel !== row.locationUUID || uuidToResolved.has(row.locationUUID))
         .sort((a, b) => {
           const q = b.quantity - a.quantity;
           if (q !== 0) return q;
@@ -73,21 +59,16 @@ export function ProductLocatorSidebar({
         });
     }
 
-    const uuidToLabel: Record<string, string> = {};
-    for (const rack of layout.racks) {
-      for (const bin of activeBinsForRack(rack)) {
-        const u = (bin.locationUUID ?? "").trim();
-        if (u) uuidToLabel[u] = getDisplayLocationLabel(rack, bin, layout);
-      }
-    }
-
     return (product.assignedLocations ?? [])
-      .map((a) => ({
-        locationUUID: a.locationUUID,
-        locationLabel: uuidToLabel[a.locationUUID] ?? a.locationAddress ?? a.locationUUID,
-        quantity: a.quantity,
-        isReserve: a.storageType === "reserve",
-      }))
+      .map((a) => {
+        const resolved = uuidToResolved.get(a.locationUUID);
+        return {
+          locationUUID: a.locationUUID,
+          locationLabel: resolved?.label ?? a.locationUUID,
+          quantity: a.quantity,
+          isReserve: resolved?.storageType === "reserve",
+        };
+      })
       .sort((a, b) => {
         const q = b.quantity - a.quantity;
         if (q !== 0) return q;

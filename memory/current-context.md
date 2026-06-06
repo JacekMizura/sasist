@@ -1,28 +1,38 @@
 # Current context
 
 ## Active goal
-Stable production bundle — no TDZ / circular-import crashes.
+Unified product pricing + inventory parity across list/detail/terminal.
 
-## Recent fix (frontend crash — ROOT CAUSE FOUND)
-- **Exact bug:** `useDirectSalesSession.ts` — `issueStrategy` used in `ensureSession` / `startNewSession` **before** `const issueStrategy = useMemo(...)`. Playwright on `/wms/direct-sales`: `Cannot access 'issueStrategy' before initialization`.
-- **Fix:** moved `issueStrategy` useMemo above dependent callbacks.
-- Debug infra: `minify: false`, `sourcemap: true`, `[route.render]`, `capture-runtime-errors.mjs`.
-- Prior TDZ: `WmsOrderIssueDetailSection`, `operationalApiTypes`, picking `wmsEvents`, `shortageLocationLabel`.
-- Import hardening: `productListRow` types, `useLocationStock` in hooks.
+## Pricing + inventory (2026-06-04)
+- `ResolvedProductPricing` + `resolveProductPricingFromRow` / `resolveDirectSalesUnitPricing` in `utils/resolvedProductPricing.ts`.
+- Product list, edit header, direct sales terminal use unified resolver (sale net → gross via VAT).
+- List + detail pass `warehouse_id` from `WarehouseContext`; list passes `listStockHint` for cross-view mismatch detection.
+- Backend list uses `apply_inventory_display_to_dict` (same as detail); `[product.inventory.compare]` structured logging.
+
+## Prior: Location labels
+Warehouse location label consistency — single resolver everywhere; backend `sync_location_display_fields` on rename/save.
+
+## Location labels (final pass)
+- UI rule: all displayed labels via `resolveWarehouseLocation` / `resolvedLocationLabel` / `buildUuidToResolvedLocation`.
+- `syncLayoutDisplayFields` on load + before save; `loadLayout` refetch after PUT clears stale inventory.
+- Migrated: ElevationPanel, SlottingPage, damageShared, reports/PDF export, LocationMappingExportImport, MagazynProductsSidebar (no `inv.location_name` fallback).
+- Backend: `sync_location_display_fields` updates `Location.name` + `putaway_last_location_name`; inventory/reservations/pick routes read `Location.name` live.
+
+## Prior: Direct Sales
+Direct Sales terminal — settings source of truth + complete-sale reliability.
+
+## Recent fix (Direct Sales)
+### Settings ignored
+- **`resolvedDirectSalesSettings`** — `ResolvedDirectSalesSettingsProvider` + `useResolvedDirectSalesSettings()`; terminal waits for API load before render.
+- All terminal UI reads from context (line cards, search, payment, customer, document, location picker).
+- Backend enrichment: `product_catalog_number`, `margin_percent` on session lines.
+- Price display: `formatDirectSalesPrice` (gross/net/both) on lines, search, payment total.
+- `prefer_store_locations` wired: product search preferred loc, issue plan, location picker sort.
+
+### Complete sale 500
+- Structured `[direct_sales.complete]` JSON logging per pipeline stage (`complete_pipeline_log.py`, `complete_service.py`).
+- `order_service`: validate `order_ui_status_id` exists before FK assign (fallback to default "Nowe").
 
 ## Prior
-Product list vs detail inventory parity — shared stock/location source of truth.
-
-## Fix (product location bug)
-- Shared service: `backend/services/product_inventory_display_service.py`
-  - `inventory_display_maps_for_products` — batch stock + locations
-  - `get_product_inventory_display_snapshot` / alias `get_product_inventory_snapshot`
-  - `apply_inventory_display_to_dict` — used by GET detail
-- Both `GET /api/products` and `GET /api/products/{id}` use same helpers; optional `warehouse_id` query param.
-- Logs: `[product.list.stock]`, `[product.detail.stock]` with product_id, tenant_id, warehouse_id, total_stock, location_codes.
-- Location shape includes `id`, `code`, `name`, `quantity`, `warehouse_id`.
-- Flag `locations_load_incomplete` when stock > 0 but no location rows.
-- Frontend Magazyn tab: shows „Dane lokalizacji nie zostały załadowane” instead of fake zero when stock > 0 but inventory empty.
-
-## Prior
-Layout designer refactor; direct sales terminal fixes.
+- TDZ fix: `issueStrategy` before use in `useDirectSalesSession`.
+- Product inventory display shared service + logging.

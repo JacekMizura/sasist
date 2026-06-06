@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
-import type { DirectSalesSettingsConfig } from "../../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
+import { formatDirectSalesAggregateTotal } from "../../../modules/directSales/settings/formatDirectSalesPrice";
+import { useResolvedDirectSalesSettings } from "../../../modules/directSales/settings/resolvedDirectSalesSettings";
 import type { DirectSaleSession } from "../../../utils/normalizeDirectSales";
 import { paymentMethodPl, sessionStatusPl } from "../directSalesTerminology";
 import { CashChangePanel } from "./CashChangePanel";
@@ -15,7 +16,6 @@ const ALL_METHODS = [
 ] as const;
 
 type Props = {
-  settings: DirectSalesSettingsConfig;
   total: number;
   busy: boolean;
   hasSession: boolean;
@@ -33,7 +33,6 @@ type Props = {
 };
 
 export function PaymentTerminalPanel({
-  settings,
   total,
   busy,
   hasSession,
@@ -49,8 +48,9 @@ export function PaymentTerminalPanel({
   onPaymentMethodChange,
   onComplete,
 }: Props) {
+  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const methods = useMemo(() => {
-    const pm = settings.payment_methods;
+    const pm = resolvedDirectSalesSettings.payment_methods;
     return ALL_METHODS.filter((m) => {
       if (m.id === "CASH") return pm.cash;
       if (m.id === "CARD") return pm.card;
@@ -59,7 +59,7 @@ export function PaymentTerminalPanel({
       if (m.id === "MIXED") return pm.mixed;
       return false;
     });
-  }, [settings.payment_methods]);
+  }, [resolvedDirectSalesSettings.payment_methods]);
 
   const isCash = paymentMethod === "CASH";
   const isMixed = paymentMethod === "MIXED";
@@ -67,8 +67,8 @@ export function PaymentTerminalPanel({
   const mixedSum = mixedCashAmount + mixedCardAmount;
   const mixedOk = Math.abs(mixedSum - total) <= 0.02 && mixedSum > 0;
   const cashOk =
-    !settings.require_cash_received ||
-    settings.allow_incomplete_payment ||
+    !resolvedDirectSalesSettings.require_cash_received ||
+    resolvedDirectSalesSettings.allow_incomplete_payment ||
     cashReceived + 1e-9 >= total;
   const canComplete =
     hasSession &&
@@ -80,7 +80,9 @@ export function PaymentTerminalPanel({
     <div className="space-y-2">
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-white">
         <div className="text-xs uppercase tracking-wide text-slate-400">Do zapłaty</div>
-        <div className="mt-1 text-4xl font-bold tabular-nums">{total.toFixed(2)} zł</div>
+        <div className="mt-1 text-4xl font-bold tabular-nums">
+          {formatDirectSalesAggregateTotal(total, resolvedDirectSalesSettings.price_display)}
+        </div>
         {isCash && cashReceived > 0 && remaining > 0.009 ? (
           <div className="mt-1 text-sm text-amber-300">Pozostało: {remaining.toFixed(2)} zł</div>
         ) : null}
@@ -125,7 +127,7 @@ export function PaymentTerminalPanel({
         />
       ) : null}
 
-      {isCash && settings.show_change_amount ? (
+      {isCash && resolvedDirectSalesSettings.show_change_amount ? (
         <CashChangePanel
           total={total}
           received={cashReceived}

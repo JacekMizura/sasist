@@ -6,7 +6,7 @@ import { normalizeStorageType } from "../../utils/storageTypes";
 import { LocationTypeBadge } from "./LocationTypeBadge";
 
 export type LocationPickerProps = {
-  /** All positions from warehouse layout (e.g. getAllPositionsFromRacks). `locationAddress` is the full display line from `getDisplayLocationLabel`. */
+  /** All positions from warehouse layout (e.g. getAllPositionsFromRacks). `locationAddress` matches `resolveWarehouseLocation`. */
   positions: SelectablePosition[];
   value: AssignedLocation[];
   onChange: (next: AssignedLocation[]) => void;

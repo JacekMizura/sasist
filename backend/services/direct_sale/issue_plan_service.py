@@ -112,6 +112,7 @@ def _fallback_line_allocations(
     *,
     reason_code: str,
     allow_oversell: bool = False,
+    prefer_store_locations: bool = True,
 ) -> list[IssueAllocation]:
     tid = int(sess.tenant_id)
     wid = int(sess.warehouse_id)
@@ -134,7 +135,12 @@ def _fallback_line_allocations(
         )
 
     splits = suggest_issue_locations_for_sales(
-        db, tenant_id=tid, warehouse_id=wid, product_id=pid, quantity=need
+        db,
+        tenant_id=tid,
+        warehouse_id=wid,
+        product_id=pid,
+        quantity=need,
+        prefer_store_locations=prefer_store_locations,
     )
     if not splits:
         raise DirectSaleError(
@@ -161,6 +167,7 @@ def _plan_single_line(
     line: DirectSaleSessionLine,
     *,
     allow_oversell: bool = False,
+    prefer_store_locations: bool = True,
 ) -> list[IssueAllocation]:
     strategy = (getattr(sess, "issue_strategy", None) or "STRICT_LOCATION").strip().upper()
     tid = int(sess.tenant_id)
@@ -177,7 +184,12 @@ def _plan_single_line(
             pick_lid = lid
             if pick_lid is None:
                 splits = suggest_issue_locations_for_sales(
-                    db, tenant_id=tid, warehouse_id=wid, product_id=pid, quantity=need
+                    db,
+                    tenant_id=tid,
+                    warehouse_id=wid,
+                    product_id=pid,
+                    quantity=need,
+                    prefer_store_locations=prefer_store_locations,
                 )
                 if splits:
                     pick_lid = int(splits[0]["location_id"])
@@ -215,13 +227,23 @@ def _plan_single_line(
                     code="single_location_unavailable",
                 )
             sorted_c = suggest_issue_locations_for_sales(
-                db, tenant_id=tid, warehouse_id=wid, product_id=pid, quantity=need
+                db,
+                tenant_id=tid,
+                warehouse_id=wid,
+                product_id=pid,
+                quantity=need,
+                prefer_store_locations=prefer_store_locations,
             )
             pick = sorted_c[0] if sorted_c else candidates[0]
             return [IssueAllocation(int(line.id), pid, int(pick["location_id"]), need)]
 
         splits = suggest_issue_locations_for_sales(
-            db, tenant_id=tid, warehouse_id=wid, product_id=pid, quantity=need
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            product_id=pid,
+            quantity=need,
+            prefer_store_locations=prefer_store_locations,
         )
         if not splits:
             raise DirectSaleError(
@@ -234,23 +256,37 @@ def _plan_single_line(
             return _oversell_allocation(line, location_id=lid)
         if exc.code in _FALLBACK_CODES:
             return _fallback_line_allocations(
-                db, sess, line, reason_code=exc.code, allow_oversell=allow_oversell
+                db,
+                sess,
+                line,
+                reason_code=exc.code,
+                allow_oversell=allow_oversell,
+                prefer_store_locations=prefer_store_locations,
             )
         raise
 
 
-def _resolve_allow_oversell(db: Session, sess: DirectSaleSession) -> bool:
+def _resolve_session_settings(db: Session, sess: DirectSaleSession):
     try:
-        settings = resolve_direct_sales_settings(
+        return resolve_direct_sales_settings(
             db, tenant_id=int(sess.tenant_id), warehouse_id=int(sess.warehouse_id)
-        )
-        return bool(settings.resolved.allow_oversell)
+        ).resolved
     except Exception:
         logger.debug(
-            "[direct-sales.issue-plan] allow_oversell fallback=false session_id=%s",
+            "[direct-sales.issue-plan] settings fallback session_id=%s",
             int(getattr(sess, "id", 0) or 0),
         )
-        return False
+        return None
+
+
+def _resolve_allow_oversell(db: Session, sess: DirectSaleSession) -> bool:
+    cfg = _resolve_session_settings(db, sess)
+    return bool(cfg.allow_oversell) if cfg is not None else False
+
+
+def _resolve_prefer_store_locations(db: Session, sess: DirectSaleSession) -> bool:
+    cfg = _resolve_session_settings(db, sess)
+    return bool(cfg.prefer_store_locations) if cfg is not None else True
 
 
 def plan_issue_allocations(
@@ -259,9 +295,18 @@ def plan_issue_allocations(
     lines: list[DirectSaleSessionLine],
 ) -> list[IssueAllocation]:
     allow_oversell = _resolve_allow_oversell(db, sess)
+    prefer_store_locations = _resolve_prefer_store_locations(db, sess)
     out: list[IssueAllocation] = []
     for line in lines:
-        out.extend(_plan_single_line(db, sess, line, allow_oversell=allow_oversell))
+        out.extend(
+            _plan_single_line(
+                db,
+                sess,
+                line,
+                allow_oversell=allow_oversell,
+                prefer_store_locations=prefer_store_locations,
+            )
+        )
     if not out:
         raise DirectSaleError("Sesja nie ma pozycji do wydania.", code="empty_session")
     return out

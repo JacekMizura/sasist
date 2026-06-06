@@ -1,5 +1,34 @@
 # Change log
 
+## 2026-06-04 — Unified pricing + inventory parity
+
+- `resolvedProductPricing.ts`: canonical `ResolvedProductPricing` DTO; list/detail/direct sales consume only resolver.
+- Direct sales: `unit_price` treated as sale net (was incorrectly shown as gross); line totals use `sale_gross`.
+- Product list/detail: `warehouse_id` from `WarehouseContext`; cross-view mismatch message instead of hiding divergence.
+- Backend: list endpoint uses `apply_inventory_display_to_dict`; `[product.inventory.compare]` logging on list + detail.
+
+## 2026-06-04 — Location label final consistency pass
+
+- Frontend audit: replaced remaining `getDisplayLocationLabel` / `bin.label` / `inv.location_name` display paths with `resolveWarehouseLocation` helpers.
+- Files: ElevationPanel, SlottingPage, damageShared, buildWarehouseStructureReportData, productLocationReportDataBuilder, LocationMappingExportImport, MagazynProductsSidebar.
+- `getAllPositionsFromRacks`: store-rack storage type matches resolver (pick/green).
+- Backend doc: `sync_location_display_fields` documents Location.name as source for inventory, reservations, pick routes.
+
+## 2026-06-04 — Direct Sales settings + complete pipeline
+
+- Frontend: `resolvedDirectSalesSettings` context; terminal blocks until settings API resolves; all UI components use `useResolvedDirectSalesSettings()`.
+- Price/catalog/margin display on line cards and search; `price_display` mode on totals.
+- Backend: session line enrichment (`product_catalog_number`, `margin_percent`); `prefer_store_locations` in search + issue plan.
+- Complete sale: `[direct_sales.complete]` structured JSON logging per stage; order `order_ui_status_id` FK validation before assign.
+
+## 2026-06-04 — Layout designer label/type sync
+
+- `resolvedWarehouseLocation.ts`: single resolver for label + storageType (store racks → green/pick).
+- Template regen: `mergeRegeneratedBins` preserves UUIDs; `syncRackBinsDisplayFields` aligns label/location_id.
+- Save layout refetches via `loadLayout` after PUT.
+- Inspector: close clears selection; click reopens panel (`previewRackId` + `rackPanelDismissed`).
+- UI uses resolver in RackSideViewGrid, Magazyn sidebar, InternalLayout, RackPropertiesSidebar.
+
 ## 2026-06-04 — Direct sales TDZ fix (`issueStrategy`)
 
 - **Root cause:** `hooks/directSales/useDirectSalesSession.ts` — `ensureSession` / `startNewSession` referenced `issueStrategy` before `useMemo` declaration (temporal dead zone at render).

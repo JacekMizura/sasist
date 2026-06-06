@@ -239,6 +239,7 @@ def suggest_issue_locations_for_sales(
     warehouse_id: int,
     product_id: int,
     quantity: float,
+    prefer_store_locations: bool = True,
 ) -> list[dict]:
     snap = build_location_stock(
         db,
@@ -247,4 +248,8 @@ def suggest_issue_locations_for_sales(
         product_id=product_id,
         available_only=True,
     )
-    return suggest_sales_locations(list(snap.get("locations") or []), quantity=float(quantity))
+    return suggest_sales_locations(
+        list(snap.get("locations") or []),
+        quantity=float(quantity),
+        prefer_store_locations=prefer_store_locations,
+    )

@@ -1,7 +1,9 @@
 import api from "../../api/axios";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import type { DamageCandidate } from "../../types/damageReport";
-import type { WarehouseProduct } from "../../types/warehouse";
+import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
+import { rawLayoutRackToRackState, type RawLayoutRack } from "../../components/warehouse/warehouseUtils";
+import { resolveWarehouseLocation, syncLayoutDisplayFields } from "../../utils/resolvedWarehouseLocation";
 
 export { DAMAGE_TENANT_ID };
 
@@ -15,15 +17,7 @@ type InventoryRow = {
   available_quantity?: number;
 };
 
-type LayoutBin = {
-  label: string;
-  storage_type?: string;
-  location_uuid?: string;
-  locationUUID?: string;
-};
-
-type LayoutRack = { bins?: LayoutBin[] };
-type LayoutResponse = { layout?: { racks?: LayoutRack[] } } | { racks?: LayoutRack[] };
+type LayoutResponse = { layout?: { racks?: RawLayoutRack[] } } | { racks?: RawLayoutRack[] };
 
 function norm(v: unknown): string {
   const s = String(v ?? "").trim();
@@ -32,6 +26,20 @@ function norm(v: unknown): string {
 
 function isDamagedType(v: unknown): boolean {
   return norm(v).toLowerCase() === "damaged";
+}
+
+function layoutFromApiPayload(data: LayoutResponse | undefined, warehouseId: number): LayoutState {
+  const layoutData = (data as { layout?: { racks?: RawLayoutRack[] } })?.layout ?? (data as { racks?: RawLayoutRack[] });
+  const rawRacks = Array.isArray(layoutData?.racks) ? layoutData.racks : [];
+  const base: LayoutState = {
+    layout_id: null,
+    warehouse_id: warehouseId,
+    grid_cols: 24,
+    grid_rows: 16,
+    racks: rawRacks.map((r) => rawLayoutRackToRackState(r)),
+    aisles: [],
+  };
+  return syncLayoutDisplayFields(base);
 }
 
 export async function fetchWarehouses(): Promise<WarehouseOption[]> {
@@ -52,15 +60,14 @@ export async function fetchDamageCandidates(warehouseId: number): Promise<Damage
     }),
   ]);
 
-  const layoutData = (layoutRes.data as { layout?: { racks?: LayoutRack[] } })?.layout ?? (layoutRes.data as { racks?: LayoutRack[] });
-  const racks = Array.isArray(layoutData?.racks) ? layoutData.racks : [];
+  const layout = layoutFromApiPayload(layoutRes.data, warehouseId);
   const damagedByUuid = new Map<string, string>();
-  for (const rack of racks) {
-    for (const bin of Array.isArray(rack.bins) ? rack.bins : []) {
+  for (const rack of layout.racks) {
+    for (const bin of rack.bins ?? []) {
       if (!isDamagedType(bin.storage_type)) continue;
-      const u = norm(bin.location_uuid ?? bin.locationUUID);
+      const u = norm(bin.locationUUID);
       if (!u) continue;
-      damagedByUuid.set(u, String(bin.label ?? u));
+      damagedByUuid.set(u, resolveWarehouseLocation(rack, bin, layout).label || u);
     }
   }
 
@@ -114,16 +121,13 @@ export async function fetchFirstDamagedBinUuid(warehouseId: number): Promise<str
   const layoutRes = await api.get<LayoutResponse>("/warehouse/layout", {
     params: { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId },
   });
-  const layoutData =
-    (layoutRes.data as { layout?: { racks?: LayoutRack[] } })?.layout ?? (layoutRes.data as { racks?: LayoutRack[] });
-  const racks = Array.isArray(layoutData?.racks) ? layoutData.racks : [];
-  for (const rack of racks) {
-    for (const bin of Array.isArray(rack.bins) ? rack.bins : []) {
+  const layout = layoutFromApiPayload(layoutRes.data, warehouseId);
+  for (const rack of layout.racks) {
+    for (const bin of rack.bins ?? []) {
       if (!isDamagedType(bin.storage_type)) continue;
-      const u = norm(bin.location_uuid ?? bin.locationUUID);
+      const u = norm(bin.locationUUID);
       if (u) return u;
     }
   }
   return null;
 }
-

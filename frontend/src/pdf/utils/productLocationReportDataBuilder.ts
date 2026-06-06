@@ -1,5 +1,6 @@
 import type { BinState, LayoutState, WarehouseProduct } from "../../types/warehouse";
-import { activeBinsForRack, getDisplayLocationLabel } from "../../components/warehouse/warehouseUtils";
+import { activeBinsForRack } from "../../components/warehouse/warehouseUtils";
+import { resolvedLocationLabel } from "../../utils/resolvedWarehouseLocation";
 
 type ProductLocationRow = {
   locationUuid: string;
@@ -73,7 +74,7 @@ function buildBinInfoMap(layout: LayoutState): Map<string, BinInfo> {
       const u = binUuid(bin);
       if (!u || map.has(u)) continue;
       map.set(u, {
-        label: getDisplayLocationLabel(rack, bin, layout),
+        label: resolvedLocationLabel(rack, bin, layout),
         storageType: normalizeStorageType(bin.storage_type),
       });
     }

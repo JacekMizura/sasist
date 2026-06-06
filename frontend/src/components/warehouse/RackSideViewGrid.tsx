@@ -4,12 +4,12 @@ import {
   getLevelConfig,
   binUsedVolumeDm3,
   binVolumeDm3,
-  getDisplayLocationLabel,
   isBinDirectionRtl,
   segmentIndexForVisualSlot,
   type PackingLayoutResult,
 } from "./warehouseUtils";
 import { getStorageTypeStyle, getStorageTypeLabel, normalizeStorageType } from "../../utils/storageTypes";
+import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 
 /** Blue – vertical rack columns (uprights) for non-top levels */
@@ -97,7 +97,7 @@ export function RackSideViewGrid({
   hoveredLocationUUID?: string | null;
   /** Bin/slot address badges on beams (A1, B2, …); same toggle as map „Pokaż etykiety”. */
   showLabels?: boolean;
-  /** When set, beam/bin labels use `getDisplayLocationLabel` (`rack_direction` + `bin_direction`). */
+  /** When set, beam/bin labels use `resolveWarehouseLocation` (`rack_direction` + `bin_direction`). */
   layout?: LayoutState | null;
 }) {
   const hoveredUuidNorm = (hoveredLocationUUID ?? "").trim();
@@ -207,8 +207,7 @@ export function RackSideViewGrid({
               const addresses = Array.from({ length: locs }, (_, seg) => {
                 const b = getBinAt(rack, lev, seg);
                 if (!b) return `L${lev + 1}-${seg + 1}`;
-                const raw = b.label ?? b.location_id ?? `L${lev + 1}-${seg + 1}`;
-                return layout ? getDisplayLocationLabel(rack, b, layout) : raw;
+                return resolveWarehouseLocation(rack, b, layout ?? null).label || `L${lev + 1}-${seg + 1}`;
               });
               const weightText = hasLevelMaxLoad
                 ? `${Math.round(loadKg)} / ${maxKg} kg${exceeded ? " ⚠" : ""}`
@@ -356,7 +355,10 @@ export function RackSideViewGrid({
                 const pct = vol > 0 ? (used / vol) * 100 : 0;
                 const quantity = binItemCounts?.[`${lev}-${bin}`] ?? 0;
                 const uniqueCount = binUniqueProductCounts?.[`${lev}-${bin}`] ?? 0;
-                const storageType = normalizeStorageType(binState?.storage_type);
+                const storageType =
+                  binState != null && layout
+                    ? resolveWarehouseLocation(rack, binState, layout).storageType
+                    : normalizeStorageType(binState?.storage_type);
                 const storageTypeLabel = getStorageTypeLabel(storageType);
                 const isSelected = selectedLocation?.level_index === lev && selectedLocation?.segment_index === bin;
                 const typeHighlightActive = highlightedStorageType != null;
@@ -382,9 +384,7 @@ export function RackSideViewGrid({
                 const fontSizeSub = Math.max(7, fontSize - 2);
                 const binLabel =
                   binState != null
-                    ? layout
-                      ? getDisplayLocationLabel(rack, binState, layout)
-                      : (binState.label ?? binState.location_id ?? `L${lev + 1}-${bin + 1}`)
+                    ? resolveWarehouseLocation(rack, binState, layout ?? null).label || `L${lev + 1}-${bin + 1}`
                     : `L${lev + 1}-${bin + 1}`;
                 const binUuidNorm = (
                   (binState as { locationUUID?: string; location_uuid?: string } | undefined)?.locationUUID ??

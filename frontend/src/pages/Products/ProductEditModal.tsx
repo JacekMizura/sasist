@@ -348,6 +348,8 @@ type ProductEditModalProps = {
   variant?: "modal" | "page";
   initialTab?: TabId;
   scrollToWmsValidation?: boolean;
+  /** Stock from list view — used to detect cross-view inventory divergence. */
+  listStockHint?: number;
 };
 
 export function ProductEditModal({
@@ -359,6 +361,7 @@ export function ProductEditModal({
   variant = "modal",
   initialTab,
   scrollToWmsValidation = false,
+  listStockHint,
 }: ProductEditModalProps) {
   const navigate = useNavigate();
   const isPage = variant === "page";
@@ -668,7 +671,21 @@ export function ProductEditModal({
     return rows;
   }, [inventoryOverride, product?.inventory]);
 
+  const inventoryCrossViewMismatch = useMemo(() => {
+    if (isNew || listStockHint == null || !Number.isFinite(listStockHint)) return false;
+    const detailStock = product?.stock_quantity ?? 0;
+    if (listStockHint > 0 && detailStock === 0) return true;
+    if (listStockHint > 0 && magazynInventoryRows.length === 0 && !product?.locations_load_incomplete) {
+      const unalloc = product?.unallocated_quantity ?? 0;
+      if (unalloc < listStockHint) return true;
+    }
+    return false;
+  }, [isNew, listStockHint, product?.stock_quantity, product?.locations_load_incomplete, product?.unallocated_quantity, magazynInventoryRows.length]);
+
   const magazynEmptyLocationsMessage = useMemo(() => {
+    if (inventoryCrossViewMismatch) {
+      return "Rozbieżność danych magazynowych między widokami";
+    }
     if (magazynInventoryRows.length > 0) return "Brak stanu magazynowego";
     if (product?.locations_load_incomplete) {
       return "Dane lokalizacji nie zostały załadowane";
@@ -678,7 +695,7 @@ export function ProductEditModal({
       return `Brak wierszy lokalizacji — ${unalloc} szt. nieprzypisanych (np. bufor / przyjęcie)`;
     }
     return "Brak stanu magazynowego";
-  }, [magazynInventoryRows.length, product?.locations_load_incomplete, product?.unallocated_quantity]);
+  }, [inventoryCrossViewMismatch, magazynInventoryRows.length, product?.locations_load_incomplete, product?.unallocated_quantity]);
 
   const pricingDisplay = useMemo(
     () =>

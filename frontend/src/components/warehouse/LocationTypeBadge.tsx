@@ -53,7 +53,11 @@ export function LocationTypeBadge({
         : String(quantity)
       : null;
 
-  const displayLocationText = formatWarehouseLocationTypeLabel(locationText);
+  const trimmedLocation = (locationText ?? "").trim();
+  const displayLocationText =
+    trimmedLocation.includes("-") || /\d/.test(trimmedLocation)
+      ? trimmedLocation
+      : formatWarehouseLocationTypeLabel(locationText);
 
   const rowClass = compact
     ? layoutSpread

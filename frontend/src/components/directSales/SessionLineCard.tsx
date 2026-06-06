@@ -2,16 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 
 import { fetchLocationStock } from "../../api/locationStockApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
-import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
+import {
+  formatDirectSalesLineTotal,
+  formatDirectSalesMargin,
+  formatDirectSalesUnitPrice,
+} from "../../modules/directSales/settings/formatDirectSalesPrice";
+import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 import type { DirectSaleSessionLine } from "../../utils/normalizeDirectSales";
-import { lineTotal } from "../../utils/directSales/lineTotal";
 import { safeDisplay } from "../../utils/safeStrings";
 import { LocationPickerModal } from "./location/LocationPickerModal";
 import { LocationBadge } from "./stock/LocationBadge";
 import { LineStockBadge } from "./stock/LineStockBadge";
 
 type Props = {
-  settings: DirectSalesSettingsConfig;
   line: DirectSaleSessionLine;
   warehouseId: number;
   busy: boolean;
@@ -20,7 +23,25 @@ type Props = {
   onRemove: (lineId: number) => void;
 };
 
-export function SessionLineCard({ settings, line, warehouseId, busy, onQtyChange, onLocationChange, onRemove }: Props) {
+function lineMetaParts(line: DirectSaleSessionLine, settings: ReturnType<typeof useResolvedDirectSalesSettings>): string[] {
+  const parts: string[] = [];
+  if (settings.show_sku) {
+    const sku = safeDisplay(line.product_sku, "");
+    if (sku) parts.push(sku);
+  }
+  if (settings.show_ean && line.product_ean) parts.push(`EAN ${line.product_ean}`);
+  if (settings.show_catalog_number && line.product_catalog_number) {
+    parts.push(`kat. ${line.product_catalog_number}`);
+  }
+  if (settings.show_margin && line.margin_percent != null) {
+    const margin = formatDirectSalesMargin(line.margin_percent);
+    if (margin) parts.push(margin);
+  }
+  return parts;
+}
+
+export function SessionLineCard({ line, warehouseId, busy, onQtyChange, onLocationChange, onRemove }: Props) {
+  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const [locOpen, setLocOpen] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
   const [locRows, setLocRows] = useState<Awaited<ReturnType<typeof fetchLocationStock>>["locations"]>([]);
@@ -36,7 +57,7 @@ export function SessionLineCard({ settings, line, warehouseId, busy, onQtyChange
       tenantId: DAMAGE_TENANT_ID,
       warehouseId,
       productId: line.product_id,
-      availableOnly: settings.hide_empty_locations,
+      availableOnly: resolvedDirectSalesSettings.hide_empty_locations,
     })
       .then((snap) => {
         if (!cancelled) setLocRows(snap.locations ?? []);
@@ -50,7 +71,7 @@ export function SessionLineCard({ settings, line, warehouseId, busy, onQtyChange
     return () => {
       cancelled = true;
     };
-  }, [locOpen, warehouseId, line.product_id, settings.hide_empty_locations]);
+  }, [locOpen, warehouseId, line.product_id, resolvedDirectSalesSettings.hide_empty_locations]);
 
   const commitQty = useCallback(() => {
     const n = Number(qtyDraft.replace(",", "."));
@@ -61,11 +82,25 @@ export function SessionLineCard({ settings, line, warehouseId, busy, onQtyChange
     onQtyChange(line.id, n);
   }, [qtyDraft, line.id, line.quantity, onQtyChange]);
 
+  const meta = lineMetaParts(line, resolvedDirectSalesSettings);
+  const unitLabel = formatDirectSalesUnitPrice(
+    line.unit_price,
+    resolvedDirectSalesSettings.price_display,
+    line.margin_percent,
+  );
+  const lineTotalLabel = formatDirectSalesLineTotal(
+    line.unit_price,
+    line.quantity,
+    line.discount_amount,
+    resolvedDirectSalesSettings.price_display,
+    line.margin_percent,
+  );
+
   return (
     <>
       <li className="border-b border-slate-100 py-2 last:border-0">
         <div className="flex gap-2">
-          {settings.show_product_images && line.image_url ? (
+          {resolvedDirectSalesSettings.show_product_images && line.image_url ? (
             <img src={line.image_url} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
           ) : (
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] text-slate-400">
@@ -76,17 +111,10 @@ export function SessionLineCard({ settings, line, warehouseId, busy, onQtyChange
             <div className="truncate text-sm font-medium text-slate-900">
               {safeDisplay(line.product_name, `Produkt #${line.product_id}`)}
             </div>
-            <div className="text-xs text-slate-500">
-              {[
-                settings.show_sku ? safeDisplay(line.product_sku, "") : "",
-                settings.show_ean && line.product_ean ? `EAN ${line.product_ean}` : "",
-              ]
-                .filter(Boolean)
-                .join(" · ") || "—"}
-            </div>
+            <div className="text-xs text-slate-500">{meta.length ? meta.join(" · ") : "—"}</div>
             <div className="mt-1 flex flex-wrap items-center gap-1">
               <LocationBadge code={line.source_location_code} zoneType={line.operational_zone_type} />
-              {settings.show_stock ? (
+              {resolvedDirectSalesSettings.show_stock ? (
                 <LineStockBadge available={line.available_qty_hint} orderedQty={line.quantity} inCart />
               ) : null}
               {line.has_reservation ? (
@@ -95,9 +123,11 @@ export function SessionLineCard({ settings, line, warehouseId, busy, onQtyChange
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <div className="text-sm font-semibold text-slate-900">{lineTotal(line).toFixed(2)} zł</div>
+            <div className="text-sm font-semibold text-slate-900">
+              {lineTotalLabel}
+            </div>
             <div className="text-[10px] text-slate-500">
-              {line.unit_price != null ? `${line.unit_price.toFixed(2)} × ${line.quantity}` : `× ${line.quantity}`}
+              {unitLabel ? `${unitLabel} × ${line.quantity}` : `× ${line.quantity}`}
             </div>
           </div>
         </div>

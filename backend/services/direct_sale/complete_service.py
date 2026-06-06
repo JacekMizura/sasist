@@ -10,7 +10,8 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from ...models.commerce_operational import DirectSaleSession
-from .complete_pipeline_log import log_complete_step
+from .complete_pipeline_log import log_complete_stage, log_complete_step
+from ..direct_sales_settings_service import resolve_direct_sales_settings
 from .document_pipeline_service import (
     DirectSaleDocumentRequest,
     enqueue_direct_sale_documents,
@@ -114,18 +115,48 @@ def complete_direct_sale_session(
 
     lines = list(sess.lines or [])
     document_warning: str | None = None
+    total_preview = _session_total(sess)
+    payment_m = (payment_method or "CASH").strip().upper()
+    issue_strategy = str(getattr(sess, "issue_strategy", None) or "STRICT_LOCATION")
+    order_status_id: int | None = None
+    try:
+        ds = resolve_direct_sales_settings(
+            db, tenant_id=int(sess.tenant_id), warehouse_id=int(sess.warehouse_id)
+        )
+        order_status_id = ds.resolved.default_order_status_id
+    except Exception:
+        logger.debug("[direct_sales.complete] settings_load_failed session_id=%s", sid)
+
+    stage_ctx = {
+        "payment_method": payment_m,
+        "totals": total_preview,
+        "order_status": order_status_id,
+        "issue_strategy": issue_strategy,
+        "line_count": len(lines),
+        "document_subtype": document_subtype,
+    }
+    log_complete_stage(
+        session_id=sid,
+        stage="pipeline_enter",
+        payment_method=payment_m,
+        totals=total_preview,
+        order_status=order_status_id,
+        issue_strategy=issue_strategy,
+        extra={"line_count": len(lines), "document_subtype": document_subtype},
+    )
+
     current_step = "create_order"
     try:
         current_step = "create_order"
-        with log_complete_step(session_id=sid, step=current_step):
+        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             order, items_by_line = create_order_from_session(db, sess, lines=lines)
 
         current_step = "plan_allocations"
-        with log_complete_step(session_id=sid, step=current_step):
+        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             allocations = plan_issue_allocations(db, sess, lines)
 
         current_step = "reserve_stock"
-        with log_complete_step(session_id=sid, step=current_step):
+        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             reservations = create_reservations_for_order(
                 db,
                 order=order,
@@ -135,7 +166,7 @@ def complete_direct_sale_session(
             )
 
         current_step = "issue_stock"
-        with log_complete_step(session_id=sid, step=current_step):
+        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             issue_stock_for_allocations(
                 db,
                 order=order,
@@ -148,7 +179,7 @@ def complete_direct_sale_session(
 
         total = _session_total(sess)
         current_step = "create_payment"
-        with log_complete_step(session_id=sid, step=current_step):
+        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             pay = orchestrate_direct_sale_payment(
                 db,
                 order=order,
@@ -162,7 +193,7 @@ def complete_direct_sale_session(
         doc_result = None
         processed_number: str | None = None
         current_step = "generate_documents"
-        with log_complete_step(session_id=sid, step=current_step):
+        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             doc_result = enqueue_direct_sale_documents(
                 db,
                 DirectSaleDocumentRequest(
@@ -189,7 +220,7 @@ def complete_direct_sale_session(
                 )
 
         current_step = "complete_session"
-        with log_complete_step(session_id=sid, step=current_step):
+        with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             now = datetime.utcnow()
             sess.status = "COMPLETED"
             sess.order_id = int(order.id)

@@ -18,6 +18,7 @@ from .barcode_generation import location_barcode_unique
 from .esp_scan_codes import assign_bin_scan_code
 from .label_pdf_generation_log import log_label_pdf_stage
 from .label_render_service import render_label_template
+from .location_display_sync_service import sync_location_display_fields
 from .location_label_filters import apply_label_filters
 
 logger = logging.getLogger(__name__)
@@ -600,6 +601,7 @@ class WarehouseLayoutService:
                 if loc_uuid is not None:
                     locations_by_uuid[loc_uuid] = loc
 
+            previous_name = (loc.name or "").strip() if loc is not None else ""
             loc.name = b.label
             loc.location_uuid = loc_uuid
             loc.is_active = True
@@ -612,6 +614,16 @@ class WarehouseLayoutService:
             loc.x = float(center_x)
             loc.y = float(center_y)
             loc.z = float(z_cm)
+            self.db.flush()
+            if loc.id is not None:
+                sync_location_display_fields(
+                    self.db,
+                    warehouse_id=int(warehouse_id),
+                    location_id=int(loc.id),
+                    display_name=str(b.label or ""),
+                    location_uuid=loc_uuid,
+                    previous_name=previous_name or None,
+                )
 
     def _load_locations_by_uuids_batched(self, warehouse_id: int, location_uuids: list[str]) -> dict[str, Location]:
         """Load Location rows by location_uuid in batches (SQLite-safe)."""
@@ -1246,7 +1258,7 @@ class WarehouseLayoutService:
             for bin_data in rack.get("bins") or []:
                 lev = int(bin_data.get("level_index", 0))
                 seg = int(bin_data.get("segment_index", 0))
-                location_name = _bin_label(aisle, r_idx, lev, seg)
+                location_name = (str(bin_data.get("label") or "").strip()) or _bin_label(aisle, r_idx, lev, seg)
                 if location_name in seen:
                     continue
                 seen.add(location_name)

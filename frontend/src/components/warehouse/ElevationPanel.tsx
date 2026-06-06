@@ -5,9 +5,9 @@ import {
   binUsedVolumeDm3,
   binVolumeDm3,
   getRackDisplayId,
-  getDisplayLocationLabel,
   isBinDirectionRtl,
 } from "./warehouseUtils";
+import { resolveWarehouseLocation } from "../../utils/resolvedWarehouseLocation";
 
 /** Slide-over panel content for elevation (side) view + inventory list. Used only in Layout tab; onAddProduct/onEditProduct allow adding/editing products. */
 export function ElevationPanel({
@@ -97,7 +97,7 @@ export function ElevationPanel({
                 const isLow = pct < 25;
                 const hasReserveInRack = rack.bins.some((x) => x.storage_type === "reserve");
                 const needReplenishment = isPrimary && isLow && hasReserveInRack;
-                const displayLoc = layout ? getDisplayLocationLabel(rack, b, layout) : (b.label ?? b.location_id ?? "");
+                const displayLoc = layout ? resolveWarehouseLocation(rack, b, layout).label : resolveWarehouseLocation(rack, b, null).label;
                 return (
                   <button
                     key={b.locationUUID ?? `${b.level_index}-${b.segment_index}-${b.label}`}
@@ -129,7 +129,7 @@ export function ElevationPanel({
       <div className="mt-4 pt-4 border-t border-[#E2E8F0]">
         <h4 className="text-xs font-bold text-slate-600 uppercase mb-2">
           {filteredBin
-            ? `Produkty w lokalizacji ${layout ? getDisplayLocationLabel(rack, filteredBin, layout) : filteredBin.barcode_data ?? filteredBin.label}`
+            ? `Produkty w lokalizacji ${resolveWarehouseLocation(rack, filteredBin, layout).label}`
             : "Produkty w regale"}
         </h4>
         {filteredBin && (

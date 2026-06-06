@@ -1663,7 +1663,7 @@ export function createBinsForRack(
     for (let seg = 0; seg < locs; seg++) {
       const key = `${lev}-${seg}`;
       const type = normalizedBinTypeMap[key] ?? "primary";
-      const label = generateLocationLabel({
+      const generatedLabel = generateLocationLabel({
         levelIndex: lev,
         segmentIndex: seg,
         levelRows,
@@ -1677,14 +1677,15 @@ export function createBinsForRack(
         aisleLetter,
       });
       const visibleCode = buildVisibleLocationCode(`${aisleLetter}${rackIndex}`, lev, seg);
-      const locId = visibleCode;
+      const displayLabel = (generatedLabel || visibleCode).trim() || visibleCode;
+      const locId = displayLabel;
       const locationUUID = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `loc-${Date.now()}-${lev}-${seg}-${Math.random().toString(36).slice(2, 9)}`;
       const width_cm = widthList.length > seg ? widthList[seg] : undefined;
       const vol = (width_cm != null && depth_cm != null && height_cm != null)
         ? binVolumeFromDimensions(width_cm, depth_cm, height_cm)
         : volumePerBinDm3;
       out.push({
-        label: visibleCode,
+        label: displayLabel,
         level_index: lev,
         segment_index: seg,
         volume_dm3: vol,
@@ -1922,7 +1923,7 @@ export function positionFitsDimensions(
 /** Single selectable position for location picker (Row > Rack > Level > Position). */
 export type SelectablePosition = {
   locationUUID: string;
-  /** Full display line — same as `getDisplayLocationLabel` (not raw bin.label). */
+  /** Full display line — same engine as `resolveWarehouseLocation` (not raw bin.label). */
   locationAddress: string;
   /** Rack-only prefix for search; same as `getRackDisplayId`. */
   rowLabel: string;
@@ -1980,7 +1981,11 @@ export function getAllPositionsFromRacks(racks: RackState[], layout?: LayoutStat
         maxWidthCm: bin.width_cm,
         maxHeightCm: bin.height_cm,
         capacityDm3: bin.volume_dm3,
-        storageType: normalizeStorageType(bin.storage_type),
+        storageType: (() => {
+          const raw = normalizeStorageType(bin.storage_type);
+          if (rack.rack_type === "store" && (raw === "primary" || raw === "unknown")) return "pick" as NormalizedStorageType;
+          return raw;
+        })(),
       });
     }
   }

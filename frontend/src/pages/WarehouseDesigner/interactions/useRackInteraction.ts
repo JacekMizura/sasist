@@ -232,13 +232,13 @@ export function useRackInteraction(params: UseRackInteractionParams) {
     if (!wasDrag && pending && !magazynMapInteractions && !routeMode) {
       const now = Date.now();
       const rid = pending.rackId;
-      if (lastClickRef.current && lastClickRef.current.rackId === rid && now - lastClickRef.current.at <= DOUBLE_CLICK_MS) {
-        setPreviewRackId(rid);
-        setRackPanelDismissed(false);
-        lastClickRef.current = null;
-      } else {
-        lastClickRef.current = { rackId: rid, at: now };
-      }
+      const isDoubleClick =
+        lastClickRef.current != null &&
+        lastClickRef.current.rackId === rid &&
+        now - lastClickRef.current.at <= DOUBLE_CLICK_MS;
+      setPreviewRackId(rid);
+      setRackPanelDismissed(false);
+      lastClickRef.current = isDoubleClick ? null : { rackId: rid, at: now };
       pointerDownRef.current = null;
       return;
     }

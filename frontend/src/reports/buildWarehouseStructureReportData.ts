@@ -2,12 +2,12 @@ import {
   activeBinsForRack,
   binVolumeDm3,
   buildRackOrderMap,
-  getDisplayLocationLabel,
   getRackDisplayId,
 } from "../components/warehouse/warehouseUtils";
 import { normalizeInventoryLocationUuid } from "../pages/WarehouseDesigner/inventoryMaps";
 import type { BinState, CustomRackTemplate, LayoutState, NormalizedStorageType, RackState } from "../types/warehouse";
 import { normalizeStorageType } from "../utils/storageTypes";
+import { resolvedLocationLabel } from "../utils/resolvedWarehouseLocation";
 
 function normalizeBinLocationUuid(bin: BinState): string {
   const raw = (bin as { location_uuid?: string }).location_uuid ?? bin.locationUUID;
@@ -174,7 +174,7 @@ function buildExampleAddressingForRack(
   return levelIndices.map((li) => {
     const row = [...(byLevel.get(li) ?? [])].sort((a, b) => a.segment_index - b.segment_index);
     const etykiety = row
-      .map((bin) => getDisplayLocationLabel(rack, bin, layout).trim())
+      .map((bin) => resolvedLocationLabel(rack, bin, layout).trim())
       .filter((s) => s.length > 0);
     return {
       poziomEtykieta: `Poziom ${li + 1}`,

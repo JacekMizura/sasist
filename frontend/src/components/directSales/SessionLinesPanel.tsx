@@ -1,4 +1,3 @@
-import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
 import { sessionStatusPl } from "./directSalesTerminology";
 import { SessionLineCard } from "./SessionLineCard";
@@ -6,7 +5,6 @@ import { SessionLineCard } from "./SessionLineCard";
 type Props = {
   session: DirectSaleSession | null;
   warehouseId: number;
-  settings: DirectSalesSettingsConfig;
   busy: boolean;
   highlight?: boolean;
   onQtyChange: (lineId: number, qty: number) => void;
@@ -17,7 +15,6 @@ type Props = {
 export function SessionLinesPanel({
   session,
   warehouseId,
-  settings,
   busy,
   highlight,
   onQtyChange,
@@ -46,7 +43,6 @@ export function SessionLinesPanel({
             {lines.map((ln) => (
               <SessionLineCard
                 key={ln.id}
-                settings={settings}
                 line={ln}
                 warehouseId={warehouseId}
                 busy={busy}

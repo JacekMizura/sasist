@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { DirectSalesCustomerState } from "../../hooks/directSales/useDirectSalesCustomer";
-import type { DirectSalesSettingsConfig } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
+import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 import { safeDisplay, safeTrim } from "../../utils/safeStrings";
 
 type CustomerState = DirectSalesCustomerState;
@@ -10,11 +10,11 @@ type Props = {
   customer: CustomerState;
   customerId: number | null;
   documentSubtype: "RECEIPT" | "INVOICE";
-  settings: DirectSalesSettingsConfig;
   disabled?: boolean;
 };
 
-export function CustomerPanel({ customer, customerId, documentSubtype, settings, disabled }: Props) {
+export function CustomerPanel({ customer, customerId, documentSubtype, disabled }: Props) {
+  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const [showInvoice, setShowInvoice] = useState(false);
   const [nip, setNip] = useState("");
   const [company, setCompany] = useState("");
@@ -26,7 +26,7 @@ export function CustomerPanel({ customer, customerId, documentSubtype, settings,
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Klient</h3>
-        {customerId && settings.allow_anonymous ? (
+        {customerId && resolvedDirectSalesSettings.allow_anonymous ? (
           <button
             type="button"
             disabled={disabled || customer.busy}
@@ -82,7 +82,7 @@ export function CustomerPanel({ customer, customerId, documentSubtype, settings,
           ) : null}
         </>
       )}
-      {documentSubtype === "INVOICE" && settings.require_customer_for_invoice && !customerId ? (
+      {documentSubtype === "INVOICE" && resolvedDirectSalesSettings.require_customer_for_invoice && !customerId ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
           Faktura wymaga przypisanego klienta z danymi firmy.
         </p>
@@ -151,7 +151,7 @@ export function CustomerPanel({ customer, customerId, documentSubtype, settings,
             Zapisz i przypisz do FV
           </button>
         </div>
-      ) : settings.quick_create_customer ? (
+      ) : resolvedDirectSalesSettings.quick_create_customer ? (
         <button
           type="button"
           disabled={disabled || customer.busy}
@@ -161,7 +161,7 @@ export function CustomerPanel({ customer, customerId, documentSubtype, settings,
           {showInvoice ? "Ukryj szybkiego klienta" : "+ Szybki klient (paragon)"}
         </button>
       ) : null}
-      {settings.quick_create_customer && showInvoice && documentSubtype !== "INVOICE" ? (
+      {resolvedDirectSalesSettings.quick_create_customer && showInvoice && documentSubtype !== "INVOICE" ? (
         <button
           type="button"
           disabled={disabled || customer.busy}

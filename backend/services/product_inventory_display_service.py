@@ -61,6 +61,50 @@ def _inventory_operational_metrics(
     }
 
 
+def log_product_inventory_compare(
+    *,
+    product_id: int,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    stock_total: int,
+    allocated: int,
+    unallocated: int,
+    locations: Sequence[dict],
+    source: str,
+) -> None:
+    """Structured compare log for list vs detail parity debugging."""
+    loc_payload = []
+    for loc in locations:
+        if not isinstance(loc, dict):
+            continue
+        loc_payload.append(
+            {
+                "id": loc.get("id"),
+                "code": (str(loc.get("code") or loc.get("name") or "").strip() or None),
+                "quantity": loc.get("quantity"),
+                "warehouse_id": loc.get("warehouse_id"),
+                "location_uuid": loc.get("location_uuid"),
+            }
+        )
+    logger.info(
+        "[product.inventory.compare] %s",
+        json.dumps(
+            {
+                "product_id": int(product_id),
+                "tenant_id": int(tenant_id),
+                "warehouse_id": int(warehouse_id) if warehouse_id is not None else None,
+                "stock_total": int(stock_total),
+                "allocated": int(allocated),
+                "unallocated": int(unallocated),
+                "locations_count": len(loc_payload),
+                "locations": loc_payload,
+                "source": str(source),
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+
 def _log_stock_event(
     tag: str,
     *,
@@ -69,27 +113,18 @@ def _log_stock_event(
     warehouse_id: Optional[int],
     total_stock: int,
     locations: Sequence[dict],
+    allocated: int = 0,
+    unallocated: int = 0,
 ) -> None:
-    codes = [
-        str(loc.get("code") or loc.get("name") or "").strip()
-        for loc in locations
-        if isinstance(loc, dict)
-    ]
-    codes = [c for c in codes if c]
-    logger.info(
-        "[%s] %s",
-        tag,
-        json.dumps(
-            {
-                "product_id": int(product_id),
-                "tenant_id": int(tenant_id),
-                "warehouse_id": int(warehouse_id) if warehouse_id is not None else None,
-                "total_stock": int(total_stock),
-                "locations_count": len(locations),
-                "location_codes": codes,
-            },
-            ensure_ascii=False,
-        ),
+    log_product_inventory_compare(
+        product_id=product_id,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        stock_total=total_stock,
+        allocated=allocated,
+        unallocated=unallocated,
+        locations=locations,
+        source=tag,
     )
 
 
@@ -222,6 +257,8 @@ def apply_inventory_display_to_dict(
             warehouse_id=warehouse_id,
             total_stock=int(snap["stock_quantity"]),
             locations=snap["locations"],
+            allocated=int(snap.get("location_allocated_quantity") or 0),
+            unallocated=int(snap.get("unallocated_quantity") or 0),
         )
 
 

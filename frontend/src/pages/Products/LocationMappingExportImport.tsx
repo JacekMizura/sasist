@@ -10,13 +10,13 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import type { AssignedLocation, LayoutState, StorageType } from "../../types/warehouse";
 import {
   activeBinsForRack,
-  getDisplayLocationLabel,
   getPositionsFromLayoutRacks,
   positionFitsDimensions,
   rawLayoutRackToRackState,
   type RawLayoutRack,
   type SelectablePosition,
 } from "../../components/warehouse/warehouseUtils";
+import { resolvedLocationLabel } from "../../utils/resolvedWarehouseLocation";
 
 const TENANT_ID = 1;
 
@@ -53,7 +53,7 @@ function collectBinsFromLayout(racks: RawLayoutRack[], layout: LayoutState): Bin
   for (const rack of racksNorm) {
     for (const bin of activeBinsForRack(rack)) {
       const uuid = (bin.locationUUID ?? "").trim();
-      const name = getDisplayLocationLabel(rack, bin, merged);
+      const name = resolvedLocationLabel(rack, bin, merged);
       if (uuid || name) out.push({ locationName: name, locationUUID: uuid });
     }
   }
