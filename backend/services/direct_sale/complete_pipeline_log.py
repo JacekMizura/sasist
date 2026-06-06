@@ -79,21 +79,24 @@ def log_complete_step(
         yield
     except Exception as exc:
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
-        logger.exception(
+        error_msg = f"{type(exc).__name__}: {exc}"
+        logger.error(
             "[direct_sales.complete] %s",
             json.dumps(
                 {
                     "session_id": int(session_id),
                     "stage": step,
                     "status": "error",
-                    "tag": tag,
-                    "elapsed_ms": elapsed_ms,
-                    "exception": f"{type(exc).__name__}: {exc}",
-                    "traceback": traceback.format_exc(),
+                    "error": error_msg,
                 },
                 ensure_ascii=False,
                 default=str,
             ),
+        )
+        logger.debug(
+            "[direct_sales.complete] stage=%s traceback=%s",
+            step,
+            traceback.format_exc(),
         )
         raise
     else:

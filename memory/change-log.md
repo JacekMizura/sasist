@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-06-06 — Direct sales settings provider wiring
+
+- `DirectSalesSettingsLayout` at `/wms/direct-sales` route — loads settings (cache/API) then wraps `<Outlet />` with `ResolvedDirectSalesSettingsProvider`.
+- Fix: provider was rendered *after* `useDirectSalesTerminal()` / `useDirectSalesSession()` called `useResolvedDirectSalesSettings()` (hooks run before child JSX mounts).
+
+## 2026-06-06 — Direct sales complete() fix
+
+- **Stage:** `reserve_stock` — `TypeError: int(None)` on `mov.id` after `record_inventory_movement` (no flush); missing `stock_reservations.expires_at` / `direct_sale_session_id` when tier1 schema still in background.
+- **Fix:** flush after movement in `stock_issue_service`; schema guard in `complete_service`; extended `ensure_stock_reservation_lot_columns`; `[direct_sales.complete] {session_id, stage, status, error}` logs.
+
 ## 2026-06-04 — Direct sales settings cache + sale documents
 
 - Terminal: localStorage cache-first settings (`directSalesSettingsCache`), instant render, silent API refresh via `settings_version`.

@@ -11,12 +11,12 @@ import { useProductSearch } from "./useProductSearch";
 import { useDirectSalesHistory } from "./useDirectSalesHistory";
 import { useSuspendedSessions } from "./useSuspendedSessions";
 import { useLocationStock } from "./useLocationStock";
-import { useDirectSalesResolvedSettings } from "./useDirectSalesResolvedSettings";
+import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 
 export function useDirectSalesTerminal() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const settingsState = useDirectSalesResolvedSettings(warehouseId);
+  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const runtime = useOperationalRuntime();
   const [issueFlash, setIssueFlash] = useState(false);
   const [suspendedKey, setSuspendedKey] = useState(0);
@@ -112,7 +112,7 @@ export function useDirectSalesTerminal() {
     enabled:
       salesEnabled &&
       !sessionState.unavailable &&
-      settingsState.resolvedDirectSalesSettings.keyboard_shortcuts,
+      resolvedDirectSalesSettings.keyboard_shortcuts,
     onCash: () => sessionState.setPaymentMethod("CASH"),
     onCard: () => sessionState.setPaymentMethod("CARD"),
     onBlik: () => sessionState.setPaymentMethod("BLIK"),
@@ -122,11 +122,7 @@ export function useDirectSalesTerminal() {
   return {
     warehouse,
     warehouseId,
-    resolvedDirectSalesSettings: settingsState.resolvedDirectSalesSettings,
-    settingsLoading: false,
-    settingsRefreshing: settingsState.refreshing,
-    settingsError: settingsState.error,
-    reloadSettings: settingsState.reload,
+    resolvedDirectSalesSettings,
     runtime,
     status,
     salesEnabled,

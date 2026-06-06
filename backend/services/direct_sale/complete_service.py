@@ -30,6 +30,26 @@ from ..operational_sales_events import emit_operational_sales_event
 
 logger = logging.getLogger(__name__)
 
+_complete_schema_ready = False
+
+
+def _ensure_direct_sale_complete_schema() -> None:
+    """Idempotent schema guard — tier1 migrations may still be running at first complete."""
+    global _complete_schema_ready
+    if _complete_schema_ready:
+        return
+    from ...database import engine
+    from ...db.schema_upgrade import (
+        ensure_direct_sales_settings_table,
+        ensure_operational_sales_phase2_schema,
+        ensure_operational_sales_phase3_schema,
+    )
+
+    ensure_direct_sales_settings_table(engine)
+    ensure_operational_sales_phase2_schema(engine)
+    ensure_operational_sales_phase3_schema(engine)
+    _complete_schema_ready = True
+
 
 @dataclass
 class DirectSaleCompleteResult:
@@ -112,6 +132,8 @@ def complete_direct_sale_session(
         raise DirectSaleError("Sesja już zakończona.", code="SESSION_INVALID")
     if not (sess.lines or []):
         raise DirectSaleError("Sesja nie ma pozycji.", code="SESSION_INVALID")
+
+    _ensure_direct_sale_complete_schema()
 
     lines = list(sess.lines or [])
     document_warning: str | None = None

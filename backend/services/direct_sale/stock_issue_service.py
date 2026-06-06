@@ -67,6 +67,8 @@ def create_reservations_for_order(
                 "reservation_kind": kind,
             },
         )
+        db.flush()
+        movement_id = int(mov.id) if mov.id is not None else None
         emit_operational_sales_event(
             db,
             "reservation.created",
@@ -80,7 +82,7 @@ def create_reservations_for_order(
             source="direct_sales",
             performed_by_user_id=performed_by_user_id,
             device_id=int(sess.workstation_id) if sess.workstation_id else None,
-            extra={"reservation_id": int(res.id), "movement_id": int(mov.id)},
+            extra={"reservation_id": int(res.id), "movement_id": movement_id},
         )
         emit_operational_sales_event(
             db,
@@ -161,6 +163,8 @@ def issue_stock_for_allocations(
                     "issue_strategy": str(sess.issue_strategy or ""),
                 },
             )
+            db.flush()
+            movement_id = int(mov.id) if mov.id is not None else None
             db.add(
                 StockMovement(
                     tenant_id=int(order.tenant_id),
@@ -184,9 +188,10 @@ def issue_stock_for_allocations(
                 source="direct_sales",
                 performed_by_user_id=performed_by_user_id,
                 device_id=int(sess.workstation_id) if sess.workstation_id else None,
-                extra={"movement_id": int(mov.id)},
+                extra={"movement_id": movement_id},
             )
-            issued_by_line[int(alloc.session_line_id)] = int(mov.id)
+            if movement_id is not None:
+                issued_by_line[int(alloc.session_line_id)] = movement_id
 
         res.status = "picked"
         oi.source_location_id = int(alloc.location_id)

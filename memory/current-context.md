@@ -1,7 +1,11 @@
 # Current context
 
 ## Active goal
-Unified product pricing + inventory parity across list/detail/terminal.
+Direct sales `POST /api/direct-sales/session/{id}/complete` — reliable end-to-end (order, stock, payment, PA/FV document, session close).
+
+## Direct sales complete fix (2026-06-06)
+- Failing stage: **`reserve_stock`** — movement row not flushed before `int(mov.id)`; schema columns for session reservations sometimes missing until tier1 background migration.
+- Structured logs: `[direct_sales.complete] {session_id, stage, status, error}` in pipeline + API handler.
 
 ## Pricing + inventory (2026-06-04)
 - `ResolvedProductPricing` + `resolveProductPricingFromRow` / `resolveDirectSalesUnitPricing` in `utils/resolvedProductPricing.ts`.

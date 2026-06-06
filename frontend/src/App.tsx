@@ -145,6 +145,7 @@ import WmsPackingScanCartPage from "./pages/wms/WmsPackingScanCartPage"
 import WmsPackingOrdersPage from "./pages/wms/WmsPackingOrdersPage"
 import WmsPackingOrderPage from "./pages/wms/WmsPackingOrderPage"
 import WmsDirectSalesPage from "./pages/wms/WmsDirectSalesPage"
+import DirectSalesSettingsLayout from "./pages/wms/direct-sales/DirectSalesSettingsLayout"
 import OperationsLayout from "./pages/wms/operations/OperationsLayout"
 import OperationsRuntimePage from "./pages/wms/operations/OperationsRuntimePage"
 import OperationsReplenishmentPage from "./pages/wms/operations/OperationsReplenishmentPage"
@@ -389,10 +390,12 @@ export const router = createBrowserRouter(
           path="direct-sales"
           element={
             <ErrorBoundary>
-              <WmsDirectSalesPage />
+              <DirectSalesSettingsLayout />
             </ErrorBoundary>
           }
-        />
+        >
+          <Route index element={<WmsDirectSalesPage />} />
+        </Route>
         <Route path="packing" element={<Outlet />}>
           <Route index element={<WmsPackingStatusPage />} />
           <Route path="mode" element={<WmsPackingModePage />} />

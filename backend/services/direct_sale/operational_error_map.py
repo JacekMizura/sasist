@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sqlalchemy.exc import OperationalError as SaOperationalError
+
 from .errors import DirectSaleError
 
 OPERATIONAL_CODES = frozenset(
@@ -31,7 +33,22 @@ def map_complete_exception(exc: Exception, *, step: str) -> DirectSaleError:
         )
 
     msg = _msg_lower(exc)
-    if isinstance(exc, ValueError) or "brak stanu" in msg or "insufficient" in msg:
+    if isinstance(exc, SaOperationalError) or "no such table" in msg or "no column named" in msg:
+        if step in ("reserve_stock", "issue_stock"):
+            return DirectSaleError(
+                "Nie udało się zdjąć towaru z magazynu.",
+                code="ISSUE_FAILED",
+                http_status=409,
+                step=step,
+            )
+        if step == "create_order":
+            return DirectSaleError(
+                "Nie udało się utworzyć zamówienia sprzedaży.",
+                code="SESSION_INVALID",
+                http_status=422,
+                step=step,
+            )
+    if isinstance(exc, (TypeError, ValueError)) or "brak stanu" in msg or "insufficient" in msg:
         return DirectSaleError(
             "Brak wystarczającego stanu do wydania towaru.",
             code="OUT_OF_STOCK",

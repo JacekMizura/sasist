@@ -3210,6 +3210,17 @@ def ensure_stock_reservation_lot_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE stock_reservations ADD COLUMN batch_number VARCHAR(128) NOT NULL DEFAULT ''"))
         if "expiry_date" not in cols:
             conn.execute(text("ALTER TABLE stock_reservations ADD COLUMN expiry_date DATE NOT NULL DEFAULT '9999-12-31'"))
+        if "expires_at" not in cols:
+            conn.execute(text("ALTER TABLE stock_reservations ADD COLUMN expires_at TIMESTAMP"))
+        if "direct_sale_session_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE stock_reservations ADD COLUMN direct_sale_session_id INTEGER "
+                    "REFERENCES direct_sale_sessions(id) ON DELETE SET NULL"
+                )
+            )
+        if "reservation_kind" not in cols:
+            conn.execute(text("ALTER TABLE stock_reservations ADD COLUMN reservation_kind VARCHAR(24)"))
         conn.commit()
 
 

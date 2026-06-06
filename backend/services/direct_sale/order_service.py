@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
 from ...models.order import Order
@@ -77,13 +80,22 @@ def create_order_from_session(
     db.add(order)
     db.flush()
 
-    settings = resolve_direct_sales_settings(db, tenant_id=tid, warehouse_id=wid)
-    panel_status_id = _resolve_panel_status_id(
-        db,
-        tenant_id=tid,
-        warehouse_id=wid,
-        configured_id=settings.resolved.default_order_status_id,
-    )
+    panel_status_id: int | None = None
+    try:
+        settings = resolve_direct_sales_settings(db, tenant_id=tid, warehouse_id=wid)
+        panel_status_id = _resolve_panel_status_id(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            configured_id=settings.resolved.default_order_status_id,
+        )
+    except Exception:
+        logger.warning(
+            "[direct_sales.complete] settings_resolve_failed tenant_id=%s warehouse_id=%s",
+            tid,
+            wid,
+            exc_info=True,
+        )
     if panel_status_id is not None:
         order.order_ui_status_id = int(panel_status_id)
     else:

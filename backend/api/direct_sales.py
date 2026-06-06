@@ -584,11 +584,18 @@ def post_session_complete(
         db.rollback()
         step = getattr(exc, "step", None) or current_step
         _complete_log.error(
-            "[direct-sales.complete.error] session_id=%s step=%s code=%s message=%s",
-            session_id,
-            step,
-            exc.code,
-            exc.message,
+            "[direct_sales.complete] %s",
+            json.dumps(
+                {
+                    "session_id": int(session_id),
+                    "stage": str(step),
+                    "status": "error",
+                    "error": exc.message,
+                    "code": getattr(exc, "code", None),
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
         )
         raise HTTPException(
             status_code=exc.http_status,
@@ -601,6 +608,19 @@ def post_session_complete(
         ) from exc
     except Exception as exc:
         db.rollback()
+        _complete_log.error(
+            "[direct_sales.complete] %s",
+            json.dumps(
+                {
+                    "session_id": int(session_id),
+                    "stage": str(current_step),
+                    "status": "error",
+                    "error": f"{type(exc).__name__}: {exc}",
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
+        )
         _complete_log.exception(
             "[direct-sales.complete.error] session_id=%s step=%s unhandled=%s",
             session_id,
