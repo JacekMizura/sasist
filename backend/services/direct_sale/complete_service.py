@@ -9,8 +9,11 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from ...models.commerce_operational import DirectSaleSession
-from .complete_pipeline_log import log_complete_stage, log_complete_step
+from ...models.commerce_operational import DirectSaleSession, Payment
+from ...models.document_generation_job import DocumentGenerationJob
+from ...models.order import Order
+from ...workers.document_generation_worker import get_job_document_number
+from .complete_pipeline_log import log_complete_stage, log_complete_step, log_session_state_transition
 from ..direct_sales_settings_service import resolve_direct_sales_settings
 from .document_pipeline_service import (
     DirectSaleDocumentRequest,
@@ -30,7 +33,118 @@ from ..operational_sales_events import emit_operational_sales_event
 
 logger = logging.getLogger(__name__)
 
+_COMPLETABLE_STATUSES = frozenset({"ACTIVE", "CHECKOUT", "SUSPENDED", "COMPLETING"})
+
 _complete_schema_ready = False
+
+
+def _positive_int(value: object | None) -> int | None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    return value if value > 0 else None
+
+
+def try_idempotent_complete_result(
+    db: Session,
+    sess: DirectSaleSession,
+) -> DirectSaleCompleteResult | None:
+    """
+    Safe replay when complete already persisted (duplicate request / commit race).
+    Repairs session row when payment+order exist but status was not finalized.
+    """
+    sid = int(sess.id)
+    tid = int(sess.tenant_id)
+
+    payment = (
+        db.query(Payment)
+        .filter(
+            Payment.direct_sale_session_id == sid,
+            Payment.tenant_id == tid,
+        )
+        .order_by(Payment.id.desc())
+        .first()
+    )
+
+    order_id = _positive_int(getattr(sess, "order_id", None))
+    pay_id = _positive_int(getattr(payment, "id", None)) if payment is not None else None
+    if payment is not None and pay_id is not None:
+        order_id = order_id or _positive_int(getattr(payment, "order_id", None))
+    else:
+        payment = None
+
+    if order_id is None:
+        return None
+
+    order = (
+        db.query(Order)
+        .filter(Order.id == int(order_id), Order.tenant_id == tid)
+        .first()
+    )
+    if order is None or _positive_int(getattr(order, "id", None)) != order_id:
+        return None
+
+    pay = payment
+    if pay is None:
+        pay = (
+            db.query(Payment)
+            .filter(Payment.order_id == int(order_id), Payment.tenant_id == tid)
+            .order_by(Payment.id.desc())
+            .first()
+        )
+    pay_id = _positive_int(getattr(pay, "id", None)) if pay is not None else None
+    if pay is None or pay_id is None:
+        return None
+
+    if sess.status != "COMPLETED" or _positive_int(getattr(sess, "order_id", None)) != order_id:
+        from_status = str(sess.status or "")
+        now = datetime.utcnow()
+        sess.status = "COMPLETED"
+        sess.order_id = int(order_id)
+        if getattr(sess, "completed_at", None) is None:
+            sess.completed_at = now
+        sess.last_activity_at = now
+        sess.expires_at = None
+        db.flush()
+        log_session_state_transition(
+            session_id=sid,
+            from_status=from_status,
+            to_status="COMPLETED",
+            stage="idempotent_repair",
+        )
+
+    doc_job = (
+        db.query(DocumentGenerationJob)
+        .filter(
+            DocumentGenerationJob.session_id == sid,
+            DocumentGenerationJob.tenant_id == tid,
+        )
+        .order_by(DocumentGenerationJob.id.desc())
+        .first()
+    )
+    doc_number = get_job_document_number(doc_job) if doc_job else None
+    if not doc_number:
+        doc_number = str(getattr(order, "sales_document_number", None) or "") or None
+
+    total = round(float(order.value or 0), 2) if order.value is not None else _session_total(sess)
+
+    logger.info(
+        "[direct_sales.complete] idempotent_hit session_id=%s order_id=%s payment_id=%s",
+        sid,
+        order_id,
+        int(pay.id),
+    )
+    job_id = _positive_int(getattr(doc_job, "id", None)) if doc_job is not None else None
+    return DirectSaleCompleteResult(
+        session_id=sid,
+        order_id=int(order_id),
+        payment_id=int(pay_id),
+        document_job_id=job_id,
+        document_number=doc_number,
+        total_amount=total,
+        payment_status=str(getattr(pay, "status", None) or "") or None,
+        payment_method=str(getattr(pay, "method", None) or "") or None,
+        document_warning=None,
+    )
 
 
 def _ensure_direct_sale_complete_schema() -> None:
@@ -126,14 +240,32 @@ def complete_direct_sale_session(
         int(sess.warehouse_id),
         sess.status,
     )
-    if sess.status not in ("ACTIVE", "CHECKOUT", "SUSPENDED"):
+    replay = try_idempotent_complete_result(db, sess)
+    if replay is not None:
+        return replay
+
+    if sess.status not in _COMPLETABLE_STATUSES:
         raise DirectSaleError("Sesja nie może być zakończona.", code="SESSION_INVALID")
     if sess.order_id is not None:
+        replay = try_idempotent_complete_result(db, sess)
+        if replay is not None:
+            return replay
         raise DirectSaleError("Sesja już zakończona.", code="SESSION_INVALID")
     if not (sess.lines or []):
         raise DirectSaleError("Sesja nie ma pozycji.", code="SESSION_INVALID")
 
     _ensure_direct_sale_complete_schema()
+
+    from_status = str(sess.status or "")
+    if from_status != "COMPLETING":
+        sess.status = "COMPLETING"
+        db.flush()
+        log_session_state_transition(
+            session_id=sid,
+            from_status=from_status,
+            to_status="COMPLETING",
+            stage="pipeline_enter",
+        )
 
     lines = list(sess.lines or [])
     document_warning: str | None = None
@@ -259,11 +391,18 @@ def complete_direct_sale_session(
         current_step = "complete_session"
         with log_complete_step(session_id=sid, step=current_step, context=stage_ctx):
             now = datetime.utcnow()
+            from_status = str(sess.status or "COMPLETING")
             sess.status = "COMPLETED"
             sess.order_id = int(order.id)
             sess.completed_at = now
             sess.last_activity_at = now
             sess.expires_at = None
+            log_session_state_transition(
+                session_id=sid,
+                from_status=from_status,
+                to_status="COMPLETED",
+                stage="complete_session",
+            )
 
             emit_operational_sales_event(
                 db,

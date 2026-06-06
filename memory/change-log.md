@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-06 — Direct sales complete idempotency (SESSION_INVALID at commit)
+
+- Duplicate complete / commit race: `try_idempotent_complete_result` returns existing order+payment; `COMPLETING` in-flight status; `get_session_for_complete` row lock; commit replay on failure.
+- `[direct_sales.session_state]` logs every transition; frontend blocks inflight complete (ref + busy + keyboard).
+
 ## 2026-06-06 — Direct sales settings provider wiring
 
 - `DirectSalesSettingsLayout` at `/wms/direct-sales` route — loads settings (cache/API) then wraps `<Outlet />` with `ResolvedDirectSalesSettingsProvider`.

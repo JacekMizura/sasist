@@ -33,7 +33,9 @@ from ..schemas.direct_sales import (
 from ..services.direct_sale_complete_service import (
     complete_direct_sale_session,
     start_direct_sale_payment,
+    try_idempotent_complete_result,
 )
+from ..services.direct_sale.session_service import get_session, get_session_for_complete
 from ..services.direct_sale.line_service import (
     add_product_to_session,
     remove_session_line,
@@ -532,7 +534,9 @@ def post_session_complete(
     user: AppUser = Depends(get_current_user),
 ):
     _complete_log = logging.getLogger(__name__)
-    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    sess = get_session_for_complete(db, session_id=session_id, tenant_id=tenant_id)
+    if sess is None:
+        raise HTTPException(status_code=404, detail="Direct sale session not found.")
     current_step = "validation"
     _complete_log.info(
         "[direct-sales.complete.validation] session_id=%s tenant_id=%s warehouse_id=%s status=%s lines=%s",
@@ -555,7 +559,23 @@ def post_session_complete(
             performed_by_user_id=_operator_id(user),
         )
         current_step = "commit"
-        db.commit()
+        try:
+            db.commit()
+        except Exception as commit_exc:
+            db.rollback()
+            sess_reloaded = get_session(db, session_id=session_id, tenant_id=tenant_id)
+            replay = try_idempotent_complete_result(db, sess_reloaded) if sess_reloaded else None
+            if replay is not None:
+                _complete_log.info(
+                    "[direct_sales.complete] commit_replay session_id=%s order_id=%s after=%s",
+                    session_id,
+                    replay.order_id,
+                    type(commit_exc).__name__,
+                )
+                db.commit()
+                result = replay
+            else:
+                raise commit_exc
         current_step = "response"
         completion = None
         completion_read = None

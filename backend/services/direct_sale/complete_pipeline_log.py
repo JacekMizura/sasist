@@ -11,6 +11,27 @@ from typing import Any, Generator
 
 logger = logging.getLogger(__name__)
 
+def log_session_state_transition(
+    *,
+    session_id: int,
+    from_status: str | None,
+    to_status: str,
+    stage: str,
+) -> None:
+    logger.info(
+        "[direct_sales.session_state] %s",
+        json.dumps(
+            {
+                "session_id": int(session_id),
+                "from": str(from_status or ""),
+                "to": str(to_status),
+                "stage": str(stage),
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+
 STEPS = (
     "create_order",
     "plan_allocations",

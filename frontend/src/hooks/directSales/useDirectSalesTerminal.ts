@@ -77,6 +77,7 @@ export function useDirectSalesTerminal() {
   );
 
   const handleComplete = useCallback(async () => {
+    if (sessionState.busy) return;
     const result = await sessionState.complete();
     if (result) {
       clearStock();
@@ -85,7 +86,7 @@ export function useDirectSalesTerminal() {
       setSuspendedKey((k) => k + 1);
       setHistoryKey((k) => k + 1);
     }
-  }, [sessionState, clearStock]);
+  }, [sessionState, sessionState.busy, clearStock]);
 
   const handleNewSession = useCallback(() => {
     sessionState.dismissCompletion();
@@ -112,6 +113,7 @@ export function useDirectSalesTerminal() {
     enabled:
       salesEnabled &&
       !sessionState.unavailable &&
+      !sessionState.busy &&
       resolvedDirectSalesSettings.keyboard_shortcuts,
     onCash: () => sessionState.setPaymentMethod("CASH"),
     onCard: () => sessionState.setPaymentMethod("CARD"),

@@ -80,6 +80,49 @@ class TestOperationalEventsPersist(unittest.TestCase):
         self.assertEqual(p["order_id"], 15)
 
 
+class TestCompleteIdempotency(unittest.TestCase):
+    def test_completed_session_returns_existing_result(self):
+        from backend.services.direct_sale.complete_service import try_idempotent_complete_result
+
+        sess = SimpleNamespace(
+            id=7,
+            tenant_id=1,
+            warehouse_id=1,
+            status="COMPLETED",
+            order_id=100,
+            completed_at=None,
+            lines=[],
+            expires_at=None,
+            last_activity_at=None,
+        )
+        order = SimpleNamespace(id=100, tenant_id=1, value=42.0, sales_document_number="PA/1")
+        pay = SimpleNamespace(id=300, order_id=100, tenant_id=1, status="PAID", method="CASH")
+        doc_job = SimpleNamespace(id=55, session_id=7, tenant_id=1, result_json='{"document_number":"PA/1"}')
+
+        db = MagicMock()
+
+        def query_side(model):
+            q = MagicMock()
+            q.filter.return_value = q
+            q.order_by.return_value = q
+            if model.__name__ == "Payment":
+                q.first.side_effect = [pay, None]
+            elif model.__name__ == "Order":
+                q.first.return_value = order
+            elif model.__name__ == "DocumentGenerationJob":
+                q.first.return_value = doc_job
+            else:
+                q.first.return_value = None
+            return q
+
+        db.query.side_effect = query_side
+        out = try_idempotent_complete_result(db, sess)
+        self.assertIsNotNone(out)
+        self.assertEqual(out.order_id, 100)
+        self.assertEqual(out.payment_id, 300)
+        self.assertEqual(out.total_amount, 42.0)
+
+
 class TestCompletePipelineOrder(unittest.TestCase):
     @patch("backend.services.direct_sale.complete_service.process_direct_sale_document_job")
     @patch("backend.services.direct_sale.complete_service.enqueue_direct_sale_documents")

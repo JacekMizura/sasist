@@ -78,6 +78,7 @@ export function useDirectSalesSession({
   const [completeError, setCompleteError] = useState<DirectSaleCompleteError | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const scanBusyRef = useRef(false);
+  const completeInFlightRef = useRef(false);
   const initRef = useRef(false);
 
   const total = useMemo(
@@ -425,6 +426,11 @@ export function useDirectSalesSession({
   const complete = useCallback(async () => {
     const scope = apiScope();
     if (!session || !scope) return null;
+    if (completeInFlightRef.current || busy) return null;
+    if (session.status === "COMPLETED") return lastComplete;
+    if (lastComplete && lastComplete.session_id === session.id) return lastComplete;
+
+    completeInFlightRef.current = true;
     setBusy(true);
     setCompleteError(null);
     try {
@@ -444,6 +450,15 @@ export function useDirectSalesSession({
         paymentSplits,
       });
       setLastComplete(result);
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "COMPLETED",
+              order_id: result.order_id,
+            }
+          : prev,
+      );
       const bundle = result.completion ?? (await fetchDirectSaleCompletion({
         ...scope,
         sessionId: result.session_id,
@@ -456,11 +471,14 @@ export function useDirectSalesSession({
       setError(null);
       return null;
     } finally {
+      completeInFlightRef.current = false;
       setBusy(false);
     }
   }, [
     session,
     apiScope,
+    busy,
+    lastComplete,
     paymentMethod,
     documentSubtype,
     mixedCashAmount,

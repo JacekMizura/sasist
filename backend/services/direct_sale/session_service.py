@@ -65,6 +65,25 @@ def get_session(db: Session, session_id: int, *, tenant_id: int) -> DirectSaleSe
     )
 
 
+def get_session_for_complete(
+    db: Session,
+    session_id: int,
+    *,
+    tenant_id: int,
+) -> DirectSaleSession | None:
+    """Row lock for complete — serializes duplicate complete requests."""
+    return (
+        db.query(DirectSaleSession)
+        .options(joinedload(DirectSaleSession.lines))
+        .filter(
+            DirectSaleSession.id == int(session_id),
+            DirectSaleSession.tenant_id == int(tenant_id),
+        )
+        .with_for_update()
+        .first()
+    )
+
+
 def suspend_session(db: Session, sess: DirectSaleSession) -> DirectSaleSession:
     if sess.status not in ("ACTIVE", "CHECKOUT"):
         raise DirectSaleError("Sesja nie może być zawieszona w tym stanie.", code="invalid_status")
