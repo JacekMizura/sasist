@@ -164,12 +164,6 @@ from .db.schema_upgrade import (
     ensure_order_issue_tasks_lifecycle_columns,
     ensure_order_issue_task_items_table,
     ensure_wms_operational_tasks_table,
-    ensure_operational_core_orm_columns,
-    ensure_operational_sales_phase1_schema,
-    ensure_operational_sales_phase2_schema,
-    ensure_operational_sales_phase3_schema,
-    ensure_operational_runtime_phase4_schema,
-    ensure_operational_feature_scopes_schema,
     ensure_orders_fulfillment_state_columns,
     ensure_orders_priority_color_column,
     ensure_orders_discount_columns,
@@ -195,6 +189,7 @@ from .middleware.exception_logging import (
     log_unhandled_exception,
     outer_request_logger_middleware,
 )
+from .middleware.readiness_gate import platform_readiness_gate_middleware
 from .services.pdf_deps import PdfGenerationUnavailable
 
 logging.basicConfig(
@@ -336,6 +331,46 @@ def healthz() -> dict[str, bool]:
     return {"ok": True}
 
 
+@app.get("/readyz")
+def readyz() -> dict:
+    """Readiness — Tier 0 schema validated. Railway liveness stays on /healthz."""
+    from .db.schema_introspection import verify_tier0_sql_probes
+    from .platform_state import (
+        get_tier0_validation_snapshot,
+        is_operational_features_force_disabled,
+        is_platform_ready,
+        is_recovery_mode_env,
+    )
+
+    if not is_platform_ready():
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "code": "PLATFORM_NOT_READY", "tier0": False},
+        )
+    probe_failures = verify_tier0_sql_probes(engine)
+    if probe_failures:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "code": "TIER0_SQL_PROBE_FAILED",
+                "failures": probe_failures,
+            },
+        )
+    return {
+        "ok": True,
+        "tier0": True,
+        "dialect": engine.dialect.name,
+        "recovery_mode": is_recovery_mode_env(),
+        "operational_forced_off": is_operational_features_force_disabled(),
+        "validation": get_tier0_validation_snapshot(),
+    }
+
+
 print("[healthz] route registered on app", flush=True)
 
 
@@ -427,8 +462,8 @@ def ensure_sqlite_tables(*, announce: bool = False) -> None:
     create_all_tables()
 
 
-# Do not run create_all at import — blocks Railway healthcheck until DB + migrations finish.
-# Tables are created in startup upgrade_schema (background thread).
+# Tier 0 bootstrap (end of this module) runs create_all + core schema sync before routers load.
+# Tier 1+ migrations run in startup background thread after Tier 0 validate.
 
 
 def _is_sqlite_engine() -> bool:
@@ -637,14 +672,6 @@ ensure_orders_deleted_at_column(engine)
 ensure_rmz_line_split_columns(engine)
 ensure_rmz_line_damage_entries_json(engine)
 ensure_wms_refunds_columns(engine)
-# Core operational ORM columns — must exist before first request (classic OMS/WMS use Order/Location models).
-try:
-    _core_orm_added = ensure_operational_core_orm_columns(engine)
-    from .observability.platform_debug import log_startup_schema
-
-    log_startup_schema("import_operational_core_orm_columns", added=_core_orm_added)
-except Exception:
-    logging.getLogger(__name__).exception("[startup.schema] ensure_operational_core_orm_columns failed at import")
 # Panel return UI statuses: run at import so first request works even before startup hook.
 try:
     ensure_return_ui_statuses_and_column(engine)
@@ -827,47 +854,38 @@ except Exception:
 
 @app.on_event("startup")
 async def upgrade_schema() -> None:
-    """Run schema upgrades in a worker thread so the event loop can serve /healthz immediately."""
+    """
+    Startup order (tiered schema policy):
+    1. Tier 0 ensure + validate (sync, blocking)
+    2. Tier 1+ migrations, seeds, workers (background)
+    """
     import asyncio
 
-    print("[startup] upgrade_schema: scheduled (background thread)", flush=True)
+    print("[startup] tier0 bootstrap: sync", flush=True)
     try:
-        from .observability.platform_debug import log_startup_schema
-
-        added = ensure_operational_core_orm_columns(engine)
-        log_startup_schema("startup_sync_operational_core_orm_columns", added=added)
+        await asyncio.to_thread(_bootstrap_tier0_platform_schema, phase="startup_sync")
     except Exception as exc:
-        log_unhandled_exception("startup ensure_operational_core_orm_columns (sync)", exc)
+        log_unhandled_exception("startup tier0 bootstrap (sync)", exc)
+        raise
+
+    print("[startup] tier1+ schema: scheduled (background thread)", flush=True)
 
     async def _run() -> None:
         try:
-            await asyncio.to_thread(_upgrade_schema)
+            await asyncio.to_thread(_upgrade_schema_background)
         except Exception as exc:
             log_unhandled_exception("startup upgrade_schema (background)", exc)
 
     asyncio.create_task(_run())
 
 
-def _upgrade_schema() -> None:
+def _upgrade_schema_background() -> None:
+    """Tier 1+ and non-core migrations — never mutate Tier 0 tables here."""
     from . import models as _orm_models  # noqa: F401 — all tables on Base.metadata before create_all
+    from .db.schema_tiers import ensure_tier1_operational_schema
     from .observability.platform_debug import log_startup_schema
 
-    print("[startup] upgrade_schema: begin", flush=True)
-    try:
-        log_startup_schema("background_begin", added=ensure_operational_core_orm_columns(engine))
-    except Exception:
-        logging.getLogger(__name__).exception("[startup.schema] core ORM sync failed at background begin")
-    ensure_sqlite_tables(announce=True)
-    ensure_locations_columns(engine)
-    ensure_warehouse_layout_identity_columns(engine)
-    ensure_warehouse_layout_rack_name_unique_index(engine)
-    ensure_warehouse_layout_building_columns(engine)
-    ensure_products_physical_columns(engine)
-    ensure_products_stack_columns(engine)
-    ensure_products_stack_behavior_column(engine)
-    ensure_products_import_metadata_columns(engine)
-    ensure_products_replenishment_levels_columns(engine)
-    ensure_products_reserve_replenishment_columns(engine)
+    print("[startup] upgrade_schema_background: begin", flush=True)
     ensure_replenishment_tasks_table(engine)
     ensure_replenishment_tasks_sources_json_column(engine)
     try:
@@ -883,15 +901,8 @@ def _upgrade_schema() -> None:
     ensure_wms_product_warehouse_operations_traceability_columns(engine)
     ensure_warehouse_inventory_movements_table(engine)
     ensure_order_item_pick_allocations_table(engine)
-    ensure_products_stock_alert_columns(engine)
-    ensure_products_carton_columns(engine)
-    ensure_products_carton_stacking_columns(engine)
-    ensure_products_receiving_requirements_columns(engine)
-    ensure_products_deleted_at_column(engine)
-    ensure_orders_deleted_at_column(engine)
     ensure_customers_deleted_at_column(engine)
     ensure_bundles_deleted_at_column(engine)
-    ensure_inventory_location_uuid_columns(engine)
     ensure_damage_report_columns(engine)
     ensure_wms_refunds_columns(engine)
     try:
@@ -920,10 +931,6 @@ def _upgrade_schema() -> None:
         pass
     try:
         ensure_panel_ui_statuses_advanced_columns(engine)
-    except Exception:
-        pass
-    try:
-        ensure_orders_complaint_origin_columns(engine)
     except Exception:
         pass
     try:
@@ -1142,43 +1149,11 @@ def _upgrade_schema() -> None:
         ensure_document_series_extended_columns(engine)
         ensure_stock_document_series_columns(engine)
         ensure_sale_documents_table(engine)
-        ensure_orders_customer_id_column(engine)
         ensure_order_issue_tasks_table(engine)
         ensure_order_issue_tasks_archive_columns(engine)
         ensure_order_issue_tasks_lifecycle_columns(engine)
         ensure_order_issue_task_items_table(engine)
         ensure_wms_operational_tasks_table(engine)
-        try:
-            ensure_operational_sales_phase1_schema(engine)
-        except Exception:
-            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_sales_phase1_schema failed")
-        try:
-            ensure_operational_sales_phase2_schema(engine)
-        except Exception:
-            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_sales_phase2_schema failed")
-        try:
-            ensure_operational_sales_phase3_schema(engine)
-        except Exception:
-            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_sales_phase3_schema failed")
-        try:
-            ensure_operational_runtime_phase4_schema(engine)
-        except Exception:
-            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_runtime_phase4_schema failed")
-        try:
-            ensure_operational_feature_scopes_schema(engine)
-        except Exception:
-            logging.getLogger(__name__).exception("[startup.schema] ensure_operational_feature_scopes_schema failed")
-        ensure_orders_fulfillment_state_columns(engine)
-        ensure_orders_priority_color_column(engine)
-        ensure_orders_discount_columns(engine)
-        ensure_orders_wms_timeline_columns(engine)
-        ensure_orders_wms_packing_automation_finished_at_column(engine)
-        ensure_wms_packing_sessions_automation_finished_at_column(engine)
-        ensure_order_items_wms_picking_line_missing_qty(engine)
-        ensure_order_items_wms_picking_line_status(engine)
-        ensure_order_items_fulfillment_sync_columns(engine)
-        ensure_order_items_bundle_hierarchy_columns(engine)
-        ensure_order_items_oms_line_status(engine)
         ensure_fulfillment_events_table(engine)
         ensure_export_templates_table(engine)
         ensure_order_notes_table(engine)
@@ -1199,6 +1174,11 @@ def _upgrade_schema() -> None:
         ensure_user_wms_profiles_table(engine)
     except Exception:
         logging.getLogger(__name__).exception("ensure_app_users_bootstrap_columns failed")
+    try:
+        tier1 = ensure_tier1_operational_schema(engine)
+        log_startup_schema("tier1_operational_complete", duration_ms=tier1.duration_ms)
+    except Exception:
+        logging.getLogger(__name__).exception("[schema.tier1] ensure_tier1_operational_schema failed")
     try:
         from .database import SessionLocal
         from .db.seed_basic_data import seed_app_users, seed_basic_data, seed_wms_panel_defaults
@@ -1235,7 +1215,7 @@ def _upgrade_schema() -> None:
     except Exception:
         logging.getLogger(__name__).exception("operational_commerce_workers startup failed")
 
-    print("[startup] upgrade_schema: done", flush=True)
+    print("[startup] upgrade_schema_background: done", flush=True)
 
 
 try:
@@ -1287,6 +1267,54 @@ try:
         _dbi.close()
 except Exception:
     logging.getLogger(__name__).exception("fulfillment_events backfill failed at import")
+
+
+def _bootstrap_tier0_platform_schema(*, phase: str) -> None:
+    """
+    Tier 0 policy: synchronous schema ensure + ORM validation before HTTP traffic.
+    Raises on failure — platform must not boot partially.
+    """
+    import time
+
+    from .database import recycle_connection_pool
+    from .db.schema_tiers import bootstrap_tier0_platform_schema
+    from .observability.platform_debug import log_startup_features, log_startup_schema
+    from .platform_state import (
+        activate_operational_safety_latch,
+        is_recovery_mode_env,
+        mark_tier0_ready,
+    )
+
+    recycle_connection_pool()
+    t0 = time.perf_counter()
+    ensure_sqlite_tables(announce=(phase == "import"))
+    tier0, validation = bootstrap_tier0_platform_schema(engine)
+    duration_ms = round((time.perf_counter() - t0) * 1000, 2)
+    log_startup_schema(
+        phase,
+        added=tier0.added_columns,
+        duration_ms=duration_ms,
+    )
+    if is_recovery_mode_env():
+        activate_operational_safety_latch(reason="PLATFORM_RECOVERY_MODE")
+        log_startup_features(recovery_mode=True, operational_forced_off=True)
+    mark_tier0_ready(
+        validation={
+            "ok": validation.ok,
+            "checked_tables": validation.checked_tables,
+            "duration_ms": validation.duration_ms,
+            "dialect": engine.dialect.name,
+            "phase": phase,
+        }
+    )
+    print(
+        f"[startup] tier0 ready phase={phase} dialect={engine.dialect.name} "
+        f"duration_ms={duration_ms} added_columns={tier0.added_columns}",
+        flush=True,
+    )
+
+
+_bootstrap_tier0_platform_schema(phase="import")
 
 
 # ==================================================
@@ -1504,6 +1532,7 @@ app.include_router(wms_photo_upload_router)
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 # Outermost on incoming requests (registered last). Bypasses / and /healthz inside the logger.
+app.middleware("http")(platform_readiness_gate_middleware)
 app.middleware("http")(outer_request_logger_middleware)
 
 

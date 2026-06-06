@@ -180,6 +180,98 @@ def _add_column_if_missing(engine: Engine, table: str, col: str, ddl: str) -> bo
     return True
 
 
+def verify_tier0_sql_probes(engine: Engine) -> list[dict[str, Any]]:
+    """
+    Direct SQL probes for production recovery — do not trust ORM alone.
+    Returns list of failures (empty = all probes OK).
+    """
+    probes = (
+        ("orders", "SELECT order_channel, fulfillment_mode FROM orders LIMIT 1"),
+        (
+            "order_items",
+            "SELECT source_location_id, source_movement_id FROM order_items LIMIT 1",
+        ),
+        ("locations", "SELECT operational_zone_type FROM locations LIMIT 1"),
+    )
+    failures: list[dict[str, Any]] = []
+    for table, sql in probes:
+        if not has_table(engine, table):
+            failures.append({"table": table, "error": "table_missing", "sql": sql})
+            continue
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(sql))
+        except Exception as exc:
+            failures.append(
+                {
+                    "table": table,
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "sql": sql,
+                }
+            )
+    return failures
+
+
+def sync_tier0_orm_columns_from_models(engine: Engine) -> int:
+    """
+    Dialect-agnostic Tier 0 sync: add ORM columns missing in DB.
+    Required on PostgreSQL where legacy schema_upgrade helpers are SQLite-only no-ops.
+    """
+    from sqlalchemy.schema import CreateColumn
+
+    from ..models.location import Location
+    from ..models.order import Order
+    from ..models.order_item import OrderItem
+    from ..models.product import Product
+
+    models: list[Any] = [Order, OrderItem, Location, Product]
+    try:
+        from ..models.inventory import Inventory
+
+        models.append(Inventory)
+    except Exception:
+        pass
+    try:
+        from ..models.inventory_unit import InventoryUnit
+
+        models.append(InventoryUnit)
+    except Exception:
+        pass
+
+    added = 0
+    dialect = engine.dialect.name
+    for model in models:
+        table = model.__tablename__
+        if not has_table(engine, table):
+            continue
+        db_cols = get_table_column_names(engine, table)
+        for col in model.__table__.columns:
+            if col.key in db_cols:
+                continue
+            try:
+                col_sql = str(CreateColumn(col).compile(dialect=engine.dialect))
+                stmt = f"ALTER TABLE {table} ADD {col_sql}"
+                with engine.begin() as conn:
+                    conn.execute(text(stmt))
+                added += 1
+                logger.info(
+                    "[schema.tier0] orm_sync added table=%s column=%s dialect=%s",
+                    table,
+                    col.key,
+                    dialect,
+                )
+            except Exception:
+                logger.exception(
+                    "[schema.tier0] orm_sync failed table=%s column=%s dialect=%s",
+                    table,
+                    col.key,
+                    dialect,
+                )
+    if added:
+        logger.info("[schema.tier0] orm_sync complete dialect=%s added=%s", dialect, added)
+    return added
+
+
 def ensure_operational_core_orm_columns(engine: Engine) -> int:
     """
     Sync ORM columns on existing core tables (orders, locations, order_items).

@@ -1,6 +1,6 @@
 # Current Context
 
-- **Platform stability (2026-06-04):** Incident RCA complete. Classic API 503/500 caused by ORM/schema drift + async startup race — fixed via `ensure_operational_core_orm_columns` at import. Operational runtime remains optional (flags OFF). Debug logs in `observability/platform_debug.py` (`PLATFORM_DEBUG=1`).
+- **Production recovery (2026-06-04):** Postgres Tier0 via `sync_tier0_orm_columns_from_models`. `/readyz` + `verify_tier0_schema` script. `PLATFORM_RECOVERY_MODE=1` + all FEATURE_*=0 for classic-only boot. Railway: full restart required. See `docs/RAILWAY_BACKEND.md`.
 
 - **Replenishment execution Phase 6 (2026-06-05):** Pełna tabela uzupełnień + modal skanerowy (scan source→product→target→complete). Kanban zadań QUEUED…COMPLETED. API `POST …/tasks/{id}/execute-step`. Operator workload, actionable alerts, zone pressure v2, timeline. Testy: `test_replenishment_execution.py`.
 

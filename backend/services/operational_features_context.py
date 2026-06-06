@@ -113,6 +113,13 @@ def _load_scope_overrides(
     if db is None:
         return (None,) * 10
     try:
+        from ..platform_state import is_operational_features_force_disabled
+
+        if is_operational_features_force_disabled():
+            return (None,) * 10
+    except Exception:
+        pass
+    try:
         from ..models.operational_feature_scope import OperationalFeatureScope
 
         tenant_row = (

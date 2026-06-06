@@ -101,6 +101,14 @@ Base = declarative_base()
 # CREATE TABLES
 # =========================
 
+def recycle_connection_pool() -> None:
+    """Drop pooled connections after schema migration — avoids stale metadata/sessions."""
+    try:
+        engine.dispose()
+    except Exception:
+        pass
+
+
 def create_all_tables() -> None:
     """
     Create every table registered on Base.metadata.

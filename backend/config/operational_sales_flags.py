@@ -27,6 +27,19 @@ def _env_bool(name: str, *, default: bool = False) -> bool:
 
 def read_global_feature_defaults() -> GlobalFeatureDefaults:
     """Global env layer — defaults OFF (classic WMS unchanged)."""
+    try:
+        from ..platform_state import is_operational_features_force_disabled
+
+        if is_operational_features_force_disabled():
+            return GlobalFeatureDefaults(
+                operational_sales=False,
+                immediate_wms_exclusion=False,
+                operational_sales_sessions=False,
+                operational_runtime=False,
+                replenishment_engine=False,
+            )
+    except Exception:
+        pass
     ops = _env_bool("FEATURE_OPERATIONAL_SALES", default=False)
     excl = _env_bool("FEATURE_IMMEDIATE_WMS_EXCLUSION", default=False)
     sess_env = os.getenv("FEATURE_OPERATIONAL_SALES_SESSIONS")

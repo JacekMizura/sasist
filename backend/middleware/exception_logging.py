@@ -23,7 +23,7 @@ def log_unhandled_exception(context: str, exc: BaseException) -> str:
     return tb
 
 # Never wrap or log these — Railway health checks must stay minimal.
-_PASS_THROUGH_PATHS = frozenset({"/", "/healthz"})
+_PASS_THROUGH_PATHS = frozenset({"/", "/healthz", "/readyz"})
 
 CallNext = Callable[[Request], Awaitable[Response]]
 

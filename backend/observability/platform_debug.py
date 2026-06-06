@@ -16,8 +16,43 @@ def _emit(tag: str, **fields: Any) -> None:
     _LOG.info("[%s] %s", tag, parts)
 
 
-def log_startup_schema(step: str, *, added: int | None = None, error: str | None = None) -> None:
-    _emit("startup.schema", step=step, added=added, error=error)
+def log_startup_schema(
+    step: str,
+    *,
+    added: int | None = None,
+    duration_ms: float | None = None,
+    error: str | None = None,
+) -> None:
+    _emit("startup.schema", step=step, added=added, duration_ms=duration_ms, error=error)
+
+
+def log_startup_validation(
+    *,
+    ok: bool,
+    checked_tables: int,
+    mismatch_count: int = 0,
+    duration_ms: float | None = None,
+    mismatches: list | None = None,
+) -> None:
+    _emit(
+        "startup.validation",
+        ok=ok,
+        checked_tables=checked_tables,
+        mismatch_count=mismatch_count,
+        duration_ms=duration_ms,
+        mismatches=mismatches,
+    )
+
+
+def log_schema_tier(
+    tier: str,
+    *,
+    step: str,
+    duration_ms: float | None = None,
+    ok: bool | None = None,
+    error: str | None = None,
+) -> None:
+    _emit(tier, step=step, duration_ms=duration_ms, ok=ok, error=error)
 
 
 def log_startup_features(**fields: Any) -> None:

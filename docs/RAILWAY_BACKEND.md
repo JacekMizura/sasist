@@ -128,7 +128,65 @@ Trigger **Redeploy** on the backend service after `git push` if the active deplo
 
 ```bash
 curl -sS "https://YOUR-BACKEND.up.railway.app/healthz"
+curl -sS "https://YOUR-BACKEND.up.railway.app/readyz"
 curl -sS "https://YOUR-BACKEND.up.railway.app/api/wms/returns/orders/lookup?tenant_id=1&q=999999&warehouse_id=1"
 ```
 
-Second call must return `[]` with HTTP **200**, not `{"detail":"Not Found"}`.
+- `/healthz` — liveness (process up).
+- `/readyz` — readiness (Tier 0 schema validated; must be `{"ok":true,"tier0":true}` before trusting API).
+- Lookup call must return `[]` with HTTP **200**, not `{"detail":"Not Found"}`.
+
+## Production recovery (500/503 on core APIs)
+
+### 1. Full restart (not hot reload)
+
+Railway dashboard → backend service → **Restart** (or redeploy latest commit).
+Stale workers may still run old code without Tier 0 bootstrap.
+
+### 2. Env for recovery window
+
+```env
+PLATFORM_DEBUG=1
+PLATFORM_RECOVERY_MODE=1
+FEATURE_OPERATIONAL_RUNTIME=0
+FEATURE_REPLENISHMENT_ENGINE=0
+FEATURE_OPERATIONAL_SALES=0
+FEATURE_OPERATIONAL_SALES_SESSIONS=0
+FEATURE_IMMEDIATE_WMS_EXCLUSION=0
+```
+
+`PLATFORM_RECOVERY_MODE=1` forces operational features OFF even if DB scope rows exist.
+
+### 3. Startup logs to confirm
+
+```text
+[startup.schema]
+[startup.validation]
+[schema.tier0]
+[startup] tier0 ready phase=import dialect=postgresql
+```
+
+If import crashes with `CoreSchemaValidationError`, the service must **not** serve broken API — fix DB or deploy newer code with `sync_tier0_orm_columns_from_models`.
+
+### 4. Direct DB verification (production)
+
+```bash
+python -m backend.scripts.verify_tier0_schema
+```
+
+Requires `DATABASE_URL` pointing at production Postgres.
+
+### 5. Core endpoint smoke test (all must be 200)
+
+```text
+/api/orders?tenant_id=1&limit=5
+/api/purchasing/dashboard?tenant_id=1
+/api/warehouse/layout?tenant_id=1&warehouse_id=1
+/api/warehouse/occupancy-metrics?tenant_id=1&warehouse_id=1
+/api/warehouses/1/inventory-value
+```
+
+### PostgreSQL note
+
+Legacy `ensure_*` helpers in `schema_upgrade.py` use SQLite `PRAGMA` and are **no-ops on Postgres**.
+Tier 0 column sync runs via dialect-agnostic `sync_tier0_orm_columns_from_models()` at import.

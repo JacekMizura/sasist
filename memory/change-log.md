@@ -1,5 +1,19 @@
 # Change Log
 
+## 2026-06-04 — Production recovery hardening
+
+- **Postgres Tier0 fix:** `sync_tier0_orm_columns_from_models()` — dialect-agnostic ORM→DB column sync (legacy `schema_upgrade` helpers are SQLite no-ops on Postgres).
+- **Hard gates:** `validate_core_schema_or_fail()`, SQL probes, `/readyz`, readiness middleware, `engine.dispose()` on bootstrap.
+- **Recovery mode:** `PLATFORM_RECOVERY_MODE=1` forces operational features OFF; `python -m backend.scripts.verify_tier0_schema` for direct SQL checks.
+- Docs: `docs/RAILWAY_BACKEND.md` recovery section.
+
+## 2026-06-04 — Tiered schema policy (mandatory architecture)
+
+- `backend/db/schema_tiers.py`: Tier 0 (sync + `validate_core_schema`), Tier 1 (`ensure_tier1_operational_schema`), ORM/DB validation fails startup early.
+- `main.py`: `_bootstrap_tier0_platform_schema()` at import + startup sync; background renamed `_upgrade_schema_background` — no Tier 0 `ALTER` in threads.
+- Observability: `[startup.validation]`, `[schema.tier0]`, `[schema.tier1]`; Cursor rule `.cursor/rules/tiered-schema-policy.mdc`.
+- Test: `test_schema_tiers.py`.
+
 ## 2026-06-04 — Platform stability incident (RCA + fix)
 
 - **Root cause:** ORM models gained operational columns (`orders.order_channel`, `locations.operational_zone_type`, `order_items.source_movement_id`, …) but migrations ran only in async background `_upgrade_schema` — classic APIs failed with `no such column` before migration completed. Not ContextVar / feature-flag coupling.
