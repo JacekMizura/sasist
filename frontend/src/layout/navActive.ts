@@ -35,6 +35,9 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/bundles") {
     return pathname === "/bundles" || pathname.startsWith("/bundles/");
   }
+  if (path === "/production") {
+    return pathname === "/production" || pathname.startsWith("/production/");
+  }
   if (path === "/manufacturers") {
     return pathname === "/manufacturers" || pathname.startsWith("/manufacturers/");
   }

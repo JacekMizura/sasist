@@ -1,0 +1,627 @@
+"""Production orders — create, start, complete, cancel; stock + RW/PW documents."""
+
+from __future__ import annotations
+
+import json
+import logging
+from datetime import date, datetime
+from typing import Any
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
+
+from ..models.inventory import Inventory
+from ..models.location import Location
+from ..models.product import Product
+from ..models.production import ProductionOrder, ProductionOrderLineSnapshot, ProductionRecipe
+from ..models.stock_document import StockDocument, StockDocumentItem
+from ..models.warehouse import Warehouse
+from ..schemas.production import (
+    ComponentAllocationWrite,
+    ProductionCompleteResultRead,
+    ProductionOrderCompleteBody,
+    ProductionOrderCreateBody,
+    ProductionOrderLineSnapshotRead,
+    ProductionOrderRead,
+    StockShortageRead,
+)
+from .document_number_service import assign_series_number_to_stock_document, require_warehouse_series
+from .inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
+from .inventory_lot_keys import NO_EXPIRY_SENTINEL
+from .order_item_pick_allocation_service import consume_inventory_fifo_slices
+from .product_cost_service import get_product_current_cost
+from .production_recipe_service import ProductionRecipeError, calculate_required_components
+from .stock_disposition import STOCK_DISPOSITION_SALEABLE
+from .stock_operation_issue_service import append_issue_operation
+from .stock_operation_receipt_service import append_receipt_operation
+
+logger = logging.getLogger(__name__)
+
+TERMINAL_STATUSES = frozenset({"completed", "cancelled"})
+
+
+class ProductionOrderError(Exception):
+    def __init__(self, message: str, *, code: str = "production_error", shortages: list | None = None) -> None:
+        self.message = message
+        self.code = code
+        self.shortages = shortages or []
+        super().__init__(message)
+
+
+def _next_order_number(db: Session, *, tenant_id: int) -> str:
+    year = datetime.utcnow().year
+    prefix = f"MO/{year}/"
+    last = (
+        db.query(ProductionOrder.number)
+        .filter(ProductionOrder.tenant_id == int(tenant_id), ProductionOrder.number.like(f"{prefix}%"))
+        .order_by(ProductionOrder.id.desc())
+        .first()
+    )
+    seq = 1
+    if last and last[0]:
+        try:
+            seq = int(str(last[0]).split("/")[-1]) + 1
+        except ValueError:
+            seq = 1
+    return f"{prefix}{seq:04d}"
+
+
+def _warehouse_stock(db: Session, *, tenant_id: int, warehouse_id: int, product_id: int) -> float:
+    row = (
+        db.query(func.coalesce(func.sum(Inventory.quantity), 0.0))
+        .filter(
+            Inventory.tenant_id == int(tenant_id),
+            Inventory.warehouse_id == int(warehouse_id),
+            Inventory.product_id == int(product_id),
+            Inventory.quantity > 0,
+        )
+        .scalar()
+    )
+    return float(row or 0)
+
+
+def _location_stock(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    location_id: int,
+    product_id: int,
+) -> float:
+    row = (
+        db.query(func.coalesce(func.sum(Inventory.quantity), 0.0))
+        .filter(
+            Inventory.tenant_id == int(tenant_id),
+            Inventory.warehouse_id == int(warehouse_id),
+            Inventory.location_id == int(location_id),
+            Inventory.product_id == int(product_id),
+            Inventory.quantity > 0,
+        )
+        .scalar()
+    )
+    return float(row or 0)
+
+
+def validate_stock_shortages(
+    db: Session,
+    order: ProductionOrder,
+    *,
+    warehouse_id: int | None = None,
+) -> list[StockShortageRead]:
+    wh = int(warehouse_id or order.warehouse_id)
+    shortages: list[StockShortageRead] = []
+    for snap in order.line_snapshots or []:
+        req = float(snap.total_required_quantity or 0)
+        avail = _warehouse_stock(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=wh,
+            product_id=int(snap.component_product_id),
+        )
+        missing = max(0.0, req - avail)
+        if missing > 1e-6:
+            shortages.append(
+                StockShortageRead(
+                    component_product_id=int(snap.component_product_id),
+                    product_name=str(snap.product_name_snapshot or ""),
+                    required=round(req, 4),
+                    available=round(avail, 4),
+                    missing=round(missing, 4),
+                )
+            )
+    return shortages
+
+
+def serialize_order(db: Session, order: ProductionOrder, *, with_availability: bool = False) -> ProductionOrderRead:
+    p = db.query(Product).filter(Product.id == int(order.product_id)).first()
+    wh = db.query(Warehouse).filter(Warehouse.id == int(order.warehouse_id)).first()
+    loc = (
+        db.query(Location).filter(Location.id == int(order.location_id)).first()
+        if order.location_id is not None
+        else None
+    )
+    rec = db.query(ProductionRecipe).filter(ProductionRecipe.id == int(order.recipe_id)).first()
+    lines_out: list[ProductionOrderLineSnapshotRead] = []
+    for snap in order.line_snapshots or []:
+        avail = miss = None
+        if with_availability:
+            req = float(snap.total_required_quantity or 0)
+            av = _warehouse_stock(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                product_id=int(snap.component_product_id),
+            )
+            avail = av
+            miss = max(0.0, req - av)
+        lines_out.append(
+            ProductionOrderLineSnapshotRead(
+                id=int(snap.id),
+                component_product_id=int(snap.component_product_id),
+                quantity_per_unit=float(snap.quantity_per_unit),
+                total_required_quantity=float(snap.total_required_quantity),
+                consumed_quantity=float(snap.consumed_quantity or 0),
+                product_name_snapshot=str(snap.product_name_snapshot or ""),
+                product_sku_snapshot=snap.product_sku_snapshot,
+                available=avail,
+                missing=miss,
+            )
+        )
+    return ProductionOrderRead(
+        id=int(order.id),
+        tenant_id=int(order.tenant_id),
+        number=str(order.number or ""),
+        recipe_id=int(order.recipe_id),
+        product_id=int(order.product_id),
+        warehouse_id=int(order.warehouse_id),
+        location_id=int(order.location_id) if order.location_id else None,
+        planned_quantity=float(order.planned_quantity),
+        produced_quantity=float(order.produced_quantity or 0),
+        status=str(order.status or "draft"),  # type: ignore[arg-type]
+        priority=int(order.priority or 0),
+        notes=order.notes,
+        calculated_unit_cost=order.calculated_unit_cost,
+        rw_stock_document_id=order.rw_stock_document_id,
+        pw_stock_document_id=order.pw_stock_document_id,
+        product_name=(p.name if p else None),
+        product_sku=((p.sku or p.symbol) if p else None),
+        warehouse_name=(wh.name if wh else None),
+        location_name=(loc.name if loc else None),
+        recipe_name=(rec.name if rec else None),
+        lines=lines_out,
+        started_at=order.started_at,
+        completed_at=order.completed_at,
+        created_at=order.created_at,
+        updated_at=order.updated_at,
+    )
+
+
+def _snapshot_recipe_lines(
+    db: Session,
+    order: ProductionOrder,
+    recipe: ProductionRecipe,
+    *,
+    planned_quantity: float,
+) -> None:
+    reqs = calculate_required_components(recipe, planned_quantity=planned_quantity)
+    prod_ids = [int(r["component_product_id"]) for r in reqs]
+    names: dict[int, Product] = {}
+    if prod_ids:
+        for p in db.query(Product).filter(Product.id.in_(prod_ids)).all():
+            names[int(p.id)] = p
+    for req in reqs:
+        pid = int(req["component_product_id"])
+        p = names.get(pid)
+        order.line_snapshots.append(
+            ProductionOrderLineSnapshot(
+                component_product_id=pid,
+                quantity_per_unit=float(req["quantity_per_unit"]),
+                total_required_quantity=float(req["total_required"]),
+                consumed_quantity=0.0,
+                product_name_snapshot=str(p.name if p else f"Produkt #{pid}"),
+                product_sku_snapshot=((p.sku or p.symbol) if p else None),
+            )
+        )
+
+
+def create_production_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    body: ProductionOrderCreateBody,
+    created_by_user_id: int | None = None,
+) -> ProductionOrderRead:
+    recipe = (
+        db.query(ProductionRecipe)
+        .options(joinedload(ProductionRecipe.lines))
+        .filter(ProductionRecipe.id == int(body.recipe_id), ProductionRecipe.tenant_id == int(tenant_id))
+        .first()
+    )
+    if recipe is None:
+        raise ProductionOrderError("Receptura nie istnieje.", code="recipe_not_found")
+    if not recipe.lines:
+        raise ProductionOrderError("Receptura nie ma składników.", code="recipe_empty")
+    order = ProductionOrder(
+        tenant_id=int(tenant_id),
+        number=_next_order_number(db, tenant_id=tenant_id),
+        recipe_id=int(recipe.id),
+        product_id=int(recipe.product_id),
+        warehouse_id=int(body.warehouse_id),
+        location_id=int(body.location_id) if body.location_id else None,
+        planned_quantity=float(body.planned_quantity),
+        status=str(body.status or "planned"),
+        priority=int(body.priority or 0),
+        notes=(body.notes or "").strip() or None,
+        created_by_user_id=int(created_by_user_id) if created_by_user_id else None,
+    )
+    db.add(order)
+    db.flush()
+    _snapshot_recipe_lines(db, order, recipe, planned_quantity=float(body.planned_quantity))
+    db.flush()
+    return serialize_order(db, order, with_availability=True)
+
+
+def start_production_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    order_id: int,
+) -> ProductionOrderRead:
+    order = (
+        db.query(ProductionOrder)
+        .options(joinedload(ProductionOrder.line_snapshots))
+        .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
+        .first()
+    )
+    if order is None:
+        raise ProductionOrderError("Zlecenie produkcyjne nie istnieje.", code="not_found")
+    if str(order.status) in TERMINAL_STATUSES:
+        raise ProductionOrderError("Zlecenie jest już zamknięte.", code="terminal_status")
+    if str(order.status) == "in_progress":
+        return serialize_order(db, order, with_availability=True)
+    shortages = validate_stock_shortages(db, order)
+    if shortages and str(order.status) != "draft":
+        raise ProductionOrderError(
+            "Niewystarczający stan magazynowy składników.",
+            code="insufficient_stock",
+            shortages=[s.model_dump() for s in shortages],
+        )
+    order.status = "in_progress"
+    order.started_at = datetime.utcnow()
+    order.updated_at = datetime.utcnow()
+    db.flush()
+    return serialize_order(db, order, with_availability=True)
+
+
+def cancel_production_order(db: Session, *, tenant_id: int, order_id: int) -> ProductionOrderRead:
+    order = (
+        db.query(ProductionOrder)
+        .options(joinedload(ProductionOrder.line_snapshots))
+        .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
+        .first()
+    )
+    if order is None:
+        raise ProductionOrderError("Zlecenie produkcyjne nie istnieje.", code="not_found")
+    if str(order.status) == "completed":
+        raise ProductionOrderError("Nie można anulować ukończonego zlecenia.", code="completed")
+    order.status = "cancelled"
+    order.updated_at = datetime.utcnow()
+    db.flush()
+    return serialize_order(db, order)
+
+
+def _auto_allocate_locations(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    quantity: float,
+) -> list[tuple[int, float]]:
+    """FIFO by expiry across warehouse locations — returns [(location_id, qty)]."""
+    rows = (
+        db.query(Inventory)
+        .filter(
+            Inventory.tenant_id == int(tenant_id),
+            Inventory.warehouse_id == int(warehouse_id),
+            Inventory.product_id == int(product_id),
+            Inventory.quantity > 0,
+        )
+        .order_by(Inventory.expiry_date.asc(), Inventory.id.asc())
+        .all()
+    )
+    remaining = float(quantity)
+    alloc: list[tuple[int, float]] = []
+    for inv in rows:
+        if remaining <= 1e-9:
+            break
+        loc_id = int(inv.location_id) if inv.location_id is not None else None
+        if loc_id is None:
+            continue
+        take = min(float(inv.quantity or 0), remaining)
+        if take <= 1e-9:
+            continue
+        alloc.append((loc_id, take))
+        remaining -= take
+    if remaining > 1e-6:
+        raise ProductionOrderError(
+            f"Brak stanu dla produktu #{product_id} (brakuje {round(remaining, 4)}).",
+            code="insufficient_stock",
+        )
+    return alloc
+
+
+def _resolve_component_allocations(
+    db: Session,
+    order: ProductionOrder,
+    *,
+    component_allocations: list[ComponentAllocationWrite] | None,
+) -> dict[int, list[tuple[int, float]]]:
+    """Map line_snapshot_id -> [(location_id, qty)]."""
+    by_snap: dict[int, list[tuple[int, float]]] = {}
+    snap_by_id = {int(s.id): s for s in order.line_snapshots or []}
+    if component_allocations:
+        for alloc in component_allocations:
+            snap = snap_by_id.get(int(alloc.line_snapshot_id))
+            if snap is None:
+                raise ProductionOrderError(f"Nieznana linia zlecenia #{alloc.line_snapshot_id}.", code="line_not_found")
+            by_snap.setdefault(int(snap.id), []).append((int(alloc.location_id), float(alloc.quantity)))
+        for snap_id, snap in snap_by_id.items():
+            total = sum(q for _, q in by_snap.get(snap_id, []))
+            req = float(snap.total_required_quantity or 0)
+            if abs(total - req) > 1e-3:
+                raise ProductionOrderError(
+                    f"Alokacja dla {snap.product_name_snapshot} ({total}) ≠ wymagane ({req}).",
+                    code="allocation_mismatch",
+                )
+        return by_snap
+    for snap in order.line_snapshots or []:
+        req = float(snap.total_required_quantity or 0)
+        if req <= 1e-9:
+            continue
+        by_snap[int(snap.id)] = _auto_allocate_locations(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            product_id=int(snap.component_product_id),
+            quantity=req,
+        )
+    return by_snap
+
+
+def _create_production_stock_document(
+    db: Session,
+    *,
+    order: ProductionOrder,
+    document_type: str,
+    location_id: int | None,
+    created_by_user_id: int | None,
+) -> StockDocument:
+    try:
+        series = require_warehouse_series(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            subtype=document_type,
+        )
+    except Exception:
+        series = None
+    doc = StockDocument(
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        location_id=location_id,
+        document_type=document_type,
+        creation_source="PRODUCTION",
+        production_order_id=int(order.id),
+        status="completed",
+        receiving_status="DONE",
+        putaway_status="DONE",
+        relocation_status="DONE",
+        created_by_user_id=created_by_user_id,
+    )
+    db.add(doc)
+    db.flush()
+    if series is not None:
+        wh = db.query(Warehouse).filter(Warehouse.id == int(order.warehouse_id)).first()
+        wh_code = str(getattr(wh, "code", None) or "").strip() or None
+        assign_series_number_to_stock_document(db, doc, series, warehouse_code=wh_code)
+    return doc
+
+
+def complete_production_order(
+    db: Session,
+    *,
+    tenant_id: int,
+    order_id: int,
+    body: ProductionOrderCompleteBody,
+    performed_by_user_id: int | None = None,
+) -> ProductionCompleteResultRead:
+    order = (
+        db.query(ProductionOrder)
+        .options(joinedload(ProductionOrder.line_snapshots))
+        .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
+        .first()
+    )
+    if order is None:
+        raise ProductionOrderError("Zlecenie produkcyjne nie istnieje.", code="not_found")
+    if str(order.status) == "completed":
+        return ProductionCompleteResultRead(
+            order=serialize_order(db, order),
+            rw_stock_document_id=order.rw_stock_document_id,
+            pw_stock_document_id=order.pw_stock_document_id,
+            calculated_unit_cost=order.calculated_unit_cost,
+        )
+    if str(order.status) == "cancelled":
+        raise ProductionOrderError("Zlecenie anulowane.", code="cancelled")
+
+    produced_qty = float(body.produced_quantity if body.produced_quantity is not None else order.planned_quantity)
+    if produced_qty <= 1e-9:
+        raise ProductionOrderError("Ilość produkowana musi być > 0.", code="invalid_qty")
+
+    shortages = validate_stock_shortages(db, order)
+    if shortages:
+        raise ProductionOrderError(
+            "Niewystarczający stan magazynowy składników.",
+            code="insufficient_stock",
+            shortages=[s.model_dump() for s in shortages],
+        )
+
+    target_loc = int(body.location_id or order.location_id or 0)
+    if target_loc < 1:
+        raise ProductionOrderError("Wybierz lokalizację docelową dla wyrobu gotowego.", code="location_required")
+
+    alloc_map = _resolve_component_allocations(db, order, component_allocations=body.component_allocations)
+
+    rw_doc = _create_production_stock_document(
+        db,
+        order=order,
+        document_type="RW",
+        location_id=None,
+        created_by_user_id=performed_by_user_id,
+    )
+    total_component_cost = 0.0
+
+    for snap in order.line_snapshots or []:
+        snap_id = int(snap.id)
+        allocs = alloc_map.get(snap_id, [])
+        if not allocs:
+            continue
+        line = StockDocumentItem(
+            document_id=int(rw_doc.id),
+            product_id=int(snap.component_product_id),
+            ordered_quantity=sum(q for _, q in allocs),
+            received_quantity=sum(q for _, q in allocs),
+            quantity=sum(q for _, q in allocs),
+            batch_number="",
+            expiry_date=date(9999, 12, 31),
+        )
+        db.add(line)
+        db.flush()
+
+        unit_cost_data = get_product_current_cost(db, int(order.tenant_id), int(snap.component_product_id))
+        unit_net = float(unit_cost_data.get("purchase_net") or 0)
+        line.purchase_price_net = unit_net
+        consumed_total = 0.0
+
+        for loc_id, qty in allocs:
+            slices = consume_inventory_fifo_slices(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                product_id=int(snap.component_product_id),
+                location_id=int(loc_id),
+                quantity=float(qty),
+            )
+            for sl in slices:
+                append_issue_operation(
+                    db,
+                    rw_doc,
+                    line,
+                    float(sl.quantity),
+                    from_location_id=int(loc_id),
+                    batch_number=sl.batch_number or "",
+                    expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
+                    operator_admin_id=performed_by_user_id,
+                    metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
+                )
+                consumed_total += float(sl.quantity)
+
+        snap.consumed_quantity = float(consumed_total)
+        total_component_cost += unit_net * float(consumed_total)
+
+    pw_doc = _create_production_stock_document(
+        db,
+        order=order,
+        document_type="PW",
+        location_id=target_loc,
+        created_by_user_id=performed_by_user_id,
+    )
+    unit_cost = total_component_cost / produced_qty if produced_qty > 1e-9 else 0.0
+    fg_line = StockDocumentItem(
+        document_id=int(pw_doc.id),
+        product_id=int(order.product_id),
+        ordered_quantity=produced_qty,
+        received_quantity=produced_qty,
+        quantity=produced_qty,
+        purchase_price_net=unit_cost,
+        batch_number="",
+        expiry_date=date(9999, 12, 31),
+    )
+    db.add(fg_line)
+    db.flush()
+
+    upsert_dock_inventory_for_loose_receipt(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        location_id=target_loc,
+        product_id=int(order.product_id),
+        add_qty=float(produced_qty),
+        batch_number="",
+        expiry_date=NO_EXPIRY_SENTINEL,
+        stock_disposition=STOCK_DISPOSITION_SALEABLE,
+    )
+    append_receipt_operation(db, pw_doc, fg_line, float(produced_qty))
+
+    order.produced_quantity = produced_qty
+    order.calculated_unit_cost = round(unit_cost, 4)
+    order.rw_stock_document_id = int(rw_doc.id)
+    order.pw_stock_document_id = int(pw_doc.id)
+    order.status = "completed"
+    order.completed_at = datetime.utcnow()
+    order.updated_at = datetime.utcnow()
+    if order.location_id is None:
+        order.location_id = target_loc
+
+    prod = db.query(Product).filter(Product.id == int(order.product_id)).first()
+    if prod is not None and unit_cost > 0:
+        prod.purchase_price = float(unit_cost)
+        prod.updated_at = datetime.utcnow()
+
+    db.flush()
+    logger.info(
+        "[production.complete] order_id=%s rw=%s pw=%s unit_cost=%s",
+        order.id,
+        rw_doc.id,
+        pw_doc.id,
+        unit_cost,
+    )
+    return ProductionCompleteResultRead(
+        order=serialize_order(db, order, with_availability=False),
+        rw_stock_document_id=int(rw_doc.id),
+        pw_stock_document_id=int(pw_doc.id),
+        calculated_unit_cost=round(unit_cost, 4),
+    )
+
+
+def list_production_orders(
+    db: Session,
+    *,
+    tenant_id: int,
+    status: str | None = None,
+    warehouse_id: int | None = None,
+) -> list[ProductionOrderRead]:
+    q = (
+        db.query(ProductionOrder)
+        .options(joinedload(ProductionOrder.line_snapshots))
+        .filter(ProductionOrder.tenant_id == int(tenant_id))
+    )
+    if status:
+        q = q.filter(ProductionOrder.status == str(status).strip().lower())
+    if warehouse_id:
+        q = q.filter(ProductionOrder.warehouse_id == int(warehouse_id))
+    rows = q.order_by(ProductionOrder.priority.desc(), ProductionOrder.created_at.desc()).all()
+    with_avail = status in (None, "planned", "draft", "in_progress")
+    return [serialize_order(db, o, with_availability=with_avail) for o in rows]
+
+
+def get_production_order(db: Session, *, tenant_id: int, order_id: int) -> ProductionOrderRead | None:
+    order = (
+        db.query(ProductionOrder)
+        .options(joinedload(ProductionOrder.line_snapshots))
+        .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
+        .first()
+    )
+    if order is None:
+        return None
+    return serialize_order(db, order, with_availability=str(order.status) not in TERMINAL_STATUSES)

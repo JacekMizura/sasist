@@ -36,6 +36,7 @@ export default function ProductEditPage() {
     "logistics",
     "offers",
     "settings",
+    "production",
   ];
   const tabResolved =
     tabParam === "wms-validation" ? "settings" : tabParam;

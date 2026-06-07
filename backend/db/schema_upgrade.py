@@ -7127,3 +7127,219 @@ def ensure_warehouse_inventory_movements_table(engine: Engine) -> None:
             )
             conn.commit()
 
+
+def ensure_production_tables(engine: Engine) -> None:
+    """Manufacturing: recipes, production orders, line snapshots (PostgreSQL + SQLite)."""
+    dialect = engine.dialect.name
+    if dialect == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS production_recipes (
+                        id SERIAL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        name VARCHAR(256) NOT NULL,
+                        version VARCHAR(32) NOT NULL DEFAULT '1',
+                        is_active BOOLEAN NOT NULL DEFAULT FALSE,
+                        yield_quantity DOUBLE PRECISION NOT NULL DEFAULT 1,
+                        notes TEXT,
+                        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc'),
+                        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_recipes_tenant ON production_recipes(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_recipes_product ON production_recipes(product_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_recipes_active ON production_recipes(is_active)"))
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS production_recipe_lines (
+                        id SERIAL PRIMARY KEY,
+                        recipe_id INTEGER NOT NULL REFERENCES production_recipes(id) ON DELETE CASCADE,
+                        component_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+                        quantity DOUBLE PRECISION NOT NULL,
+                        waste_percent DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        notes TEXT,
+                        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prod_recipe_lines_recipe ON production_recipe_lines(recipe_id)"))
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_prod_recipe_lines_component ON production_recipe_lines(component_product_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS production_orders (
+                        id SERIAL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        number VARCHAR(64) NOT NULL,
+                        recipe_id INTEGER NOT NULL REFERENCES production_recipes(id) ON DELETE RESTRICT,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
+                        location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+                        planned_quantity DOUBLE PRECISION NOT NULL,
+                        produced_quantity DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        status VARCHAR(32) NOT NULL DEFAULT 'draft',
+                        priority INTEGER NOT NULL DEFAULT 0,
+                        notes TEXT,
+                        calculated_unit_cost DOUBLE PRECISION,
+                        rw_stock_document_id INTEGER REFERENCES stock_documents(id) ON DELETE SET NULL,
+                        pw_stock_document_id INTEGER REFERENCES stock_documents(id) ON DELETE SET NULL,
+                        created_by_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        started_at TIMESTAMP WITHOUT TIME ZONE,
+                        completed_at TIMESTAMP WITHOUT TIME ZONE,
+                        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc'),
+                        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_orders_tenant ON production_orders(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_orders_wh ON production_orders(warehouse_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_orders_status ON production_orders(status)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_orders_product ON production_orders(product_id)"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_production_orders_number ON production_orders(tenant_id, number)"))
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS production_order_lines_snapshot (
+                        id SERIAL PRIMARY KEY,
+                        production_order_id INTEGER NOT NULL REFERENCES production_orders(id) ON DELETE CASCADE,
+                        component_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+                        quantity_per_unit DOUBLE PRECISION NOT NULL,
+                        total_required_quantity DOUBLE PRECISION NOT NULL,
+                        consumed_quantity DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        product_name_snapshot VARCHAR(512) NOT NULL DEFAULT '',
+                        product_sku_snapshot VARCHAR(128),
+                        allocation_json TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_prod_order_lines_order ON production_order_lines_snapshot(production_order_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_prod_order_lines_component ON production_order_lines_snapshot(component_product_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE stock_documents ADD COLUMN IF NOT EXISTS production_order_id INTEGER "
+                    "REFERENCES production_orders(id) ON DELETE SET NULL"
+                )
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_stock_documents_production_order ON stock_documents(production_order_id)")
+            )
+        return
+    with engine.connect() as conn:
+        if not _table_exists(conn, "production_recipes"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE production_recipes (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        name VARCHAR(256) NOT NULL,
+                        version VARCHAR(32) NOT NULL DEFAULT '1',
+                        is_active BOOLEAN NOT NULL DEFAULT 0,
+                        yield_quantity REAL NOT NULL DEFAULT 1,
+                        notes TEXT,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_recipes_tenant ON production_recipes(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_recipes_product ON production_recipes(product_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_recipes_active ON production_recipes(is_active)"))
+        if not _table_exists(conn, "production_recipe_lines"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE production_recipe_lines (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        recipe_id INTEGER NOT NULL REFERENCES production_recipes(id) ON DELETE CASCADE,
+                        component_product_id INTEGER NOT NULL REFERENCES products(id),
+                        quantity REAL NOT NULL,
+                        waste_percent REAL NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        notes TEXT,
+                        created_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prod_recipe_lines_recipe ON production_recipe_lines(recipe_id)"))
+        if not _table_exists(conn, "production_orders"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE production_orders (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        number VARCHAR(64) NOT NULL,
+                        recipe_id INTEGER NOT NULL REFERENCES production_recipes(id),
+                        product_id INTEGER NOT NULL REFERENCES products(id),
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                        location_id INTEGER REFERENCES locations(id),
+                        planned_quantity REAL NOT NULL,
+                        produced_quantity REAL NOT NULL DEFAULT 0,
+                        status VARCHAR(32) NOT NULL DEFAULT 'draft',
+                        priority INTEGER NOT NULL DEFAULT 0,
+                        notes TEXT,
+                        calculated_unit_cost REAL,
+                        rw_stock_document_id INTEGER REFERENCES stock_documents(id),
+                        pw_stock_document_id INTEGER REFERENCES stock_documents(id),
+                        created_by_user_id INTEGER REFERENCES app_users(id),
+                        started_at DATETIME,
+                        completed_at DATETIME,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_production_orders_tenant ON production_orders(tenant_id)"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_production_orders_number ON production_orders(tenant_id, number)"))
+        if not _table_exists(conn, "production_order_lines_snapshot"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE production_order_lines_snapshot (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        production_order_id INTEGER NOT NULL REFERENCES production_orders(id) ON DELETE CASCADE,
+                        component_product_id INTEGER NOT NULL REFERENCES products(id),
+                        quantity_per_unit REAL NOT NULL,
+                        total_required_quantity REAL NOT NULL,
+                        consumed_quantity REAL NOT NULL DEFAULT 0,
+                        product_name_snapshot VARCHAR(512) NOT NULL DEFAULT '',
+                        product_sku_snapshot VARCHAR(128),
+                        allocation_json TEXT
+                    )
+                    """
+                )
+            )
+        sd_cols = _table_column_names(conn, "stock_documents") if _table_exists(conn, "stock_documents") else set()
+        if sd_cols and "production_order_id" not in sd_cols:
+            conn.execute(
+                text("ALTER TABLE stock_documents ADD COLUMN production_order_id INTEGER REFERENCES production_orders(id)")
+            )
+        conn.commit()
+

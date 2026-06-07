@@ -81,6 +81,7 @@ from .db.schema_upgrade import (
     ensure_complaint_customer_snapshot_columns,
     ensure_complaint_production_columns,
     ensure_complaint_events_table,
+    ensure_production_tables,
     ensure_bundles_tables_and_order_item_bundle_columns,
     ensure_manufacturers_table_and_product_manufacturer_id,
     ensure_suppliers_and_inbound_deliveries_tables,
@@ -225,6 +226,7 @@ from .api.cartons import router as cartons_router
 from .api.packaging_materials import router as packaging_materials_router
 from .api.product import router as product_router
 from .api.bundle import router as bundle_router
+from .api.production import router as production_router
 from .api.manufacturer import router as manufacturer_router
 from .api.purchasing import router as purchasing_router
 from .api.supplier import router as supplier_router
@@ -796,6 +798,10 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_bundles_tables_and_order_item_bundle_columns failed at import")
 try:
+    ensure_production_tables(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_production_tables failed at import")
+try:
     ensure_manufacturers_table_and_product_manufacturer_id(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_manufacturers_table_and_product_manufacturer_id failed at import")
@@ -1049,6 +1055,10 @@ def _upgrade_schema_background() -> None:
         pass
     try:
         ensure_bundles_tables_and_order_item_bundle_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_production_tables(engine)
     except Exception:
         pass
     try:
@@ -1426,6 +1436,7 @@ _API_ROUTERS = (
     tenant_warehouse_router,
     product_router,
     bundle_router,
+    production_router,
     manufacturer_router,
     purchasing_router,
     supplier_router,

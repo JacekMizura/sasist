@@ -172,6 +172,7 @@ import WmsReturnsEntryPage from "./pages/wms/WmsReturnsEntryPage"
 import OfficeDamagesPage from "./pages/damage/OfficeDamagesPage"
 import OfficeDamageReportsPage from "./pages/damage/OfficeDamageReportsPage"
 import BundlesPage from "./pages/Assortment/BundlesPage"
+import ProductionPage from "./pages/Production/ProductionPage"
 import ManufacturersPage from "./pages/Assortment/ManufacturersPage"
 import SuppliersPage from "./pages/Assortment/SuppliersPage"
 import SuppliersLayout from "./pages/Assortment/SuppliersLayout"
@@ -507,6 +508,7 @@ export const router = createBrowserRouter(
                 <Route path="customers/:id" element={<CustomerEditPage />} />
                 <Route path="bundles" element={<BundlesPage />} />
                 <Route path="bundles/new" element={<BundlesPage defaultCreateOpen={true} />} />
+                <Route path="production" element={<ProductionPage />} />
                 <Route path="manufacturers" element={<ManufacturersPage />} />
                 <Route path="manufacturers/new" element={<ManufacturersPage defaultCreateOpen={true} />} />
                 <Route path="suppliers" element={<SuppliersLayout />}>

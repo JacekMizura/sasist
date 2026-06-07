@@ -38,6 +38,12 @@ from .receiving_scan_log import ReceivingScanLog  # noqa: F401
 from .stock_item_location import StockItemLocation  # noqa: F401
 from .stock_operation import StockOperation  # noqa: F401
 from .bundle import Bundle, BundleItem  # noqa: F401 - register for relationships
+from .production import (  # noqa: F401 - manufacturing recipes & orders
+    ProductionOrder,
+    ProductionOrderLineSnapshot,
+    ProductionRecipe,
+    ProductionRecipeLine,
+)
 from .order import Order
 from .order_custom_field import OrderCustomField, OrderCustomFieldOption, OrderCustomFieldValue  # noqa: F401
 from .order_document import OrderDocument  # noqa: F401

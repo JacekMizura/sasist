@@ -73,7 +73,7 @@ def append_issue_operation(
         quantity=float(qty),
         inventory_bucket=BUCKET_SELLABLE,
         operator_admin_id=op_admin,
-        source_document_type="WZ",
+        source_document_type=str(getattr(doc, "document_type", None) or "WZ").strip().upper()[:32],
         source_document_id=int(doc.id),
         source_line_id=int(line.id),
         from_location_id=int(from_location_id),

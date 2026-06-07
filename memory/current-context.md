@@ -32,7 +32,16 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
+## Manufacturing / Production module (latest)
+- DB: `production_recipes`, `production_recipe_lines`, `production_orders`, `production_order_lines_snapshot`; `stock_documents.production_order_id`
+- No `product_type` enum — role from recipe/bundle relations only
+- Backend: recipe CRUD + activate/clone; production orders create/start/complete/cancel; completion → RW+PW docs, FIFO consume, unit cost
+- API: `/api/production/*` (recipes + orders)
+- Frontend: nav **Produkcja** (`/production`), product tab **Produkcja** + recipe editor; component usage list
+- Tests: `backend/tests/test_production.py` (recipe math, schema, self-reference)
+
 ## Not yet / follow-up
+- Production: create-order UI from product tab; mobile collector scan flow; stock reservations on start
 - VIES EU fallback for NIP
 - Manager approval + negative margin enforcement
 - Quantity keypad modal, payment shortcut polish

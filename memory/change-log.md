@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-04 — Manufacturing / Production module (WMS)
+- PostgreSQL-safe migration `ensure_production_tables` (recipes, orders, line snapshots)
+- Recipe service + production order service (FIFO consume, RW/PW docs, valuation on complete)
+- API router `/production`; no `product_type` enum
+- Frontend: Produkcja nav + list/detail UI; product tab with recipe editor and component usage
+- Tests: recipe calculations, schema, self-reference guard
+
 ## 2026-06-04 — Direct Sales PDF + Dokumenty print templates
 - Root-cause fix: sale PDF 500 (`map_sale_document` keyword-only call)
 - Central `document_print_service` with logging, builtin/custom template fallback, PDF validation

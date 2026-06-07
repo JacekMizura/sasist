@@ -7,6 +7,7 @@ import {
   Building2,
   ClipboardList,
   Copy,
+  Factory,
   Image as ImageIcon,
   ImageUp,
   LayoutList,
@@ -40,6 +41,8 @@ import { ProductLogisticsPackagingMatchingSection } from "../../components/produ
 import { RetailLabel } from "../../components/products/RetailLabel";
 import { WarehouseFormCard as Card } from "../../components/products/WarehouseFormCard";
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
+import { ProductProductionPanel } from "../Production/ProductProductionPanel";
+import { listRecipesForProduct } from "../../api/productionApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
 import { ProductReceivingRequirementsSection } from "../../components/wms/receiving/ProductReceivingRequirementsSection";
@@ -205,7 +208,8 @@ export type ProductEditTabId =
   | "warehouseOps"
   | "logistics"
   | "offers"
-  | "settings";
+  | "settings"
+  | "production";
 
 type TabId = ProductEditTabId;
 
@@ -369,6 +373,7 @@ export function ProductEditModal({
   const [dupBusy, setDupBusy] = useState(false);
   const { warehouse } = useWarehouse();
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "basic");
+  const [productionTabVisible, setProductionTabVisible] = useState(initialTab === "production");
   const [positions, setPositions] = useState<SelectablePosition[]>([]);
   const [layoutLoading, setLayoutLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1599,10 +1604,30 @@ export function ProductEditModal({
       activeTab === id ? "border-slate-700 bg-slate-50 text-slate-900 ring-1 ring-slate-200/80 shadow-sm" : "border-transparent bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900"
     }`;
 
+  useEffect(() => {
+    if (isNew || tenantId == null || tenantId < 1 || product?.id == null) {
+      setProductionTabVisible(false);
+      return;
+    }
+    let cancelled = false;
+    void listRecipesForProduct(tenantId, Number(product.id))
+      .then((rows) => {
+        if (!cancelled && rows.length > 0) setProductionTabVisible(true);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNew, tenantId, product?.id]);
+
   // Zaktualizowana kolejność zakładek
   const railTabOrder = useMemo((): TabId[] => {
-    return ["basic", "prices", "warehouse", "images", "offers", "labelSheet"];
-  }, []);
+    const base: TabId[] = ["basic", "prices", "warehouse", "images", "offers", "labelSheet"];
+    if (!isNew) return [...base.slice(0, 3), "production", ...base.slice(3)];
+    return base;
+  }, [isNew]);
 
   const railLabel: Record<TabId, string> = {
     basic: "Podstawowe",
@@ -1616,6 +1641,7 @@ export function ProductEditModal({
     warehouseOps: "Operacje magazynowe",
     logistics: "Logistyka",
     settings: "Ustawienia",
+    production: "Produkcja",
   };
 
   // Tego fragmentu zabrakło:
@@ -1630,6 +1656,7 @@ export function ProductEditModal({
     logistics: Truck,
     offers: Layers,
     settings: Wrench,
+    production: Factory,
   };
 
   const tenantDisplay =
@@ -2809,6 +2836,22 @@ export function ProductEditModal({
                     </section>
                   </div>
                 )}
+
+                {activeTab === "production" && !isNew && tenantId != null && product?.id != null ? (
+                  <ProductProductionPanel
+                    tenantId={tenantId}
+                    productId={Number(product.id)}
+                    productName={name.trim() || `Produkt #${product.id}`}
+                    onRecipesChanged={() => {
+                      setProductionTabVisible(true);
+                      setActiveTab("production");
+                    }}
+                  />
+                ) : null}
+
+                {activeTab === "production" && isNew ? (
+                  <p className="text-sm text-slate-500">Zapisz produkt, aby dodać recepturę produkcji.</p>
+                ) : null}
 
                 {activeTab === "offers" && (
                   <div className="w-full xl:max-w-4xl space-y-12">

@@ -36,6 +36,12 @@ class StockDocument(Base):
         nullable=True,
         index=True,
     )
+    production_order_id = Column(
+        Integer,
+        ForeignKey("production_orders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=True, index=True)
     location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True, index=True)
     # MM (internal transfer): source / target bins (header audit; lines + stock_operations carry lots).
