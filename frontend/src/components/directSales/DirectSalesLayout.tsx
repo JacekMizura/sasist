@@ -112,7 +112,7 @@ export function DirectSalesLayout({ terminal }: Props) {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         
         {/* LEWA KOLUMNA: Wyszukiwarka, Zawieszone, Historia */}
-        <div className="flex w-full shrink-0 flex-col lg:w-[24rem] lg:min-w-[24rem] border-b lg:border-b-0 lg:border-r border-blue-50 z-20 overflow-hidden">
+        <div className="flex min-h-0 w-full shrink-0 flex-col lg:w-[24rem] lg:min-w-[24rem] border-b border-blue-50 lg:border-b-0 lg:border-r z-20 overflow-hidden">
           <ProductSearchPanel
             session={session}
             search={productSearch}
@@ -122,20 +122,20 @@ export function DirectSalesLayout({ terminal }: Props) {
             onSuspend={() => void sessionState.suspend()}
             onNewSession={handleNewSession}
           />
-          <div className="px-4 lg:px-6 pt-4 flex-1 overflow-y-auto custom-scrollbar">
-            <SuspendedSessionsPanel
-              rows={suspended.rows}
-              loading={suspended.loading}
-              busyId={suspended.busyId}
-              onRestore={(id) => void handleRestoreSuspended(id)}
-              onCancel={(id) => void suspended.cancel(id)}
-            />
+          <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 lg:px-6 lg:pb-6">
             <DirectSalesHistoryPanel
               rows={history.rows}
               loading={history.loading}
               todayOnly={history.todayOnly}
               onToggleToday={history.toggleToday}
               onSelect={(id) => void sessionState.showHistoricalCompletion(id)}
+            />
+            <SuspendedSessionsPanel
+              rows={suspended.rows}
+              loading={suspended.loading}
+              busyId={suspended.busyId}
+              onRestore={(id) => void handleRestoreSuspended(id)}
+              onCancel={(id) => void suspended.cancel(id)}
             />
           </div>
         </div>

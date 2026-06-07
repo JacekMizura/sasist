@@ -42,7 +42,7 @@ export function CustomerPanel({
   return (
     <div className="bg-white rounded-3xl p-5 border border-blue-50 shadow-sm space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold text-blue-900/50 uppercase tracking-wider">Klient — faktura VAT</h3>
+        <h3 className="text-xs font-bold text-blue-900/50 uppercase tracking-wider">Klient</h3>
       </div>
 
       {showSearch ? (
@@ -70,7 +70,7 @@ export function CustomerPanel({
               disabled={disabled || customer.busy}
               value={customer.search}
               onChange={(e) => customer.setSearch(e.target.value)}
-              placeholder="Szukaj w CRM (nazwa, NIP)…"
+              placeholder="Szukaj"
               className="w-full pl-10 pr-4 py-3 bg-white border-2 border-blue-50 rounded-2xl text-sm font-medium"
             />
           </div>

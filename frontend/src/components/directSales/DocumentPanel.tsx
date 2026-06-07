@@ -43,11 +43,11 @@ export function DocumentPanel({ value, onChange, disabled }: Props) {
         </button>
       </div>
       
-      <p className="mt-4 text-[11px] font-medium text-slate-400 text-center">
-        {value === "INVOICE"
-          ? "Uzupełnij dane firmy (NIP) przed płatnością."
-          : "Paragon — klient detaliczny przypisany automatycznie."}
-      </p>
+      {value === "RECEIPT" ? (
+        <p className="mt-4 text-center text-[11px] font-medium text-slate-400">
+          Paragon — klient detaliczny przypisany automatycznie.
+        </p>
+      ) : null}
     </div>
   );
 }

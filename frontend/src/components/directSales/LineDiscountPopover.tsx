@@ -8,9 +8,17 @@ type Props = {
   currentType: string | null;
   currentValue: number;
   onApply: (type: "percent" | "amount" | null, value: number) => void;
+  /** Badge under price (default) or compact action button */
+  variant?: "badge" | "action";
 };
 
-export function LineDiscountPopover({ disabled, currentType, currentValue, onApply }: Props) {
+export function LineDiscountPopover({
+  disabled,
+  currentType,
+  currentValue,
+  onApply,
+  variant = "badge",
+}: Props) {
   const settings = useResolvedDirectSalesSettings();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"percent" | "amount">(
@@ -27,20 +35,36 @@ export function LineDiscountPopover({ disabled, currentType, currentValue, onApp
     setOpen(false);
   };
 
+  const hasDiscount = currentValue > 0;
+  const badgeLabel = hasDiscount
+    ? `−${currentValue}${currentType === "percent" ? "%" : " zł"}`
+    : "Rabat";
+
+  const triggerClass =
+    variant === "badge"
+      ? hasDiscount
+        ? "inline-flex items-center rounded-md bg-orange-100 px-1.5 py-0.5 text-[11px] font-bold text-orange-800 hover:bg-orange-200"
+        : "inline-flex items-center rounded-md bg-orange-50 px-1.5 py-0.5 text-[11px] font-semibold text-orange-700/70 hover:bg-orange-100 hover:text-orange-800"
+      : "inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-900 hover:bg-amber-100";
+
   return (
     <div className="relative">
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+        className={`${triggerClass} disabled:opacity-40`}
         title="Rabat pozycji"
       >
-        <Tag size={12} />
-        {currentValue > 0 ? `−${currentValue}${currentType === "percent" ? "%" : " zł"}` : "Rabat"}
+        {variant === "action" ? <Tag size={12} /> : null}
+        {badgeLabel}
       </button>
       {open ? (
-        <div className="absolute right-0 top-full z-30 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+        <div
+          className={`absolute top-full z-30 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-3 shadow-lg ${
+            variant === "badge" ? "left-0" : "right-0"
+          }`}
+        >
           <div className="mb-2 flex gap-1">
             <button
               type="button"
@@ -63,7 +87,7 @@ export function LineDiscountPopover({ disabled, currentType, currentValue, onApp
             step={mode === "percent" ? 1 : 0.01}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="mb-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
+            className="no-number-spinner mb-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
             placeholder={mode === "percent" ? "np. 10" : "np. 5.00"}
           />
           <div className="mb-2 flex flex-wrap gap-1">

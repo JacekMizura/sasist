@@ -33,7 +33,7 @@ export function CashChangePanel({ total, received, onReceivedChange, disabled }:
             disabled={disabled}
             value={Number.isFinite(received) ? received : 0}
             onChange={(e) => onReceivedChange(Number(e.target.value) || 0)}
-            className="w-full text-center text-xl font-black text-blue-700 bg-white border border-blue-200 rounded-xl py-1 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 transition-all shadow-sm"
+            className="no-number-spinner w-full rounded-xl border border-blue-200 bg-white py-1 text-center text-xl font-black text-blue-700 shadow-sm transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50"
           />
         </div>
         

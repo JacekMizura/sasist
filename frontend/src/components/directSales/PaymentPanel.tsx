@@ -131,7 +131,7 @@ export function PaymentPanel({
         onClick={onComplete}
         className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-lg shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-3 transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 disabled:shadow-none disabled:hover:bg-emerald-500"
       >
-        <CheckCircle size={24} /> Zakończ sprzedaż (Enter)
+        <CheckCircle size={24} /> Realizuj
       </button>
 
     </div>

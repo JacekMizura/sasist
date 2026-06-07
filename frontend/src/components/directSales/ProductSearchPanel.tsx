@@ -74,7 +74,7 @@ export function ProductSearchPanel({
   );
 
   return (
-    <aside className="flex w-full shrink-0 flex-col md:w-72 lg:w-[24rem] bg-white border-r border-blue-50 p-4 lg:p-6 z-30 h-full relative">
+    <aside className="relative z-30 flex w-full shrink-0 flex-col border-r border-blue-50 bg-white p-4 lg:p-6 md:w-72 lg:w-[24rem]">
       
       {/* Opcjonalny mały nagłówek, jeśli TopBar nie jest widoczny w trybie mobilnym.
           Mocno wtopiony w tło, aby nie odwracał uwagi */}
@@ -128,7 +128,7 @@ export function ProductSearchPanel({
       </div>
 
       {/* Przyciski akcji zepchnięte na dół przy pomocy mt-auto */}
-      <div className="grid grid-cols-2 gap-3 mt-auto pt-6 border-t border-blue-50 flex-shrink-0">
+      <div className="mt-4 grid shrink-0 grid-cols-2 gap-3 border-t border-blue-50 pt-4">
         <button
           type="button"
           disabled={busy || !session}

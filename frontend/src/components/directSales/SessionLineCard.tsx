@@ -221,36 +221,58 @@ export function SessionLineCard({
           </button>
         </div>
 
-        {/* 4. ROZDZIELONA CENA (Wielkie Brutto, Małe Netto) */}
-        <div className="text-right min-w-[140px] flex flex-col justify-center hidden xl:flex">
-          <div className="text-3xl font-black text-slate-900 tracking-tight leading-none">
+        {/* 4. CENA — brutto główne, netto drugorzędne, rabat pod ceną */}
+        <div className="hidden min-w-[140px] flex-col justify-center text-left xl:flex">
+          <div className="text-3xl font-black leading-none tracking-tight text-slate-900">
             {parsedTotal.gross} <span className="text-xl font-bold text-slate-400">zł</span>
           </div>
-          {parsedTotal.net && (
-            <div className="text-xs font-bold text-slate-400 mt-1.5">
+          {parsedTotal.net ? (
+            <div className="mt-1 text-xs font-bold text-slate-400">
               {parsedTotal.net} zł netto
             </div>
-          )}
-          {line.quantity > 1 && parsedUnit.gross && (
-            <div className="text-[10px] font-medium text-slate-400 mt-0.5">
+          ) : null}
+          {parsedUnit.gross ? (
+            <div className="mt-0.5 text-[10px] font-medium text-slate-400">
               {parsedUnit.gross} zł / szt.
             </div>
-          )}
+          ) : null}
+          {onLineDiscount ? (
+            <div className="mt-1.5">
+              <LineDiscountPopover
+                variant="badge"
+                disabled={busy}
+                currentType={line.line_discount_type}
+                currentValue={line.line_discount_value}
+                onApply={(type, value) => onLineDiscount(line.id, type, value)}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* 5. AKCJE */}
         <div className="flex flex-col gap-2 w-full xl:w-auto xl:ml-2">
           {/* Mobilny widok ceny */}
-          <div className="xl:hidden flex justify-between items-center mb-2 px-1">
-            <div className="text-xs font-bold text-slate-400">
-              {parsedUnit.gross} zł × {line.quantity}
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-black text-slate-900">{parsedTotal.gross} zł</div>
-              {parsedTotal.net && <div className="text-[10px] font-bold text-slate-400">{parsedTotal.net} zł netto</div>}
-            </div>
+          <div className="mb-2 px-1 xl:hidden">
+            <div className="text-2xl font-black text-slate-900">{parsedTotal.gross} zł</div>
+            {parsedTotal.net ? (
+              <div className="text-[10px] font-bold text-slate-400">{parsedTotal.net} zł netto</div>
+            ) : null}
+            {parsedUnit.gross ? (
+              <div className="text-[10px] font-medium text-slate-400">{parsedUnit.gross} zł / szt.</div>
+            ) : null}
+            {onLineDiscount ? (
+              <div className="mt-1">
+                <LineDiscountPopover
+                  variant="badge"
+                  disabled={busy}
+                  currentType={line.line_discount_type}
+                  currentValue={line.line_discount_value}
+                  onApply={(type, value) => onLineDiscount(line.id, type, value)}
+                />
+              </div>
+            ) : null}
           </div>
-          
+
           <button
             type="button"
             disabled={busy}
@@ -259,14 +281,6 @@ export function SessionLineCard({
           >
             <MapPin size={14} /> Lokalizacja
           </button>
-          {onLineDiscount ? (
-            <LineDiscountPopover
-              disabled={busy}
-              currentType={line.line_discount_type}
-              currentValue={line.line_discount_value}
-              onApply={(type, value) => onLineDiscount(line.id, type, value)}
-            />
-          ) : null}
           <button
             type="button"
             disabled={busy}

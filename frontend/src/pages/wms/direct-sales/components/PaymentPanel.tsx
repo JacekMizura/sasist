@@ -96,7 +96,7 @@ export function PaymentPanel({
         onClick={onComplete}
         className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
-        Zakończ sprzedaż
+        Realizuj
       </button>
       <button
         type="button"

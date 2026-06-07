@@ -24,28 +24,14 @@ export function DirectSalesTotalsPanel({ totals, loading }: Props) {
         <span className="font-semibold tabular-nums">{formatMoneyPl(totals.subtotal_gross)}</span>
       </div>
       {hasDiscount ? (
-        <>
-          {totals.line_discounts_gross > 0.009 ? (
-            <div className="flex justify-between text-amber-800">
-              <span>Rabaty pozycji</span>
-              <span className="font-semibold tabular-nums">−{formatMoneyPl(totals.line_discounts_gross)}</span>
-            </div>
-          ) : null}
-          {totals.order_discount_gross > 0.009 ? (
-            <div className="flex justify-between text-amber-800">
-              <span>Rabat zamówienia</span>
-              <span className="font-semibold tabular-nums">−{formatMoneyPl(totals.order_discount_gross)}</span>
-            </div>
-          ) : null}
-        </>
+        <div className="flex justify-between text-amber-800">
+          <span>Rabaty</span>
+          <span className="font-semibold tabular-nums">−{formatMoneyPl(totals.total_discount_gross)}</span>
+        </div>
       ) : null}
       <div className="flex justify-between text-slate-500 text-xs">
         <span>Netto</span>
         <span className="tabular-nums">{formatMoneyPl(totals.total_net)}</span>
-      </div>
-      <div className="flex justify-between text-slate-500 text-xs">
-        <span>VAT</span>
-        <span className="tabular-nums">{formatMoneyPl(totals.total_vat)}</span>
       </div>
       <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-900">
         <span>Do zapłaty</span>

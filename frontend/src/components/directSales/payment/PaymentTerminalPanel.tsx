@@ -144,7 +144,7 @@ export function PaymentTerminalPanel({
         onClick={onComplete}
         className="w-full rounded-xl bg-emerald-600 px-4 py-4 text-base font-bold text-white shadow-sm disabled:opacity-50"
       >
-        Zakończ sprzedaż (Enter)
+        Realizuj
       </button>
     </div>
   );

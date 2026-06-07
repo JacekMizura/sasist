@@ -45,7 +45,7 @@ export function OrderDiscountPanel({ disabled, discountType, discountValue, onAp
         min={0}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        className="w-full rounded-lg border border-amber-100 bg-white px-3 py-2 text-sm"
+        className="no-number-spinner w-full rounded-lg border border-amber-100 bg-white px-3 py-2 text-sm"
         placeholder={mode === "percent" ? "Rabat %" : "Rabat zł"}
       />
       <div className="flex flex-wrap gap-1">

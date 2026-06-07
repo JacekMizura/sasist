@@ -1,7 +1,8 @@
-import { Clock } from "lucide-react";
+import { Clock, Receipt } from "lucide-react";
 import type { DirectSaleHistoryEntry } from "../../../types/directSalesCompletion";
-import { formatMoneyPl, paymentMethodPl } from "../directSalesTerminology";
+import { formatMoneyPl } from "../directSalesTerminology";
 import { DocumentStatusBadge } from "../documents/DocumentStatusBadge";
+import { PaymentStatusBadge } from "../documents/PaymentStatusBadge";
 
 type Props = {
   rows: DirectSaleHistoryEntry[];
@@ -25,6 +26,13 @@ function formatAt(iso: string | null): string {
   }
 }
 
+function receiptLabel(row: DirectSaleHistoryEntry): string {
+  if (row.document_number) return row.document_number;
+  if (row.order_number) return row.order_number;
+  if (row.order_id) return `#${row.order_id}`;
+  return `Sesja #${row.session_id}`;
+}
+
 export function DirectSalesHistoryPanel({
   rows,
   loading,
@@ -33,61 +41,56 @@ export function DirectSalesHistoryPanel({
   onSelect,
 }: Props) {
   return (
-    <div className="mb-6">
-      {/* Nagłówek sekcji */}
-      <div className="flex justify-between items-end mb-4 border-b border-blue-50 pb-2">
-        <h3 className="text-xs font-semibold text-blue-900/50 uppercase tracking-wider">
-          Historia sprzedaży
-        </h3>
+    <div className="mb-4 flex min-h-0 flex-1 flex-col">
+      <div className="mb-3 flex shrink-0 items-end justify-between border-b border-blue-50 pb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-900/50">Poprzednie transakcje</h3>
         <button
           type="button"
           onClick={onToggleToday}
-          className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+          className="text-xs font-semibold text-blue-600 transition-colors hover:text-blue-800"
         >
-          {todayOnly ? "Wszystkie" : "Dziś"}
+          {todayOnly ? "Zobacz wszystkie" : "Tylko dziś"}
         </button>
       </div>
 
       {loading ? (
-        <p className="text-xs font-medium text-blue-400 animate-pulse py-2">
-          Ładuję…
-        </p>
+        <p className="py-2 text-xs font-medium text-blue-400 animate-pulse">Ładuję…</p>
       ) : null}
 
       {!loading && !rows.length ? (
-        <p className="text-xs text-slate-400 italic py-2">
-          Brak zakończonych sprzedaży.
-        </p>
+        <p className="py-2 text-xs italic text-slate-400">Brak zakończonych transakcji.</p>
       ) : null}
 
-      {/* Lista historii */}
-      <ul className="max-h-[35vh] overflow-y-auto pr-1 space-y-3 custom-scrollbar">
+      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
         {rows.map((row) => (
           <li key={row.session_id}>
             <button
               type="button"
               onClick={() => onSelect?.(row.session_id)}
-              className="w-full flex flex-col bg-white border border-blue-50 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-blue-100 transition-all text-left group"
+              className="group w-full rounded-2xl border border-blue-50 bg-white p-3 text-left shadow-sm transition-all hover:border-blue-100 hover:shadow-md"
             >
-              <div className="flex justify-between items-start w-full mb-2 gap-2">
-                <span className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">
-                  {row.order_number ?? `#${row.order_id}`} · {formatMoneyPl(row.total_amount)}
-                </span>
-                <span className="text-[11px] font-medium text-blue-900/40 flex items-center gap-1 flex-shrink-0">
-                  <Clock size={12} />
-                  {formatAt(row.completed_at)}
+              <div className="mb-1.5 flex items-start justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Receipt size={14} className="shrink-0 text-blue-400" />
+                  <span className="truncate text-sm font-bold text-slate-800 group-hover:text-blue-700">
+                    {receiptLabel(row)}
+                  </span>
+                </div>
+                <span className="shrink-0 text-sm font-black tabular-nums text-slate-900">
+                  {formatMoneyPl(row.total_amount)}
                 </span>
               </div>
-              
-              <div className="text-xs text-slate-500 font-medium">
-                {row.operator_label ?? "—"} · {paymentMethodPl(row.payment_method)}
-                {row.document_number ? ` · ${row.document_number}` : ""}
+
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium text-blue-900/40 flex items-center gap-1">
+                  <Clock size={11} />
+                  {formatAt(row.completed_at)}
+                </span>
+                <PaymentStatusBadge status={row.payment_status} />
               </div>
 
               {row.document_status ? (
-                <div className="mt-3">
-                  <DocumentStatusBadge status={row.document_status} />
-                </div>
+                <DocumentStatusBadge status={row.document_status} />
               ) : null}
             </button>
           </li>
