@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from sqlalchemy import create_engine, text
 
 from backend.db.schema_upgrade import ensure_production_tables
+from backend.services.location_priority_service import suggest_picking_locations
 from backend.services.production_recipe_service import (
     ProductionRecipeError,
     _effective_line_qty,
@@ -85,6 +86,18 @@ class TestRecipeCalculations(unittest.TestCase):
             self.assertEqual(ctx.exception.code, "self_reference")
         finally:
             db.close()
+
+
+class TestPickingLocationSuggest(unittest.TestCase):
+    def test_suggest_picking_prefers_packing_zone(self):
+        rows = [
+            {"location_id": 1, "code": "BULK", "available": 50, "operational_zone_type": "RETURNS", "picking_priority": 10},
+            {"location_id": 2, "code": "P1-01", "available": 10, "operational_zone_type": "PACKING", "picking_priority": 5},
+        ]
+        out = suggest_picking_locations(rows, quantity=8)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["location_id"], 2)
+        self.assertAlmostEqual(float(out[0]["suggested_qty"]), 8.0, places=4)
 
 
 class TestProductionSchema(unittest.TestCase):

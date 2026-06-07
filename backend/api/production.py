@@ -15,10 +15,14 @@ from ..schemas.production import (
     ProductionOrderCompleteBody,
     ProductionOrderCreateBody,
     ProductionOrderRead,
+    ProductionOrderSummaryRead,
+    ProductionPickPlanRead,
     ProductionRecipeCreateBody,
     ProductionRecipeRead,
     ProductionRecipeUpdateBody,
+    RecipeCostEstimateRead,
     RecipeUsageRead,
+    WarehouseLocationSearchRow,
 )
 from ..services.production_order_service import (
     ProductionOrderError,
@@ -27,12 +31,15 @@ from ..services.production_order_service import (
     create_production_order,
     get_production_order,
     list_production_orders,
+    list_production_orders_for_product,
     start_production_order,
 )
+from ..services.production_pick_service import build_production_pick_plan, search_warehouse_locations
 from ..services.production_recipe_service import (
     ProductionRecipeError,
     clone_recipe_version,
     create_recipe,
+    estimate_recipe_cost,
     get_recipe,
     list_recipe_usages_for_component,
     list_recipes_for_product,
@@ -150,6 +157,52 @@ def api_recipe_usages(
     db: Session = Depends(get_db),
 ):
     return list_recipe_usages_for_component(db, tenant_id=tenant_id, product_id=product_id)
+
+
+@router.get("/recipes/{recipe_id}/cost-estimate", response_model=RecipeCostEstimateRead)
+def api_recipe_cost_estimate(
+    recipe_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return estimate_recipe_cost(db, tenant_id=tenant_id, recipe_id=recipe_id)
+    except ProductionRecipeError as exc:
+        raise _recipe_err(exc) from exc
+
+
+@router.get("/locations/search", response_model=List[WarehouseLocationSearchRow])
+def api_search_locations(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    q: str = Query("", max_length=128),
+    limit: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    rows = search_warehouse_locations(db, warehouse_id=warehouse_id, query=q, limit=limit)
+    return [WarehouseLocationSearchRow(**r) for r in rows]
+
+
+@router.get("/orders/by-product/{product_id}", response_model=List[ProductionOrderSummaryRead])
+def api_orders_by_product(
+    product_id: int,
+    tenant_id: int = Query(..., ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    return list_production_orders_for_product(db, tenant_id=tenant_id, product_id=product_id, limit=limit)
+
+
+@router.get("/orders/{order_id}/pick-plan", response_model=ProductionPickPlanRead)
+def api_pick_plan(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return build_production_pick_plan(db, tenant_id=tenant_id, order_id=order_id)
+    except ProductionOrderError as exc:
+        raise _order_err(exc) from exc
 
 
 @router.get("/orders", response_model=List[ProductionOrderRead])

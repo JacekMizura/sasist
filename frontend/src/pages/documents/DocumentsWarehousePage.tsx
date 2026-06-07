@@ -1146,6 +1146,19 @@ export default function DocumentsWarehousePage() {
                             </dd>
                           </div>
                         ) : null}
+                        {detail.production_order_id != null ? (
+                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <dt className="text-slate-500">Zlecenie produkcyjne</dt>
+                            <dd>
+                              <Link
+                                to={detail.production_order_path ?? `/production?order=${detail.production_order_id}`}
+                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
+                              >
+                                {(detail.production_order_number || "").trim() || `MO #${detail.production_order_id}`}
+                              </Link>
+                            </dd>
+                          </div>
+                        ) : null}
                         {detail.linked_sale_document ? (
                           <div className="flex items-center justify-between gap-4 pt-1">
                             <dt className="text-slate-500">Dokument sprzedaży</dt>

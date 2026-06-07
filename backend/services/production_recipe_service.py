@@ -17,8 +17,11 @@ from ..schemas.production import (
     ProductionRecipeLineWrite,
     ProductionRecipeRead,
     ProductionRecipeUpdateBody,
+    RecipeCostEstimateRead,
+    RecipeLineCostRead,
     RecipeUsageRead,
 )
+from .product_cost_service import get_product_current_cost
 
 
 class ProductionRecipeError(Exception):
@@ -298,6 +301,52 @@ def list_recipe_usages_for_component(db: Session, *, tenant_id: int, product_id:
             )
         )
     return out
+
+
+def estimate_recipe_cost(db: Session, *, tenant_id: int, recipe_id: int) -> RecipeCostEstimateRead:
+    recipe = (
+        db.query(ProductionRecipe)
+        .options(joinedload(ProductionRecipe.lines))
+        .filter(ProductionRecipe.id == int(recipe_id), ProductionRecipe.tenant_id == int(tenant_id))
+        .first()
+    )
+    if recipe is None:
+        raise ProductionRecipeError("Receptura nie istnieje.", code="not_found")
+    yld = float(recipe.yield_quantity or 1)
+    if yld <= 1e-12:
+        yld = 1.0
+    lines_out: list[RecipeLineCostRead] = []
+    total = 0.0
+    prod_map: dict[int, Product] = {}
+    pids = [int(ln.component_product_id) for ln in recipe.lines or []]
+    if pids:
+        for p in db.query(Product).filter(Product.id.in_(pids)).all():
+            prod_map[int(p.id)] = p
+    for ln in sorted(recipe.lines or [], key=lambda x: (x.sort_order, x.id)):
+        pid = int(ln.component_product_id)
+        per_yield = _effective_line_qty(ln, yield_qty=yld)
+        cost_data = get_product_current_cost(db, int(tenant_id), pid)
+        unit_net = float(cost_data.get("purchase_net") or 0)
+        line_cost = unit_net * per_yield
+        total += line_cost
+        cp = prod_map.get(pid)
+        lines_out.append(
+            RecipeLineCostRead(
+                component_product_id=pid,
+                product_name=str(cp.name if cp else f"Produkt #{pid}"),
+                quantity=float(ln.quantity),
+                waste_percent=float(ln.waste_percent or 0),
+                unit_cost_net=round(unit_net, 4),
+                line_cost_net=round(line_cost, 4),
+            )
+        )
+    return RecipeCostEstimateRead(
+        recipe_id=int(recipe.id),
+        yield_quantity=yld,
+        lines=lines_out,
+        total_cost_net=round(total, 4),
+        unit_cost_net=round(total / yld, 4) if yld > 0 else 0.0,
+    )
 
 
 def calculate_required_components(

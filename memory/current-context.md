@@ -32,7 +32,13 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Manufacturing / Production module (latest)
+## Manufacturing / Production — execution UX (latest)
+- Pick plan API: `/production/orders/{id}/pick-plan` — FIFO auto-allocation + picking-priority location suggestions
+- Completion UI: per-component source locations (auto/manual), target location search (debounced), shortage panel
+- Recipe FIFO cost estimate API; product **Historia produkcji**; RW/PW ↔ MO backlinks on warehouse docs
+- Status labels: Robocze / Zaplanowane / W produkcji / Zakończone / Anulowane
+
+## Manufacturing / Production module (base)
 - DB: `production_recipes`, `production_recipe_lines`, `production_orders`, `production_order_lines_snapshot`; `stock_documents.production_order_id`
 - No `product_type` enum — role from recipe/bundle relations only
 - Backend: recipe CRUD + activate/clone; production orders create/start/complete/cancel; completion → RW+PW docs, FIFO consume, unit cost

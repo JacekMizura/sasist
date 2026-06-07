@@ -90,6 +90,11 @@ def list_stock_documents(
     }
     wids = {d.warehouse_id for d in docs if d.warehouse_id is not None}
     lids = {d.location_id for d in docs if d.location_id is not None}
+    poids = {
+        int(d.production_order_id)
+        for d in docs
+        if getattr(d, "production_order_id", None) is not None
+    }
     dids = [d.id for d in docs]
 
     sup_names = {r.id: (r.name or "").strip() for r in db.query(Supplier).filter(Supplier.id.in_(sids)).all()}
@@ -114,6 +119,12 @@ def list_stock_documents(
     loc_names = (
         {r.id: (r.name or "").strip() for r in db.query(Location).filter(Location.id.in_(lids)).all()} if lids else {}
     )
+    prod_order_numbers: dict[int, str] = {}
+    if poids:
+        from ..models.production import ProductionOrder
+
+        for po in db.query(ProductionOrder).filter(ProductionOrder.id.in_(poids)).all():
+            prod_order_numbers[int(po.id)] = str(po.number or "").strip()
 
     cnt_rows = (
         db.query(StockDocumentItem.document_id, func.count(StockDocumentItem.id))
@@ -211,6 +222,14 @@ def list_stock_documents(
                 order_id=oid,
                 order_number=order_number or None,
                 customer_name=display_customer or None,
+                production_order_id=(
+                    int(d.production_order_id) if getattr(d, "production_order_id", None) is not None else None
+                ),
+                production_order_number=(
+                    prod_order_numbers.get(int(d.production_order_id))
+                    if getattr(d, "production_order_id", None) is not None
+                    else None
+                ),
                 delivery_id=d.delivery_id,
                 supplier_id=d.supplier_id,
                 supplier_name=supplier_label,

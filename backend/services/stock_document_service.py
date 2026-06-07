@@ -1349,6 +1349,17 @@ def build_stock_document_read(
                 "detail_path": f"/documents/sales/{sale_row.id}",
             }
 
+    prod_order_id = getattr(doc, "production_order_id", None)
+    prod_order_number: Optional[str] = None
+    prod_order_path: Optional[str] = None
+    if prod_order_id is not None:
+        from ..models.production import ProductionOrder
+
+        po = db.query(ProductionOrder).filter(ProductionOrder.id == int(prod_order_id)).first()
+        if po is not None:
+            prod_order_number = str(po.number or "").strip() or None
+            prod_order_path = f"/production?order={int(po.id)}"
+
     return StockDocumentRead(
         id=doc.id,
         tenant_id=doc.tenant_id,
@@ -1360,6 +1371,9 @@ def build_stock_document_read(
         customer_name=customer_name,
         source_sale_document_id=sale_doc_id,
         linked_sale_document=linked_sale,
+        production_order_id=int(prod_order_id) if prod_order_id is not None else None,
+        production_order_number=prod_order_number,
+        production_order_path=prod_order_path,
         supplier_id=doc.supplier_id,
         supplier_name=(sup.name or "").strip() if sup else "",
         delivery_id=doc.delivery_id,

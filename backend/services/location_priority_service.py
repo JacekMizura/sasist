@@ -86,3 +86,34 @@ def suggest_sales_locations(
         if rem <= 1e-9:
             break
     return out
+
+
+def suggest_picking_locations(
+    rows: list[dict],
+    *,
+    quantity: float,
+) -> list[dict]:
+    """Production / warehouse issue — prefer pick/store zones (PACKING → SALES → …)."""
+    need = float(quantity)
+    if need <= 0:
+        return []
+    sorted_rows = sorted(
+        rows,
+        key=lambda r: picking_sort_key(
+            operational_zone_type=r.get("operational_zone_type"),
+            picking_priority=r.get("picking_priority"),
+            location_id=int(r.get("location_id") or 0),
+        ),
+    )
+    out: list[dict] = []
+    rem = need
+    for r in sorted_rows:
+        avail = float(r.get("available") or 0)
+        if avail <= 1e-9:
+            continue
+        take = min(rem, avail)
+        out.append({**r, "suggested_qty": round(take, 6)})
+        rem -= take
+        if rem <= 1e-9:
+            break
+    return out

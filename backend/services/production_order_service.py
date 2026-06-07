@@ -14,6 +14,7 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
 from ..models.production import ProductionOrder, ProductionOrderLineSnapshot, ProductionRecipe
+from ..models.app_user import AppUser
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.warehouse import Warehouse
 from ..schemas.production import (
@@ -23,6 +24,7 @@ from ..schemas.production import (
     ProductionOrderCreateBody,
     ProductionOrderLineSnapshotRead,
     ProductionOrderRead,
+    ProductionOrderSummaryRead,
     StockShortageRead,
 )
 from .document_number_service import assign_series_number_to_stock_document, require_warehouse_series
@@ -132,6 +134,26 @@ def validate_stock_shortages(
     return shortages
 
 
+def _document_number(db: Session, doc_id: int | None) -> str | None:
+    if doc_id is None:
+        return None
+    row = db.query(StockDocument.document_number).filter(StockDocument.id == int(doc_id)).first()
+    if row is None or not row[0]:
+        return None
+    return str(row[0]).strip() or None
+
+
+def _operator_name(db: Session, user_id: int | None) -> str | None:
+    if user_id is None:
+        return None
+    u = db.query(AppUser).filter(AppUser.id == int(user_id)).first()
+    if u is None:
+        return None
+    parts = [str(getattr(u, "first_name", None) or "").strip(), str(getattr(u, "last_name", None) or "").strip()]
+    name = " ".join(p for p in parts if p).strip()
+    return name or str(getattr(u, "email", None) or "").strip() or None
+
+
 def serialize_order(db: Session, order: ProductionOrder, *, with_availability: bool = False) -> ProductionOrderRead:
     p = db.query(Product).filter(Product.id == int(order.product_id)).first()
     wh = db.query(Warehouse).filter(Warehouse.id == int(order.warehouse_id)).first()
@@ -183,6 +205,14 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         calculated_unit_cost=order.calculated_unit_cost,
         rw_stock_document_id=order.rw_stock_document_id,
         pw_stock_document_id=order.pw_stock_document_id,
+        rw_document_number=_document_number(db, order.rw_stock_document_id),
+        pw_document_number=_document_number(db, order.pw_stock_document_id),
+        component_total_cost=(
+            round(float(order.calculated_unit_cost or 0) * float(order.produced_quantity or 0), 4)
+            if order.calculated_unit_cost is not None and float(order.produced_quantity or 0) > 0
+            else None
+        ),
+        operator_name=_operator_name(db, order.created_by_user_id),
         product_name=(p.name if p else None),
         product_sku=((p.sku or p.symbol) if p else None),
         warehouse_name=(wh.name if wh else None),
@@ -586,11 +616,15 @@ def complete_production_order(
         pw_doc.id,
         unit_cost,
     )
+    comp_total = round(total_component_cost, 4)
     return ProductionCompleteResultRead(
         order=serialize_order(db, order, with_availability=False),
         rw_stock_document_id=int(rw_doc.id),
         pw_stock_document_id=int(pw_doc.id),
+        rw_document_number=str(getattr(rw_doc, "document_number", None) or "").strip() or None,
+        pw_document_number=str(getattr(pw_doc, "document_number", None) or "").strip() or None,
         calculated_unit_cost=round(unit_cost, 4),
+        component_total_cost=comp_total,
     )
 
 
@@ -613,6 +647,46 @@ def list_production_orders(
     rows = q.order_by(ProductionOrder.priority.desc(), ProductionOrder.created_at.desc()).all()
     with_avail = status in (None, "planned", "draft", "in_progress")
     return [serialize_order(db, o, with_availability=with_avail) for o in rows]
+
+
+def list_production_orders_for_product(
+    db: Session,
+    *,
+    tenant_id: int,
+    product_id: int,
+    limit: int = 50,
+) -> list[ProductionOrderSummaryRead]:
+    lim = max(1, min(int(limit or 50), 200))
+    rows = (
+        db.query(ProductionOrder)
+        .filter(
+            ProductionOrder.tenant_id == int(tenant_id),
+            ProductionOrder.product_id == int(product_id),
+        )
+        .order_by(ProductionOrder.created_at.desc())
+        .limit(lim)
+        .all()
+    )
+    out: list[ProductionOrderSummaryRead] = []
+    for o in rows:
+        unit = o.calculated_unit_cost
+        prod_q = float(o.produced_quantity or 0)
+        comp_total = round(float(unit or 0) * prod_q, 4) if unit is not None and prod_q > 0 else None
+        out.append(
+            ProductionOrderSummaryRead(
+                id=int(o.id),
+                number=str(o.number or ""),
+                status=str(o.status or "draft"),  # type: ignore[arg-type]
+                planned_quantity=float(o.planned_quantity),
+                produced_quantity=prod_q,
+                calculated_unit_cost=unit,
+                component_total_cost=comp_total,
+                completed_at=o.completed_at,
+                created_at=o.created_at,
+                operator_name=_operator_name(db, o.created_by_user_id),
+            )
+        )
+    return out
 
 
 def get_production_order(db: Session, *, tenant_id: int, order_id: int) -> ProductionOrderRead | None:

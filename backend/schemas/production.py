@@ -91,6 +91,86 @@ class RecipeUsageRead(BaseModel):
     quantity: float
 
 
+class ProductionLocationSuggestionRead(BaseModel):
+    location_id: int
+    code: str
+    available: float
+    operational_zone_type: Optional[str] = None
+    auto_pick_qty: float = 0.0
+    is_suggested: bool = False
+
+
+class ProductionAllocationRead(BaseModel):
+    location_id: int
+    location_code: str
+    quantity: float
+
+
+class StockShortageRead(BaseModel):
+    component_product_id: int
+    product_name: str
+    required: float
+    available: float
+    missing: float
+
+
+class ProductionPickLinePlanRead(BaseModel):
+    line_snapshot_id: int
+    component_product_id: int
+    product_name: str
+    product_sku: Optional[str] = None
+    required: float
+    available: float
+    missing: float
+    suggested_locations: List[ProductionLocationSuggestionRead] = Field(default_factory=list)
+    auto_allocation: List[ProductionAllocationRead] = Field(default_factory=list)
+
+
+class ProductionPickPlanRead(BaseModel):
+    order_id: int
+    warehouse_id: int
+    shortages: List[StockShortageRead] = Field(default_factory=list)
+    has_shortages: bool = False
+    lines: List[ProductionPickLinePlanRead] = Field(default_factory=list)
+
+
+class RecipeLineCostRead(BaseModel):
+    component_product_id: int
+    product_name: str
+    quantity: float
+    waste_percent: float
+    unit_cost_net: float
+    line_cost_net: float
+
+
+class RecipeCostEstimateRead(BaseModel):
+    recipe_id: int
+    yield_quantity: float
+    lines: List[RecipeLineCostRead] = Field(default_factory=list)
+    total_cost_net: float
+    unit_cost_net: float
+
+
+class ProductionOrderSummaryRead(BaseModel):
+    """Lightweight row for product manufacturing history."""
+    id: int
+    number: str
+    status: ProductionOrderStatus
+    planned_quantity: float
+    produced_quantity: float
+    calculated_unit_cost: Optional[float] = None
+    component_total_cost: Optional[float] = None
+    completed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    operator_name: Optional[str] = None
+
+
+class WarehouseLocationSearchRow(BaseModel):
+    id: int
+    code: str
+    operational_zone_type: Optional[str] = None
+
+
 class ProductionOrderLineSnapshotRead(BaseModel):
     id: int
     component_product_id: int
@@ -120,6 +200,10 @@ class ProductionOrderRead(BaseModel):
     calculated_unit_cost: Optional[float] = None
     rw_stock_document_id: Optional[int] = None
     pw_stock_document_id: Optional[int] = None
+    rw_document_number: Optional[str] = None
+    pw_document_number: Optional[str] = None
+    component_total_cost: Optional[float] = None
+    operator_name: Optional[str] = None
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
     warehouse_name: Optional[str] = None
@@ -154,17 +238,12 @@ class ProductionOrderCompleteBody(BaseModel):
     component_allocations: Optional[List[ComponentAllocationWrite]] = None
 
 
-class StockShortageRead(BaseModel):
-    component_product_id: int
-    product_name: str
-    required: float
-    available: float
-    missing: float
-
-
 class ProductionCompleteResultRead(BaseModel):
     order: ProductionOrderRead
     rw_stock_document_id: Optional[int] = None
     pw_stock_document_id: Optional[int] = None
+    rw_document_number: Optional[str] = None
+    pw_document_number: Optional[str] = None
     calculated_unit_cost: Optional[float] = None
+    component_total_cost: Optional[float] = None
     shortages: List[StockShortageRead] = Field(default_factory=list)

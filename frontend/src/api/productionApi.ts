@@ -94,6 +94,10 @@ export type ProductionOrderRead = {
   calculated_unit_cost?: number | null;
   rw_stock_document_id?: number | null;
   pw_stock_document_id?: number | null;
+  rw_document_number?: string | null;
+  pw_document_number?: string | null;
+  component_total_cost?: number | null;
+  operator_name?: string | null;
   product_name?: string | null;
   product_sku?: string | null;
   warehouse_name?: string | null;
@@ -116,16 +120,105 @@ export type ProductionOrderCreateBody = {
   status?: ProductionOrderStatus;
 };
 
+export type ComponentAllocationWrite = {
+  line_snapshot_id: number;
+  location_id: number;
+  quantity: number;
+};
+
 export type ProductionOrderCompleteBody = {
   produced_quantity?: number;
   location_id?: number | null;
+  component_allocations?: ComponentAllocationWrite[];
+};
+
+export type StockShortageRead = {
+  component_product_id: number;
+  product_name: string;
+  required: number;
+  available: number;
+  missing: number;
+};
+
+export type ProductionLocationSuggestionRead = {
+  location_id: number;
+  code: string;
+  available: number;
+  operational_zone_type?: string | null;
+  auto_pick_qty: number;
+  is_suggested: boolean;
+};
+
+export type ProductionAllocationRead = {
+  location_id: number;
+  location_code: string;
+  quantity: number;
+};
+
+export type ProductionPickLinePlanRead = {
+  line_snapshot_id: number;
+  component_product_id: number;
+  product_name: string;
+  product_sku?: string | null;
+  required: number;
+  available: number;
+  missing: number;
+  suggested_locations: ProductionLocationSuggestionRead[];
+  auto_allocation: ProductionAllocationRead[];
+};
+
+export type ProductionPickPlanRead = {
+  order_id: number;
+  warehouse_id: number;
+  shortages: StockShortageRead[];
+  has_shortages: boolean;
+  lines: ProductionPickLinePlanRead[];
+};
+
+export type RecipeLineCostRead = {
+  component_product_id: number;
+  product_name: string;
+  quantity: number;
+  waste_percent: number;
+  unit_cost_net: number;
+  line_cost_net: number;
+};
+
+export type RecipeCostEstimateRead = {
+  recipe_id: number;
+  yield_quantity: number;
+  lines: RecipeLineCostRead[];
+  total_cost_net: number;
+  unit_cost_net: number;
+};
+
+export type ProductionOrderSummaryRead = {
+  id: number;
+  number: string;
+  status: ProductionOrderStatus;
+  planned_quantity: number;
+  produced_quantity: number;
+  calculated_unit_cost?: number | null;
+  component_total_cost?: number | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  operator_name?: string | null;
+};
+
+export type WarehouseLocationSearchRow = {
+  id: number;
+  code: string;
+  operational_zone_type?: string | null;
 };
 
 export type ProductionCompleteResultRead = {
   order: ProductionOrderRead;
   rw_stock_document_id?: number | null;
   pw_stock_document_id?: number | null;
+  rw_document_number?: string | null;
+  pw_document_number?: string | null;
   calculated_unit_cost?: number | null;
+  component_total_cost?: number | null;
 };
 
 export async function listRecipesForProduct(
@@ -258,6 +351,50 @@ export async function completeProductionOrder(
     `/production/orders/${orderId}/complete`,
     body,
     { params: { tenant_id: tenantId } },
+  );
+  return res.data;
+}
+
+export async function fetchProductionPickPlan(
+  tenantId: number,
+  orderId: number,
+): Promise<ProductionPickPlanRead> {
+  const res = await api.get<ProductionPickPlanRead>(`/production/orders/${orderId}/pick-plan`, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function searchProductionLocations(
+  tenantId: number,
+  warehouseId: number,
+  q: string,
+  limit = 20,
+): Promise<WarehouseLocationSearchRow[]> {
+  const res = await api.get<WarehouseLocationSearchRow[]>("/production/locations/search", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId, q, limit },
+  });
+  return res.data;
+}
+
+export async function fetchRecipeCostEstimate(
+  tenantId: number,
+  recipeId: number,
+): Promise<RecipeCostEstimateRead> {
+  const res = await api.get<RecipeCostEstimateRead>(`/production/recipes/${recipeId}/cost-estimate`, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function listProductionOrdersForProduct(
+  tenantId: number,
+  productId: number,
+  limit = 50,
+): Promise<ProductionOrderSummaryRead[]> {
+  const res = await api.get<ProductionOrderSummaryRead[]>(
+    `/production/orders/by-product/${productId}`,
+    { params: { tenant_id: tenantId, limit } },
   );
   return res.data;
 }

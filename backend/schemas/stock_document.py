@@ -298,6 +298,9 @@ class StockDocumentRead(BaseModel):
         None,
         description="Powiązany dokument sprzedaży (paragon/faktura).",
     )
+    production_order_id: Optional[int] = Field(None, description="Zlecenie produkcyjne (RW/PW z produkcji).")
+    production_order_number: Optional[str] = Field(None, description="Numer MO zlecenia produkcyjnego.")
+    production_order_path: Optional[str] = Field(None, description="Ścieżka UI do zlecenia produkcyjnego.")
     supplier_id: Optional[int] = None
     supplier_name: str = ""
     delivery_id: Optional[int] = None
@@ -352,6 +355,8 @@ class StockDocumentListRow(BaseModel):
     order_id: Optional[int] = None
     order_number: Optional[str] = None
     customer_name: Optional[str] = None
+    production_order_id: Optional[int] = None
+    production_order_number: Optional[str] = None
     delivery_id: Optional[int] = None
     supplier_id: Optional[int] = None
     supplier_name: str

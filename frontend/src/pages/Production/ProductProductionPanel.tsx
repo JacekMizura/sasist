@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Factory, Plus, Trash2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Factory, History, Plus, Trash2 } from "lucide-react";
 import api from "../../api/axios";
 import {
   activateRecipe,
   createProductionOrder,
   createRecipe,
+  fetchRecipeCostEstimate,
+  listProductionOrdersForProduct,
   listRecipeUsages,
   listRecipesForProduct,
   updateRecipe,
+  type ProductionOrderSummaryRead,
   type ProductionRecipeLineWrite,
   type ProductionRecipeRead,
+  type RecipeCostEstimateRead,
   type RecipeUsageRead,
 } from "../../api/productionApi";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { formatProductionMoney, PRODUCTION_STATUS_LABEL, productionStatusBadgeClass } from "./productionUi";
 
 type CatalogProduct = {
   id: number;
@@ -96,6 +101,8 @@ export function ProductProductionPanel({ tenantId, productId, productName, onRec
   const [rows, setRows] = useState<ComponentRow[]>(() => [emptyRow()]);
   const [productCache, setProductCache] = useState<Record<number, CatalogProduct>>({});
   const [searchResults, setSearchResults] = useState<CatalogProduct[]>([]);
+  const [costEstimate, setCostEstimate] = useState<RecipeCostEstimateRead | null>(null);
+  const [history, setHistory] = useState<ProductionOrderSummaryRead[]>([]);
 
   const inputClass =
     "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-violet-500 focus:border-violet-400";
@@ -105,12 +112,14 @@ export function ProductProductionPanel({ tenantId, productId, productName, onRec
     setLoading(true);
     setErr(null);
     try {
-      const [r, u] = await Promise.all([
+      const [r, u, h] = await Promise.all([
         listRecipesForProduct(tenantId, productId),
         listRecipeUsages(tenantId, productId),
+        listProductionOrdersForProduct(tenantId, productId),
       ]);
       setRecipes(r);
       setUsages(u);
+      setHistory(h);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Nie udało się wczytać danych produkcji.");
     } finally {
@@ -153,7 +162,20 @@ export function ProductProductionPanel({ tenantId, productId, productName, onRec
         : [emptyRow()],
     );
     setEditorOpen(true);
+    void loadCostEstimate(rec.id);
   };
+
+  const loadCostEstimate = useCallback(
+    async (recipeId: number) => {
+      try {
+        const est = await fetchRecipeCostEstimate(tenantId, recipeId);
+        setCostEstimate(est);
+      } catch {
+        setCostEstimate(null);
+      }
+    },
+    [tenantId],
+  );
 
   const searchProducts = useCallback(
     async (q: string) => {
@@ -542,9 +564,25 @@ export function ProductProductionPanel({ tenantId, productId, productName, onRec
             </button>
           </div>
 
-          <p className="text-sm text-slate-600">
-            Szacowany koszt jednostkowy: <strong>{formatMoney(estimatedCost)}</strong>
-          </p>
+          {costEstimate && editingRecipeId != null ? (
+            <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm space-y-2">
+              <p className="font-semibold text-slate-800">Szacowany koszt (FIFO/wycena)</p>
+              <ul className="space-y-1 text-slate-600">
+                {costEstimate.lines.map((ln) => (
+                  <li key={ln.component_product_id}>
+                    {ln.product_name}: {ln.quantity} × {formatProductionMoney(ln.unit_cost_net)}
+                  </li>
+                ))}
+              </ul>
+              <p className="border-t border-slate-100 pt-2">
+                Szacowany koszt: <strong>{formatProductionMoney(costEstimate.unit_cost_net)}</strong> / szt.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">
+              Szacowany koszt jednostkowy (katalog): <strong>{formatMoney(estimatedCost)}</strong>
+            </p>
+          )}
 
           <div className="flex justify-end gap-2">
             <button
@@ -565,6 +603,55 @@ export function ProductProductionPanel({ tenantId, productId, productName, onRec
           </div>
         </div>
       ) : null}
+
+      <section>
+        <h3 className="mb-3 flex items-center gap-2 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">
+          <History className="h-5 w-5 text-slate-500" aria-hidden />
+          Historia produkcji
+        </h3>
+        {history.length === 0 ? (
+          <p className="text-sm text-slate-500">Brak zleceń produkcyjnych dla tego produktu.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Nr MO</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Ilość</th>
+                  <th className="px-3 py-2">Koszt jdn.</th>
+                  <th className="px-3 py-2">Data</th>
+                  <th className="px-3 py-2">Operator</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h) => (
+                  <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/80">
+                    <td className="px-3 py-2">
+                      <Link to={`/production?order=${h.id}`} className="font-mono text-violet-700 hover:underline">
+                        {h.number}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={productionStatusBadgeClass(h.status)}>
+                        {PRODUCTION_STATUS_LABEL[h.status]}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {h.status === "completed" ? h.produced_quantity : h.planned_quantity}
+                    </td>
+                    <td className="px-3 py-2">{formatProductionMoney(h.calculated_unit_cost)}</td>
+                    <td className="px-3 py-2 text-xs text-slate-500">
+                      {(h.completed_at || h.created_at || "").slice(0, 10) || "—"}
+                    </td>
+                    <td className="px-3 py-2 text-xs">{h.operator_name ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -12,6 +12,8 @@ export type StockDocumentListRow = {
   order_id?: number | null;
   order_number?: string | null;
   customer_name?: string | null;
+  production_order_id?: number | null;
+  production_order_number?: string | null;
   delivery_id: number;
   supplier_id: number;
   supplier_name: string;
@@ -145,6 +147,9 @@ export type StockDocumentRead = {
   customer_name?: string | null;
   source_sale_document_id?: string | null;
   linked_sale_document?: StockDocumentLinkedSaleDocumentRead | null;
+  production_order_id?: number | null;
+  production_order_number?: string | null;
+  production_order_path?: string | null;
   supplier_id: number;
   supplier_name?: string;
   delivery_id?: number | null;
