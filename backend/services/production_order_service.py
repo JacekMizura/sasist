@@ -8,12 +8,14 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
+from ..db.schema_introspection import get_table_column_names, has_table
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
-from ..models.product_composition import ProductComposition
+from ..models.product_composition import ProductComposition, ProductionBatch, ProductionBatchLine
 from ..models.production import ProductionOrder, ProductionOrderLineSnapshot, ProductionRecipe
 from ..models.app_user import AppUser
 from ..models.stock_document import StockDocument, StockDocumentItem
@@ -43,6 +45,17 @@ from .stock_operation_receipt_service import append_receipt_operation
 logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = frozenset({"completed", "cancelled"})
+
+_VALID_SUMMARY_STATUSES = frozenset({"draft", "planned", "in_progress", "completed", "cancelled"})
+_BATCH_STATUS_TO_ORDER = {
+    "draft": "draft",
+    "planned": "planned",
+    "collecting": "in_progress",
+    "in_progress": "in_progress",
+    "putaway": "in_progress",
+    "completed": "completed",
+    "cancelled": "cancelled",
+}
 
 
 class ProductionOrderError(Exception):
@@ -144,6 +157,109 @@ def _document_number(db: Session, doc_id: int | None) -> str | None:
     if row is None or not row[0]:
         return None
     return str(row[0]).strip() or None
+
+
+def _normalize_summary_status(raw: str | None) -> str:
+    """Map MO/batch status to ProductionOrderSummaryRead literal."""
+    key = str(raw or "draft").strip().lower()
+    if key in _VALID_SUMMARY_STATUSES:
+        return key
+    return _BATCH_STATUS_TO_ORDER.get(key, "planned")
+
+
+def _production_orders_table_ready(db: Session) -> bool:
+    bind = db.get_bind()
+    if not has_table(bind, "production_orders"):
+        return False
+    cols = get_table_column_names(bind, "production_orders")
+    required = {
+        "id",
+        "tenant_id",
+        "product_id",
+        "number",
+        "status",
+        "planned_quantity",
+        "produced_quantity",
+        "created_at",
+    }
+    return required.issubset(cols)
+
+
+def _batch_tables_ready(db: Session) -> bool:
+    bind = db.get_bind()
+    return has_table(bind, "production_batches") and has_table(bind, "production_batch_lines")
+
+
+def _summary_from_order(db: Session, order: ProductionOrder) -> ProductionOrderSummaryRead:
+    unit = order.calculated_unit_cost
+    prod_q = float(order.produced_quantity or 0)
+    comp_total = round(float(unit or 0) * prod_q, 4) if unit is not None and prod_q > 0 else None
+    return ProductionOrderSummaryRead(
+        id=int(order.id),
+        number=str(order.number or ""),
+        status=_normalize_summary_status(order.status),  # type: ignore[arg-type]
+        planned_quantity=float(order.planned_quantity or 0),
+        produced_quantity=prod_q,
+        calculated_unit_cost=unit,
+        component_total_cost=comp_total,
+        completed_at=order.completed_at,
+        created_at=order.created_at,
+        operator_name=_operator_name(db, order.created_by_user_id),
+    )
+
+
+def _summaries_from_batches_for_product(
+    db: Session,
+    *,
+    tenant_id: int,
+    product_id: int,
+    limit: int,
+) -> list[ProductionOrderSummaryRead]:
+    if not _batch_tables_ready(db):
+        return []
+    try:
+        pairs = (
+            db.query(ProductionBatchLine, ProductionBatch)
+            .join(ProductionBatch, ProductionBatchLine.batch_id == ProductionBatch.id)
+            .filter(
+                ProductionBatch.tenant_id == int(tenant_id),
+                ProductionBatchLine.product_id == int(product_id),
+            )
+            .order_by(ProductionBatch.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+    except SQLAlchemyError as exc:
+        logger.warning(
+            "production_batches history query failed tenant=%s product=%s: %s",
+            tenant_id,
+            product_id,
+            exc,
+            exc_info=True,
+        )
+        return []
+
+    out: list[ProductionOrderSummaryRead] = []
+    for line, batch in pairs:
+        unit = line.calculated_unit_cost
+        prod_q = float(line.completed_quantity or 0)
+        planned_q = float(line.planned_quantity or 0)
+        comp_total = round(float(unit or 0) * prod_q, 4) if unit is not None and prod_q > 0 else None
+        out.append(
+            ProductionOrderSummaryRead(
+                id=-int(batch.id),
+                number=str(batch.number or ""),
+                status=_normalize_summary_status(batch.status),  # type: ignore[arg-type]
+                planned_quantity=planned_q,
+                produced_quantity=prod_q,
+                calculated_unit_cost=unit,
+                component_total_cost=comp_total,
+                completed_at=batch.completed_at,
+                created_at=batch.created_at,
+                operator_name=_operator_name(db, batch.created_by_user_id),
+            )
+        )
+    return out
 
 
 def _operator_name(db: Session, user_id: int | None) -> str | None:
@@ -692,37 +808,52 @@ def list_production_orders_for_product(
     product_id: int,
     limit: int = 50,
 ) -> list[ProductionOrderSummaryRead]:
+    """Product manufacturing history — legacy MO rows + production batch lines."""
     lim = max(1, min(int(limit or 50), 200))
-    rows = (
-        db.query(ProductionOrder)
-        .filter(
-            ProductionOrder.tenant_id == int(tenant_id),
-            ProductionOrder.product_id == int(product_id),
-        )
-        .order_by(ProductionOrder.created_at.desc())
-        .limit(lim)
-        .all()
-    )
+    tid = int(tenant_id)
+    pid = int(product_id)
     out: list[ProductionOrderSummaryRead] = []
-    for o in rows:
-        unit = o.calculated_unit_cost
-        prod_q = float(o.produced_quantity or 0)
-        comp_total = round(float(unit or 0) * prod_q, 4) if unit is not None and prod_q > 0 else None
-        out.append(
-            ProductionOrderSummaryRead(
-                id=int(o.id),
-                number=str(o.number or ""),
-                status=str(o.status or "draft"),  # type: ignore[arg-type]
-                planned_quantity=float(o.planned_quantity),
-                produced_quantity=prod_q,
-                calculated_unit_cost=unit,
-                component_total_cost=comp_total,
-                completed_at=o.completed_at,
-                created_at=o.created_at,
-                operator_name=_operator_name(db, o.created_by_user_id),
+
+    if _production_orders_table_ready(db):
+        try:
+            rows = (
+                db.query(ProductionOrder)
+                .filter(
+                    ProductionOrder.tenant_id == tid,
+                    ProductionOrder.product_id == pid,
+                )
+                .order_by(ProductionOrder.created_at.desc())
+                .limit(lim)
+                .all()
             )
+            out.extend(_summary_from_order(db, o) for o in rows)
+        except SQLAlchemyError as exc:
+            logger.warning(
+                "production_orders by-product query failed tenant=%s product=%s: %s",
+                tid,
+                pid,
+                exc,
+                exc_info=True,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    else:
+        logger.info(
+            "production_orders table unavailable — skipping MO history tenant=%s product=%s",
+            tid,
+            pid,
         )
-    return out
+
+    batch_rows = _summaries_from_batches_for_product(db, tenant_id=tid, product_id=pid, limit=lim)
+    out.extend(batch_rows)
+
+    out.sort(
+        key=lambda r: (r.created_at is not None, r.created_at or datetime.min),
+        reverse=True,
+    )
+    return out[:lim]
 
 
 def get_production_order(db: Session, *, tenant_id: int, order_id: int) -> ProductionOrderRead | None:

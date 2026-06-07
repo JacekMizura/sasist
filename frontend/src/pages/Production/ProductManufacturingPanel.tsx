@@ -77,7 +77,7 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
         setDetail(null);
       }
 
-      const latestCompleted = hRes.find((h) => h.status === "completed");
+      const latestCompleted = hRes.find((h) => h.status === "completed" && h.id > 0);
       if (latestCompleted) {
         try {
           const full = await getProductionOrder(tenantId, latestCompleted.id);

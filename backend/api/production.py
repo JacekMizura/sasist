@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -84,6 +85,7 @@ from ..services.production_recipe_service import (
 )
 
 router = APIRouter(prefix="/production", tags=["Production"])
+logger = logging.getLogger(__name__)
 
 
 def _recipe_err(exc: ProductionRecipeError) -> HTTPException:
@@ -226,7 +228,21 @@ def api_orders_by_product(
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
-    return list_production_orders_for_product(db, tenant_id=tenant_id, product_id=product_id, limit=limit)
+    try:
+        return list_production_orders_for_product(
+            db,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            limit=limit,
+        )
+    except Exception as exc:
+        logger.exception(
+            "orders/by-product failed tenant_id=%s product_id=%s limit=%s",
+            tenant_id,
+            product_id,
+            limit,
+        )
+        return []
 
 
 @router.get("/orders/{order_id}/pick-plan", response_model=ProductionPickPlanRead)
@@ -358,6 +374,11 @@ def _batch_err(exc: ProductionBatchError) -> HTTPException:
             status_code=409,
             detail={"message": exc.message, "code": exc.code, "shortages": exc.shortages},
         )
+    if exc.code == "schema_unavailable":
+        return HTTPException(
+            status_code=503,
+            detail={"message": exc.message, "code": exc.code},
+        )
     return HTTPException(status_code=400, detail={"message": exc.message, "code": exc.code})
 
 
@@ -368,7 +389,16 @@ def api_list_batches(
     warehouse_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
-    return list_batches(db, tenant_id=tenant_id, status=status, warehouse_id=warehouse_id)
+    try:
+        return list_batches(db, tenant_id=tenant_id, status=status, warehouse_id=warehouse_id)
+    except Exception:
+        logger.exception(
+            "GET /production/batches failed tenant_id=%s status=%s warehouse_id=%s",
+            tenant_id,
+            status,
+            warehouse_id,
+        )
+        return []
 
 
 @router.get("/batches/{batch_id}", response_model=ProductionBatchRead)
@@ -401,7 +431,17 @@ def api_preview_batch(
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
+    line_summary = [
+        {"product_id": ln.product_id, "composition_id": ln.composition_id, "planned_quantity": ln.planned_quantity}
+        for ln in (body.lines or [])
+    ]
     try:
+        logger.info(
+            "POST /production/batches/preview tenant_id=%s warehouse_id=%s lines=%s",
+            tenant_id,
+            body.warehouse_id,
+            line_summary,
+        )
         return preview_batch_demand(
             db,
             tenant_id=tenant_id,
@@ -409,7 +449,25 @@ def api_preview_batch(
             lines=body.lines,
         )
     except ProductionBatchError as exc:
+        logger.warning(
+            "batch preview rejected tenant_id=%s warehouse_id=%s code=%s message=%s",
+            tenant_id,
+            body.warehouse_id,
+            exc.code,
+            exc.message,
+        )
         raise _batch_err(exc) from exc
+    except Exception:
+        logger.exception(
+            "POST /production/batches/preview unexpected error tenant_id=%s warehouse_id=%s lines=%s",
+            tenant_id,
+            body.warehouse_id,
+            line_summary,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Nie udało się wygenerować podglądu partii.", "code": "preview_failed"},
+        )
 
 
 @router.post("/batches", response_model=ProductionBatchRead)
@@ -419,14 +477,44 @@ def api_create_batch(
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(get_optional_current_user),
 ):
+    line_summary = [
+        {"product_id": ln.product_id, "composition_id": ln.composition_id, "planned_quantity": ln.planned_quantity}
+        for ln in (body.lines or [])
+    ]
     try:
+        logger.info(
+            "POST /production/batches tenant_id=%s warehouse_id=%s status=%s lines=%s",
+            tenant_id,
+            body.warehouse_id,
+            body.status,
+            line_summary,
+        )
         uid = int(user.id) if user is not None else None
         row = create_batch(db, tenant_id=tenant_id, body=body, created_by_user_id=uid)
         db.commit()
         return row
     except ProductionBatchError as exc:
         db.rollback()
+        logger.warning(
+            "batch create rejected tenant_id=%s warehouse_id=%s code=%s message=%s",
+            tenant_id,
+            body.warehouse_id,
+            exc.code,
+            exc.message,
+        )
         raise _batch_err(exc) from exc
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "POST /production/batches unexpected error tenant_id=%s warehouse_id=%s lines=%s",
+            tenant_id,
+            body.warehouse_id,
+            line_summary,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Nie udało się utworzyć partii produkcyjnej.", "code": "create_failed"},
+        )
 
 
 @router.post("/batches/{batch_id}/start", response_model=ProductionBatchRead)

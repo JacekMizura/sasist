@@ -8,8 +8,10 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
+from ..db.schema_introspection import get_table_column_names, has_table
 from ..models.app_user import AppUser
 from ..models.inventory import Inventory
 from ..models.location import Location
@@ -53,6 +55,31 @@ from .stock_operation_receipt_service import append_receipt_operation
 logger = logging.getLogger(__name__)
 
 TERMINAL = frozenset({"completed", "cancelled"})
+_VALID_BATCH_STATUSES = frozenset(
+    {"draft", "planned", "collecting", "in_progress", "putaway", "completed", "cancelled"}
+)
+
+
+def _normalize_batch_status(raw: str | None) -> str:
+    key = str(raw or "draft").strip().lower()
+    return key if key in _VALID_BATCH_STATUSES else "planned"
+
+
+def _batch_schema_ready(db: Session) -> bool:
+    bind = db.get_bind()
+    if not has_table(bind, "production_batches") or not has_table(bind, "production_batch_lines"):
+        return False
+    cols = get_table_column_names(bind, "production_batches")
+    required = {"id", "tenant_id", "number", "warehouse_id", "status", "created_at"}
+    return required.issubset(cols)
+
+
+def _require_batch_schema(db: Session) -> None:
+    if not _batch_schema_ready(db):
+        raise ProductionBatchError(
+            "Production batch tables are not available. Run database migration.",
+            code="schema_unavailable",
+        )
 
 
 class ProductionBatchError(Exception):
@@ -66,12 +93,16 @@ class ProductionBatchError(Exception):
 def _next_batch_number(db: Session, *, tenant_id: int) -> str:
     year = datetime.utcnow().year
     prefix = f"BAT/{year}/"
-    last = (
-        db.query(ProductionBatch.number)
-        .filter(ProductionBatch.tenant_id == int(tenant_id), ProductionBatch.number.like(f"{prefix}%"))
-        .order_by(ProductionBatch.id.desc())
-        .first()
-    )
+    try:
+        last = (
+            db.query(ProductionBatch.number)
+            .filter(ProductionBatch.tenant_id == int(tenant_id), ProductionBatch.number.like(f"{prefix}%"))
+            .order_by(ProductionBatch.id.desc())
+            .first()
+        )
+    except SQLAlchemyError as exc:
+        logger.warning("batch number sequence query failed tenant=%s: %s", tenant_id, exc)
+        last = None
     seq = 1
     if last and last[0]:
         try:
@@ -189,7 +220,7 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
         number=str(batch.number or ""),
         warehouse_id=int(batch.warehouse_id),
         warehouse_name=(wh.name if wh else None),
-        status=status,  # type: ignore[arg-type]
+        status=_normalize_batch_status(status),  # type: ignore[arg-type]
         notes=batch.notes,
         rw_stock_document_id=batch.rw_stock_document_id,
         rw_document_number=_doc_number(db, batch.rw_stock_document_id),
@@ -216,29 +247,63 @@ def preview_batch_demand(
     tenant_id: int,
     warehouse_id: int,
     lines: list,
-) -> dict:
+):
     """Aggregate material demand for proposed batch lines (no persist)."""
     from ..schemas.production_batch import ProductionBatchPreviewRead
 
+    tid = int(tenant_id)
+    wid = int(warehouse_id)
+    logger.info(
+        "preview_batch_demand tenant=%s warehouse=%s line_count=%s",
+        tid,
+        wid,
+        len(lines or []),
+    )
+
     if not lines:
         raise ProductionBatchError("Dodaj co najmniej jedną linię.", code="empty_batch")
+    if wid < 1:
+        raise ProductionBatchError("Wybierz magazyn.", code="warehouse_required")
+
     demands: list[list[dict[str, Any]]] = []
     total_units = 0.0
-    for ln in lines:
-        comp = resolve_composition_entity(db, tenant_id=tenant_id, composition_id=int(ln.composition_id))
-        if comp is None or str(comp.composition_mode) != "manufacturing":
-            raise ProductionBatchError(f"Kompozycja #{ln.composition_id} nie jest produkcyjna.", code="invalid_composition")
-        if int(comp.product_id) != int(ln.product_id):
-            raise ProductionBatchError("Produkt nie zgadza się z kompozycją.", code="product_mismatch")
-        demands.append(calculate_required_components(comp, planned_quantity=float(ln.planned_quantity)))
-        total_units += float(ln.planned_quantity)
-    totals = aggregate_component_demand(demands)
-    agg_rows = aggregated_demand_with_availability(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        component_totals=totals,
-    )
+    try:
+        for ln in lines:
+            comp = resolve_composition_entity(db, tenant_id=tid, composition_id=int(ln.composition_id))
+            if comp is None or str(comp.composition_mode) != "manufacturing":
+                raise ProductionBatchError(
+                    f"Kompozycja #{ln.composition_id} nie jest produkcyjna.",
+                    code="invalid_composition",
+                )
+            if int(comp.product_id) != int(ln.product_id):
+                raise ProductionBatchError("Produkt nie zgadza się z kompozycją.", code="product_mismatch")
+            demands.append(calculate_required_components(comp, planned_quantity=float(ln.planned_quantity)))
+            total_units += float(ln.planned_quantity)
+        totals = aggregate_component_demand(demands)
+        agg_rows = aggregated_demand_with_availability(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            component_totals=totals,
+        )
+    except ProductionBatchError:
+        raise
+    except SQLAlchemyError as exc:
+        logger.exception(
+            "preview_batch_demand SQL failed tenant=%s warehouse=%s lines=%s",
+            tid,
+            wid,
+            len(lines),
+        )
+        raise ProductionBatchError("Nie udało się policzyć zapotrzebowania materiałów.", code="preview_failed") from exc
+    except Exception as exc:
+        logger.exception(
+            "preview_batch_demand failed tenant=%s warehouse=%s lines=%s",
+            tid,
+            wid,
+            len(lines),
+        )
+        raise ProductionBatchError("Nie udało się policzyć podglądu partii.", code="preview_failed") from exc
     shortages = [
         StockShortageRead(
             component_product_id=r.component_product_id,
@@ -312,11 +377,20 @@ def preview_batch_demand(
 
     estimated_cost = 0.0
     for ln in lines:
-        comp = resolve_composition_entity(db, tenant_id=tenant_id, composition_id=int(ln.composition_id))
-        if comp is not None:
-            cost = estimate_composition_cost(db, tenant_id=int(tenant_id), composition=comp)
+        try:
+            cost = estimate_composition_cost(
+                db,
+                tenant_id=tid,
+                composition_id=int(ln.composition_id),
+            )
             unit = float(cost.get("unit_cost_net") or 0)
             estimated_cost += unit * float(ln.planned_quantity)
+        except Exception as exc:
+            logger.warning(
+                "preview cost estimate skipped composition_id=%s: %s",
+                getattr(ln, "composition_id", None),
+                exc,
+            )
     duration = int(round(15 + len(lines) * 12 + total_units * 1.5))
 
     return ProductionBatchPreviewRead(
@@ -337,6 +411,14 @@ def create_batch(
     body: ProductionBatchCreateBody,
     created_by_user_id: int | None = None,
 ) -> ProductionBatchRead:
+    _require_batch_schema(db)
+    logger.info(
+        "create_batch tenant=%s warehouse=%s line_count=%s status=%s",
+        tenant_id,
+        body.warehouse_id,
+        len(body.lines or []),
+        body.status,
+    )
     if not body.lines:
         raise ProductionBatchError("Dodaj co najmniej jedną linię produktu.", code="empty_batch")
     batch = ProductionBatch(
@@ -375,17 +457,41 @@ def list_batches(
     status: str | None = None,
     warehouse_id: int | None = None,
 ) -> list[ProductionBatchRead]:
-    q = (
-        db.query(ProductionBatch)
-        .options(joinedload(ProductionBatch.lines).joinedload(ProductionBatchLine.composition))
-        .filter(ProductionBatch.tenant_id == int(tenant_id))
-    )
-    if status:
-        q = q.filter(ProductionBatch.status == str(status).strip().lower())
-    if warehouse_id:
-        q = q.filter(ProductionBatch.warehouse_id == int(warehouse_id))
-    rows = q.order_by(ProductionBatch.created_at.desc()).all()
-    return [serialize_batch(db, b) for b in rows]
+    tid = int(tenant_id)
+    if not _batch_schema_ready(db):
+        logger.info("list_batches skipped — schema unavailable tenant=%s", tid)
+        return []
+    try:
+        q = (
+            db.query(ProductionBatch)
+            .options(joinedload(ProductionBatch.lines).joinedload(ProductionBatchLine.composition))
+            .filter(ProductionBatch.tenant_id == tid)
+        )
+        if status:
+            q = q.filter(ProductionBatch.status == str(status).strip().lower())
+        if warehouse_id:
+            q = q.filter(ProductionBatch.warehouse_id == int(warehouse_id))
+        rows = q.order_by(ProductionBatch.created_at.desc()).all()
+    except SQLAlchemyError as exc:
+        logger.exception(
+            "list_batches query failed tenant=%s status=%s warehouse_id=%s",
+            tid,
+            status,
+            warehouse_id,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return []
+
+    out: list[ProductionBatchRead] = []
+    for batch in rows:
+        try:
+            out.append(serialize_batch(db, batch))
+        except Exception as exc:
+            logger.warning("list_batches skip batch_id=%s: %s", getattr(batch, "id", None), exc)
+    return out
 
 
 def get_batch(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchRead | None:

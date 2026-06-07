@@ -137,5 +137,77 @@ class TestProductionSchema(unittest.TestCase):
         self.assertIn("production_order_id", cols)
 
 
+class TestProductionBatches(unittest.TestCase):
+    def test_list_batches_returns_empty_when_schema_missing(self):
+        from sqlalchemy.orm import sessionmaker
+
+        from backend.services.production_batch_service import list_batches
+
+        engine = create_engine("sqlite:///:memory:")
+        Session = sessionmaker(bind=engine)
+        with Session() as db:
+            rows = list_batches(db, tenant_id=1, warehouse_id=1)
+        self.assertEqual(rows, [])
+
+    def test_preview_cost_uses_composition_id_kwarg(self):
+        from unittest.mock import MagicMock, patch
+
+        from backend.services.production_batch_service import preview_batch_demand
+
+        ln = MagicMock(product_id=10, composition_id=1, planned_quantity=2)
+        comp = MagicMock()
+        comp.composition_mode = "manufacturing"
+        comp.product_id = 10
+        comp.id = 1
+        db = MagicMock()
+        with (
+            patch(
+                "backend.services.production_batch_service.resolve_composition_entity",
+                return_value=comp,
+            ),
+            patch(
+                "backend.services.production_batch_service.calculate_required_components",
+                return_value=[],
+            ),
+            patch(
+                "backend.services.production_batch_service.aggregate_component_demand",
+                return_value={},
+            ),
+            patch(
+                "backend.services.production_batch_service.aggregated_demand_with_availability",
+                return_value=[],
+            ),
+            patch(
+                "backend.services.composition_engine_service.estimate_composition_cost",
+                return_value={"unit_cost_net": 3.5},
+            ) as mock_cost,
+        ):
+            result = preview_batch_demand(db, tenant_id=1, warehouse_id=1, lines=[ln])
+        mock_cost.assert_called_once_with(db, tenant_id=1, composition_id=1)
+        self.assertEqual(result.estimated_cost_net, 7.0)
+        self.assertEqual(result.products_count, 1)
+
+
+class TestProductionOrdersByProduct(unittest.TestCase):
+    def test_returns_empty_when_production_orders_table_missing(self):
+        from sqlalchemy.orm import sessionmaker
+
+        from backend.services.production_order_service import list_production_orders_for_product
+
+        engine = create_engine("sqlite:///:memory:")
+        Session = sessionmaker(bind=engine)
+        with Session() as db:
+            rows = list_production_orders_for_product(db, tenant_id=1, product_id=15, limit=50)
+        self.assertEqual(rows, [])
+
+    def test_normalizes_batch_status_for_summary(self):
+        from backend.services.production_order_service import _normalize_summary_status
+
+        self.assertEqual(_normalize_summary_status("collecting"), "in_progress")
+        self.assertEqual(_normalize_summary_status("putaway"), "in_progress")
+        self.assertEqual(_normalize_summary_status("completed"), "completed")
+        self.assertEqual(_normalize_summary_status("unknown"), "planned")
+
+
 if __name__ == "__main__":
     unittest.main()

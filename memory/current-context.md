@@ -38,6 +38,8 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - **Sidebar**: flyout **Asortyment** — jeden link **Produkcja** → `/production` (podstrony tylko w zakładkach modułu); **WMS** pod **System**
 - **Karta produktu**: zakładka **Produkcja** (`ProductManufacturingPanel`) — tylko BOM/receptura; zestawy sprzedażowe wyłącznie w Asortyment → Zestawy
 - **ERP Produkcja**: zakładki orders-first (Pulpit → Zlecenia → Planowanie → Receptury → Historia → Analiza)
+- **Fix**: `GET /production/orders/by-product/:id` — odporny na brak tabeli `production_orders`, łączy MO + partie, zwraca `[]` zamiast 500
+- **Fix**: batch API — `estimate_composition_cost(composition_id=…)` w preview; `list_batches` → `[]` gdy brak schematu; logowanie + try/catch w `/batches`, `/batches/preview`, `POST /batches`
 - Ścieżki: `erpProductionPaths` vs `wmsProductionPaths` w `productionPaths.ts`
 
 ## Production — visibility / integration fix (prior)
