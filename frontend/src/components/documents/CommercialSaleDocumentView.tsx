@@ -1,19 +1,16 @@
 import { Link } from "react-router-dom";
 import { Download, FileText, Package, Printer, ScrollText } from "lucide-react";
 
+import { saleDocumentPdfUrl, stockDocumentPdfUrl } from "../../api/saleDocumentsApi";
+import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
+import { printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
 import type { SaleDocumentDetail } from "../../types/saleDocument";
+import { formatMoneyPl } from "../../utils/formatOrderMoney";
+import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "../../pages/documents/documentsBadges";
 
 const btnSecondary =
   "inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50";
-
-function money(n: number, currency = "PLN") {
-  return new Intl.NumberFormat("pl-PL", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(n);
-}
 
 function partyBlock(title: string, party: SaleDocumentDetail["buyer"] | SaleDocumentDetail["seller"]) {
   const lines = [
@@ -51,6 +48,17 @@ type Props = {
 export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: Props) {
   const title = doc.doc_type === "PA" ? "Paragon" : "Faktura VAT";
   const legacy = doc.numbering_legacy;
+  const printLabel = printButtonLabelPl(doc.document_subtype || doc.doc_type);
+
+  const handlePrint =
+    onPrint ??
+    (() => {
+      openPdfUrlInPrintViewer(saleDocumentPdfUrl(DAMAGE_TENANT_ID, doc.id), { autoPrint: true });
+    });
+
+  const handlePrintWz = (wzId: number) => {
+    openPdfUrlInPrintViewer(stockDocumentPdfUrl(DAMAGE_TENANT_ID, wzId), { autoPrint: true });
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,9 +91,9 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
           </div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" className={btnSecondary} onClick={onPrint} disabled={!doc.print.available}>
+          <button type="button" className={btnSecondary} onClick={handlePrint} disabled={!doc.print.available}>
             <Printer className="h-4 w-4 shrink-0" aria-hidden />
-            Drukuj
+            {printLabel}
           </button>
           <button type="button" className={btnSecondary} onClick={onExport} disabled={!doc.export.available}>
             <Download className="h-4 w-4 shrink-0" aria-hidden />
@@ -95,10 +103,15 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
             Zamówienie #{doc.order_number}
           </Link>
           {doc.related.warehouse_documents.map((wz) => (
-            <Link key={wz.id} to={wz.detail_path} className={btnSecondary}>
+            <button
+              key={wz.id}
+              type="button"
+              className={btnSecondary}
+              onClick={() => handlePrintWz(wz.id)}
+            >
               <Package className="h-4 w-4 shrink-0" aria-hidden />
-              WZ {wz.document_number}
-            </Link>
+              Drukuj WZ {wz.document_number}
+            </button>
           ))}
         </div>
       </header>
@@ -135,13 +148,13 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
                   </td>
                   <td className="px-4 py-3 tabular-nums">{ln.quantity}</td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {ln.unit_net != null ? money(ln.unit_net, doc.currency) : "—"}
+                    {ln.unit_net != null ? formatMoneyPl(ln.unit_net) : "—"}
                   </td>
                   <td className="px-4 py-3 tabular-nums">{ln.vat_percent}%</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{money(ln.line_net, doc.currency)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{money(ln.line_vat, doc.currency)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatMoneyPl(ln.line_net)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatMoneyPl(ln.line_vat)}</td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium">
-                    {money(ln.line_gross, doc.currency)}
+                    {formatMoneyPl(ln.line_gross)}
                   </td>
                 </tr>
               ))}
@@ -166,9 +179,9 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
               {doc.vat_rows.map((row) => (
                 <tr key={row.vat_percent} className="border-t border-slate-100">
                   <td className="py-2 tabular-nums">{row.vat_percent}%</td>
-                  <td className="py-2 text-right tabular-nums">{money(row.net, doc.currency)}</td>
-                  <td className="py-2 text-right tabular-nums">{money(row.vat, doc.currency)}</td>
-                  <td className="py-2 text-right tabular-nums">{money(row.gross, doc.currency)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatMoneyPl(row.net)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatMoneyPl(row.vat)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatMoneyPl(row.gross)}</td>
                 </tr>
               ))}
             </tbody>
@@ -180,15 +193,15 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between">
               <dt className="text-slate-600">Razem netto</dt>
-              <dd className="font-medium tabular-nums">{money(doc.total_net, doc.currency)}</dd>
+              <dd className="font-medium tabular-nums">{formatMoneyPl(doc.total_net)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-600">Razem VAT</dt>
-              <dd className="font-medium tabular-nums">{money(doc.total_vat, doc.currency)}</dd>
+              <dd className="font-medium tabular-nums">{formatMoneyPl(doc.total_vat)}</dd>
             </div>
             <div className="flex justify-between border-t border-slate-200 pt-2 text-base">
               <dt className="font-semibold text-slate-900">Razem brutto</dt>
-              <dd className="font-bold tabular-nums text-slate-900">{money(doc.total_gross, doc.currency)}</dd>
+              <dd className="font-bold tabular-nums text-slate-900">{formatMoneyPl(doc.total_gross)}</dd>
             </div>
           </dl>
         </section>
@@ -211,7 +224,7 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
             </div>
             <div>
               <dt className="text-slate-500">Kwota</dt>
-              <dd className="font-medium tabular-nums">{money(doc.payment.amount, doc.payment.currency)}</dd>
+              <dd className="font-medium tabular-nums">{formatMoneyPl(doc.payment.amount)}</dd>
             </div>
             <div>
               <dt className="text-slate-500">Data zapłaty</dt>
@@ -233,17 +246,25 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             <Package className="h-4 w-4" aria-hidden />
-            Dokumenty magazynowe (WZ)
+            Powiązane dokumenty
           </h2>
           <ul className="flex flex-wrap gap-2">
             {doc.related.warehouse_documents.map((wz) => (
-              <li key={wz.id}>
+              <li key={wz.id} className="flex flex-wrap items-center gap-2">
                 <Link
                   to={wz.detail_path}
                   className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
                 >
                   WZ {wz.document_number}
                 </Link>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={() => handlePrintWz(wz.id)}
+                >
+                  <Printer className="h-3.5 w-3.5" aria-hidden />
+                  Drukuj WZ
+                </button>
               </li>
             ))}
           </ul>

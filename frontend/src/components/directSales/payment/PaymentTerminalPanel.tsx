@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { formatDirectSalesAggregateTotal } from "../../../modules/directSales/settings/formatDirectSalesPrice";
 import { useResolvedDirectSalesSettings } from "../../../modules/directSales/settings/resolvedDirectSalesSettings";
 import type { DirectSaleSession } from "../../../utils/normalizeDirectSales";
-import { paymentMethodPl, sessionStatusPl } from "../directSalesTerminology";
+import { formatMoneyPl, paymentMethodPl, sessionStatusPl } from "../directSalesTerminology";
 import { CashChangePanel } from "./CashChangePanel";
 import { MixedPaymentPanel } from "./MixedPaymentPanel";
 
@@ -84,7 +84,7 @@ export function PaymentTerminalPanel({
           {formatDirectSalesAggregateTotal(total, resolvedDirectSalesSettings.price_display)}
         </div>
         {isCash && cashReceived > 0 && remaining > 0.009 ? (
-          <div className="mt-1 text-sm text-amber-300">Pozostało: {remaining.toFixed(2)} zł</div>
+          <div className="mt-1 text-sm text-amber-300">Pozostało: {formatMoneyPl(remaining)}</div>
         ) : null}
         {session?.status ? (
           <div className="mt-1 text-[11px] text-slate-400">Sesja: {sessionStatusPl(session.status)}</div>

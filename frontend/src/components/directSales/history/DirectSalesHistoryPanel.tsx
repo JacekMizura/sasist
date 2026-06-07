@@ -1,6 +1,6 @@
 import { Clock } from "lucide-react";
 import type { DirectSaleHistoryEntry } from "../../../types/directSalesCompletion";
-import { paymentMethodPl } from "../directSalesTerminology";
+import { formatMoneyPl, paymentMethodPl } from "../directSalesTerminology";
 import { DocumentStatusBadge } from "../documents/DocumentStatusBadge";
 
 type Props = {
@@ -71,7 +71,7 @@ export function DirectSalesHistoryPanel({
             >
               <div className="flex justify-between items-start w-full mb-2 gap-2">
                 <span className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">
-                  {row.order_number ?? `#${row.order_id}`} · {row.total_amount.toFixed(2)} zł
+                  {row.order_number ?? `#${row.order_id}`} · {formatMoneyPl(row.total_amount)}
                 </span>
                 <span className="text-[11px] font-medium text-blue-900/40 flex items-center gap-1 flex-shrink-0">
                   <Clock size={12} />

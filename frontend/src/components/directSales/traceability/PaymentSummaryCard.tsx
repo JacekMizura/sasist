@@ -1,5 +1,5 @@
 import type { DirectSalePaymentDetail } from "../../../types/directSalesCompletion";
-import { paymentMethodPl, paymentStatusPl } from "../directSalesTerminology";
+import { formatMoneyPl, paymentMethodPl, paymentStatusPl } from "../directSalesTerminology";
 
 type Props = {
   payment: DirectSalePaymentDetail | null;
@@ -25,7 +25,7 @@ export function PaymentSummaryCard({ payment, fallbackMethod, fallbackStatus }: 
         {payment?.amount != null ? (
           <div className="flex justify-between">
             <dt>Kwota</dt>
-            <dd className="font-semibold">{payment.amount.toFixed(2)} zł</dd>
+            <dd className="font-semibold">{formatMoneyPl(payment.amount)}</dd>
           </div>
         ) : null}
         {payment?.authorization_reference ? (

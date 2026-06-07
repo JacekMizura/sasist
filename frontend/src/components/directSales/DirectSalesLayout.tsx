@@ -1,5 +1,5 @@
-import { OperationalStatusPanel } from "../operational/debug/OperationalStatusPanel";
 import { DirectSalesUnavailable } from "../operational/fallbacks/DirectSalesUnavailable";
+import { STATIONARY_SALE_TITLE } from "./directSalesTerminology";
 import type { DirectSalesTerminalState } from "../../hooks/directSales/useDirectSalesTerminal";
 import { DirectSalesHistoryPanel } from "./history/DirectSalesHistoryPanel";
 import { CustomerPanel } from "./CustomerPanel";
@@ -42,7 +42,7 @@ export function DirectSalesLayout({ terminal }: Props) {
     return (
       <div className="flex h-full items-center justify-center bg-white p-6">
         <div className="text-blue-800 bg-blue-50 px-6 py-4 rounded-2xl font-bold border border-blue-100 shadow-sm">
-          Wybierz magazyn, aby rozpocząć sprzedaż bezpośrednią.
+          Wybierz magazyn, aby rozpocząć {STATIONARY_SALE_TITLE.toLowerCase()}.
         </div>
       </div>
     );
@@ -62,17 +62,6 @@ export function DirectSalesLayout({ terminal }: Props) {
   if (!salesEnabled || sessionState.unavailable) {
     return (
       <div className="flex h-full flex-col bg-white">
-        {status.showDebug ? (
-          <div className="border-b border-blue-50 p-4">
-            <OperationalStatusPanel
-              features={status.features}
-              debugBundle={status.debugBundle}
-              backendReachable={runtime.backendReachable}
-              sseStatus={status.sseStatus}
-              onRefresh={() => void handleRefresh()}
-            />
-          </div>
-        ) : null}
         <div className="flex-1 flex items-center justify-center p-6">
           <DirectSalesUnavailable reason={unavailableReason ?? "off"} onRefresh={handleRefresh} />
         </div>
@@ -106,18 +95,6 @@ export function DirectSalesLayout({ terminal }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white text-slate-900 selection:bg-blue-100">
-      
-      {status.showDebug ? (
-        <div className="shrink-0 border-b border-blue-50 p-2">
-          <OperationalStatusPanel
-            features={status.features}
-            debugBundle={status.debugBundle}
-            backendReachable={runtime.backendReachable}
-            sseStatus={status.sseStatus}
-            onRefresh={() => void status.refreshDebug()}
-          />
-        </div>
-      ) : null}
       
       {sessionState.completeError ? (
         <CompleteErrorModal

@@ -60,7 +60,11 @@ import {
 } from "../../api/ordersApi";
 import { getBackendPublicOrigin } from "../../config/apiBase";
 import { formatApiError } from "../../utils/apiErrorMessage";
+import { saleDocumentPdfUrl, stockDocumentPdfUrl } from "../../api/saleDocumentsApi";
+import { isStationarySaleOrder, printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
+import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDirectSalesBadge";
 import { formatMoney } from "../../utils/formatOrderMoney";
+import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import OrderAdditionalFieldsSection from "../../components/orders/OrderAdditionalFieldsSection";
 import OrderMissingProductsSection from "../../components/orders/OrderMissingProductsSection";
 import { buildOrderReplacementPairs } from "../../components/orders/buildOrderReplacementSummary";
@@ -246,6 +250,19 @@ type OrderDetail = {
   has_customer_comment?: boolean;
   latest_internal_note_preview?: string | null;
   latest_customer_comment_preview?: string | null;
+  order_channel?: string | null;
+  fulfillment_mode?: string | null;
+  linked_documents?: {
+    id: string;
+    kind: "sale" | "warehouse";
+    document_type: string;
+    document_subtype?: string | null;
+    document_number: string;
+    detail_path: string;
+    print_kind?: string | null;
+    sale_document_id?: string | null;
+    stock_document_id?: number | null;
+  }[];
 };
 
 const PAYMENT_METHOD_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
@@ -324,16 +341,6 @@ function pickFirstFinite(...vals: (number | null | undefined)[]): number | null 
     if (v != null && Number.isFinite(Number(v))) return Number(v);
   }
   return null;
-}
-
-function grossFromNetLine(net: number, vatPct: number | null | undefined): number {
-  const v = Number(vatPct ?? 0);
-  return Math.round(net * (1 + v / 100) * 100) / 100;
-}
-
-function grossFromNetUnit(net: number, vatPct: number | null | undefined): number {
-  const v = Number(vatPct ?? 0);
-  return Math.round(net * (1 + v / 100) * 10000) / 10000;
 }
 
 function orderOfficePinStorageKey(orderId: number): string {
@@ -606,6 +613,9 @@ type OrderDocTableRow = {
   fileUrl?: string;
   mimeType?: string;
   typeLabel?: { abbr: string; name: string; tone: OrderDocTableKindTone };
+  saleDocumentId?: string;
+  stockDocumentId?: number;
+  printKind?: string | null;
 };
 
 function orderDocRowIsPdfOrImage(row: OrderDocTableRow): boolean {
@@ -1185,15 +1195,9 @@ export default function OrderDetailPage() {
       const ean = (it.product?.ean ?? wm?.ean ?? "").trim();
       const qty = Number(it.quantity) || 0;
       const unitNetN = pickFirstFinite(it.unit_price_net, it.unit_price);
-      const lineNetN = pickFirstFinite(it.line_net_total, it.total_price, unitNetN != null ? unitNetN * qty : null);
-      const unitGrossN = pickFirstFinite(
-        it.unit_price_gross,
-        unitNetN != null ? grossFromNetUnit(unitNetN, it.vat_percent) : null,
-      );
-      const lineGrossN = pickFirstFinite(
-        it.line_gross_total,
-        lineNetN != null ? grossFromNetLine(lineNetN, it.vat_percent) : null,
-      );
+      const lineNetN = pickFirstFinite(it.line_net_total, it.total_price);
+      const unitGrossN = pickFirstFinite(it.unit_price_gross);
+      const lineGrossN = pickFirstFinite(it.line_gross_total);
       let marginPct = "—";
       let marginTone: "positive" | "negative" | "warn" | "neutral" = "neutral";
       const mp = it.line_margin_percent;
@@ -1391,6 +1395,8 @@ export default function OrderDetailPage() {
     return "unassigned";
   }, [order?.order_ui_status?.id]);
 
+  const isStationarySale = useMemo(() => isStationarySaleOrder(order), [order]);
+
   const contact = useMemo(() => {
     if (!order) return { name: "—", phone: "—", email: "—", addressLines: ["—"] as string[] };
     const name = [order.first_name, order.last_name].filter(Boolean).join(" ").trim() || "—";
@@ -1508,14 +1514,18 @@ export default function OrderDetailPage() {
 
   const dateLine = order ? formatDetailDate(order.order_date ?? order.created_at) : "—";
 
-  const productsSubtotal = useMemo(() => {
+  const productsSubtotalGross = useMemo(() => {
     if (!order?.items?.length) return null;
     let sum = 0;
+    let hasLine = false;
     for (const it of order.items) {
-      if (it.unit_price == null || Number.isNaN(Number(it.unit_price))) return null;
-      sum += Number(it.unit_price) * (it.quantity || 0);
+      if (it.parent_bundle_order_item_id != null) continue;
+      const gross = it.line_gross_total;
+      if (gross == null || !Number.isFinite(Number(gross))) return null;
+      sum += Number(gross);
+      hasLine = true;
     }
-    return sum;
+    return hasLine ? sum : null;
   }, [order]);
 
   const saveOrderDiscount = useCallback(async () => {
@@ -1571,6 +1581,29 @@ export default function OrderDetailPage() {
   const docsTabDocumentsRowsSeed = useMemo((): OrderDocTableRow[] => {
     if (!order) return [];
     const baseDate = formatDocsShortDate(order.order_date ?? order.created_at);
+    const linked = order.linked_documents ?? [];
+    if (linked.length > 0) {
+      return linked.map((doc) => {
+        const isWz = doc.kind === "warehouse" || doc.document_type === "WZ";
+        const isFa = doc.document_type === "FV" || doc.document_subtype === "INVOICE";
+        const typeLabel: NonNullable<OrderDocTableRow["typeLabel"]> = isWz
+          ? { abbr: "WZ", name: "WZ", tone: "lp" }
+          : isFa
+            ? { abbr: "Fa", name: "Faktura", tone: "fa" }
+            : { abbr: "Pa", name: "Paragon", tone: "pa" };
+        return {
+          id: `linked-${doc.kind}-${doc.id}`,
+          type: isWz ? "stock_document" : "sale_document",
+          date: baseDate,
+          typeLabel,
+          name: doc.document_number || "—",
+          status: "approved" as const,
+          saleDocumentId: doc.sale_document_id ?? (doc.kind === "sale" ? doc.id : undefined),
+          stockDocumentId: doc.stock_document_id ?? (doc.kind === "warehouse" ? Number(doc.id) : undefined),
+          printKind: doc.print_kind ?? doc.document_subtype ?? doc.document_type,
+        };
+      });
+    }
     const hasNum = Boolean((order.sales_document_number ?? "").trim());
     const docType = (order.panel_document_type ?? "").trim();
     let typeLabel: NonNullable<OrderDocTableRow["typeLabel"]>;
@@ -1717,11 +1750,18 @@ export default function OrderDetailPage() {
   }, []);
 
   const handleOrderDocPrint = useCallback((row: OrderDocTableRow) => {
+    if (row.saleDocumentId) {
+      openPdfUrlInPrintViewer(saleDocumentPdfUrl(DAMAGE_TENANT_ID, row.saleDocumentId), { autoPrint: true });
+      return;
+    }
+    if (row.stockDocumentId != null) {
+      openPdfUrlInPrintViewer(stockDocumentPdfUrl(DAMAGE_TENANT_ID, row.stockDocumentId), { autoPrint: true });
+      return;
+    }
     if (row.fileUrl) {
       window.open(row.fileUrl, "_blank", "noopener,noreferrer");
       return;
     }
-    console.log("[print] brak pliku — brak podglądu do druku", row.id, row.name);
   }, []);
 
   const handleOrderDocDelete = useCallback(
@@ -1803,11 +1843,15 @@ export default function OrderDetailPage() {
 
   const shippingLabel = (order.shipping_method ?? "").trim() || "—";
   const linesTotalDisplay =
-    productsSubtotal != null ? formatMoney(productsSubtotal, order.currency) : formatMoney(order.value, order.currency);
+    productsSubtotalGross != null
+      ? formatMoney(productsSubtotalGross, order.currency)
+      : order.value != null && Number.isFinite(Number(order.value))
+        ? formatMoney(Number(order.value), order.currency)
+        : "—";
   const productsAfterDiscount =
     order.total_products_value != null && Number.isFinite(Number(order.total_products_value))
       ? Number(order.total_products_value)
-      : productsSubtotal;
+      : null;
   const discountAmount = order.discount_amount != null && Number.isFinite(Number(order.discount_amount)) ? Number(order.discount_amount) : 0;
   const marginTone =
     order.margin == null || !Number.isFinite(Number(order.margin))
@@ -1902,6 +1946,7 @@ export default function OrderDetailPage() {
                       <span className="text-[11px] text-slate-400 font-medium">{dateLine}</span>
                       {formatExternalIdSnippet(order.external_id) && <span className="text-[11px] text-slate-400 font-medium">ID zew: {formatExternalIdSnippet(order.external_id)}</span>}
                       {(order.source ?? "").trim() && <span className="hidden text-[11px] text-slate-400 font-medium md:inline">{(order.source ?? "").trim()}</span>}
+                      <OrderDirectSalesBadge orderChannel={order.order_channel} fulfillmentMode={order.fulfillment_mode} />
                   </div>
 
                   <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -1922,7 +1967,9 @@ export default function OrderDetailPage() {
                       </button>
                       <div className="w-px h-6 bg-slate-200 mx-1"></div>
                       <button type="button" onClick={() => window.print()} className={ORDER_DETAIL_HEADER_ICON_BTN}><Printer className="h-4 w-4 shrink-0" strokeWidth={2} /></button>
-                      <Link to={WMS_ROUTES.packingOrder(order.id)} className="ml-2 inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700">Spakuj</Link>
+                      {!isStationarySale ? (
+                        <Link to={WMS_ROUTES.packingOrder(order.id)} className="ml-2 inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700">Spakuj</Link>
+                      ) : null}
                   </div>
                 </div>
 
@@ -1985,10 +2032,14 @@ export default function OrderDetailPage() {
                         <span className="text-slate-500 font-medium">Status płatności</span>
                         <select className={`rounded-md border px-2.5 py-1 text-xs font-bold outline-none ${paymentStatusIsPaid(payStatusDraft) ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`} value={payStatusDraft} onChange={(e) => setPayStatusDraft(e.target.value)}><option value="">—</option>{Array.from(new Set([...PAYMENT_STATUS_PRESETS, payStatusDraft].filter(Boolean))).map((m) => (<option key={m} value={m}>{m}</option>))}</select>
                       </div>
-                      <label className="flex flex-col gap-1.5 border-b border-slate-100 py-2.5 text-sm text-slate-500 last:border-b-0 font-medium">
-                        <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> Sposób wysyłki</span>
-                        <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600 outline-none focus:border-orange-500" value={shipDraft} disabled={warehouseId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
-                      </label>
+                      {!isStationarySale ? (
+                        <label className="flex flex-col gap-1.5 border-b border-slate-100 py-2.5 text-sm text-slate-500 last:border-b-0 font-medium">
+                          <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> Sposób wysyłki</span>
+                          <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600 outline-none focus:border-orange-500" value={shipDraft} disabled={warehouseId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
+                        </label>
+                      ) : (
+                        <SummaryCompactRow label="Odbiór" value={order.shipping_method ?? "Odbiór osobisty"} />
+                      )}
                       {warehouseId != null && (
                         <div className="mt-3 flex justify-end gap-2">
                           <button type="button" className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
@@ -2070,15 +2121,36 @@ export default function OrderDetailPage() {
                     </SummaryDashboardCard>
                   </div>
 
-                  {/* Informacja dla programisty co do podzespołów */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-sm text-blue-900 shadow-sm">
-                    <p className="font-bold mb-1 flex items-center"><Info size={16} className="mr-2"/> Ważne informacje do zmian wizualnych wewnątrz tabel</p>
-                    <p>Tabele produktów korzystają z komponentów <code>OrderWarehouseProductsSection</code> oraz <code>OrderSummaryProductsList</code>, które mają swój własny kod HTML (i musisz zaktualizować je w ich plikach, jeśli chcesz pełny efekt z Twoich zrzutów ekranu).</p>
-                    <ul className="list-disc pl-5 mt-2 space-y-1">
-                       <li><strong>Aby poprawić "BRUTTO/SZT":</strong> Odszukaj tam nagłówki <code>&lt;th&gt;</code> i dodaj im <code>whitespace-nowrap</code>. Tutaj wymusiłem niełamliwe spacje w <code>WarehouseMetricCell</code>.</li>
-                       <li><strong>Aby dodać ikonę linku i powiększyć przycisk menu "Kebab":</strong> Podmieniłem wewnętrzny <code>WarehouseMetricCell</code> i <code>whKebabBtn</code> – menu powinno mieć teraz ładną obwódkę. Uzupełniłem również odpowiednią klasę na linku i dodałem ikonę <code>ExternalLink</code>.</li>
-                    </ul>
-                  </div>
+                  {(order.linked_documents?.length ?? 0) > 0 ? (
+                    <SummaryDashboardCard title="Powiązane dokumenty">
+                      <div className="flex flex-wrap gap-2">
+                        {order.linked_documents!.map((doc) => (
+                          <button
+                            key={`${doc.kind}-${doc.id}`}
+                            type="button"
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                            onClick={() => {
+                              if (doc.kind === "sale" || doc.sale_document_id) {
+                                openPdfUrlInPrintViewer(
+                                  saleDocumentPdfUrl(DAMAGE_TENANT_ID, doc.sale_document_id ?? doc.id),
+                                  { autoPrint: true },
+                                );
+                              } else if (doc.stock_document_id != null) {
+                                openPdfUrlInPrintViewer(
+                                  stockDocumentPdfUrl(DAMAGE_TENANT_ID, doc.stock_document_id),
+                                  { autoPrint: true },
+                                );
+                              }
+                            }}
+                          >
+                            <Printer className="h-4 w-4 shrink-0" strokeWidth={2} />
+                            {printButtonLabelPl(doc.print_kind ?? doc.document_subtype ?? doc.document_type)}
+                            {doc.document_number ? ` ${doc.document_number}` : ""}
+                          </button>
+                        ))}
+                      </div>
+                    </SummaryDashboardCard>
+                  ) : null}
 
                   <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
                     <div className="flex flex-wrap items-center justify-between mb-4">

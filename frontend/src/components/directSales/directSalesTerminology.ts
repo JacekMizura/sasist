@@ -1,6 +1,9 @@
-/** Centralized Polish labels for Sprzedaż stacjonarna (Direct Sales). */
+/** Centralized Polish labels for Sprzedaż stacjonarna. */
+
+import { formatMoneyPl as formatMoneyPlCore } from "../../utils/formatOrderMoney";
 
 export const STATIONARY_SALE_TITLE = "Sprzedaż stacjonarna";
+export const STATIONARY_SALE_UNAVAILABLE = "Sprzedaż stacjonarna jest obecnie niedostępna.";
 export const IMMEDIATE_ISSUE_LABEL = "Wydanie natychmiastowe";
 export const RETAIL_CUSTOMER_LABEL = "Klient detaliczny";
 export const PICKUP_DELIVERY_LABEL = "Odbiór osobisty";
@@ -145,8 +148,18 @@ export function printButtonLabelPl(subtype: string | null | undefined): string {
 }
 
 export function formatMoneyPl(amount: number | null | undefined, currency = "zł"): string {
-  if (amount == null || Number.isNaN(amount)) return "—";
-  return `${amount.toFixed(2)} ${currency}`;
+  return formatMoneyPlCore(amount, { currency });
+}
+
+export function isStationarySaleOrder(order: {
+  order_channel?: string | null;
+  source?: string | null;
+} | null | undefined): boolean {
+  if (!order) return false;
+  const ch = String(order.order_channel ?? "").trim().toUpperCase();
+  if (ch === "DIRECT_SALE") return true;
+  const src = String(order.source ?? "").trim().toLowerCase();
+  return src === "direct-sales" || src === "direct_sales" || src === "sprzedaż stacjonarna";
 }
 
 export function formatAgeMinutes(minutes: number | null | undefined): string {

@@ -1,5 +1,7 @@
 import { Banknote, CreditCard } from "lucide-react";
 
+import { formatMoneyPl } from "../directSalesTerminology";
+
 type Props = {
   total: number;
   cashAmount: number;
@@ -74,17 +76,17 @@ export function MixedPaymentPanel({
       <div className="grid grid-cols-3 bg-white rounded-xl py-2.5 border border-blue-50 shadow-sm divide-x divide-blue-50 mt-1 text-center items-center">
         <div>
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Do zapłaty</div>
-          <div className="font-black text-slate-800">{total.toFixed(2)}</div>
+          <div className="font-black text-slate-800">{formatMoneyPl(total)}</div>
         </div>
         <div>
           <div className="text-[9px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">Wpłacono</div>
           <div className={`font-black transition-colors ${ok ? "text-emerald-500" : "text-amber-500"}`}>
-            {sum.toFixed(2)}
+            {formatMoneyPl(sum)}
           </div>
         </div>
         <div>
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pozostało</div>
-          <div className="font-black text-slate-800">{remaining.toFixed(2)}</div>
+          <div className="font-black text-slate-800">{formatMoneyPl(remaining)}</div>
         </div>
       </div>
 

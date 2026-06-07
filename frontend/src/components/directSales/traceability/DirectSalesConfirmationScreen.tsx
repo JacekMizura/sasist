@@ -11,6 +11,7 @@ import {
   documentSubtypePl,
   paymentMethodPl,
   paymentStatusPl,
+  formatMoneyPl,
   printButtonLabelPl,
 } from "../directSalesTerminology";
 import { DocumentStatusBadge } from "../documents/DocumentStatusBadge";
@@ -89,7 +90,7 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale, onRefresh
                 <CheckCircle2 size={16} /> Sprzedaż zakończona pomyślnie
               </div>
               <h2 className="text-5xl font-black text-slate-900 tracking-tight">
-                {completion.total_amount.toFixed(2)} <span className="text-2xl text-slate-400">zł</span>
+                {formatMoneyPl(completion.total_amount)}
               </h2>
               <p className="mt-4 text-slate-500 font-medium">
                 Zamówienie <strong className="text-slate-900">{completion.order_number ?? `#${completion.order_id}`}</strong>

@@ -47,18 +47,18 @@ class TestCanonicalFinancials(unittest.TestCase):
             product_id=10,
             product=product,
             quantity=1,
-            unit_price=4.07,
-            total_price=4.07,
+            unit_price=5.0,
+            total_price=5.0,
             vat_percent=23.0,
-            metadata_json='{"line_gross_total": 5.0}',
+            metadata_json='{"line_gross_total": 6.15, "price_input_mode": "NETTO"}',
             oms_line_status=None,
             parent_bundle_order_item_id=None,
         )
-        order = SimpleNamespace(id=5, items=[item], value=5.0, currency="PLN")
+        order = SimpleNamespace(id=5, items=[item], value=6.15, currency="PLN")
         fin = compute_canonical_financials(order)
-        self.assertEqual(fin["total_net"], 4.07)
-        self.assertEqual(fin["total_gross"], 5.0)
-        self.assertEqual(fin["total_vat"], 0.93)
+        self.assertEqual(fin["total_net"], 5.0)
+        self.assertEqual(fin["total_gross"], 6.15)
+        self.assertEqual(fin["total_vat"], 1.15)
 
 
 class TestMapperListUsesCanonical(unittest.TestCase):
@@ -72,10 +72,10 @@ class TestMapperListUsesCanonical(unittest.TestCase):
             product_id=10,
             product=product,
             quantity=1,
-            unit_price=4.07,
-            total_price=4.07,
+            unit_price=5.0,
+            total_price=5.0,
             vat_percent=23.0,
-            metadata_json='{"line_gross_total": 5.0}',
+            metadata_json='{"line_gross_total": 6.15, "price_input_mode": "NETTO"}',
             oms_line_status=None,
             parent_bundle_order_item_id=None,
             source_movement_id=None,
@@ -84,7 +84,7 @@ class TestMapperListUsesCanonical(unittest.TestCase):
             id=5,
             number="ORD-1",
             items=[item],
-            value=5.0,
+            value=6.15,
             currency="PLN",
             source="direct-sales",
             order_channel="DIRECT_SALE",
@@ -119,10 +119,10 @@ class TestMapperListUsesCanonical(unittest.TestCase):
         db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
         row = map_sale_document(db, doc=doc, order=order, customer=None, mode="list", refresh_db=False)
-        self.assertEqual(row["total_net"], 4.07)
-        self.assertEqual(row["total_gross"], 5.0)
-        self.assertEqual(row["net"], 4.07)
-        self.assertEqual(row["gross"], 5.0)
+        self.assertEqual(row["total_net"], 5.0)
+        self.assertEqual(row["total_gross"], 6.15)
+        self.assertEqual(row["net"], 5.0)
+        self.assertEqual(row["gross"], 6.15)
 
 
 if __name__ == "__main__":

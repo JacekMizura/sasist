@@ -18,6 +18,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _order_list_source_display(order: Order) -> Optional[str]:
+    from .direct_sale.order_display import direct_sale_source_display
+
+    try:
+        ds = direct_sale_source_display(order)
+        if ds:
+            return ds
+        from ..api.wms_returns import _normalize_order_source
+
+        raw = getattr(order, "source", None)
+        source_raw = str(raw).strip() if raw is not None and str(raw).strip() else None
+        return _normalize_order_source(source_raw)
+    except Exception:
+        raw = getattr(order, "source", None)
+        return str(raw).strip() if raw is not None and str(raw).strip() else None
+
+
 def log_orders_list_error(
     *,
     phase: str,
@@ -182,7 +199,7 @@ def build_order_list_read_row(
             order_date=getattr(order, "order_date", None),
             value=getattr(order, "value", None),
             created_at=getattr(order, "created_at", None),
-            source=getattr(order, "source", None),
+            source=_order_list_source_display(order),
             shipping_method_id=ship_id,
             shipping_method=ship_name,
             shipping_method_logo_url=ship_logo,

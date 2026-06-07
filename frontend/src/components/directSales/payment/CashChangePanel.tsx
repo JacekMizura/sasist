@@ -1,3 +1,5 @@
+import { formatMoneyPl } from "../directSalesTerminology";
+
 type Props = {
   total: number;
   received: number;
@@ -17,7 +19,7 @@ export function CashChangePanel({ total, received, onReceivedChange, disabled }:
       <div className="flex justify-between items-center mb-5">
         <div className="text-center">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Do zapłaty</div>
-          <div className="text-xl font-black text-slate-900">{total.toFixed(2)}</div>
+          <div className="text-xl font-black text-slate-900">{formatMoneyPl(total)}</div>
         </div>
         
         <div className="text-slate-300 font-light text-xl">-</div>
@@ -39,7 +41,7 @@ export function CashChangePanel({ total, received, onReceivedChange, disabled }:
         
         <div className="text-center">
           <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-1">Reszta</div>
-          <div className="text-xl font-black text-emerald-600">{change.toFixed(2)}</div>
+          <div className="text-xl font-black text-emerald-600">{formatMoneyPl(change)}</div>
         </div>
       </div>
 

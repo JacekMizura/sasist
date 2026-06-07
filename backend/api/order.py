@@ -75,7 +75,7 @@ from ..utils.order_shipping_display import order_shipping_display
 
 def _customer_names_for_order_display(order: Order) -> Tuple[Optional[str], Optional[str]]:
     from ..services.direct_sale.order_display import (
-        STATIONARY_SALE_LABEL,
+        RETAIL_CUSTOMER_LABEL,
         direct_sale_customer_names,
         is_direct_sale_order,
     )
@@ -86,8 +86,21 @@ def _customer_names_for_order_display(order: Order) -> Tuple[Optional[str], Opti
         return ds_fn, ds_ln
     fn, ln = _customer_names_from_order(order)
     if is_direct_sale_order(order) and not fn and not ln:
-        return STATIONARY_SALE_LABEL, None
+        return RETAIL_CUSTOMER_LABEL, None
     return fn, ln
+
+
+def _source_display_for_order(order: Order) -> Optional[str]:
+    from ..services.direct_sale.order_display import direct_sale_source_display
+
+    ds = direct_sale_source_display(order)
+    if ds:
+        return ds
+    raw_src = getattr(order, "source", None)
+    source_raw = str(raw_src).strip() if raw_src is not None and str(raw_src).strip() else None
+    from .wms_returns import _normalize_order_source
+
+    return _normalize_order_source(source_raw)
 
 
 def _shipping_display_for_order(order: Order) -> Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -1545,131 +1558,20 @@ def _order_item_include_in_purchase_cost_total(item: OrderItem) -> bool:
     return True
 
 
-def _compute_order_line_financials(item: OrderItem, product: Optional[Product]) -> Dict[str, Optional[float]]:
-    """VAT, net/brutto linii i marża z ``metadata_json`` / produktu — bez mieszania z dostawą."""
-    meta = _order_item_meta_dict(item)
-    try:
-        qty = max(0, int(item.quantity or 0))
-    except (TypeError, ValueError):
-        qty = 0
+def _compute_order_line_financials(
+    item: OrderItem,
+    product: Optional[Product],
+    *,
+    fifo_purchase_net: Optional[float] = None,
+) -> Dict[str, Optional[float]]:
+    """Delegate to sale_document_financials — single source of truth for line totals."""
+    from ..services.sale_document_financials import compute_order_line_financials_with_margin
 
-    unit_net: Optional[float] = None
-    up = getattr(item, "unit_price", None)
-    if up is not None:
-        try:
-            unit_net = round(float(up), 4)
-        except (TypeError, ValueError):
-            pass
-
-    line_net: Optional[float] = None
-    tp = getattr(item, "total_price", None)
-    if tp is not None:
-        try:
-            line_net = round(float(tp), 2)
-        except (TypeError, ValueError):
-            pass
-    if line_net is None and unit_net is not None and qty > 0:
-        line_net = round(unit_net * qty, 2)
-
-    vat_p: Optional[float] = None
-    vp_col = getattr(item, "vat_percent", None)
-    if vp_col is not None:
-        try:
-            fv = float(vp_col)
-            if 0 <= fv <= 100:
-                vat_p = fv
-        except (TypeError, ValueError):
-            pass
-    if vat_p is None:
-        for key in ("vat_percent", "vat_percent_catalog"):
-            raw_vc = meta.get(key)
-            if raw_vc is None:
-                continue
-            try:
-                fv = float(raw_vc)
-                if 0 <= fv <= 100:
-                    vat_p = fv
-                    break
-            except (TypeError, ValueError):
-                continue
-    if vat_p is None and product is not None:
-        vat_p = vat_percent_from_product(product)
-
-    unit_gross: Optional[float] = None
-    line_vat_amt: Optional[float] = None
-    line_gross: Optional[float] = None
-
-    # Direct sales / brutto-anchored lines — must match sale_document_financials.
-    line_gross_meta = meta.get("line_gross_total")
-    if line_gross_meta is not None and vat_p is not None:
-        try:
-            lg = round(float(line_gross_meta), 2)
-            if lg >= 0:
-                from ..services.sale_document_financials import net_vat_from_gross
-
-                line_net, line_vat_amt = net_vat_from_gross(lg, float(vat_p))
-                line_gross = lg
-                unit_net = round(line_net / qty, 4) if qty > 0 else 0.0
-                unit_gross = round(unit_net * (1.0 + float(vat_p) / 100.0), 4) if qty > 0 else None
-                return {
-                    "vat_percent": vat_p,
-                    "unit_price_net": unit_net,
-                    "unit_price_gross": unit_gross,
-                    "line_net_total": line_net,
-                    "line_vat_amount": line_vat_amt,
-                    "line_gross_total": line_gross,
-                    "line_purchase_total_net": None,
-                    "line_margin_amount": None,
-                    "line_margin_percent": None,
-                }
-        except (TypeError, ValueError):
-            pass
-
-    if unit_net is not None and vat_p is not None:
-        unit_gross = round(unit_net * (1.0 + float(vat_p) / 100.0), 4)
-    if line_net is not None and vat_p is not None:
-        line_vat_amt = round(line_net * (float(vat_p) / 100.0), 2)
-        line_gross = round(line_net + float(line_vat_amt), 2)
-
-    pur_unit: Optional[float] = None
-    if meta.get("purchase_price_net") is not None:
-        try:
-            pu = float(meta["purchase_price_net"])
-            if pu >= 0:
-                pur_unit = pu
-        except (TypeError, ValueError):
-            pass
-    if pur_unit is None and product is not None and getattr(product, "purchase_price", None) is not None:
-        try:
-            pu = float(product.purchase_price)
-            if pu >= 0:
-                pur_unit = pu
-        except (TypeError, ValueError):
-            pass
-
-    line_pur_tot: Optional[float] = None
-    if pur_unit is not None and qty > 0:
-        line_pur_tot = round(pur_unit * qty, 2)
-
-    line_margin_amt: Optional[float] = None
-    line_margin_pct: Optional[float] = None
-    if line_net is not None and pur_unit is not None and qty > 0:
-        profit = round(line_net - pur_unit * qty, 2)
-        line_margin_amt = profit
-        if line_net > 1e-9:
-            line_margin_pct = round(profit / line_net * 100.0, 2)
-
-    return {
-        "vat_percent": vat_p,
-        "unit_price_net": unit_net,
-        "unit_price_gross": unit_gross,
-        "line_net_total": line_net,
-        "line_vat_amount": line_vat_amt,
-        "line_gross_total": line_gross,
-        "line_purchase_total_net": line_pur_tot,
-        "line_margin_amount": line_margin_amt,
-        "line_margin_percent": line_margin_pct,
-    }
+    return compute_order_line_financials_with_margin(
+        item,
+        product,
+        fifo_purchase_net=fifo_purchase_net,
+    )
 
 
 def build_order_read(db: Session, order: Order) -> OrderRead:
@@ -1693,6 +1595,19 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
     bundles_by_id = {}
     if bids:
         bundles_by_id = {b.id: b for b in db.query(Bundle).filter(Bundle.id.in_(bids)).all()}
+    from ..services.product_cost_service import get_products_current_costs
+
+    product_ids_for_cost = {
+        int(item.product_id)
+        for item in order.items
+        if _order_item_include_in_purchase_cost_total(item) and getattr(item, "product_id", None) is not None
+    }
+    costs_by_pid: Dict[int, Dict] = (
+        get_products_current_costs(db, int(order.tenant_id), product_ids_for_cost)
+        if product_ids_for_cost
+        else {}
+    )
+
     sum_line_net_active = 0.0
     sum_purchase_active = 0.0
     items_out = []
@@ -1722,7 +1637,17 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
                 total_price_out = round(float(tp_raw), 2)
             except (TypeError, ValueError):
                 total_price_out = None
-        fin = _compute_order_line_financials(item, product)
+        fifo_purchase_net: Optional[float] = None
+        if item.product_id is not None:
+            cost_row = costs_by_pid.get(int(item.product_id))
+            if cost_row is not None:
+                raw_pur = cost_row.get("purchase_net")
+                if raw_pur is not None:
+                    try:
+                        fifo_purchase_net = float(raw_pur)
+                    except (TypeError, ValueError):
+                        fifo_purchase_net = None
+        fin = _compute_order_line_financials(item, product, fifo_purchase_net=fifo_purchase_net)
         if _order_item_active_for_financial_totals(item):
             ln = fin.get("line_net_total")
             if ln is not None:
@@ -1829,17 +1754,19 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
     )
     gross_profit_out: Optional[float] = None
     margin_out: Optional[float] = None
-    if total_products_value is not None:
+    if total_products_value is not None and sum_purchase_active > 1e-9:
         gross_profit_out = round(float(total_products_value) - sum_purchase_active, 2)
         if total_products_value > 1e-9:
             margin_out = round(float(gross_profit_out) / float(total_products_value) * 100.0, 2)
 
-    from .wms_returns import _normalize_order_source
+    from ..services.direct_sale.order_display import (
+        direct_sale_panel_payment_status,
+        is_direct_sale_order,
+        linked_documents_for_order,
+    )
 
     fn, ln = _customer_names_for_order_display(order)
-    raw_src = getattr(order, "source", None)
-    source_raw = str(raw_src).strip() if raw_src is not None and str(raw_src).strip() else None
-    source_disp = _normalize_order_source(source_raw)
+    source_disp = _source_display_for_order(order)
 
     ui_row = getattr(order, "order_ui_status", None)
     if ui_row is None and getattr(order, "order_ui_status_id", None):
@@ -1855,6 +1782,10 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
     panel_payment_method = str(pm_raw).strip()[:128] if isinstance(pm_raw, str) and str(pm_raw).strip() else None
     ps_raw = meta.get("panel_payment_status")
     panel_payment_status = str(ps_raw).strip()[:128] if isinstance(ps_raw, str) and str(ps_raw).strip() else None
+    if is_direct_sale_order(order):
+        ds_pay = direct_sale_panel_payment_status(order, db)
+        if ds_pay:
+            panel_payment_status = ds_pay
     pap_raw = meta.get("panel_amount_paid")
     panel_amount_paid = str(pap_raw).strip()[:128] if pap_raw is not None and str(pap_raw).strip() else None
     ptn_raw = meta.get("panel_tracking_numbers")
@@ -2022,6 +1953,13 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         for d in order_doc_rows
     ]
 
+    from ..schemas.order import OrderLinkedDocumentRead
+
+    linked_docs_out = [
+        OrderLinkedDocumentRead(**row)
+        for row in linked_documents_for_order(db, order)
+    ]
+
     return OrderRead(
         id=order.id,
         tenant_id=int(order.tenant_id),
@@ -2081,6 +2019,9 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         latest_internal_note_preview=comm_one.latest_internal_note_preview if comm_one else None,
         latest_customer_comment_preview=comm_one.latest_customer_comment_preview if comm_one else None,
         order_documents=order_documents_out,
+        order_channel=str(getattr(order, "order_channel", None) or "").strip() or None,
+        fulfillment_mode=str(getattr(order, "fulfillment_mode", None) or "").strip() or None,
+        linked_documents=linked_docs_out,
     )
 
 

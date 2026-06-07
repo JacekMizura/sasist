@@ -30,6 +30,7 @@ import {
 import { allocationStrategyToIssueStrategy } from "../../utils/directSales/allocationStrategy";
 import { lineTotal } from "../../utils/directSales/lineTotal";
 import { safeTrim } from "../../utils/safeStrings";
+import { STATIONARY_SALE_UNAVAILABLE } from "../../components/directSales/directSalesTerminology";
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 
 export type DocumentSubtype = "RECEIPT" | "INVOICE";
@@ -44,7 +45,7 @@ type Args = {
 function friendlyError(err: unknown): string {
   const status = classifyAxiosOperationalError(err);
   if (isOperationalUnavailableStatus(status)) {
-    return "Sprzedaż bezpośrednia jest obecnie niedostępna.";
+    return STATIONARY_SALE_UNAVAILABLE;
   }
   return extractApiErrorMessage(err);
 }

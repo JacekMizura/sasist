@@ -126,16 +126,67 @@ def build_direct_sale_completion_read(
         .first()
     )
 
-    movements = (
-        db.query(WarehouseInventoryMovement)
-        .filter(
-            WarehouseInventoryMovement.tenant_id == int(tenant_id),
-            WarehouseInventoryMovement.source_document_type == "DIRECT_SALE",
-            WarehouseInventoryMovement.source_document_id == int(order.id),
+    sale_document_id = str(doc_job.sale_document_id) if doc_job and doc_job.sale_document_id else None
+    stock_document_id: int | None = None
+    if sale_document_id:
+        link = (
+            db.query(SaleDocumentStockLink)
+            .filter(SaleDocumentStockLink.sale_document_id == str(sale_document_id))
+            .order_by(SaleDocumentStockLink.id.desc())
+            .first()
         )
-        .order_by(WarehouseInventoryMovement.id.asc())
+        if link is not None:
+            stock_document_id = int(link.stock_document_id)
+
+    order_items = (
+        db.query(OrderItem)
+        .filter(OrderItem.order_id == int(order.id))
+        .order_by(OrderItem.id.asc())
         .all()
     )
+
+    movement_ids: set[int] = set()
+    for oi in order_items:
+        mid = getattr(oi, "source_movement_id", None)
+        if mid is not None:
+            try:
+                movement_ids.add(int(mid))
+            except (TypeError, ValueError):
+                pass
+
+    movements: list[WarehouseInventoryMovement] = []
+    if movement_ids:
+        movements = (
+            db.query(WarehouseInventoryMovement)
+            .filter(
+                WarehouseInventoryMovement.tenant_id == int(tenant_id),
+                WarehouseInventoryMovement.id.in_(sorted(movement_ids)),
+            )
+            .order_by(WarehouseInventoryMovement.id.asc())
+            .all()
+        )
+    if not movements and stock_document_id is not None:
+        movements = (
+            db.query(WarehouseInventoryMovement)
+            .filter(
+                WarehouseInventoryMovement.tenant_id == int(tenant_id),
+                WarehouseInventoryMovement.source_document_type == "WZ",
+                WarehouseInventoryMovement.source_document_id == int(stock_document_id),
+            )
+            .order_by(WarehouseInventoryMovement.id.asc())
+            .all()
+        )
+    if not movements:
+        movements = (
+            db.query(WarehouseInventoryMovement)
+            .filter(
+                WarehouseInventoryMovement.tenant_id == int(tenant_id),
+                WarehouseInventoryMovement.source_document_type == "DIRECT_SALE",
+                WarehouseInventoryMovement.source_document_id == int(order.id),
+            )
+            .order_by(WarehouseInventoryMovement.id.asc())
+            .all()
+        )
 
     reservations = (
         db.query(StockReservation)
@@ -144,12 +195,6 @@ def build_direct_sale_completion_read(
     )
     res_by_key = {(int(r.product_id), int(r.location_id)): int(r.id) for r in reservations if r.location_id}
 
-    order_items = (
-        db.query(OrderItem)
-        .filter(OrderItem.order_id == int(order.id))
-        .order_by(OrderItem.id.asc())
-        .all()
-    )
     product_ids = {int(oi.product_id) for oi in order_items if oi.product_id}
     products: dict[int, Product] = {}
     if product_ids:
@@ -243,18 +288,6 @@ def build_direct_sale_completion_read(
                 "detail": payment_method_label_pl(str(payment.method or "")),
             }
         )
-
-    stock_document_id: int | None = None
-    sale_document_id = str(doc_job.sale_document_id) if doc_job and doc_job.sale_document_id else None
-    if sale_document_id:
-        link = (
-            db.query(SaleDocumentStockLink)
-            .filter(SaleDocumentStockLink.sale_document_id == str(sale_document_id))
-            .order_by(SaleDocumentStockLink.id.desc())
-            .first()
-        )
-        if link is not None:
-            stock_document_id = int(link.stock_document_id)
 
     doc_subtype = str(doc_job.document_subtype or "") if doc_job else ""
     doc_num = order.sales_document_number

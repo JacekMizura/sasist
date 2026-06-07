@@ -51,10 +51,14 @@ class DirectSaleCompleteResult:
     recoverable: bool = False
 
 
-def _session_total(sess: DirectSaleSession) -> float:
+def _session_total(db: Session, sess: DirectSaleSession) -> float:
     from ..sale_document_financials import compute_direct_sale_session_total
 
-    return compute_direct_sale_session_total(list(sess.lines or []))
+    return compute_direct_sale_session_total(
+        list(sess.lines or []),
+        db=db,
+        tenant_id=int(sess.tenant_id),
+    )
 
 
 def try_idempotent_complete_result(
@@ -130,7 +134,7 @@ def try_idempotent_complete_result(
     if not doc_number:
         doc_number = str(getattr(order, "sales_document_number", None) or "") or None
 
-    total = round(float(order.value or 0), 2) if order.value is not None else _session_total(sess)
+    total = round(float(order.value or 0), 2) if order.value is not None else _session_total(db, sess)
     job_id = _positive_int(getattr(doc_job, "id", None)) if doc_job else _positive_int(entities.get("document_job_id"))
 
     return DirectSaleCompleteResult(
@@ -163,7 +167,7 @@ def start_direct_sale_payment(
 
     ctx = {
         "method": (payment_method or "CASH").strip().upper(),
-        "amount": _session_total(sess),
+        "amount": _session_total(db, sess),
         "started_at": datetime.utcnow().isoformat(),
     }
     sess.payment_context_json = json.dumps(ctx, ensure_ascii=False)

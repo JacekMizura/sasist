@@ -383,6 +383,20 @@ class OrderOperationalNoteCreateBody(BaseModel):
     color_tag: Optional[str] = Field(None, max_length=32)
 
 
+class OrderLinkedDocumentRead(BaseModel):
+    """Powiązane dokumenty sprzedaży i magazynowe (PA/FV ↔ WZ)."""
+
+    id: str
+    kind: Literal["sale", "warehouse"]
+    document_type: str
+    document_subtype: Optional[str] = None
+    document_number: str
+    detail_path: str
+    print_kind: Optional[str] = None
+    sale_document_id: Optional[str] = None
+    stock_document_id: Optional[int] = None
+
+
 class OrderRead(BaseModel):
     id: int
     tenant_id: int = Field(..., description="Tenant zamówienia (WMS / panel).")
@@ -474,6 +488,18 @@ class OrderRead(BaseModel):
     wms_packed_at: Optional[datetime] = None
     wms_packed_by_label: Optional[str] = None
     wms_workflow_phase: Optional[str] = None
+    order_channel: Optional[str] = Field(
+        None,
+        description="DIRECT_SALE | ONLINE | … — kanał sprzedaży.",
+    )
+    fulfillment_mode: Optional[str] = Field(
+        None,
+        description="IMMEDIATE | WMS | DELIVERY_ONLY | … — tryb realizacji.",
+    )
+    linked_documents: List[OrderLinkedDocumentRead] = Field(
+        default_factory=list,
+        description="Powiązane dokumenty PA/FV i WZ.",
+    )
 
     class Config:
         from_attributes = True

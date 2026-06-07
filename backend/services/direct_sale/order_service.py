@@ -16,8 +16,8 @@ from ...models.order_item import OrderItem
 from ...models.order_ui_status import OrderUiStatus
 from ..barcode_generation import next_internal_order_number, next_order_barcode
 from ..direct_sales_settings_service import resolve_direct_sales_settings
-from ..order_default_new_panel_status import assign_default_new_panel_status_to_order
-from ..sale_document_financials import brutto_line_to_net_fields, product_vat_for_direct_sale
+from ..order_default_new_panel_status import assign_direct_sale_completed_panel_status
+from ..sale_document_financials import netto_line_to_gross_fields, product_vat_for_direct_sale
 from .errors import DirectSaleError
 
 
@@ -114,10 +114,10 @@ def create_order_from_session(
         qty = int(round(float(ln.quantity or 0)))
         if qty <= 0:
             continue
-        unit_gross = float(ln.unit_price) if ln.unit_price is not None else 0.0
+        unit_net = float(ln.unit_price) if ln.unit_price is not None else 0.0
         disc = float(ln.discount_amount or 0)
         vat_p = product_vat_for_direct_sale(db, int(ln.product_id))
-        fin = brutto_line_to_net_fields(unit_gross=unit_gross, qty=qty, discount=disc, vat_percent=vat_p)
+        fin = netto_line_to_gross_fields(unit_net=unit_net, qty=qty, discount=disc, vat_percent=vat_p)
         goods_gross_total += float(fin["line_gross"])
 
     order = Order(
@@ -155,10 +155,11 @@ def create_order_from_session(
             wid,
             exc_info=True,
         )
-    if panel_status_id is not None:
-        order.order_ui_status_id = int(panel_status_id)
-    else:
-        assign_default_new_panel_status_to_order(db, order)
+    assign_direct_sale_completed_panel_status(
+        db,
+        order,
+        configured_status_id=panel_status_id,
+    )
     db.flush()
 
     items_by_line: dict[int, OrderItem] = {}
@@ -166,13 +167,13 @@ def create_order_from_session(
         qty = int(round(float(ln.quantity or 0)))
         if qty <= 0:
             continue
-        unit_gross = float(ln.unit_price) if ln.unit_price is not None else 0.0
+        unit_net = float(ln.unit_price) if ln.unit_price is not None else 0.0
         disc = float(ln.discount_amount or 0)
         vat_p = product_vat_for_direct_sale(db, int(ln.product_id))
-        fin = brutto_line_to_net_fields(unit_gross=unit_gross, qty=qty, discount=disc, vat_percent=vat_p)
+        fin = netto_line_to_gross_fields(unit_net=unit_net, qty=qty, discount=disc, vat_percent=vat_p)
         line_meta = {
             "line_gross_total": float(fin["line_gross"]),
-            "price_input_mode": "BRUTTO",
+            "price_input_mode": "NETTO",
         }
         oi = OrderItem(
             order_id=int(order.id),

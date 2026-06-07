@@ -64,7 +64,7 @@ from ..services.direct_sale_service import (
 
 router = APIRouter(
     prefix="/direct-sales",
-    tags=["Direct sales"],
+    tags=["Sprzedaż stacjonarna"],
     dependencies=[Depends(operational_sales_sessions_for_request)],
 )
 

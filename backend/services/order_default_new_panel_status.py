@@ -109,3 +109,42 @@ def assign_default_new_panel_status_to_order(db: Session, order: Order) -> None:
         return
     sid = get_or_create_default_new_order_ui_status_id(db, int(order.tenant_id), int(order.warehouse_id))
     order.order_ui_status_id = sid
+
+
+def assign_direct_sale_completed_panel_status(
+    db: Session,
+    order: Order,
+    *,
+    configured_status_id: int | None = None,
+) -> None:
+    """Stationary retail: land on completed/DONE panel status, never default NEW."""
+    if order.tenant_id is None or order.warehouse_id is None:
+        return
+    tid = int(order.tenant_id)
+    wid = int(order.warehouse_id)
+    from .order_status_select_service import (
+        resolve_order_status_id_by_legacy_name_hints,
+        resolve_order_status_id_with_fallback,
+    )
+
+    if configured_status_id is not None and int(configured_status_id) > 0:
+        sid = resolve_order_status_id_with_fallback(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            configured_id=int(configured_status_id),
+        )
+        if sid is not None:
+            order.order_ui_status_id = int(sid)
+            return
+    for legacy_key in ("completed", "paid", "ready"):
+        sid = resolve_order_status_id_by_legacy_name_hints(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            legacy_key=legacy_key,
+        )
+        if sid is not None:
+            order.order_ui_status_id = int(sid)
+            return
+    assign_default_new_panel_status_to_order(db, order)

@@ -37,7 +37,7 @@ def brutto_line_to_net_fields(
     discount: float = 0.0,
     vat_percent: float,
 ) -> dict[str, float]:
-    """Convert direct-sales brutto input into order_item net fields + line gross."""
+    """Split gross-anchored input into net/VAT — legacy; direct sales use ``netto_line_to_gross_fields``."""
     q = max(0, int(qty))
     ug = max(0.0, float(unit_gross))
     disc = max(0.0, float(discount))
@@ -53,28 +53,69 @@ def brutto_line_to_net_fields(
     }
 
 
+def netto_line_to_gross_fields(
+    *,
+    unit_net: float,
+    qty: int,
+    discount: float = 0.0,
+    vat_percent: float,
+) -> dict[str, float]:
+    """Convert direct-sales NET catalog price into order line financials (canonical)."""
+    q = max(0, int(qty))
+    un = max(0.0, float(unit_net))
+    disc = max(0.0, float(discount))
+    vp = max(0.0, float(vat_percent))
+    unit_gross = round(un * (1.0 + vp / 100.0), 2) if q > 0 else 0.0
+    line_gross = round(max(0.0, unit_gross * q - disc), 2)
+    line_net, line_vat = net_vat_from_gross(line_gross, vp)
+    unit_net_out = un if disc <= 1e-9 else (round(line_net / q, 4) if q > 0 else 0.0)
+    return {
+        "unit_price": unit_net_out,
+        "total_price": line_net,
+        "vat_percent": vp,
+        "line_gross": line_gross,
+        "line_vat": line_vat,
+        "unit_price_gross": unit_gross,
+    }
+
+
 def compute_direct_sale_line_gross(
     *,
-    unit_gross: float,
+    unit_net: float,
     quantity: float,
     discount_amount: float = 0.0,
+    vat_percent: float = DEFAULT_VAT_PERCENT,
 ) -> float:
-    """Per-line brutto (2dp) — canonical for terminal totals and payments."""
+    """Per-line brutto total (2dp) from NET unit — matches POS terminal rounding."""
     qty = max(0, int(round(float(quantity or 0))))
-    ug = max(0.0, float(unit_gross or 0))
+    un = max(0.0, float(unit_net or 0))
     disc = max(0.0, float(discount_amount or 0))
-    return round(max(0.0, ug * qty - disc), 2)
+    vp = max(0.0, float(vat_percent))
+    unit_gross = round(un * (1.0 + vp / 100.0), 2) if qty > 0 else 0.0
+    return round(max(0.0, unit_gross * qty - disc), 2)
 
 
-def compute_direct_sale_session_total(lines: list[Any]) -> float:
-    """Sum session lines using the same per-line rounding as order creation."""
+def compute_direct_sale_session_total(
+    lines: list[Any],
+    *,
+    db: Session | None = None,
+    tenant_id: int | None = None,
+) -> float:
+    """Sum session lines — ``unit_price`` is NET (catalog sale price); returns GROSS total."""
     total = 0.0
     for ln in lines or []:
-        unit = float(ln.unit_price) if getattr(ln, "unit_price", None) is not None else 0.0
+        unit_net = float(ln.unit_price) if getattr(ln, "unit_price", None) is not None else 0.0
+        vp = DEFAULT_VAT_PERCENT
+        if db is not None and getattr(ln, "product_id", None) is not None:
+            try:
+                vp = product_vat_for_direct_sale(db, int(ln.product_id))
+            except Exception:
+                pass
         total += compute_direct_sale_line_gross(
-            unit_gross=unit,
+            unit_net=unit_net,
             quantity=float(getattr(ln, "quantity", 0) or 0),
             discount_amount=float(getattr(ln, "discount_amount", 0) or 0),
+            vat_percent=vp,
         )
     return round(total, 2)
 
@@ -191,6 +232,80 @@ def compute_order_line_financials(item: OrderItem, product: Product | None) -> d
         "line_vat_amount": line_vat_amt,
         "line_gross_total": line_gross,
     }
+
+
+def _purchase_unit_net_for_line(
+    item: OrderItem,
+    product: Product | None,
+    *,
+    fifo_purchase_net: float | None = None,
+) -> float | None:
+    meta = _order_item_meta_dict(item)
+    raw_meta = meta.get("purchase_price_net")
+    if raw_meta is not None:
+        try:
+            pu = float(raw_meta)
+            if pu >= 0:
+                return pu
+        except (TypeError, ValueError):
+            pass
+    if fifo_purchase_net is not None:
+        try:
+            pu = float(fifo_purchase_net)
+            if pu >= 0:
+                return pu
+        except (TypeError, ValueError):
+            pass
+    if product is not None and getattr(product, "purchase_price", None) is not None:
+        try:
+            pu = float(product.purchase_price)
+            if pu >= 0:
+                return pu
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def compute_order_line_margin_fields(
+    item: OrderItem,
+    product: Product | None,
+    fin: dict[str, Optional[float]],
+    *,
+    fifo_purchase_net: float | None = None,
+) -> dict[str, Optional[float]]:
+    """Margin from sales net vs warehouse purchase net — null when purchase unknown."""
+    try:
+        qty = max(0, int(item.quantity or 0))
+    except (TypeError, ValueError):
+        qty = 0
+    line_net = fin.get("line_net_total")
+    pur_unit = _purchase_unit_net_for_line(item, product, fifo_purchase_net=fifo_purchase_net)
+    line_pur_tot: Optional[float] = None
+    line_margin_amt: Optional[float] = None
+    line_margin_pct: Optional[float] = None
+    if pur_unit is not None and qty > 0:
+        line_pur_tot = round(pur_unit * qty, 2)
+    if line_net is not None and pur_unit is not None and qty > 0:
+        profit = round(float(line_net) - pur_unit * qty, 2)
+        line_margin_amt = profit
+        if float(line_net) > 1e-9:
+            line_margin_pct = round(profit / float(line_net) * 100.0, 2)
+    return {
+        "line_purchase_total_net": line_pur_tot,
+        "line_margin_amount": line_margin_amt,
+        "line_margin_percent": line_margin_pct,
+    }
+
+
+def compute_order_line_financials_with_margin(
+    item: OrderItem,
+    product: Product | None,
+    *,
+    fifo_purchase_net: float | None = None,
+) -> dict[str, Optional[float]]:
+    fin = compute_order_line_financials(item, product)
+    margin = compute_order_line_margin_fields(item, product, fin, fifo_purchase_net=fifo_purchase_net)
+    return {**fin, **margin}
 
 
 def compute_sale_totals_from_order(order: Order) -> dict[str, Any]:

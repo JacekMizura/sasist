@@ -119,10 +119,20 @@ export type StockDocumentItemRead = {
   serial_range_label?: string | null;
 };
 
+export type StockDocumentLinkedSaleDocumentRead = {
+  id: string;
+  document_number: string;
+  document_subtype?: string | null;
+  detail_path: string;
+};
+
 export type StockDocumentRead = {
   id: number;
   tenant_id: number;
   document_type: string;
+  order_id?: number | null;
+  source_sale_document_id?: string | null;
+  linked_sale_document?: StockDocumentLinkedSaleDocumentRead | null;
   supplier_id: number;
   supplier_name?: string;
   delivery_id?: number | null;

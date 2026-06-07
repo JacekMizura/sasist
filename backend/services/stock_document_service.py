@@ -1300,10 +1300,35 @@ def build_stock_document_read(
         cn, cv, cg = compute_pz_line_financial_totals(visible_rows)
         tn, tg, tv = float(cn), float(cg), float(cv)
 
+    linked_sale: Optional[dict] = None
+    sale_doc_id = str(getattr(doc, "source_sale_document_id", None) or "").strip() or None
+    if sale_doc_id:
+        from ..models.sale_document import SaleDocument
+
+        sale_row = (
+            db.query(SaleDocument)
+            .filter(SaleDocument.id == sale_doc_id)
+            .first()
+        )
+        if sale_row is not None:
+            panel_type = str(sale_row.panel_document_type or "").strip().upper()
+            subtype = str(sale_row.document_subtype or "").strip().upper()
+            if not subtype:
+                subtype = "INVOICE" if panel_type == "INVOICE" else "RECEIPT"
+            linked_sale = {
+                "id": str(sale_row.id),
+                "document_number": str(sale_row.document_number or "").strip(),
+                "document_subtype": subtype,
+                "detail_path": f"/documents/sales/{sale_row.id}",
+            }
+
     return StockDocumentRead(
         id=doc.id,
         tenant_id=doc.tenant_id,
         document_type=doc.document_type,
+        order_id=int(doc.order_id) if getattr(doc, "order_id", None) else None,
+        source_sale_document_id=sale_doc_id,
+        linked_sale_document=linked_sale,
         supplier_id=doc.supplier_id,
         supplier_name=(sup.name or "").strip() if sup else "",
         delivery_id=doc.delivery_id,

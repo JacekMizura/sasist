@@ -267,8 +267,37 @@ def missing_operational_subtypes(db: Session, tenant_id: int, warehouse_id: int)
     return missing
 
 
+def repair_receipt_series_padding_all(db: Session) -> int:
+    """Force PA/RECEIPT padding_length=0 on legacy rows (e.g. PA/2026/06/000005 → …/5)."""
+    rows = (
+        db.query(DocumentSeries)
+        .filter(
+            DocumentSeries.series_type == "SALE",
+            DocumentSeries.subtype == "RECEIPT",
+        )
+        .all()
+    )
+    changed = 0
+    for row in rows:
+        if not hasattr(row, "padding_length"):
+            continue
+        if int(getattr(row, "padding_length", None) or 0) != 0:
+            row.padding_length = 0
+            row.updated_at = datetime.utcnow()
+            changed += 1
+    if changed:
+        db.commit()
+        logger.info("[document_series.repair] receipt padding_length=0 rows_updated=%s", changed)
+    return changed
+
+
 def seed_default_document_series(db: Session) -> int:
     """Create default series for every tenant↔warehouse link. Returns rows created."""
+    try:
+        repair_receipt_series_padding_all(db)
+    except Exception:
+        db.rollback()
+        logger.exception("[document_series.repair] receipt padding repair failed")
     total = 0
     for tenant_id, warehouse_id in _tenant_warehouse_pairs(db):
         total += ensure_default_document_series(db, tenant_id, warehouse_id)

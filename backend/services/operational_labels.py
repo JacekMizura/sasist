@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+import math
+
+STATIONARY_SALE_LABEL = "Sprzedaż stacjonarna"
+IMMEDIATE_ISSUE_LABEL = "Wydanie natychmiastowe"
+RETAIL_CUSTOMER_LABEL = "Klient detaliczny"
+PICKUP_DELIVERY_LABEL = "Odbiór osobisty"
+PAID_STATUS_LABEL = "Opłacone"
+STATIONARY_SALE_UNAVAILABLE = "Sprzedaż stacjonarna jest obecnie niedostępna."
+
 _PAYMENT_METHOD_PL = {
     "CASH": "Gotówka",
     "CARD": "Karta",
@@ -80,6 +89,22 @@ def fiscal_status_label_pl(status: str | None) -> str:
     if not s:
         return "—"
     return _FISCAL_STATUS_PL.get(s, s)
+
+
+def format_money_pl(amount: float | int | None, *, currency: str = "zł") -> str:
+    """Polish retail money: 2 decimals, comma separator, NBSP before currency."""
+    if amount is None:
+        return "—"
+    try:
+        n = float(amount)
+    except (TypeError, ValueError):
+        return "—"
+    if not math.isfinite(n):
+        return "—"
+    rounded = round((n + math.copysign(1e-9, n)) * 100) / 100
+    formatted = f"{rounded:.2f}".replace(".", ",")
+    cur = (currency or "zł").strip() or "zł"
+    return f"{formatted}\u00a0{cur}"
 
 
 def print_button_label_pl(*, document_subtype: str | None, document_type: str | None = None) -> str:

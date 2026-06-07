@@ -1,6 +1,6 @@
 import { Banknote, CreditCard, Smartphone, Wallet, CheckCircle } from "lucide-react";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
-import { paymentMethodPl, sessionStatusPl } from "./directSalesTerminology";
+import { formatMoneyPl, paymentMethodPl, sessionStatusPl } from "./directSalesTerminology";
 
 const METHODS = [
   { id: "CASH", label: "Gotówka", key: "F1", Icon: Banknote },
@@ -61,7 +61,7 @@ export function PaymentPanel({
           </div>
           
           <div className="text-5xl font-black tracking-tight mb-2">
-            {amount.toFixed(2)} <span className="text-2xl text-blue-200">zł</span>
+            {formatMoneyPl(amount)}
           </div>
 
           {/* Dodatkowe informacje w stanie CHECKOUT */}
@@ -69,11 +69,11 @@ export function PaymentPanel({
             <div className="mt-6 pt-4 border-t border-blue-500/50 flex justify-between items-center text-sm">
               <div>
                 <div className="text-blue-200 text-xs font-medium mb-0.5">Wpłacono</div>
-                <div className="font-bold text-white">{(paid ?? 0).toFixed(2)} zł</div>
+                <div className="font-bold text-white">{formatMoneyPl(paid ?? 0)}</div>
               </div>
               <div className="text-right">
                 <div className="text-blue-200 text-xs font-medium mb-0.5">Pozostało</div>
-                <div className="font-bold text-white">{remaining.toFixed(2)} zł</div>
+                <div className="font-bold text-white">{formatMoneyPl(remaining)}</div>
               </div>
             </div>
           )}

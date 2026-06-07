@@ -20,6 +20,7 @@ import { scanWmsCarrierByBarcode } from "../../api/wmsCarrierApi";
 import { CarrierAssignProductsModal } from "../../components/warehouse/carriers/CarrierAssignProductsModal";
 import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 import { CarrierCreateModal } from "../../components/warehouse/carriers/CarrierCreateModal";
+import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentNotApplicableBadge } from "./documentsBadges";
@@ -68,17 +69,14 @@ function fmtQty(n: number) {
 }
 
 function fmtMoney(n: number) {
-  return new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 2 }).format(n);
+  return formatMoneyPl(n);
 }
 
 function fmtMoneyCur(n: number | null | undefined, currency: string | undefined) {
   const c = (currency || "PLN").trim() || "PLN";
   if (n == null || !Number.isFinite(n)) return "—";
-  try {
-    return new Intl.NumberFormat("pl-PL", { style: "currency", currency: c, maximumFractionDigits: 2 }).format(n);
-  } catch {
-    return `${n.toFixed(2)} ${c}`;
-  }
+  if (c === "PLN" || c === "zł") return formatMoneyPl(n);
+  return formatMoneyPl(n, { currency: c });
 }
 
 function diffToneClass(diff: number) {
@@ -1076,17 +1074,44 @@ export default function DocumentsWarehousePage() {
                             )}
                           </dd>
                         </div>
-                        <div className="flex items-center justify-between gap-4 pt-1">
-                          <dt className="text-slate-500">Zamówienie</dt>
-                          <dd>
-                            <Link
-                              to={`/goods-orders?edit=${detail.delivery_id}`}
-                              className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
-                            >
-                              #{detail.delivery_id}
-                            </Link>
-                          </dd>
-                        </div>
+                        {detail.order_id != null ? (
+                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <dt className="text-slate-500">Zamówienie</dt>
+                            <dd>
+                              <Link
+                                to={`/orders/${detail.order_id}`}
+                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
+                              >
+                                #{detail.order_id}
+                              </Link>
+                            </dd>
+                          </div>
+                        ) : null}
+                        {detail.linked_sale_document ? (
+                          <div className="flex items-center justify-between gap-4 pt-1">
+                            <dt className="text-slate-500">Dokument sprzedaży</dt>
+                            <dd>
+                              <Link
+                                to={detail.linked_sale_document.detail_path}
+                                className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-2 hover:text-emerald-900"
+                              >
+                                {detail.linked_sale_document.document_number || detail.linked_sale_document.id}
+                              </Link>
+                            </dd>
+                          </div>
+                        ) : detail.delivery_id != null ? (
+                          <div className="flex items-center justify-between gap-4 pt-1">
+                            <dt className="text-slate-500">Dostawa</dt>
+                            <dd>
+                              <Link
+                                to={`/goods-orders?edit=${detail.delivery_id}`}
+                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
+                              >
+                                #{detail.delivery_id}
+                              </Link>
+                            </dd>
+                          </div>
+                        ) : null}
                       </dl>
                     </div>
                   </div>

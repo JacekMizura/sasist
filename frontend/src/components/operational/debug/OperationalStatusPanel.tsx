@@ -36,7 +36,7 @@ export function OperationalStatusPanel({
       </div>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5">
         <div className="flex justify-between">
-          <dt>Direct sales</dt>
+          <dt>Sprzedaż stacjonarna</dt>
           <dd><Flag on={features.directSalesFlag} /></dd>
         </div>
         <div className="flex justify-between">

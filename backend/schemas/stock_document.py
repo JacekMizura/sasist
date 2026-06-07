@@ -249,10 +249,23 @@ class PatchStockDocumentMetadataBody(BaseModel):
         return v
 
 
+class StockDocumentLinkedSaleDocumentRead(BaseModel):
+    id: str
+    document_number: str = ""
+    document_subtype: Optional[str] = None
+    detail_path: str = ""
+
+
 class StockDocumentRead(BaseModel):
     id: int
     tenant_id: int
     document_type: str
+    order_id: Optional[int] = Field(None, description="Powiązane zamówienie OMS.")
+    source_sale_document_id: Optional[str] = Field(None, description="PA/FV źródłowe dla WZ.")
+    linked_sale_document: Optional[StockDocumentLinkedSaleDocumentRead] = Field(
+        None,
+        description="Powiązany dokument sprzedaży (paragon/faktura).",
+    )
     supplier_id: Optional[int] = None
     supplier_name: str = ""
     delivery_id: Optional[int] = None

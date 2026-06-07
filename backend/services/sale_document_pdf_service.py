@@ -16,6 +16,7 @@ from ..models.sale_document import SaleDocument
 from .document_print_template_catalog import TEMPLATES_DIR, resolve_template_filename
 from .operational_labels import (
     document_subtype_label_pl,
+    format_money_pl,
     payment_method_label_pl,
     payment_status_label_pl,
 )
@@ -29,9 +30,7 @@ _env = Environment(
 
 
 def _fmt_money(n: float | None) -> str:
-    if n is None:
-        return "—"
-    return f"{float(n):.2f}".replace(".", ",")
+    return format_money_pl(n)
 
 
 def _fmt_date(iso: str | None) -> str:

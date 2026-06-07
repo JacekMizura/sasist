@@ -88,10 +88,14 @@ class StageEntities:
         }
 
 
-def _session_total(sess: DirectSaleSession) -> float:
+def _session_total(db: Session, sess: DirectSaleSession) -> float:
     from ..sale_document_financials import compute_direct_sale_session_total
 
-    return compute_direct_sale_session_total(list(sess.lines or []))
+    return compute_direct_sale_session_total(
+        list(sess.lines or []),
+        db=db,
+        tenant_id=int(sess.tenant_id),
+    )
 
 
 def _commit_stage(db: Session, sess: DirectSaleSession, *, stage: str, entities: StageEntities) -> None:
@@ -193,13 +197,20 @@ def _stage_create_order_and_payment(
             db,
             order=order,
             sess=sess,
-            amount=_session_total(sess),
+            amount=_session_total(db, sess),
             method=payment_method,
             payment_splits=payment_splits,
             performed_by_user_id=performed_by_user_id,
         )
     entities.payment_id = int(pay.id)
     sess.order_id = int(order.id)
+    from .order_display import apply_direct_sale_order_panel_metadata
+
+    apply_direct_sale_order_panel_metadata(
+        order,
+        payment_method=payment_method,
+        document_subtype=str(getattr(sess, "document_subtype", None) or "RECEIPT"),
+    )
     if not getattr(sess, "pipeline_status", None) or str(sess.pipeline_status) == PIPELINE_FAILED:
         sess.pipeline_status = PIPELINE_PAYMENT_STARTED
     merge_pipeline_entities(
@@ -376,7 +387,7 @@ def _stage_complete_session(
             "document_job_id": entities.document_job_id,
             "document_number": entities.document_number,
             "stock_document_id": entities.stock_document_id,
-            "total_amount": _session_total(sess),
+            "total_amount": _session_total(db, sess),
         },
     )
 
@@ -446,7 +457,7 @@ def run_staged_complete_pipeline(
         tenant_id=tid,
         warehouse_id=int(sess.warehouse_id),
         payment_id=entities.payment_id,
-        total_amount=_session_total(sess),
+        total_amount=_session_total(db, sess),
         features=feat.as_log_dict(),
     )
     return entities

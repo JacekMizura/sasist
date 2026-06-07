@@ -3,7 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Download, FileText, Plus, Upload } from "lucide-react";
 
 import { listSaleDocuments } from "../../api/saleDocumentsApi";
+import { STATIONARY_SALE_TITLE } from "../../components/directSales/directSalesTerminology";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
+import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "./documentsBadges";
 import type { BusinessDocStatus } from "./warehouseDocumentsUi";
@@ -68,8 +70,8 @@ export default function DocumentsSalesPage() {
             series: it.series,
             docType: it.doc_type,
             date: it.date ? new Date(it.date).toLocaleString("pl-PL") : "—",
-            net: `${Number(it.total_net ?? it.net).toFixed(2)} zł`,
-            gross: `${Number(it.total_gross ?? it.gross).toFixed(2)} zł`,
+            net: formatMoneyPl(Number(it.total_net ?? it.net)),
+            gross: formatMoneyPl(Number(it.total_gross ?? it.gross)),
             paymentMethod: it.payment_label_pl || "—",
             paid: it.paid,
             externalStatus: "NOWE" as BusinessDocStatus,
@@ -92,8 +94,8 @@ export default function DocumentsSalesPage() {
 
   const sectionTitle = isReceipts ? "Paragony" : "Faktury";
   const sectionSubtitle = isReceipts
-    ? "Paragony z terminala sprzedaży bezpośredniej i pakowania WMS."
-    : "Faktury VAT z terminala sprzedaży bezpośredniej i pakowania WMS.";
+    ? `Paragony z terminala ${STATIONARY_SALE_TITLE.toLowerCase()} i pakowania WMS.`
+    : `Faktury VAT z terminala ${STATIONARY_SALE_TITLE.toLowerCase()} i pakowania WMS.`;
 
   const kpiItems = useMemo(() => {
     const countLabel = isReceipts ? "Liczba paragonów" : "Liczba faktur";

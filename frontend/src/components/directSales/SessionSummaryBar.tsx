@@ -1,5 +1,5 @@
 import type { DirectSaleCompleteResult } from "../../utils/normalizeDirectSales";
-import { paymentMethodPl, paymentStatusPl } from "./directSalesTerminology";
+import { formatMoneyPl, paymentMethodPl, paymentStatusPl } from "./directSalesTerminology";
 import { safeDisplay } from "../../utils/safeStrings";
 
 type Props = {
@@ -32,7 +32,7 @@ export function SessionSummaryBar({ result, onPrint, onNewSession }: Props) {
         </div>
         <div className="flex justify-between gap-2">
           <dt className="text-emerald-700">Suma</dt>
-          <dd className="font-bold">{result.total_amount.toFixed(2)} zł</dd>
+          <dd className="font-bold">{formatMoneyPl(result.total_amount)}</dd>
         </div>
       </dl>
       <div className="mt-3 flex gap-2">

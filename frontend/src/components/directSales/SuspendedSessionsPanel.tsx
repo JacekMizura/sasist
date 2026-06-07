@@ -1,6 +1,6 @@
 import { PlayCircle, Trash2, Clock } from "lucide-react";
 import type { DirectSaleSuspendedSummary } from "../../api/directSalesApi";
-import { formatAgeMinutes } from "./directSalesTerminology";
+import { formatAgeMinutes, formatMoneyPl } from "./directSalesTerminology";
 
 type Props = {
   rows: DirectSaleSuspendedSummary[];
@@ -53,7 +53,7 @@ export function SuspendedSessionsPanel({ rows, loading, busyId, onRestore, onCan
             <div className="text-xs text-slate-500 font-medium mb-4">
               {row.operator_label ?? "Operator"} · {row.line_count} poz. ·{" "}
               <span className="text-slate-700 font-bold">
-                {row.total_amount.toFixed(2)} zł
+                {formatMoneyPl(row.total_amount)}
               </span>
             </div>
 

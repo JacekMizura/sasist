@@ -1,15 +1,13 @@
 # Current context
 
 ## Active goal
-Direct Sales POS polish — Polish UX, print templates, financial consistency, retail numbering.
+Direct-sale pipeline: session `unit_price` = NET (catalog sale price); gross derived with VAT.
 
-## Completed (2026-06-04)
-- Central labels: `operational_labels.py` (backend), `directSalesTerminology.ts` (frontend)
-- Terminology: Sprzedaż stacjonarna, Wydanie natychmiastowe
-- Print: HTML templates PA/FV/WZ in `backend/templates/`, PDF APIs `/sale-documents/{id}/pdf`, stock HTML PDF
-- Numbering: `padding_length=0` → no leading zeros; PA series default padding 0
-- Financials: gross-anchored in order API when `line_gross_total` metadata present; `compute_direct_sale_session_total`
-- Order list: direct-sale customer → Sprzedaż stacjonarna, delivery → Odbiór osobisty
+## Fixed (2026-06-04)
+- Root cause: backend treated session `unit_price` as GROSS (`brutto_line_to_net_fields`) — fixed with `netto_line_to_gross_fields`
+- `compute_direct_sale_session_total` / payment amounts now sum gross from net (5.00 net → 6.15 gross)
+- Order creation stores `price_input_mode: NETTO`, `unit_price=5.00`, `line_gross_total=6.15`
+- Prior pass: order API canonical financials, frontend display-only, WZ traceability, PA padding repair
 
-## Prior: infrastructure
-- E2E complete works on PostgreSQL after schema tier0 + session lock fixes
+## Prior: POS polish complete
+- Print PDF wiring, formatMoneyPl, stationary-sale order profile, linked docs, terminology helpers
