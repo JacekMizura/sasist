@@ -7343,3 +7343,270 @@ def ensure_production_tables(engine: Engine) -> None:
             )
         conn.commit()
 
+
+def ensure_product_compositions_and_batches(engine: Engine) -> None:
+    """Shared composition engine + production batches (PostgreSQL + SQLite)."""
+    dialect = engine.dialect.name
+    if dialect == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS product_compositions (
+                        id SERIAL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        composition_mode VARCHAR(32) NOT NULL,
+                        name VARCHAR(256) NOT NULL,
+                        version VARCHAR(32) NOT NULL DEFAULT '1',
+                        is_active BOOLEAN NOT NULL DEFAULT FALSE,
+                        yield_quantity DOUBLE PRECISION NOT NULL DEFAULT 1,
+                        notes TEXT,
+                        source_recipe_id INTEGER UNIQUE,
+                        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc'),
+                        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prod_comp_tenant ON product_compositions(tenant_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prod_comp_product ON product_compositions(product_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prod_comp_mode ON product_compositions(composition_mode)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prod_comp_active ON product_compositions(is_active)"))
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS product_composition_lines (
+                        id SERIAL PRIMARY KEY,
+                        composition_id INTEGER NOT NULL REFERENCES product_compositions(id) ON DELETE CASCADE,
+                        component_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+                        quantity DOUBLE PRECISION NOT NULL,
+                        waste_percent DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        notes TEXT,
+                        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prod_comp_lines_comp ON product_composition_lines(composition_id)"))
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS production_batches (
+                        id SERIAL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        number VARCHAR(64) NOT NULL,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
+                        status VARCHAR(32) NOT NULL DEFAULT 'draft',
+                        notes TEXT,
+                        rw_stock_document_id INTEGER REFERENCES stock_documents(id) ON DELETE SET NULL,
+                        created_by_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        started_at TIMESTAMP WITHOUT TIME ZONE,
+                        completed_at TIMESTAMP WITHOUT TIME ZONE,
+                        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc'),
+                        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_batches_number ON production_batches(tenant_id, number)"))
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS production_batch_lines (
+                        id SERIAL PRIMARY KEY,
+                        batch_id INTEGER NOT NULL REFERENCES production_batches(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+                        composition_id INTEGER NOT NULL REFERENCES product_compositions(id) ON DELETE RESTRICT,
+                        planned_quantity DOUBLE PRECISION NOT NULL,
+                        completed_quantity DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        target_location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+                        status VARCHAR(32) NOT NULL DEFAULT 'planned',
+                        calculated_unit_cost DOUBLE PRECISION,
+                        pw_stock_document_id INTEGER REFERENCES stock_documents(id) ON DELETE SET NULL,
+                        notes TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prod_batch_lines_batch ON production_batch_lines(batch_id)"))
+            conn.execute(
+                text("ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS composition_id INTEGER REFERENCES product_compositions(id)")
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE stock_documents ADD COLUMN IF NOT EXISTS production_batch_id INTEGER "
+                    "REFERENCES production_batches(id) ON DELETE SET NULL"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE stock_documents ADD COLUMN IF NOT EXISTS production_batch_line_id INTEGER "
+                    "REFERENCES production_batch_lines(id) ON DELETE SET NULL"
+                )
+            )
+        _migrate_recipes_to_compositions(engine)
+        return
+    with engine.connect() as conn:
+        if not _table_exists(conn, "product_compositions"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_compositions (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        composition_mode VARCHAR(32) NOT NULL,
+                        name VARCHAR(256) NOT NULL,
+                        version VARCHAR(32) NOT NULL DEFAULT '1',
+                        is_active BOOLEAN NOT NULL DEFAULT 0,
+                        yield_quantity REAL NOT NULL DEFAULT 1,
+                        notes TEXT,
+                        source_recipe_id INTEGER UNIQUE,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+        if not _table_exists(conn, "product_composition_lines"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE product_composition_lines (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        composition_id INTEGER NOT NULL REFERENCES product_compositions(id) ON DELETE CASCADE,
+                        component_product_id INTEGER NOT NULL REFERENCES products(id),
+                        quantity REAL NOT NULL,
+                        waste_percent REAL NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        notes TEXT,
+                        created_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+        if not _table_exists(conn, "production_batches"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE production_batches (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        number VARCHAR(64) NOT NULL,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                        status VARCHAR(32) NOT NULL DEFAULT 'draft',
+                        notes TEXT,
+                        rw_stock_document_id INTEGER REFERENCES stock_documents(id),
+                        created_by_user_id INTEGER REFERENCES app_users(id),
+                        started_at DATETIME,
+                        completed_at DATETIME,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+        if not _table_exists(conn, "production_batch_lines"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE production_batch_lines (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        batch_id INTEGER NOT NULL REFERENCES production_batches(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id),
+                        composition_id INTEGER NOT NULL REFERENCES product_compositions(id),
+                        planned_quantity REAL NOT NULL,
+                        completed_quantity REAL NOT NULL DEFAULT 0,
+                        target_location_id INTEGER REFERENCES locations(id),
+                        status VARCHAR(32) NOT NULL DEFAULT 'planned',
+                        calculated_unit_cost REAL,
+                        pw_stock_document_id INTEGER REFERENCES stock_documents(id),
+                        notes TEXT
+                    )
+                    """
+                )
+            )
+        po_cols = _table_column_names(conn, "production_orders") if _table_exists(conn, "production_orders") else set()
+        if po_cols and "composition_id" not in po_cols:
+            conn.execute(text("ALTER TABLE production_orders ADD COLUMN composition_id INTEGER REFERENCES product_compositions(id)"))
+        sd_cols = _table_column_names(conn, "stock_documents") if _table_exists(conn, "stock_documents") else set()
+        if sd_cols and "production_batch_id" not in sd_cols:
+            conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_id INTEGER REFERENCES production_batches(id)"))
+        if sd_cols and "production_batch_line_id" not in sd_cols:
+            conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_line_id INTEGER REFERENCES production_batch_lines(id)"))
+        conn.commit()
+    _migrate_recipes_to_compositions(engine)
+
+
+def _migrate_recipes_to_compositions(engine: Engine) -> None:
+    """One-time idempotent copy production_recipes → product_compositions (manufacturing)."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "production_recipes"):
+            return
+    from datetime import datetime
+
+    from sqlalchemy.orm import joinedload, sessionmaker
+
+    from ..models.product_composition import ProductComposition, ProductCompositionLine
+    from ..models.production import ProductionOrder, ProductionRecipe
+
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    try:
+        if not db.query(ProductionRecipe).limit(1).first():
+            return
+        recipes = (
+            db.query(ProductionRecipe)
+            .options(joinedload(ProductionRecipe.lines))
+            .all()
+        )
+        recipe_to_comp: dict[int, int] = {}
+        now = datetime.utcnow()
+        for rec in recipes:
+            existing = (
+                db.query(ProductComposition)
+                .filter(ProductComposition.source_recipe_id == int(rec.id))
+                .first()
+            )
+            if existing is not None:
+                recipe_to_comp[int(rec.id)] = int(existing.id)
+                continue
+            comp = ProductComposition(
+                tenant_id=int(rec.tenant_id),
+                product_id=int(rec.product_id),
+                composition_mode="manufacturing",
+                name=str(rec.name or ""),
+                version=str(rec.version or "1"),
+                is_active=bool(rec.is_active),
+                yield_quantity=float(rec.yield_quantity or 1),
+                notes=rec.notes,
+                source_recipe_id=int(rec.id),
+                created_at=rec.created_at or now,
+                updated_at=rec.updated_at or now,
+            )
+            db.add(comp)
+            db.flush()
+            for ln in sorted(rec.lines or [], key=lambda x: (x.sort_order, x.id)):
+                comp.lines.append(
+                    ProductCompositionLine(
+                        component_product_id=int(ln.component_product_id),
+                        quantity=float(ln.quantity),
+                        waste_percent=float(ln.waste_percent or 0),
+                        sort_order=int(ln.sort_order or 0),
+                        notes=ln.notes,
+                        created_at=ln.created_at or now,
+                    )
+                )
+            recipe_to_comp[int(rec.id)] = int(comp.id)
+        for order in db.query(ProductionOrder).filter(ProductionOrder.composition_id.is_(None)).all():
+            rid = int(order.recipe_id) if order.recipe_id else None
+            if rid and rid in recipe_to_comp:
+                order.composition_id = recipe_to_comp[rid]
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+

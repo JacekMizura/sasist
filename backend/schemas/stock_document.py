@@ -301,6 +301,9 @@ class StockDocumentRead(BaseModel):
     production_order_id: Optional[int] = Field(None, description="Zlecenie produkcyjne (RW/PW z produkcji).")
     production_order_number: Optional[str] = Field(None, description="Numer MO zlecenia produkcyjnego.")
     production_order_path: Optional[str] = Field(None, description="Ścieżka UI do zlecenia produkcyjnego.")
+    production_batch_id: Optional[int] = Field(None, description="Partia produkcyjna (RW/PW z produkcji falowej).")
+    production_batch_number: Optional[str] = Field(None, description="Numer partii produkcyjnej.")
+    production_batch_path: Optional[str] = Field(None, description="Ścieżka UI do partii produkcyjnej.")
     supplier_id: Optional[int] = None
     supplier_name: str = ""
     delivery_id: Optional[int] = None
@@ -357,6 +360,8 @@ class StockDocumentListRow(BaseModel):
     customer_name: Optional[str] = None
     production_order_id: Optional[int] = None
     production_order_number: Optional[str] = None
+    production_batch_id: Optional[int] = None
+    production_batch_number: Optional[str] = None
     delivery_id: Optional[int] = None
     supplier_id: Optional[int] = None
     supplier_name: str

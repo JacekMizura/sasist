@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
+from ..models.product_composition import ProductComposition
 from ..models.production import ProductionOrder, ProductionOrderLineSnapshot, ProductionRecipe
 from ..models.app_user import AppUser
 from ..models.stock_document import StockDocument, StockDocumentItem
@@ -32,6 +33,8 @@ from .inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 from .order_item_pick_allocation_service import consume_inventory_fifo_slices
 from .product_cost_service import get_product_current_cost
+from .composition_engine_service import calculate_required_components as calculate_composition_components
+from .composition_engine_service import resolve_composition_entity
 from .production_recipe_service import ProductionRecipeError, calculate_required_components
 from .stock_disposition import STOCK_DISPOSITION_SALEABLE
 from .stock_operation_issue_service import append_issue_operation
@@ -226,6 +229,34 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
     )
 
 
+def _snapshot_composition_lines(
+    db: Session,
+    order: ProductionOrder,
+    composition: ProductComposition,
+    *,
+    planned_quantity: float,
+) -> None:
+    reqs = calculate_composition_components(composition, planned_quantity=planned_quantity)
+    prod_ids = [int(r["component_product_id"]) for r in reqs]
+    names: dict[int, Product] = {}
+    if prod_ids:
+        for p in db.query(Product).filter(Product.id.in_(prod_ids)).all():
+            names[int(p.id)] = p
+    for req in reqs:
+        pid = int(req["component_product_id"])
+        p = names.get(pid)
+        order.line_snapshots.append(
+            ProductionOrderLineSnapshot(
+                component_product_id=pid,
+                quantity_per_unit=float(req["quantity_per_unit"]),
+                total_required_quantity=float(req["total_required"]),
+                consumed_quantity=0.0,
+                product_name_snapshot=str(p.name if p else f"Produkt #{pid}"),
+                product_sku_snapshot=((p.sku or p.symbol) if p else None),
+            )
+        )
+
+
 def _snapshot_recipe_lines(
     db: Session,
     order: ProductionOrder,
@@ -271,10 +302,12 @@ def create_production_order(
         raise ProductionOrderError("Receptura nie istnieje.", code="recipe_not_found")
     if not recipe.lines:
         raise ProductionOrderError("Receptura nie ma składników.", code="recipe_empty")
+    composition = resolve_composition_entity(db, tenant_id=tenant_id, recipe_id=int(recipe.id))
     order = ProductionOrder(
         tenant_id=int(tenant_id),
         number=_next_order_number(db, tenant_id=tenant_id),
         recipe_id=int(recipe.id),
+        composition_id=int(composition.id) if composition is not None else None,
         product_id=int(recipe.product_id),
         warehouse_id=int(body.warehouse_id),
         location_id=int(body.location_id) if body.location_id else None,
@@ -286,7 +319,10 @@ def create_production_order(
     )
     db.add(order)
     db.flush()
-    _snapshot_recipe_lines(db, order, recipe, planned_quantity=float(body.planned_quantity))
+    if composition is not None and composition.lines:
+        _snapshot_composition_lines(db, order, composition, planned_quantity=float(body.planned_quantity))
+    else:
+        _snapshot_recipe_lines(db, order, recipe, planned_quantity=float(body.planned_quantity))
     db.flush()
     return serialize_order(db, order, with_availability=True)
 

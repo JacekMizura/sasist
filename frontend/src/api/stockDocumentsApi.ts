@@ -150,6 +150,9 @@ export type StockDocumentRead = {
   production_order_id?: number | null;
   production_order_number?: string | null;
   production_order_path?: string | null;
+  production_batch_id?: number | null;
+  production_batch_number?: string | null;
+  production_batch_path?: string | null;
   supplier_id: number;
   supplier_name?: string;
   delivery_id?: number | null;

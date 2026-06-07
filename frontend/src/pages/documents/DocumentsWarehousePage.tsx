@@ -1159,6 +1159,19 @@ export default function DocumentsWarehousePage() {
                             </dd>
                           </div>
                         ) : null}
+                        {detail.production_batch_id != null ? (
+                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <dt className="text-slate-500">Partia produkcyjna</dt>
+                            <dd>
+                              <Link
+                                to={detail.production_batch_path ?? `/production?batch=${detail.production_batch_id}`}
+                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
+                              >
+                                {(detail.production_batch_number || "").trim() || `BAT #${detail.production_batch_id}`}
+                              </Link>
+                            </dd>
+                          </div>
+                        ) : null}
                         {detail.linked_sale_document ? (
                           <div className="flex items-center justify-between gap-4 pt-1">
                             <dt className="text-slate-500">Dokument sprzedaży</dt>

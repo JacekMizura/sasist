@@ -10,6 +10,13 @@ from sqlalchemy.orm import Session
 from ..auth.deps import get_optional_current_user
 from ..database import get_db
 from ..models.app_user import AppUser
+from ..schemas.production_batch import (
+    ProductionBatchCompleteBody,
+    ProductionBatchCompleteResultRead,
+    ProductionBatchCreateBody,
+    ProductionBatchPickPlanRead,
+    ProductionBatchRead,
+)
 from ..schemas.production import (
     ProductionCompleteResultRead,
     ProductionOrderCompleteBody,
@@ -33,6 +40,16 @@ from ..services.production_order_service import (
     list_production_orders,
     list_production_orders_for_product,
     start_production_order,
+)
+from ..services.production_batch_service import (
+    ProductionBatchError,
+    build_batch_pick_plan,
+    cancel_batch,
+    complete_batch,
+    create_batch,
+    get_batch,
+    list_batches,
+    start_batch,
 )
 from ..services.production_pick_service import build_production_pick_plan, search_warehouse_locations
 from ..services.production_recipe_service import (
@@ -281,6 +298,122 @@ def api_complete_order(
     except ProductionOrderError as exc:
         db.rollback()
         raise _order_err(exc) from exc
+
+
+def _batch_err(exc: ProductionBatchError) -> HTTPException:
+    if exc.code == "not_found":
+        return HTTPException(status_code=404, detail={"message": exc.message, "code": exc.code})
+    if exc.code == "insufficient_stock":
+        return HTTPException(
+            status_code=409,
+            detail={"message": exc.message, "code": exc.code, "shortages": exc.shortages},
+        )
+    return HTTPException(status_code=400, detail={"message": exc.message, "code": exc.code})
+
+
+@router.get("/batches", response_model=List[ProductionBatchRead])
+def api_list_batches(
+    tenant_id: int = Query(..., ge=1),
+    status: Optional[str] = Query(None),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    return list_batches(db, tenant_id=tenant_id, status=status, warehouse_id=warehouse_id)
+
+
+@router.get("/batches/{batch_id}", response_model=ProductionBatchRead)
+def api_get_batch(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    row = get_batch(db, tenant_id=tenant_id, batch_id=batch_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Partia nie istnieje.")
+    return row
+
+
+@router.get("/batches/{batch_id}/pick-plan", response_model=ProductionBatchPickPlanRead)
+def api_batch_pick_plan(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return build_batch_pick_plan(db, tenant_id=tenant_id, batch_id=batch_id)
+    except ProductionBatchError as exc:
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches", response_model=ProductionBatchRead)
+def api_create_batch(
+    body: ProductionBatchCreateBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        uid = int(user.id) if user is not None else None
+        row = create_batch(db, tenant_id=tenant_id, body=body, created_by_user_id=uid)
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/start", response_model=ProductionBatchRead)
+def api_start_batch(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = start_batch(db, tenant_id=tenant_id, batch_id=batch_id)
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/complete", response_model=ProductionBatchCompleteResultRead)
+def api_complete_batch(
+    batch_id: int,
+    body: ProductionBatchCompleteBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        uid = int(user.id) if user is not None else None
+        row = complete_batch(
+            db,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            body=body,
+            performed_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/cancel", response_model=ProductionBatchRead)
+def api_cancel_batch(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = cancel_batch(db, tenant_id=tenant_id, batch_id=batch_id)
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
 
 
 @router.post("/orders/{order_id}/cancel", response_model=ProductionOrderRead)

@@ -1,4 +1,4 @@
-import type { ProductionOrderStatus } from "../../api/productionApi";
+import type { ProductionBatchStatus, ProductionOrderStatus } from "../../api/productionApi";
 
 export const PRODUCTION_STATUS_LABEL: Record<ProductionOrderStatus, string> = {
   draft: "Robocze",
@@ -7,6 +7,18 @@ export const PRODUCTION_STATUS_LABEL: Record<ProductionOrderStatus, string> = {
   completed: "Zakończone",
   cancelled: "Anulowane",
 };
+
+export const BATCH_STATUS_LABEL: Record<ProductionBatchStatus, string> = {
+  draft: "Robocza",
+  planned: "Zaplanowana",
+  in_progress: "W produkcji",
+  completed: "Zakończona",
+  cancelled: "Anulowana",
+};
+
+export function batchStatusBadgeClass(status: ProductionBatchStatus): string {
+  return productionStatusBadgeClass(status as ProductionOrderStatus);
+}
 
 export function productionStatusBadgeClass(status: ProductionOrderStatus): string {
   const base = "inline-flex rounded px-2 py-0.5 text-xs font-medium";

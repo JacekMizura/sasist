@@ -41,7 +41,7 @@ import { ProductLogisticsPackagingMatchingSection } from "../../components/produ
 import { RetailLabel } from "../../components/products/RetailLabel";
 import { WarehouseFormCard as Card } from "../../components/products/WarehouseFormCard";
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
-import { ProductProductionPanel } from "../Production/ProductProductionPanel";
+import { ProductCompositionsPanel } from "../Production/ProductCompositionsPanel";
 import { listRecipesForProduct } from "../../api/productionApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
@@ -1641,7 +1641,7 @@ export function ProductEditModal({
     warehouseOps: "Operacje magazynowe",
     logistics: "Logistyka",
     settings: "Ustawienia",
-    production: "Produkcja",
+    production: "Kompozycje",
   };
 
   // Tego fragmentu zabrakło:
@@ -2838,11 +2838,11 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "production" && !isNew && tenantId != null && product?.id != null ? (
-                  <ProductProductionPanel
+                  <ProductCompositionsPanel
                     tenantId={tenantId}
                     productId={Number(product.id)}
                     productName={name.trim() || `Produkt #${product.id}`}
-                    onRecipesChanged={() => {
+                    onChanged={() => {
                       setProductionTabVisible(true);
                       setActiveTab("production");
                     }}
@@ -2850,7 +2850,7 @@ export function ProductEditModal({
                 ) : null}
 
                 {activeTab === "production" && isNew ? (
-                  <p className="text-sm text-slate-500">Zapisz produkt, aby dodać recepturę produkcji.</p>
+                  <p className="text-sm text-slate-500">Zapisz produkt, aby dodać kompozycje (zestawy i produkcja).</p>
                 ) : null}
 
                 {activeTab === "offers" && (

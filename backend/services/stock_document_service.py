@@ -1360,6 +1360,17 @@ def build_stock_document_read(
             prod_order_number = str(po.number or "").strip() or None
             prod_order_path = f"/production?order={int(po.id)}"
 
+    prod_batch_id = getattr(doc, "production_batch_id", None)
+    prod_batch_number: Optional[str] = None
+    prod_batch_path: Optional[str] = None
+    if prod_batch_id is not None:
+        from ..models.product_composition import ProductionBatch
+
+        bat = db.query(ProductionBatch).filter(ProductionBatch.id == int(prod_batch_id)).first()
+        if bat is not None:
+            prod_batch_number = str(bat.number or "").strip() or None
+            prod_batch_path = f"/production?batch={int(bat.id)}"
+
     return StockDocumentRead(
         id=doc.id,
         tenant_id=doc.tenant_id,
@@ -1374,6 +1385,9 @@ def build_stock_document_read(
         production_order_id=int(prod_order_id) if prod_order_id is not None else None,
         production_order_number=prod_order_number,
         production_order_path=prod_order_path,
+        production_batch_id=int(prod_batch_id) if prod_batch_id is not None else None,
+        production_batch_number=prod_batch_number,
+        production_batch_path=prod_batch_path,
         supplier_id=doc.supplier_id,
         supplier_name=(sup.name or "").strip() if sup else "",
         delivery_id=doc.delivery_id,

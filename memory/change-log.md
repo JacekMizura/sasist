@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-04 — Composition Engine + Batch/Wave Production
+- `product_compositions` + `product_composition_lines` (bundle | manufacturing modes, no product_type)
+- `production_batches` + `production_batch_lines`; aggregated component demand + shortages
+- Migration from `production_recipes`; recipe service syncs compositions; stock docs link batch_id
+- API: `/compositions`, `/production/batches`; frontend Kompozycje tab + batch Produkcja UI
+- Tests: `test_composition_batch.py` (aggregation engine)
+
 ## 2026-06-04 — Manufacturing / Production module (WMS)
 - PostgreSQL-safe migration `ensure_production_tables` (recipes, orders, line snapshots)
 - Recipe service + production order service (FIFO consume, RW/PW docs, valuation on complete)

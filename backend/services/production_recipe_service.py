@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..models.inventory import Inventory
 from ..models.product import Product
+from ..models.product_composition import ProductComposition, ProductCompositionLine
 from ..models.production import ProductionRecipe, ProductionRecipeLine
 from ..schemas.production import (
     ProductionRecipeCreateBody,
@@ -96,6 +97,67 @@ def _deactivate_siblings(db: Session, recipe: ProductionRecipe) -> None:
     )
 
 
+def _deactivate_composition_siblings(db: Session, comp: ProductComposition) -> None:
+    (
+        db.query(ProductComposition)
+        .filter(
+            ProductComposition.tenant_id == int(comp.tenant_id),
+            ProductComposition.product_id == int(comp.product_id),
+            ProductComposition.composition_mode == str(comp.composition_mode),
+            ProductComposition.id != int(comp.id),
+            ProductComposition.is_active.is_(True),
+        )
+        .update({ProductComposition.is_active: False}, synchronize_session=False)
+    )
+
+
+def _sync_composition_from_recipe(db: Session, recipe: ProductionRecipe) -> None:
+    """Keep manufacturing composition in sync with legacy recipe row."""
+    comp = (
+        db.query(ProductComposition)
+        .filter(
+            ProductComposition.tenant_id == int(recipe.tenant_id),
+            ProductComposition.source_recipe_id == int(recipe.id),
+        )
+        .first()
+    )
+    if comp is None:
+        comp = ProductComposition(
+            tenant_id=int(recipe.tenant_id),
+            product_id=int(recipe.product_id),
+            composition_mode="manufacturing",
+            name=str(recipe.name or ""),
+            version=str(recipe.version or "1"),
+            yield_quantity=float(recipe.yield_quantity or 1),
+            notes=recipe.notes,
+            is_active=bool(recipe.is_active),
+            source_recipe_id=int(recipe.id),
+        )
+        db.add(comp)
+        db.flush()
+    else:
+        comp.name = str(recipe.name or "")
+        comp.version = str(recipe.version or "1")
+        comp.yield_quantity = float(recipe.yield_quantity or 1)
+        comp.notes = recipe.notes
+        comp.is_active = bool(recipe.is_active)
+        comp.updated_at = datetime.utcnow()
+    comp.lines.clear()
+    for idx, ln in enumerate(sorted(recipe.lines or [], key=lambda x: (x.sort_order, x.id))):
+        comp.lines.append(
+            ProductCompositionLine(
+                component_product_id=int(ln.component_product_id),
+                quantity=float(ln.quantity),
+                waste_percent=float(ln.waste_percent or 0),
+                sort_order=int(ln.sort_order if ln.sort_order else idx),
+                notes=ln.notes,
+            )
+        )
+    if comp.is_active:
+        _deactivate_composition_siblings(db, comp)
+    db.flush()
+
+
 def _apply_lines(recipe: ProductionRecipe, lines: list[ProductionRecipeLineWrite]) -> None:
     recipe.lines.clear()
     for idx, ln in enumerate(lines):
@@ -169,6 +231,7 @@ def create_recipe(db: Session, *, tenant_id: int, body: ProductionRecipeCreateBo
     if recipe.is_active:
         _deactivate_siblings(db, recipe)
     db.flush()
+    _sync_composition_from_recipe(db, recipe)
     return serialize_recipe(db, recipe)
 
 
@@ -205,6 +268,7 @@ def update_recipe(
             _deactivate_siblings(db, recipe)
     recipe.updated_at = datetime.utcnow()
     db.flush()
+    _sync_composition_from_recipe(db, recipe)
     return serialize_recipe(db, recipe)
 
 

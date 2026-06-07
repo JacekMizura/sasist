@@ -12,51 +12,52 @@ import {
 } from "../../components/operational";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
-  getProductionOrder,
-  listProductionOrders,
-  type ProductionOrderRead,
-  type ProductionOrderStatus,
+  createProductionBatch,
+  getProductionBatch,
+  listProductionBatches,
+  type ProductionBatchRead,
+  type ProductionBatchStatus,
 } from "../../api/productionApi";
-import { ProductionOrderExecutionPanel } from "./ProductionOrderExecutionPanel";
-import { PRODUCTION_STATUS_LABEL, productionStatusBadgeClass } from "./productionUi";
+import { ProductionBatchExecutionPanel } from "./ProductionBatchExecutionPanel";
+import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
 
 const DEFAULT_TENANT_ID = 1;
 
-type ViewTab = "queue" | "in_progress" | "completed" | "cancelled";
+type ViewTab = "queue" | "in_progress" | "completed";
 
-const TAB_STATUS: Record<ViewTab, ProductionOrderStatus> = {
+const TAB_STATUS: Record<ViewTab, ProductionBatchStatus> = {
   queue: "planned",
   in_progress: "in_progress",
   completed: "completed",
-  cancelled: "cancelled",
 };
 
 export default function ProductionPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT_ID;
   const warehouseId = warehouse?.id;
 
   const [viewTab, setViewTab] = useState<ViewTab>("queue");
-  const [orders, setOrders] = useState<ProductionOrderRead[]>([]);
+  const [batches, setBatches] = useState<ProductionBatchRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [detail, setDetail] = useState<ProductionOrderRead | null>(null);
+  const [detail, setDetail] = useState<ProductionBatchRead | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
 
   const reloadList = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
-      const rows = await listProductionOrders(tenantId, {
+      const rows = await listProductionBatches(tenantId, {
         status: TAB_STATUS[viewTab],
         warehouse_id: warehouseId,
       });
-      setOrders(rows);
+      setBatches(rows);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Nie udało się wczytać zleceń.");
-      setOrders([]);
+      setErr(e instanceof Error ? e.message : "Nie udało się wczytać partii.");
+      setBatches([]);
     } finally {
       setLoading(false);
     }
@@ -67,18 +68,18 @@ export default function ProductionPage() {
   }, [reloadList]);
 
   useEffect(() => {
-    const oid = searchParams.get("order");
-    if (oid && /^\d+$/.test(oid)) setSelectedId(Number(oid));
+    const bid = searchParams.get("batch");
+    if (bid && /^\d+$/.test(bid)) setSelectedId(Number(bid));
   }, [searchParams]);
 
   const loadDetail = useCallback(
     async (id: number) => {
       setDetailBusy(true);
       try {
-        const row = await getProductionOrder(tenantId, id);
+        const row = await getProductionBatch(tenantId, id);
         setDetail(row);
       } catch (e: unknown) {
-        setErr(e instanceof Error ? e.message : "Nie udało się wczytać zlecenia.");
+        setErr(e instanceof Error ? e.message : "Nie udało się wczytać partii.");
         setDetail(null);
       } finally {
         setDetailBusy(false);
@@ -92,6 +93,39 @@ export default function ProductionPage() {
     else setDetail(null);
   }, [selectedId, loadDetail]);
 
+  const handleCreateFromParams = useCallback(async () => {
+    const newBatch = searchParams.get("newBatch");
+    const productId = searchParams.get("product");
+    const compositionId = searchParams.get("composition");
+    if (newBatch !== "1" || !productId || !compositionId || !warehouseId) return;
+    setCreateBusy(true);
+    setErr(null);
+    try {
+      const batch = await createProductionBatch(tenantId, {
+        warehouse_id: warehouseId,
+        status: "planned",
+        lines: [
+          {
+            product_id: Number(productId),
+            composition_id: Number(compositionId),
+            planned_quantity: 1,
+          },
+        ],
+      });
+      setSelectedId(batch.id);
+      setSearchParams({ batch: String(batch.id) });
+      await reloadList();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Nie udało się utworzyć partii.");
+    } finally {
+      setCreateBusy(false);
+    }
+  }, [searchParams, warehouseId, tenantId, setSearchParams, reloadList]);
+
+  useEffect(() => {
+    void handleCreateFromParams();
+  }, [handleCreateFromParams]);
+
   const tabClass = (id: ViewTab) =>
     `rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
       viewTab === id ? "bg-violet-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
@@ -102,10 +136,12 @@ export default function ProductionPage() {
       { id: "queue", label: "Kolejka" },
       { id: "in_progress", label: "W produkcji" },
       { id: "completed", label: "Zakończone" },
-      { id: "cancelled", label: "Anulowane" },
     ],
     [],
   );
+
+  const lineSummary = (b: ProductionBatchRead) =>
+    b.lines.map((l) => `${l.product_name ?? l.product_id} ×${l.planned_quantity}`).join(", ");
 
   return (
     <PageLayout>
@@ -118,60 +154,59 @@ export default function ProductionPage() {
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {viewTabs.map((t) => (
-          <button key={t.id} type="button" className={tabClass(t.id)} onClick={() => setViewTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {viewTabs.map((t) => (
+            <button key={t.id} type="button" className={tabClass(t.id)} onClick={() => setViewTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {createBusy ? <span className="text-sm text-slate-500">Tworzenie partii…</span> : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-2">
           <div className={panelListDenseTableScrollWrapClass}>
             <table className={panelListDenseTableClass}>
               <thead className={panelListDenseTheadClass}>
                 <tr>
-                  <th className={panelListDenseThBase}>Nr</th>
-                  <th className={panelListDenseThBase}>Produkt</th>
-                  <th className={panelListDenseThBase}>Ilość</th>
-                  <th className={panelListDenseThBase}>Magazyn</th>
+                  <th className={panelListDenseThBase}>Nr partii</th>
+                  <th className={panelListDenseThBase}>Produkty</th>
                   <th className={panelListDenseThBase}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className={`${panelListDenseTdBase} text-slate-500`}>
+                    <td colSpan={3} className={`${panelListDenseTdBase} text-slate-500`}>
                       Wczytywanie…
                     </td>
                   </tr>
-                ) : orders.length === 0 ? (
+                ) : batches.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className={`${panelListDenseTdBase} text-slate-500`}>
-                      Brak zleceń w tym widoku.
+                    <td colSpan={3} className={`${panelListDenseTdBase} text-slate-500`}>
+                      Brak partii w tym widoku.
                     </td>
                   </tr>
                 ) : (
-                  orders.map((o) => (
+                  batches.map((b) => (
                     <tr
-                      key={o.id}
-                      className={`${panelListDenseRowClass} cursor-pointer ${selectedId === o.id ? "bg-violet-50" : ""}`}
-                      onClick={() => setSelectedId(o.id)}
+                      key={b.id}
+                      className={`${panelListDenseRowClass} cursor-pointer ${selectedId === b.id ? "bg-violet-50" : ""}`}
+                      onClick={() => {
+                        setSelectedId(b.id);
+                        setSearchParams({ batch: String(b.id) });
+                      }}
                     >
                       <td className={panelListDenseTdBase}>
-                        <span className="font-mono text-xs">{o.number}</span>
+                        <span className="font-mono text-xs">{b.number}</span>
+                      </td>
+                      <td className={`${panelListDenseTdBase} text-xs text-slate-600 max-w-[12rem] truncate`}>
+                        {lineSummary(b)}
                       </td>
                       <td className={panelListDenseTdBase}>
-                        <div className="font-medium text-slate-900">{o.product_name ?? `#${o.product_id}`}</div>
-                        <div className="text-xs text-slate-500">{o.product_sku ?? ""}</div>
-                      </td>
-                      <td className={panelListDenseTdBase}>{o.planned_quantity}</td>
-                      <td className={panelListDenseTdBase}>{o.warehouse_name ?? o.warehouse_id}</td>
-                      <td className={panelListDenseTdBase}>
-                        <span className={productionStatusBadgeClass(o.status)}>
-                          {PRODUCTION_STATUS_LABEL[o.status]}
-                        </span>
+                        <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
                       </td>
                     </tr>
                   ))
@@ -181,17 +216,17 @@ export default function ProductionPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-3">
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
             {!selectedId ? (
-              <p className="text-sm text-slate-500">Wybierz zlecenie z listy.</p>
+              <p className="text-sm text-slate-500">Wybierz partię z listy lub utwórz ją z karty produktu (Kompozycje → Produkcja).</p>
             ) : detailBusy || !detail ? (
               <p className="text-sm text-slate-500">Wczytywanie szczegółów…</p>
             ) : (
-              <ProductionOrderExecutionPanel
+              <ProductionBatchExecutionPanel
                 tenantId={tenantId}
-                order={detail}
-                onOrderUpdated={setDetail}
+                batch={detail}
+                onBatchUpdated={setDetail}
                 onListRefresh={() => void reloadList()}
               />
             )}

@@ -410,3 +410,165 @@ export async function cancelProductionOrder(
   );
   return res.data;
 }
+
+export type ProductionBatchStatus =
+  | "draft"
+  | "planned"
+  | "in_progress"
+  | "completed"
+  | "cancelled";
+
+export type ProductionBatchLineRead = {
+  id: number;
+  product_id: number;
+  composition_id: number;
+  planned_quantity: number;
+  completed_quantity: number;
+  target_location_id?: number | null;
+  target_location_name?: string | null;
+  status: string;
+  calculated_unit_cost?: number | null;
+  pw_stock_document_id?: number | null;
+  product_name?: string | null;
+  product_sku?: string | null;
+  composition_name?: string | null;
+  notes?: string | null;
+};
+
+export type ProductionBatchRead = {
+  id: number;
+  tenant_id: number;
+  number: string;
+  warehouse_id: number;
+  warehouse_name?: string | null;
+  status: ProductionBatchStatus;
+  notes?: string | null;
+  rw_stock_document_id?: number | null;
+  rw_document_number?: string | null;
+  operator_name?: string | null;
+  lines: ProductionBatchLineRead[];
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type ProductionBatchLineWrite = {
+  product_id: number;
+  composition_id: number;
+  planned_quantity: number;
+  target_location_id?: number | null;
+  notes?: string | null;
+};
+
+export type ProductionBatchCreateBody = {
+  warehouse_id: number;
+  notes?: string | null;
+  status?: ProductionBatchStatus;
+  lines: ProductionBatchLineWrite[];
+};
+
+export type BatchAggregatedPickLineRead = {
+  component_product_id: number;
+  product_name: string;
+  product_sku?: string | null;
+  required: number;
+  available: number;
+  missing: number;
+  suggested_locations: ProductionLocationSuggestionRead[];
+  auto_allocation: ProductionAllocationRead[];
+};
+
+export type ProductionBatchPickPlanRead = {
+  batch_id: number;
+  warehouse_id: number;
+  shortages: StockShortageRead[];
+  has_shortages: boolean;
+  aggregated_components: BatchAggregatedPickLineRead[];
+  product_lines: ProductionBatchLineRead[];
+};
+
+export type ProductionBatchCompleteBody = {
+  component_allocations?: ComponentAllocationWrite[];
+  line_completions?: { line_id: number; completed_quantity: number; target_location_id?: number | null }[];
+};
+
+export type ProductionBatchCompleteResultRead = {
+  batch: ProductionBatchRead;
+  rw_stock_document_id?: number | null;
+  rw_document_number?: string | null;
+  component_total_cost?: number | null;
+};
+
+export async function listProductionBatches(
+  tenantId: number,
+  opts?: { status?: ProductionBatchStatus; warehouse_id?: number },
+): Promise<ProductionBatchRead[]> {
+  const res = await api.get<ProductionBatchRead[]>("/production/batches", {
+    params: { tenant_id: tenantId, ...opts },
+  });
+  return res.data;
+}
+
+export async function getProductionBatch(
+  tenantId: number,
+  batchId: number,
+): Promise<ProductionBatchRead> {
+  const res = await api.get<ProductionBatchRead>(`/production/batches/${batchId}`, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function fetchBatchPickPlan(
+  tenantId: number,
+  batchId: number,
+): Promise<ProductionBatchPickPlanRead> {
+  const res = await api.get<ProductionBatchPickPlanRead>(`/production/batches/${batchId}/pick-plan`, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function createProductionBatch(
+  tenantId: number,
+  body: ProductionBatchCreateBody,
+): Promise<ProductionBatchRead> {
+  const res = await api.post<ProductionBatchRead>("/production/batches", body, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function startProductionBatch(
+  tenantId: number,
+  batchId: number,
+): Promise<ProductionBatchRead> {
+  const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/start`, null, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function completeProductionBatch(
+  tenantId: number,
+  batchId: number,
+  body: ProductionBatchCompleteBody = {},
+): Promise<ProductionBatchCompleteResultRead> {
+  const res = await api.post<ProductionBatchCompleteResultRead>(
+    `/production/batches/${batchId}/complete`,
+    body,
+    { params: { tenant_id: tenantId } },
+  );
+  return res.data;
+}
+
+export async function cancelProductionBatch(
+  tenantId: number,
+  batchId: number,
+): Promise<ProductionBatchRead> {
+  const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/cancel`, null, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}

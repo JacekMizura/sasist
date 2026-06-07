@@ -32,7 +32,15 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Manufacturing / Production — execution UX (latest)
+## Composition Engine + Batch Production (latest)
+- Shared `product_compositions` / `product_composition_lines` (`composition_mode`: bundle | manufacturing)
+- Migration `ensure_product_compositions_and_batches` copies `production_recipes` → manufacturing compositions
+- API `/compositions`; batch API `/production/batches` with aggregated pick-plan + RW/PW completion
+- Recipe CRUD syncs linked composition (`source_recipe_id`); orders get `composition_id`
+- Product tab **Kompozycje**: Zestawy + Produkcja visual card editor; Produkcja module is batch-centric
+- No `product_type` enums; legacy `bundles` table unchanged
+
+## Manufacturing / Production — execution UX (prior)
 - Pick plan API: `/production/orders/{id}/pick-plan` — FIFO auto-allocation + picking-priority location suggestions
 - Completion UI: per-component source locations (auto/manual), target location search (debounced), shortage panel
 - Recipe FIFO cost estimate API; product **Historia produkcji**; RW/PW ↔ MO backlinks on warehouse docs

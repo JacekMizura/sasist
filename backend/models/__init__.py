@@ -44,6 +44,12 @@ from .production import (  # noqa: F401 - manufacturing recipes & orders
     ProductionRecipe,
     ProductionRecipeLine,
 )
+from .product_composition import (  # noqa: F401 - shared composition engine + batches
+    ProductComposition,
+    ProductCompositionLine,
+    ProductionBatch,
+    ProductionBatchLine,
+)
 from .order import Order
 from .order_custom_field import OrderCustomField, OrderCustomFieldOption, OrderCustomFieldValue  # noqa: F401
 from .order_document import OrderDocument  # noqa: F401
