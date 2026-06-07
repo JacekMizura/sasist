@@ -6,7 +6,7 @@ export type WmsPinnedMode = {
   order: number;
 };
 
-const STORAGE_VERSION = "v1";
+const STORAGE_VERSION = "v2";
 const STORAGE_PREFIX = "wmsPinnedModes";
 
 export function wmsPinnedModesStorageKey(userId: number | null): string {

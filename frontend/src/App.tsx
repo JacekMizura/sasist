@@ -324,7 +324,7 @@ export const router = createBrowserRouter(
       <Route path="report/product-locations" element={<ProductLocationReportPage />} />
       <Route path="wms-upload/:sessionId" element={<WmsPhoneUploadPage />} />
       <Route path="wms" element={<WmsOperationalLayout />}>
-        <Route index element={<Navigate to="returns" replace />} />
+        <Route index element={<Navigate to="menu" replace />} />
         <Route path="menu" element={<WmsMenuPage />} />
         <Route path="returns" element={<WmsReturnsEntryPage />} />
         <Route path="returns/process/:returnId" element={<WmsReturnsPage />} />

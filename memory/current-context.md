@@ -32,7 +32,14 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Production module UX — WMS wiring fix (latest)
+## Production — full WMS module integration (latest)
+- `WMS_MODULES` in `wmsTabConfig.ts` — Produkcja same shape as Przyjęcie/Zbieranie/Pakowanie (icon, path, dashboard tile, operationalMode)
+- `/wms` and sidebar WMS link → `/wms/menu` (tile dashboard)
+- `WmsMenuPage` uses `WmsModeCard` + `dashboardTiles` from `resolveWmsNavTabs()` (permission-aware)
+- Removed mandatory-nav hack, debug console logs, NEW PRODUCTION UI banner
+- Top nav + pin support via same module registry; route `/wms/production` → `ProductionDashboardPage`
+
+## Production module UX — WMS wiring fix (prior)
 - Routes live under `/wms/production/*` (dashboard, batch, collecting, execute, putaway)
 - **Produkcja** always visible in WMS top bar (`useWmsPinnedModes` mandatory tab)
 - Dashboard banner **NEW PRODUCTION UI ACTIVE** + console debug logs

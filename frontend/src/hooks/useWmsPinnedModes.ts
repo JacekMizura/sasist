@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { WMS_TAB_ITEMS, type WmsTabConfigItem, type WmsTabId } from "../pages/wms/wmsTabConfig";
-
-/** Always visible in WMS top bar even when user pins a custom tab subset. */
-const MANDATORY_WMS_TAB_IDS: WmsTabId[] = ["production"];
+import { useAuth } from "../context/AuthContext";
+import { WMS_TAB_ITEMS, type WmsTabConfigItem } from "../pages/wms/wmsTabConfig";
+import { resolveWmsNavTabs } from "../pages/wms/wmsNavTabs";
 import {
   readWmsPinnedModesFromStorage,
   writeWmsPinnedModesToStorage,
@@ -13,6 +12,7 @@ import {
 export type { WmsPinnedMode };
 
 export function useWmsPinnedModes(userId: number | null) {
+  const { user } = useAuth();
   const [modes, setModes] = useState<WmsPinnedMode[]>(() => readWmsPinnedModesFromStorage(userId));
 
   useEffect(() => {
@@ -23,19 +23,14 @@ export function useWmsPinnedModes(userId: number | null) {
     writeWmsPinnedModesToStorage(userId, modes);
   }, [userId, modes]);
 
-  const pinnedTabsInOrder: WmsTabConfigItem[] = useMemo(() => {
-    const pinned = modes.filter((m) => m.pinned).sort((a, b) => a.order - b.order);
-    return pinned
-      .map((m) => WMS_TAB_ITEMS.find((t) => t.id === m.key))
-      .filter((t): t is WmsTabConfigItem => Boolean(t));
-  }, [modes]);
+  const navResolution = useMemo(
+    () => resolveWmsNavTabs(modes, user?.wms_operational_modes),
+    [modes, user?.wms_operational_modes],
+  );
 
-  const visibleNavTabs: WmsTabConfigItem[] = useMemo(() => {
-    const base = pinnedTabsInOrder.length > 0 ? pinnedTabsInOrder : WMS_TAB_ITEMS;
-    const present = new Set(base.map((t) => t.id));
-    const mandatory = WMS_TAB_ITEMS.filter((t) => MANDATORY_WMS_TAB_IDS.includes(t.id) && !present.has(t.id));
-    return mandatory.length ? [...base, ...mandatory] : base;
-  }, [pinnedTabsInOrder]);
+  const pinnedTabsInOrder: WmsTabConfigItem[] = navResolution.pinnedTabs;
+  const visibleNavTabs: WmsTabConfigItem[] = navResolution.finalTabs;
+  const dashboardTiles: WmsTabConfigItem[] = navResolution.dashboardTiles;
 
   const isPinned = useCallback(
     (key: string) => modes.some((m) => m.key === key && m.pinned),
@@ -85,8 +80,11 @@ export function useWmsPinnedModes(userId: number | null) {
     modes,
     pinnedTabsInOrder,
     visibleNavTabs,
+    dashboardTiles,
+    navResolution,
     isPinned,
     togglePin,
     movePinned,
+    catalogTabs: WMS_TAB_ITEMS,
   };
 }

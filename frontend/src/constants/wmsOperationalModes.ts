@@ -12,6 +12,7 @@ export const WMS_OPERATIONAL_MODE_LABELS_PL: Record<string, string> = {
   analytics: "Analiza",
   purchasing: "Zakupy",
   labels: "System etykiet",
+  production: "Produkcja",
 };
 
 export const WMS_OPERATIONAL_MODE_KEYS = Object.keys(WMS_OPERATIONAL_MODE_LABELS_PL);

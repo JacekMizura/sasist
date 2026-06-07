@@ -77,7 +77,7 @@ export type NavCategoryConfig = {
 /** Direct link (no fly-out): opens WMS in a new tab. */
 export const WMS_SIDEBAR_DIRECT = {
   id: "wms" as const,
-  path: "/wms",
+  path: "/wms/menu",
   label: UI_STRINGS.navigation.wmsTerminal,
   Icon: Tablet,
 };
