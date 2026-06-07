@@ -35,7 +35,7 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 ## Production — ERP management vs WMS execution split (latest)
 - **ERP `/production/*`** (`ProductionErpModuleLayout`): Pulpit, Receptury (tabela), Zlecenia, Planowanie, Historia, Analiza kosztów; `/production/batches` → redirect planning
 - **WMS `/wms/production/*`**: tylko collecting → execute → putaway; duże karty operatorskie, bez planowania/analityki
-- **Sidebar**: Produkcja jako sekcja w flyoucie **Asortyment**; jeden link **Terminal WMS** na dole (`/wms/menu`)
+- **Sidebar**: flyout **Asortyment** — jeden link **Produkcja** → `/production` (podstrony tylko w zakładkach modułu); **WMS** pod **System**
 - **Karta produktu**: `ProductProductionSummary` (receptura, koszt, czas, link) — bez CRUD receptury; zestawy nadal w `CompositionVisualEditor`
 - Ścieżki: `erpProductionPaths` vs `wmsProductionPaths` w `productionPaths.ts`
 

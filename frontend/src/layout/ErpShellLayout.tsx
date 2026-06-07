@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Tablet } from "lucide-react";
-
-import { UI_STRINGS } from "../constants/uiStrings";
 import ErpCompactBrandLink from "../components/layout/ErpCompactBrandLink";
 import PanelGlobalStatusStrip from "../components/layout/PanelGlobalStatusStrip";
 import {
   NAV_FLYOUT_CATEGORIES,
+  WMS_SIDEBAR_DIRECT,
   isCategoryActive,
   type NavCategoryConfig,
 } from "./mainNavConfig";
@@ -62,47 +60,57 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
         <div className="flex shrink-0 items-center border-b border-slate-100 px-2 py-2">
           <ErpCompactBrandLink />
         </div>
-        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2 text-sm" aria-label="Menu główne">
-          {NAV_FLYOUT_CATEGORIES.map((cat) => {
-            const Icon = cat.Icon;
-            const contained = categoryContainsCurrentRoute(cat, pathname);
-            const isHovered = hoveredCategoryId === cat.id;
-            const base =
-              "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500";
-            const defaultCls = [
-              contained
-                ? "bg-slate-100 text-slate-800 ring-1 ring-slate-200/90"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-              !contained && isHovered ? "bg-slate-100" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                className={`${base} ${defaultCls}`}
-                onMouseEnter={(e) => onTriggerEnter(cat.id, e.currentTarget)}
-                onMouseLeave={onTriggerLeave}
-              >
-                <span className="text-slate-500 [&_svg]:h-[22px] [&_svg]:w-[22px]">
-                  <Icon size={CATEGORY_ICON} />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-left">{cat.label}</span>
-              </button>
-            );
-          })}
-          <div className="mt-auto border-t border-slate-100 pt-3">
-            <Link
-              to="/wms/menu"
-              className={[
-                "flex w-full items-center gap-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-3 text-sm font-bold text-amber-950 transition-colors hover:bg-amber-100",
-                pathname === "/wms" || pathname.startsWith("/wms/") ? "ring-2 ring-amber-300/80" : "",
-              ].join(" ")}
-            >
-              <Tablet className="h-[22px] w-[22px] text-amber-700" aria-hidden />
-              <span className="truncate">{UI_STRINGS.navigation.wmsTerminal}</span>
-            </Link>
+        <nav className="min-h-0 flex-1 overflow-y-auto p-2 text-sm" aria-label="Menu główne">
+          <div className="flex flex-col gap-0.5">
+            {NAV_FLYOUT_CATEGORIES.map((cat) => {
+              const Icon = cat.Icon;
+              const contained = categoryContainsCurrentRoute(cat, pathname);
+              const isHovered = hoveredCategoryId === cat.id;
+              const base =
+                "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500";
+              const defaultCls = [
+                contained
+                  ? "bg-slate-100 text-slate-800 ring-1 ring-slate-200/90"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                !contained && isHovered ? "bg-slate-100" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`${base} ${defaultCls}`}
+                  onMouseEnter={(e) => onTriggerEnter(cat.id, e.currentTarget)}
+                  onMouseLeave={onTriggerLeave}
+                >
+                  <span className="text-slate-500 [&_svg]:h-[22px] [&_svg]:w-[22px]">
+                    <Icon size={CATEGORY_ICON} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-left">{cat.label}</span>
+                </button>
+              );
+            })}
+            {(() => {
+              const WmsIcon = WMS_SIDEBAR_DIRECT.Icon;
+              const wmsActive = isNavPathActive(pathname, "/wms");
+              return (
+                <Link
+                  to={WMS_SIDEBAR_DIRECT.path}
+                  className={[
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500",
+                    wmsActive
+                      ? "bg-amber-50 text-amber-950 ring-1 ring-amber-300/80"
+                      : "text-amber-900 hover:bg-amber-50/80",
+                  ].join(" ")}
+                >
+                  <span className="text-amber-700 [&_svg]:h-[22px] [&_svg]:w-[22px]">
+                    <WmsIcon size={CATEGORY_ICON} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{WMS_SIDEBAR_DIRECT.label}</span>
+                </Link>
+              );
+            })()}
           </div>
         </nav>
       </aside>

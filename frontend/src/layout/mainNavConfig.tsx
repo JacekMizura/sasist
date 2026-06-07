@@ -23,7 +23,6 @@ import {
   FolderOpen,
   Boxes,
   Factory,
-  LayoutDashboard,
   Truck,
   ShoppingBag,
   Layers,
@@ -34,8 +33,6 @@ import {
   FileText,
   Building2,
   Library,
-  History,
-  CalendarClock,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -78,7 +75,7 @@ export type NavCategoryConfig = {
   activePathPrefix?: string;
 };
 
-/** @deprecated Use WMS nav category in NAV_FLYOUT_CATEGORIES */
+/** Direct WMS sidebar link — rendered inline after System in {@link ErpShellLayout}. */
 export const WMS_SIDEBAR_DIRECT = {
   id: "wms" as const,
   path: "/wms/menu",
@@ -86,7 +83,7 @@ export const WMS_SIDEBAR_DIRECT = {
   Icon: Tablet,
 };
 
-/** Categories that open a hover fly-out. Terminal WMS is a single sidebar link — see ErpShellLayout. */
+/** Categories that open a hover fly-out. WMS is a direct link after System — see ErpShellLayout. */
 export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
   {
     id: "orders",
@@ -203,17 +200,11 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
             label: "Rentowność produktów",
             Icon: BarChart3,
           },
-        ],
-      },
-      {
-        title: "Produkcja",
-        items: [
-          { path: "/production", label: "Pulpit", Icon: LayoutDashboard },
-          { path: "/production/recipes", label: "Receptury", Icon: ClipboardList },
-          { path: "/production/orders", label: "Zlecenia produkcyjne", Icon: Factory },
-          { path: "/production/planning", label: "Planowanie", Icon: CalendarClock },
-          { path: "/production/history", label: "Historia produkcji", Icon: History },
-          { path: "/production/analytics", label: "Analiza kosztów", Icon: BarChart3 },
+          {
+            path: "/production",
+            label: "Produkcja",
+            Icon: ClipboardList,
+          },
         ],
       },
     ],
