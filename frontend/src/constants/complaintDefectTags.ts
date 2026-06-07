@@ -1,6 +1,6 @@
 /** Tagi wady — id muszą być spójne z backendem (zapis `defects_json`). */
 export const COMPLAINT_DEFECT_TAG_OPTIONS: { id: string; label: string }[] = [
-  { id: "transport", label: "Uszkodzenie transportu" },
+  { id: "transport", label: "Uszkodzenie w transporcie" },
   { id: "factory", label: "Wada fabryczna" },
   { id: "missing", label: "Brakująca część" },
   { id: "use", label: "Ślady użytkowania" },

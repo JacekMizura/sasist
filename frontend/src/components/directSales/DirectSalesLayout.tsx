@@ -38,7 +38,6 @@ export function DirectSalesLayout({ terminal }: Props) {
     handleRestoreSuspended,
   } = terminal;
 
-  // Nowoczesny ekran wyboru magazynu (brak szarości)
   if (warehouseId == null) {
     return (
       <div className="flex h-full items-center justify-center bg-white p-6">
@@ -49,7 +48,6 @@ export function DirectSalesLayout({ terminal }: Props) {
     );
   }
 
-  // Nowoczesny ekran ładowania
   if (!runtime.featuresLoaded) {
     return (
       <div className="flex h-full items-center justify-center bg-white p-6">
@@ -144,7 +142,6 @@ export function DirectSalesLayout({ terminal }: Props) {
             onSuspend={() => void sessionState.suspend()}
             onNewSession={handleNewSession}
           />
-          {/* Przewijana dolna część lewej kolumny */}
           <div className="px-4 lg:px-6 pt-4 flex-1 overflow-y-auto custom-scrollbar">
             <SuspendedSessionsPanel
               rows={suspended.rows}
@@ -178,6 +175,7 @@ export function DirectSalesLayout({ terminal }: Props) {
 
         {/* PRAWA KOLUMNA: Klient, Dokument, Płatność */}
         <aside className="flex w-full shrink-0 flex-col lg:w-[26rem] lg:min-w-[26rem] border-t lg:border-t-0 lg:border-l border-blue-50 shadow-[-10px_0_30px_rgb(0,0,0,0.02)] z-0 bg-white">
+          {/* Zlikwidowany sztuczny podział! Wszystko jest w jednym równym strumieniu. */}
           <div className="p-4 lg:p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-6">
             <CustomerPanel
               customer={customer}
@@ -191,9 +189,7 @@ export function DirectSalesLayout({ terminal }: Props) {
               onChange={sessionState.setDocumentSubtype}
               disabled={sessionState.busy}
             />
-          </div>
-          {/* Płatność na samym dole (nieprzewijana, zawsze widoczna na dużym ekranie) */}
-          <div className="flex-shrink-0">
+            {/* PaymentTerminalPanel wskakuje naturalnie zaraz pod Dokumentem */}
             <PaymentTerminalPanel
               total={sessionState.total}
               busy={sessionState.busy}
