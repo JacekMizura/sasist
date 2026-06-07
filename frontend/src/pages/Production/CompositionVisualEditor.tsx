@@ -172,7 +172,7 @@ export function CompositionVisualEditor({
         const p = productCache[r.productId!];
         return {
           id: r.productId!,
-          name: p?.name ?? r.searchText || `Produkt #${r.productId}`,
+          name: p?.name ?? (r.searchText || `Produkt #${r.productId}`),
           qty: r.quantity,
           unit: "szt.",
         };

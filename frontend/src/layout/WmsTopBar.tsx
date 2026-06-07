@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Menu, Minimize2, ScanLine, ArrowLeft } from "lucide-react";
+import { Factory, Maximize2, Menu, Minimize2, ScanLine, ArrowLeft } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import WmsTopBarModuleNav from "../components/wms/WmsTopBarModuleNav";
@@ -197,6 +197,22 @@ export default function WmsTopBar() {
             aria-label="Menu WMS — ekran startowy"
           >
             <Menu className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+          </NavLink>
+
+          <NavLink
+            to={WMS_ROUTES.production}
+            className={({ isActive }) =>
+              [
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-bold transition-colors",
+                isActive
+                  ? "bg-violet-600 text-white shadow-sm"
+                  : "bg-violet-50 text-violet-800 ring-1 ring-violet-200 hover:bg-violet-100",
+              ].join(" ")
+            }
+            title="Centrum produkcji"
+          >
+            <Factory className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">Produkcja</span>
           </NavLink>
 
           <div className="mx-1 h-5 w-px bg-slate-200 shrink-0 hidden sm:block"></div>

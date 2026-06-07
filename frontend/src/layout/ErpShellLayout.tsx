@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { Factory, Tablet } from "lucide-react";
 
 import ErpCompactBrandLink from "../components/layout/ErpCompactBrandLink";
 import PanelGlobalStatusStrip from "../components/layout/PanelGlobalStatusStrip";
@@ -90,6 +91,27 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
               </button>
             );
           })}
+          <div className="mt-3 space-y-1 border-t border-slate-100 pt-3">
+            <Link
+              to="/wms/menu"
+              className="flex w-full items-center gap-3 rounded-lg border border-amber-300/80 bg-amber-50 px-3 py-3 text-sm font-bold text-amber-950 transition-colors hover:bg-amber-100"
+            >
+              <Tablet className="h-[22px] w-[22px] text-amber-700" aria-hidden />
+              <span className="truncate">Terminal WMS</span>
+            </Link>
+            <Link
+              to="/wms/production"
+              className={[
+                "flex w-full items-center gap-3 rounded-lg border-2 px-3 py-3 text-sm font-bold transition-colors",
+                pathname === "/wms/production" || pathname.startsWith("/wms/production/")
+                  ? "border-violet-500 bg-violet-600 text-white shadow-md"
+                  : "border-violet-300 bg-violet-50 text-violet-950 hover:bg-violet-100",
+              ].join(" ")}
+            >
+              <Factory className="h-[22px] w-[22px]" aria-hidden />
+              <span className="truncate">Produkcja</span>
+            </Link>
+          </div>
         </nav>
       </aside>
 

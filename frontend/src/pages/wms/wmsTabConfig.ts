@@ -103,10 +103,9 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     path: "/wms/production",
     label: "Produkcja",
     icon: Factory,
-    sortOrder: 55,
+    sortOrder: 15,
     dashboard: true,
-    operationalMode: "production",
-    shortDescription: "Partie produkcyjne — zbieranie, wykonanie, odkładanie",
+    shortDescription: "Centrum produkcji — planowanie partii, zbieranie, wykonanie, odkładanie",
   },
   {
     id: "packing",

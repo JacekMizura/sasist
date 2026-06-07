@@ -32,7 +32,13 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Production — ERP command center UX (latest)
+## Production — visibility / integration fix (latest)
+- **Root cause**: `operationalMode: "production"` hid tile/nav when user `wms_operational_modes` omitted `production`; build also failed on `CompositionVisualEditor.tsx` (`??`/`||` parens).
+- **Fix**: removed mode gate from production module; `MANDATORY_WMS_TAB_IDS` in `wmsNavTabs.ts` always injects Produkcja.
+- **Always-visible entry points**: ERP sidebar direct links (Terminal WMS + **Produkcja**); WMS menu violet hero banner; WmsTopBar **Produkcja** button; WMS flyout unchanged.
+- Routes `/wms/production/*` wrapped in `ErrorBoundary`; frontend `npm run build` succeeds after syntax fix.
+
+## Production — ERP command center UX (prior)
 - **Visual identity**: violet/indigo manufacturing shell (`productionTheme.ts`, `ProductionModuleLayout`)
 - **Hero command center** (`ProductionHero`): KPIs, shortage alerts, pipeline stage counts, active operator avatars
 - **Queue sections** (`ProductionQueueSection` + `QUEUE_SECTIONS`): operational headers, counts, rich empty states

@@ -418,7 +418,14 @@ export const router = createBrowserRouter(
           <Route path="orders" element={<WmsPackingOrdersPage />} />
           <Route path="order/:orderId" element={<WmsPackingOrderPage />} />
         </Route>
-        <Route path="production" element={<ProductionModuleLayout />}>
+        <Route
+          path="production"
+          element={
+            <ErrorBoundary>
+              <ProductionModuleLayout />
+            </ErrorBoundary>
+          }
+        >
           <Route index element={<ProductionDashboardPage />} />
           <Route path="batch/:batchId" element={<BatchDetailPage />} />
           <Route path="collecting" element={<CollectingPage />} />

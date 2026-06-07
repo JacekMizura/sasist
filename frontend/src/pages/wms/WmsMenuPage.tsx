@@ -1,5 +1,5 @@
-import { ArrowLeft, Menu, Building2, LogOut } from "lucide-react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, ArrowRight, Factory, Menu, Building2, LogOut } from "lucide-react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import WmsTopBarModuleNav from "../../components/wms/WmsTopBarModuleNav";
 import WmsModeCard from "../../components/wms/WmsModeCard";
@@ -91,6 +91,28 @@ export default function WmsMenuPage() {
             <h1 className="text-2xl font-black tracking-tight text-slate-900">Terminal WMS</h1>
             <p className="mt-1 text-sm text-slate-500">Wybierz moduł operacyjny</p>
           </div>
+
+          <Link
+            to={WMS_ROUTES.production}
+            className="mb-8 flex flex-col gap-4 rounded-3xl border-2 border-violet-300 bg-gradient-to-br from-violet-700 via-violet-600 to-indigo-700 p-6 text-white shadow-xl shadow-violet-300/30 transition hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between sm:p-8"
+          >
+            <div className="flex items-start gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
+                <Factory className="h-8 w-8" aria-hidden />
+              </span>
+              <div className="text-left">
+                <p className="text-xs font-bold uppercase tracking-widest text-violet-200">Moduł produkcyjny</p>
+                <h2 className="mt-1 text-xl font-black sm:text-2xl">Centrum produkcji</h2>
+                <p className="mt-2 max-w-xl text-sm text-violet-100/90">
+                  Planowanie partii masowych, kolejki operatorów, zbieranie → wykonanie → odkładanie wyrobów.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-2xl bg-white px-5 py-3 text-sm font-bold text-violet-900 sm:self-center">
+              Otwórz produkcję
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </span>
+          </Link>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {dashboardTiles.map((tab) => (
