@@ -28,32 +28,11 @@ from ..operational_sales_events import emit_operational_sales_event
 
 logger = logging.getLogger(__name__)
 
-_complete_schema_ready = False
-
 
 def _positive_int(value: object | None) -> int | None:
     if not isinstance(value, int) or isinstance(value, bool):
         return None
     return value if value > 0 else None
-
-
-def _ensure_direct_sale_complete_schema() -> None:
-    global _complete_schema_ready
-    if _complete_schema_ready:
-        return
-    from ...database import engine
-    from ...db.schema_upgrade import (
-        ensure_direct_sales_settings_table,
-        ensure_operational_sales_phase2_schema,
-        ensure_operational_sales_phase3_schema,
-        ensure_sale_documents_extended_columns,
-    )
-
-    ensure_direct_sales_settings_table(engine)
-    ensure_operational_sales_phase2_schema(engine)
-    ensure_operational_sales_phase3_schema(engine)
-    ensure_sale_documents_extended_columns(engine)
-    _complete_schema_ready = True
 
 
 @dataclass
@@ -232,8 +211,6 @@ def complete_direct_sale_session(
         sess.status,
         infer_pipeline_status_from_session(sess),
     )
-
-    _ensure_direct_sale_complete_schema()
 
     replay = try_idempotent_complete_result(db, sess)
     if replay is not None and infer_pipeline_status_from_session(sess) == PIPELINE_COMPLETED:

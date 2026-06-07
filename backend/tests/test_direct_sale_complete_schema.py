@@ -11,7 +11,7 @@ import unittest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from backend.db.schema_upgrade import ensure_sale_documents_extended_columns
+from backend.db.schema_introspection import ensure_sale_documents_orm_columns
 from backend.models.sale_document import SaleDocument
 
 
@@ -36,7 +36,7 @@ class TestDirectSaleCompleteSchema(unittest.TestCase):
                     """
                 )
             )
-        ensure_sale_documents_extended_columns(engine)
+        ensure_sale_documents_orm_columns(engine)
         with engine.connect() as conn:
             cols = {row[1] for row in conn.execute(text("PRAGMA table_info(sale_documents)"))}
         self.assertIn("document_type_id", cols)
@@ -94,7 +94,7 @@ class TestDirectSaleCompleteSchema(unittest.TestCase):
                 )
             )
 
-        ensure_sale_documents_extended_columns(engine)
+        ensure_sale_documents_orm_columns(engine)
         Session = sessionmaker(bind=engine)
         db = Session()
         try:

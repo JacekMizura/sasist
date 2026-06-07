@@ -180,11 +180,57 @@ def _add_column_if_missing(engine: Engine, table: str, col: str, ddl: str) -> bo
     return True
 
 
+def ensure_sale_documents_orm_columns(engine: Engine) -> int:
+    """
+    Dialect-agnostic sync of ``sale_documents`` ORM columns (PostgreSQL-safe types).
+
+    Run synchronously at startup — never during ``/complete`` or other request handlers.
+    """
+    from sqlalchemy.schema import CreateColumn
+
+    from ..models.sale_document import SaleDocument
+
+    if not has_table(engine, "sale_documents"):
+        return 0
+
+    added = 0
+    dialect = engine.dialect.name
+    db_cols = get_table_column_names(engine, "sale_documents")
+    for col in SaleDocument.__table__.columns:
+        if col.key in db_cols:
+            continue
+        try:
+            col_sql = str(CreateColumn(col).compile(dialect=engine.dialect))
+            stmt = f"ALTER TABLE sale_documents ADD {col_sql}"
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+            added += 1
+            logger.info(
+                "[schema.tier0] sale_documents orm_sync added column=%s dialect=%s",
+                col.key,
+                dialect,
+            )
+        except Exception:
+            logger.exception(
+                "[schema.tier0] sale_documents orm_sync failed column=%s dialect=%s",
+                col.key,
+                dialect,
+            )
+    if added:
+        logger.info(
+            "[schema.tier0] sale_documents orm_sync complete dialect=%s added=%s",
+            dialect,
+            added,
+        )
+    return added
+
+
 def verify_tier0_sql_probes(engine: Engine) -> list[dict[str, Any]]:
     """
     Direct SQL probes for production recovery — do not trust ORM alone.
     Returns list of failures (empty = all probes OK).
     """
+    optional_tables = frozenset({"sale_documents"})
     probes = (
         ("orders", "SELECT order_channel, fulfillment_mode FROM orders LIMIT 1"),
         (
@@ -192,11 +238,16 @@ def verify_tier0_sql_probes(engine: Engine) -> list[dict[str, Any]]:
             "SELECT source_location_id, source_movement_id FROM order_items LIMIT 1",
         ),
         ("locations", "SELECT operational_zone_type FROM locations LIMIT 1"),
+        (
+            "sale_documents",
+            "SELECT document_type_id, payment_captured_at FROM sale_documents LIMIT 1",
+        ),
     )
     failures: list[dict[str, Any]] = []
     for table, sql in probes:
         if not has_table(engine, table):
-            failures.append({"table": table, "error": "table_missing", "sql": sql})
+            if table not in optional_tables:
+                failures.append({"table": table, "error": "table_missing", "sql": sql})
             continue
         try:
             with engine.connect() as conn:

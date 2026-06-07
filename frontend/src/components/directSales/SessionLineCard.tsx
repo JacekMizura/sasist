@@ -24,29 +24,20 @@ type Props = {
   onRemove: (lineId: number) => void;
 };
 
-// "Kuloodporna" funkcja rozdzielająca Netto i Brutto (radzi sobie z twardymi spacjami)
+// KULOODPORNA FUNKCJA: Rozcina sklejony tekst "5.00 / 6.15 zł" i zwraca { net: "5.00", gross: "6.15" }
 function splitPrice(label: string | null | undefined) {
-  if (!label) return { gross: "", net: null, currency: "zł" };
-
-  // Usuwamy wszystkie białe znaki i normalizujemy stringa
+  if (!label) return { gross: "", net: null };
   const normalized = label.replace(/\s+/g, ' ').trim();
-  
-  // Szukamy ukośnika oddzielającego netto od brutto
   const parts = normalized.split(/\s*\/\s*/);
   
   if (parts.length === 2) {
-    const net = parts[0].replace(/[^\d.,]/g, '').trim(); // Sama wartość netto
+    const net = parts[0].replace(/[^\d.,]/g, '').trim();
     const grossPart = parts[1];
-    const gross = grossPart.replace(/[^\d.,]/g, '').trim(); // Sama wartość brutto
-    const currency = grossPart.replace(/[\d.,]/g, '').trim() || 'zł'; // Wyciągamy 'zł'
-    
-    return { net, gross, currency };
+    const gross = grossPart.replace(/[^\d.,]/g, '').trim();
+    return { net, gross };
   }
-
-  // Jeśli ustawienia pokazują tylko jedną cenę (brak ukośnika)
   const gross = normalized.replace(/[^\d.,]/g, '').trim();
-  const currency = normalized.replace(/[\d.,]/g, '').trim() || 'zł';
-  return { gross, net: null, currency };
+  return { gross, net: null };
 }
 
 export function SessionLineCard({
@@ -65,6 +56,7 @@ export function SessionLineCard({
 
   useEffect(() => setQtyDraft(String(line.quantity)), [line.quantity]);
 
+  // ... (tutaj zostaje Twój useEffect pobierający lokacje, bez zmian)
   useEffect(() => {
     if (!locOpen) return;
     let cancelled = false;
@@ -111,15 +103,15 @@ export function SessionLineCard({
     line.margin_percent,
   );
 
-  // Bezpieczne rozdzielanie cen
+  // Zastosowanie naszej funkcji do rozcinania cen
   const parsedTotal = splitPrice(lineTotalLabel);
   const parsedUnit = splitPrice(unitLabel);
 
   return (
     <>
-      <li className="bg-white rounded-3xl border border-blue-50 p-5 flex flex-col xl:flex-row gap-6 items-center shadow-[0_8px_30px_rgb(59,130,246,0.04)] hover:border-blue-100 transition-all">
+      <li className="bg-white rounded-3xl border border-slate-100 p-5 flex flex-col xl:flex-row gap-6 items-center shadow-sm hover:shadow-md transition-all">
         
-        {/* 1. Obrazek (Bez ramki, wtopiony w tło) */}
+        {/* 1. OBRAZEK (BEZ RAMEK) */}
         <div className="w-24 h-24 flex-shrink-0 flex items-center justify-center">
           {resolvedDirectSalesSettings.show_product_images && line.image_url ? (
             <img 
@@ -132,7 +124,7 @@ export function SessionLineCard({
           )}
         </div>
 
-        {/* 2. Informacje o produkcie */}
+        {/* 2. INFORMACJE (UKŁAD Z TWOJEGO SCREENA) */}
         <div className="flex-1 w-full min-w-0">
           <h3 className="text-xl font-bold text-slate-900 leading-tight truncate">
             {safeDisplay(line.product_name, `Produkt #${line.product_id}`)}
@@ -191,13 +183,13 @@ export function SessionLineCard({
           </div>
         </div>
 
-        {/* 3. Kontrolki Ilości */}
+        {/* 3. KONTROLKI ILOŚCI */}
         <div className="flex items-center gap-2 pl-0 xl:pl-4 w-full xl:w-auto">
           <button
             type="button"
             disabled={busy}
             onClick={() => onQtyChange(line.id, Math.max(1, line.quantity - 1))}
-            className="w-12 h-12 rounded-xl border border-blue-50 text-blue-600 hover:bg-slate-50 flex justify-center items-center transition-all disabled:opacity-50"
+            className="w-12 h-12 rounded-2xl border border-slate-100 text-blue-600 hover:bg-slate-50 flex justify-center items-center transition-all disabled:opacity-50"
           >
             <Minus size={18} />
           </button>
@@ -214,48 +206,45 @@ export function SessionLineCard({
                 commitQty();
               }
             }}
-            className="w-10 text-center text-xl font-bold text-slate-900 bg-transparent focus:outline-none disabled:opacity-50"
+            className="w-10 text-center text-2xl font-bold text-slate-900 bg-transparent focus:outline-none disabled:opacity-50"
           />
           <button
             type="button"
             disabled={busy}
             onClick={() => onQtyChange(line.id, line.quantity + 1)}
-            className="w-12 h-12 rounded-xl border border-blue-50 text-blue-600 hover:bg-slate-50 flex justify-center items-center transition-all disabled:opacity-50"
+            className="w-12 h-12 rounded-2xl border border-slate-100 text-blue-600 hover:bg-slate-50 flex justify-center items-center transition-all disabled:opacity-50"
           >
             <Plus size={18} />
           </button>
         </div>
 
-        {/* 4. CENA - CZYSTA I NOWOCZESNA */}
-        <div className="text-right min-w-[140px] hidden xl:block">
-          {/* Wielkie Brutto */}
-          <div className="text-3xl font-black text-slate-900 whitespace-nowrap tracking-tight">
-            {parsedTotal.gross} <span className="text-xl text-slate-400">{parsedTotal.currency}</span>
+        {/* 4. ROZDZIELONA CENA (Wielkie Brutto, Małe Netto) */}
+        <div className="text-right min-w-[140px] flex flex-col justify-center hidden xl:flex">
+          <div className="text-3xl font-black text-slate-900 tracking-tight leading-none">
+            {parsedTotal.gross} <span className="text-xl font-bold text-slate-400">zł</span>
           </div>
-          {/* Małe Netto */}
           {parsedTotal.net && (
-            <div className="text-xs font-bold text-slate-400 mt-1 whitespace-nowrap">
-              {parsedTotal.net} {parsedTotal.currency} netto
+            <div className="text-xs font-bold text-slate-400 mt-1.5">
+              {parsedTotal.net} zł netto
             </div>
           )}
-          {/* Cena jednostkowa x ilość */}
-          <div className="text-[11px] font-medium text-slate-400 mt-0.5 whitespace-nowrap">
-            {parsedUnit.gross} {parsedUnit.currency} × {line.quantity}
-          </div>
+          {line.quantity > 1 && parsedUnit.gross && (
+            <div className="text-[10px] font-medium text-slate-400 mt-0.5">
+              {parsedUnit.gross} zł / szt.
+            </div>
+          )}
         </div>
 
-        {/* 5. Akcje (Widok Mobilny Cen + Przyciski) */}
-        <div className="flex flex-col gap-2 w-full sm:w-auto xl:ml-2">
+        {/* 5. AKCJE */}
+        <div className="flex flex-col gap-2 w-full xl:w-auto xl:ml-2">
           {/* Mobilny widok ceny */}
           <div className="xl:hidden flex justify-between items-center mb-2 px-1">
             <div className="text-xs font-bold text-slate-400">
-              {parsedUnit.gross} {parsedUnit.currency} × {line.quantity}
+              {parsedUnit.gross} zł × {line.quantity}
             </div>
             <div className="text-right">
-              <div className="text-2xl font-black text-slate-900">
-                {parsedTotal.gross} <span className="text-sm text-slate-400">{parsedTotal.currency}</span>
-              </div>
-              {parsedTotal.net && <div className="text-[10px] font-bold text-slate-400">{parsedTotal.net} {parsedTotal.currency} netto</div>}
+              <div className="text-2xl font-black text-slate-900">{parsedTotal.gross} zł</div>
+              {parsedTotal.net && <div className="text-[10px] font-bold text-slate-400">{parsedTotal.net} zł netto</div>}
             </div>
           </div>
           
@@ -263,7 +252,7 @@ export function SessionLineCard({
             type="button"
             disabled={busy}
             onClick={() => setLocOpen(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 text-blue-700 rounded-lg hover:bg-slate-50 font-bold text-xs transition-all disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 text-blue-700 rounded-xl hover:bg-slate-50 font-bold text-xs transition-all disabled:opacity-50"
           >
             <MapPin size={14} /> Lokalizacja
           </button>
@@ -271,7 +260,7 @@ export function SessionLineCard({
             type="button"
             disabled={busy}
             onClick={() => onRemove(line.id)}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-red-100 text-red-600 rounded-lg hover:bg-red-50 font-bold text-xs transition-all disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-red-100 text-red-600 rounded-xl hover:bg-red-50 font-bold text-xs transition-all disabled:opacity-50"
           >
             <Trash2 size={14} /> Usuń
           </button>

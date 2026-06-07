@@ -3974,27 +3974,10 @@ def ensure_stock_document_series_columns(engine: Engine) -> None:
 
 
 def ensure_sale_documents_extended_columns(engine: Engine) -> None:
-    """Financial totals + payment linkage on sale_documents."""
-    with engine.connect() as conn:
-        if not _table_exists(conn, "sale_documents"):
-            conn.commit()
-            return
-        cols = _table_column_names(conn, "sale_documents")
-        for col, typ in [
-            ("document_type_id", "VARCHAR(36)"),
-            ("document_subtype", "VARCHAR(16)"),
-            ("total_net", "REAL"),
-            ("total_gross", "REAL"),
-            ("total_vat", "REAL"),
-            ("payment_id", "INTEGER"),
-            ("payment_method", "VARCHAR(24)"),
-            ("payment_status", "VARCHAR(24)"),
-            ("payment_captured_at", "DATETIME"),
-            ("payment_external_transaction_id", "VARCHAR(128)"),
-        ]:
-            if col not in cols:
-                conn.execute(text(f"ALTER TABLE sale_documents ADD COLUMN {col} {typ}"))
-        conn.commit()
+    """Financial totals + payment linkage on sale_documents (delegates to ORM sync)."""
+    from .schema_introspection import ensure_sale_documents_orm_columns
+
+    ensure_sale_documents_orm_columns(engine)
 
 
 def ensure_sale_documents_table(engine: Engine) -> None:

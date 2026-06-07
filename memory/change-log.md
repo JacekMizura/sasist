@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-04 — sale_documents PostgreSQL DATETIME fix + startup-only schema
+
+- `payment_captured_at DATETIME` failed on PostgreSQL (`type "datetime" does not exist`).
+- Added `ensure_sale_documents_orm_columns` — dialect-safe ORM column sync via `CreateColumn`.
+- Tier 0 startup: `ensure_sale_documents_orm_columns` runs synchronously before requests.
+- Removed `_ensure_direct_sale_complete_schema()` from `complete_service.py` — no ALTER TABLE on `/complete`.
+- `ensure_sale_documents_extended_columns` delegates to ORM sync.
+- Tests: `test_sale_documents_schema_postgres.py`.
+
 ## 2026-06-04 — Direct Sales /complete PostgreSQL FOR UPDATE fix
 
 - Root cause: `get_session_for_complete()` used `joinedload(DirectSaleSession.lines)` + `with_for_update()` — PostgreSQL rejects `FOR UPDATE` on nullable outer-join side.
