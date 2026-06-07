@@ -32,12 +32,13 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Production — full WMS module integration (latest)
-- `WMS_MODULES` in `wmsTabConfig.ts` — Produkcja same shape as Przyjęcie/Zbieranie/Pakowanie (icon, path, dashboard tile, operationalMode)
-- `/wms` and sidebar WMS link → `/wms/menu` (tile dashboard)
-- `WmsMenuPage` uses `WmsModeCard` + `dashboardTiles` from `resolveWmsNavTabs()` (permission-aware)
-- Removed mandatory-nav hack, debug console logs, NEW PRODUCTION UI banner
-- Top nav + pin support via same module registry; route `/wms/production` → `ProductionDashboardPage`
+## Production — first-class WMS module (latest)
+- ERP sidebar **WMS flyout**: Przyjęcie, Rozlokowanie PZ, Zbieranie, Pakowanie, **Produkcja** (`mainNavConfig.tsx`; removed single amber new-tab link)
+- `ProductionModuleLayout`: dedicated “Centrum produkcji” shell; generic `WmsTopBar` hidden on `/wms/production/*`
+- Workflow tabs: Pulpit, Zbieranie, Wykonanie, Odłożenie (recipes stay on product page only)
+- Dashboard API extended: `planned`, `in_progress`, `planned_batches`, `production_efficiency_percent`, batch `priority`/`planned_date`
+- Dashboard UI: 5 KPI tiles + 5 sections (Zaplanowane, Gotowe, W trakcie, Braki, Zakończone); mass batch CTA
+- Product **Kompozycje** tab: removed batch-creation CTA; link to production module for execution only
 
 ## Production module UX — WMS wiring fix (prior)
 - Routes live under `/wms/production/*` (dashboard, batch, collecting, execute, putaway)

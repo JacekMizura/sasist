@@ -5,7 +5,6 @@ import ErpCompactBrandLink from "../components/layout/ErpCompactBrandLink";
 import PanelGlobalStatusStrip from "../components/layout/PanelGlobalStatusStrip";
 import {
   NAV_FLYOUT_CATEGORIES,
-  WMS_SIDEBAR_DIRECT,
   isCategoryActive,
   type NavCategoryConfig,
 } from "./mainNavConfig";
@@ -23,30 +22,6 @@ type ErpShellLayoutProps = {
   /** `panel` vs `settings` — wpływa na drobne zachowanie przewijania (WMS w ustawieniach); pasek KPI jest wspólny. */
   headerMode: ErpShellHeaderMode;
 };
-
-function WmsDirectSidebarLink({ pathname }: { pathname: string }) {
-  const Icon = WMS_SIDEBAR_DIRECT.Icon;
-  const active = isNavPathActive(pathname, WMS_SIDEBAR_DIRECT.path);
-  return (
-    <a
-      href={WMS_SIDEBAR_DIRECT.path}
-      target="_blank"
-      rel="noopener noreferrer"
-      title="Otwórz terminal WMS w nowej karcie"
-      className={[
-        "mt-1 flex w-full items-center gap-3 rounded-lg border-2 border-amber-500 bg-amber-50 px-3 py-3 text-left text-sm font-bold text-amber-950 shadow-sm transition-colors",
-        "hover:bg-amber-100 hover:shadow-md",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600",
-        active ? "ring-2 ring-amber-400/90" : "",
-      ].join(" ")}
-    >
-      <span className="text-amber-600 [&_svg]:h-[22px] [&_svg]:w-[22px]">
-        <Icon size={CATEGORY_ICON} />
-      </span>
-      <span className="min-w-0 flex-1 truncate">{WMS_SIDEBAR_DIRECT.label}</span>
-    </a>
-  );
-}
 
 function isWarehouseDesignerRoute(pathname: string): boolean {
   return pathname.startsWith("/designer") || pathname.startsWith("/warehouse-designer");
@@ -115,7 +90,6 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
               </button>
             );
           })}
-          <WmsDirectSidebarLink pathname={pathname} />
         </nav>
       </aside>
 

@@ -201,15 +201,20 @@ def _batch_summary(db: Session, batch: ProductionBatch) -> ProductionBatchSummar
                 break
         labels.append(f"{name or ln.product_id} ×{float(ln.planned_quantity or 0):g}")
     created = batch.created_at.isoformat() if batch.created_at else None
+    status = str(batch.status or "")
+    priority = "high" if status in ("collecting", "in_progress") else "normal"
+    planned_day = created[:10] if created else None
     return ProductionBatchSummaryRead(
         id=int(batch.id),
         number=str(batch.number or ""),
-        status=str(batch.status or ""),
+        status=status,
         products_count=int(full.products_count or 0),
         total_planned_units=float(full.total_planned_units or 0),
         progress_percent=float(full.progress_percent or 0),
         has_shortages=bool(full.has_shortages),
         operator_name=full.operator_name,
+        priority=priority,
+        planned_date=planned_day,
         created_at=created,
         product_labels=labels[:4],
     )
@@ -233,12 +238,13 @@ def get_production_dashboard(
         q = q.filter(ProductionBatch.warehouse_id == int(warehouse_id))
     batches = q.order_by(ProductionBatch.updated_at.desc()).all()
     today = datetime.utcnow().date()
+    planned_rows: list[ProductionBatchSummaryRead] = []
     active_rows: list[ProductionBatchSummaryRead] = []
     waiting_rows: list[ProductionBatchSummaryRead] = []
     ready_rows: list[ProductionBatchSummaryRead] = []
     completed_rows: list[ProductionBatchSummaryRead] = []
     shortage_count = 0
-    waiting_count = 0
+    planned_count = 0
     finished_today = 0
 
     for b in batches:
@@ -254,11 +260,15 @@ def get_production_dashboard(
         if status in ("collecting", "in_progress", "putaway"):
             active_rows.append(summary)
         elif status in ("draft", "planned"):
-            waiting_count += 1
+            planned_count += 1
+            planned_rows.append(summary)
             if summary.has_shortages:
                 waiting_rows.append(summary)
             else:
                 ready_rows.append(summary)
+
+    workload = finished_today + len(active_rows) + planned_count
+    efficiency = round(100.0 * finished_today / workload, 1) if workload else 0.0
 
     recipe_count = (
         db.query(ProductComposition)
@@ -269,14 +279,18 @@ def get_production_dashboard(
         .count()
     )
     return ProductionDashboardRead(
+        planned_batches=planned_count,
         active_batches=len(active_rows),
-        waiting_batches=waiting_count,
+        waiting_batches=planned_count,
         batches_with_shortages=shortage_count,
         finished_today=finished_today,
+        production_efficiency_percent=efficiency,
         collecting_batches=sum(1 for b in batches if str(b.status) == "collecting"),
         in_production_batches=sum(1 for b in batches if str(b.status) == "in_progress"),
         putaway_batches=sum(1 for b in batches if str(b.status) == "putaway"),
         recipe_count=int(recipe_count),
+        planned=planned_rows[:12],
+        in_progress=active_rows[:12],
         active=active_rows[:12],
         waiting_materials=waiting_rows[:12],
         ready_to_produce=ready_rows[:12],

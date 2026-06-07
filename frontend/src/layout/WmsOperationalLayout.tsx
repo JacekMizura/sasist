@@ -16,10 +16,11 @@ import WmsTopBar from "./WmsTopBar";
 function WmsLayoutChrome() {
   const { pathname } = useLocation();
   const hideMenuTopBar = pathname === WMS_ROUTES.menu;
+  const hideProductionTopBar = pathname === "/wms/production" || pathname.startsWith("/wms/production/");
 
   return (
     <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-slate-100">
-      {hideMenuTopBar ? null : (
+      {hideMenuTopBar || hideProductionTopBar ? null : (
         <div className="shrink-0" style={{ zIndex: WMS_Z.topNav }}>
           <WmsTopBar />
         </div>

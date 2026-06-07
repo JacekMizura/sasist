@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardList,
+  Inbox,
   Package,
   Warehouse,
   Activity,
@@ -74,7 +75,7 @@ export type NavCategoryConfig = {
   activePathPrefix?: string;
 };
 
-/** Direct link (no fly-out): opens WMS in a new tab. */
+/** @deprecated Use WMS nav category in NAV_FLYOUT_CATEGORIES */
 export const WMS_SIDEBAR_DIRECT = {
   id: "wms" as const,
   path: "/wms/menu",
@@ -82,8 +83,27 @@ export const WMS_SIDEBAR_DIRECT = {
   Icon: Tablet,
 };
 
-/** Categories that open a hover fly-out (excludes WMS — see `WMS_SIDEBAR_DIRECT`). */
+/** Categories that open a hover fly-out (includes WMS terminal modules). */
 export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
+  {
+    id: "wms",
+    label: "WMS",
+    Icon: Tablet,
+    activePathPrefix: "/wms",
+    flyoutSections: [
+      {
+        title: "Terminal magazynowy",
+        items: [
+          { path: "/wms/menu", label: "Pulpit WMS", Icon: Tablet },
+          { path: "/wms/receiving", label: "Przyjęcie", Icon: Inbox },
+          { path: "/wms/putaway", label: "Rozlokowanie PZ", Icon: Warehouse },
+          { path: "/wms/picking", label: "Zbieranie", Icon: ClipboardList },
+          { path: "/wms/packing", label: "Pakowanie", Icon: Package },
+          { path: "/wms/production", label: "Produkcja", Icon: Factory },
+        ],
+      },
+    ],
+  },
   {
     id: "orders",
     label: UI_STRINGS.navigation.groups.orders,
@@ -215,7 +235,6 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
           { path: "/carts/racks", label: "Regały", Icon: Boxes },
           { path: "/carts/zones", label: "Strefy", Icon: Layers },
           { path: "/carts/carriers", label: UI_STRINGS.navigation.warehouseCarriers, Icon: Package },
-          { path: "/wms/production", label: "Produkcja", Icon: Factory },
           { path: "/inventory", label: UI_STRINGS.navigation.inventory, Icon: Archive },
           { path: "/optimizer", label: UI_STRINGS.navigation.fleetPlanner, Icon: Route },
           { path: "/warehouse/bdo", label: UI_STRINGS.navigation.warehouseBdo, Icon: Recycle },
@@ -362,6 +381,9 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
   }
   if (category.id === "documents") {
     if (pathname.startsWith("/documents")) return true;
+  }
+  if (category.id === "wms") {
+    if (pathname === "/wms" || pathname.startsWith("/wms/")) return true;
   }
   return navGroupHasActivePath(pathname, categoryFlyoutPaths(category));
 }

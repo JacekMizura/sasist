@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Layers, History } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Layers, History, Factory } from "lucide-react";
 import {
   listCompositionsForProduct,
   listCompositionUsages,
@@ -8,7 +8,6 @@ import {
   type ProductCompositionRead,
 } from "../../api/compositionApi";
 import { listProductionOrdersForProduct, type ProductionOrderSummaryRead } from "../../api/productionApi";
-import { useWarehouse } from "../../context/WarehouseContext";
 import { CompositionVisualEditor } from "./CompositionVisualEditor";
 import { productionPaths } from "./productionPaths";
 import { formatProductionMoney, PRODUCTION_STATUS_LABEL, productionStatusBadgeClass } from "./productionUi";
@@ -21,8 +20,6 @@ type Props = {
 };
 
 export function ProductCompositionsPanel({ tenantId, productId, productName, onChanged }: Props) {
-  const navigate = useNavigate();
-  const { warehouse } = useWarehouse();
   const [bundles, setBundles] = useState<ProductCompositionRead[]>([]);
   const [manufacturing, setManufacturing] = useState<ProductCompositionRead[]>([]);
   const [usages, setUsages] = useState<CompositionUsageRead[]>([]);
@@ -71,11 +68,6 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
 
   const activeMfg = manufacturing.find((c) => c.is_active) ?? manufacturing[0] ?? null;
 
-  const goToBatchProduction = () => {
-    if (!activeMfg || !warehouse?.id) return;
-    navigate(`${productionPaths.home}?create=1&product=${productId}&composition=${activeMfg.id}`);
-  };
-
   if (loading) {
     return <p className="text-sm text-slate-500">Wczytywanie kompozycji…</p>;
   }
@@ -116,19 +108,15 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
       />
 
       {activeMfg ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h4 className="text-sm font-semibold text-slate-900">Dodaj do partii produkcyjnej</h4>
-          <p className="mt-1 text-xs text-slate-600">
-            Aktywna kompozycja: {activeMfg.name} (v{activeMfg.version})
+        <section className="rounded-lg border border-violet-100 bg-violet-50/40 p-4">
+          <p className="text-xs text-slate-600">
+            Planowanie i wykonanie partii odbywa się w{" "}
+            <Link to={productionPaths.home} className="inline-flex items-center gap-1 font-semibold text-violet-700 hover:underline">
+              <Factory className="h-3.5 w-3.5" aria-hidden />
+              module Produkcja WMS
+            </Link>
+            . Na karcie produktu edytujesz tylko receptury i koszty.
           </p>
-          <button
-            type="button"
-            disabled={!warehouse?.id}
-            onClick={goToBatchProduction}
-            className="mt-3 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
-          >
-            Otwórz moduł Produkcja
-          </button>
         </section>
       ) : null}
 

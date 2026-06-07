@@ -172,6 +172,7 @@ import WmsReturnsEntryPage from "./pages/wms/WmsReturnsEntryPage"
 import OfficeDamagesPage from "./pages/damage/OfficeDamagesPage"
 import OfficeDamageReportsPage from "./pages/damage/OfficeDamageReportsPage"
 import BundlesPage from "./pages/Assortment/BundlesPage"
+import ProductionModuleLayout from "./pages/Production/ProductionModuleLayout"
 import ProductionDashboardPage from "./pages/Production/ProductionDashboardPage"
 import BatchDetailPage from "./pages/Production/BatchDetailPage"
 import CollectingPage from "./pages/Production/CollectingPage"
@@ -417,7 +418,7 @@ export const router = createBrowserRouter(
           <Route path="orders" element={<WmsPackingOrdersPage />} />
           <Route path="order/:orderId" element={<WmsPackingOrderPage />} />
         </Route>
-        <Route path="production" element={<Outlet />}>
+        <Route path="production" element={<ProductionModuleLayout />}>
           <Route index element={<ProductionDashboardPage />} />
           <Route path="batch/:batchId" element={<BatchDetailPage />} />
           <Route path="collecting" element={<CollectingPage />} />
