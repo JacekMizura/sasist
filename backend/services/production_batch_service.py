@@ -308,10 +308,23 @@ def preview_batch_demand(
                 auto_allocation=auto_reads,
             )
         )
+    from .composition_engine_service import estimate_composition_cost
+
+    estimated_cost = 0.0
+    for ln in lines:
+        comp = resolve_composition_entity(db, tenant_id=tenant_id, composition_id=int(ln.composition_id))
+        if comp is not None:
+            cost = estimate_composition_cost(db, tenant_id=int(tenant_id), composition=comp)
+            unit = float(cost.get("unit_cost_net") or 0)
+            estimated_cost += unit * float(ln.planned_quantity)
+    duration = int(round(15 + len(lines) * 12 + total_units * 1.5))
+
     return ProductionBatchPreviewRead(
         has_shortages=bool(shortages),
         total_planned_units=round(total_units, 4),
         products_count=len(lines),
+        estimated_cost_net=round(estimated_cost, 2),
+        estimated_duration_minutes=max(duration, 5),
         aggregated_components=pick_plan_rows,
         shortages=shortages,
     )

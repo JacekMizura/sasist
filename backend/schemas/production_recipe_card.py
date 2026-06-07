@@ -68,6 +68,7 @@ class ProductionDashboardRead(BaseModel):
     in_production_batches: int = 0
     putaway_batches: int = 0
     recipe_count: int = 0
+    active_operators: List[str] = Field(default_factory=list)
     planned: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
     in_progress: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
     active: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
@@ -89,3 +90,5 @@ class ProductionBatchSummaryRead(BaseModel):
     planned_date: Optional[str] = None
     created_at: Optional[str] = None
     product_labels: List[str] = Field(default_factory=list)
+    product_image_urls: List[str] = Field(default_factory=list)
+    shortage_count: int = 0

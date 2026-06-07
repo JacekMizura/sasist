@@ -656,6 +656,8 @@ export type ProductionBatchSummaryRead = {
   planned_date?: string | null;
   created_at?: string | null;
   product_labels: string[];
+  product_image_urls?: string[];
+  shortage_count?: number;
 };
 
 export type ProductionDashboardRead = {
@@ -669,6 +671,7 @@ export type ProductionDashboardRead = {
   in_production_batches: number;
   putaway_batches: number;
   recipe_count: number;
+  active_operators?: string[];
   planned: ProductionBatchSummaryRead[];
   in_progress: ProductionBatchSummaryRead[];
   active: ProductionBatchSummaryRead[];
@@ -681,6 +684,8 @@ export type ProductionBatchPreviewRead = {
   has_shortages: boolean;
   total_planned_units: number;
   products_count: number;
+  estimated_cost_net?: number;
+  estimated_duration_minutes?: number;
   aggregated_components: BatchAggregatedPickLineRead[];
   shortages: StockShortageRead[];
 };

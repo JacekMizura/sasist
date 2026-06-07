@@ -193,6 +193,16 @@ def get_recipe_detail(
 def _batch_summary(db: Session, batch: ProductionBatch) -> ProductionBatchSummaryRead:
     full = serialize_batch(db, batch)
     labels: list[str] = []
+    image_urls: list[str] = []
+    product_ids = [int(ln.product_id) for ln in batch.lines or []]
+    pid_to_img: dict[int, str] = {}
+    if product_ids:
+        rows = db.query(Product).filter(Product.id.in_(product_ids)).all()
+        pid_to_img = {
+            int(p.id): str(p.image_url)
+            for p in rows
+            if getattr(p, "image_url", None)
+        }
     for ln in batch.lines or []:
         name = None
         for fl in full.lines:
@@ -200,10 +210,22 @@ def _batch_summary(db: Session, batch: ProductionBatch) -> ProductionBatchSummar
                 name = fl.product_name
                 break
         labels.append(f"{name or ln.product_id} ×{float(ln.planned_quantity or 0):g}")
+        img = pid_to_img.get(int(ln.product_id))
+        if img and img not in image_urls:
+            image_urls.append(img)
     created = batch.created_at.isoformat() if batch.created_at else None
     status = str(batch.status or "")
     priority = "high" if status in ("collecting", "in_progress") else "normal"
+    if full.has_shortages and status in ("draft", "planned"):
+        priority = "blocked"
     planned_day = created[:10] if created else None
+    shortage_count = 0
+    if full.has_shortages:
+        try:
+            plan = build_batch_pick_plan(db, tenant_id=int(batch.tenant_id), batch_id=int(batch.id))
+            shortage_count = sum(1 for r in (plan.aggregated_components or []) if float(r.missing or 0) > 1e-6)
+        except Exception:
+            shortage_count = 1
     return ProductionBatchSummaryRead(
         id=int(batch.id),
         number=str(batch.number or ""),
@@ -217,6 +239,8 @@ def _batch_summary(db: Session, batch: ProductionBatch) -> ProductionBatchSummar
         planned_date=planned_day,
         created_at=created,
         product_labels=labels[:4],
+        product_image_urls=image_urls[:3],
+        shortage_count=int(shortage_count),
     )
 
 
@@ -278,6 +302,8 @@ def get_production_dashboard(
         )
         .count()
     )
+    active_operators = sorted({s.operator_name for s in active_rows if s.operator_name})
+
     return ProductionDashboardRead(
         planned_batches=planned_count,
         active_batches=len(active_rows),
@@ -289,6 +315,7 @@ def get_production_dashboard(
         in_production_batches=sum(1 for b in batches if str(b.status) == "in_progress"),
         putaway_batches=sum(1 for b in batches if str(b.status) == "putaway"),
         recipe_count=int(recipe_count),
+        active_operators=active_operators[:8],
         planned=planned_rows[:12],
         in_progress=active_rows[:12],
         active=active_rows[:12],

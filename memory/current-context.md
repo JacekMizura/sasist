@@ -32,13 +32,14 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Production — first-class WMS module (latest)
-- ERP sidebar **WMS flyout**: Przyjęcie, Rozlokowanie PZ, Zbieranie, Pakowanie, **Produkcja** (`mainNavConfig.tsx`; removed single amber new-tab link)
-- `ProductionModuleLayout`: dedicated “Centrum produkcji” shell; generic `WmsTopBar` hidden on `/wms/production/*`
-- Workflow tabs: Pulpit, Zbieranie, Wykonanie, Odłożenie (recipes stay on product page only)
-- Dashboard API extended: `planned`, `in_progress`, `planned_batches`, `production_efficiency_percent`, batch `priority`/`planned_date`
-- Dashboard UI: 5 KPI tiles + 5 sections (Zaplanowane, Gotowe, W trakcie, Braki, Zakończone); mass batch CTA
-- Product **Kompozycje** tab: removed batch-creation CTA; link to production module for execution only
+## Production — ERP command center UX (latest)
+- **Visual identity**: violet/indigo manufacturing shell (`productionTheme.ts`, `ProductionModuleLayout`)
+- **Hero command center** (`ProductionHero`): KPIs, shortage alerts, pipeline stage counts, active operator avatars
+- **Queue sections** (`ProductionQueueSection` + `QUEUE_SECTIONS`): operational headers, counts, rich empty states
+- **ERP batch cards** (`BatchCard`): product thumb stack, priority stripe, operator avatar, progress, full-width CTA
+- **Mass planning modal** (`CreateBatchModal`): 3-step flow, recipe search grid, cost/duration preview, aggregated materials
+- Backend dashboard: `product_image_urls`, `shortage_count`, `active_operators`; preview: `estimated_cost_net`, `estimated_duration_minutes`
+- Prior: WMS sidebar flyout Produkcja; product tab recipes-only; routes `/wms/production/*`
 
 ## Production module UX — WMS wiring fix (prior)
 - Routes live under `/wms/production/*` (dashboard, batch, collecting, execute, putaway)

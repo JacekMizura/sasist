@@ -57,6 +57,8 @@ class ProductionBatchPreviewRead(BaseModel):
     has_shortages: bool = False
     total_planned_units: float = 0.0
     products_count: int = 0
+    estimated_cost_net: float = 0.0
+    estimated_duration_minutes: int = 0
     aggregated_components: List[BatchAggregatedPickLineRead] = Field(default_factory=list)
     shortages: List[StockShortageRead] = Field(default_factory=list)
 
