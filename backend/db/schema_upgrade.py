@@ -3961,16 +3961,10 @@ def ensure_document_series_extended_columns(engine: Engine) -> None:
 
 
 def ensure_stock_document_series_columns(engine: Engine) -> None:
-    """FK + persisted document number for warehouse stock documents."""
-    with engine.connect() as conn:
-        if not _table_exists(conn, "stock_documents"):
-            return
-        cols = _table_column_names(conn, "stock_documents")
-        if "document_series_id" not in cols:
-            conn.execute(text("ALTER TABLE stock_documents ADD COLUMN document_series_id VARCHAR(36)"))
-        if "document_number" not in cols:
-            conn.execute(text("ALTER TABLE stock_documents ADD COLUMN document_number VARCHAR(128)"))
-        conn.commit()
+    """FK + persisted document number for warehouse stock documents (ORM sync)."""
+    from .schema_introspection import ensure_stock_documents_orm_columns
+
+    ensure_stock_documents_orm_columns(engine)
 
 
 def ensure_sale_documents_extended_columns(engine: Engine) -> None:

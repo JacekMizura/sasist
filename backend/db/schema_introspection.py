@@ -180,48 +180,123 @@ def _add_column_if_missing(engine: Engine, table: str, col: str, ddl: str) -> bo
     return True
 
 
-def ensure_sale_documents_orm_columns(engine: Engine) -> int:
+def _ensure_orm_columns_for_model(engine: Engine, model: Any) -> int:
     """
-    Dialect-agnostic sync of ``sale_documents`` ORM columns (PostgreSQL-safe types).
+    Dialect-agnostic sync: add ORM columns missing in DB (PostgreSQL-safe types).
 
-    Run synchronously at startup — never during ``/complete`` or other request handlers.
+    Run synchronously at startup — never during request handlers.
     """
     from sqlalchemy.schema import CreateColumn
 
-    from ..models.sale_document import SaleDocument
-
-    if not has_table(engine, "sale_documents"):
+    table = model.__tablename__
+    if not has_table(engine, table):
         return 0
 
     added = 0
     dialect = engine.dialect.name
-    db_cols = get_table_column_names(engine, "sale_documents")
-    for col in SaleDocument.__table__.columns:
+    db_cols = get_table_column_names(engine, table)
+    for col in model.__table__.columns:
         if col.key in db_cols:
             continue
         try:
             col_sql = str(CreateColumn(col).compile(dialect=engine.dialect))
-            stmt = f"ALTER TABLE sale_documents ADD {col_sql}"
+            stmt = f"ALTER TABLE {table} ADD {col_sql}"
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             added += 1
             logger.info(
-                "[schema.tier0] sale_documents orm_sync added column=%s dialect=%s",
+                "[schema.tier0] %s orm_sync added column=%s dialect=%s",
+                table,
                 col.key,
                 dialect,
             )
         except Exception:
             logger.exception(
-                "[schema.tier0] sale_documents orm_sync failed column=%s dialect=%s",
+                "[schema.tier0] %s orm_sync failed column=%s dialect=%s",
+                table,
                 col.key,
                 dialect,
             )
     if added:
         logger.info(
-            "[schema.tier0] sale_documents orm_sync complete dialect=%s added=%s",
+            "[schema.tier0] %s orm_sync complete dialect=%s added=%s",
+            table,
             dialect,
             added,
         )
+    return added
+
+
+def ensure_sale_documents_orm_columns(engine: Engine) -> int:
+    """Sync ``sale_documents`` ORM columns."""
+    from ..models.sale_document import SaleDocument
+
+    return _ensure_orm_columns_for_model(engine, SaleDocument)
+
+
+def ensure_stock_documents_orm_columns(engine: Engine) -> int:
+    """Sync ``stock_documents`` ORM columns (WZ numbering, direct-sale linkage)."""
+    from ..models.stock_document import StockDocument
+
+    return _ensure_orm_columns_for_model(engine, StockDocument)
+
+
+def ensure_stock_document_items_orm_columns(engine: Engine) -> int:
+    """Sync ``stock_document_items`` ORM columns."""
+    from ..models.stock_document import StockDocumentItem
+
+    return _ensure_orm_columns_for_model(engine, StockDocumentItem)
+
+
+def ensure_order_documents_orm_columns(engine: Engine) -> int:
+    """Sync ``order_documents`` ORM columns."""
+    from ..models.order_document import OrderDocument
+
+    return _ensure_orm_columns_for_model(engine, OrderDocument)
+
+
+def ensure_sale_document_stock_links_orm_columns(engine: Engine) -> int:
+    """Sync ``sale_document_stock_links`` ORM columns (PA/FV ↔ WZ)."""
+    from ..models.sale_document_stock_link import SaleDocumentStockLink
+
+    return _ensure_orm_columns_for_model(engine, SaleDocumentStockLink)
+
+
+def ensure_document_series_orm_columns(engine: Engine) -> int:
+    """Sync ``document_series`` ORM columns (numbering / warehouse series link)."""
+    from ..models.document_series import DocumentSeries
+
+    return _ensure_orm_columns_for_model(engine, DocumentSeries)
+
+
+def ensure_sale_document_stock_links_table(engine: Engine) -> int:
+    """Create ``sale_document_stock_links`` when missing (dialect-agnostic via ORM metadata)."""
+    if has_table(engine, "sale_document_stock_links"):
+        return 0
+    from ..models.sale_document_stock_link import SaleDocumentStockLink
+
+    SaleDocumentStockLink.__table__.create(engine, checkfirst=True)
+    logger.info(
+        "[schema.tier0] sale_document_stock_links table created dialect=%s",
+        engine.dialect.name,
+    )
+    return 1
+
+
+def ensure_tier0_document_warehouse_schema(engine: Engine) -> int:
+    """
+    Full ORM-vs-DB reconciliation for document/warehouse tables used by Direct Sales.
+
+    Startup only — never during /complete, WZ, or payment handlers.
+    """
+    added = 0
+    added += ensure_sale_document_stock_links_table(engine)
+    added += ensure_document_series_orm_columns(engine)
+    added += ensure_sale_documents_orm_columns(engine)
+    added += ensure_stock_documents_orm_columns(engine)
+    added += ensure_stock_document_items_orm_columns(engine)
+    added += ensure_sale_document_stock_links_orm_columns(engine)
+    added += ensure_order_documents_orm_columns(engine)
     return added
 
 
@@ -230,7 +305,16 @@ def verify_tier0_sql_probes(engine: Engine) -> list[dict[str, Any]]:
     Direct SQL probes for production recovery — do not trust ORM alone.
     Returns list of failures (empty = all probes OK).
     """
-    optional_tables = frozenset({"sale_documents"})
+    optional_tables = frozenset(
+        {
+            "sale_documents",
+            "stock_documents",
+            "stock_document_items",
+            "document_series",
+            "sale_document_stock_links",
+            "order_documents",
+        }
+    )
     probes = (
         ("orders", "SELECT order_channel, fulfillment_mode FROM orders LIMIT 1"),
         (
@@ -241,6 +325,15 @@ def verify_tier0_sql_probes(engine: Engine) -> list[dict[str, Any]]:
         (
             "sale_documents",
             "SELECT document_type_id, payment_captured_at FROM sale_documents LIMIT 1",
+        ),
+        (
+            "stock_documents",
+            "SELECT document_series_id, document_number, order_id, source_sale_document_id "
+            "FROM stock_documents LIMIT 1",
+        ),
+        (
+            "document_series",
+            "SELECT warehouse_document_series_id, numbering_format FROM document_series LIMIT 1",
         ),
     )
     failures: list[dict[str, Any]] = []

@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-04 — Tier 0 stock_documents ORM schema reconciliation
+
+- `ensure_stock_documents_orm_columns` + full document/warehouse bundle via `ensure_tier0_document_warehouse_schema`.
+- Tables synced at startup: `document_series`, `sale_documents`, `stock_documents`, `stock_document_items`, `sale_document_stock_links`, `order_documents`.
+- Shared `_ensure_orm_columns_for_model` helper; `ensure_stock_document_series_columns` delegates to ORM sync.
+- Tier 0 SQL probes for `stock_documents.document_series_id` and `document_series.warehouse_document_series_id`.
+- Tests: `test_stock_documents_schema_postgres.py`.
+
 ## 2026-06-04 — Direct Sales /complete PendingRollbackError hardening
 
 - Removed `generate_documents` soft-fail `except Exception` that swallowed DB errors and caused PendingRollbackError on next commit.

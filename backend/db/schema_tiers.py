@@ -18,7 +18,7 @@ from sqlalchemy.orm import DeclarativeBase
 
 from .schema_introspection import (
     ensure_operational_core_orm_columns,
-    ensure_sale_documents_orm_columns,
+    ensure_tier0_document_warehouse_schema,
     get_table_column_names,
     has_table,
     sync_tier0_orm_columns_from_models,
@@ -40,7 +40,11 @@ TIER0_TABLES: frozenset[str] = frozenset(
         "inventory",
         "inventory_units",
         "stock_documents",
+        "stock_document_items",
         "sale_documents",
+        "sale_document_stock_links",
+        "document_series",
+        "order_documents",
     }
 )
 
@@ -219,7 +223,7 @@ def ensure_tier0_schema(engine: Engine) -> Tier0Result:
     t0 = time.perf_counter()
     added = ensure_operational_core_orm_columns(engine)
     added += sync_tier0_orm_columns_from_models(engine)
-    added += ensure_sale_documents_orm_columns(engine)
+    added += ensure_tier0_document_warehouse_schema(engine)
     if engine.dialect.name == "sqlite":
         steps_run, failures = _run_steps(engine, _tier0_ensure_steps(), tier_tag="schema.tier0")
     else:

@@ -1,19 +1,19 @@
 # Current context
 
 ## Active goal
-Direct Sales /complete PostgreSQL schema fix applied — `DATETIME` → ORM `TIMESTAMP` sync at startup.
+Tier 0 ORM schema reconciliation for warehouse/document tables — fixes `stock_documents.document_series_id` drift on PostgreSQL.
 
 ## Real exception (PostgreSQL production)
-- `type "datetime" does not exist` on `ALTER TABLE sale_documents ADD COLUMN payment_captured_at DATETIME`
-- Cause: `/complete` called `ensure_sale_documents_extended_columns` with SQLite-only `DATETIME` type
-- Fix: `ensure_sale_documents_orm_columns` (dialect-safe ORM sync) in Tier 0 startup; removed runtime schema from `complete_service.py`
+- `column "document_series_id" of relation "stock_documents" does not exist`
+- WZ creation reached; schema drift blocked `assign_series_number_to_stock_document`
+- Fix: `ensure_tier0_document_warehouse_schema()` at startup (not runtime)
+
+## Tier 0 document/warehouse sync (startup only)
+- `document_series`, `sale_documents`, `stock_documents`, `stock_document_items`, `sale_document_stock_links`, `order_documents`
+- Helper: `_ensure_orm_columns_for_model` (dialect-safe `CreateColumn`)
+- No ALTER TABLE during `/complete`, WZ, or payment
 
 ## Prior fixes
-- `FOR UPDATE` + `joinedload` on `get_session_for_complete` — split lock/load
-- `sale_documents.document_type_id` missing — ORM sync
-- FK on `order_items.source_movement_id` — WZ path fix
-
-## Staged pipeline
-- `pipeline_orchestrator.run_staged_complete_pipeline` — 5 commits per request
-- States: OPEN → … → COMPLETED | FAILED
-- Schema ensures: Tier 0 sync at startup only (never on `/complete`)
+- `sale_documents` DATETIME → TIMESTAMP ORM sync
+- PendingRollbackError / generate_documents swallow removed
+- `FOR UPDATE` + joinedload split in session lock
