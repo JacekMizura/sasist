@@ -33,18 +33,47 @@ _SA_TYPES: tuple[type[BaseException], ...] = (
 
 
 def root_complete_exception(exc: BaseException) -> BaseException:
-    """Unwrap PendingRollbackError to the original DB failure."""
+    """Unwrap PendingRollbackError chains to the first underlying DB failure."""
     seen: set[int] = set()
-    current = exc
-    while id(current) not in seen:
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
         seen.add(id(current))
         if isinstance(current, PendingRollbackError):
-            cause = current.__cause__
-            if cause is not None:
-                current = cause
+            nxt = current.__cause__ or current.__context__
+            if nxt is not None:
+                current = nxt
                 continue
         break
-    return current
+    return current if current is not None else exc
+
+
+def log_stage_failure(
+    exc: BaseException,
+    *,
+    stage: str,
+    session_id: int | None = None,
+    context: str = "pipeline",
+) -> str:
+    """Log the FIRST real failure at a pipeline stage — never PendingRollbackError noise."""
+    root = root_complete_exception(exc)
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    logger.error(
+        "[STAGE FAILED] context=%s stage=%s session_id=%s type=%s repr=%r",
+        context,
+        stage,
+        session_id,
+        type(root).__name__,
+        safe_exception_repr(root),
+    )
+    logger.error("[STAGE FAILED] str=%s", safe_exception_str(root))
+    if type(exc) is not type(root):
+        logger.error(
+            "[STAGE FAILED] wrapped_type=%s wrapped_str=%s",
+            type(exc).__name__,
+            safe_exception_str(exc),
+        )
+    logger.error("[STAGE FAILED] traceback:\n%s", tb)
+    return tb
 
 
 def rollback_db_safely(db: Session | None, *, context: str = "complete") -> None:

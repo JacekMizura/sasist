@@ -359,17 +359,13 @@ def create_and_post_wz_for_direct_sale(
         performed_by_user_id=performed_by_user_id,
     )
 
-    try:
-        link = SaleDocumentStockLink(
-            sale_document_id=sale_doc_id,
-            stock_document_id=int(wz.id),
-            link_type="WZ",
-        )
-        db.add(link)
-        db.flush()
-    except Exception:
-        db.rollback()
-        raise
+    link = SaleDocumentStockLink(
+        sale_document_id=sale_doc_id,
+        stock_document_id=int(wz.id),
+        link_type="WZ",
+    )
+    db.add(link)
+    db.flush()
 
     emit_operational_sales_event(
         db,

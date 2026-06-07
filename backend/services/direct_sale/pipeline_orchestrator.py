@@ -27,7 +27,7 @@ from .errors import DirectSaleError
 from .issue_plan_service import IssueAllocation, plan_issue_allocations
 from .order_service import create_order_from_session, load_order_for_session
 from .payment_service import orchestrate_direct_sale_payment, load_payment_for_session
-from .complete_debug_log import commit_with_logging
+from .complete_debug_log import commit_with_logging, log_stage_failure, rollback_db_safely
 from .pipeline_log import new_transaction_id, pipeline_stage_span
 from .pipeline_state import (
     PIPELINE_COMPLETED,
@@ -115,7 +115,8 @@ def _fail_stage(db: Session, sess: DirectSaleSession, *, stage: str, exc: Except
     sid = int(sess.id)
     tid = int(sess.tenant_id)
     wid = int(sess.warehouse_id)
-    db.rollback()
+    log_stage_failure(exc, stage=stage, session_id=sid, context="pipeline_fail_stage")
+    rollback_db_safely(db, context=f"fail_stage:{stage}")
     sess = reload_session_for_stage(db, session_id=sid, tenant_id=tid)
     if sess is None:
         raise DirectSaleError("Sesja nie istnieje po błędzie pipeline.", code="pipeline_failed", step=stage) from exc
@@ -265,20 +266,12 @@ def _stage_generate_documents(
         ),
     )
     entities.document_job_id = int(doc_result.job_id)
-    try:
-        processed = process_direct_sale_document_job(db, doc_result.job_id)
-        entities.document_number = processed.document_number
-        if str(processed.status or "").upper() == "GENERATED":
-            entities.sale_document_id = str(processed.sale_document_id or "")
-        elif str(processed.status or "").upper() in ("FAILED", "RETRYING") and not processed.document_number:
-            entities.document_warning = "Dokument zostanie wygenerowany asynchronicznie."
-    except Exception as doc_exc:
+    processed = process_direct_sale_document_job(db, doc_result.job_id)
+    entities.document_number = processed.document_number
+    if str(processed.status or "").upper() == "GENERATED":
+        entities.sale_document_id = str(processed.sale_document_id or "")
+    elif str(processed.status or "").upper() in ("FAILED", "RETRYING") and not processed.document_number:
         entities.document_warning = "Dokument zostanie wygenerowany asynchronicznie."
-        logger.warning(
-            "[direct_sales.pipeline] session_id=%s stage=generate_documents soft_fail=%s",
-            sess.id,
-            doc_exc,
-        )
 
 
 def _stage_create_wz(

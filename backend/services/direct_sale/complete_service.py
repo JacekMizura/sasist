@@ -16,7 +16,7 @@ from ...workers.document_generation_worker import get_job_document_number
 from .complete_pipeline_log import log_session_state_transition
 from .constants import SUSPEND_TTL_MINUTES, reservation_expires_at
 from .errors import DirectSaleError
-from .complete_debug_log import log_unhandled_complete_exception
+from .complete_debug_log import log_unhandled_complete_exception, rollback_db_safely
 from .pipeline_orchestrator import run_staged_complete_pipeline
 from .pipeline_state import (
     PIPELINE_COMPLETED,
@@ -239,9 +239,11 @@ def complete_direct_sale_session(
             performed_by_user_id=performed_by_user_id,
         )
     except DirectSaleError:
+        rollback_db_safely(db, context="complete_service_direct_sale_error")
         raise
     except Exception as exc:
         tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        rollback_db_safely(db, context="complete_service_unhandled")
         log_unhandled_complete_exception(
             exc,
             session_id=sid,
@@ -249,7 +251,7 @@ def complete_direct_sale_session(
             context="complete_service",
             traceback_str=tb,
         )
-        raise exc
+        raise
 
     if not entities.order_id or not entities.payment_id:
         raise DirectSaleError(

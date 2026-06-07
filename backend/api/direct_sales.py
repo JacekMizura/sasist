@@ -544,8 +544,10 @@ def post_session_complete(
     from ..services.direct_sale.complete_debug_log import (
         commit_with_logging,
         log_raw_exception,
+        log_stage_failure,
         raw_complete_failure_response,
         rollback_db_safely,
+        root_complete_exception,
     )
 
     _complete_log = logging.getLogger(__name__)
@@ -600,6 +602,13 @@ def post_session_complete(
                     warehouse_id=warehouse_id,
                 )
             except Exception as commit_exc:
+                rollback_db_safely(db, context="api_late_commit_failed")
+                log_raw_exception(
+                    commit_exc,
+                    stage="commit",
+                    session_id=session_id,
+                    context="api_late_commit_original",
+                )
                 sess_reloaded = get_session(db, session_id=session_id, tenant_id=tenant_id)
                 replay = try_idempotent_complete_result(db, sess_reloaded) if sess_reloaded else None
                 if replay is not None:
@@ -662,18 +671,21 @@ def post_session_complete(
     except DirectSaleError as exc:
         tb = traceback.format_exc()
         rollback_db_safely(db, context="complete_direct_sale_error")
-        root = exc.__cause__ or exc
+        root = root_complete_exception(exc.__cause__ or exc)
+        log_stage_failure(root, stage=getattr(exc, "step", None) or current_step, session_id=session_id, context="api_direct_sale_error")
         return _failure_response(root, stage=getattr(exc, "step", None) or current_step, tb=tb)
     except SQLAlchemyError as exc:
         tb = traceback.format_exc()
         rollback_db_safely(db, context="complete_sqlalchemy")
-        log_raw_exception(exc, stage=current_step, session_id=session_id, context="api_sqlalchemy")
-        return _failure_response(exc, stage=current_step, tb=tb)
+        root = root_complete_exception(exc)
+        log_stage_failure(root, stage=current_step, session_id=session_id, context="api_sqlalchemy")
+        return _failure_response(root, stage=current_step, tb=tb)
     except Exception as exc:
         tb = traceback.format_exc()
         rollback_db_safely(db, context="complete_unhandled")
-        log_raw_exception(exc, stage=current_step, session_id=session_id, context="api_exception")
-        return _failure_response(exc, stage=current_step, tb=tb)
+        root = root_complete_exception(exc)
+        log_stage_failure(root, stage=current_step, session_id=session_id, context="api_exception")
+        return _failure_response(root, stage=current_step, tb=tb)
 
 
 @router.post("/documents/{job_id}/reprint")

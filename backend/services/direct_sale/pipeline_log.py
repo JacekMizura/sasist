@@ -63,7 +63,10 @@ def pipeline_stage_span(
     try:
         yield
     except Exception as exc:
+        from .complete_debug_log import root_complete_exception, safe_exception_str
+
         elapsed_ms = (time.perf_counter() - started) * 1000
+        root = root_complete_exception(exc)
         log_pipeline_event(
             session_id=session_id,
             stage=stage,
@@ -71,7 +74,7 @@ def pipeline_stage_span(
             status="error",
             entity_ids=entity_ids,
             duration_ms=elapsed_ms,
-            error=f"{type(exc).__name__}: {exc}",
+            error=f"{type(root).__name__}: {safe_exception_str(root)}",
         )
         raise
     else:

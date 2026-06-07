@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-04 — Direct Sales /complete PendingRollbackError hardening
+
+- Removed `generate_documents` soft-fail `except Exception` that swallowed DB errors and caused PendingRollbackError on next commit.
+- Added `log_stage_failure()` — logs root exception per stage with `[STAGE FAILED]` prefix.
+- `_fail_stage`: mandatory `rollback_db_safely` before failure persist; never continues after DB error.
+- API/complete_service: rollback + `root_complete_exception` before failure JSON; late commit logs original error first.
+- `root_complete_exception` unwraps via `__cause__` and `__context__`.
+- Tests extended in `test_direct_sale_complete_rollback.py`.
+
 ## 2026-06-04 — sale_documents PostgreSQL DATETIME fix + startup-only schema
 
 - `payment_captured_at DATETIME` failed on PostgreSQL (`type "datetime" does not exist`).

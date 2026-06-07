@@ -10,7 +10,11 @@ import unittest
 
 from sqlalchemy.exc import IntegrityError, PendingRollbackError
 
+import inspect
+
+from backend.services.direct_sale import pipeline_orchestrator
 from backend.services.direct_sale.complete_debug_log import (
+    log_stage_failure,
     root_complete_exception,
     safe_exception_repr,
     safe_exception_str,
@@ -25,6 +29,23 @@ class TestCompleteRollbackHelpers(unittest.TestCase):
         )
         wrapped.__cause__ = root
         self.assertIs(root_complete_exception(wrapped), root)
+
+    def test_root_complete_exception_unwraps_pending_rollback_via_context(self):
+        root = IntegrityError("stmt", {}, Exception("FOREIGN KEY constraint failed"))
+        wrapped = PendingRollbackError("pending rollback")
+        wrapped.__context__ = root
+        self.assertIs(root_complete_exception(wrapped), root)
+
+    def test_generate_documents_does_not_swallow_db_errors(self):
+        source = inspect.getsource(pipeline_orchestrator._stage_generate_documents)
+        self.assertNotIn("soft_fail", source)
+        self.assertNotIn("except Exception as doc_exc", source)
+
+    def test_log_stage_failure_returns_traceback(self):
+        root = IntegrityError("stmt", {}, Exception("FOREIGN KEY constraint failed"))
+        tb = log_stage_failure(root, stage="generate_documents", session_id=1)
+        self.assertIn("IntegrityError", tb)
+        self.assertIn("FOREIGN KEY", tb)
 
     def test_safe_exception_str_uses_orig_not_full_sql(self):
         root = IntegrityError(
