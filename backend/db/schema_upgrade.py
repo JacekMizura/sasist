@@ -7540,7 +7540,7 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
         if sd_cols and "production_batch_line_id" not in sd_cols:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_line_id INTEGER REFERENCES production_batch_lines(id)"))
         if _table_exists(conn, "production_batches"):
-            pb_cols = _columns(conn, "production_batches")
+            pb_cols = _table_column_names(conn, "production_batches")
             if pb_cols and "collection_state_json" not in pb_cols:
                 conn.execute(text("ALTER TABLE production_batches ADD COLUMN collection_state_json TEXT"))
             if pb_cols and "collecting_completed_at" not in pb_cols:

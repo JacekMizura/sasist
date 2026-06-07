@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Clock, Factory, Layers, Plus, ScanLine } from "lucide-react";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
@@ -87,6 +87,7 @@ function BatchSection({
 
 export default function ProductionDashboardPage() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
@@ -109,6 +110,28 @@ export default function ProductionDashboardPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    console.log("Production dashboard mounted", { pathname });
+  }, [pathname]);
+
+  useEffect(() => {
+    if (data == null) return;
+    console.log("Production dashboard batch counts", {
+      pathname,
+      active_batches: data.active_batches,
+      waiting_batches: data.waiting_batches,
+      batches_with_shortages: data.batches_with_shortages,
+      finished_today: data.finished_today,
+      collecting_batches: data.collecting_batches,
+      in_production_batches: data.in_production_batches,
+      putaway_batches: data.putaway_batches,
+      active_list: data.active?.length ?? 0,
+      waiting_materials: data.waiting_materials?.length ?? 0,
+      ready_to_produce: data.ready_to_produce?.length ?? 0,
+      recently_completed: data.recently_completed?.length ?? 0,
+    });
+  }, [data, pathname]);
 
   useEffect(() => {
     const create = searchParams.get("create");
@@ -166,6 +189,9 @@ export default function ProductionDashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 p-4 pb-12 lg:p-6">
+      <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50 px-4 py-3 text-center text-sm font-bold uppercase tracking-wide text-emerald-900">
+        NEW PRODUCTION UI ACTIVE
+      </div>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Produkcja</h1>

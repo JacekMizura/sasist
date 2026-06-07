@@ -42,7 +42,7 @@ import { RetailLabel } from "../../components/products/RetailLabel";
 import { WarehouseFormCard as Card } from "../../components/products/WarehouseFormCard";
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
 import { ProductCompositionsPanel } from "../Production/ProductCompositionsPanel";
-import { listRecipesForProduct } from "../../api/productionApi";
+import { listCompositionsForProduct } from "../../api/compositionApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
 import { ProductReceivingRequirementsSection } from "../../components/wms/receiving/ProductReceivingRequirementsSection";
@@ -1610,7 +1610,7 @@ export function ProductEditModal({
       return;
     }
     let cancelled = false;
-    void listRecipesForProduct(tenantId, Number(product.id))
+    void listCompositionsForProduct(tenantId, Number(product.id))
       .then((rows) => {
         if (!cancelled && rows.length > 0) setProductionTabVisible(true);
       })

@@ -522,6 +522,7 @@ export const router = createBrowserRouter(
                 <Route path="customers/:id" element={<CustomerEditPage />} />
                 <Route path="bundles" element={<BundlesPage />} />
                 <Route path="bundles/new" element={<BundlesPage defaultCreateOpen={true} />} />
+                <Route path="production" element={<Navigate to="/wms/production" replace />} />
                 <Route path="production/*" element={<Navigate to="/wms/production" replace />} />
                 <Route path="manufacturers" element={<ManufacturersPage />} />
                 <Route path="manufacturers/new" element={<ManufacturersPage defaultCreateOpen={true} />} />

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { WMS_TAB_ITEMS, type WmsTabConfigItem } from "../pages/wms/wmsTabConfig";
+import { WMS_TAB_ITEMS, type WmsTabConfigItem, type WmsTabId } from "../pages/wms/wmsTabConfig";
+
+/** Always visible in WMS top bar even when user pins a custom tab subset. */
+const MANDATORY_WMS_TAB_IDS: WmsTabId[] = ["production"];
 import {
   readWmsPinnedModesFromStorage,
   writeWmsPinnedModesToStorage,
@@ -28,8 +31,10 @@ export function useWmsPinnedModes(userId: number | null) {
   }, [modes]);
 
   const visibleNavTabs: WmsTabConfigItem[] = useMemo(() => {
-    if (pinnedTabsInOrder.length > 0) return pinnedTabsInOrder;
-    return WMS_TAB_ITEMS;
+    const base = pinnedTabsInOrder.length > 0 ? pinnedTabsInOrder : WMS_TAB_ITEMS;
+    const present = new Set(base.map((t) => t.id));
+    const mandatory = WMS_TAB_ITEMS.filter((t) => MANDATORY_WMS_TAB_IDS.includes(t.id) && !present.has(t.id));
+    return mandatory.length ? [...base, ...mandatory] : base;
   }, [pinnedTabsInOrder]);
 
   const isPinned = useCallback(

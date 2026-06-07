@@ -32,7 +32,14 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Production module UX redesign (latest)
+## Production module UX — WMS wiring fix (latest)
+- Routes live under `/wms/production/*` (dashboard, batch, collecting, execute, putaway)
+- **Produkcja** always visible in WMS top bar (`useWmsPinnedModes` mandatory tab)
+- Dashboard banner **NEW PRODUCTION UI ACTIVE** + console debug logs
+- Fixed SQLite migration bug: `_columns` → `_table_column_names` in `ensure_product_compositions_and_batches` (was causing 500 on product Kompozycje tab)
+- Legacy `/production` redirects to `/wms/production`
+
+## Production module UX redesign (prior)
 - Tab navigation: Pulpit, Receptury, Batch, Zbieranie, Produkcja, Odłożenie (`ProductionLayout` + `WmsModuleLayout`)
 - Card/grid UI for recipes and batches; recipe detail with component availability grid
 - Phased batch workflow: `collecting` → `in_progress` → `putaway` → `completed`

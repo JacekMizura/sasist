@@ -33,19 +33,28 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
   const reload = useCallback(async () => {
     setLoading(true);
     setErr(null);
+    const errors: string[] = [];
     try {
-      const [b, m, u, h] = await Promise.all([
+      const [bRes, mRes, uRes, hRes] = await Promise.allSettled([
         listCompositionsForProduct(tenantId, productId, "bundle"),
         listCompositionsForProduct(tenantId, productId, "manufacturing"),
         listCompositionUsages(tenantId, productId),
         listProductionOrdersForProduct(tenantId, productId),
       ]);
-      setBundles(b);
-      setManufacturing(m);
-      setUsages(u);
-      setHistory(h);
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Nie udało się wczytać kompozycji.");
+      if (bRes.status === "fulfilled") setBundles(bRes.value);
+      else errors.push("zestawy");
+      if (mRes.status === "fulfilled") setManufacturing(mRes.value);
+      else errors.push("produkcja");
+      if (uRes.status === "fulfilled") setUsages(uRes.value);
+      else errors.push("użycia");
+      if (hRes.status === "fulfilled") setHistory(hRes.value);
+      else setHistory([]);
+      if (errors.length === 4) {
+        const reason = bRes.status === "rejected" && bRes.reason instanceof Error ? bRes.reason.message : null;
+        setErr(reason ?? "Nie udało się wczytać kompozycji.");
+      } else if (errors.length > 0) {
+        setErr(`Częściowy błąd wczytywania: ${errors.join(", ")}.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -173,7 +182,7 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
                   {history.map((h) => (
                     <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/80">
                       <td className="px-3 py-2">
-                        <Link to={`/production?order=${h.id}`} className="font-mono text-violet-700 hover:underline">
+                        <Link to={productionPaths.home} className="font-mono text-violet-700 hover:underline" title="Otwórz moduł Produkcja WMS">
                           {h.number}
                         </Link>
                       </td>
