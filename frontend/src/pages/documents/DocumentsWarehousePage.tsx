@@ -117,13 +117,31 @@ function receiptLineStatus(it: StockDocumentItemRead): string {
   return "Oczekuje";
 }
 
-function ProductThumb({ url }: { url?: string | null }) {
+function wzLineLocation(it: StockDocumentItemRead): string {
+  const mm = (it.mm_line_from_location_name || "").trim();
+  if (mm) return mm;
+  return receiptLineLocation(it);
+}
+
+function wzLineStatus(it: StockDocumentItemRead): string {
+  const q = Number(it.quantity) || Number(it.ordered_quantity) || 0;
+  if (q > 1e-6) return "Wydano";
+  return "—";
+}
+
+function ProductThumb({ url, plain }: { url?: string | null; plain?: boolean }) {
   const [bad, setBad] = useState(false);
   const src = url && !bad ? url : null;
+  const wrapCls = plain
+    ? "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden"
+    : "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50";
+  const imgCls = plain
+    ? "max-h-10 max-w-10 object-contain object-center"
+    : "h-full w-full object-contain object-center";
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+    <div className={wrapCls}>
       {src ? (
-        <img src={src} alt="" className="h-full w-full object-contain object-center" onError={() => setBad(true)} />
+        <img src={src} alt="" className={imgCls} onError={() => setBad(true)} />
       ) : (
         <span className="text-[10px] font-medium text-slate-400">—</span>
       )}
@@ -546,6 +564,8 @@ export default function DocumentsWarehousePage() {
   const isDraft = docStatusLower === "draft";
   const isWmsCompleteDraft = docStatusLower === "zakonczone";
   const isPzDetail = detail ? normalizeWarehouseDocType(detail.document_type) === "PZ" : false;
+  const isWzDetail = detail ? normalizeWarehouseDocType(detail.document_type) === "WZ" : false;
+  const hidePaymentCols = docTab === "WZ";
   const editMode = detail?.edit_mode ?? "none";
   const lineEditEnabled = Boolean(isDraft && isPzDetail && editMode === "full");
   const canPostAccept =
@@ -564,6 +584,7 @@ export default function DocumentsWarehousePage() {
     }
     const biz = businessDocStatus({
       status: detail.status,
+      document_type: detail.document_type,
       total_received: tr,
       receiving_status: detail.receiving_status,
       putaway_status: detail.putaway_status,
@@ -768,14 +789,18 @@ export default function DocumentsWarehousePage() {
                 <th className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
                   Brutto
                 </th>
+                {hidePaymentCols ? null : (
+                  <>
+                    <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
+                      Metoda płatności
+                    </th>
+                    <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
+                      Status płatności
+                    </th>
+                  </>
+                )}
                 <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Metoda płatności
-                </th>
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Status płatności
-                </th>
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Status zewnętrzny
+                  {hidePaymentCols ? "Status" : "Status zewnętrzny"}
                 </th>
                 <th className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
                   Akcje
@@ -786,6 +811,7 @@ export default function DocumentsWarehousePage() {
               {pagedRows.map((r) => {
                 const st = businessDocStatus({
                   status: r.status,
+                  document_type: r.document_type,
                   total_received: r.total_received,
                   receiving_status: r.receiving_status,
                   putaway_status: r.putaway_status,
@@ -809,21 +835,38 @@ export default function DocumentsWarehousePage() {
                     className="cursor-pointer border-t border-slate-100 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/80"
                   >
                     <td className="px-4 py-4 font-mono text-lg font-bold tabular-nums text-slate-900 sm:px-5 sm:py-5">
-                      #{r.id}
+                      {(r.document_number || "").trim() || `#${r.id}`}
                     </td>
                     <td className="px-4 py-4 sm:px-5 sm:py-5">
-                      <Link
-                        to={`/goods-orders?edit=${r.delivery_id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
-                      >
-                        #{r.delivery_id}
-                      </Link>
+                      {r.order_id != null ? (
+                        <Link
+                          to={`/orders/${r.order_id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
+                        >
+                          #{(r.order_number || "").trim() || r.order_id}
+                        </Link>
+                      ) : r.delivery_id != null ? (
+                        <Link
+                          to={`/goods-orders?edit=${r.delivery_id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
+                        >
+                          #{r.delivery_id}
+                        </Link>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
-                    <td className="max-w-[14rem] truncate px-4 py-4 text-slate-800 sm:px-5 sm:py-5" title={r.supplier_name}>
-                      {(r.supplier_name || "").trim() || "—"}
+                    <td
+                      className="max-w-[14rem] truncate px-4 py-4 text-slate-800 sm:px-5 sm:py-5"
+                      title={(r.customer_name || r.supplier_name || "").trim()}
+                    >
+                      {(r.customer_name || r.supplier_name || "").trim() || "—"}
                     </td>
-                    <td className="px-4 py-4 text-slate-500 sm:px-5 sm:py-5">—</td>
+                    <td className="px-4 py-4 text-slate-800 sm:px-5 sm:py-5">
+                      {(r.document_series_prefix || "").trim() || "—"}
+                    </td>
                     <td className="px-4 py-4 sm:px-5 sm:py-5">
                       <DocumentTypeBadge code={dt} />
                     </td>
@@ -839,10 +882,14 @@ export default function DocumentsWarehousePage() {
                     <td className="px-4 py-4 text-right tabular-nums text-slate-800 sm:px-5 sm:py-5">
                       {fmtMoneyCur(r.total_gross, r.currency)}
                     </td>
-                    <td className="px-4 py-4 text-slate-500 sm:px-5 sm:py-5">—</td>
-                    <td className="px-4 py-4 sm:px-5 sm:py-5">
-                      <PaymentNotApplicableBadge />
-                    </td>
+                    {hidePaymentCols ? null : (
+                      <>
+                        <td className="px-4 py-4 text-slate-500 sm:px-5 sm:py-5">—</td>
+                        <td className="px-4 py-4 sm:px-5 sm:py-5">
+                          <PaymentNotApplicableBadge />
+                        </td>
+                      </>
+                    )}
                     <td className="px-4 py-4 sm:px-5 sm:py-5">
                       <ExternalStatusBadge status={st} />
                     </td>
@@ -984,7 +1031,7 @@ export default function DocumentsWarehousePage() {
                 <div className="min-w-0 space-y-1">
                   <h2 className="text-3xl font-bold tracking-tight text-slate-900">
                     {detailId != null && detail
-                      ? `${normalizeWarehouseDocType(detail.document_type)} ${detailId}`
+                      ? `${normalizeWarehouseDocType(detail.document_type)} ${(detail.document_number || "").trim() || detailId}`
                       : detailId != null
                         ? `#${detailId}`
                         : "—"}
@@ -1029,11 +1076,17 @@ export default function DocumentsWarehousePage() {
                 <div className="flex flex-col gap-6">
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Dostawca</h3>
+                      <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+                        {isWzDetail ? "Klient" : "Dostawca"}
+                      </h3>
                       <p className="text-lg font-semibold text-slate-900">
-                        {(detail.supplier_name || "").trim() || `Dostawca #${detail.supplier_id}`}
+                        {isWzDetail
+                          ? (detail.customer_name || "").trim() || "—"
+                          : (detail.supplier_name || "").trim() || `Dostawca #${detail.supplier_id}`}
                       </p>
-                      <p className="mt-2 text-sm text-slate-500">Identyfikator w systemie · #{detail.supplier_id}</p>
+                      {!isWzDetail ? (
+                        <p className="mt-2 text-sm text-slate-500">Identyfikator w systemie · #{detail.supplier_id}</p>
+                      ) : null}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                       <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Dokument</h3>
@@ -1042,6 +1095,12 @@ export default function DocumentsWarehousePage() {
                           <dt className="text-slate-500">Typ</dt>
                           <dd className="font-semibold text-slate-900">{detail.document_type}</dd>
                         </div>
+                        {(detail.document_series_prefix || "").trim() ? (
+                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <dt className="text-slate-500">Seria</dt>
+                            <dd className="font-semibold text-slate-900">{detail.document_series_prefix}</dd>
+                          </div>
+                        ) : null}
                         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
                           <dt className="text-slate-500">Utworzył</dt>
                           <dd className="text-right font-medium text-slate-900">
@@ -1082,7 +1141,7 @@ export default function DocumentsWarehousePage() {
                                 to={`/orders/${detail.order_id}`}
                                 className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
                               >
-                                #{detail.order_id}
+                                #{(detail.order_number || "").trim() || detail.order_id}
                               </Link>
                             </dd>
                           </div>
@@ -1198,11 +1257,13 @@ export default function DocumentsWarehousePage() {
                                   Nazwa
                                 </th>
                                 <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Zamówiono
+                                  {isWzDetail ? "Ilość" : "Zamówiono"}
                                 </th>
+                                {isWzDetail ? null : (
                                 <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
                                   Przyjęto
                                 </th>
+                                )}
                                 {lineEditEnabled ? (
                                   <th className="px-3 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
                                     Nośnik <span className="font-normal normal-case text-slate-400">(sugestia)</span>
@@ -1217,15 +1278,27 @@ export default function DocumentsWarehousePage() {
                                 <th className="px-3 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
                                   Status
                                 </th>
+                                {isWzDetail ? null : (
                                 <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
                                   Różnica
                                 </th>
+                                )}
                                 <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
                                   Cena netto
                                 </th>
                                 <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
                                   Wartość netto
                                 </th>
+                                {isWzDetail ? (
+                                  <>
+                                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
+                                      Cena brutto
+                                    </th>
+                                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
+                                      Wartość brutto
+                                    </th>
+                                  </>
+                                ) : null}
                               </tr>
                             </thead>
                             <tbody>
@@ -1233,9 +1306,18 @@ export default function DocumentsWarehousePage() {
                                 const raw = receivedByLineId[it.id] ?? String(it.received_quantity);
                                 const recParsed = parseQty(raw);
                                 const rec = recParsed ?? it.received_quantity;
+                                const qty = isWzDetail
+                                  ? Number(it.quantity) || Number(it.ordered_quantity) || 0
+                                  : it.ordered_quantity;
                                 const diff = rec - it.ordered_quantity;
                                 const price = it.purchase_price_net;
-                                const val = price != null && Number.isFinite(rec) ? rec * price : null;
+                                const val =
+                                  it.value_net ??
+                                  (price != null && Number.isFinite(isWzDetail ? qty : rec)
+                                    ? (isWzDetail ? qty : rec) * price
+                                    : null);
+                                const priceGross = it.unit_price_gross ?? null;
+                                const valGross = it.value_gross ?? null;
                                 const ean = (it.product_ean || "").trim();
                                 const sku = (it.product_sku || "").trim();
                                 return (
@@ -1247,7 +1329,7 @@ export default function DocumentsWarehousePage() {
                                     </td>
                                     <td className="px-4 py-4">
                                       <div className="flex items-start gap-3">
-                                        <ProductThumb url={wmsReceiptLineImageUrl(it)} />
+                                        <ProductThumb url={wmsReceiptLineImageUrl(it)} plain={isWzDetail} />
                                         <div className="min-w-0 flex-1">
                                           <div className="font-semibold leading-snug text-slate-900">
                                             {receiptLineDisplayName(it)}
@@ -1259,8 +1341,9 @@ export default function DocumentsWarehousePage() {
                                       </div>
                                     </td>
                                     <td className="px-4 py-4 text-right align-middle tabular-nums text-slate-800">
-                                      {fmtQty(it.ordered_quantity)}
+                                      {fmtQty(qty)}
                                     </td>
+                                    {isWzDetail ? null : (
                                     <td className="px-4 py-4 text-right align-middle tabular-nums">
                                       {lineEditEnabled ? (
                                         <input
@@ -1277,6 +1360,7 @@ export default function DocumentsWarehousePage() {
                                         <span className="text-slate-900">{fmtQty(it.received_quantity)}</span>
                                       )}
                                     </td>
+                                    )}
                                     {lineEditEnabled ? (
                                       <td className="px-3 py-4 align-middle">
                                         <div className="flex min-w-[10rem] flex-col gap-2">
@@ -1332,21 +1416,35 @@ export default function DocumentsWarehousePage() {
                                     <td className="px-3 py-4 text-right align-middle text-slate-700">
                                       {(it.line_unit || "").trim() || "—"}
                                     </td>
-                                    <td className="px-3 py-4 align-middle text-xs text-slate-700">{receiptLineLocation(it)}</td>
-                                    <td className="px-3 py-4 align-middle text-xs font-medium text-slate-800">
-                                      {receiptLineStatus(it)}
+                                    <td className="px-3 py-4 align-middle text-xs text-slate-700">
+                                      {isWzDetail ? wzLineLocation(it) : receiptLineLocation(it)}
                                     </td>
+                                    <td className="px-3 py-4 align-middle text-xs font-medium text-slate-800">
+                                      {isWzDetail ? wzLineStatus(it) : receiptLineStatus(it)}
+                                    </td>
+                                    {isWzDetail ? null : (
                                     <td
                                       className={`px-4 py-4 text-right align-middle tabular-nums ${diffToneClass(diff)}`}
                                     >
                                       {fmtQty(diff)}
                                     </td>
+                                    )}
                                     <td className="px-4 py-4 text-right align-middle tabular-nums text-slate-700">
                                       {price != null ? fmtMoney(price) : "—"}
                                     </td>
                                     <td className="px-4 py-4 text-right align-middle tabular-nums font-medium text-slate-900">
                                       {val != null ? fmtMoney(val) : "—"}
                                     </td>
+                                    {isWzDetail ? (
+                                      <>
+                                        <td className="px-4 py-4 text-right align-middle tabular-nums text-slate-700">
+                                          {priceGross != null ? fmtMoney(priceGross) : "—"}
+                                        </td>
+                                        <td className="px-4 py-4 text-right align-middle tabular-nums font-medium text-slate-900">
+                                          {valGross != null ? fmtMoney(valGross) : "—"}
+                                        </td>
+                                      </>
+                                    ) : null}
                                   </tr>
                                 );
                               })}
@@ -1354,7 +1452,31 @@ export default function DocumentsWarehousePage() {
                           </table>
                         </div>
 
-                        {lineSummary ? (
+                        {isWzDetail ? (
+                          <div className="mt-4 rounded-lg bg-gray-50 p-4">
+                            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Podsumowanie</p>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                              <div>
+                                <p className="text-xs text-slate-500">Suma netto</p>
+                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                                  {fmtMoneyCur(detail.total_net, detail.currency)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500">VAT</p>
+                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                                  {fmtMoneyCur(detail.total_vat, detail.currency)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500">Suma brutto</p>
+                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                                  {fmtMoneyCur(detail.total_gross, detail.currency)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : lineSummary ? (
                           <div className="mt-4 rounded-lg bg-gray-50 p-4">
                             <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Podsumowanie</p>
                             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">

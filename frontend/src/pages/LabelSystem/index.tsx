@@ -11,7 +11,10 @@ import TopTabsNavigation from "../../components/TopTabsNavigation";
 import type { TemplateMeta } from "./LabelTemplateDesigner";
 import { labelModuleBasePath } from "./labelModuleBasePath";
 import { labelModuleTabs } from "./labelModuleTabs";
-import { LABEL_PRINT_MODULE_TYPE_ORDER } from "./labelPrintModuleTypes";
+import {
+  DOCUMENT_PRINT_MODULE_TYPE_ORDER,
+  LABEL_PRINT_MODULE_TYPE_ORDER,
+} from "./labelPrintModuleTypes";
 import { PrintTemplateNewPage } from "./PrintTemplateNewPage";
 import { LabelReadyTemplatesPage } from "./LabelReadyTemplatesPage";
 
@@ -56,7 +59,10 @@ function DesignerWrapper() {
           updatedAt: new Date().toISOString(),
         };
       } else if (st?.initialTemplateType) {
-        const allowed = LABEL_PRINT_MODULE_TYPE_ORDER as readonly string[];
+        const allowed = [
+          ...LABEL_PRINT_MODULE_TYPE_ORDER,
+          ...DOCUMENT_PRINT_MODULE_TYPE_ORDER,
+        ] as readonly string[];
         if (allowed.includes(String(st.initialTemplateType))) {
           next = {
             ...DEFAULT_TEMPLATE,

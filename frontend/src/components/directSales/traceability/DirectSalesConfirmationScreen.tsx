@@ -8,6 +8,7 @@ import {
 } from "../../../api/saleDocumentsApi";
 import { DAMAGE_TENANT_ID } from "../../../constants/panelTenant";
 import type { DirectSaleCompletion } from "../../../types/directSalesCompletion";
+import { getApiErrorMessage } from "../../../utils/apiError";
 import { openPdfBlobInPrintViewer } from "../../../utils/openPdfForBrowserPrint";
 import {
   documentSubtypePl,
@@ -55,8 +56,10 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale }: Props) 
     try {
       const blob = await fetchSaleDocumentPdfBlob(DAMAGE_TENANT_ID, saleDocId);
       openPdfBlobInPrintViewer(blob, { autoPrint: true });
-    } catch {
-      setPrintError("Nie udało się pobrać PDF dokumentu sprzedaży.");
+    } catch (err) {
+      const msg = getApiErrorMessage(err) || "Nie udało się wygenerować PDF dokumentu.";
+      console.error("[DirectSales.printSale]", msg, err);
+      setPrintError(msg);
     } finally {
       setPrintBusy(false);
     }
@@ -69,8 +72,10 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale }: Props) 
     try {
       const blob = await fetchStockDocumentPdfBlob(DAMAGE_TENANT_ID, stockDocId);
       openPdfBlobInPrintViewer(blob, { autoPrint: true });
-    } catch {
-      setPrintError("Nie udało się pobrać PDF dokumentu WZ.");
+    } catch (err) {
+      const msg = getApiErrorMessage(err) || "Nie udało się wygenerować PDF dokumentu.";
+      console.error("[DirectSales.printWz]", msg, err);
+      setPrintError(msg);
     } finally {
       setPrintBusy(false);
     }

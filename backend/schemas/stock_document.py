@@ -191,7 +191,35 @@ class StockDocumentItemRead(BaseModel):
     def value_net(self) -> Optional[float]:
         if self.purchase_price_net is None:
             return None
-        return float(self.received_quantity) * float(self.purchase_price_net)
+        rec = float(self.received_quantity or 0)
+        ordq = float(self.ordered_quantity or 0)
+        qty = rec if rec > 1e-9 else ordq
+        if qty <= 1e-12:
+            return None
+        return round(qty * float(self.purchase_price_net), 2)
+
+    @computed_field
+    @property
+    def unit_price_gross(self) -> Optional[float]:
+        if self.purchase_price_net is None:
+            return None
+        vr = float(self.vat_rate or 0)
+        if not math.isfinite(vr):
+            vr = 0.0
+        return round(float(self.purchase_price_net) * (1.0 + vr / 100.0), 2)
+
+    @computed_field
+    @property
+    def value_gross(self) -> Optional[float]:
+        ug = self.unit_price_gross
+        if ug is None:
+            return None
+        rec = float(self.received_quantity or 0)
+        ordq = float(self.ordered_quantity or 0)
+        qty = rec if rec > 1e-9 else ordq
+        if qty <= 1e-12:
+            return None
+        return round(qty * float(ug), 2)
 
 
 class StockDocumentItemPatchLine(BaseModel):
@@ -260,7 +288,11 @@ class StockDocumentRead(BaseModel):
     id: int
     tenant_id: int
     document_type: str
+    document_number: Optional[str] = Field(None, description="Numer z serii dokumentu (np. WZ/1/2026).")
+    document_series_prefix: Optional[str] = Field(None, description="Prefiks serii (np. WZ).")
     order_id: Optional[int] = Field(None, description="Powiązane zamówienie OMS.")
+    order_number: Optional[str] = Field(None, description="Numer zamówienia OMS.")
+    customer_name: Optional[str] = Field(None, description="Klient z powiązanego zamówienia (WZ).")
     source_sale_document_id: Optional[str] = Field(None, description="PA/FV źródłowe dla WZ.")
     linked_sale_document: Optional[StockDocumentLinkedSaleDocumentRead] = Field(
         None,
@@ -315,6 +347,11 @@ class StockDocumentListRow(BaseModel):
     id: int
     tenant_id: int
     document_type: str
+    document_number: Optional[str] = None
+    document_series_prefix: Optional[str] = None
+    order_id: Optional[int] = None
+    order_number: Optional[str] = None
+    customer_name: Optional[str] = None
     delivery_id: Optional[int] = None
     supplier_id: Optional[int] = None
     supplier_name: str

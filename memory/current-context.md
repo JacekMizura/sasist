@@ -21,6 +21,17 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - Removed „Wygeneruj ponownie”; Dokumenty category in label templates + seed on startup
 - Series `print_template_id` fix in `normalize_series_spec`; KOR preset id=4
 
+## Direct Sales PDF + Dokumenty templates (latest)
+- Fixed HTTP 500 on sale PDF: `map_sale_document()` keyword-args + `document_print_service`
+- Puppeteer PDF pipeline with logging, fallback templates, `PdfRendererUnavailable` → 503
+- Seeded built-in A4 templates (Paragon, FV, WZ, Korekta) in label manager Dokumenty section
+- Frontend: PDF blob validation, clearer print errors, HTML/CSS editor for document templates
+
+## WZ warehouse document cleanup
+- Direct-sale WZ: status `completed` + workflow DONE; line pricing from order items; totals persisted
+- List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
+- Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
+
 ## Not yet / follow-up
 - VIES EU fallback for NIP
 - Manager approval + negative margin enforcement

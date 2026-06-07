@@ -1,8 +1,13 @@
 """Sale documents list + detail (FV/PA) — direct sales and WMS packing."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from jinja2 import TemplateNotFound
 from sqlalchemy.orm import Session
+
+_logger = logging.getLogger(__name__)
 
 from ..database import get_db
 from ..schemas.sale_document import SaleDocumentDetailRead
@@ -59,14 +64,52 @@ def get_sale_document_pdf(
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
+    from ..services.document_print_service import PdfRendererUnavailable
     from ..services.sale_document_pdf_service import build_sale_document_pdf_bytes
 
     try:
         pdf = build_sale_document_pdf_bytes(db, tenant_id=int(tenant_id), document_id=document_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Dokument sprzedaży nie istnieje.")
-    except (FileNotFoundError, RuntimeError, OSError) as exc:
-        raise HTTPException(status_code=503, detail=f"Generowanie PDF niedostępne: {exc}") from exc
+    except ValueError as exc:
+        _logger.warning(
+            "[sale_document_pdf] not found document_id=%s tenant_id=%s: %s",
+            document_id,
+            tenant_id,
+            exc,
+        )
+        raise HTTPException(status_code=404, detail="Dokument sprzedaży nie istnieje.") from exc
+    except PdfRendererUnavailable as exc:
+        _logger.error(
+            "[sale_document_pdf] renderer unavailable document_id=%s tenant_id=%s: %s",
+            document_id,
+            tenant_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail="PDF renderer unavailable") from exc
+    except TemplateNotFound as exc:
+        _logger.error(
+            "[sale_document_pdf] template missing document_id=%s tenant_id=%s: %s",
+            document_id,
+            tenant_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail="PDF renderer unavailable") from exc
+    except Exception as exc:
+        _logger.exception(
+            "[sale_document_pdf] failed document_id=%s tenant_id=%s",
+            document_id,
+            tenant_id,
+        )
+        raise HTTPException(status_code=500, detail="Nie udało się wygenerować PDF dokumentu.") from exc
+    if not pdf or not pdf.startswith(b"%PDF"):
+        _logger.error(
+            "[sale_document_pdf] invalid pdf bytes document_id=%s tenant_id=%s len=%s",
+            document_id,
+            tenant_id,
+            len(pdf or b""),
+        )
+        raise HTTPException(status_code=503, detail="PDF renderer unavailable")
     return Response(
         content=pdf,
         media_type="application/pdf",

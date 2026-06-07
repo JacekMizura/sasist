@@ -14,7 +14,10 @@ from sqlalchemy.orm import Session
 from ..auth.deps import get_current_user, get_optional_current_user
 from ..database import get_db
 from ..models.app_user import AppUser
+from ..models.customer import Customer
+from ..models.document_series import DocumentSeries
 from ..models.location import Location
+from ..models.order import Order
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.stock_item_location import StockItemLocation
 from ..models.stock_operation import StockOperation
@@ -79,11 +82,32 @@ def list_stock_documents(
         return []
 
     sids = {int(d.supplier_id) for d in docs if d.supplier_id is not None}
+    oids = {int(d.order_id) for d in docs if getattr(d, "order_id", None) is not None}
+    series_ids = {
+        str(d.document_series_id)
+        for d in docs
+        if getattr(d, "document_series_id", None) is not None and str(d.document_series_id).strip()
+    }
     wids = {d.warehouse_id for d in docs if d.warehouse_id is not None}
     lids = {d.location_id for d in docs if d.location_id is not None}
     dids = [d.id for d in docs]
 
     sup_names = {r.id: (r.name or "").strip() for r in db.query(Supplier).filter(Supplier.id.in_(sids)).all()}
+    order_by_id: dict[int, Order] = {}
+    customer_names: dict[int, str] = {}
+    if oids:
+        for o in db.query(Order).filter(Order.id.in_(oids)).all():
+            order_by_id[int(o.id)] = o
+        cids = {int(o.customer_id) for o in order_by_id.values() if o.customer_id is not None}
+        if cids:
+            for c in db.query(Customer).filter(Customer.id.in_(cids)).all():
+                customer_names[int(c.id)] = (c.name or "").strip()
+    series_prefix_by_id: dict[str, str] = {}
+    if series_ids:
+        for s in db.query(DocumentSeries).filter(DocumentSeries.id.in_(series_ids)).all():
+            label = (s.prefix or "").strip() or (s.code or "").strip()
+            if label:
+                series_prefix_by_id[str(s.id)] = label
     wh_names = (
         {r.id: (r.name or "").strip() for r in db.query(Warehouse).filter(Warehouse.id.in_(wids)).all()} if wids else {}
     )
@@ -158,21 +182,38 @@ def list_stock_documents(
         tg = getattr(d, "total_gross", None)
         tv: Optional[float] = None
         doc_lines = by_doc_lines.get(d.id, [])
-        if str(getattr(d, "document_type", "") or "").strip().upper() == "PZ" and doc_lines:
+        dt_u = str(getattr(d, "document_type", "") or "").strip().upper()
+        if dt_u in ("PZ", "WZ") and doc_lines:
             cn, cv, cg = compute_pz_line_financial_totals(doc_lines)
             tn, tg, tv = cn, cg, cv
+        oid = int(d.order_id) if getattr(d, "order_id", None) is not None else None
+        order_row = order_by_id.get(oid) if oid is not None else None
+        order_number = (order_row.number or "").strip() if order_row is not None else None
+        cust_name = ""
+        if order_row is not None and order_row.customer_id is not None:
+            cust_name = customer_names.get(int(order_row.customer_id), "")
+        series_id = str(getattr(d, "document_series_id", None) or "").strip() or None
+        series_label = series_prefix_by_id.get(series_id, "") if series_id else ""
+        doc_number = str(getattr(d, "document_number", None) or "").strip() or None
+        supplier_label = (
+            sup_names.get(int(d.supplier_id), f"#{int(d.supplier_id)}")
+            if d.supplier_id is not None
+            else ""
+        )
+        display_customer = cust_name if dt_u == "WZ" and cust_name else supplier_label
         out.append(
             StockDocumentListRow(
                 id=d.id,
                 tenant_id=d.tenant_id,
                 document_type=d.document_type,
+                document_number=doc_number,
+                document_series_prefix=series_label or None,
+                order_id=oid,
+                order_number=order_number or None,
+                customer_name=display_customer or None,
                 delivery_id=d.delivery_id,
                 supplier_id=d.supplier_id,
-                supplier_name=(
-                    sup_names.get(int(d.supplier_id), f"#{int(d.supplier_id)}")
-                    if d.supplier_id is not None
-                    else ""
-                ),
+                supplier_name=supplier_label,
                 warehouse_id=d.warehouse_id,
                 warehouse_name=wh_names.get(d.warehouse_id, "") if d.warehouse_id is not None else "",
                 location_id=d.location_id,
@@ -347,21 +388,42 @@ def patch_stock_document_metadata_route(
 
 
 def _stock_document_pdf_response(db: Session, tenant_id: int, document_id: int) -> Response:
+    from ..services.document_print_service import PdfRendererUnavailable
     from ..services.pdf_deps import PdfGenerationUnavailable
     from ..services.stock_document_html_pdf_service import build_stock_document_html_pdf_bytes
 
     try:
         try:
             pdf = build_stock_document_html_pdf_bytes(db, tenant_id=tenant_id, document_id=document_id)
+        except PdfRendererUnavailable:
+            raise
         except (FileNotFoundError, RuntimeError, OSError):
             pdf = build_stock_document_pdf_bytes(db, tenant_id, document_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Document not found")
+    except PdfRendererUnavailable as exc:
+        _logger.error(
+            "[stock_document_pdf] renderer unavailable document_id=%s tenant_id=%s: %s",
+            document_id,
+            tenant_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail="PDF renderer unavailable") from exc
     except PdfGenerationUnavailable:
         raise HTTPException(
             status_code=503,
-            detail="PDF generation unavailable: install reportlab",
+            detail="PDF renderer unavailable",
         )
+    except Exception as exc:
+        _logger.exception(
+            "[stock_document_pdf] failed document_id=%s tenant_id=%s",
+            document_id,
+            tenant_id,
+        )
+        raise HTTPException(status_code=500, detail="Nie udało się wygenerować PDF dokumentu.") from exc
+    if not pdf or not pdf.startswith(b"%PDF"):
+        raise HTTPException(status_code=503, detail="PDF renderer unavailable")
     return Response(
         content=pdf,
         media_type="application/pdf",

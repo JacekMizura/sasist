@@ -42,6 +42,8 @@ import { LayersPanel } from "../../components/label/LayersPanel";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { LABEL_IMAGE_TOOLBAR_PLACEHOLDER_DATA_URL } from "../../labelSystem/labelImageToolbarPlaceholder";
 import { LabelDesignerPreviewModal } from "./components/LabelDesignerPreviewModal";
+import { DocumentTemplateHtmlPanel } from "./components/DocumentTemplateHtmlPanel";
+import { isDocumentPrintModuleType } from "./labelPrintModuleTypes";
 
 const BASE_PX_PER_MM = 8;
 const GRID_PX = 5;
@@ -333,6 +335,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
   }, [template.template_type]);
 
   const isLocationTemplate = (template.template_type ?? "location") === "location";
+  const isDocumentTemplate = isDocumentPrintModuleType(String(template.template_type ?? ""));
   const groupedLocationActive = isLocationTemplate && groupedLocationVariables;
   const previewBuildOptions = useMemo(
     () => ({ groupedLocationLabels: groupedLocationActive }),
@@ -966,6 +969,10 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
         handleImportBackgroundImageChange={handleImportBackgroundImageChange}
         onOpenPreview={() => setPreviewModalOpen(true)}
       />
+
+      {isDocumentTemplate ? (
+        <DocumentTemplateHtmlPanel template={template} onTemplateChange={onTemplateChange} />
+      ) : null}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <LabelLeftPanel

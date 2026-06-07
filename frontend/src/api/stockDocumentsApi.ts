@@ -7,6 +7,11 @@ export type StockDocumentListRow = {
   id: number;
   tenant_id: number;
   document_type: string;
+  document_number?: string | null;
+  document_series_prefix?: string | null;
+  order_id?: number | null;
+  order_number?: string | null;
+  customer_name?: string | null;
   delivery_id: number;
   supplier_id: number;
   supplier_name: string;
@@ -104,8 +109,11 @@ export type StockDocumentItemRead = {
   putaway_completed?: boolean;
   difference: number;
   value_net: number | null;
+  unit_price_gross?: number | null;
+  value_gross?: number | null;
   purchase_price_net?: number | null;
   vat_rate: number;
+  mm_line_from_location_name?: string | null;
   delivery_item_id?: number | null;
   suggested_warehouse_carrier_id?: number | null;
   suggested_warehouse_carrier_barcode?: string | null;
@@ -130,7 +138,11 @@ export type StockDocumentRead = {
   id: number;
   tenant_id: number;
   document_type: string;
+  document_number?: string | null;
+  document_series_prefix?: string | null;
   order_id?: number | null;
+  order_number?: string | null;
+  customer_name?: string | null;
   source_sale_document_id?: string | null;
   linked_sale_document?: StockDocumentLinkedSaleDocumentRead | null;
   supplier_id: number;

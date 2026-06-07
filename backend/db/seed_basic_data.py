@@ -111,7 +111,6 @@ def seed_basic_data(db: Session) -> None:
         db.commit()
 
     from ..services.document_series_seed_service import seed_default_document_series
-    from ..services.document_label_template_seed_service import seed_default_document_label_templates
 
     try:
         seed_default_document_series(db)
@@ -119,7 +118,9 @@ def seed_basic_data(db: Session) -> None:
         logger.exception("seed_basic_data: document series seed failed")
 
     try:
-        seed_default_document_label_templates(db, tenant_id=tenant_id)
+        from ..services.document_label_template_seed_service import ensure_document_label_templates_for_all_tenants
+
+        ensure_document_label_templates_for_all_tenants(db)
     except Exception:
         logger.exception("seed_basic_data: document label templates seed failed")
 

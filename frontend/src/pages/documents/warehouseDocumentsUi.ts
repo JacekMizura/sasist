@@ -76,10 +76,11 @@ export function typeBadgeClass(t: WarehouseDocumentType): string {
   }
 }
 
-export type BusinessDocStatus = "NOWE" | "W TRAKCIE" | "GOTOWE" | "ZAKOŃCZONE" | "ANULOWANE";
+export type BusinessDocStatus = "NOWE" | "W TRAKCIE" | "GOTOWE" | "ZAKOŃCZONE" | "ANULOWANE" | "ZREALIZOWANA";
 
 export function businessDocStatus(r: {
   status: string;
+  document_type?: string;
   total_received?: number;
   receiving_status?: string;
   putaway_status?: string;
@@ -87,8 +88,16 @@ export function businessDocStatus(r: {
   is_fully_received?: boolean;
   is_fully_putaway?: boolean;
 }): BusinessDocStatus {
+  const docType = String(r.document_type ?? "")
+    .trim()
+    .toUpperCase();
   const st = (r.status || "").toLowerCase();
   if (st === "cancelled" || st === "canceled" || st === "anulowane" || st === "anulowany") return "ANULOWANE";
+  if (docType === "WZ") {
+    if (st === "done" || st === "completed" || st === "posted" || st === "zakonczone") return "ZREALIZOWANA";
+    if (st === "draft") return "NOWE";
+    return "W TRAKCIE";
+  }
   if (st === "posted" || st === "zakonczone" || st === "completed") return "ZAKOŃCZONE";
   const fullRec = r.is_fully_received === true;
   const fullPut = r.is_fully_putaway === true;
@@ -137,6 +146,8 @@ export function receivedProgressClass(received: number, ordered: number): string
 
 export function businessStatusBadgeClass(status: BusinessDocStatus): string {
   switch (status) {
+    case "ZREALIZOWANA":
+      return "bg-emerald-50 text-emerald-800 ring-emerald-200/90";
     case "ZAKOŃCZONE":
       return "bg-emerald-50 text-emerald-800 ring-emerald-200/90";
     case "GOTOWE":

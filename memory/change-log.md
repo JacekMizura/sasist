@@ -1,5 +1,16 @@
 # Change log
 
+## 2026-06-04 — Direct Sales PDF + Dokumenty print templates
+- Root-cause fix: sale PDF 500 (`map_sale_document` keyword-only call)
+- Central `document_print_service` with logging, builtin/custom template fallback, PDF validation
+- Auto-seed Paragon/FV/WZ/Korekta A4 templates (stable slugs) in label template Dokumenty category
+- Frontend PDF fetch validates `%PDF` bytes; print errors surface backend `detail`
+
+## 2026-06-04 — WZ warehouse document cleanup
+- `wz_service`: finalize WZ as `completed` with line net/VAT pricing and document totals
+- Stock document list/read: order number, series prefix, customer, financial totals for WZ
+- `DocumentsWarehousePage` WZ tab: removed payment columns; ZREALIZOWANA status; warehouse-oriented line table
+
 ## 2026-06-04 — Retail/POS workflow (Direct Sales)
 - Auto retail customer (`Klient detaliczny`) on every new session
 - Document-first flow: PA = retail badge; FV = NIP lookup + invoice customer upsert

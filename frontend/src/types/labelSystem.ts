@@ -196,14 +196,19 @@ export const LABEL_VARIABLE_CATEGORIES: Array<{
     id: "documents",
     label: "Dokumenty",
     items: [
-      { id: "document_number", label: "Numer dokumentu", token: "{{document.number}}" },
-      { id: "document_date", label: "Data dokumentu", token: "{{document.date}}" },
-      { id: "customer_name", label: "Nazwa klienta", token: "{{customer.name}}" },
-      { id: "customer_address", label: "Adres klienta", token: "{{customer.address}}" },
-      { id: "items", label: "Pozycje", token: "{{items}}" },
-      { id: "summary_net", label: "Suma netto", token: "{{summary.net}}" },
-      { id: "summary_gross", label: "Suma brutto", token: "{{summary.gross}}" },
-      { id: "payment_method", label: "Metoda płatności", token: "{{payment.method}}" },
+      { id: "document_number", label: "Numer dokumentu", token: "{{ document.number }}" },
+      { id: "document_date", label: "Data dokumentu", token: "{{ document.date }}" },
+      { id: "customer_name", label: "Nazwa klienta", token: "{{ customer.name }}" },
+      { id: "customer_address", label: "Adres klienta", token: "{{ customer.address }}" },
+      { id: "company_name", label: "Firma (sprzedawca)", token: "{{ company.name }}" },
+      { id: "items", label: "Pozycje", token: "{{ items }}" },
+      { id: "totals_net", label: "Suma netto", token: "{{ totals.net }}" },
+      { id: "totals_vat", label: "VAT", token: "{{ totals.vat }}" },
+      { id: "totals_gross", label: "Suma brutto", token: "{{ totals.gross }}" },
+      { id: "payment_method", label: "Metoda płatności", token: "{{ payment.method }}" },
+      { id: "warehouse_name", label: "Magazyn", token: "{{ warehouse.name }}" },
+      { id: "item_quantity", label: "Ilość pozycji", token: "{{ item.quantity }}" },
+      { id: "item_location", label: "Lokalizacja pozycji", token: "{{ item.location }}" },
     ],
   },
 ];
@@ -599,6 +604,14 @@ export interface LabelTemplate {
   elements: TemplateElement[];
   /** Template type: which entity this label is for (controls variable availability and preview). */
   template_type?: TemplateType;
+  /** A4 commercial document — Jinja HTML body (Dokumenty). */
+  htmlContent?: string;
+  cssContent?: string;
+  documentPresetId?: number;
+  seedSlug?: string;
+  jinjaTemplate?: string;
+  variables?: string[];
+  category?: string;
   /** Optional: change colors by metadata (e.g. Reserve -> red background) */
   conditionalFormatting?: ConditionalFormatRule[];
   createdAt?: string;

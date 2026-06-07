@@ -20,6 +20,7 @@ from ...models.stock_movement import StockMovement
 from ...models.stock_reservation import StockReservation
 from ..document_number_service import assign_series_number_to_stock_document
 from ..operational_sales_events import emit_operational_sales_event
+from ..stock_document_service import compute_pz_line_financial_totals
 from ..order_item_pick_allocation_service import SENTINEL_EXPIRY, consume_inventory_fifo_slices
 from ..sale_warehouse_series_service import resolve_wz_series_for_sale_series
 from ..stock_operation_issue_service import append_issue_operation
@@ -312,7 +313,7 @@ def create_and_post_wz_for_direct_sale(
         order_id=order_id,
         source_sale_document_id=sale_doc_id,
         direct_sale_session_id=session_id,
-        status="done",
+        status="completed",
         currency=str(order.currency or "PLN"),
         created_by_user_id=int(performed_by_user_id) if performed_by_user_id else None,
     )
@@ -325,12 +326,17 @@ def create_and_post_wz_for_direct_sale(
     line_by_alloc: dict[tuple[int, int, int], StockDocumentItem] = {}
     for alloc in allocations:
         qty = float(alloc.quantity)
+        oi = order_items_by_line.get(int(alloc.session_line_id))
+        unit_net = float(oi.unit_price or 0) if oi is not None else 0.0
+        vat_pct = float(oi.vat_percent if oi is not None and oi.vat_percent is not None else 23.0)
         line = StockDocumentItem(
             document_id=int(wz.id),
             product_id=int(alloc.product_id),
             ordered_quantity=qty,
             received_quantity=qty,
             quantity=qty,
+            purchase_price_net=unit_net,
+            vat_rate=vat_pct,
             mm_line_from_location_id=int(alloc.location_id),
             batch_number="",
             expiry_date=date(9999, 12, 31),
@@ -358,6 +364,19 @@ def create_and_post_wz_for_direct_sale(
         reservations=reservations,
         performed_by_user_id=performed_by_user_id,
     )
+
+    wz_lines = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == int(wz.id))
+        .all()
+    )
+    total_net, _total_vat, total_gross = compute_pz_line_financial_totals(wz_lines)
+    wz.status = "completed"
+    wz.receiving_status = "DONE"
+    wz.putaway_status = "DONE"
+    wz.relocation_status = "DONE"
+    wz.total_net = total_net
+    wz.total_gross = total_gross
 
     link = SaleDocumentStockLink(
         sale_document_id=sale_doc_id,

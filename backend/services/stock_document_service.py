@@ -1296,9 +1296,36 @@ def build_stock_document_read(
     tn: Optional[float] = float(getattr(doc, "total_net")) if getattr(doc, "total_net", None) is not None else None
     tg: Optional[float] = float(getattr(doc, "total_gross")) if getattr(doc, "total_gross", None) is not None else None
     tv: Optional[float] = None
-    if str(getattr(doc, "document_type", "") or "").strip().upper() == "PZ" and visible_rows:
+    dt_fin = str(getattr(doc, "document_type", "") or "").strip().upper()
+    if dt_fin in ("PZ", "WZ") and visible_rows:
         cn, cv, cg = compute_pz_line_financial_totals(visible_rows)
         tn, tg, tv = float(cn), float(cg), float(cv)
+
+    order_number: Optional[str] = None
+    customer_name: Optional[str] = None
+    order_id_raw = getattr(doc, "order_id", None)
+    if order_id_raw is not None:
+        from ..models.order import Order
+        from ..models.customer import Customer
+
+        order_row = db.query(Order).filter(Order.id == int(order_id_raw)).first()
+        if order_row is not None:
+            order_number = str(order_row.number or "").strip() or None
+            if order_row.customer_id is not None:
+                cust = db.query(Customer).filter(Customer.id == int(order_row.customer_id)).first()
+                if cust is not None:
+                    customer_name = (cust.name or "").strip() or None
+
+    series_prefix: Optional[str] = None
+    series_id = str(getattr(doc, "document_series_id", None) or "").strip() or None
+    if series_id:
+        from ..models.document_series import DocumentSeries
+
+        series_row = db.query(DocumentSeries).filter(DocumentSeries.id == series_id).first()
+        if series_row is not None:
+            series_prefix = (series_row.prefix or "").strip() or (series_row.code or "").strip() or None
+
+    doc_number = str(getattr(doc, "document_number", None) or "").strip() or None
 
     linked_sale: Optional[dict] = None
     sale_doc_id = str(getattr(doc, "source_sale_document_id", None) or "").strip() or None
@@ -1326,7 +1353,11 @@ def build_stock_document_read(
         id=doc.id,
         tenant_id=doc.tenant_id,
         document_type=doc.document_type,
+        document_number=doc_number,
+        document_series_prefix=series_prefix,
         order_id=int(doc.order_id) if getattr(doc, "order_id", None) else None,
+        order_number=order_number,
+        customer_name=customer_name,
         source_sale_document_id=sale_doc_id,
         linked_sale_document=linked_sale,
         supplier_id=doc.supplier_id,
