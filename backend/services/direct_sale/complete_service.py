@@ -264,18 +264,13 @@ def complete_direct_sale_session(
     except DirectSaleError:
         raise
     except Exception as exc:
+        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         log_unhandled_complete_exception(
             exc,
             session_id=sid,
-            tenant_id=tid,
-            warehouse_id=wid,
             stage="pipeline",
             context="complete_service",
-        )
-        logger.error(
-            "[direct_sales.complete] UNHANDLED EXCEPTION pipeline session_id=%s\n%s",
-            sid,
-            traceback.format_exc(),
+            traceback_str=tb,
         )
         raise exc
 

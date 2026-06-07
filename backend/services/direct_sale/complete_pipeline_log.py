@@ -98,7 +98,12 @@ def log_complete_step(
         yield
     except Exception as exc:
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
-        error_msg = f"{type(exc).__name__}: {exc}"
+        try:
+            from .complete_debug_log import safe_exception_str
+
+            error_msg = f"{type(exc).__name__}: {safe_exception_str(exc)}"
+        except Exception:
+            error_msg = type(exc).__name__
         logger.error(
             "[direct_sales.complete] %s",
             json.dumps(

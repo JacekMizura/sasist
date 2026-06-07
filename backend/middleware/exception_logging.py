@@ -13,11 +13,21 @@ from starlette.responses import Response
 _LOG = logging.getLogger("wms.exceptions")
 
 
+def _safe_exc_summary(exc: BaseException) -> str:
+    try:
+        from ..services.direct_sale.complete_debug_log import safe_exception_str
+
+        return safe_exception_str(exc)
+    except Exception:
+        return type(exc).__name__
+
+
 def log_unhandled_exception(context: str, exc: BaseException) -> str:
     tb = traceback.format_exc() or "".join(
         traceback.format_exception(type(exc), exc, exc.__traceback__)
     )
-    message = f"[EXCEPTION] {context}: {type(exc).__name__}: {exc}\n{tb}"
+    summary = _safe_exc_summary(exc)
+    message = f"[EXCEPTION] {context}: {type(exc).__name__}: {summary}\n{tb}"
     _LOG.error(message)
     print(message, file=sys.stderr, flush=True)
     return tb
@@ -46,7 +56,7 @@ async def outer_request_logger_middleware(request: Request, call_next: CallNext)
             from ..observability.platform_debug import log_db_session, log_request_features
 
             log_request_features(path=path)
-            log_db_session(phase="middleware_unhandled", path=path, error=f"{type(exc).__name__}: {exc}")
+            log_db_session(phase="middleware_unhandled", path=path, error=f"{type(exc).__name__}: {_safe_exc_summary(exc)}")
         except Exception:
             pass
         raise

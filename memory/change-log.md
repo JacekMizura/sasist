@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-04 — Direct Sales /complete raw exception logging
+
+- Removed `logger.exception()`, ORM inspect, and `str(exc)` SQL dumps from complete debug path.
+- `safe_exception_str/repr` use `exc.orig` only for SQLAlchemy errors.
+- API returns `exc_type`, `exc_repr`, `exc_str`, `traceback`, `orig` — SQL in separate `sql_statement` field (truncated).
+- Global handler + `log_unhandled_exception` use safe summaries.
+
 ## 2026-06-04 — Direct Sales /complete PendingRollbackError guard
 
 - Failure paths: explicit `db.rollback()` before error JSON; no ORM relationship access after rollback.

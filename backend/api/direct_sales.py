@@ -539,10 +539,12 @@ def post_session_complete(
     TEMP: no response_model — errors return flat JSONResponse with real traceback.
     Success returns DirectSaleCompleteResponse JSON.
     """
+    from sqlalchemy.exc import SQLAlchemyError
+
     from ..services.direct_sale.complete_debug_log import (
         commit_with_logging,
-        log_orm_serialize_state,
-        real_failure_json_response,
+        log_raw_exception,
+        raw_complete_failure_response,
         rollback_db_safely,
     )
 
@@ -550,13 +552,14 @@ def post_session_complete(
     warehouse_id: int | None = None
     current_step = "validation"
 
-    def _failure_response(exc: BaseException, *, stage: str) -> JSONResponse:
-        return real_failure_json_response(
+    def _failure_response(exc: BaseException, *, stage: str, tb: str) -> JSONResponse:
+        return raw_complete_failure_response(
             exc,
             stage=stage,
             session_id=session_id,
             tenant_id=tenant_id,
             warehouse_id=warehouse_id,
+            traceback_str=tb,
             db=db,
         )
 
@@ -615,9 +618,9 @@ def post_session_complete(
                     )
                     result = replay
                 else:
-                    return _failure_response(commit_exc, stage="commit")
+                    tb = traceback.format_exc()
+                    return _failure_response(commit_exc, stage="commit", tb=tb)
         current_step = "response"
-        log_orm_serialize_state(sess, label="session", stage=current_step, relationship="pre_completion_read")
         completion = None
         try:
             completion_read = build_direct_sale_completion_read(
@@ -647,20 +650,30 @@ def post_session_complete(
         )
         return payload
     except HTTPException as http_exc:
+        tb = traceback.format_exc()
         rollback_db_safely(db, context="complete_http_exception")
         if isinstance(http_exc.detail, dict):
             return _failure_response(
                 Exception(str(http_exc.detail.get("message") or http_exc.detail)),
                 stage=current_step,
+                tb=tb,
             )
-        return _failure_response(Exception(str(http_exc.detail)), stage=current_step)
+        return _failure_response(Exception(str(http_exc.detail)), stage=current_step, tb=tb)
     except DirectSaleError as exc:
+        tb = traceback.format_exc()
         rollback_db_safely(db, context="complete_direct_sale_error")
         root = exc.__cause__ or exc
-        return _failure_response(root, stage=getattr(exc, "step", None) or current_step)
+        return _failure_response(root, stage=getattr(exc, "step", None) or current_step, tb=tb)
+    except SQLAlchemyError as exc:
+        tb = traceback.format_exc()
+        rollback_db_safely(db, context="complete_sqlalchemy")
+        log_raw_exception(exc, stage=current_step, session_id=session_id, context="api_sqlalchemy")
+        return _failure_response(exc, stage=current_step, tb=tb)
     except Exception as exc:
+        tb = traceback.format_exc()
         rollback_db_safely(db, context="complete_unhandled")
-        return _failure_response(exc, stage=current_step)
+        log_raw_exception(exc, stage=current_step, session_id=session_id, context="api_exception")
+        return _failure_response(exc, stage=current_step, tb=tb)
 
 
 @router.post("/documents/{job_id}/reprint")

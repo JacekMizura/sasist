@@ -1,4 +1,4 @@
-"""Full-fidelity logging for direct-sale /complete debugging — do not mask exceptions."""
+"""Raw exception logging for direct-sale /complete — never stringify ORM objects."""
 
 from __future__ import annotations
 
@@ -18,12 +18,11 @@ try:
     from sqlalchemy.exc import FlushError
 except ImportError:
     FlushError = type("FlushError", (SQLAlchemyError,), {})  # type: ignore[misc,assignment]
-from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-_SA_TYPES = (
+_SA_TYPES: tuple[type[BaseException], ...] = (
     IntegrityError,
     OperationalError,
     PendingRollbackError,
@@ -34,7 +33,7 @@ _SA_TYPES = (
 
 
 def root_complete_exception(exc: BaseException) -> BaseException:
-    """Unwrap PendingRollbackError chains to the original DB failure."""
+    """Unwrap PendingRollbackError to the original DB failure."""
     seen: set[int] = set()
     current = exc
     while id(current) not in seen:
@@ -54,112 +53,134 @@ def rollback_db_safely(db: Session | None, *, context: str = "complete") -> None
     try:
         if db.is_active:
             db.rollback()
-            logger.warning("[direct_sales.rollback] context=%s active=True", context)
-    except Exception as rb_exc:
-        logger.warning("[direct_sales.rollback] context=%s failed=%s", context, rb_exc)
+    except Exception:
+        pass
 
 
-def log_orm_serialize_state(
-    entity: object | None,
-    *,
-    label: str,
-    stage: str,
-    relationship: str | None = None,
-) -> None:
-    """TEMP: log ORM bound/expired state before response serialization."""
-    if entity is None:
-        logger.warning(
-            "[direct_sales.serialize] label=%s stage=%s entity=None",
-            label,
-            stage,
-        )
-        return
-    try:
-        state = sa_inspect(entity)
-        logger.warning(
-            "[direct_sales.serialize] label=%s stage=%s relationship=%s "
-            "session_bound=%s detached=%s expired=%s persistent=%s",
-            label,
-            stage,
-            relationship,
-            state.session is not None,
-            state.detached,
-            state.expired,
-            state.persistent,
-        )
-    except Exception as inspect_exc:
-        logger.warning(
-            "[direct_sales.serialize] label=%s stage=%s inspect_failed=%s",
-            label,
-            stage,
-            inspect_exc,
-        )
-
-
-def sqlalchemy_exception_details(exc: BaseException) -> dict[str, Any]:
-    """Extract repr, str, and .orig for SQLAlchemy errors."""
+def safe_exception_str(exc: BaseException) -> str:
+    """Short message — never the full SQLAlchemy statement dump."""
     root = root_complete_exception(exc)
-    out: dict[str, Any] = {
-        "error_type": type(root).__name__,
-        "repr": repr(root),
-        "message": str(root),
-    }
-    if root is not exc:
-        out["wrapped_error_type"] = type(exc).__name__
-        out["wrapped_message"] = str(exc)
-    orig = getattr(root, "orig", None)
-    if orig is not None:
-        out["orig_type"] = type(orig).__name__
-        out["orig_repr"] = repr(orig)
-        out["orig_message"] = str(orig)
-    if isinstance(root, _SA_TYPES):
-        out["is_sqlalchemy"] = True
-    cause = root.__cause__
-    if cause is not None:
-        out["cause_type"] = type(cause).__name__
-        out["cause_message"] = str(cause)
-        if getattr(cause, "orig", None) is not None:
-            out["cause_orig"] = str(cause.orig)
-    return out
+    if isinstance(root, SQLAlchemyError):
+        orig = getattr(root, "orig", None)
+        if orig is not None:
+            return str(orig)
+        return type(root).__name__
+    return str(root)
 
 
-def log_unhandled_complete_exception(
+def safe_exception_repr(exc: BaseException) -> str:
+    """Short repr — SQLAlchemy repr() embeds entire SQL; use orig only."""
+    root = root_complete_exception(exc)
+    if isinstance(root, SQLAlchemyError):
+        orig = getattr(root, "orig", None)
+        if orig is not None:
+            return f"{type(root).__name__}(orig={orig!r})"
+        return type(root).__name__
+    text = repr(root)
+    return text if len(text) <= 500 else text[:500] + "…"
+
+
+def log_raw_exception(
     exc: BaseException,
     *,
-    session_id: int | None = None,
-    tenant_id: int | None = None,
-    warehouse_id: int | None = None,
     stage: str | None = None,
+    session_id: int | None = None,
     context: str = "complete",
+    traceback_str: str | None = None,
 ) -> str:
-    """Log full traceback + SQLAlchemy root cause. Returns traceback string."""
-    tb = traceback.format_exc()
-    details = sqlalchemy_exception_details(exc)
-    logger.exception(
-        "[direct_sales.complete] UNHANDLED EXCEPTION context=%s stage=%s session_id=%s error_type=%s",
+    """
+    Log ONLY the exception object — no ORM entities, no queries, no logger.exception().
+    """
+    root = root_complete_exception(exc)
+    tb = traceback_str or "".join(
+        traceback.format_exception(type(exc), exc, exc.__traceback__)
+    )
+    logger.error(
+        "[direct_sales.complete.raw] context=%s stage=%s session_id=%s",
         context,
         stage,
         session_id,
-        details.get("error_type"),
     )
-    logger.error(
-        "[direct_sales.complete] TRACEBACK session_id=%s stage=%s\n%s",
-        session_id,
-        stage,
-        tb,
-    )
-    if isinstance(exc, _SA_TYPES):
-        logger.error(
-            "[direct_sales.complete] SQLALCHEMY ROOT session_id=%s stage=%s repr=%s str=%s orig=%s",
-            session_id,
-            stage,
-            repr(exc),
-            str(exc),
-            getattr(exc, "orig", None),
-        )
+    logger.error("EXC TYPE: %s", type(root).__name__)
+    logger.error("EXC REPR: %r", safe_exception_repr(root))
+    logger.error("EXC STR: %s", safe_exception_str(root))
+    if isinstance(root, SQLAlchemyError):
+        logger.error("SQLA ORIG: %r", getattr(root, "orig", None))
+        stmt = getattr(root, "statement", None)
+        if stmt is not None:
+            logger.error("SQLA STMT: %s", str(stmt)[:500])
+    if type(exc) is not type(root):
+        logger.error("WRAPPED TYPE: %s", type(exc).__name__)
+        logger.error("WRAPPED STR: %s", safe_exception_str(exc))
+    logger.error("TRACEBACK:\n%s", tb)
     return tb
 
 
+def raw_complete_failure_response(
+    exc: BaseException,
+    *,
+    stage: str,
+    session_id: int | None = None,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+    traceback_str: str | None = None,
+    db: Session | None = None,
+):
+    """Return flat JSON with raw exception fields only — no ORM, no DTOs."""
+    from starlette.responses import JSONResponse
+
+    rollback_db_safely(db, context=f"raw_failure:{stage}")
+    root = root_complete_exception(exc)
+    tb = traceback_str or "".join(
+        traceback.format_exception(type(exc), exc, exc.__traceback__)
+    )
+    log_raw_exception(
+        root,
+        stage=stage,
+        session_id=session_id,
+        context="raw_complete_failure_response",
+        traceback_str=tb,
+    )
+
+    orig = getattr(root, "orig", None)
+    content: dict[str, Any] = {
+        "error": "DIRECT_SALE_COMPLETE_FAILED",
+        "stage": stage,
+        "exc_type": type(root).__name__,
+        "exc_repr": safe_exception_repr(root),
+        "exc_str": safe_exception_str(root),
+        "traceback": tb,
+        "orig": repr(orig) if orig is not None else None,
+        # Legacy aliases for frontend parsers
+        "error_type": type(root).__name__,
+        "message": safe_exception_str(root),
+        "code": type(root).__name__,
+    }
+    if type(exc) is not type(root):
+        content["wrapped_exc_type"] = type(exc).__name__
+        content["wrapped_exc_str"] = safe_exception_str(exc)
+    if session_id is not None:
+        content["session_id"] = session_id
+    if tenant_id is not None:
+        content["tenant_id"] = tenant_id
+    if warehouse_id is not None:
+        content["warehouse_id"] = warehouse_id
+    if orig is not None:
+        content["sqlalchemy_orig"] = str(orig)
+        content["sqlalchemy_orig_type"] = type(orig).__name__
+
+    stmt = getattr(root, "statement", None)
+    if stmt is not None:
+        content["sql_statement"] = str(stmt)[:1000]
+
+    response = JSONResponse(status_code=500, content=content)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+
+# Back-compat shim — delegate to raw response.
 def real_failure_json_response(
     exc: BaseException,
     *,
@@ -170,83 +191,34 @@ def real_failure_json_response(
     traceback_str: str | None = None,
     db: Session | None = None,
 ):
-    """
-    TEMP debug: flat JSON body — never wrapped in HTTPException/detail/SESSION_INVALID.
-    Never touches ORM entities — scalars only. Rolls back session first.
-    """
-    from starlette.responses import JSONResponse
-
-    rollback_db_safely(db, context=f"real_failure_json_response:{stage}")
-    root = root_complete_exception(exc)
-    tb = traceback_str or traceback.format_exc()
-    details = sqlalchemy_exception_details(exc)
-    log_unhandled_complete_exception(
-        root,
+    return raw_complete_failure_response(
+        exc,
+        stage=stage,
         session_id=session_id,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
-        stage=stage,
-        context="real_failure_json_response",
+        traceback_str=traceback_str,
+        db=db,
     )
-    logger.exception(
-        "[direct_sales.complete] REAL FAILURE stage=%s session_id=%s",
-        stage,
-        session_id,
-    )
-    logger.error("[direct_sales.complete] REAL FAILURE TRACEBACK\n%s", tb)
-
-    content: dict[str, Any] = {
-        "error": "DIRECT_SALE_COMPLETE_FAILED",
-        "error_type": details["error_type"],
-        "message": details["message"],
-        "stage": stage,
-        "traceback": tb,
-        "code": details["error_type"],
-    }
-    if session_id is not None:
-        content["session_id"] = session_id
-    if details.get("orig_message"):
-        content["sqlalchemy_orig"] = details["orig_message"]
-    if details.get("orig_type"):
-        content["sqlalchemy_orig_type"] = details["orig_type"]
-    if details.get("repr"):
-        content["repr"] = details["repr"]
-    if details.get("cause_message"):
-        content["cause_message"] = details["cause_message"]
-    if details.get("cause_orig"):
-        content["cause_orig"] = details["cause_orig"]
-
-    response = JSONResponse(status_code=500, content=content)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
 
 
-def build_debug_error_detail(
+def log_unhandled_complete_exception(
     exc: BaseException,
     *,
-    stage: str,
+    session_id: int | None = None,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+    stage: str | None = None,
+    context: str = "complete",
     traceback_str: str | None = None,
-) -> dict[str, Any]:
-    """API response body with real exception — no SESSION_INVALID masking."""
-    details = sqlalchemy_exception_details(exc)
-    body: dict[str, Any] = {
-        "error": "DIRECT_SALE_COMPLETE_FAILED",
-        "stage": stage,
-        "error_type": details["error_type"],
-        "message": details["message"],
-        "code": details["error_type"],
-    }
-    if details.get("orig_message"):
-        body["sqlalchemy_orig"] = details["orig_message"]
-    if details.get("orig_type"):
-        body["sqlalchemy_orig_type"] = details["orig_type"]
-    if details.get("cause_message"):
-        body["cause_message"] = details["cause_message"]
-    if traceback_str:
-        body["traceback"] = traceback_str
-    return body
+) -> str:
+    return log_raw_exception(
+        exc,
+        stage=stage,
+        session_id=session_id,
+        context=context,
+        traceback_str=traceback_str,
+    )
 
 
 def commit_with_logging(
@@ -257,51 +229,22 @@ def commit_with_logging(
     tenant_id: int | None = None,
     warehouse_id: int | None = None,
 ) -> None:
-    """Log before/success/failure around db.commit(). Re-raises original exception."""
-    logger.warning(
-        "[direct_sales.commit] BEFORE stage=%s session_id=%s tenant_id=%s warehouse_id=%s "
-        "dirty=%s new=%s deleted=%s is_active=%s",
-        stage,
-        session_id,
-        tenant_id,
-        warehouse_id,
-        bool(db.dirty),
-        bool(db.new),
-        bool(db.deleted),
-        db.is_active,
-    )
+    """Commit with minimal logging. On failure: log raw exception + rollback + re-raise."""
     try:
         db.commit()
     except Exception as exc:
-        tb = traceback.format_exc()
-        details = sqlalchemy_exception_details(exc)
-        logger.exception(
-            "[direct_sales.commit] FAILED stage=%s session_id=%s tenant_id=%s error_type=%s",
-            stage,
-            session_id,
-            tenant_id,
-            details.get("error_type"),
+        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        log_raw_exception(
+            exc,
+            stage=stage,
+            session_id=session_id,
+            context=f"commit_failed:{stage}",
+            traceback_str=tb,
         )
-        logger.error(
-            "[direct_sales.commit] FAILED TRACEBACK stage=%s session_id=%s\n%s",
-            stage,
-            session_id,
-            tb,
-        )
-        if isinstance(exc, _SA_TYPES):
-            logger.error(
-                "[direct_sales.commit] SQLALCHEMY ROOT stage=%s repr=%s str=%s orig=%s",
-                stage,
-                repr(exc),
-                str(exc),
-                getattr(exc, "orig", None),
-            )
         rollback_db_safely(db, context=f"commit_failed:{stage}")
         raise
-    else:
-        logger.warning(
-            "[direct_sales.commit] SUCCESS stage=%s session_id=%s tenant_id=%s",
-            stage,
-            session_id,
-            tenant_id,
-        )
+
+
+# Deprecated — no-op to avoid accidental ORM inspect during serialization.
+def log_orm_serialize_state(*_args: object, **_kwargs: object) -> None:
+    return None
