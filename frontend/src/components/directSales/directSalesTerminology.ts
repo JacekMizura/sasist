@@ -1,3 +1,10 @@
+/** Centralized Polish labels for Sprzedaż stacjonarna (Direct Sales). */
+
+export const STATIONARY_SALE_TITLE = "Sprzedaż stacjonarna";
+export const IMMEDIATE_ISSUE_LABEL = "Wydanie natychmiastowe";
+export const RETAIL_CUSTOMER_LABEL = "Klient detaliczny";
+export const PICKUP_DELIVERY_LABEL = "Odbiór osobisty";
+
 export function sessionStatusPl(status: string | null | undefined): string {
   switch (String(status ?? "").toUpperCase()) {
     case "ACTIVE":
@@ -10,6 +17,8 @@ export function sessionStatusPl(status: string | null | undefined): string {
       return "Zakończona";
     case "CANCELLED":
       return "Anulowana";
+    case "FAILED":
+      return "Błąd";
     default:
       return status ? String(status) : "—";
   }
@@ -25,19 +34,18 @@ export function resolveStockLevel(available: number | null | undefined, orderedQ
   return "ok";
 }
 
-// Nowoczesne, subtelne kolory tagów stanów magazynowych
 export const STOCK_BADGE: Record<StockLevel, { label: string; className: string }> = {
-  ok: { 
-    label: "Dostępny", 
-    className: "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+  ok: {
+    label: "Dostępny",
+    className: "bg-emerald-50 text-emerald-700 border border-emerald-200",
   },
-  low: { 
-    label: "Niski stan", 
-    className: "bg-amber-50 text-amber-700 border border-amber-200" 
+  low: {
+    label: "Niski stan",
+    className: "bg-amber-50 text-amber-700 border border-amber-200",
   },
-  out: { 
-    label: "Brak", 
-    className: "bg-red-50 text-red-700 border border-red-200" 
+  out: {
+    label: "Brak",
+    className: "bg-red-50 text-red-700 border border-red-200",
   },
 };
 
@@ -51,9 +59,94 @@ export function paymentMethodPl(method: string | null | undefined): string {
       return "BLIK";
     case "MIXED":
       return "Mieszana";
+    case "TRANSFER":
+      return "Przelew";
     default:
       return method ? String(method) : "—";
   }
+}
+
+export function paymentStatusPl(status: string | null | undefined): string {
+  switch (String(status ?? "").toUpperCase()) {
+    case "PAID":
+    case "SETTLED":
+    case "CAPTURED":
+      return "Opłacone";
+    case "PENDING":
+      return "Oczekuje";
+    case "FAILED":
+      return "Nieudane";
+    case "CANCELLED":
+      return "Anulowane";
+    case "REFUNDED":
+      return "Zwrócone";
+    default:
+      return status ? String(status) : "—";
+  }
+}
+
+export function documentSubtypePl(subtype: string | null | undefined): string {
+  switch (String(subtype ?? "").toUpperCase()) {
+    case "INVOICE":
+    case "FV":
+      return "Faktura";
+    case "RECEIPT":
+    case "PA":
+    case "PARAGON":
+      return "Paragon";
+    case "WZ":
+      return "WZ";
+    default:
+      return subtype ? String(subtype) : "—";
+  }
+}
+
+export function documentStatusPl(status: string | null | undefined): string {
+  switch (String(status ?? "").toUpperCase()) {
+    case "PENDING":
+    case "RETRYING":
+      return "W kolejce";
+    case "PROCESSING":
+      return "Generowanie";
+    case "GENERATED":
+    case "COMPLETED":
+    case "DONE":
+      return "Gotowy";
+    case "FAILED":
+      return "Błąd";
+    case "CANCELLED":
+      return "Anulowany";
+    default:
+      return status ? String(status) : "—";
+  }
+}
+
+export function fiscalStatusPl(status: string | null | undefined): string {
+  switch (String(status ?? "").toUpperCase()) {
+    case "PENDING":
+      return "Oczekuje na fiskalizację";
+    case "SENT":
+      return "Wysłano do kasy";
+    case "ACCEPTED":
+      return "Zafiskalizowano";
+    case "FAILED":
+      return "Błąd fiskalizacji";
+    default:
+      return status ? String(status) : "—";
+  }
+}
+
+export function printButtonLabelPl(subtype: string | null | undefined): string {
+  const s = String(subtype ?? "").toUpperCase();
+  if (s === "INVOICE" || s === "FV") return "Drukuj fakturę";
+  if (s === "RECEIPT" || s === "PA") return "Drukuj paragon";
+  if (s === "WZ") return "Drukuj WZ";
+  return "Drukuj dokument";
+}
+
+export function formatMoneyPl(amount: number | null | undefined, currency = "zł"): string {
+  if (amount == null || Number.isNaN(amount)) return "—";
+  return `${amount.toFixed(2)} ${currency}`;
 }
 
 export function formatAgeMinutes(minutes: number | null | undefined): string {

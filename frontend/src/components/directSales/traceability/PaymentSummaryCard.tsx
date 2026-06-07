@@ -1,5 +1,5 @@
 import type { DirectSalePaymentDetail } from "../../../types/directSalesCompletion";
-import { paymentMethodPl } from "../directSalesTerminology";
+import { paymentMethodPl, paymentStatusPl } from "../directSalesTerminology";
 
 type Props = {
   payment: DirectSalePaymentDetail | null;
@@ -20,7 +20,7 @@ export function PaymentSummaryCard({ payment, fallbackMethod, fallbackStatus }: 
         </div>
         <div className="flex justify-between">
           <dt>Status</dt>
-          <dd>{status ?? "—"}</dd>
+          <dd>{paymentStatusPl(status)}</dd>
         </div>
         {payment?.amount != null ? (
           <div className="flex justify-between">

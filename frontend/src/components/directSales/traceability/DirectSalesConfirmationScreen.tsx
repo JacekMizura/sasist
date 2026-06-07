@@ -3,9 +3,16 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, RotateCcw, Printer, FileText, ShoppingCart, ArrowRight } from "lucide-react";
 
 import { reprintDirectSaleDocument } from "../../../api/directSalesApi";
+import { saleDocumentPdfUrl, stockDocumentPdfUrl } from "../../../api/saleDocumentsApi";
 import { DAMAGE_TENANT_ID } from "../../../constants/panelTenant";
 import type { DirectSaleCompletion } from "../../../types/directSalesCompletion";
-import { paymentMethodPl } from "../directSalesTerminology";
+import { openPdfUrlInPrintViewer } from "../../../utils/openPdfForBrowserPrint";
+import {
+  documentSubtypePl,
+  paymentMethodPl,
+  paymentStatusPl,
+  printButtonLabelPl,
+} from "../directSalesTerminology";
 import { DocumentStatusBadge } from "../documents/DocumentStatusBadge";
 import { DirectSalesTraceabilityPanel } from "./DirectSalesTraceabilityPanel";
 import { PaymentSummaryCard } from "./PaymentSummaryCard";
@@ -35,6 +42,18 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale, onRefresh
   const [reprintBusy, setReprintBusy] = useState(false);
   const [reprintMsg, setReprintMsg] = useState<string | null>(null);
   const docType = completion.document_subtype === "INVOICE" ? "FV" : "PA";
+  const saleDocId = completion.sale_document_id ?? completion.document?.sale_document_id ?? null;
+  const stockDocId = completion.stock_document_id ?? null;
+
+  const handlePrintSaleDocument = () => {
+    if (!saleDocId) return;
+    openPdfUrlInPrintViewer(saleDocumentPdfUrl(DAMAGE_TENANT_ID, saleDocId), { autoPrint: true });
+  };
+
+  const handlePrintWz = () => {
+    if (!stockDocId) return;
+    openPdfUrlInPrintViewer(stockDocumentPdfUrl(DAMAGE_TENANT_ID, stockDocId), { autoPrint: true });
+  };
 
   const handleReprint = async () => {
     const jobId = completion.document?.job_id ?? completion.document_job_id;
@@ -75,7 +94,7 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale, onRefresh
               <p className="mt-4 text-slate-500 font-medium">
                 Zamówienie <strong className="text-slate-900">{completion.order_number ?? `#${completion.order_id}`}</strong>
                 {completion.document_number ? (
-                  <> • Dok. <strong className="text-slate-900">{completion.document_number}</strong> ({docType})</>
+                  <> • Dok. <strong className="text-slate-900">{completion.document_number}</strong> ({documentSubtypePl(completion.document_subtype) || docType})</>
                 ) : null}
               </p>
             </div>
@@ -89,7 +108,10 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale, onRefresh
 
           <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6 border-t border-slate-100 pt-6">
             {[
-              { label: "Płatność", val: `${paymentMethodPl(completion.payment_method)}` },
+              {
+                label: "Płatność",
+                val: `${completion.payment_method_label ?? paymentMethodPl(completion.payment_method)} · ${completion.payment_status_label ?? paymentStatusPl(completion.payment_status)}`,
+              },
               { label: "Operator", val: completion.operator_label ?? "—" },
               { label: "Data", val: formatCompletedAt(completion.completed_at) },
               { label: "Sesja", val: `#${completion.session_id}` },
@@ -105,9 +127,24 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale, onRefresh
             <button type="button" onClick={onNewSale} className="flex items-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 font-bold transition-all">
               <ShoppingCart size={18} /> Nowa sprzedaż
             </button>
-            <button type="button" onClick={() => window.print()} className="flex items-center gap-2 rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 px-6 py-3 font-bold transition-all">
-              <Printer size={18} /> Drukuj
-            </button>
+            {saleDocId ? (
+              <button
+                type="button"
+                onClick={handlePrintSaleDocument}
+                className="flex items-center gap-2 rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 px-6 py-3 font-bold transition-all"
+              >
+                <Printer size={18} /> {printButtonLabelPl(completion.document_subtype)}
+              </button>
+            ) : null}
+            {stockDocId ? (
+              <button
+                type="button"
+                onClick={handlePrintWz}
+                className="flex items-center gap-2 rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 px-6 py-3 font-bold transition-all"
+              >
+                <Printer size={18} /> Drukuj WZ
+              </button>
+            ) : null}
             <Link to={`/orders/${completion.order_id}`} className="flex items-center gap-2 rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 px-6 py-3 font-bold transition-all">
               <FileText size={18} /> Zamówienie
             </Link>

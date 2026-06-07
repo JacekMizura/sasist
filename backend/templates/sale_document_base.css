@@ -1,0 +1,15 @@
+@page { size: A4; margin: 14mm; }
+body { font-family: system-ui, Segoe UI, sans-serif; font-size: 10pt; color: #111; margin: 0; }
+h1 { font-size: 18pt; margin: 0 0 4mm; }
+.meta { color: #555; font-size: 9pt; margin-bottom: 6mm; }
+.grid { display: flex; gap: 8mm; margin-bottom: 6mm; }
+.box { flex: 1; border: 1px solid #ddd; padding: 3mm; border-radius: 2mm; }
+.box h2 { font-size: 9pt; text-transform: uppercase; color: #666; margin: 0 0 2mm; }
+table { width: 100%; border-collapse: collapse; margin-top: 4mm; }
+th, td { border-bottom: 1px solid #e5e5e5; padding: 2mm 1mm; text-align: left; }
+th { font-size: 8pt; text-transform: uppercase; color: #666; }
+.num { text-align: right; white-space: nowrap; }
+.totals { margin-top: 6mm; width: 55%; margin-left: auto; }
+.totals td { border: none; padding: 1mm 2mm; }
+.totals .label { color: #555; }
+.totals .grand td { font-weight: 700; font-size: 11pt; border-top: 2px solid #111; }

@@ -42,6 +42,11 @@ class TestFormatDocumentNumber(unittest.TestCase):
         out = format_document_number(s, 42, now=datetime(2026, 6, 4))
         self.assertEqual(out, "PZ/2026/06/000042")
 
+    def test_pa_receipt_zero_padding(self):
+        s = _series(prefix="PA", numbering_format="{PREFIX}/{YEAR}/{MONTH}/{NUMBER}", padding_length=0)
+        out = format_document_number(s, 3, now=datetime(2026, 6, 4))
+        self.assertEqual(out, "PA/2026/06/3")
+
     def test_wz_with_warehouse_code_legacy_format(self):
         s = _series(
             prefix="WZ",

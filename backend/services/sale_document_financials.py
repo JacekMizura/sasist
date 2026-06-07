@@ -53,6 +53,32 @@ def brutto_line_to_net_fields(
     }
 
 
+def compute_direct_sale_line_gross(
+    *,
+    unit_gross: float,
+    quantity: float,
+    discount_amount: float = 0.0,
+) -> float:
+    """Per-line brutto (2dp) — canonical for terminal totals and payments."""
+    qty = max(0, int(round(float(quantity or 0))))
+    ug = max(0.0, float(unit_gross or 0))
+    disc = max(0.0, float(discount_amount or 0))
+    return round(max(0.0, ug * qty - disc), 2)
+
+
+def compute_direct_sale_session_total(lines: list[Any]) -> float:
+    """Sum session lines using the same per-line rounding as order creation."""
+    total = 0.0
+    for ln in lines or []:
+        unit = float(ln.unit_price) if getattr(ln, "unit_price", None) is not None else 0.0
+        total += compute_direct_sale_line_gross(
+            unit_gross=unit,
+            quantity=float(getattr(ln, "quantity", 0) or 0),
+            discount_amount=float(getattr(ln, "discount_amount", 0) or 0),
+        )
+    return round(total, 2)
+
+
 def _order_item_meta_dict(item: OrderItem) -> dict[str, Any]:
     raw = getattr(item, "metadata_json", None) or ""
     if not str(raw).strip():

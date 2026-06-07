@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>Paragon {{ document.number }}</title>
+  <style>{% include 'sale_document_base.css' %}</style>
+</head>
+<body>
+  <h1>Paragon {{ document.number }}</h1>
+  <div class="meta">Data: {{ document.date }}</div>
+  <div class="grid">
+    <div class="box">
+      <h2>Sprzedawca</h2>
+      <div>{{ seller.name }}</div>
+      <div>{{ seller.address }}</div>
+      {% if seller.nip != "—" %}<div>NIP: {{ seller.nip }}</div>{% endif %}
+    </div>
+    <div class="box">
+      <h2>Nabywca</h2>
+      <div>{{ customer.name }}</div>
+      <div>{{ customer.address }}</div>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Lp.</th>
+        <th>Nazwa</th>
+        <th class="num">Ilość</th>
+        <th class="num">Netto</th>
+        <th class="num">VAT</th>
+        <th class="num">Brutto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in items %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.name or row.product_name or "—" }}</td>
+        <td class="num">{{ row.quantity or row.qty or "—" }}</td>
+        <td class="num">{{ row.line_net or row.net or "—" }}</td>
+        <td class="num">{{ row.line_vat or row.vat or "—" }}</td>
+        <td class="num">{{ row.line_gross or row.gross or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <table class="totals">
+    <tr><td class="label">Razem netto</td><td class="num">{{ totals.net }} {{ currency }}</td></tr>
+    <tr><td class="label">Razem VAT</td><td class="num">{{ totals.vat }} {{ currency }}</td></tr>
+    <tr class="grand"><td class="label">Razem brutto</td><td class="num">{{ totals.gross }} {{ currency }}</td></tr>
+  </table>
+  <div class="meta" style="margin-top:8mm;">
+    Płatność: {{ payment.method }} · {{ payment.status }} · {{ payment.amount }} {{ currency }}
+  </div>
+</body>
+</html>

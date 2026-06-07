@@ -89,13 +89,9 @@ class StageEntities:
 
 
 def _session_total(sess: DirectSaleSession) -> float:
-    total = 0.0
-    for ln in sess.lines or []:
-        qty = float(ln.quantity or 0)
-        unit = float(ln.unit_price) if ln.unit_price is not None else 0.0
-        disc = float(ln.discount_amount or 0)
-        total += max(0.0, unit * qty - disc)
-    return round(total, 2)
+    from ..sale_document_financials import compute_direct_sale_session_total
+
+    return compute_direct_sale_session_total(list(sess.lines or []))
 
 
 def _commit_stage(db: Session, sess: DirectSaleSession, *, stage: str, entities: StageEntities) -> None:

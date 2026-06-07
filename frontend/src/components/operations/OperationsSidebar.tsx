@@ -11,7 +11,7 @@ export function OperationsSidebar({ replenishmentCount, alertCount }: Props) {
     { to: "/wms/operations/replenishment", label: "Uzupełnienia", badge: replenishmentCount },
     { to: "/wms/operations/alerts", label: "Alerty", badge: alertCount },
     { to: "/wms/operations/operators", label: "Operatorzy", badge: null },
-    { to: "/wms/direct-sales", label: "Sprzedaż bezpośrednia", badge: null },
+    { to: "/wms/direct-sales", label: "Sprzedaż stacjonarna", badge: null },
   ];
   return (
     <aside className="w-full shrink-0 space-y-1 md:w-44">

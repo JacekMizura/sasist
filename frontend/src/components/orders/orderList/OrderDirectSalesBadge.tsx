@@ -11,7 +11,7 @@ export function OrderDirectSalesBadge({ orderChannel, fulfillmentMode }: Props) 
     <span className="inline-flex flex-wrap gap-1">
       {ch === "DIRECT_SALE" ? (
         <span className="rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-800">
-          Sprzedaż bezpośrednia
+          Sprzedaż stacjonarna
         </span>
       ) : null}
       {fm === "IMMEDIATE" ? (

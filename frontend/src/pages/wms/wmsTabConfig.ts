@@ -49,7 +49,7 @@ export const WMS_TAB_ITEMS: WmsTabConfigItem[] = [
   { id: "product_preview", path: "/wms/product-preview", label: "Podgląd produktu", icon: ScanSearch },
   { id: "packing", path: "/wms/packing", label: "Pakowanie", icon: Package },
   { id: "operations", path: "/wms/operations", label: "Operacje", icon: Activity },
-  { id: "direct_sales", path: "/wms/direct-sales", label: "Sprzedaż bezpośrednia", icon: ShoppingCart },
+  { id: "direct_sales", path: "/wms/direct-sales", label: "Sprzedaż stacjonarna", icon: ShoppingCart },
 ];
 
 /** Active tab detection shared by top bar and quick-access overlay. */

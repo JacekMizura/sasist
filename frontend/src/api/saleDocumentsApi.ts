@@ -29,3 +29,11 @@ export async function getSaleDocument(params: {
   });
   return data;
 }
+
+export function saleDocumentPdfUrl(tenantId: number, documentId: string): string {
+  return `/api/sale-documents/${encodeURIComponent(documentId)}/pdf?tenant_id=${tenantId}`;
+}
+
+export function stockDocumentPdfUrl(tenantId: number, stockDocumentId: number): string {
+  return `/api/stock-documents/${stockDocumentId}/pdf?tenant_id=${tenantId}`;
+}

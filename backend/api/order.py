@@ -71,6 +71,32 @@ from ..services.wms_recovery_pick_service import ensure_recovery_pick_task
 from ..services.order_fulfillment_state import touch_picking_in_progress
 from ..services.wms_packing_service import apply_order_selected_carton, get_oms_order_wms_fulfillment_card
 from ..utils.order_shipping_display import order_shipping_display
+
+
+def _customer_names_for_order_display(order: Order) -> Tuple[Optional[str], Optional[str]]:
+    from ..services.direct_sale.order_display import (
+        STATIONARY_SALE_LABEL,
+        direct_sale_customer_names,
+        is_direct_sale_order,
+    )
+    from .wms_returns import _customer_names_from_order
+
+    ds_fn, ds_ln = direct_sale_customer_names(order)
+    if ds_fn:
+        return ds_fn, ds_ln
+    fn, ln = _customer_names_from_order(order)
+    if is_direct_sale_order(order) and not fn and not ln:
+        return STATIONARY_SALE_LABEL, None
+    return fn, ln
+
+
+def _shipping_display_for_order(order: Order) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    from ..services.direct_sale.order_display import direct_sale_shipping_display
+
+    ds = direct_sale_shipping_display(order)
+    if ds[0] is not None:
+        return ds
+    return order_shipping_display(order)
 from ..services.bundle_explosion import (
     BundleExplosionError,
     explode_bundle_line,
@@ -853,10 +879,10 @@ def get_orders(
             list_active=list_active,
             comm_by_id=comm_by_id,
             profit_map=profit_map,
-            customer_names_fn=_customer_names_from_order,
+            customer_names_fn=_customer_names_for_order_display,
             item_preview_fn=_order_list_item_preview_from_line,
             brief_ui_status_fn=_brief_order_ui_status,
-            shipping_display_fn=order_shipping_display,
+            shipping_display_fn=_shipping_display_for_order,
             import_meta_fn=_order_import_meta_dict,
         )
         if row is None:
@@ -1572,6 +1598,33 @@ def _compute_order_line_financials(item: OrderItem, product: Optional[Product]) 
     unit_gross: Optional[float] = None
     line_vat_amt: Optional[float] = None
     line_gross: Optional[float] = None
+
+    # Direct sales / brutto-anchored lines — must match sale_document_financials.
+    line_gross_meta = meta.get("line_gross_total")
+    if line_gross_meta is not None and vat_p is not None:
+        try:
+            lg = round(float(line_gross_meta), 2)
+            if lg >= 0:
+                from ..services.sale_document_financials import net_vat_from_gross
+
+                line_net, line_vat_amt = net_vat_from_gross(lg, float(vat_p))
+                line_gross = lg
+                unit_net = round(line_net / qty, 4) if qty > 0 else 0.0
+                unit_gross = round(unit_net * (1.0 + float(vat_p) / 100.0), 4) if qty > 0 else None
+                return {
+                    "vat_percent": vat_p,
+                    "unit_price_net": unit_net,
+                    "unit_price_gross": unit_gross,
+                    "line_net_total": line_net,
+                    "line_vat_amount": line_vat_amt,
+                    "line_gross_total": line_gross,
+                    "line_purchase_total_net": None,
+                    "line_margin_amount": None,
+                    "line_margin_percent": None,
+                }
+        except (TypeError, ValueError):
+            pass
+
     if unit_net is not None and vat_p is not None:
         unit_gross = round(unit_net * (1.0 + float(vat_p) / 100.0), 4)
     if line_net is not None and vat_p is not None:
@@ -1781,9 +1834,9 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         if total_products_value > 1e-9:
             margin_out = round(float(gross_profit_out) / float(total_products_value) * 100.0, 2)
 
-    from .wms_returns import _customer_names_from_order, _normalize_order_source
+    from .wms_returns import _normalize_order_source
 
-    fn, ln = _customer_names_from_order(order)
+    fn, ln = _customer_names_for_order_display(order)
     raw_src = getattr(order, "source", None)
     source_raw = str(raw_src).strip() if raw_src is not None and str(raw_src).strip() else None
     source_disp = _normalize_order_source(source_raw)
@@ -1792,7 +1845,7 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
     if ui_row is None and getattr(order, "order_ui_status_id", None):
         ui_row = db.query(OrderUiStatus).filter(OrderUiStatus.id == order.order_ui_status_id).first()
 
-    ship_name, ship_logo, ship_id = order_shipping_display(order)
+    ship_name, ship_logo, ship_id = _shipping_display_for_order(order)
 
     raw_doc = meta.get("panel_document_type")
     panel_document_type: Optional[str] = None

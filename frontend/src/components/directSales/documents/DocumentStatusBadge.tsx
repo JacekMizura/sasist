@@ -1,3 +1,5 @@
+import { documentStatusPl, fiscalStatusPl } from "../directSalesTerminology";
+
 type Props = {
   status: string | null | undefined;
   statusLabel?: string | null;
@@ -19,7 +21,7 @@ function badgeClass(status: string): string {
 }
 
 export function DocumentStatusBadge({ status, statusLabel, fiscalStatus }: Props) {
-  const label = statusLabel ?? status ?? "—";
+  const label = statusLabel ?? documentStatusPl(status);
   
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -29,7 +31,7 @@ export function DocumentStatusBadge({ status, statusLabel, fiscalStatus }: Props
       
       {fiscalStatus ? (
         <span className="rounded-lg bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-          {fiscalStatus === "PENDING" ? "Oczekuje na fiskalizację" : fiscalStatus}
+          {fiscalStatusPl(fiscalStatus)}
         </span>
       ) : null}
     </div>

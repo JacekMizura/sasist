@@ -16,6 +16,7 @@ class OperationalSeriesSpec(TypedDict, total=False):
     series_type: str
     numbering_format: str
     padding_length: int
+    print_template_id: int
     is_default: bool
     monthly_reset: bool
     yearly_reset: bool
@@ -28,9 +29,10 @@ def _wh(
     *,
     name: str | None = None,
     prefix: str | None = None,
+    print_template_id: int | None = None,
 ) -> OperationalSeriesSpec:
     sub = subtype.strip().upper()
-    return {
+    spec: OperationalSeriesSpec = {
         "series_type": "WAREHOUSE",
         "subtype": sub,
         "operational_code": sub,
@@ -38,22 +40,36 @@ def _wh(
         "name": name or f"{sub} — domyślna",
         "warehouse_effect": True,
     }
+    if print_template_id is not None:
+        spec["print_template_id"] = int(print_template_id)
+    return spec
 
 
-def _sale(subtype: str, *, code: str, name: str) -> OperationalSeriesSpec:
-    return {
+def _sale(
+    subtype: str,
+    *,
+    code: str,
+    name: str,
+    padding_length: int = 6,
+    print_template_id: int | None = None,
+) -> OperationalSeriesSpec:
+    spec: OperationalSeriesSpec = {
         "series_type": "SALE",
         "subtype": subtype.strip().upper(),
         "operational_code": code.strip().upper(),
         "prefix": code.strip().upper(),
         "name": name,
         "warehouse_effect": False,
+        "padding_length": int(padding_length),
     }
+    if print_template_id is not None:
+        spec["print_template_id"] = int(print_template_id)
+    return spec
 
 
 OPERATIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
     _wh("PZ", name="PZ — przyjęcia"),
-    _wh("WZ", name="WZ — wydania"),
+    _wh("WZ", name="WZ — wydania", print_template_id=3),
     _wh("MM", name="MM — przesunięcia magazynowe"),
     _wh("RW", name="RW — rozchód wewnętrzny"),
     _wh("PW", name="PW — przychód wewnętrzny"),
@@ -62,8 +78,8 @@ OPERATIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
 ]
 
 OPERATIONAL_SALE_SERIES: list[OperationalSeriesSpec] = [
-    _sale("INVOICE", code="FV", name="FV — faktura VAT"),
-    _sale("RECEIPT", code="PA", name="PA — paragon"),
+    _sale("INVOICE", code="FV", name="FV — faktura VAT", padding_length=6, print_template_id=1),
+    _sale("RECEIPT", code="PA", name="PA — paragon", padding_length=0, print_template_id=2),
 ]
 
 OPERATIONAL_CORRECTION_SERIES: list[OperationalSeriesSpec] = [

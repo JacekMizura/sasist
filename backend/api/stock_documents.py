@@ -348,9 +348,13 @@ def patch_stock_document_metadata_route(
 
 def _stock_document_pdf_response(db: Session, tenant_id: int, document_id: int) -> Response:
     from ..services.pdf_deps import PdfGenerationUnavailable
+    from ..services.stock_document_html_pdf_service import build_stock_document_html_pdf_bytes
 
     try:
-        pdf = build_stock_document_pdf_bytes(db, tenant_id, document_id)
+        try:
+            pdf = build_stock_document_html_pdf_bytes(db, tenant_id=tenant_id, document_id=document_id)
+        except (FileNotFoundError, RuntimeError, OSError):
+            pdf = build_stock_document_pdf_bytes(db, tenant_id, document_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Document not found")
     except PdfGenerationUnavailable:

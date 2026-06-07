@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>Faktura VAT {{ document.number }}</title>
+  <style>{% include 'sale_document_base.css' %}</style>
+</head>
+<body>
+  <h1>Faktura VAT {{ document.number }}</h1>
+  <div class="meta">Data wystawienia: {{ document.date }}</div>
+  <div class="grid">
+    <div class="box">
+      <h2>Sprzedawca</h2>
+      <div>{{ seller.name }}</div>
+      <div>{{ seller.address }}</div>
+      {% if seller.nip != "—" %}<div>NIP: {{ seller.nip }}</div>{% endif %}
+    </div>
+    <div class="box">
+      <h2>Nabywca</h2>
+      <div>{{ customer.name }}</div>
+      <div>{{ customer.address }}</div>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Lp.</th>
+        <th>Nazwa</th>
+        <th class="num">Ilość</th>
+        <th class="num">Cena netto</th>
+        <th class="num">VAT %</th>
+        <th class="num">Wartość netto</th>
+        <th class="num">Kwota VAT</th>
+        <th class="num">Brutto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in items %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.name or row.product_name or "—" }}</td>
+        <td class="num">{{ row.quantity or row.qty or "—" }}</td>
+        <td class="num">{{ row.unit_net or row.unit_price_net or "—" }}</td>
+        <td class="num">{{ row.vat_percent or "—" }}</td>
+        <td class="num">{{ row.line_net or row.net or "—" }}</td>
+        <td class="num">{{ row.line_vat or row.vat or "—" }}</td>
+        <td class="num">{{ row.line_gross or row.gross or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if vat_rows %}
+  <table style="margin-top:6mm;">
+    <thead><tr><th>Stawka VAT</th><th class="num">Netto</th><th class="num">VAT</th><th class="num">Brutto</th></tr></thead>
+    <tbody>
+      {% for v in vat_rows %}
+      <tr>
+        <td>{{ v.vat_percent or v.rate }}%</td>
+        <td class="num">{{ v.net }}</td>
+        <td class="num">{{ v.vat }}</td>
+        <td class="num">{{ v.gross }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <table class="totals">
+    <tr><td class="label">Razem netto</td><td class="num">{{ totals.net }} {{ currency }}</td></tr>
+    <tr><td class="label">Razem VAT</td><td class="num">{{ totals.vat }} {{ currency }}</td></tr>
+    <tr class="grand"><td class="label">Do zapłaty (brutto)</td><td class="num">{{ totals.gross }} {{ currency }}</td></tr>
+  </table>
+  <div class="meta" style="margin-top:8mm;">
+    Forma płatności: {{ payment.method }} · Status: {{ payment.status }}
+  </div>
+</body>
+</html>

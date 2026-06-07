@@ -1,5 +1,5 @@
 import type { DirectSaleCompleteResult } from "../../utils/normalizeDirectSales";
-import { paymentMethodPl } from "./directSalesTerminology";
+import { paymentMethodPl, paymentStatusPl } from "./directSalesTerminology";
 import { safeDisplay } from "../../utils/safeStrings";
 
 type Props = {
@@ -26,7 +26,7 @@ export function SessionSummaryBar({ result, onPrint, onNewSession }: Props) {
         <div className="flex justify-between gap-2">
           <dt className="text-emerald-700">Płatność</dt>
           <dd>
-            {safeDisplay(result.payment_status, "Zakończone")}
+            {paymentStatusPl(result.payment_status) || "Zakończone"}
             {result.payment_method ? ` · ${paymentMethodPl(result.payment_method)}` : ""}
           </dd>
         </div>

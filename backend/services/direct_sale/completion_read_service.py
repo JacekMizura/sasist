@@ -19,7 +19,14 @@ from ...models.order_item import OrderItem
 from ...models.product import Product
 from ...models.stock_reservation import StockReservation
 from ...models.warehouse_inventory_movement import WarehouseInventoryMovement
-from ..sale_document_mapper import payment_method_label_pl, resolve_document_number_fields
+from ...models.sale_document_stock_link import SaleDocumentStockLink
+from ..operational_labels import (
+    document_status_label_pl,
+    document_subtype_label_pl,
+    payment_method_label_pl,
+    payment_status_label_pl,
+)
+from ..sale_document_mapper import resolve_document_number_fields
 from .session_service import get_session
 
 
@@ -63,16 +70,7 @@ def _loc_code(db: Session, location_id: int | None) -> str | None:
 
 
 def _document_status_pl(status: str | None) -> str:
-    s = str(status or "").upper()
-    if s in ("PENDING", "RETRYING"):
-        return "W kolejce"
-    if s == "PROCESSING":
-        return "Generowanie"
-    if s in ("GENERATED", "COMPLETED", "DONE"):
-        return "Gotowy"
-    if s in ("FAILED", "CANCELLED"):
-        return "Błąd"
-    return s or "—"
+    return document_status_label_pl(status)
 
 
 def _timeline_label(event_type: str, *, qty: float | None = None, loc: str | None = None) -> str:
@@ -242,9 +240,21 @@ def build_direct_sale_completion_read(
                 else None,
                 "kind": "payment",
                 "label": _timeline_label("payment"),
-                "detail": str(payment.method or ""),
+                "detail": payment_method_label_pl(str(payment.method or "")),
             }
         )
+
+    stock_document_id: int | None = None
+    sale_document_id = str(doc_job.sale_document_id) if doc_job and doc_job.sale_document_id else None
+    if sale_document_id:
+        link = (
+            db.query(SaleDocumentStockLink)
+            .filter(SaleDocumentStockLink.sale_document_id == str(sale_document_id))
+            .order_by(SaleDocumentStockLink.id.desc())
+            .first()
+        )
+        if link is not None:
+            stock_document_id = int(link.stock_document_id)
 
     doc_subtype = str(doc_job.document_subtype or "") if doc_job else ""
     doc_num = order.sales_document_number
@@ -258,9 +268,9 @@ def build_direct_sale_completion_read(
                 if (doc_job.completed_at or doc_job.created_at)
                 else None,
                 "kind": "document",
-                "label": f"Dokument {doc_subtype or 'PA'} wygenerowany"
+                "label": f"Dokument {document_subtype_label_pl(doc_subtype or 'RECEIPT')} wygenerowany"
                 if str(doc_job.status or "").upper() == "GENERATED"
-                else f"Dokument {doc_subtype or 'PA'} — {_document_status_pl(doc_job.status)}",
+                else f"Dokument {document_subtype_label_pl(doc_subtype or 'RECEIPT')} — {_document_status_pl(doc_job.status)}",
                 "detail": doc_num,
             }
         )
@@ -280,8 +290,11 @@ def build_direct_sale_completion_read(
         "document_number_raw": num_info["document_number_raw"],
         "numbering_legacy": bool(num_info["numbering_legacy"]),
         "document_subtype": doc_subtype or None,
+        "sale_document_id": sale_document_id,
+        "stock_document_id": stock_document_id,
         "total_amount": float(order.value or 0),
         "payment_status": str(payment.status or "") if payment else None,
+        "payment_status_label": payment_status_label_pl(payment.status) if payment else None,
         "payment_method": str(payment.method or "") if payment else None,
         "payment_method_label": payment_method_label_pl(payment.method) if payment else None,
         "completed_at": completed_at.isoformat() if completed_at else None,
@@ -295,6 +308,7 @@ def build_direct_sale_completion_read(
             "method": str(payment.method or "") if payment else None,
             "method_label": payment_method_label_pl(payment.method) if payment else None,
             "status": str(payment.status or "") if payment else None,
+            "status_label": payment_status_label_pl(payment.status) if payment else None,
             "amount": float(payment.amount or 0) if payment else None,
             "authorization_reference": str(payment.authorization_reference or "") or None if payment else None,
             "external_transaction_id": str(payment.external_transaction_id or "") or None if payment else None,

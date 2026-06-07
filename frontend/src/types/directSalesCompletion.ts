@@ -64,9 +64,13 @@ export type DirectSaleCompletion = {
   document_job_id: number | null;
   document_number: string | null;
   document_subtype: string | null;
+  sale_document_id: string | null;
+  stock_document_id: number | null;
   total_amount: number;
   payment_status: string | null;
+  payment_status_label: string | null;
   payment_method: string | null;
+  payment_method_label: string | null;
   completed_at: string | null;
   operator_label: string | null;
   warehouse_id: number | null;

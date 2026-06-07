@@ -74,10 +74,15 @@ def _repair_operational_series_row(row: DocumentSeries, spec: dict) -> bool:
     if bool(getattr(row, "reset_each_period", False)) is not bool(spec.get("monthly_reset", True)):
         row.reset_each_period = bool(spec.get("monthly_reset", True))
         changed = True
-    if hasattr(row, "padding_length"):
-        want_pad = int(spec.get("padding_length") or 6)
-        if int(getattr(row, "padding_length", None) or 0) != want_pad:
+    if hasattr(row, "padding_length") and "padding_length" in spec:
+        want_pad = int(spec.get("padding_length") or 0)
+        if int(getattr(row, "padding_length", None) or 6) != want_pad:
             row.padding_length = want_pad
+            changed = True
+    if hasattr(row, "print_template_id") and spec.get("print_template_id") is not None:
+        want_tpl = int(spec["print_template_id"])
+        if int(getattr(row, "print_template_id", None) or 0) != want_tpl:
+            row.print_template_id = want_tpl
             changed = True
     if hasattr(row, "warehouse_effect"):
         want_wh = bool(spec.get("warehouse_effect", str(spec.get("series_type", "")).upper() == "WAREHOUSE"))
@@ -107,7 +112,15 @@ def _apply_spec_to_new_row(row: DocumentSeries, spec: dict) -> None:
     row.reset_each_period = bool(spec.get("monthly_reset"))
     if hasattr(row, "warehouse_effect"):
         row.warehouse_effect = bool(spec.get("warehouse_effect", str(spec["series_type"]).upper() == "WAREHOUSE"))
-    for attr in ("code", "padding_length", "yearly_reset", "monthly_reset", "is_default", "is_active"):
+    for attr in (
+        "code",
+        "padding_length",
+        "print_template_id",
+        "yearly_reset",
+        "monthly_reset",
+        "is_default",
+        "is_active",
+    ):
         if attr in spec and hasattr(DocumentSeries, attr):
             setattr(row, attr, spec[attr])
     if hasattr(DocumentSeries, "is_active"):

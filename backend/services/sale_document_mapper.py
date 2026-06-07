@@ -27,20 +27,7 @@ from .sale_document_financials import compute_sale_totals_from_order
 
 _LEGACY_NUMBER_RE = re.compile(r"\{[A-Z_]+\}")
 
-_PAYMENT_LABELS_PL = {
-    "CASH": "Gotówka",
-    "CARD": "Karta",
-    "BLIK": "BLIK",
-    "MIXED": "Mieszana",
-    "TRANSFER": "Przelew",
-}
-
-
-def payment_method_label_pl(method: str | None) -> str:
-    m = str(method or "").strip().upper()
-    if not m:
-        return "—"
-    return _PAYMENT_LABELS_PL.get(m, m)
+from .operational_labels import payment_method_label_pl, payment_status_label_pl  # noqa: F401 — re-export
 
 
 def is_legacy_document_number(document_number: str | None) -> bool:

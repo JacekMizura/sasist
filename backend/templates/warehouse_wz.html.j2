@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>WZ {{ document.number }}</title>
+  <style>{% include 'sale_document_base.css' %}</style>
+</head>
+<body>
+  <h1>Dokument WZ {{ document.number }}</h1>
+  <div class="meta">Data: {{ document.date }}</div>
+  {% if order_number %}<div class="meta">Zamówienie: {{ order_number }}</div>{% endif %}
+  <table>
+    <thead>
+      <tr>
+        <th>Lp.</th>
+        <th>Produkt</th>
+        <th class="num">Ilość</th>
+        <th>Lokalizacja</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in items %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.product_name or row.name or "—" }}</td>
+        <td class="num">{{ row.quantity or "—" }}</td>
+        <td>{{ row.location_name or row.from_location or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

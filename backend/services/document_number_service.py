@@ -53,10 +53,15 @@ def _series_active(series: DocumentSeries) -> bool:
 
 
 def _pad_number(n: int, series: DocumentSeries) -> str:
-    width = int(getattr(series, "padding_length", None) or 0)
-    if width < 1:
+    raw = getattr(series, "padding_length", None)
+    if raw is None:
         width = 6
-    return str(max(1, int(n))).zfill(width)
+    else:
+        width = int(raw)
+    num = str(max(1, int(n)))
+    if width <= 0:
+        return num
+    return num.zfill(width)
 
 
 def format_document_number(
