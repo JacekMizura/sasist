@@ -172,11 +172,7 @@ import WmsReturnsEntryPage from "./pages/wms/WmsReturnsEntryPage"
 import OfficeDamagesPage from "./pages/damage/OfficeDamagesPage"
 import OfficeDamageReportsPage from "./pages/damage/OfficeDamageReportsPage"
 import BundlesPage from "./pages/Assortment/BundlesPage"
-import ProductionLayout from "./pages/Production/ProductionLayout"
 import ProductionDashboardPage from "./pages/Production/ProductionDashboardPage"
-import RecipesListPage from "./pages/Production/RecipesListPage"
-import RecipeDetailPage from "./pages/Production/RecipeDetailPage"
-import BatchesListPage from "./pages/Production/BatchesListPage"
 import BatchDetailPage from "./pages/Production/BatchDetailPage"
 import CollectingPage from "./pages/Production/CollectingPage"
 import ProductionExecutionPage from "./pages/Production/ProductionExecutionPage"
@@ -421,6 +417,16 @@ export const router = createBrowserRouter(
           <Route path="orders" element={<WmsPackingOrdersPage />} />
           <Route path="order/:orderId" element={<WmsPackingOrderPage />} />
         </Route>
+        <Route path="production" element={<Outlet />}>
+          <Route index element={<ProductionDashboardPage />} />
+          <Route path="batch/:batchId" element={<BatchDetailPage />} />
+          <Route path="collecting" element={<CollectingPage />} />
+          <Route path="collecting/:batchId" element={<CollectingPage />} />
+          <Route path="execute" element={<ProductionExecutionPage />} />
+          <Route path="execute/:batchId" element={<ProductionExecutionPage />} />
+          <Route path="putaway" element={<PutawayPage />} />
+          <Route path="putaway/:batchId" element={<PutawayPage />} />
+        </Route>
       </Route>
       <Route element={<SettingsAdminLayout />}>
                 <Route path="setup" element={<Navigate to="/settings/company" replace />} />
@@ -516,19 +522,7 @@ export const router = createBrowserRouter(
                 <Route path="customers/:id" element={<CustomerEditPage />} />
                 <Route path="bundles" element={<BundlesPage />} />
                 <Route path="bundles/new" element={<BundlesPage defaultCreateOpen={true} />} />
-                <Route path="production" element={<ProductionLayout />}>
-                  <Route index element={<ProductionDashboardPage />} />
-                  <Route path="recipes" element={<RecipesListPage />} />
-                  <Route path="recipes/:compositionId" element={<RecipeDetailPage />} />
-                  <Route path="batches" element={<BatchesListPage />} />
-                  <Route path="batches/:batchId" element={<BatchDetailPage />} />
-                  <Route path="collecting" element={<CollectingPage />} />
-                  <Route path="collecting/:batchId" element={<CollectingPage />} />
-                  <Route path="execute" element={<ProductionExecutionPage />} />
-                  <Route path="execute/:batchId" element={<ProductionExecutionPage />} />
-                  <Route path="putaway" element={<PutawayPage />} />
-                  <Route path="putaway/:batchId" element={<PutawayPage />} />
-                </Route>
+                <Route path="production/*" element={<Navigate to="/wms/production" replace />} />
                 <Route path="manufacturers" element={<ManufacturersPage />} />
                 <Route path="manufacturers/new" element={<ManufacturersPage defaultCreateOpen={true} />} />
                 <Route path="suppliers" element={<SuppliersLayout />}>

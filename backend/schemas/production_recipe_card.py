@@ -59,8 +59,27 @@ class RecipeDetailRead(BaseModel):
 
 class ProductionDashboardRead(BaseModel):
     active_batches: int = 0
+    waiting_batches: int = 0
+    batches_with_shortages: int = 0
+    finished_today: int = 0
     collecting_batches: int = 0
     in_production_batches: int = 0
     putaway_batches: int = 0
     recipe_count: int = 0
-    batches_with_shortages: int = 0
+    active: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
+    waiting_materials: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
+    ready_to_produce: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
+    recently_completed: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
+
+
+class ProductionBatchSummaryRead(BaseModel):
+    id: int
+    number: str
+    status: str
+    products_count: int = 0
+    total_planned_units: float = 0.0
+    progress_percent: float = 0.0
+    has_shortages: bool = False
+    operator_name: Optional[str] = None
+    created_at: Optional[str] = None
+    product_labels: List[str] = Field(default_factory=list)

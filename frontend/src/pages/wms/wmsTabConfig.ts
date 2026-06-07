@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   ClipboardList,
+  Factory,
   Inbox,
   Package,
   ScanSearch,
@@ -30,7 +31,8 @@ export type WmsTabId =
   | "packing"
   | "issues"
   | "direct_sales"
-  | "operations";
+  | "operations"
+  | "production";
 
 export type WmsTabConfigItem = {
   id: WmsTabId;
@@ -48,6 +50,7 @@ export const WMS_TAB_ITEMS: WmsTabConfigItem[] = [
   { id: "issues", path: "/wms/braki", label: "Braki", icon: AlertTriangle },
   { id: "product_preview", path: "/wms/product-preview", label: "Podgląd produktu", icon: ScanSearch },
   { id: "packing", path: "/wms/packing", label: "Pakowanie", icon: Package },
+  { id: "production", path: "/wms/production", label: "Produkcja", icon: Factory },
   { id: "operations", path: "/wms/operations", label: "Operacje", icon: Activity },
   { id: "direct_sales", path: "/wms/direct-sales", label: "Sprzedaż stacjonarna", icon: ShoppingCart },
 ];

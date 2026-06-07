@@ -53,6 +53,14 @@ class ProductionBatchCreateBody(BaseModel):
     lines: List[ProductionBatchLineWrite] = Field(default_factory=list)
 
 
+class ProductionBatchPreviewRead(BaseModel):
+    has_shortages: bool = False
+    total_planned_units: float = 0.0
+    products_count: int = 0
+    aggregated_components: List[BatchAggregatedPickLineRead] = Field(default_factory=list)
+    shortages: List[StockShortageRead] = Field(default_factory=list)
+
+
 class ProductionBatchRead(BaseModel):
     id: int
     tenant_id: int

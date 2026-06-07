@@ -215,7 +215,7 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
           { path: "/carts/racks", label: "Regały", Icon: Boxes },
           { path: "/carts/zones", label: "Strefy", Icon: Layers },
           { path: "/carts/carriers", label: UI_STRINGS.navigation.warehouseCarriers, Icon: Package },
-          { path: "/production", label: "Produkcja", Icon: Factory },
+          { path: "/wms/production", label: "Produkcja", Icon: Factory },
           { path: "/inventory", label: UI_STRINGS.navigation.inventory, Icon: Archive },
           { path: "/optimizer", label: UI_STRINGS.navigation.fleetPlanner, Icon: Route },
           { path: "/warehouse/bdo", label: UI_STRINGS.navigation.warehouseBdo, Icon: Recycle },

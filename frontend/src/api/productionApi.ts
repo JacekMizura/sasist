@@ -540,6 +540,16 @@ export async function fetchBatchPickPlan(
   return res.data;
 }
 
+export async function previewProductionBatch(
+  tenantId: number,
+  body: ProductionBatchCreateBody,
+): Promise<ProductionBatchPreviewRead> {
+  const res = await api.post<ProductionBatchPreviewRead>("/production/batches/preview", body, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
 export async function createProductionBatch(
   tenantId: number,
   body: ProductionBatchCreateBody,
@@ -633,13 +643,40 @@ export type RecipeDetailRead = {
   shortage_summary: string[];
 };
 
+export type ProductionBatchSummaryRead = {
+  id: number;
+  number: string;
+  status: ProductionBatchStatus;
+  products_count: number;
+  total_planned_units: number;
+  progress_percent: number;
+  has_shortages: boolean;
+  operator_name?: string | null;
+  created_at?: string | null;
+  product_labels: string[];
+};
+
 export type ProductionDashboardRead = {
   active_batches: number;
+  waiting_batches: number;
+  batches_with_shortages: number;
+  finished_today: number;
   collecting_batches: number;
   in_production_batches: number;
   putaway_batches: number;
   recipe_count: number;
-  batches_with_shortages: number;
+  active: ProductionBatchSummaryRead[];
+  waiting_materials: ProductionBatchSummaryRead[];
+  ready_to_produce: ProductionBatchSummaryRead[];
+  recently_completed: ProductionBatchSummaryRead[];
+};
+
+export type ProductionBatchPreviewRead = {
+  has_shortages: boolean;
+  total_planned_units: number;
+  products_count: number;
+  aggregated_components: BatchAggregatedPickLineRead[];
+  shortages: StockShortageRead[];
 };
 
 export type CollectionTaskRead = {

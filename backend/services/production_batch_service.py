@@ -210,6 +210,113 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
     )
 
 
+def preview_batch_demand(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    lines: list,
+) -> dict:
+    """Aggregate material demand for proposed batch lines (no persist)."""
+    from ..schemas.production_batch import ProductionBatchPreviewRead
+
+    if not lines:
+        raise ProductionBatchError("Dodaj co najmniej jedną linię.", code="empty_batch")
+    demands: list[list[dict[str, Any]]] = []
+    total_units = 0.0
+    for ln in lines:
+        comp = resolve_composition_entity(db, tenant_id=tenant_id, composition_id=int(ln.composition_id))
+        if comp is None or str(comp.composition_mode) != "manufacturing":
+            raise ProductionBatchError(f"Kompozycja #{ln.composition_id} nie jest produkcyjna.", code="invalid_composition")
+        if int(comp.product_id) != int(ln.product_id):
+            raise ProductionBatchError("Produkt nie zgadza się z kompozycją.", code="product_mismatch")
+        demands.append(calculate_required_components(comp, planned_quantity=float(ln.planned_quantity)))
+        total_units += float(ln.planned_quantity)
+    totals = aggregate_component_demand(demands)
+    agg_rows = aggregated_demand_with_availability(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        component_totals=totals,
+    )
+    shortages = [
+        StockShortageRead(
+            component_product_id=r.component_product_id,
+            product_name=r.product_name,
+            required=r.required,
+            available=r.available,
+            missing=r.missing,
+        )
+        for r in agg_rows
+        if r.missing > 1e-6
+    ]
+    pick_plan_rows: list[BatchAggregatedPickLineRead] = []
+    for row in agg_rows:
+        pid = int(row.component_product_id)
+        req = float(row.required)
+        snap_stock = build_location_stock(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=pid,
+            available_only=True,
+        )
+        loc_rows = list(snap_stock.get("locations") or [])
+        suggested = suggest_picking_locations(loc_rows, quantity=req)
+        try:
+            auto_pairs = _auto_allocate_locations(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                product_id=pid,
+                quantity=req,
+            )
+        except Exception:
+            auto_pairs = []
+        from ..schemas.production import ProductionAllocationRead, ProductionLocationSuggestionRead
+
+        loc_ids = {int(lid) for lid, _ in auto_pairs}
+        codes = {
+            int(l.id): str(l.name or f"#{l.id}")
+            for l in db.query(Location).filter(Location.id.in_(loc_ids)).all()
+        } if loc_ids else {}
+        auto_reads = [
+            ProductionAllocationRead(
+                location_id=int(lid),
+                location_code=codes.get(int(lid), f"#{lid}"),
+                quantity=round(float(qty), 4),
+            )
+            for lid, qty in auto_pairs
+        ]
+        pick_plan_rows.append(
+            BatchAggregatedPickLineRead(
+                component_product_id=pid,
+                product_name=row.product_name,
+                product_sku=row.product_sku,
+                required=row.required,
+                available=row.available,
+                missing=row.missing,
+                suggested_locations=[
+                    ProductionLocationSuggestionRead(
+                        location_id=int(s.get("location_id") or 0),
+                        code=str(s.get("code") or ""),
+                        available=round(float(s.get("available") or 0), 4),
+                        is_suggested=True,
+                    )
+                    for s in loc_rows[:8]
+                ],
+                auto_allocation=auto_reads,
+            )
+        )
+    return ProductionBatchPreviewRead(
+        has_shortages=bool(shortages),
+        total_planned_units=round(total_units, 4),
+        products_count=len(lines),
+        aggregated_components=pick_plan_rows,
+        shortages=shortages,
+    )
+
+
 def create_batch(
     db: Session,
     *,

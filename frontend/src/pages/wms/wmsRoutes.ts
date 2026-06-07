@@ -59,6 +59,15 @@ export const WMS_ROUTES = {
   /** Szczegóły PZ — wyłącznie liczenie (``WmsReceivingCountPage``), segment ``pz`` jak w REST ``/wms/receiving/pz/{id}``. */
   receivingPz: (pzId: number | string) => `/wms/receiving/pz/${pzId}`,
   putaway: "/wms/putaway",
+  /** Warehouse production — batch waves, collecting, execution, putaway. */
+  production: "/wms/production",
+  productionBatch: (batchId: number | string) => `/wms/production/batch/${batchId}`,
+  productionCollecting: (batchId?: number | string) =>
+    batchId != null ? `/wms/production/collecting/${batchId}` : "/wms/production/collecting",
+  productionExecute: (batchId?: number | string) =>
+    batchId != null ? `/wms/production/execute/${batchId}` : "/wms/production/execute",
+  productionPutaway: (batchId?: number | string) =>
+    batchId != null ? `/wms/production/putaway/${batchId}` : "/wms/production/putaway",
   /** Live operational runtime hub (Phase 5). */
   operations: "/wms/operations",
   operationsReplenishment: "/wms/operations/replenishment",

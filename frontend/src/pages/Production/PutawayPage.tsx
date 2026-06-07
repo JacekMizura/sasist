@@ -12,6 +12,7 @@ import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProductionWarehouseLocationSearch } from "./ProductionWarehouseLocationSearch";
 import { loadRecentTargetLocations, rememberTargetLocation } from "./productionUi";
+import { productionPaths } from "./productionPaths";
 
 const DEFAULT_TENANT = 1;
 
@@ -62,7 +63,7 @@ export default function PutawayPage() {
     try {
       await finishPutawayBatch(tenantId, activeId, { lines });
       lines.forEach((l) => rememberTargetLocation(warehouseId, l.target_location_id));
-      navigate("/production/batches");
+      navigate(productionPaths.home);
     } finally {
       setBusy(false);
     }
@@ -88,7 +89,7 @@ export default function PutawayPage() {
                 type="button"
                 onClick={() => {
                   setActiveId(b.id);
-                  navigate(`/production/putaway/${b.id}`);
+                  navigate(productionPaths.putaway(b.id));
                 }}
                 className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-emerald-300"
               >
@@ -136,7 +137,7 @@ export default function PutawayPage() {
           >
             Potwierdź odkładanie (PW)
           </button>
-          <Link to={`/production/batches/${activeId}`} className="block text-center text-sm text-slate-500 hover:underline">
+          <Link to={productionPaths.batch(activeId)} className="block text-center text-sm text-slate-500 hover:underline">
             Szczegóły partii
           </Link>
         </>

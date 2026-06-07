@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session, joinedload
 from ..models.inventory import Inventory
 from ..models.product import Product
 from ..models.product_composition import ProductComposition, ProductionBatch
+from datetime import datetime
+
 from ..schemas.production_recipe_card import (
+    ProductionBatchSummaryRead,
     ProductionDashboardRead,
     RecipeCardRead,
     RecipeComponentDetailRead,
@@ -18,7 +21,7 @@ from .composition_engine_service import effective_line_qty, estimate_composition
 from .product_cost_service import get_product_current_cost
 from .location_priority_service import suggest_picking_locations
 from .location_stock_service import build_location_stock
-from .production_batch_service import build_batch_pick_plan, ProductionBatchError
+from .production_batch_service import build_batch_pick_plan, serialize_batch
 
 
 def _warehouse_stock(db: Session, *, tenant_id: int, warehouse_id: int, product_id: int) -> float:
@@ -187,25 +190,76 @@ def get_recipe_detail(
     )
 
 
+def _batch_summary(db: Session, batch: ProductionBatch) -> ProductionBatchSummaryRead:
+    full = serialize_batch(db, batch)
+    labels: list[str] = []
+    for ln in batch.lines or []:
+        name = None
+        for fl in full.lines:
+            if int(fl.id) == int(ln.id):
+                name = fl.product_name
+                break
+        labels.append(f"{name or ln.product_id} ×{float(ln.planned_quantity or 0):g}")
+    created = batch.created_at.isoformat() if batch.created_at else None
+    return ProductionBatchSummaryRead(
+        id=int(batch.id),
+        number=str(batch.number or ""),
+        status=str(batch.status or ""),
+        products_count=int(full.products_count or 0),
+        total_planned_units=float(full.total_planned_units or 0),
+        progress_percent=float(full.progress_percent or 0),
+        has_shortages=bool(full.has_shortages),
+        operator_name=full.operator_name,
+        created_at=created,
+        product_labels=labels[:4],
+    )
+
+
 def get_production_dashboard(
     db: Session,
     *,
     tenant_id: int,
     warehouse_id: int | None = None,
 ) -> ProductionDashboardRead:
-    q = db.query(ProductionBatch).filter(ProductionBatch.tenant_id == int(tenant_id))
+    from sqlalchemy.orm import joinedload
+    from ..models.product_composition import ProductionBatchLine
+
+    q = (
+        db.query(ProductionBatch)
+        .options(joinedload(ProductionBatch.lines).joinedload(ProductionBatchLine.composition))
+        .filter(ProductionBatch.tenant_id == int(tenant_id))
+    )
     if warehouse_id:
         q = q.filter(ProductionBatch.warehouse_id == int(warehouse_id))
-    batches = q.all()
-    active = [b for b in batches if str(b.status) not in ("completed", "cancelled")]
+    batches = q.order_by(ProductionBatch.updated_at.desc()).all()
+    today = datetime.utcnow().date()
+    active_rows: list[ProductionBatchSummaryRead] = []
+    waiting_rows: list[ProductionBatchSummaryRead] = []
+    ready_rows: list[ProductionBatchSummaryRead] = []
+    completed_rows: list[ProductionBatchSummaryRead] = []
     shortage_count = 0
-    for b in active:
-        try:
-            plan = build_batch_pick_plan(db, tenant_id=tenant_id, batch_id=int(b.id))
-            if plan.has_shortages:
-                shortage_count += 1
-        except ProductionBatchError:
-            pass
+    waiting_count = 0
+    finished_today = 0
+
+    for b in batches:
+        status = str(b.status or "")
+        if status in ("completed", "cancelled"):
+            if status == "completed" and b.completed_at and b.completed_at.date() == today:
+                finished_today += 1
+                completed_rows.append(_batch_summary(db, b))
+            continue
+        summary = _batch_summary(db, b)
+        if summary.has_shortages:
+            shortage_count += 1
+        if status in ("collecting", "in_progress", "putaway"):
+            active_rows.append(summary)
+        elif status in ("draft", "planned"):
+            waiting_count += 1
+            if summary.has_shortages:
+                waiting_rows.append(summary)
+            else:
+                ready_rows.append(summary)
+
     recipe_count = (
         db.query(ProductComposition)
         .filter(
@@ -215,10 +269,16 @@ def get_production_dashboard(
         .count()
     )
     return ProductionDashboardRead(
-        active_batches=len(active),
+        active_batches=len(active_rows),
+        waiting_batches=waiting_count,
+        batches_with_shortages=shortage_count,
+        finished_today=finished_today,
         collecting_batches=sum(1 for b in batches if str(b.status) == "collecting"),
         in_production_batches=sum(1 for b in batches if str(b.status) == "in_progress"),
         putaway_batches=sum(1 for b in batches if str(b.status) == "putaway"),
         recipe_count=int(recipe_count),
-        batches_with_shortages=shortage_count,
+        active=active_rows[:12],
+        waiting_materials=waiting_rows[:12],
+        ready_to_produce=ready_rows[:12],
+        recently_completed=completed_rows[:8],
     )

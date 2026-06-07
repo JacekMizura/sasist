@@ -10,6 +10,7 @@ import {
 import { listProductionOrdersForProduct, type ProductionOrderSummaryRead } from "../../api/productionApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { CompositionVisualEditor } from "./CompositionVisualEditor";
+import { productionPaths } from "./productionPaths";
 import { formatProductionMoney, PRODUCTION_STATUS_LABEL, productionStatusBadgeClass } from "./productionUi";
 
 type Props = {
@@ -63,7 +64,7 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
 
   const goToBatchProduction = () => {
     if (!activeMfg || !warehouse?.id) return;
-    navigate(`/production/batches?create=1&product=${productId}&composition=${activeMfg.id}`);
+    navigate(`${productionPaths.home}?create=1&product=${productId}&composition=${activeMfg.id}`);
   };
 
   if (loading) {

@@ -19,6 +19,7 @@ from ..schemas.production_batch import (
     ProductionBatchCompleteResultRead,
     ProductionBatchCreateBody,
     ProductionBatchPickPlanRead,
+    ProductionBatchPreviewRead,
     ProductionBatchRead,
 )
 from ..schemas.production_recipe_card import ProductionDashboardRead, RecipeCardRead, RecipeDetailRead
@@ -58,6 +59,7 @@ from ..services.production_batch_service import (
     get_batch,
     get_collection_state,
     list_batches,
+    preview_batch_demand,
     start_batch,
     start_collecting,
     update_collection_task,
@@ -389,6 +391,23 @@ def api_batch_pick_plan(
 ):
     try:
         return build_batch_pick_plan(db, tenant_id=tenant_id, batch_id=batch_id)
+    except ProductionBatchError as exc:
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/preview", response_model=ProductionBatchPreviewRead)
+def api_preview_batch(
+    body: ProductionBatchCreateBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return preview_batch_demand(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=int(body.warehouse_id),
+            lines=body.lines,
+        )
     except ProductionBatchError as exc:
         raise _batch_err(exc) from exc
 
