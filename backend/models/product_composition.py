@@ -68,7 +68,11 @@ class ProductionBatch(Base):
     notes = Column(Text, nullable=True)
     rw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
+    #: JSON: collecting tasks progress (collector-ready).
+    collection_state_json = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
+    collecting_completed_at = Column(DateTime, nullable=True)
+    production_completed_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

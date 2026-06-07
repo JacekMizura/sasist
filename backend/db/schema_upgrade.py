@@ -7446,6 +7446,9 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
                     "REFERENCES production_batch_lines(id) ON DELETE SET NULL"
                 )
             )
+            conn.execute(text("ALTER TABLE production_batches ADD COLUMN IF NOT EXISTS collection_state_json TEXT"))
+            conn.execute(text("ALTER TABLE production_batches ADD COLUMN IF NOT EXISTS collecting_completed_at TIMESTAMP WITHOUT TIME ZONE"))
+            conn.execute(text("ALTER TABLE production_batches ADD COLUMN IF NOT EXISTS production_completed_at TIMESTAMP WITHOUT TIME ZONE"))
         _migrate_recipes_to_compositions(engine)
         return
     with engine.connect() as conn:
@@ -7536,6 +7539,14 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_id INTEGER REFERENCES production_batches(id)"))
         if sd_cols and "production_batch_line_id" not in sd_cols:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_line_id INTEGER REFERENCES production_batch_lines(id)"))
+        if _table_exists(conn, "production_batches"):
+            pb_cols = _columns(conn, "production_batches")
+            if pb_cols and "collection_state_json" not in pb_cols:
+                conn.execute(text("ALTER TABLE production_batches ADD COLUMN collection_state_json TEXT"))
+            if pb_cols and "collecting_completed_at" not in pb_cols:
+                conn.execute(text("ALTER TABLE production_batches ADD COLUMN collecting_completed_at DATETIME"))
+            if pb_cols and "production_completed_at" not in pb_cols:
+                conn.execute(text("ALTER TABLE production_batches ADD COLUMN production_completed_at DATETIME"))
         conn.commit()
     _migrate_recipes_to_compositions(engine)
 

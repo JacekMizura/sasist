@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, datetime
 from typing import Any
@@ -19,6 +20,11 @@ from ..models.warehouse import Warehouse
 from ..schemas.production import ComponentAllocationWrite, StockShortageRead
 from ..schemas.production_batch import (
     BatchAggregatedPickLineRead,
+    BatchCollectionStateRead,
+    BatchCollectionUpdateBody,
+    BatchPutawayBody,
+    BatchProductionProgressBody,
+    CollectionTaskRead,
     ProductionBatchCompleteBody,
     ProductionBatchCompleteResultRead,
     ProductionBatchCreateBody,
@@ -128,21 +134,76 @@ def serialize_batch_line(db: Session, line: ProductionBatchLine) -> ProductionBa
     )
 
 
+def _collection_progress_percent(batch: ProductionBatch) -> float:
+    raw = getattr(batch, "collection_state_json", None)
+    if not raw:
+        return 0.0
+    try:
+        data = json.loads(str(raw))
+    except json.JSONDecodeError:
+        return 0.0
+    tasks = data.get("tasks") or []
+    if not tasks:
+        return 0.0
+    done = 0
+    for t in tasks:
+        req = float(t.get("required_qty") or 0)
+        col = float(t.get("collected_qty") or 0)
+        if req <= 1e-9 or col >= req - 1e-6:
+            done += 1
+    return round(100.0 * done / len(tasks), 1)
+
+
+def _batch_has_shortages(db: Session, batch: ProductionBatch) -> bool:
+    try:
+        totals = _aggregate_batch_components(batch)
+        agg = aggregated_demand_with_availability(
+            db,
+            tenant_id=int(batch.tenant_id),
+            warehouse_id=int(batch.warehouse_id),
+            component_totals=totals,
+        )
+        return any(float(r.missing) > 1e-6 for r in agg)
+    except Exception:
+        return False
+
+
 def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
     wh = db.query(Warehouse).filter(Warehouse.id == int(batch.warehouse_id)).first()
+    lines = batch.lines or []
+    total_planned = sum(float(ln.planned_quantity or 0) for ln in lines)
+    total_completed = sum(float(ln.completed_quantity or 0) for ln in lines)
+    coll_pct = _collection_progress_percent(batch)
+    status = str(batch.status or "draft")
+    if status == "collecting":
+        progress = coll_pct
+    elif status in ("in_progress", "putaway"):
+        progress = round(100.0 * total_completed / total_planned, 1) if total_planned > 0 else 0.0
+    elif status == "completed":
+        progress = 100.0
+    else:
+        progress = 0.0
     return ProductionBatchRead(
         id=int(batch.id),
         tenant_id=int(batch.tenant_id),
         number=str(batch.number or ""),
         warehouse_id=int(batch.warehouse_id),
         warehouse_name=(wh.name if wh else None),
-        status=str(batch.status or "draft"),  # type: ignore[arg-type]
+        status=status,  # type: ignore[arg-type]
         notes=batch.notes,
         rw_stock_document_id=batch.rw_stock_document_id,
         rw_document_number=_doc_number(db, batch.rw_stock_document_id),
         operator_name=_operator_name(db, batch.created_by_user_id),
-        lines=[serialize_batch_line(db, ln) for ln in batch.lines or []],
+        lines=[serialize_batch_line(db, ln) for ln in lines],
+        products_count=len(lines),
+        total_planned_units=round(total_planned, 4),
+        total_completed_units=round(total_completed, 4),
+        has_shortages=_batch_has_shortages(db, batch),
+        progress_percent=progress,
+        collection_progress_percent=coll_pct,
         started_at=batch.started_at,
+        collecting_completed_at=getattr(batch, "collecting_completed_at", None),
+        production_completed_at=getattr(batch, "production_completed_at", None),
         completed_at=batch.completed_at,
         created_at=batch.created_at,
         updated_at=batch.updated_at,
@@ -220,30 +281,8 @@ def get_batch(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchR
 
 
 def start_batch(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchRead:
-    batch = (
-        db.query(ProductionBatch)
-        .options(joinedload(ProductionBatch.lines).joinedload(ProductionBatchLine.composition))
-        .filter(ProductionBatch.id == int(batch_id), ProductionBatch.tenant_id == int(tenant_id))
-        .first()
-    )
-    if batch is None:
-        raise ProductionBatchError("Partia nie istnieje.", code="not_found")
-    if str(batch.status) in TERMINAL:
-        raise ProductionBatchError("Partia jest zamknięta.", code="terminal_status")
-    if str(batch.status) == "in_progress":
-        return serialize_batch(db, batch)
-    plan = build_batch_pick_plan(db, tenant_id=tenant_id, batch_id=batch_id)
-    if plan.has_shortages:
-        raise ProductionBatchError(
-            "Niewystarczający stan magazynowy składników.",
-            code="insufficient_stock",
-            shortages=[s.model_dump() for s in plan.shortages],
-        )
-    batch.status = "in_progress"
-    batch.started_at = datetime.utcnow()
-    batch.updated_at = datetime.utcnow()
-    db.flush()
-    return serialize_batch(db, batch)
+    """Backward-compatible alias — starts collecting phase."""
+    return start_collecting(db, tenant_id=tenant_id, batch_id=batch_id)
 
 
 def cancel_batch(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchRead:
@@ -582,5 +621,376 @@ def complete_batch(
         batch=serialize_batch(db, batch),
         rw_stock_document_id=int(rw_doc.id),
         rw_document_number=str(getattr(rw_doc, "document_number", None) or "").strip() or None,
+        component_total_cost=round(total_component_cost, 4),
+    )
+
+
+def _load_batch_entity(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatch:
+    batch = (
+        db.query(ProductionBatch)
+        .options(joinedload(ProductionBatch.lines).joinedload(ProductionBatchLine.composition))
+        .filter(ProductionBatch.id == int(batch_id), ProductionBatch.tenant_id == int(tenant_id))
+        .first()
+    )
+    if batch is None:
+        raise ProductionBatchError("Partia nie istnieje.", code="not_found")
+    return batch
+
+
+def _init_collection_tasks(db: Session, batch: ProductionBatch) -> dict[str, Any]:
+    plan = build_batch_pick_plan(db, tenant_id=int(batch.tenant_id), batch_id=int(batch.id))
+    if plan.has_shortages:
+        raise ProductionBatchError(
+            "Niewystarczający stan magazynowy składników.",
+            code="insufficient_stock",
+            shortages=[s.model_dump() for s in plan.shortages],
+        )
+    pids = {int(c.component_product_id) for c in plan.aggregated_components}
+    products = {p.id: p for p in db.query(Product).filter(Product.id.in_(pids)).all()} if pids else {}
+    tasks: list[dict[str, Any]] = []
+    for comp in plan.aggregated_components:
+        pid = int(comp.component_product_id)
+        p = products.get(pid)
+        allocs = list(comp.auto_allocation or [])
+        if not allocs and comp.suggested_locations:
+            for s in comp.suggested_locations[:3]:
+                qty = float(s.auto_pick_qty or s.available or comp.required)
+                if qty <= 0:
+                    continue
+                allocs.append(
+                    type("_A", (), {"location_id": int(s.location_id), "location_code": str(s.code), "quantity": qty})()
+                )
+        if not allocs:
+            allocs = [
+                type("_A", (), {"location_id": 0, "location_code": "MAG", "quantity": float(comp.required)})()
+            ]
+        for alloc in allocs:
+            loc_id = int(alloc.location_id)
+            key = f"{pid}-{loc_id}"
+            tasks.append(
+                {
+                    "task_key": key,
+                    "component_product_id": pid,
+                    "product_name": str(comp.product_name),
+                    "product_sku": comp.product_sku,
+                    "product_image_url": (p.image_url if p else None),
+                    "location_id": loc_id,
+                    "location_code": str(alloc.location_code),
+                    "required_qty": round(float(alloc.quantity), 4),
+                    "collected_qty": 0.0,
+                }
+            )
+    return {"tasks": tasks}
+
+
+def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> BatchCollectionStateRead:
+    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    raw = getattr(batch, "collection_state_json", None)
+    tasks_raw: list[dict[str, Any]] = []
+    if raw:
+        try:
+            tasks_raw = (json.loads(str(raw)).get("tasks") or [])
+        except json.JSONDecodeError:
+            tasks_raw = []
+    tasks = [CollectionTaskRead(**t) for t in tasks_raw]
+    done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
+    total = len(tasks)
+    pct = round(100.0 * done / total, 1) if total else 0.0
+    return BatchCollectionStateRead(
+        batch_id=int(batch.id),
+        status=str(batch.status),
+        tasks=tasks,
+        collected_count=done,
+        total_count=total,
+        progress_percent=pct,
+    )
+
+
+def start_collecting(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchRead:
+    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    if str(batch.status) in TERMINAL:
+        raise ProductionBatchError("Partia jest zamknięta.", code="terminal_status")
+    if str(batch.status) == "collecting":
+        return serialize_batch(db, batch)
+    if str(batch.status) not in ("draft", "planned"):
+        raise ProductionBatchError("Nie można rozpocząć zbierania w tym statusie.", code="invalid_status")
+    state = _init_collection_tasks(db, batch)
+    batch.collection_state_json = json.dumps(state, ensure_ascii=False)
+    batch.status = "collecting"
+    batch.started_at = batch.started_at or datetime.utcnow()
+    batch.updated_at = datetime.utcnow()
+    db.flush()
+    return serialize_batch(db, batch)
+
+
+def update_collection_task(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    body: BatchCollectionUpdateBody,
+) -> BatchCollectionStateRead:
+    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    if str(batch.status) != "collecting":
+        raise ProductionBatchError("Partia nie jest w fazie zbierania.", code="invalid_status")
+    raw = getattr(batch, "collection_state_json", None) or "{}"
+    try:
+        data = json.loads(str(raw))
+    except json.JSONDecodeError:
+        data = {"tasks": []}
+    found = False
+    for t in data.get("tasks") or []:
+        if str(t.get("task_key")) == str(body.task_key):
+            t["collected_qty"] = round(float(body.collected_qty), 4)
+            found = True
+            break
+    if not found:
+        raise ProductionBatchError("Zadanie zbierania nie istnieje.", code="task_not_found")
+    batch.collection_state_json = json.dumps(data, ensure_ascii=False)
+    batch.updated_at = datetime.utcnow()
+    db.flush()
+    return get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
+
+
+def finish_collecting(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    performed_by_user_id: int | None = None,
+) -> ProductionBatchRead:
+    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    if str(batch.status) != "collecting":
+        raise ProductionBatchError("Partia nie jest w fazie zbierania.", code="invalid_status")
+    state = get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
+    if state.collected_count < state.total_count:
+        raise ProductionBatchError("Nie zebrano wszystkich materiałów.", code="collection_incomplete")
+    totals = _aggregate_batch_components(batch)
+    allocs: list[ComponentAllocationWrite] = []
+    for t in state.tasks:
+        if t.location_id > 0 and t.collected_qty > 0:
+            allocs.append(
+                ComponentAllocationWrite(
+                    line_snapshot_id=int(t.component_product_id),
+                    location_id=int(t.location_id),
+                    quantity=float(t.collected_qty),
+                )
+            )
+    _consume_batch_materials(db, batch, totals=totals, component_allocations=allocs, performed_by_user_id=performed_by_user_id)
+    batch.status = "in_progress"
+    batch.collecting_completed_at = datetime.utcnow()
+    batch.updated_at = datetime.utcnow()
+    db.flush()
+    return serialize_batch(db, batch)
+
+
+def _consume_batch_materials(
+    db: Session,
+    batch: ProductionBatch,
+    *,
+    totals: dict[int, float],
+    component_allocations: list[ComponentAllocationWrite],
+    performed_by_user_id: int | None,
+) -> StockDocument:
+    if batch.rw_stock_document_id:
+        doc = db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first()
+        if doc is not None:
+            return doc
+    alloc_map = _resolve_batch_allocations(db, batch, totals=totals, component_allocations=component_allocations)
+    try:
+        series = require_warehouse_series(db, tenant_id=int(batch.tenant_id), warehouse_id=int(batch.warehouse_id), subtype="RW")
+    except Exception:
+        series = None
+    rw_doc = StockDocument(
+        tenant_id=int(batch.tenant_id),
+        warehouse_id=int(batch.warehouse_id),
+        document_type="RW",
+        creation_source="PRODUCTION",
+        production_batch_id=int(batch.id),
+        status="completed",
+        receiving_status="DONE",
+        putaway_status="DONE",
+        relocation_status="DONE",
+        created_by_user_id=performed_by_user_id,
+    )
+    db.add(rw_doc)
+    db.flush()
+    if series is not None:
+        wh = db.query(Warehouse).filter(Warehouse.id == int(batch.warehouse_id)).first()
+        assign_series_number_to_stock_document(db, rw_doc, series, warehouse_code=str(getattr(wh, "code", None) or "") or None)
+    for pid, allocs in alloc_map.items():
+        if not allocs:
+            continue
+        qty_sum = sum(q for _, q in allocs)
+        line = StockDocumentItem(
+            document_id=int(rw_doc.id),
+            product_id=int(pid),
+            ordered_quantity=qty_sum,
+            received_quantity=qty_sum,
+            quantity=qty_sum,
+            batch_number="",
+            expiry_date=date(9999, 12, 31),
+        )
+        db.add(line)
+        db.flush()
+        unit_net = float(get_product_current_cost(db, int(batch.tenant_id), int(pid)).get("purchase_net") or 0)
+        line.purchase_price_net = unit_net
+        for loc_id, qty in allocs:
+            slices = consume_inventory_fifo_slices(
+                db,
+                tenant_id=int(batch.tenant_id),
+                warehouse_id=int(batch.warehouse_id),
+                product_id=int(pid),
+                location_id=int(loc_id),
+                quantity=float(qty),
+            )
+            for sl in slices:
+                append_issue_operation(
+                    db,
+                    rw_doc,
+                    line,
+                    float(sl.quantity),
+                    from_location_id=int(loc_id),
+                    batch_number=sl.batch_number or "",
+                    expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
+                    operator_admin_id=performed_by_user_id,
+                    metadata={"production_batch_id": int(batch.id), "source_document_type": "RW"},
+                )
+    batch.rw_stock_document_id = int(rw_doc.id)
+    return rw_doc
+
+
+def update_production_progress(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    body: BatchProductionProgressBody,
+) -> ProductionBatchRead:
+    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    if str(batch.status) != "in_progress":
+        raise ProductionBatchError("Partia nie jest w produkcji.", code="invalid_status")
+    line = next((ln for ln in batch.lines or [] if int(ln.id) == int(body.line_id)), None)
+    if line is None:
+        raise ProductionBatchError("Linia partii nie istnieje.", code="line_not_found")
+    new_qty = float(line.completed_quantity or 0) + float(body.add_quantity)
+    if new_qty > float(line.planned_quantity) + 1e-6:
+        raise ProductionBatchError("Przekroczono planowaną ilość.", code="over_production")
+    line.completed_quantity = round(new_qty, 4)
+    line.status = "in_progress" if new_qty < float(line.planned_quantity) - 1e-6 else "produced"
+    batch.updated_at = datetime.utcnow()
+    db.flush()
+    return serialize_batch(db, batch)
+
+
+def finish_production(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchRead:
+    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    if str(batch.status) != "in_progress":
+        raise ProductionBatchError("Partia nie jest w produkcji.", code="invalid_status")
+    for ln in batch.lines or []:
+        if float(ln.completed_quantity or 0) < float(ln.planned_quantity) - 1e-6:
+            raise ProductionBatchError("Nie wszystkie produkty są wyprodukowane.", code="production_incomplete")
+    batch.status = "putaway"
+    batch.production_completed_at = datetime.utcnow()
+    batch.updated_at = datetime.utcnow()
+    db.flush()
+    return serialize_batch(db, batch)
+
+
+def finish_putaway(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    body: BatchPutawayBody,
+    performed_by_user_id: int | None = None,
+) -> ProductionBatchCompleteResultRead:
+    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    if str(batch.status) != "putaway":
+        raise ProductionBatchError("Partia nie jest w fazie odkładania.", code="invalid_status")
+    if not body.lines:
+        raise ProductionBatchError("Podaj lokalizacje docelowe.", code="putaway_required")
+    loc_map = {int(x.line_id): int(x.target_location_id) for x in body.lines}
+    for bl in batch.lines or []:
+        tid = loc_map.get(int(bl.id))
+        if tid:
+            bl.target_location_id = tid
+    db.flush()
+    totals = _aggregate_batch_components(batch)
+    rw_doc = db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first() if batch.rw_stock_document_id else None
+    total_component_cost = 0.0
+    if rw_doc is not None:
+        for item in rw_doc.items or []:
+            total_component_cost += float(item.purchase_price_net or 0) * float(item.quantity or 0)
+    total_planned = sum(float(bl.planned_quantity) for bl in batch.lines or []) or 1.0
+    for bl in batch.lines or []:
+        produced = float(bl.completed_quantity or bl.planned_quantity)
+        target_loc = int(bl.target_location_id or 0)
+        if target_loc < 1:
+            raise ProductionBatchError(f"Brak lokalizacji docelowej dla {bl.product_id}.", code="location_required")
+        line_share = produced / total_planned
+        line_comp_cost = total_component_cost * line_share
+        unit_cost = line_comp_cost / produced if produced > 1e-9 else 0.0
+        try:
+            pw_series = require_warehouse_series(db, tenant_id=int(batch.tenant_id), warehouse_id=int(batch.warehouse_id), subtype="PW")
+        except Exception:
+            pw_series = None
+        pw_doc = StockDocument(
+            tenant_id=int(batch.tenant_id),
+            warehouse_id=int(batch.warehouse_id),
+            location_id=target_loc,
+            document_type="PW",
+            creation_source="PRODUCTION",
+            production_batch_id=int(batch.id),
+            production_batch_line_id=int(bl.id),
+            status="completed",
+            receiving_status="DONE",
+            putaway_status="DONE",
+            relocation_status="DONE",
+            created_by_user_id=performed_by_user_id,
+        )
+        db.add(pw_doc)
+        db.flush()
+        if pw_series is not None:
+            wh = db.query(Warehouse).filter(Warehouse.id == int(batch.warehouse_id)).first()
+            assign_series_number_to_stock_document(db, pw_doc, pw_series, warehouse_code=str(getattr(wh, "code", None) or "") or None)
+        fg_line = StockDocumentItem(
+            document_id=int(pw_doc.id),
+            product_id=int(bl.product_id),
+            ordered_quantity=produced,
+            received_quantity=produced,
+            quantity=produced,
+            purchase_price_net=unit_cost,
+            batch_number="",
+            expiry_date=date(9999, 12, 31),
+        )
+        db.add(fg_line)
+        db.flush()
+        upsert_dock_inventory_for_loose_receipt(
+            db,
+            tenant_id=int(batch.tenant_id),
+            warehouse_id=int(batch.warehouse_id),
+            location_id=target_loc,
+            product_id=int(bl.product_id),
+            add_qty=float(produced),
+            batch_number="",
+            expiry_date=NO_EXPIRY_SENTINEL,
+            stock_disposition=STOCK_DISPOSITION_SALEABLE,
+        )
+        append_receipt_operation(db, pw_doc, fg_line, float(produced))
+        bl.calculated_unit_cost = round(unit_cost, 4)
+        bl.pw_stock_document_id = int(pw_doc.id)
+        bl.status = "completed"
+        prod = db.query(Product).filter(Product.id == int(bl.product_id)).first()
+        if prod is not None and unit_cost > 0:
+            prod.purchase_price = float(unit_cost)
+    batch.status = "completed"
+    batch.completed_at = datetime.utcnow()
+    batch.updated_at = datetime.utcnow()
+    db.flush()
+    return ProductionBatchCompleteResultRead(
+        batch=serialize_batch(db, batch),
+        rw_stock_document_id=batch.rw_stock_document_id,
+        rw_document_number=_doc_number(db, batch.rw_stock_document_id),
         component_total_cost=round(total_component_cost, 4),
     )

@@ -32,7 +32,14 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Composition Engine + Batch Production (latest)
+## Production module UX redesign (latest)
+- Tab navigation: Pulpit, Receptury, Batch, Zbieranie, Produkcja, Odłożenie (`ProductionLayout` + `WmsModuleLayout`)
+- Card/grid UI for recipes and batches; recipe detail with component availability grid
+- Phased batch workflow: `collecting` → `in_progress` → `putaway` → `completed`
+- APIs: `/production/dashboard`, `/production/recipes`, batch `start-collecting`, `finish-collecting`, `production-progress`, `finish-production`, `finish-putaway`
+- Operator screens: large collecting cards, +1/+5 production, putaway with location search
+
+## Composition Engine + Batch Production (prior)
 - Shared `product_compositions` / `product_composition_lines` (`composition_mode`: bundle | manufacturing)
 - Migration `ensure_product_compositions_and_batches` copies `production_recipes` → manufacturing compositions
 - API `/compositions`; batch API `/production/batches` with aggregated pick-plan + RW/PW completion

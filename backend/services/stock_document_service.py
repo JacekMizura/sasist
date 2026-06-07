@@ -1369,7 +1369,7 @@ def build_stock_document_read(
         bat = db.query(ProductionBatch).filter(ProductionBatch.id == int(prod_batch_id)).first()
         if bat is not None:
             prod_batch_number = str(bat.number or "").strip() or None
-            prod_batch_path = f"/production?batch={int(bat.id)}"
+            prod_batch_path = f"/production/batches/{int(bat.id)}"
 
     return StockDocumentRead(
         id=doc.id,

@@ -414,7 +414,9 @@ export async function cancelProductionOrder(
 export type ProductionBatchStatus =
   | "draft"
   | "planned"
+  | "collecting"
   | "in_progress"
+  | "putaway"
   | "completed"
   | "cancelled";
 
@@ -447,7 +449,15 @@ export type ProductionBatchRead = {
   rw_document_number?: string | null;
   operator_name?: string | null;
   lines: ProductionBatchLineRead[];
+  products_count?: number;
+  total_planned_units?: number;
+  total_completed_units?: number;
+  has_shortages?: boolean;
+  progress_percent?: number;
+  collection_progress_percent?: number;
   started_at?: string | null;
+  collecting_completed_at?: string | null;
+  production_completed_at?: string | null;
   completed_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -570,5 +580,181 @@ export async function cancelProductionBatch(
   const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/cancel`, null, {
     params: { tenant_id: tenantId },
   });
+  return res.data;
+}
+
+export type RecipeCardRead = {
+  composition_id: number;
+  product_id: number;
+  product_name: string;
+  product_sku?: string | null;
+  product_image_url?: string | null;
+  recipe_name: string;
+  version: string;
+  is_active: boolean;
+  component_count: number;
+  unit_cost_net?: number | null;
+  current_stock: number;
+  max_producible: number;
+  has_low_stock: boolean;
+  status_badge: string;
+};
+
+export type RecipeComponentDetailRead = {
+  component_product_id: number;
+  product_name: string;
+  product_sku?: string | null;
+  product_image_url?: string | null;
+  required_per_unit: number;
+  available: number;
+  shortage: number;
+  unit_cost_net?: number | null;
+  line_cost_net?: number | null;
+  suggested_locations: string[];
+};
+
+export type RecipeDetailRead = {
+  composition_id: number;
+  product_id: number;
+  product_name: string;
+  product_sku?: string | null;
+  product_image_url?: string | null;
+  recipe_name: string;
+  version: string;
+  is_active: boolean;
+  yield_quantity: number;
+  current_stock: number;
+  unit_cost_net?: number | null;
+  margin_hint?: number | null;
+  max_producible: number;
+  components: RecipeComponentDetailRead[];
+  total_cost_net?: number | null;
+  has_shortages: boolean;
+  shortage_summary: string[];
+};
+
+export type ProductionDashboardRead = {
+  active_batches: number;
+  collecting_batches: number;
+  in_production_batches: number;
+  putaway_batches: number;
+  recipe_count: number;
+  batches_with_shortages: number;
+};
+
+export type CollectionTaskRead = {
+  task_key: string;
+  component_product_id: number;
+  product_name: string;
+  product_sku?: string | null;
+  product_image_url?: string | null;
+  location_id: number;
+  location_code: string;
+  required_qty: number;
+  collected_qty: number;
+};
+
+export type BatchCollectionStateRead = {
+  batch_id: number;
+  status: string;
+  tasks: CollectionTaskRead[];
+  collected_count: number;
+  total_count: number;
+  progress_percent: number;
+};
+
+export async function fetchProductionDashboard(
+  tenantId: number,
+  warehouseId?: number,
+): Promise<ProductionDashboardRead> {
+  const res = await api.get<ProductionDashboardRead>("/production/dashboard", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return res.data;
+}
+
+export async function listRecipeCards(
+  tenantId: number,
+  warehouseId?: number,
+): Promise<RecipeCardRead[]> {
+  const res = await api.get<RecipeCardRead[]>("/production/recipes", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return res.data;
+}
+
+export async function getRecipeDetail(
+  tenantId: number,
+  compositionId: number,
+  warehouseId?: number,
+): Promise<RecipeDetailRead> {
+  const res = await api.get<RecipeDetailRead>(`/production/recipes/${compositionId}`, {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return res.data;
+}
+
+export async function startCollectingBatch(tenantId: number, batchId: number) {
+  const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/start-collecting`, null, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function fetchCollectionState(tenantId: number, batchId: number) {
+  const res = await api.get<BatchCollectionStateRead>(`/production/batches/${batchId}/collection`, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function updateCollectionTask(
+  tenantId: number,
+  batchId: number,
+  body: { task_key: string; collected_qty: number },
+) {
+  const res = await api.post<BatchCollectionStateRead>(
+    `/production/batches/${batchId}/collection/update`,
+    body,
+    { params: { tenant_id: tenantId } },
+  );
+  return res.data;
+}
+
+export async function finishCollectingBatch(tenantId: number, batchId: number) {
+  const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/finish-collecting`, null, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function updateProductionProgress(
+  tenantId: number,
+  batchId: number,
+  body: { line_id: number; add_quantity: number },
+) {
+  const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/production-progress`, body, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function finishProductionPhase(tenantId: number, batchId: number) {
+  const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/finish-production`, null, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function finishPutawayBatch(
+  tenantId: number,
+  batchId: number,
+  body: { lines: { line_id: number; target_location_id: number; quantity?: number }[] },
+) {
+  const res = await api.post<ProductionBatchCompleteResultRead>(
+    `/production/batches/${batchId}/finish-putaway`,
+    body,
+    { params: { tenant_id: tenantId } },
+  );
   return res.data;
 }

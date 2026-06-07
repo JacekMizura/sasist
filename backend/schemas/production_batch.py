@@ -10,7 +10,15 @@ from pydantic import BaseModel, Field
 from .composition import AggregatedComponentDemandRead, CompositionLineRead
 from .production import ComponentAllocationWrite, ProductionAllocationRead, ProductionLocationSuggestionRead, StockShortageRead
 
-ProductionBatchStatus = Literal["draft", "planned", "in_progress", "completed", "cancelled"]
+ProductionBatchStatus = Literal[
+    "draft",
+    "planned",
+    "collecting",
+    "in_progress",
+    "putaway",
+    "completed",
+    "cancelled",
+]
 
 
 class ProductionBatchLineWrite(BaseModel):
@@ -57,10 +65,59 @@ class ProductionBatchRead(BaseModel):
     rw_document_number: Optional[str] = None
     operator_name: Optional[str] = None
     lines: List[ProductionBatchLineRead] = Field(default_factory=list)
+    products_count: int = 0
+    total_planned_units: float = 0.0
+    total_completed_units: float = 0.0
+    has_shortages: bool = False
+    progress_percent: float = 0.0
+    collection_progress_percent: float = 0.0
     started_at: Optional[datetime] = None
+    collecting_completed_at: Optional[datetime] = None
+    production_completed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class CollectionTaskRead(BaseModel):
+    task_key: str
+    component_product_id: int
+    product_name: str
+    product_sku: Optional[str] = None
+    product_image_url: Optional[str] = None
+    location_id: int
+    location_code: str
+    required_qty: float
+    collected_qty: float = 0.0
+
+
+class BatchCollectionStateRead(BaseModel):
+    batch_id: int
+    status: str
+    tasks: List[CollectionTaskRead] = Field(default_factory=list)
+    collected_count: int = 0
+    total_count: int = 0
+    progress_percent: float = 0.0
+
+
+class BatchCollectionUpdateBody(BaseModel):
+    task_key: str
+    collected_qty: float = Field(..., ge=0)
+
+
+class BatchProductionProgressBody(BaseModel):
+    line_id: int = Field(..., ge=1)
+    add_quantity: float = Field(..., gt=0)
+
+
+class BatchPutawayLineBody(BaseModel):
+    line_id: int = Field(..., ge=1)
+    target_location_id: int = Field(..., ge=1)
+    quantity: Optional[float] = Field(None, gt=0)
+
+
+class BatchPutawayBody(BaseModel):
+    lines: List[BatchPutawayLineBody] = Field(default_factory=list)
 
 
 class BatchAggregatedPickLineRead(BaseModel):

@@ -63,7 +63,7 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
 
   const goToBatchProduction = () => {
     if (!activeMfg || !warehouse?.id) return;
-    navigate(`/production?newBatch=1&product=${productId}&composition=${activeMfg.id}`);
+    navigate(`/production/batches?create=1&product=${productId}&composition=${activeMfg.id}`);
   };
 
   if (loading) {

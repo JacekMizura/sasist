@@ -11,12 +11,17 @@ from ..auth.deps import get_optional_current_user
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.production_batch import (
+    BatchCollectionStateRead,
+    BatchCollectionUpdateBody,
+    BatchPutawayBody,
+    BatchProductionProgressBody,
     ProductionBatchCompleteBody,
     ProductionBatchCompleteResultRead,
     ProductionBatchCreateBody,
     ProductionBatchPickPlanRead,
     ProductionBatchRead,
 )
+from ..schemas.production_recipe_card import ProductionDashboardRead, RecipeCardRead, RecipeDetailRead
 from ..schemas.production import (
     ProductionCompleteResultRead,
     ProductionOrderCompleteBody,
@@ -47,9 +52,21 @@ from ..services.production_batch_service import (
     cancel_batch,
     complete_batch,
     create_batch,
+    finish_collecting,
+    finish_production,
+    finish_putaway,
     get_batch,
+    get_collection_state,
     list_batches,
     start_batch,
+    start_collecting,
+    update_collection_task,
+    update_production_progress,
+)
+from ..services.production_recipe_card_service import (
+    get_production_dashboard,
+    get_recipe_detail,
+    list_recipe_cards,
 )
 from ..services.production_pick_service import build_production_pick_plan, search_warehouse_locations
 from ..services.production_recipe_service import (
@@ -300,6 +317,37 @@ def api_complete_order(
         raise _order_err(exc) from exc
 
 
+@router.get("/dashboard", response_model=ProductionDashboardRead)
+def api_production_dashboard(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    return get_production_dashboard(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
+@router.get("/recipes", response_model=List[RecipeCardRead])
+def api_list_recipe_cards(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    return list_recipe_cards(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
+@router.get("/recipes/{composition_id}", response_model=RecipeDetailRead)
+def api_recipe_detail(
+    composition_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    row = get_recipe_detail(db, tenant_id=tenant_id, composition_id=composition_id, warehouse_id=warehouse_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Receptura nie istnieje.")
+    return row
+
+
 def _batch_err(exc: ProductionBatchError) -> HTTPException:
     if exc.code == "not_found":
         return HTTPException(status_code=404, detail={"message": exc.message, "code": exc.code})
@@ -394,6 +442,115 @@ def api_complete_batch(
             body=body,
             performed_by_user_id=uid,
         )
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/start-collecting", response_model=ProductionBatchRead)
+def api_start_collecting(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = start_collecting(db, tenant_id=tenant_id, batch_id=batch_id)
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.get("/batches/{batch_id}/collection", response_model=BatchCollectionStateRead)
+def api_get_collection(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
+    except ProductionBatchError as exc:
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/collection/update", response_model=BatchCollectionStateRead)
+def api_update_collection(
+    batch_id: int,
+    body: BatchCollectionUpdateBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = update_collection_task(db, tenant_id=tenant_id, batch_id=batch_id, body=body)
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/finish-collecting", response_model=ProductionBatchRead)
+def api_finish_collecting(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        uid = int(user.id) if user is not None else None
+        row = finish_collecting(db, tenant_id=tenant_id, batch_id=batch_id, performed_by_user_id=uid)
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/production-progress", response_model=ProductionBatchRead)
+def api_production_progress(
+    batch_id: int,
+    body: BatchProductionProgressBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = update_production_progress(db, tenant_id=tenant_id, batch_id=batch_id, body=body)
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/finish-production", response_model=ProductionBatchRead)
+def api_finish_production(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = finish_production(db, tenant_id=tenant_id, batch_id=batch_id)
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/finish-putaway", response_model=ProductionBatchCompleteResultRead)
+def api_finish_putaway(
+    batch_id: int,
+    body: BatchPutawayBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        uid = int(user.id) if user is not None else None
+        row = finish_putaway(db, tenant_id=tenant_id, batch_id=batch_id, body=body, performed_by_user_id=uid)
         db.commit()
         return row
     except ProductionBatchError as exc:
