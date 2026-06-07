@@ -72,16 +72,14 @@ export default function PutawayPage() {
   const recentIds = batch ? loadRecentTargetLocations(batch.warehouse_id) : [];
 
   return (
-    <div className="px-4 py-6 lg:px-6 space-y-6 max-w-3xl mx-auto">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Odłożenie wyrobów</h1>
-        <p className="text-sm text-slate-500">Wybierz lokację docelową — system wygeneruje PW i przyjmie stan.</p>
-      </div>
-
+    <div className="space-y-6 px-4 py-6 lg:px-6">
       {!activeId ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-500">Odkładanie wyrobów</p>
           {queue.length === 0 ? (
-            <p className="text-sm text-slate-500">Brak partii do odłożenia.</p>
+            <p className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center text-base text-slate-500">
+              Brak partii do odłożenia.
+            </p>
           ) : (
             queue.map((b) => (
               <button
@@ -91,58 +89,73 @@ export default function PutawayPage() {
                   setActiveId(b.id);
                   navigate(wmsProductionPaths.putaway(b.id));
                 }}
-                className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-emerald-300"
+                className="w-full rounded-2xl border-2 border-emerald-300 bg-white p-6 text-left shadow-md active:scale-[0.99]"
               >
-                <span className="font-mono font-bold">{b.number}</span>
-                <span className={`ml-2 ${batchStatusBadgeClass(b.status)}`}>{BATCH_STATUS_LABEL[b.status]}</span>
+                <p className="font-mono text-2xl font-black text-slate-900">{b.number}</p>
+                <span className={`mt-2 inline-block ${batchStatusBadgeClass(b.status)}`}>{BATCH_STATUS_LABEL[b.status]}</span>
               </button>
             ))
           )}
         </div>
       ) : batch ? (
         <>
-          <p className="font-mono font-bold text-emerald-900">{batch.number}</p>
-          <div className="space-y-4">
-            {batch.lines.map((ln) => (
-              <div key={ln.id} className="rounded-2xl border-2 border-emerald-200 bg-white p-5">
-                <div className="flex gap-4">
-                  <ProductThumb name={ln.product_name ?? undefined} size="lg" />
-                  <div>
-                    <p className="text-lg font-bold text-slate-900">{ln.product_name}</p>
-                    <p className="text-2xl font-bold text-emerald-700">{ln.completed_quantity || ln.planned_quantity} szt.</p>
+          <div className="rounded-2xl border-2 border-emerald-400 bg-emerald-50 p-5 text-center">
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-800">Odkładanie wyrobów gotowych</p>
+            <p className="font-mono text-lg font-bold text-slate-600">{batch.number}</p>
+          </div>
+
+          <div className="space-y-5">
+            {batch.lines.map((ln) => {
+              const qty = ln.completed_quantity || ln.planned_quantity;
+              return (
+                <div key={ln.id} className="rounded-2xl border-4 border-emerald-300 bg-white p-6 shadow-lg">
+                  <div className="flex items-center gap-4">
+                    <ProductThumb name={ln.product_name ?? undefined} size="lg" />
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Produkt</p>
+                      <p className="text-2xl font-black text-slate-900">{ln.product_name}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Ilość</p>
+                      <p className="text-4xl font-black text-emerald-800">{qty}</p>
+                    </div>
+                    <div>
+                      <p className="mb-2 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+                        <MapPin className="h-4 w-4" aria-hidden />
+                        Lokacja docelowa
+                      </p>
+                      <ProductionWarehouseLocationSearch
+                        tenantId={tenantId}
+                        warehouseId={batch.warehouse_id}
+                        valueId={targets[ln.id]?.id ?? null}
+                        valueCode={targets[ln.id]?.code ?? null}
+                        recentLocationIds={recentIds}
+                        onSelect={(id, code) => setTargets((prev) => ({ ...prev, [ln.id]: { id, code } }))}
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="mt-4">
-                  <p className="mb-2 inline-flex items-center gap-1 text-xs font-semibold uppercase text-slate-500">
-                    <MapPin className="h-3.5 w-3.5" aria-hidden />
-                    Lokacja docelowa
-                  </p>
-                  <ProductionWarehouseLocationSearch
-                    tenantId={tenantId}
-                    warehouseId={batch.warehouse_id}
-                    valueId={targets[ln.id]?.id ?? null}
-                    valueCode={targets[ln.id]?.code ?? null}
-                    recentLocationIds={recentIds}
-                    onSelect={(id, code) => setTargets((prev) => ({ ...prev, [ln.id]: { id, code } }))}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
           <button
             type="button"
             disabled={busy}
             onClick={() => void confirmPutaway()}
-            className="sticky bottom-4 w-full rounded-2xl bg-emerald-600 py-4 text-base font-bold text-white shadow-lg hover:bg-emerald-700 disabled:opacity-50"
+            className="sticky bottom-4 w-full rounded-2xl bg-emerald-600 py-5 text-xl font-black text-white shadow-xl hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.99]"
           >
-            Potwierdź odkładanie (PW)
+            Potwierdź odkładanie
           </button>
-          <Link to={wmsProductionPaths.execute(activeId)} className="block text-center text-sm text-slate-500 hover:underline">
-            Szczegóły partii
+
+          <Link to={wmsProductionPaths.execute(activeId)} className="block text-center text-sm text-slate-500 underline">
+            Wróć do produkcji
           </Link>
         </>
       ) : (
-        <p className="text-sm text-slate-500">Wczytywanie…</p>
+        <p className="text-center text-slate-500">Wczytywanie…</p>
       )}
     </div>
   );

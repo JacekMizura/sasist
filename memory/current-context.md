@@ -33,10 +33,10 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
 ## Production — ERP management vs WMS execution split (latest)
-- **ERP `/production/*`** (`ProductionErpModuleLayout` under `MainPanelLayout`): dashboard, receptury, partie, planowanie masowe, KPIs, hero, kolejki
-- **WMS `/wms/production/*`** (`WmsProductionExecutionLayout`): tylko zbieranie → wykonanie → odkładanie (index → collecting)
-- **ERP sidebar**: kategoria **Produkcja** (Pulpit, Receptury, Partie); jeden link **Terminal WMS** (bez flyout WMS, bez duplikatu Produkcja)
-- **WMS tile**: „Produkcja — wykonanie” → `/wms/production/collecting`; usunięty hero planowania z menu WMS
+- **ERP `/production/*`** (`ProductionErpModuleLayout`): Pulpit, Receptury (tabela), Zlecenia, Planowanie, Historia, Analiza kosztów; `/production/batches` → redirect planning
+- **WMS `/wms/production/*`**: tylko collecting → execute → putaway; duże karty operatorskie, bez planowania/analityki
+- **Sidebar**: Produkcja jako sekcja w flyoucie **Asortyment**; jeden link **Terminal WMS** na dole (`/wms/menu`)
+- **Karta produktu**: `ProductProductionSummary` (receptura, koszt, czas, link) — bez CRUD receptury; zestawy nadal w `CompositionVisualEditor`
 - Ścieżki: `erpProductionPaths` vs `wmsProductionPaths` w `productionPaths.ts`
 
 ## Production — visibility / integration fix (prior)

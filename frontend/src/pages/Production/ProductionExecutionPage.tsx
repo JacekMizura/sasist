@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Plus } from "lucide-react";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   finishProductionPhase,
@@ -68,16 +67,14 @@ export default function ProductionExecutionPage() {
   const allDone = batch?.lines.every((l) => l.completed_quantity >= l.planned_quantity - 1e-6);
 
   return (
-    <div className="px-4 py-6 lg:px-6 space-y-6 max-w-3xl mx-auto">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Produkcja</h1>
-        <p className="text-sm text-slate-500">Proste ekrany operatorskie — ile zbudować, bez pól ERP.</p>
-      </div>
-
+    <div className="space-y-6 px-4 py-6 lg:px-6">
       {!activeId ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-500">W produkcji</p>
           {queue.length === 0 ? (
-            <p className="text-sm text-slate-500">Brak partii w produkcji.</p>
+            <p className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center text-base text-slate-500">
+              Brak partii w produkcji.
+            </p>
           ) : (
             queue.map((b) => (
               <button
@@ -87,68 +84,73 @@ export default function ProductionExecutionPage() {
                   setActiveId(b.id);
                   navigate(wmsProductionPaths.execute(b.id));
                 }}
-                className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-blue-300"
+                className="w-full rounded-2xl border-2 border-blue-300 bg-white p-6 text-left shadow-md active:scale-[0.99]"
               >
-                <span className="font-mono font-bold">{b.number}</span>
-                <span className={`ml-2 ${batchStatusBadgeClass(b.status)}`}>{BATCH_STATUS_LABEL[b.status]}</span>
+                <p className="font-mono text-2xl font-black text-slate-900">{b.number}</p>
+                <span className={`mt-2 inline-block ${batchStatusBadgeClass(b.status)}`}>{BATCH_STATUS_LABEL[b.status]}</span>
               </button>
             ))
           )}
         </div>
       ) : batch ? (
         <>
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-            <p className="font-mono font-bold text-blue-900">{batch.number}</p>
-            <ProgressBar
-              value={batch.total_completed_units ?? 0}
-              max={batch.total_planned_units ?? 1}
-              label="Wyprodukowano sztuk"
-              tone="emerald"
-            />
+          <div className="rounded-2xl border-2 border-blue-400 bg-blue-50 p-5 text-center">
+            <p className="text-xs font-bold uppercase tracking-widest text-blue-800">W produkcji</p>
+            <p className="font-mono text-lg font-bold text-slate-600">{batch.number}</p>
           </div>
 
-          <div className="space-y-5">
-            {batch.lines.map((ln) => (
-              <div key={ln.id} className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex gap-4">
-                  <ProductThumb name={ln.product_name ?? undefined} size="lg" />
-                  <div className="flex-1">
-                    <p className="text-xl font-bold text-slate-900">{ln.product_name}</p>
-                    <p className="mt-2 text-sm text-slate-500">
-                      Cel: <strong className="text-slate-800">{ln.planned_quantity}</strong>
+          <div className="space-y-6">
+            {batch.lines.map((ln) => {
+              const remaining = Math.max(0, ln.planned_quantity - ln.completed_quantity);
+              return (
+                <div key={ln.id} className="rounded-2xl border-4 border-slate-300 bg-white p-6 shadow-lg">
+                  <div className="flex items-center gap-4">
+                    <ProductThumb name={ln.product_name ?? undefined} size="lg" />
+                    <p className="text-2xl font-black text-slate-900">{ln.product_name}</p>
+                  </div>
+                  <div className="mt-5">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Postęp</p>
+                    <p className="mt-1 text-5xl font-black text-blue-700">
+                      {ln.completed_quantity}
+                      <span className="text-2xl font-bold text-slate-400"> / {ln.planned_quantity}</span>
                     </p>
-                    <p className="text-3xl font-bold text-blue-700 mt-1">{ln.completed_quantity}</p>
+                    <div className="mt-3">
+                      <ProgressBar
+                        value={ln.completed_quantity}
+                        max={ln.planned_quantity || 1}
+                        tone="emerald"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6 grid grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      disabled={busy || remaining <= 0}
+                      onClick={() => void addQty(ln.id, 1)}
+                      className="rounded-2xl bg-slate-900 py-6 text-2xl font-black text-white hover:bg-slate-800 disabled:opacity-40 active:scale-95"
+                    >
+                      +1
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || remaining <= 0}
+                      onClick={() => void addQty(ln.id, 5)}
+                      className="rounded-2xl bg-slate-700 py-6 text-2xl font-black text-white hover:bg-slate-600 disabled:opacity-40 active:scale-95"
+                    >
+                      +5
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || remaining <= 0}
+                      onClick={() => void addQty(ln.id, remaining)}
+                      className="rounded-2xl border-2 border-emerald-500 bg-emerald-50 py-4 text-sm font-bold text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+                    >
+                      Zakończ krok
+                    </button>
                   </div>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void addQty(ln.id, 1)}
-                    className="rounded-xl bg-slate-800 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
-                  >
-                    +1
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void addQty(ln.id, 5)}
-                    className="rounded-xl bg-slate-700 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                  >
-                    +5
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void addQty(ln.id, Math.max(0, ln.planned_quantity - ln.completed_quantity))}
-                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-                  >
-                    <Plus className="h-4 w-4" aria-hidden />
-                    Zakończ wszystkie
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {allDone ? (
@@ -156,18 +158,18 @@ export default function ProductionExecutionPage() {
               type="button"
               disabled={busy}
               onClick={() => void finish()}
-              className="sticky bottom-4 w-full rounded-2xl bg-blue-600 py-4 text-base font-bold text-white shadow-lg hover:bg-blue-700"
+              className="sticky bottom-4 w-full rounded-2xl bg-blue-600 py-5 text-xl font-black text-white shadow-xl hover:bg-blue-700 active:scale-[0.99]"
             >
               Zakończ produkcję → odkładanie
             </button>
           ) : null}
 
-          <Link to={wmsProductionPaths.collecting(activeId)} className="block text-center text-sm text-slate-500 hover:underline">
-            Szczegóły partii
+          <Link to={wmsProductionPaths.collecting()} className="block text-center text-sm text-slate-500 underline">
+            Menu zbierania
           </Link>
         </>
       ) : (
-        <p className="text-sm text-slate-500">Wczytywanie…</p>
+        <p className="text-center text-slate-500">Wczytywanie…</p>
       )}
     </div>
   );

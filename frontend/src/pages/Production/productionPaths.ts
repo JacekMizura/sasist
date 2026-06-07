@@ -5,7 +5,13 @@ export const erpProductionPaths = {
   home: ERP_PRODUCTION_BASE,
   recipes: `${ERP_PRODUCTION_BASE}/recipes`,
   recipe: (id: number | string) => `${ERP_PRODUCTION_BASE}/recipes/${id}`,
-  batches: `${ERP_PRODUCTION_BASE}/batches`,
+  orders: `${ERP_PRODUCTION_BASE}/orders`,
+  order: (id: number | string) => `${ERP_PRODUCTION_BASE}/orders/${id}`,
+  planning: `${ERP_PRODUCTION_BASE}/planning`,
+  history: `${ERP_PRODUCTION_BASE}/history`,
+  analytics: `${ERP_PRODUCTION_BASE}/analytics`,
+  /** @deprecated Use planning or orders */
+  batches: `${ERP_PRODUCTION_BASE}/planning`,
   batch: (id: number | string) => `${ERP_PRODUCTION_BASE}/batch/${id}`,
 } as const;
 

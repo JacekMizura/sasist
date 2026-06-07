@@ -179,6 +179,10 @@ import RecipesListPage from "./pages/Production/RecipesListPage"
 import RecipeDetailPage from "./pages/Production/RecipeDetailPage"
 import BatchesListPage from "./pages/Production/BatchesListPage"
 import BatchDetailPage from "./pages/Production/BatchDetailPage"
+import ProductionOrdersPage from "./pages/Production/ProductionOrdersPage"
+import ProductionPlanningPage from "./pages/Production/ProductionPlanningPage"
+import ProductionHistoryPage from "./pages/Production/ProductionHistoryPage"
+import ProductionAnalyticsPage from "./pages/Production/ProductionAnalyticsPage"
 import CollectingPage from "./pages/Production/CollectingPage"
 import ProductionExecutionPage from "./pages/Production/ProductionExecutionPage"
 import PutawayPage from "./pages/Production/PutawayPage"
@@ -551,7 +555,11 @@ export const router = createBrowserRouter(
                   <Route index element={<ProductionDashboardPage />} />
                   <Route path="recipes" element={<RecipesListPage />} />
                   <Route path="recipes/:compositionId" element={<RecipeDetailPage />} />
-                  <Route path="batches" element={<BatchesListPage />} />
+                  <Route path="orders" element={<ProductionOrdersPage />} />
+                  <Route path="planning" element={<ProductionPlanningPage />} />
+                  <Route path="history" element={<ProductionHistoryPage />} />
+                  <Route path="analytics" element={<ProductionAnalyticsPage />} />
+                  <Route path="batches" element={<Navigate to="/production/planning" replace />} />
                   <Route path="batch/:batchId" element={<BatchDetailPage />} />
                 </Route>
                 <Route path="manufacturers" element={<ManufacturersPage />} />

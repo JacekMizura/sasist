@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Layers, History, Factory } from "lucide-react";
+import { Layers } from "lucide-react";
 import {
   listCompositionsForProduct,
   listCompositionUsages,
   type CompositionUsageRead,
   type ProductCompositionRead,
 } from "../../api/compositionApi";
-import { listProductionOrdersForProduct, type ProductionOrderSummaryRead } from "../../api/productionApi";
 import { CompositionVisualEditor } from "./CompositionVisualEditor";
-import { erpProductionPaths } from "./productionPaths";
-import { formatProductionMoney, PRODUCTION_STATUS_LABEL, productionStatusBadgeClass } from "./productionUi";
+import { ProductProductionSummary } from "./ProductProductionSummary";
+import { useWarehouse } from "../../context/WarehouseContext";
 
 type Props = {
   tenantId: number;
@@ -20,10 +18,9 @@ type Props = {
 };
 
 export function ProductCompositionsPanel({ tenantId, productId, productName, onChanged }: Props) {
+  const { warehouse } = useWarehouse();
   const [bundles, setBundles] = useState<ProductCompositionRead[]>([]);
-  const [manufacturing, setManufacturing] = useState<ProductCompositionRead[]>([]);
   const [usages, setUsages] = useState<CompositionUsageRead[]>([]);
-  const [history, setHistory] = useState<ProductionOrderSummaryRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -32,21 +29,15 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
     setErr(null);
     const errors: string[] = [];
     try {
-      const [bRes, mRes, uRes, hRes] = await Promise.allSettled([
+      const [bRes, uRes] = await Promise.allSettled([
         listCompositionsForProduct(tenantId, productId, "bundle"),
-        listCompositionsForProduct(tenantId, productId, "manufacturing"),
         listCompositionUsages(tenantId, productId),
-        listProductionOrdersForProduct(tenantId, productId),
       ]);
       if (bRes.status === "fulfilled") setBundles(bRes.value);
       else errors.push("zestawy");
-      if (mRes.status === "fulfilled") setManufacturing(mRes.value);
-      else errors.push("produkcja");
       if (uRes.status === "fulfilled") setUsages(uRes.value);
       else errors.push("użycia");
-      if (hRes.status === "fulfilled") setHistory(hRes.value);
-      else setHistory([]);
-      if (errors.length === 4) {
+      if (errors.length === 2) {
         const reason = bRes.status === "rejected" && bRes.reason instanceof Error ? bRes.reason.message : null;
         setErr(reason ?? "Nie udało się wczytać kompozycji.");
       } else if (errors.length > 0) {
@@ -66,8 +57,6 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
     onChanged?.();
   };
 
-  const activeMfg = manufacturing.find((c) => c.is_active) ?? manufacturing[0] ?? null;
-
   if (loading) {
     return <p className="text-sm text-slate-500">Wczytywanie kompozycji…</p>;
   }
@@ -80,8 +69,8 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
 
       <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
         <p className="text-sm text-slate-600">
-          Kompozycje definiują skład produktu. <strong>Zestawy</strong> są rozliczane przy sprzedaży;{" "}
-          <strong>Produkcja</strong> tworzy gotowy towar w magazynie (RW/PW).
+          <strong>Zestawy</strong> definiują skład sprzedażowy produktu.{" "}
+          <strong>Produkcja</strong> jest zarządzana w module ERP — tutaj tylko podsumowanie receptury.
         </p>
       </div>
 
@@ -96,29 +85,7 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
         sectionHint="Sprzedażowe zestawy i kity — bez dokumentów RW/PW."
       />
 
-      <CompositionVisualEditor
-        tenantId={tenantId}
-        productId={productId}
-        productName={productName}
-        mode="manufacturing"
-        compositions={manufacturing}
-        onChanged={handleChanged}
-        sectionTitle="Produkcja"
-        sectionHint="Kompozycje magazynowe — zużycie składników i przyjęcie wyrobu gotowego."
-      />
-
-      {activeMfg ? (
-        <section className="rounded-lg border border-violet-100 bg-violet-50/40 p-4">
-          <p className="text-xs text-slate-600">
-            Planowanie i wykonanie partii odbywa się w{" "}
-            <Link to={erpProductionPaths.home} className="inline-flex items-center gap-1 font-semibold text-violet-700 hover:underline">
-              <Factory className="h-3.5 w-3.5" aria-hidden />
-              module ERP Produkcja
-            </Link>
-            . Na karcie produktu edytujesz tylko receptury i koszty; wykonanie — w terminalu WMS.
-          </p>
-        </section>
-      ) : null}
+      <ProductProductionSummary tenantId={tenantId} productId={productId} warehouseId={warehouse?.id} />
 
       {usages.length > 0 ? (
         <section>
@@ -143,49 +110,6 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
-
-      {manufacturing.length > 0 ? (
-        <section>
-          <h3 className="mb-3 flex items-center gap-2 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">
-            <History className="h-5 w-5 text-slate-500" aria-hidden />
-            Historia produkcji
-          </h3>
-          {history.length === 0 ? (
-            <p className="text-sm text-slate-500">Brak zleceń produkcyjnych dla tego produktu.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="px-3 py-2">Nr MO</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Ilość</th>
-                    <th className="px-3 py-2">Koszt jdn.</th>
-                    <th className="px-3 py-2">Data</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((h) => (
-                    <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                      <td className="px-3 py-2">
-                        <Link to={erpProductionPaths.home} className="font-mono text-violet-700 hover:underline" title="Otwórz moduł ERP Produkcja">
-                          {h.number}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={productionStatusBadgeClass(h.status)}>{PRODUCTION_STATUS_LABEL[h.status]}</span>
-                      </td>
-                      <td className="px-3 py-2">{h.status === "completed" ? h.produced_quantity : h.planned_quantity}</td>
-                      <td className="px-3 py-2">{formatProductionMoney(h.calculated_unit_cost)}</td>
-                      <td className="px-3 py-2 text-xs text-slate-500">{(h.completed_at || h.created_at || "").slice(0, 10) || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </section>
       ) : null}
     </div>

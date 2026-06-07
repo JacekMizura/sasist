@@ -5,6 +5,7 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import {
   fetchCollectionState,
   finishCollectingBatch,
+  getProductionBatch,
   listProductionBatches,
   startCollectingBatch,
   updateCollectionTask,
@@ -25,6 +26,7 @@ export default function CollectingPage() {
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
   const [queue, setQueue] = useState<ProductionBatchRead[]>([]);
+  const [batch, setBatch] = useState<ProductionBatchRead | null>(null);
   const [state, setState] = useState<BatchCollectionStateRead | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<number | null>(batchId ? Number(batchId) : null);
   const [busy, setBusy] = useState(false);
@@ -37,9 +39,12 @@ export default function CollectingPage() {
 
   const loadState = useCallback(async (id: number) => {
     try {
-      setState(await fetchCollectionState(tenantId, id));
+      const [s, b] = await Promise.all([fetchCollectionState(tenantId, id), getProductionBatch(tenantId, id)]);
+      setState(s);
+      setBatch(b);
     } catch {
       setState(null);
+      setBatch(null);
     }
   }, [tenantId]);
 
@@ -85,78 +90,98 @@ export default function CollectingPage() {
     }
   };
 
-  return (
-    <div className="px-4 py-6 lg:px-6 space-y-6 max-w-3xl mx-auto">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Zbieranie surowców</h1>
-        <p className="text-sm text-slate-500">Idź do lokacji → potwierdź ilość. Przygotowane pod skaner.</p>
-      </div>
+  const batchLabel = batch?.lines?.map((l) => l.product_name).filter(Boolean).join(", ") ?? "—";
+  const batchQty = batch?.total_planned_units ?? 0;
 
+  return (
+    <div className="space-y-6 px-4 py-6 lg:px-6">
       {!activeBatchId ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-500">Kolejka zbierania</p>
           {queue.length === 0 ? (
-            <p className="text-sm text-slate-500">Brak partii do zbierania.</p>
+            <p className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center text-base text-slate-500">
+              Brak partii do zbierania.
+            </p>
           ) : (
             queue.map((b) => (
               <button
                 key={b.id}
                 type="button"
                 onClick={() => void openBatch(b)}
-                className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-amber-300"
+                className="w-full rounded-2xl border-2 border-amber-300 bg-white p-6 text-left shadow-md active:scale-[0.99] transition"
               >
-                <span className="font-mono font-bold">{b.number}</span>
-                <span className={`ml-2 ${batchStatusBadgeClass(b.status)}`}>{BATCH_STATUS_LABEL[b.status]}</span>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Partia</p>
+                <p className="mt-1 font-mono text-2xl font-black text-slate-900">{b.number}</p>
+                <p className="mt-2 text-lg font-semibold text-slate-800">
+                  {b.lines?.[0]?.product_name ?? `${b.products_count ?? 0} produktów`}
+                </p>
+                <p className="mt-1 text-3xl font-black text-amber-800">{b.total_planned_units ?? 0} szt.</p>
+                <span className={`mt-3 inline-block ${batchStatusBadgeClass(b.status)}`}>{BATCH_STATUS_LABEL[b.status]}</span>
               </button>
             ))
           )}
         </div>
       ) : (
         <>
+          <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-5 text-center shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-800">Partia</p>
+            <p className="font-mono text-2xl font-black text-slate-900">{batch?.number ?? "—"}</p>
+            <p className="mt-1 text-lg font-bold text-slate-800">{batchLabel}</p>
+            <p className="text-4xl font-black text-amber-900">{batchQty} szt.</p>
+          </div>
+
           {state ? (
-            <div className="sticky top-0 z-10 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="rounded-xl border border-amber-200 bg-white p-4">
               <ProgressBar
                 value={state.collected_count}
                 max={state.total_count || 1}
-                label={`Zebrano ${state.collected_count} / ${state.total_count} pozycji`}
+                label={`Zebrano ${state.collected_count} / ${state.total_count}`}
                 tone="amber"
               />
             </div>
           ) : null}
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             {(state?.tasks ?? []).map((t) => {
               const done = t.collected_qty >= t.required_qty - 1e-6;
               return (
                 <div
                   key={t.task_key}
-                  className={`rounded-2xl border-2 p-5 shadow-sm ${done ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"}`}
+                  className={`rounded-2xl border-4 p-6 shadow-lg ${done ? "border-emerald-400 bg-emerald-50" : "border-slate-300 bg-white"}`}
                 >
-                  <div className="flex items-start gap-4">
-                    <ProductThumb imageUrl={t.product_image_url} name={t.product_name} size="lg" />
-                    <div className="flex-1">
-                      <p className="text-lg font-bold text-slate-900">{t.product_name}</p>
-                      <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                        <MapPin className="h-4 w-4" aria-hidden />
-                        {t.location_code}
-                      </p>
-                      <p className="mt-3 text-2xl font-bold text-amber-800">
-                        {t.collected_qty} / {t.required_qty}
-                      </p>
-                    </div>
-                  </div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Lokalizacja</p>
+                  <p className="mt-1 inline-flex items-center gap-2 font-mono text-3xl font-black text-slate-900">
+                    <MapPin className="h-8 w-8 text-amber-600" aria-hidden />
+                    {t.location_code}
+                  </p>
+                  <p className="mt-4 text-xl font-bold text-slate-900">{t.product_name}</p>
+                  <p className="mt-2 text-4xl font-black text-amber-800">
+                    {t.required_qty} <span className="text-lg font-semibold text-slate-500">szt.</span>
+                  </p>
                   {!done ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void confirmTask(t.task_key, t.required_qty)}
-                      className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 py-3 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-                    >
-                      <ScanLine className="h-5 w-5" aria-hidden />
-                      Potwierdź {t.required_qty} szt.
-                    </button>
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void confirmTask(t.task_key, t.required_qty)}
+                        className="col-span-2 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-5 text-lg font-bold text-white hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98]"
+                      >
+                        <Check className="h-6 w-6" aria-hidden />
+                        Potwierdź
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void confirmTask(t.task_key, t.required_qty)}
+                        className="col-span-2 inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-500 bg-amber-50 py-4 text-base font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                      >
+                        <ScanLine className="h-5 w-5" aria-hidden />
+                        Skanuj
+                      </button>
+                    </div>
                   ) : (
-                    <p className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-emerald-700">
-                      <Check className="h-4 w-4" aria-hidden />
+                    <p className="mt-5 inline-flex items-center gap-2 text-lg font-bold text-emerald-700">
+                      <Check className="h-5 w-5" aria-hidden />
                       Zebrane
                     </p>
                   )}
@@ -170,14 +195,18 @@ export default function CollectingPage() {
               type="button"
               disabled={busy}
               onClick={() => void finish()}
-              className="sticky bottom-4 w-full rounded-2xl bg-emerald-600 py-4 text-base font-bold text-white shadow-lg hover:bg-emerald-700 disabled:opacity-50"
+              className="sticky bottom-4 w-full rounded-2xl bg-emerald-600 py-5 text-xl font-black text-white shadow-xl hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.99]"
             >
-              Zakończ zbieranie
+              Zakończ zbieranie →
             </button>
           ) : null}
 
-          <Link to={wmsProductionPaths.collecting()} className="block text-center text-sm text-slate-500 hover:underline">
-            Wróć do kolejki zbierania
+          <Link
+            to={wmsProductionPaths.collecting()}
+            onClick={() => setActiveBatchId(null)}
+            className="block text-center text-sm font-medium text-slate-500 underline"
+          >
+            Wróć do kolejki
           </Link>
         </>
       )}

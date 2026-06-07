@@ -34,6 +34,8 @@ import {
   FileText,
   Building2,
   Library,
+  History,
+  CalendarClock,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -203,20 +205,15 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
           },
         ],
       },
-    ],
-  },
-  {
-    id: "production",
-    label: "Produkcja",
-    Icon: Factory,
-    activePathPrefix: "/production",
-    flyoutSections: [
       {
-        title: "Zarządzanie produkcją",
+        title: "Produkcja",
         items: [
           { path: "/production", label: "Pulpit", Icon: LayoutDashboard },
           { path: "/production/recipes", label: "Receptury", Icon: ClipboardList },
-          { path: "/production/batches", label: "Partie produkcyjne", Icon: Layers },
+          { path: "/production/orders", label: "Zlecenia produkcyjne", Icon: Factory },
+          { path: "/production/planning", label: "Planowanie", Icon: CalendarClock },
+          { path: "/production/history", label: "Historia produkcji", Icon: History },
+          { path: "/production/analytics", label: "Analiza kosztów", Icon: BarChart3 },
         ],
       },
     ],
@@ -371,6 +368,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/suppliers")) return true;
     if (pathname.startsWith("/goods-orders")) return true;
     if (pathname.startsWith("/warehouse-materials")) return true;
+    if (pathname === "/production" || pathname.startsWith("/production/")) return true;
   }
   if (category.id === "settings") {
     if (pathname.startsWith("/settings")) return true;
