@@ -32,7 +32,14 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 - List/detail API: `document_number`, `order_number`, `document_series_prefix`, `customer_name`
 - Frontend WZ tab: no payment columns; status `ZREALIZOWANA`; Ilość/brutto columns; clean product images
 
-## Production — visibility / integration fix (latest)
+## Production — ERP management vs WMS execution split (latest)
+- **ERP `/production/*`** (`ProductionErpModuleLayout` under `MainPanelLayout`): dashboard, receptury, partie, planowanie masowe, KPIs, hero, kolejki
+- **WMS `/wms/production/*`** (`WmsProductionExecutionLayout`): tylko zbieranie → wykonanie → odkładanie (index → collecting)
+- **ERP sidebar**: kategoria **Produkcja** (Pulpit, Receptury, Partie); jeden link **Terminal WMS** (bez flyout WMS, bez duplikatu Produkcja)
+- **WMS tile**: „Produkcja — wykonanie” → `/wms/production/collecting`; usunięty hero planowania z menu WMS
+- Ścieżki: `erpProductionPaths` vs `wmsProductionPaths` w `productionPaths.ts`
+
+## Production — visibility / integration fix (prior)
 - **Root cause**: `operationalMode: "production"` hid tile/nav when user `wms_operational_modes` omitted `production`; build also failed on `CompositionVisualEditor.tsx` (`??`/`||` parens).
 - **Fix**: removed mode gate from production module; `MANDATORY_WMS_TAB_IDS` in `wmsNavTabs.ts` always injects Produkcja.
 - **Always-visible entry points**: ERP sidebar direct links (Terminal WMS + **Produkcja**); WMS menu violet hero banner; WmsTopBar **Produkcja** button; WMS flyout unchanged.

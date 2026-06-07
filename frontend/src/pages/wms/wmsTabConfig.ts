@@ -100,12 +100,12 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
   },
   {
     id: "production",
-    path: "/wms/production",
-    label: "Produkcja",
+    path: "/wms/production/collecting",
+    label: "Produkcja — wykonanie",
     icon: Factory,
-    sortOrder: 15,
+    sortOrder: 55,
     dashboard: true,
-    shortDescription: "Centrum produkcji — planowanie partii, zbieranie, wykonanie, odkładanie",
+    shortDescription: "Zbieranie surowców, wykonanie i odkładanie wyrobów",
   },
   {
     id: "packing",
@@ -171,7 +171,7 @@ export function isWmsTabPathActive(pathname: string, tab: WmsTabConfigItem): boo
     return p.startsWith("/wms/operations");
   }
   if (tab.id === "production") {
-    return p === "/wms/production" || p.startsWith("/wms/production/");
+    return p === "/wms/production" || p.startsWith("/wms/production/") || p.startsWith("/wms/production");
   }
   return p === tab.path || p.startsWith(`${tab.path}/`);
 }

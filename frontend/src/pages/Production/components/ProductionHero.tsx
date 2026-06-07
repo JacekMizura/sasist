@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import type { ProductionDashboardRead } from "../../../api/productionApi";
 import { PIPELINE_STAGES } from "../productionTheme";
-import { productionPaths } from "../productionPaths";
+import { wmsProductionPaths } from "../productionPaths";
 import { OperatorAvatar } from "./OperatorAvatar";
 
 type Props = {
@@ -84,7 +84,7 @@ export function ProductionHero({ data, warehouseName, loading, onCreateBatch }: 
                 Nowa partia produkcyjna
               </button>
               <Link
-                to={productionPaths.collecting()}
+                to={wmsProductionPaths.collecting()}
                 className="inline-flex items-center gap-2 rounded-2xl border border-white/25 px-5 py-3.5 text-sm font-semibold text-white hover:bg-white/10"
               >
                 Kolejka zbierania

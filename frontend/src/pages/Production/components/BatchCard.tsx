@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Calendar, Play, ScanLine } from "lucide-reac
 import type { ProductionBatchRead, ProductionBatchSummaryRead } from "../../../api/productionApi";
 import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "../productionUi";
 import { priorityLabel, priorityStripe } from "../productionTheme";
-import { productionPaths } from "../productionPaths";
+import { erpProductionPaths, wmsProductionPaths } from "../productionPaths";
 import { OperatorAvatar } from "./OperatorAvatar";
 import { ProductThumb } from "./ProductThumb";
 import { ProgressBar } from "./ProgressBar";
@@ -49,10 +49,10 @@ export function BatchCard({ batch, showActions = true, onStartCollecting, onCont
   const shortageCount = "shortage_count" in batch ? batch.shortage_count : batch.has_shortages ? 1 : 0;
 
   const continueHref = () => {
-    if (status === "collecting") return productionPaths.collecting(batch.id);
-    if (status === "in_progress") return productionPaths.execute(batch.id);
-    if (status === "putaway") return productionPaths.putaway(batch.id);
-    return productionPaths.batch(batch.id);
+    if (status === "collecting") return wmsProductionPaths.collecting(batch.id);
+    if (status === "in_progress") return wmsProductionPaths.execute(batch.id);
+    if (status === "putaway") return wmsProductionPaths.putaway(batch.id);
+    return erpProductionPaths.batch(batch.id);
   };
 
   const primaryCta = () => {
@@ -62,7 +62,7 @@ export function BatchCard({ batch, showActions = true, onStartCollecting, onCont
     if ((status === "draft" || status === "planned") && !batch.has_shortages && onStartCollecting) {
       return { label: "Rozpocznij zbieranie", href: null, action: "collect" as const };
     }
-    return { label: "Otwórz partię", href: productionPaths.batch(batch.id), action: "open" as const };
+    return { label: "Otwórz partię", href: erpProductionPaths.batch(batch.id), action: "open" as const };
   };
 
   const cta = primaryCta();
@@ -91,7 +91,7 @@ export function BatchCard({ batch, showActions = true, onStartCollecting, onCont
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                to={productionPaths.batch(batch.id)}
+                to={erpProductionPaths.batch(batch.id)}
                 className="font-mono text-sm font-bold text-slate-900 hover:text-violet-700"
               >
                 {batch.number}
@@ -170,7 +170,7 @@ export function BatchCard({ batch, showActions = true, onStartCollecting, onCont
               </button>
             ) : (
               <Link
-                to={cta.href ?? productionPaths.batch(batch.id)}
+                to={cta.href ?? erpProductionPaths.batch(batch.id)}
                 onClick={() => cta.action === "continue" && onContinue?.(batch.id, status)}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:from-violet-700 hover:to-indigo-700"
               >

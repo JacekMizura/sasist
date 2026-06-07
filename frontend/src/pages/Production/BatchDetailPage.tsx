@@ -13,7 +13,7 @@ import {
 import { BATCH_STATUS_LABEL, batchStatusBadgeClass, stockTone, STOCK_TONE_CLASS } from "./productionUi";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProgressBar } from "./components/ProgressBar";
-import { productionPaths } from "./productionPaths";
+import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 
 const DEFAULT_TENANT = 1;
 
@@ -46,7 +46,7 @@ export default function BatchDetailPage() {
     setBusy(true);
     try {
       await startCollectingBatch(tenantId, Number(batchId));
-      navigate(productionPaths.collecting(batchId));
+      navigate(wmsProductionPaths.collecting(batchId));
     } finally {
       setBusy(false);
     }
@@ -55,14 +55,14 @@ export default function BatchDetailPage() {
   const cancel = async () => {
     if (!batchId || !confirm("Anulować partię?")) return;
     await cancelProductionBatch(tenantId, Number(batchId));
-    navigate(productionPaths.home);
+    navigate(erpProductionPaths.home);
   };
 
   if (!batch) return <p className="px-4 py-6 text-sm text-slate-500">Wczytywanie…</p>;
 
   return (
     <div className="px-4 py-6 lg:px-6 space-y-8 max-w-6xl">
-      <Link to={productionPaths.home} className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline">
+      <Link to={erpProductionPaths.home} className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline">
         <ArrowLeft className="h-4 w-4" aria-hidden />
         Partie
       </Link>
@@ -90,7 +90,7 @@ export default function BatchDetailPage() {
             )}
             {batch.status === "collecting" && (
               <Link
-                to={productionPaths.collecting(batch.id)}
+                to={wmsProductionPaths.collecting(batch.id)}
                 className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white"
               >
                 <ScanLine className="h-4 w-4" aria-hidden />
@@ -99,7 +99,7 @@ export default function BatchDetailPage() {
             )}
             {batch.status === "in_progress" && (
               <Link
-                to={productionPaths.execute(batch.id)}
+                to={wmsProductionPaths.execute(batch.id)}
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white"
               >
                 <Play className="h-4 w-4" aria-hidden />
@@ -108,7 +108,7 @@ export default function BatchDetailPage() {
             )}
             {batch.status === "putaway" && (
               <Link
-                to={productionPaths.putaway(batch.id)}
+                to={wmsProductionPaths.putaway(batch.id)}
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
               >
                 <Package className="h-4 w-4" aria-hidden />

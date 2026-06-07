@@ -53,7 +53,7 @@ export default function BatchesListPage() {
           {batches.map((b) => (
             <Link
               key={b.id}
-              to={`/production/batches/${b.id}`}
+              to={`/production/batch/${b.id}`}
               className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-violet-300 hover:shadow-md transition"
             >
               <div className="flex items-start justify-between gap-2">

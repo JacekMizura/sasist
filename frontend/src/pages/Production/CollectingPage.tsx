@@ -12,7 +12,7 @@ import {
   type ProductionBatchRead,
 } from "../../api/productionApi";
 import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
-import { productionPaths } from "./productionPaths";
+import { wmsProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProgressBar } from "./components/ProgressBar";
 
@@ -56,7 +56,7 @@ export default function CollectingPage() {
       await startCollectingBatch(tenantId, b.id);
     }
     setActiveBatchId(b.id);
-    navigate(productionPaths.collecting(b.id));
+    navigate(wmsProductionPaths.collecting(b.id));
     await loadState(b.id);
   };
 
@@ -79,7 +79,7 @@ export default function CollectingPage() {
     setBusy(true);
     try {
       await finishCollectingBatch(tenantId, activeBatchId);
-      navigate(productionPaths.execute(activeBatchId));
+      navigate(wmsProductionPaths.execute(activeBatchId));
     } finally {
       setBusy(false);
     }
@@ -176,8 +176,8 @@ export default function CollectingPage() {
             </button>
           ) : null}
 
-          <Link to={productionPaths.home} className="block text-center text-sm text-slate-500 hover:underline">
-            Wróć do partii
+          <Link to={wmsProductionPaths.collecting()} className="block text-center text-sm text-slate-500 hover:underline">
+            Wróć do kolejki zbierania
           </Link>
         </>
       )}

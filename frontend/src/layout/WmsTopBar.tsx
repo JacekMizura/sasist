@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Factory, Maximize2, Menu, Minimize2, ScanLine, ArrowLeft } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import WmsTopBarModuleNav from "../components/wms/WmsTopBarModuleNav";
 import GlobalWarehouseSelect from "../components/layout/GlobalWarehouseSelect";
@@ -36,6 +36,7 @@ const menuNavBtn =
  */
 export default function WmsTopBar() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { user } = useAuth();
   const { showWarehouseSelector, warehouse } = useWarehouse();
   const [fs, setFs] = useState(false);
@@ -200,19 +201,19 @@ export default function WmsTopBar() {
           </NavLink>
 
           <NavLink
-            to={WMS_ROUTES.production}
+            to={WMS_ROUTES.productionCollecting()}
             className={({ isActive }) =>
               [
                 "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-bold transition-colors",
-                isActive
-                  ? "bg-violet-600 text-white shadow-sm"
-                  : "bg-violet-50 text-violet-800 ring-1 ring-violet-200 hover:bg-violet-100",
+                isActive || pathname.startsWith("/wms/production")
+                  ? "bg-amber-600 text-white shadow-sm"
+                  : "bg-amber-50 text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100",
               ].join(" ")
             }
-            title="Centrum produkcji"
+            title="Produkcja — wykonanie (WMS)"
           >
             <Factory className="h-4 w-4" aria-hidden />
-            <span className="hidden sm:inline">Produkcja</span>
+            <span className="hidden sm:inline">Prod. WMS</span>
           </NavLink>
 
           <div className="mx-1 h-5 w-px bg-slate-200 shrink-0 hidden sm:block"></div>

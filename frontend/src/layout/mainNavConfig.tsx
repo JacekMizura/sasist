@@ -23,6 +23,7 @@ import {
   FolderOpen,
   Boxes,
   Factory,
+  LayoutDashboard,
   Truck,
   ShoppingBag,
   Layers,
@@ -83,27 +84,8 @@ export const WMS_SIDEBAR_DIRECT = {
   Icon: Tablet,
 };
 
-/** Categories that open a hover fly-out (includes WMS terminal modules). */
+/** Categories that open a hover fly-out. Terminal WMS is a single sidebar link — see ErpShellLayout. */
 export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
-  {
-    id: "wms",
-    label: "WMS",
-    Icon: Tablet,
-    activePathPrefix: "/wms",
-    flyoutSections: [
-      {
-        title: "Terminal magazynowy",
-        items: [
-          { path: "/wms/menu", label: "Pulpit WMS", Icon: Tablet },
-          { path: "/wms/receiving", label: "Przyjęcie", Icon: Inbox },
-          { path: "/wms/putaway", label: "Rozlokowanie PZ", Icon: Warehouse },
-          { path: "/wms/picking", label: "Zbieranie", Icon: ClipboardList },
-          { path: "/wms/packing", label: "Pakowanie", Icon: Package },
-          { path: "/wms/production", label: "Produkcja", Icon: Factory },
-        ],
-      },
-    ],
-  },
   {
     id: "orders",
     label: UI_STRINGS.navigation.groups.orders,
@@ -219,6 +201,22 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
             label: "Rentowność produktów",
             Icon: BarChart3,
           },
+        ],
+      },
+    ],
+  },
+  {
+    id: "production",
+    label: "Produkcja",
+    Icon: Factory,
+    activePathPrefix: "/production",
+    flyoutSections: [
+      {
+        title: "Zarządzanie produkcją",
+        items: [
+          { path: "/production", label: "Pulpit", Icon: LayoutDashboard },
+          { path: "/production/recipes", label: "Receptury", Icon: ClipboardList },
+          { path: "/production/batches", label: "Partie produkcyjne", Icon: Layers },
         ],
       },
     ],
@@ -381,9 +379,6 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
   }
   if (category.id === "documents") {
     if (pathname.startsWith("/documents")) return true;
-  }
-  if (category.id === "wms") {
-    if (pathname === "/wms" || pathname.startsWith("/wms/")) return true;
   }
   return navGroupHasActivePath(pathname, categoryFlyoutPaths(category));
 }

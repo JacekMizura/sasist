@@ -12,7 +12,7 @@ import { CreateBatchModal } from "./components/CreateBatchModal";
 import { ProductionHero } from "./components/ProductionHero";
 import { ProductionQueueSection } from "./components/ProductionQueueSection";
 import { QUEUE_SECTIONS } from "./productionTheme";
-import { productionPaths } from "./productionPaths";
+import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 
 const DEFAULT_TENANT = 1;
 
@@ -60,7 +60,7 @@ export default function ProductionDashboardPage() {
           ],
         });
         setSearchParams({});
-        navigate(productionPaths.batch(batch.id));
+        navigate(erpProductionPaths.batch(batch.id));
       } catch {
         setModalOpen(true);
         setSearchParams({});
@@ -70,19 +70,19 @@ export default function ProductionDashboardPage() {
 
   const handleStartCollecting = async (id: number) => {
     await startCollectingBatch(tenantId, id);
-    navigate(productionPaths.collecting(id));
+    navigate(wmsProductionPaths.collecting(id));
   };
 
   const handleContinue = (id: number, status: string) => {
-    if (status === "collecting") navigate(productionPaths.collecting(id));
-    else if (status === "in_progress") navigate(productionPaths.execute(id));
-    else if (status === "putaway") navigate(productionPaths.putaway(id));
-    else navigate(productionPaths.batch(id));
+    if (status === "collecting") navigate(wmsProductionPaths.collecting(id));
+    else if (status === "in_progress") navigate(wmsProductionPaths.execute(id));
+    else if (status === "putaway") navigate(wmsProductionPaths.putaway(id));
+    else navigate(erpProductionPaths.batch(id));
   };
 
   const handleCreated = (batchId: number) => {
     void reload();
-    navigate(productionPaths.batch(batchId));
+    navigate(erpProductionPaths.batch(batchId));
   };
 
   if (warehouseId == null) {

@@ -1151,7 +1151,7 @@ export default function DocumentsWarehousePage() {
                             <dt className="text-slate-500">Zlecenie produkcyjne</dt>
                             <dd>
                               <Link
-                                to={detail.production_order_path ?? "/wms/production"}
+                                to={detail.production_order_path ?? "/production"}
                                 className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
                               >
                                 {(detail.production_order_number || "").trim() || `MO #${detail.production_order_id}`}
@@ -1164,7 +1164,7 @@ export default function DocumentsWarehousePage() {
                             <dt className="text-slate-500">Partia produkcyjna</dt>
                             <dd>
                               <Link
-                                to={detail.production_batch_path ?? `/wms/production/batch/${detail.production_batch_id}`}
+                                to={detail.production_batch_path ?? `/production/batch/${detail.production_batch_id}`}
                                 className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
                               >
                                 {(detail.production_batch_number || "").trim() || `BAT #${detail.production_batch_id}`}

@@ -9,7 +9,7 @@ import {
 } from "../../api/compositionApi";
 import { listProductionOrdersForProduct, type ProductionOrderSummaryRead } from "../../api/productionApi";
 import { CompositionVisualEditor } from "./CompositionVisualEditor";
-import { productionPaths } from "./productionPaths";
+import { erpProductionPaths } from "./productionPaths";
 import { formatProductionMoney, PRODUCTION_STATUS_LABEL, productionStatusBadgeClass } from "./productionUi";
 
 type Props = {
@@ -111,11 +111,11 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
         <section className="rounded-lg border border-violet-100 bg-violet-50/40 p-4">
           <p className="text-xs text-slate-600">
             Planowanie i wykonanie partii odbywa się w{" "}
-            <Link to={productionPaths.home} className="inline-flex items-center gap-1 font-semibold text-violet-700 hover:underline">
+            <Link to={erpProductionPaths.home} className="inline-flex items-center gap-1 font-semibold text-violet-700 hover:underline">
               <Factory className="h-3.5 w-3.5" aria-hidden />
-              module Produkcja WMS
+              module ERP Produkcja
             </Link>
-            . Na karcie produktu edytujesz tylko receptury i koszty.
+            . Na karcie produktu edytujesz tylko receptury i koszty; wykonanie — w terminalu WMS.
           </p>
         </section>
       ) : null}
@@ -170,7 +170,7 @@ export function ProductCompositionsPanel({ tenantId, productId, productName, onC
                   {history.map((h) => (
                     <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/80">
                       <td className="px-3 py-2">
-                        <Link to={productionPaths.home} className="font-mono text-violet-700 hover:underline" title="Otwórz moduł Produkcja WMS">
+                        <Link to={erpProductionPaths.home} className="font-mono text-violet-700 hover:underline" title="Otwórz moduł ERP Produkcja">
                           {h.number}
                         </Link>
                       </td>
