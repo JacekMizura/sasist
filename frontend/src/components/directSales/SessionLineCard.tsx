@@ -24,14 +24,29 @@ type Props = {
   onRemove: (lineId: number) => void;
 };
 
-// Rozcina sklejoną cenę "Netto / Brutto zł" na dwie osobne wartości
+// "Kuloodporna" funkcja rozdzielająca Netto i Brutto (radzi sobie z twardymi spacjami)
 function splitPrice(label: string | null | undefined) {
-  if (!label) return { gross: "", net: null };
-  const parts = label.split(" / ");
+  if (!label) return { gross: "", net: null, currency: "zł" };
+
+  // Usuwamy wszystkie białe znaki i normalizujemy stringa
+  const normalized = label.replace(/\s+/g, ' ').trim();
+  
+  // Szukamy ukośnika oddzielającego netto od brutto
+  const parts = normalized.split(/\s*\/\s*/);
+  
   if (parts.length === 2) {
-    return { net: parts[0], gross: parts[1] }; // Lewa strona to netto, prawa to brutto
+    const net = parts[0].replace(/[^\d.,]/g, '').trim(); // Sama wartość netto
+    const grossPart = parts[1];
+    const gross = grossPart.replace(/[^\d.,]/g, '').trim(); // Sama wartość brutto
+    const currency = grossPart.replace(/[\d.,]/g, '').trim() || 'zł'; // Wyciągamy 'zł'
+    
+    return { net, gross, currency };
   }
-  return { gross: label, net: null };
+
+  // Jeśli ustawienia pokazują tylko jedną cenę (brak ukośnika)
+  const gross = normalized.replace(/[^\d.,]/g, '').trim();
+  const currency = normalized.replace(/[\d.,]/g, '').trim() || 'zł';
+  return { gross, net: null, currency };
 }
 
 export function SessionLineCard({
@@ -96,7 +111,7 @@ export function SessionLineCard({
     line.margin_percent,
   );
 
-  // Przepuszczamy ceny przez naszą funkcję rozcinającą
+  // Bezpieczne rozdzielanie cen
   const parsedTotal = splitPrice(lineTotalLabel);
   const parsedUnit = splitPrice(unitLabel);
 
@@ -104,7 +119,7 @@ export function SessionLineCard({
     <>
       <li className="bg-white rounded-3xl border border-blue-50 p-5 flex flex-col xl:flex-row gap-6 items-center shadow-[0_8px_30px_rgb(59,130,246,0.04)] hover:border-blue-100 transition-all">
         
-        {/* 1. Obrazek - Całkowicie bez ramki, wtopiony w tło karty */}
+        {/* 1. Obrazek (Bez ramki, wtopiony w tło) */}
         <div className="w-24 h-24 flex-shrink-0 flex items-center justify-center">
           {resolvedDirectSalesSettings.show_product_images && line.image_url ? (
             <img 
@@ -119,11 +134,10 @@ export function SessionLineCard({
 
         {/* 2. Informacje o produkcie */}
         <div className="flex-1 w-full min-w-0">
-          <h3 className="text-lg lg:text-xl font-bold text-slate-900 leading-tight truncate">
+          <h3 className="text-xl font-bold text-slate-900 leading-tight truncate">
             {safeDisplay(line.product_name, `Produkt #${line.product_id}`)}
           </h3>
 
-          {/* Twój ustrukturyzowany układ ze zrzutu ekranu */}
           <div className="flex flex-wrap items-center gap-8 mt-3">
             {resolvedDirectSalesSettings.show_sku && line.product_sku && (
               <div className="flex flex-col">
@@ -212,31 +226,36 @@ export function SessionLineCard({
           </button>
         </div>
 
-        {/* 4. Cena (Nowy wygląd: Duże Brutto, Małe Netto) */}
+        {/* 4. CENA - CZYSTA I NOWOCZESNA */}
         <div className="text-right min-w-[140px] hidden xl:block">
+          {/* Wielkie Brutto */}
           <div className="text-3xl font-black text-slate-900 whitespace-nowrap tracking-tight">
-            {parsedTotal.gross}
+            {parsedTotal.gross} <span className="text-xl text-slate-400">{parsedTotal.currency}</span>
           </div>
+          {/* Małe Netto */}
           {parsedTotal.net && (
-            <div className="text-sm font-bold text-slate-400 mt-1 whitespace-nowrap">
-              {parsedTotal.net} netto
+            <div className="text-xs font-bold text-slate-400 mt-1 whitespace-nowrap">
+              {parsedTotal.net} {parsedTotal.currency} netto
             </div>
           )}
+          {/* Cena jednostkowa x ilość */}
           <div className="text-[11px] font-medium text-slate-400 mt-0.5 whitespace-nowrap">
-            {parsedUnit.gross ? `${parsedUnit.gross} × ${line.quantity}` : `× ${line.quantity}`}
+            {parsedUnit.gross} {parsedUnit.currency} × {line.quantity}
           </div>
         </div>
 
-        {/* 5. Akcje - Przyciski w kolumnie */}
+        {/* 5. Akcje (Widok Mobilny Cen + Przyciski) */}
         <div className="flex flex-col gap-2 w-full sm:w-auto xl:ml-2">
           {/* Mobilny widok ceny */}
           <div className="xl:hidden flex justify-between items-center mb-2 px-1">
             <div className="text-xs font-bold text-slate-400">
-              {parsedUnit.gross ? `${parsedUnit.gross} × ${line.quantity}` : `× ${line.quantity}`}
+              {parsedUnit.gross} {parsedUnit.currency} × {line.quantity}
             </div>
             <div className="text-right">
-              <div className="text-2xl font-black text-slate-900">{parsedTotal.gross}</div>
-              {parsedTotal.net && <div className="text-[10px] font-bold text-slate-400">{parsedTotal.net} netto</div>}
+              <div className="text-2xl font-black text-slate-900">
+                {parsedTotal.gross} <span className="text-sm text-slate-400">{parsedTotal.currency}</span>
+              </div>
+              {parsedTotal.net && <div className="text-[10px] font-bold text-slate-400">{parsedTotal.net} {parsedTotal.currency} netto</div>}
             </div>
           </div>
           

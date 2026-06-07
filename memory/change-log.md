@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-04 — Direct Sales /complete PostgreSQL FOR UPDATE fix
+
+- Root cause: `get_session_for_complete()` used `joinedload(DirectSaleSession.lines)` + `with_for_update()` — PostgreSQL rejects `FOR UPDATE` on nullable outer-join side.
+- Fix: lock session row only; eager-load lines via separate SELECT (`sess.lines`).
+- Tests: `test_direct_sale_session_for_update.py` (SQL compile + optional live PostgreSQL).
+
 ## 2026-06-04 — Direct Sales /complete raw exception logging
 
 - Removed `logger.exception()`, ORM inspect, and `str(exc)` SQL dumps from complete debug path.

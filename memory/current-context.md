@@ -1,13 +1,17 @@
 # Current context
 
 ## Active goal
-Direct Sales /complete root cause fixed: missing `sale_documents.document_type_id` column at `generate_documents` stage.
+Direct Sales /complete PostgreSQL lock fix applied.
 
-## Real exception (2026-06-04)
-- `sqlalchemy.exc.OperationalError`: `no such column: sale_documents.document_type_id`
-- Stage: `generate_documents` (`pipeline_orchestrator.py:233`)
-- Fix: `ensure_sale_documents_extended_columns` in `_ensure_direct_sale_complete_schema`
-- Secondary: logging `extra.message` KeyError in `complete_debug_log.py` — fixed
+## Real exception (PostgreSQL production)
+- `FOR UPDATE cannot be applied to the nullable side of an outer join`
+- Location: `session_service.get_session_for_complete()` — `joinedload(lines)` + `with_for_update()`
+- Fix: lock `DirectSaleSession` only; load `lines` in separate query (`sess.lines`)
+- Regression: `backend/tests/test_direct_sale_session_for_update.py`
+
+## Prior exceptions (SQLite local)
+- `no such column: sale_documents.document_type_id` — fixed via `ensure_sale_documents_extended_columns`
+- FK on `order_items.source_movement_id` — fixed in `wz_service.py`
 
 ## Staged pipeline (2026-06-04)
 - `pipeline_orchestrator.run_staged_complete_pipeline` — 5 commits per request

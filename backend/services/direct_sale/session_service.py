@@ -72,9 +72,8 @@ def get_session_for_complete(
     tenant_id: int,
 ) -> DirectSaleSession | None:
     """Row lock for complete — serializes duplicate complete requests."""
-    return (
+    sess = (
         db.query(DirectSaleSession)
-        .options(joinedload(DirectSaleSession.lines))
         .filter(
             DirectSaleSession.id == int(session_id),
             DirectSaleSession.tenant_id == int(tenant_id),
@@ -82,6 +81,11 @@ def get_session_for_complete(
         .with_for_update()
         .first()
     )
+    if sess is not None:
+        # Load lines in a separate query — PostgreSQL rejects FOR UPDATE on the
+        # nullable side of LEFT OUTER JOIN (joinedload + with_for_update).
+        _ = sess.lines
+    return sess
 
 
 def suspend_session(db: Session, sess: DirectSaleSession) -> DirectSaleSession:
