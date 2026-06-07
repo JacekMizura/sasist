@@ -244,6 +244,20 @@ def _assert_warehouse_document_series(
         raise HTTPException(status_code=400, detail="warehouse_document_series_id must reference an active WZ series.")
 
 
+def _default_print_template_id_for_subtype(subtype: str) -> int | None:
+    from ..services.document_print_template_catalog import DEFAULT_PRINT_TEMPLATE_ID_BY_SUBTYPE
+
+    sub = str(subtype or "").strip().upper()
+    mapping = {
+        "FV": "INVOICE",
+        "PA": "RECEIPT",
+        "KOR": "CORRECTION",
+    }
+    key = mapping.get(sub, sub)
+    preset = DEFAULT_PRINT_TEMPLATE_ID_BY_SUBTYPE.get(key)
+    return int(preset) if preset is not None else None
+
+
 def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
     """Assign scalar fields from create/update body onto ORM row."""
     row.name = body.name.strip()
@@ -258,7 +272,10 @@ def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
             body.warehouse_document_series_id.strip() if body.warehouse_document_series_id else None
         )
     row.print_template = (body.print_template or "").strip()
-    row.print_template_id = int(body.print_template_id) if body.print_template_id is not None else None
+    tpl_id = int(body.print_template_id) if body.print_template_id is not None else None
+    if tpl_id is None and not row.print_template:
+        tpl_id = _default_print_template_id_for_subtype(str(body.subtype))
+    row.print_template_id = tpl_id
     row.email_notification_enabled = bool(body.email_notification_enabled)
     row.delete_mode = str(body.delete_mode).strip().upper()
     row.vat_source = str(body.vat_source).strip().upper() if body.vat_source else None

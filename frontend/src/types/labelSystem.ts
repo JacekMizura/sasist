@@ -24,7 +24,16 @@ export const DYNAMIC_BINDINGS = [
 export type DynamicBinding = string;
 
 /** Template type controls which variable groups are relevant and which preview data is used. */
-export type TemplateType = "location" | "product" | "cart" | "basket" | "order";
+export type TemplateType =
+  | "location"
+  | "product"
+  | "cart"
+  | "basket"
+  | "order"
+  | "document_receipt"
+  | "document_invoice"
+  | "document_wz"
+  | "document_correction";
 
 export const TEMPLATE_TYPE_OPTIONS: { value: TemplateType; label: string }[] = [
   { value: "location", label: "Lokalizacja" },
@@ -32,6 +41,10 @@ export const TEMPLATE_TYPE_OPTIONS: { value: TemplateType; label: string }[] = [
   { value: "cart", label: "Wózek" },
   { value: "basket", label: "Koszyk" },
   { value: "order", label: "Zamówienie" },
+  { value: "document_receipt", label: "Paragon" },
+  { value: "document_invoice", label: "Faktura VAT" },
+  { value: "document_wz", label: "WZ" },
+  { value: "document_correction", label: "Korekta" },
 ];
 
 export type VariableCategoryId =
@@ -46,7 +59,8 @@ export type VariableCategoryId =
   | "product_origin"
   | "product_regulations"
   | "product_media"
-  | "orders";
+  | "orders"
+  | "documents";
 export type LabelVariable = { id: string; label: string; token: string };
 
 export const LABEL_VARIABLE_CATEGORIES: Array<{
@@ -178,6 +192,20 @@ export const LABEL_VARIABLE_CATEGORIES: Array<{
       { id: "priority", label: "{priority}", token: "{priority}" },
     ],
   },
+  {
+    id: "documents",
+    label: "Dokumenty",
+    items: [
+      { id: "document_number", label: "Numer dokumentu", token: "{{document.number}}" },
+      { id: "document_date", label: "Data dokumentu", token: "{{document.date}}" },
+      { id: "customer_name", label: "Nazwa klienta", token: "{{customer.name}}" },
+      { id: "customer_address", label: "Adres klienta", token: "{{customer.address}}" },
+      { id: "items", label: "Pozycje", token: "{{items}}" },
+      { id: "summary_net", label: "Suma netto", token: "{{summary.net}}" },
+      { id: "summary_gross", label: "Suma brutto", token: "{{summary.gross}}" },
+      { id: "payment_method", label: "Metoda płatności", token: "{{payment.method}}" },
+    ],
+  },
 ];
 
 /** Which variable categories to show for each template type. */
@@ -195,6 +223,10 @@ export const TEMPLATE_TYPE_CATEGORIES: Record<TemplateType, VariableCategoryId[]
   cart: ["cart", "fleet"],
   basket: ["basket", "cart"],
   order: ["orders"],
+  document_receipt: ["documents"],
+  document_invoice: ["documents"],
+  document_wz: ["documents"],
+  document_correction: ["documents"],
 };
 
 /** Preview data type for template editor. */

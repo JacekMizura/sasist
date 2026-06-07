@@ -4,6 +4,7 @@ import {
   Box,
   Eye,
   FileSpreadsheet,
+  FileText,
   Package,
   Plus,
   ShoppingBasket,
@@ -16,8 +17,11 @@ import { formatMm } from "../../utils/formatMm";
 import { TemplatePreview } from "../../components/labels/TemplatePreview";
 import { labelModuleBasePath } from "./labelModuleBasePath";
 import {
+  DOCUMENT_PRINT_MODULE_TYPE_LABELS,
+  DOCUMENT_PRINT_MODULE_TYPE_ORDER,
   LABEL_PRINT_MODULE_TYPE_LABELS,
   LABEL_PRINT_MODULE_TYPE_ORDER,
+  printModuleTypeLabel,
 } from "./labelPrintModuleTypes";
 
 const TENANT_ID = 1;
@@ -278,6 +282,11 @@ export function LabelTemplatesList() {
         return <Package className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
       case "order":
         return <Box className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
+      case "document_receipt":
+      case "document_invoice":
+      case "document_wz":
+      case "document_correction":
+        return <FileText className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
       default:
         return <Box className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />;
     }
@@ -555,6 +564,27 @@ export function LabelTemplatesList() {
             {LABEL_PRINT_MODULE_TYPE_LABELS[type] || type}
           </button>
         ))}
+        <h3 className="mt-3 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Dokumenty</h3>
+        {DOCUMENT_PRINT_MODULE_TYPE_ORDER.map((type) => (
+          <button
+            key={type}
+            type="button"
+            onClick={() => {
+              setSelectedType(type);
+              setSelectedGroupId(UNGROUPED_ID);
+            }}
+            className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+              selectedType === type
+                ? "bg-cyan-600 text-white shadow-sm"
+                : "text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            <span className={`${selectedType === type ? "text-white" : "text-slate-500 group-hover:text-slate-700"}`}>
+              {getTypeIcon(type)}
+            </span>
+            {DOCUMENT_PRINT_MODULE_TYPE_LABELS[type] || type}
+          </button>
+        ))}
       </div>
 
       {/* Middle: Groups */}
@@ -617,7 +647,7 @@ export function LabelTemplatesList() {
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-bold text-slate-800">
-            {LABEL_PRINT_MODULE_TYPE_LABELS[selectedType as keyof typeof LABEL_PRINT_MODULE_TYPE_LABELS] || selectedType}
+            {printModuleTypeLabel(selectedType)}
           </h1>
           <div className="flex flex-wrap items-center gap-2">
             <button

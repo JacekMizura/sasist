@@ -111,11 +111,17 @@ def seed_basic_data(db: Session) -> None:
         db.commit()
 
     from ..services.document_series_seed_service import seed_default_document_series
+    from ..services.document_label_template_seed_service import seed_default_document_label_templates
 
     try:
         seed_default_document_series(db)
     except Exception:
         logger.exception("seed_basic_data: document series seed failed")
+
+    try:
+        seed_default_document_label_templates(db, tenant_id=tenant_id)
+    except Exception:
+        logger.exception("seed_basic_data: document label templates seed failed")
 
 
 def seed_wms_panel_defaults(db: Session) -> None:

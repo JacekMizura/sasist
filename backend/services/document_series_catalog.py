@@ -90,6 +90,7 @@ OPERATIONAL_CORRECTION_SERIES: list[OperationalSeriesSpec] = [
         "prefix": "KOR",
         "name": "KOR — korekta",
         "warehouse_effect": False,
+        "print_template_id": 4,
     },
 ]
 
@@ -158,7 +159,7 @@ def normalize_series_spec(spec: OperationalSeriesSpec) -> dict:
     sub = str(spec["subtype"]).strip().upper()
     prefix = str(spec.get("prefix") or operational_code_for_spec(spec)).strip().upper()
     wh_effect = bool(spec.get("warehouse_effect", st == "WAREHOUSE"))
-    return {
+    out: dict = {
         "name": str(spec.get("name") or f"{sub} — domyślna"),
         "subtype": sub,
         "prefix": prefix,
@@ -172,6 +173,9 @@ def normalize_series_spec(spec: OperationalSeriesSpec) -> dict:
         "warehouse_effect": wh_effect,
         "code": str(spec.get("code") or ""),
     }
+    if spec.get("print_template_id") is not None:
+        out["print_template_id"] = int(spec["print_template_id"])
+    return out
 
 
 def required_subtype_keys() -> list[tuple[str, str]]:

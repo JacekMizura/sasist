@@ -186,8 +186,17 @@ export function SessionLineCard({
           </div>
         </div>
 
-        {/* 3. KONTROLKI ILOŚCI */}
-        <div className="flex items-center gap-2 pl-0 xl:pl-4 w-full xl:w-auto">
+        {/* 3. RABAT + KONTROLKI ILOŚCI */}
+        <div className="flex w-full items-center gap-2 pl-0 xl:w-auto xl:pl-4">
+          {onLineDiscount ? (
+            <LineDiscountPopover
+              variant="badge"
+              disabled={busy}
+              currentType={line.line_discount_type}
+              currentValue={line.line_discount_value}
+              onApply={(type, value) => onLineDiscount(line.id, type, value)}
+            />
+          ) : null}
           <button
             type="button"
             disabled={busy}
@@ -236,17 +245,6 @@ export function SessionLineCard({
               {parsedUnit.gross} zł / szt.
             </div>
           ) : null}
-          {onLineDiscount ? (
-            <div className="mt-1.5">
-              <LineDiscountPopover
-                variant="badge"
-                disabled={busy}
-                currentType={line.line_discount_type}
-                currentValue={line.line_discount_value}
-                onApply={(type, value) => onLineDiscount(line.id, type, value)}
-              />
-            </div>
-          ) : null}
         </div>
 
         {/* 5. AKCJE */}
@@ -259,17 +257,6 @@ export function SessionLineCard({
             ) : null}
             {parsedUnit.gross ? (
               <div className="text-[10px] font-medium text-slate-400">{parsedUnit.gross} zł / szt.</div>
-            ) : null}
-            {onLineDiscount ? (
-              <div className="mt-1">
-                <LineDiscountPopover
-                  variant="badge"
-                  disabled={busy}
-                  currentType={line.line_discount_type}
-                  currentValue={line.line_discount_value}
-                  onApply={(type, value) => onLineDiscount(line.id, type, value)}
-                />
-              </div>
             ) : null}
           </div>
 

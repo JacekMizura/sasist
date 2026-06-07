@@ -157,9 +157,9 @@ export function numberingSummaryForListRow(
 }
 
 export const DOCUMENT_SERIES_PRINT_TEMPLATE_PRESETS: readonly { id: number; label: string }[] = [
-  { id: 1, label: "Faktura — szablon domyślny" },
+  { id: 1, label: "Faktura VAT — szablon domyślny" },
   { id: 2, label: "Paragon — szablon domyślny" },
-  { id: 3, label: "Dokument magazynowy — szablon domyślny" },
+  { id: 3, label: "WZ — szablon domyślny" },
   { id: 4, label: "Korekta — szablon domyślny" },
 ] as const;
 

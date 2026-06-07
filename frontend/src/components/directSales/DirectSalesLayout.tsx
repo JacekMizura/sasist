@@ -8,6 +8,7 @@ import { DocumentPanel } from "./DocumentPanel";
 import { OrderDiscountPanel } from "./OrderDiscountPanel";
 import { RetailCustomerBadge } from "./RetailCustomerBadge";
 import { PaymentTerminalPanel } from "./payment/PaymentTerminalPanel";
+import { DirectSalesSidebarActions } from "./DirectSalesSidebarActions";
 import { ProductSearchPanel } from "./ProductSearchPanel";
 import { SessionLinesPanel } from "./SessionLinesPanel";
 import { SuspendedSessionsPanel } from "./SuspendedSessionsPanel";
@@ -112,17 +113,15 @@ export function DirectSalesLayout({ terminal }: Props) {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         
         {/* LEWA KOLUMNA: Wyszukiwarka, Zawieszone, Historia */}
-        <div className="flex min-h-0 w-full shrink-0 flex-col lg:w-[24rem] lg:min-w-[24rem] border-b border-blue-50 lg:border-b-0 lg:border-r z-20 overflow-hidden">
+        <div className="flex h-full min-h-0 w-full shrink-0 flex-col lg:w-[24rem] lg:min-w-[24rem] border-b border-blue-50 lg:border-b-0 lg:border-r z-20 overflow-hidden">
           <ProductSearchPanel
             session={session}
             search={productSearch}
             busy={sessionState.busy}
             onAddProduct={(id, loc) => void sessionState.addByProductId(id, loc)}
             onScanCode={(code) => void sessionState.addByCode(code)}
-            onSuspend={() => void sessionState.suspend()}
-            onNewSession={handleNewSession}
           />
-          <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 lg:px-6 lg:pb-6">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 lg:px-6">
             <DirectSalesHistoryPanel
               rows={history.rows}
               loading={history.loading}
@@ -138,6 +137,12 @@ export function DirectSalesLayout({ terminal }: Props) {
               onCancel={(id) => void suspended.cancel(id)}
             />
           </div>
+          <DirectSalesSidebarActions
+            busy={sessionState.busy}
+            hasSession={session != null}
+            onSuspend={() => void sessionState.suspend()}
+            onNewSession={handleNewSession}
+          />
         </div>
 
         {/* ŚRODKOWA KOLUMNA: Koszyk */}

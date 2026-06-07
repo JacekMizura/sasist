@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { ScanLine, PauseCircle, PlayCircle } from "lucide-react";
+import { ScanLine } from "lucide-react";
 
 import type { DirectSalesProductSearchState } from "../../hooks/directSales/useProductSearch";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
@@ -16,8 +16,6 @@ type Props = {
   busy: boolean;
   onAddProduct: (productId: number, sourceLocationId?: number | null) => void;
   onScanCode: (code: string) => void;
-  onSuspend: () => void;
-  onNewSession: () => void;
 };
 
 export function ProductSearchPanel({
@@ -26,8 +24,6 @@ export function ProductSearchPanel({
   busy,
   onAddProduct,
   onScanCode,
-  onSuspend,
-  onNewSession,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -126,27 +122,6 @@ export function ProductSearchPanel({
           </div>
         ) : null}
       </div>
-
-      {/* Przyciski akcji zepchnięte na dół przy pomocy mt-auto */}
-      <div className="mt-4 grid shrink-0 grid-cols-2 gap-3 border-t border-blue-50 pt-4">
-        <button
-          type="button"
-          disabled={busy || !session}
-          onClick={onSuspend}
-          className="flex items-center justify-center gap-2 py-3 px-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-white"
-        >
-          <PauseCircle size={18} /> Zawieś
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onNewSession}
-          className="flex items-center justify-center gap-2 py-3 px-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-white"
-        >
-          <PlayCircle size={18} /> Nowa sesja
-        </button>
-      </div>
-
     </aside>
   );
 }

@@ -16,6 +16,11 @@ Retail/POS workflow for Direct Sales — document-first checkout, default retail
 ## Prior: NET price pipeline
 - Session `unit_price` = NET; `netto_line_to_gross_fields` for gross/VAT
 
+## POS refinement (latest)
+- Sidebar: Zawieś/Nowa sesja pinned bottom; discount badge left of qty; print via authenticated PDF blob
+- Removed „Wygeneruj ponownie”; Dokumenty category in label templates + seed on startup
+- Series `print_template_id` fix in `normalize_series_spec`; KOR preset id=4
+
 ## Not yet / follow-up
 - VIES EU fallback for NIP
 - Manager approval + negative margin enforcement
