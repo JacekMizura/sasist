@@ -5,6 +5,16 @@ export type DocumentTypeDefault = "PA" | "FV";
 export type AllocationStrategy = "auto" | "store_first" | "pick_face" | "manual";
 export type PriceDisplayMode = "gross" | "net" | "both";
 
+export type DirectSalesDiscountSettings = {
+  allow_line_discounts: boolean;
+  allow_order_discounts: boolean;
+  max_discount_percent: number;
+  require_manager_approval: boolean;
+  allow_negative_margin_override: boolean;
+  show_discount_buttons: boolean;
+  quick_discount_percents: number[];
+};
+
 export type DirectSalesPaymentMethods = {
   cash: boolean;
   card: boolean;
@@ -41,6 +51,7 @@ export type DirectSalesSettingsConfig = {
   require_customer_for_invoice: boolean;
   auto_save_customers: boolean;
   quick_create_customer: boolean;
+  discounts: DirectSalesDiscountSettings;
   keyboard_shortcuts: boolean;
   scanner_mode: boolean;
   auto_focus_scan: boolean;
@@ -96,6 +107,15 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
   require_customer_for_invoice: true,
   auto_save_customers: true,
   quick_create_customer: true,
+  discounts: {
+    allow_line_discounts: true,
+    allow_order_discounts: true,
+    max_discount_percent: 50,
+    require_manager_approval: false,
+    allow_negative_margin_override: false,
+    show_discount_buttons: true,
+    quick_discount_percents: [5, 10, 15, 20],
+  },
   keyboard_shortcuts: true,
   scanner_mode: true,
   auto_focus_scan: true,
@@ -136,6 +156,10 @@ export function normalizeDirectSalesSettings(
     issued_order_status_id: pick("issued_order_status_id"),
     cancelled_order_status_id: pick("cancelled_order_status_id"),
     payment_methods: { ...DEFAULT_DIRECT_SALES_SETTINGS.payment_methods, ...pm },
+    discounts: {
+      ...DEFAULT_DIRECT_SALES_SETTINGS.discounts,
+      ...((d.discounts ?? {}) as Partial<DirectSalesDiscountSettings>),
+    },
     extensions: { ...DEFAULT_DIRECT_SALES_SETTINGS.extensions, ...(d.extensions ?? {}) },
   };
 }

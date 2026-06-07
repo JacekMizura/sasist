@@ -2,12 +2,27 @@ import type { DirectSaleCompletion } from "../types/directSalesCompletion";
 import { normalizeCompletion } from "./normalizeDirectSalesCompletion";
 import { safeDisplay, safeTrim } from "./safeStrings";
 
+export type DirectSaleSessionTotals = {
+  subtotal_gross: number;
+  line_discounts_gross: number;
+  lines_gross: number;
+  order_discount_gross: number;
+  total_discount_gross: number;
+  total_net: number;
+  total_vat: number;
+  total_gross: number;
+};
+
 export type DirectSaleSessionLine = {
   id: number;
   product_id: number;
   quantity: number;
   unit_price: number | null;
+  line_discount_type: string | null;
+  line_discount_value: number;
   discount_amount: number;
+  line_gross: number | null;
+  line_net: number | null;
   source_location_id: number | null;
   suggested_location_id: number | null;
   sort_order: number;
@@ -35,8 +50,13 @@ export type DirectSaleSession = {
   issue_strategy: string;
   reservation_scope: string;
   customer_id: number | null;
+  customer_is_retail: boolean;
+  document_subtype: string;
+  order_discount_type: string | null;
+  order_discount_value: number;
   expires_at: string | null;
   payment_context: Record<string, unknown> | null;
+  totals: DirectSaleSessionTotals | null;
   lines: DirectSaleSessionLine[];
 };
 
@@ -82,6 +102,21 @@ function strOrNull(v: unknown): string | null {
   return s || null;
 }
 
+function normalizeSessionTotals(raw: unknown): DirectSaleSessionTotals | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  return {
+    subtotal_gross: num(r.subtotal_gross),
+    line_discounts_gross: num(r.line_discounts_gross),
+    lines_gross: num(r.lines_gross),
+    order_discount_gross: num(r.order_discount_gross),
+    total_discount_gross: num(r.total_discount_gross),
+    total_net: num(r.total_net),
+    total_vat: num(r.total_vat),
+    total_gross: num(r.total_gross),
+  };
+}
+
 export function normalizeDirectSaleLine(raw: unknown): DirectSaleSessionLine {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
@@ -89,7 +124,11 @@ export function normalizeDirectSaleLine(raw: unknown): DirectSaleSessionLine {
     product_id: num(r.product_id),
     quantity: num(r.quantity),
     unit_price: numOrNull(r.unit_price),
+    line_discount_type: strOrNull(r.line_discount_type),
+    line_discount_value: num(r.line_discount_value),
     discount_amount: num(r.discount_amount),
+    line_gross: numOrNull(r.line_gross),
+    line_net: numOrNull(r.line_net),
     source_location_id: numOrNull(r.source_location_id),
     suggested_location_id: numOrNull(r.suggested_location_id),
     sort_order: num(r.sort_order),
@@ -125,8 +164,13 @@ export function normalizeDirectSaleSession(raw: unknown): DirectSaleSession {
     issue_strategy: safeDisplay(r.issue_strategy, "STRICT_LOCATION"),
     reservation_scope: safeDisplay(r.reservation_scope, "SESSION"),
     customer_id: numOrNull(r.customer_id),
+    customer_is_retail: Boolean(r.customer_is_retail),
+    document_subtype: safeDisplay(r.document_subtype, "RECEIPT"),
+    order_discount_type: strOrNull(r.order_discount_type),
+    order_discount_value: num(r.order_discount_value),
     expires_at: strOrNull(r.expires_at),
     payment_context: payCtx,
+    totals: normalizeSessionTotals(r.totals),
     lines: linesRaw.map(normalizeDirectSaleLine),
   };
 }

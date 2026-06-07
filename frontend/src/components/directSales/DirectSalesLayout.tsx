@@ -3,7 +3,10 @@ import { STATIONARY_SALE_TITLE } from "./directSalesTerminology";
 import type { DirectSalesTerminalState } from "../../hooks/directSales/useDirectSalesTerminal";
 import { DirectSalesHistoryPanel } from "./history/DirectSalesHistoryPanel";
 import { CustomerPanel } from "./CustomerPanel";
+import { DirectSalesTotalsPanel } from "./DirectSalesTotalsPanel";
 import { DocumentPanel } from "./DocumentPanel";
+import { OrderDiscountPanel } from "./OrderDiscountPanel";
+import { RetailCustomerBadge } from "./RetailCustomerBadge";
 import { PaymentTerminalPanel } from "./payment/PaymentTerminalPanel";
 import { ProductSearchPanel } from "./ProductSearchPanel";
 import { SessionLinesPanel } from "./SessionLinesPanel";
@@ -147,6 +150,7 @@ export function DirectSalesLayout({ terminal }: Props) {
             onQtyChange={(id, qty) => void sessionState.changeLineQty(id, qty)}
             onLocationChange={(id, loc) => void sessionState.changeLineLocation(id, loc)}
             onRemove={(id) => void sessionState.removeLine(id)}
+            onLineDiscount={(id, type, value) => void sessionState.changeLineDiscount(id, type, value)}
           />
         </div>
 
@@ -154,17 +158,33 @@ export function DirectSalesLayout({ terminal }: Props) {
         <aside className="flex w-full shrink-0 flex-col lg:w-[26rem] lg:min-w-[26rem] border-t lg:border-t-0 lg:border-l border-blue-50 shadow-[-10px_0_30px_rgb(0,0,0,0.02)] z-0 bg-white">
           {/* Zlikwidowany sztuczny podział! Wszystko jest w jednym równym strumieniu. */}
           <div className="p-4 lg:p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-6">
-            <CustomerPanel
-              customer={customer}
-              customerId={session?.customer_id ?? null}
-              documentSubtype={sessionState.documentSubtype}
-              disabled={sessionState.busy}
-            />
             <DocumentPanel
               value={sessionState.documentSubtype}
-              hasCustomer={session?.customer_id != null}
-              onChange={sessionState.setDocumentSubtype}
+              onChange={(v) => void sessionState.changeDocumentSubtype(v)}
               disabled={sessionState.busy}
+            />
+            {sessionState.documentSubtype === "RECEIPT" ? (
+              <RetailCustomerBadge />
+            ) : (
+              <CustomerPanel
+                customer={customer}
+                customerId={session?.customer_id ?? null}
+                customerIsRetail={session?.customer_is_retail ?? false}
+                sessionId={session?.id ?? null}
+                warehouseId={warehouseId ?? 0}
+                disabled={sessionState.busy}
+                onSessionUpdated={(s) => {
+                  sessionState.applySession(s);
+                  sessionState.onCustomerAttached(s.customer_id);
+                }}
+              />
+            )}
+            <DirectSalesTotalsPanel totals={session?.totals} loading={sessionState.busy} />
+            <OrderDiscountPanel
+              disabled={sessionState.busy}
+              discountType={session?.order_discount_type ?? null}
+              discountValue={session?.order_discount_value ?? 0}
+              onApply={(type, value) => void sessionState.changeOrderDiscount(type, value)}
             />
             {/* PaymentTerminalPanel wskakuje naturalnie zaraz pod Dokumentem */}
             <PaymentTerminalPanel

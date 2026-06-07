@@ -7,7 +7,9 @@ from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 
 from ...models.commerce_operational import DirectSaleSession
+from ..direct_sales_settings_service import resolve_direct_sales_settings
 from ..operational_sales_events import emit_operational_sales_event
+from .retail_customer_service import ensure_retail_customer
 from ..reservations.lifecycle_service import release_session_reservations_lifecycle
 from .constants import SUSPEND_TTL_MINUTES, reservation_expires_at
 from .errors import DirectSaleError
@@ -25,6 +27,15 @@ def create_session(
     reservation_scope: str = "SESSION",
 ) -> DirectSaleSession:
     now = datetime.utcnow()
+    default_doc = "RECEIPT"
+    try:
+        settings = resolve_direct_sales_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+        if str(settings.resolved.default_document_type or "PA").upper() == "FV":
+            default_doc = "INVOICE"
+    except Exception:
+        pass
+
+    retail = ensure_retail_customer(db, tenant_id=int(tenant_id))
     sess = DirectSaleSession(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -34,6 +45,8 @@ def create_session(
         status="ACTIVE",
         issue_strategy=str(issue_strategy or "STRICT_LOCATION"),
         reservation_scope=str(reservation_scope or "SESSION"),
+        customer_id=int(retail.id),
+        document_subtype=default_doc,
         started_at=now,
         last_activity_at=now,
         created_by_user_id=int(operator_user_id) if operator_user_id else None,
@@ -117,7 +130,59 @@ def set_session_customer(
 ) -> DirectSaleSession:
     if sess.status in ("COMPLETED", "CANCELLED"):
         raise DirectSaleError("Sesja zamknięta.", code="session_closed")
-    sess.customer_id = int(customer_id) if customer_id else None
+    if customer_id is None:
+        retail = ensure_retail_customer(db, tenant_id=int(sess.tenant_id))
+        sess.customer_id = int(retail.id)
+    else:
+        sess.customer_id = int(customer_id)
+    sess.last_activity_at = datetime.utcnow()
+    return sess
+
+
+def set_session_document_subtype(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    document_subtype: str,
+) -> DirectSaleSession:
+    if sess.status in ("COMPLETED", "CANCELLED"):
+        raise DirectSaleError("Sesja zamknięta.", code="session_closed")
+    sub = str(document_subtype or "RECEIPT").strip().upper()
+    if sub not in ("RECEIPT", "INVOICE", "PA", "FV"):
+        raise DirectSaleError("Nieprawidłowy typ dokumentu.", code="invalid_document_subtype")
+    if sub in ("PA", "FV"):
+        sub = "INVOICE" if sub == "FV" else "RECEIPT"
+    sess.document_subtype = sub
+    if sub == "RECEIPT":
+        retail = ensure_retail_customer(db, tenant_id=int(sess.tenant_id))
+        sess.customer_id = int(retail.id)
+    sess.last_activity_at = datetime.utcnow()
+    return sess
+
+
+def set_session_order_discount(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    discount_type: str | None,
+    discount_value: float,
+) -> DirectSaleSession:
+    from .discount_validation_service import validate_order_discount
+
+    if sess.status in ("COMPLETED", "CANCELLED"):
+        raise DirectSaleError("Sesja zamknięta.", code="session_closed")
+    dt = str(discount_type or "").strip().lower()
+    if dt not in ("percent", "amount", ""):
+        raise DirectSaleError("Nieprawidłowy typ rabatu.", code="invalid_discount")
+    validate_order_discount(
+        db,
+        tenant_id=int(sess.tenant_id),
+        warehouse_id=int(sess.warehouse_id),
+        discount_type=dt or None,
+        discount_value=float(discount_value or 0),
+    )
+    sess.order_discount_type = dt or None
+    sess.order_discount_value = max(0.0, float(discount_value or 0))
     sess.last_activity_at = datetime.utcnow()
     return sess
 

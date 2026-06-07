@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-04 — Retail/POS workflow (Direct Sales)
+- Auto retail customer (`Klient detaliczny`) on every new session
+- Document-first flow: PA = retail badge; FV = NIP lookup + invoice customer upsert
+- Line + order discounts with backend canonical totals (`session_financials_service`)
+- Discount settings + admin panel section; server-side max-% validation
+- Complete pipeline reads session `document_subtype`; `httpx` for MF NIP API
+
 ## 2026-06-04 — Direct-sale NET price pipeline fix
 - Session `unit_price` is catalog NET; backend no longer treats it as gross
 - `netto_line_to_gross_fields`, updated `compute_direct_sale_session_total` with per-product VAT

@@ -11,6 +11,18 @@ AllocationStrategy = Literal["auto", "store_first", "pick_face", "manual"]
 PriceDisplayMode = Literal["gross", "net", "both"]
 
 
+class DirectSalesDiscountSettings(BaseModel):
+    allow_line_discounts: bool = True
+    allow_order_discounts: bool = True
+    max_discount_percent: float = Field(50.0, ge=0, le=100)
+    require_manager_approval: bool = False
+    allow_negative_margin_override: bool = False
+    show_discount_buttons: bool = True
+    quick_discount_percents: list[float] = Field(
+        default_factory=lambda: [5.0, 10.0, 15.0, 20.0],
+    )
+
+
 class DirectSalesPaymentMethods(BaseModel):
     cash: bool = True
     card: bool = True
@@ -49,6 +61,7 @@ class DirectSalesSettingsConfig(BaseModel):
     require_customer_for_invoice: bool = True
     auto_save_customers: bool = True
     quick_create_customer: bool = True
+    discounts: DirectSalesDiscountSettings = Field(default_factory=DirectSalesDiscountSettings)
     keyboard_shortcuts: bool = True
     scanner_mode: bool = True
     auto_focus_scan: bool = True

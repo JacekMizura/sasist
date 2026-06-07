@@ -20,9 +20,13 @@ from ..schemas.direct_sales import (
     DirectSaleCompleteBody,
     DirectSaleCompleteResponse,
     DirectSaleCompletionRead,
+    DirectSaleDocumentPatchBody,
     DirectSaleHistoryEntryRead,
+    DirectSaleInvoiceCustomerBody,
     DirectSaleLinePatchBody,
+    DirectSaleNipLookupRead,
     DirectSaleProductSearchHit,
+    DirectSaleSessionDiscountPatchBody,
     DirectSaleScanBody,
     DirectSaleScanResponse,
     DirectSaleSessionCreateBody,
@@ -41,9 +45,16 @@ from ..services.direct_sale.session_service import get_session, get_session_for_
 from ..services.direct_sale.line_service import (
     add_product_to_session,
     remove_session_line,
+    update_session_line_discount,
     update_session_line_location,
     update_session_line_quantity,
 )
+from ..services.direct_sale.session_service import (
+    set_session_document_subtype,
+    set_session_order_discount,
+)
+from ..services.direct_sale.invoice_customer_service import upsert_invoice_customer
+from ..services.nip_lookup_service import lookup_polish_nip
 from ..services.direct_sale.completion_read_service import build_direct_sale_completion_read
 from ..services.direct_sale.history_service import list_direct_sale_history
 from ..services.direct_sale.product_search_service import search_direct_sale_products
@@ -80,14 +91,24 @@ def _operator_id(user: AppUser | None) -> int | None:
     return int(user.id)
 
 
-def _line_to_read(line: DirectSaleSessionLine, *, meta: dict | None = None) -> DirectSaleSessionLineRead:
+def _line_to_read(
+    line: DirectSaleSessionLine,
+    *,
+    meta: dict | None = None,
+    fin: dict | None = None,
+) -> DirectSaleSessionLineRead:
     m = meta or {}
+    f = fin or {}
     return DirectSaleSessionLineRead(
         id=int(line.id),
         product_id=int(line.product_id),
         quantity=float(line.quantity or 0),
         unit_price=float(line.unit_price) if line.unit_price is not None else None,
+        line_discount_type=str(getattr(line, "line_discount_type", None) or "") or None,
+        line_discount_value=float(getattr(line, "line_discount_value", None) or 0),
         discount_amount=float(line.discount_amount or 0),
+        line_gross=f.get("line_gross"),
+        line_net=f.get("line_net"),
         source_location_id=int(line.source_location_id) if line.source_location_id else None,
         suggested_location_id=int(line.suggested_location_id) if line.suggested_location_id else None,
         sort_order=int(line.sort_order or 0),
@@ -105,11 +126,34 @@ def _line_to_read(line: DirectSaleSessionLine, *, meta: dict | None = None) -> D
 
 
 def _session_to_read(db: Session, sess: DirectSaleSession) -> DirectSaleSessionRead:
+    from ..models.customer import Customer
+    from ..services.direct_sale.retail_customer_service import is_retail_system_customer
+    from ..services.direct_sale.session_financials_service import compute_line_financials, compute_session_totals
+    from ..schemas.direct_sales import DirectSaleSessionTotalsRead
+
     enriched = enrich_session_lines(db, sess)
+    fin_by_line: dict[int, dict] = {}
+    for ln in sess.lines or []:
+        fin_by_line[int(ln.id)] = compute_line_financials(db, ln)
     lines = [
-        _line_to_read(row["line"], meta=row)
+        _line_to_read(row["line"], meta=row, fin=fin_by_line.get(int(row["line"].id)))
         for row in enriched
     ]
+    totals_raw = compute_session_totals(db, sess)
+    totals = DirectSaleSessionTotalsRead(
+        subtotal_gross=float(totals_raw["subtotal_gross"]),
+        line_discounts_gross=float(totals_raw["line_discounts_gross"]),
+        lines_gross=float(totals_raw["lines_gross"]),
+        order_discount_gross=float(totals_raw["order_discount_gross"]),
+        total_discount_gross=float(totals_raw["total_discount_gross"]),
+        total_net=float(totals_raw["total_net"]),
+        total_vat=float(totals_raw["total_vat"]),
+        total_gross=float(totals_raw["total_gross"]),
+    )
+    cust_retail = False
+    if getattr(sess, "customer_id", None):
+        cust = db.query(Customer).filter(Customer.id == int(sess.customer_id)).first()
+        cust_retail = is_retail_system_customer(cust)
     payment_ctx = None
     raw_pay = getattr(sess, "payment_context_json", None)
     if raw_pay:
@@ -135,8 +179,13 @@ def _session_to_read(db: Session, sess: DirectSaleSession) -> DirectSaleSessionR
         last_activity_at=sess.last_activity_at,
         completed_at=sess.completed_at,
         customer_id=int(sess.customer_id) if getattr(sess, "customer_id", None) else None,
+        customer_is_retail=cust_retail,
+        document_subtype=str(getattr(sess, "document_subtype", None) or "RECEIPT"),
+        order_discount_type=str(getattr(sess, "order_discount_type", None) or "") or None,
+        order_discount_value=float(getattr(sess, "order_discount_value", None) or 0),
         expires_at=getattr(sess, "expires_at", None),
         payment_context=payment_ctx,
+        totals=totals,
         lines=lines,
     )
 
@@ -399,11 +448,103 @@ def patch_session_line(
                 line_id=line_id,
                 source_location_id=body.source_location_id,
             )
+        if body.line_discount_type is not None or body.line_discount_value is not None:
+            update_session_line_discount(
+                db,
+                sess,
+                line_id=line_id,
+                discount_type=body.line_discount_type,
+                discount_value=float(body.line_discount_value or 0),
+            )
         db.commit()
         db.refresh(sess)
         return _session_to_read(db, sess)
     except DirectSaleError as exc:
         raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.patch("/session/{session_id}/document", response_model=DirectSaleSessionRead)
+def patch_session_document(
+    session_id: int,
+    body: DirectSaleDocumentPatchBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        set_session_document_subtype(db, sess, document_subtype=body.document_subtype)
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(db, sess)
+    except DirectSaleError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.patch("/session/{session_id}/discount", response_model=DirectSaleSessionRead)
+def patch_session_order_discount(
+    session_id: int,
+    body: DirectSaleSessionDiscountPatchBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        set_session_order_discount(
+            db,
+            sess,
+            discount_type=body.order_discount_type,
+            discount_value=float(body.order_discount_value or 0),
+        )
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(db, sess)
+    except DirectSaleError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.get("/nip-lookup", response_model=DirectSaleNipLookupRead)
+def get_nip_lookup(
+    nip: str = Query(..., min_length=10),
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.direct_sale.invoice_customer_service import find_customer_by_nip
+
+    result = lookup_polish_nip(nip)
+    if result.get("ok"):
+        existing = find_customer_by_nip(db, tenant_id=tenant_id, nip=str(result.get("nip") or nip))
+        if existing is not None:
+            result["customer_id"] = int(existing.id)
+    return DirectSaleNipLookupRead(**result)
+
+
+@router.post("/session/{session_id}/invoice-customer", response_model=DirectSaleSessionRead)
+def post_invoice_customer(
+    session_id: int,
+    body: DirectSaleInvoiceCustomerBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        cust = upsert_invoice_customer(
+            db,
+            tenant_id=tenant_id,
+            nip=body.nip,
+            company_name=body.company_name,
+            street=body.street,
+            postal_code=body.postal_code,
+            city=body.city,
+        )
+        set_session_customer(db, sess, customer_id=int(cust.id))
+        set_session_document_subtype(db, sess, document_subtype="INVOICE")
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(db, sess)
+    except (DirectSaleError, ValueError) as exc:
+        status = getattr(exc, "http_status", 400)
+        msg = getattr(exc, "message", str(exc))
+        raise HTTPException(status_code=status, detail=msg) from exc
 
 
 @router.delete("/session/{session_id}/lines/{line_id}", response_model=DirectSaleSessionRead)

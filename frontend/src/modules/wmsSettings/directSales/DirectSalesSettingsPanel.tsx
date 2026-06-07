@@ -6,6 +6,7 @@ import { ValidationWarnings } from "./components/ValidationWarnings";
 import { DIRECT_SALES_SETTINGS_NAV_SECTIONS } from "./directSalesSettingsNavSections";
 import { useDirectSalesSettings } from "./hooks/useDirectSalesSettings";
 import { CustomersSection } from "./sections/CustomersSection";
+import { DiscountsSection } from "./sections/DiscountsSection";
 import { GeneralSection } from "./sections/GeneralSection";
 import { PaymentsSection } from "./sections/PaymentsSection";
 import { PricingSection } from "./sections/PricingSection";
@@ -94,6 +95,7 @@ export const DirectSalesSettingsPanel = forwardRef<DirectSalesSettingsPanelHandl
           <PaymentsSection config={state.draft} onChange={state.patch} />
           <StockSection config={state.draft} onChange={state.patch} />
           <PricingSection config={state.draft} onChange={state.patch} />
+          <DiscountsSection config={state.draft} onChange={state.patch} />
           <CustomersSection config={state.draft} onChange={state.patch} />
           <TerminalSection config={state.draft} onChange={state.patch} />
         </WmsSettingsLayout>

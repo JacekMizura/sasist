@@ -91,13 +91,86 @@ export async function patchDirectSaleLine(params: DirectSalesScope & {
   lineId: number;
   quantity?: number;
   sourceLocationId?: number | null;
+  lineDiscountType?: string | null;
+  lineDiscountValue?: number;
 }): Promise<DirectSaleSession> {
-  const body: Record<string, number | null> = {};
+  const body: Record<string, number | string | null> = {};
   if (params.quantity != null) body.quantity = params.quantity;
   if (params.sourceLocationId !== undefined) body.source_location_id = params.sourceLocationId;
+  if (params.lineDiscountType !== undefined) body.line_discount_type = params.lineDiscountType;
+  if (params.lineDiscountValue != null) body.line_discount_value = params.lineDiscountValue;
   const { data } = await api.patch(`direct-sales/session/${params.sessionId}/lines/${params.lineId}`, body, {
     params: directSalesQuery(params),
   });
+  return normalizeDirectSaleSession(data);
+}
+
+export async function patchSessionDocument(params: DirectSalesScope & {
+  sessionId: number;
+  documentSubtype: "RECEIPT" | "INVOICE";
+}): Promise<DirectSaleSession> {
+  const { data } = await api.patch(
+    `direct-sales/session/${params.sessionId}/document`,
+    { document_subtype: params.documentSubtype },
+    { params: directSalesQuery(params) },
+  );
+  return normalizeDirectSaleSession(data);
+}
+
+export async function patchSessionOrderDiscount(params: DirectSalesScope & {
+  sessionId: number;
+  orderDiscountType: string | null;
+  orderDiscountValue: number;
+}): Promise<DirectSaleSession> {
+  const { data } = await api.patch(
+    `direct-sales/session/${params.sessionId}/discount`,
+    {
+      order_discount_type: params.orderDiscountType,
+      order_discount_value: params.orderDiscountValue,
+    },
+    { params: directSalesQuery(params) },
+  );
+  return normalizeDirectSaleSession(data);
+}
+
+export type NipLookupResult = {
+  ok: boolean;
+  nip?: string | null;
+  company_name?: string | null;
+  street?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  source?: string | null;
+  error?: string | null;
+  customer_id?: number | null;
+};
+
+export async function lookupDirectSaleNip(params: DirectSalesScope & { nip: string }): Promise<NipLookupResult> {
+  const { data } = await api.get<NipLookupResult>("direct-sales/nip-lookup", {
+    params: { ...directSalesQuery(params), nip: params.nip },
+  });
+  return data;
+}
+
+export async function postInvoiceCustomer(params: DirectSalesScope & {
+  sessionId: number;
+  nip: string;
+  companyName: string;
+  street?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+}): Promise<DirectSaleSession> {
+  const { data } = await api.post(
+    `direct-sales/session/${params.sessionId}/invoice-customer`,
+    {
+      nip: params.nip,
+      company_name: params.companyName,
+      street: params.street ?? null,
+      postal_code: params.postalCode ?? null,
+      city: params.city ?? null,
+    },
+    { params: directSalesQuery(params) },
+  );
   return normalizeDirectSaleSession(data);
 }
 

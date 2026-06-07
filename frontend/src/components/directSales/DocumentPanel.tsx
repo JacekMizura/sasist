@@ -1,18 +1,13 @@
-import { FileText, Receipt, Lock } from "lucide-react";
+import { FileText, Receipt } from "lucide-react";
 import type { DocumentSubtype } from "../../hooks/directSales/useDirectSalesSession";
-import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 
 type Props = {
   value: DocumentSubtype;
-  hasCustomer: boolean;
   onChange: (v: DocumentSubtype) => void;
   disabled?: boolean;
 };
 
-export function DocumentPanel({ value, hasCustomer, onChange, disabled }: Props) {
-  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
-  const invoiceBlocked = resolvedDirectSalesSettings.require_customer_for_invoice && !hasCustomer;
-
+export function DocumentPanel({ value, onChange, disabled }: Props) {
   return (
     <div className="bg-white rounded-3xl p-5 border border-blue-50 shadow-sm">
       <h3 className="text-xs font-bold text-blue-900/50 uppercase tracking-wider mb-4">
@@ -35,8 +30,7 @@ export function DocumentPanel({ value, hasCustomer, onChange, disabled }: Props)
         
         <button
           type="button"
-          disabled={disabled || invoiceBlocked}
-          title={invoiceBlocked ? "Przypisz klienta przed wystawieniem FV" : undefined}
+          disabled={disabled}
           onClick={() => onChange("INVOICE")}
           className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-bold transition-all ${
             value === "INVOICE" 
@@ -44,15 +38,15 @@ export function DocumentPanel({ value, hasCustomer, onChange, disabled }: Props)
               : "text-slate-500 hover:text-slate-700"
           } disabled:opacity-50`}
         >
-          {invoiceBlocked ? <Lock size={16} /> : <FileText size={18} />} 
+          <FileText size={18} />
           Faktura VAT (FV)
         </button>
       </div>
       
       <p className="mt-4 text-[11px] font-medium text-slate-400 text-center">
-        {value === "INVOICE" 
-          ? "Wymagany klient z NIP i danymi firmy." 
-          : "Szybka sprzedaż detaliczna bez FV."}
+        {value === "INVOICE"
+          ? "Uzupełnij dane firmy (NIP) przed płatnością."
+          : "Paragon — klient detaliczny przypisany automatycznie."}
       </p>
     </div>
   );

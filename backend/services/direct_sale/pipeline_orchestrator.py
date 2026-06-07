@@ -95,6 +95,7 @@ def _session_total(db: Session, sess: DirectSaleSession) -> float:
         list(sess.lines or []),
         db=db,
         tenant_id=int(sess.tenant_id),
+        session=sess,
     )
 
 

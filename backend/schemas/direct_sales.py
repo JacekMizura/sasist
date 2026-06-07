@@ -23,7 +23,11 @@ class DirectSaleSessionLineRead(BaseModel):
     product_id: int
     quantity: float
     unit_price: float | None = None
+    line_discount_type: str | None = None
+    line_discount_value: float = 0.0
     discount_amount: float = 0.0
+    line_gross: float | None = None
+    line_net: float | None = None
     source_location_id: int | None = None
     suggested_location_id: int | None = None
     sort_order: int = 0
@@ -59,6 +63,48 @@ DirectSaleAddProductBody = AddDirectSalesProductRequest
 class DirectSaleLinePatchBody(BaseModel):
     quantity: float | None = Field(None, gt=0)
     source_location_id: int | None = None
+    line_discount_type: str | None = Field(None, description="percent | amount")
+    line_discount_value: float | None = Field(None, ge=0)
+
+
+class DirectSaleSessionDiscountPatchBody(BaseModel):
+    order_discount_type: str | None = Field(None, description="percent | amount")
+    order_discount_value: float = Field(0.0, ge=0)
+
+
+class DirectSaleDocumentPatchBody(BaseModel):
+    document_subtype: str = Field(..., description="RECEIPT | INVOICE")
+
+
+class DirectSaleSessionTotalsRead(BaseModel):
+    subtotal_gross: float
+    line_discounts_gross: float
+    lines_gross: float
+    order_discount_gross: float
+    total_discount_gross: float
+    total_net: float
+    total_vat: float
+    total_gross: float
+
+
+class DirectSaleNipLookupRead(BaseModel):
+    ok: bool
+    nip: str | None = None
+    company_name: str | None = None
+    street: str | None = None
+    postal_code: str | None = None
+    city: str | None = None
+    source: str | None = None
+    error: str | None = None
+    customer_id: int | None = None
+
+
+class DirectSaleInvoiceCustomerBody(BaseModel):
+    nip: str = Field(..., min_length=10, max_length=16)
+    company_name: str = Field(..., min_length=1, max_length=256)
+    street: str | None = Field(None, max_length=256)
+    postal_code: str | None = Field(None, max_length=32)
+    city: str | None = Field(None, max_length=128)
 
 
 class DirectSaleSessionRead(BaseModel):
@@ -77,8 +123,13 @@ class DirectSaleSessionRead(BaseModel):
     last_activity_at: datetime | None = None
     completed_at: datetime | None = None
     customer_id: int | None = None
+    customer_is_retail: bool = False
+    document_subtype: str = "RECEIPT"
+    order_discount_type: str | None = None
+    order_discount_value: float = 0.0
     expires_at: datetime | None = None
     payment_context: dict | None = None
+    totals: DirectSaleSessionTotalsRead | None = None
     lines: list[DirectSaleSessionLineRead] = Field(default_factory=list)
 
 

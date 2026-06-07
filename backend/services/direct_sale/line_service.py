@@ -85,6 +85,38 @@ def update_session_line_location(
     return line
 
 
+def update_session_line_discount(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    line_id: int,
+    discount_type: str | None,
+    discount_value: float,
+) -> DirectSaleSessionLine:
+    from .discount_validation_service import validate_line_discount
+    from .session_financials_service import compute_line_financials
+
+    _require_mutable_session(sess)
+    line = _get_line(sess, line_id)
+    dt = str(discount_type or "").strip().lower()
+    if dt not in ("percent", "amount", ""):
+        raise DirectSaleError("Nieprawidłowy typ rabatu.", code="invalid_discount")
+    validate_line_discount(
+        db,
+        tenant_id=int(sess.tenant_id),
+        warehouse_id=int(sess.warehouse_id),
+        discount_type=dt or None,
+        discount_value=float(discount_value or 0),
+    )
+    line.line_discount_type = dt or None
+    line.line_discount_value = max(0.0, float(discount_value or 0))
+    fin = compute_line_financials(db, line)
+    line.discount_amount = float(fin["line_discount_gross"])
+    sess.last_activity_at = datetime.utcnow()
+    db.flush()
+    return line
+
+
 def remove_session_line(db: Session, sess: DirectSaleSession, *, line_id: int) -> None:
     _require_mutable_session(sess)
     line = _get_line(sess, line_id)

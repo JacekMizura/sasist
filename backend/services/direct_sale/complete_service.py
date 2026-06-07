@@ -58,6 +58,7 @@ def _session_total(db: Session, sess: DirectSaleSession) -> float:
         list(sess.lines or []),
         db=db,
         tenant_id=int(sess.tenant_id),
+        session=sess,
     )
 
 
@@ -219,6 +220,34 @@ def complete_direct_sale_session(
     if not (sess.lines or []):
         raise DirectSaleError("Sesja nie ma pozycji.", code="empty_session")
 
+    doc_sub = str(document_subtype or getattr(sess, "document_subtype", None) or "RECEIPT").strip().upper()
+    if doc_sub == "PA":
+        doc_sub = "RECEIPT"
+    elif doc_sub == "FV":
+        doc_sub = "INVOICE"
+    if doc_sub in ("FV", "INVOICE"):
+        from ...models.customer import Customer
+        from .retail_customer_service import is_retail_system_customer
+
+        cust = (
+            db.query(Customer).filter(Customer.id == int(sess.customer_id)).first()
+            if getattr(sess, "customer_id", None)
+            else None
+        )
+        if cust is None or is_retail_system_customer(cust):
+            raise DirectSaleError(
+                "Faktura wymaga klienta firmowego z NIP.",
+                code="invoice_customer_required",
+                http_status=400,
+            )
+        nip = str(getattr(cust, "nip", None) or "").strip()
+        if len(nip.replace("-", "").replace(" ", "")) < 10:
+            raise DirectSaleError(
+                "Faktura wymaga poprawnego NIP klienta.",
+                code="invoice_nip_required",
+                http_status=400,
+            )
+
     ui_status = str(sess.status or "").strip().upper()
     if ui_status == "COMPLETED" and infer_pipeline_status_from_session(sess) == PIPELINE_COMPLETED:
         replay = try_idempotent_complete_result(db, sess)
@@ -234,7 +263,7 @@ def complete_direct_sale_session(
             db,
             sess,
             payment_method=payment_method,
-            document_subtype=document_subtype,
+            document_subtype=doc_sub,
             payment_splits=payment_splits,
             performed_by_user_id=performed_by_user_id,
         )

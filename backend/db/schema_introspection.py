@@ -628,8 +628,18 @@ def ensure_operational_sales_phase2_schema(engine: Engine) -> None:
         for col, ddl in (
             ("customer_id", "ALTER TABLE direct_sale_sessions ADD COLUMN customer_id INTEGER"),
             ("expires_at", "ALTER TABLE direct_sale_sessions ADD COLUMN expires_at TIMESTAMP"),
+            ("document_subtype", "ALTER TABLE direct_sale_sessions ADD COLUMN document_subtype VARCHAR(16) DEFAULT 'RECEIPT'"),
+            ("order_discount_type", "ALTER TABLE direct_sale_sessions ADD COLUMN order_discount_type VARCHAR(16)"),
+            ("order_discount_value", "ALTER TABLE direct_sale_sessions ADD COLUMN order_discount_value REAL DEFAULT 0"),
         ):
             if _add_column_if_missing(engine, "direct_sale_sessions", col, ddl):
+                added += 1
+    if has_table(engine, "direct_sale_session_lines"):
+        for col, ddl in (
+            ("line_discount_type", "ALTER TABLE direct_sale_session_lines ADD COLUMN line_discount_type VARCHAR(16)"),
+            ("line_discount_value", "ALTER TABLE direct_sale_session_lines ADD COLUMN line_discount_value REAL DEFAULT 0"),
+        ):
+            if _add_column_if_missing(engine, "direct_sale_session_lines", col, ddl):
                 added += 1
 
     if not has_table(engine, "operational_commerce_events"):

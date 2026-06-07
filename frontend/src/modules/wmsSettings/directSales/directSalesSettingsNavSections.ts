@@ -5,6 +5,7 @@ export const DIRECT_SALES_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
   { id: "ds-payments", label: "Płatności" },
   { id: "ds-stock", label: "Stany magazynowe" },
   { id: "ds-pricing", label: "Ceny i widok" },
+  { id: "ds-discounts", label: "Rabaty" },
   { id: "ds-customers", label: "Klienci" },
   { id: "ds-terminal", label: "Terminal" },
 ];

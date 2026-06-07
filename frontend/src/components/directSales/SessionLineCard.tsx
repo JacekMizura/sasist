@@ -14,6 +14,7 @@ import { safeDisplay } from "../../utils/safeStrings";
 import { LocationPickerModal } from "./location/LocationPickerModal";
 import { LocationBadge } from "./stock/LocationBadge";
 import { LineStockBadge } from "./stock/LineStockBadge";
+import { LineDiscountPopover } from "./LineDiscountPopover";
 
 type Props = {
   line: DirectSaleSessionLine;
@@ -22,6 +23,7 @@ type Props = {
   onQtyChange: (lineId: number, qty: number) => void;
   onLocationChange: (lineId: number, locationId: number | null) => void;
   onRemove: (lineId: number) => void;
+  onLineDiscount?: (lineId: number, type: "percent" | "amount" | null, value: number) => void;
 };
 
 // KULOODPORNA FUNKCJA: Rozcina sklejony tekst "5.00 / 6.15 zł" i zwraca { net: "5.00", gross: "6.15" }
@@ -47,6 +49,7 @@ export function SessionLineCard({
   onQtyChange,
   onLocationChange,
   onRemove,
+  onLineDiscount,
 }: Props) {
   const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const [locOpen, setLocOpen] = useState(false);
@@ -256,6 +259,14 @@ export function SessionLineCard({
           >
             <MapPin size={14} /> Lokalizacja
           </button>
+          {onLineDiscount ? (
+            <LineDiscountPopover
+              disabled={busy}
+              currentType={line.line_discount_type}
+              currentValue={line.line_discount_value}
+              onApply={(type, value) => onLineDiscount(line.id, type, value)}
+            />
+          ) : null}
           <button
             type="button"
             disabled={busy}

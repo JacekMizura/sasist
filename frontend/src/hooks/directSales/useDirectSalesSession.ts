@@ -10,6 +10,8 @@ import {
   fetchDirectSaleCompletion,
   getDirectSaleSession,
   patchDirectSaleLine,
+  patchSessionDocument,
+  patchSessionOrderDiscount,
   resumeDirectSaleSession,
   scanDirectSaleSession,
   startDirectSalePayment,
@@ -28,7 +30,6 @@ import {
   OPERATIONAL_ENDPOINTS,
 } from "../../services/operational/operationalFeatureGuard";
 import { allocationStrategyToIssueStrategy } from "../../utils/directSales/allocationStrategy";
-import { lineTotal } from "../../utils/directSales/lineTotal";
 import { safeTrim } from "../../utils/safeStrings";
 import { STATIONARY_SALE_UNAVAILABLE } from "../../components/directSales/directSalesTerminology";
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
@@ -83,8 +84,8 @@ export function useDirectSalesSession({
   const initRef = useRef(false);
 
   const total = useMemo(
-    () => (session?.lines ?? []).reduce((sum, ln) => sum + lineTotal(ln), 0),
-    [session?.lines],
+    () => session?.totals?.total_gross ?? 0,
+    [session?.totals?.total_gross],
   );
 
   const issueStrategy = useMemo(
@@ -93,8 +94,13 @@ export function useDirectSalesSession({
   );
 
   useEffect(() => {
-    setDocumentSubtype(resolvedDirectSalesSettings.default_document_type === "FV" ? "INVOICE" : "RECEIPT");
-  }, [resolvedDirectSalesSettings.default_document_type]);
+    if (!session) {
+      setDocumentSubtype(resolvedDirectSalesSettings.default_document_type === "FV" ? "INVOICE" : "RECEIPT");
+      return;
+    }
+    const sub = String(session.document_subtype || "RECEIPT").toUpperCase();
+    setDocumentSubtype(sub === "INVOICE" || sub === "FV" ? "INVOICE" : "RECEIPT");
+  }, [session?.document_subtype, session?.id, resolvedDirectSalesSettings.default_document_type]);
 
   useEffect(() => {
     setCashReceived((prev) => (prev < total ? total : prev));
@@ -424,6 +430,72 @@ export function useDirectSalesSession({
     }
   }, [session, apiScope, paymentMethod]);
 
+  const changeDocumentSubtype = useCallback(
+    async (sub: DocumentSubtype) => {
+      const scope = apiScope();
+      if (!session || !scope) {
+        setDocumentSubtype(sub);
+        return;
+      }
+      setBusy(true);
+      try {
+        const s = await patchSessionDocument({ ...scope, sessionId: session.id, documentSubtype: sub });
+        setSession(s);
+        setDocumentSubtype(sub);
+      } catch (e) {
+        setError(extractApiErrorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [apiScope, session],
+  );
+
+  const changeLineDiscount = useCallback(
+    async (lineId: number, type: "percent" | "amount" | null, value: number) => {
+      const scope = apiScope();
+      if (!session || !scope) return;
+      setBusy(true);
+      try {
+        const s = await patchDirectSaleLine({
+          ...scope,
+          sessionId: session.id,
+          lineId,
+          lineDiscountType: type,
+          lineDiscountValue: value,
+        });
+        setSession(s);
+      } catch (e) {
+        setError(extractApiErrorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [apiScope, session],
+  );
+
+  const changeOrderDiscount = useCallback(
+    async (type: "percent" | "amount" | null, value: number) => {
+      const scope = apiScope();
+      if (!session || !scope) return;
+      setBusy(true);
+      try {
+        const s = await patchSessionOrderDiscount({
+          ...scope,
+          sessionId: session.id,
+          orderDiscountType: type,
+          orderDiscountValue: value,
+        });
+        setSession(s);
+      } catch (e) {
+        setError(extractApiErrorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [apiScope, session],
+  );
+
   const complete = useCallback(async () => {
     const scope = apiScope();
     if (!session || !scope) return null;
@@ -504,7 +576,9 @@ export function useDirectSalesSession({
     setMixedCardAmount,
     dismissCompleteError,
     documentSubtype,
-    setDocumentSubtype,
+    changeDocumentSubtype,
+    changeLineDiscount,
+    changeOrderDiscount,
     lastComplete,
     completionView,
     completeError,
@@ -528,5 +602,7 @@ export function useDirectSalesSession({
       initRef.current = false;
       setError(null);
     },
+    applySession: setSession,
+    refreshSession,
   };
 }

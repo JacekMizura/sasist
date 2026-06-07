@@ -100,8 +100,13 @@ def compute_direct_sale_session_total(
     *,
     db: Session | None = None,
     tenant_id: int | None = None,
+    session: Any | None = None,
 ) -> float:
-    """Sum session lines — ``unit_price`` is NET (catalog sale price); returns GROSS total."""
+    """Sum session lines — ``unit_price`` is NET; returns GROSS total after discounts."""
+    if db is not None and session is not None:
+        from .direct_sale.session_financials_service import compute_session_totals
+
+        return float(compute_session_totals(db, session)["total_gross"])
     total = 0.0
     for ln in lines or []:
         unit_net = float(ln.unit_price) if getattr(ln, "unit_price", None) is not None else 0.0
@@ -111,12 +116,13 @@ def compute_direct_sale_session_total(
                 vp = product_vat_for_direct_sale(db, int(ln.product_id))
             except Exception:
                 pass
-        total += compute_direct_sale_line_gross(
+        gross = compute_direct_sale_line_gross(
             unit_net=unit_net,
             quantity=float(getattr(ln, "quantity", 0) or 0),
-            discount_amount=float(getattr(ln, "discount_amount", 0) or 0),
             vat_percent=vp,
         )
+        disc = float(getattr(ln, "discount_amount", 0) or 0)
+        total += round(max(0.0, gross - disc), 2)
     return round(total, 2)
 
 

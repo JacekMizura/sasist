@@ -1,13 +1,24 @@
 # Current context
 
 ## Active goal
-Direct-sale pipeline: session `unit_price` = NET (catalog sale price); gross derived with VAT.
+Retail/POS workflow for Direct Sales — document-first checkout, default retail customer, backend-canonical discounts.
 
-## Fixed (2026-06-04)
-- Root cause: backend treated session `unit_price` as GROSS (`brutto_line_to_net_fields`) — fixed with `netto_line_to_gross_fields`
-- `compute_direct_sale_session_total` / payment amounts now sum gross from net (5.00 net → 6.15 gross)
-- Order creation stores `price_input_mode: NETTO`, `unit_price=5.00`, `line_gross_total=6.15`
-- Prior pass: order API canonical financials, frontend display-only, WZ traceability, PA padding repair
+## Implemented (2026-06-04)
+- **Default retail customer:** `ensure_retail_customer()` auto-assigned on session create; PA keeps retail; FV switches to invoice customer flow
+- **Document-first UX:** Paragon/FV toggle before customer; `CustomerPanel` only for FV with MF NIP lookup + CRM upsert
+- **Discounts (backend SSOT):** `session_financials_service.py` — line + order %/amount; persisted on session/lines; order creation uses canonical totals
+- **Discount settings:** `DirectSalesDiscountSettings` in backend + frontend schema; admin **Rabaty POS** section
+- **Discount validation:** `discount_validation_service.py` enforces allow flags + max % on patch
+- **Complete pipeline:** uses session `document_subtype` (normalized PA/FV → RECEIPT/INVOICE)
+- **Frontend POS:** totals from `session.totals`, line/order discount UI, `LineDiscountPopover` on cart rows
+- **NIP lookup:** MF whitelist API (`nip_lookup_service.py`); `httpx` added to requirements
 
-## Prior: POS polish complete
-- Print PDF wiring, formatMoneyPl, stationary-sale order profile, linked docs, terminology helpers
+## Prior: NET price pipeline
+- Session `unit_price` = NET; `netto_line_to_gross_fields` for gross/VAT
+
+## Not yet / follow-up
+- VIES EU fallback for NIP
+- Manager approval + negative margin enforcement
+- Quantity keypad modal, payment shortcut polish
+- Hide retail system customer from CRM search
+- Pre-existing frontend `tsc` errors in scanner hooks (unrelated)
