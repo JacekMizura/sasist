@@ -70,7 +70,43 @@ type Props = {
   onChanged: () => void;
   sectionTitle: string;
   sectionHint: string;
+  /** Parent can request opening the new-recipe editor (e.g. product empty state CTA). */
+  requestNewEditor?: boolean;
+  onRequestNewHandled?: () => void;
 };
+
+function modeCopy(mode: CompositionMode) {
+  if (mode === "manufacturing") {
+    return {
+      empty: "Brak receptury produkcyjnej.",
+      newTitle: "Nowa receptura produkcyjna",
+      editTitle: "Edycja receptury produkcyjnej",
+      activeLabel: "Aktywna receptura",
+      addLabel: "Utwórz recepturę",
+      defaultName: "Receptura produkcyjna",
+      accentBtn: "bg-slate-800 hover:bg-slate-900",
+      accentRing: "focus:ring-slate-500 focus:border-slate-400",
+      cardBorder: "hover:border-slate-300",
+      outputBorder: "border-slate-300 bg-slate-50 text-slate-900",
+      editorPanel: "border-slate-200 bg-slate-50/50",
+      link: "text-slate-700 hover:underline",
+    };
+  }
+  return {
+    empty: "Brak zestawu.",
+    newTitle: "Nowy zestaw",
+    editTitle: "Edycja zestawu",
+    activeLabel: "Aktywny zestaw",
+    addLabel: "Dodaj zestaw",
+    defaultName: "Zestaw",
+    accentBtn: "bg-violet-600 hover:bg-violet-700",
+    accentRing: "focus:ring-violet-500 focus:border-violet-400",
+    cardBorder: "hover:border-violet-200",
+    outputBorder: "border-violet-200 bg-violet-50 text-violet-900",
+    editorPanel: "border-violet-200 bg-violet-50/30",
+    link: "text-violet-600 hover:underline",
+  };
+}
 
 export function CompositionVisualEditor({
   tenantId,
@@ -81,7 +117,10 @@ export function CompositionVisualEditor({
   onChanged,
   sectionTitle,
   sectionHint,
+  requestNewEditor,
+  onRequestNewHandled,
 }: Props) {
+  const copy = modeCopy(mode);
   const [err, setErr] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -97,13 +136,12 @@ export function CompositionVisualEditor({
   const [searchResults, setSearchResults] = useState<CatalogProduct[]>([]);
   const [costEstimate, setCostEstimate] = useState<CompositionCostEstimateRead | null>(null);
 
-  const inputClass =
-    "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-violet-500 focus:border-violet-400";
+  const inputClass = `w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 ${copy.accentRing}`;
   const labelClass = "block text-sm font-medium text-slate-700 mb-1";
 
   const openNew = () => {
     setEditingId(null);
-    setName(mode === "bundle" ? "Zestaw" : "Produkcja");
+    setName(copy.defaultName);
     setVersion("1");
     setYieldQty(1);
     setNotes("");
@@ -113,6 +151,12 @@ export function CompositionVisualEditor({
     setEditorOpen(true);
     setErr(null);
   };
+
+  useEffect(() => {
+    if (!requestNewEditor) return;
+    openNew();
+    onRequestNewHandled?.();
+  }, [requestNewEditor]);
 
   const openEdit = (comp: ProductCompositionRead) => {
     setEditingId(comp.id);
@@ -265,10 +309,10 @@ export function CompositionVisualEditor({
         <button
           type="button"
           onClick={openNew}
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700"
+          className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white ${copy.accentBtn}`}
         >
           <Plus className="h-4 w-4" aria-hidden />
-          Dodaj
+          {copy.addLabel}
         </button>
       </div>
 
@@ -277,13 +321,13 @@ export function CompositionVisualEditor({
       ) : null}
 
       {compositions.length === 0 && !editorOpen ? (
-        <p className="text-sm text-slate-500">Brak kompozycji w tym trybie.</p>
+        <p className="text-sm text-slate-500">{copy.empty}</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {compositions.map((comp) => (
             <div
               key={comp.id}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-violet-200 transition-colors"
+              className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors ${copy.cardBorder}`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -298,7 +342,7 @@ export function CompositionVisualEditor({
                   <button
                     type="button"
                     onClick={() => void handleActivate(comp.id)}
-                    className="text-xs text-violet-600 hover:underline"
+                    className={`text-xs ${copy.link}`}
                   >
                     Aktywuj
                   </button>
@@ -318,14 +362,14 @@ export function CompositionVisualEditor({
                   <p className="text-xs text-slate-400">+{comp.lines.length - 4} więcej</p>
                 ) : null}
                 <ArrowDown className="h-4 w-4 text-slate-300" aria-hidden />
-                <div className="w-full max-w-xs rounded-lg border-2 border-violet-200 bg-violet-50 px-3 py-2 text-center text-sm font-semibold text-violet-900">
+                <div className={`w-full max-w-xs rounded-lg border-2 px-3 py-2 text-center text-sm font-semibold ${copy.outputBorder}`}>
                   {productName}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => openEdit(comp)}
-                className="mt-3 text-sm text-violet-600 hover:underline"
+                className={`mt-3 text-sm ${copy.link}`}
               >
                 Edytuj
               </button>
@@ -335,8 +379,8 @@ export function CompositionVisualEditor({
       )}
 
       {editorOpen ? (
-        <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-4 space-y-4">
-          <h5 className="font-semibold text-slate-900">{editingId == null ? "Nowa kompozycja" : "Edycja kompozycji"}</h5>
+        <div className={`rounded-xl border p-4 space-y-4 ${copy.editorPanel}`}>
+          <h5 className="font-semibold text-slate-900">{editingId == null ? copy.newTitle : copy.editTitle}</h5>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="sm:col-span-2">
               <label className={labelClass}>Nazwa</label>
@@ -360,7 +404,7 @@ export function CompositionVisualEditor({
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-            Aktywna kompozycja
+            {copy.activeLabel}
           </label>
 
           <div className="grid gap-6 lg:grid-cols-2">

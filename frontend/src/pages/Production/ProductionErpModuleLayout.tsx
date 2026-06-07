@@ -14,7 +14,7 @@ export default function ProductionErpModuleLayout() {
         <div className="py-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Asortyment · Produkcja</p>
           <h1 className="mt-1 text-xl font-semibold text-slate-900">Zarządzanie produkcją</h1>
-          <p className="mt-1 text-sm text-slate-500">Planowanie, zlecenia i receptury — wykonanie w terminalu WMS.</p>
+          <p className="mt-1 text-sm text-slate-500">Zlecenia i planowanie produkcji — receptury jako dane pomocnicze. Wykonanie w terminalu WMS.</p>
         </div>
         <TopTabsNavigation tabs={ERP_PRODUCTION_TABS} exact={false} aria-label="Moduł produkcji ERP" />
       </div>

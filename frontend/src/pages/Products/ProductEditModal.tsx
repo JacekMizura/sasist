@@ -41,7 +41,7 @@ import { ProductLogisticsPackagingMatchingSection } from "../../components/produ
 import { RetailLabel } from "../../components/products/RetailLabel";
 import { WarehouseFormCard as Card } from "../../components/products/WarehouseFormCard";
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
-import { ProductCompositionsPanel } from "../Production/ProductCompositionsPanel";
+import { ProductManufacturingPanel } from "../Production/ProductManufacturingPanel";
 import { listCompositionsForProduct } from "../../api/compositionApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
@@ -1641,7 +1641,7 @@ export function ProductEditModal({
     warehouseOps: "Operacje magazynowe",
     logistics: "Logistyka",
     settings: "Ustawienia",
-    production: "Kompozycje",
+    production: "Produkcja",
   };
 
   // Tego fragmentu zabrakło:
@@ -2838,7 +2838,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "production" && !isNew && tenantId != null && product?.id != null ? (
-                  <ProductCompositionsPanel
+                  <ProductManufacturingPanel
                     tenantId={tenantId}
                     productId={Number(product.id)}
                     productName={name.trim() || `Produkt #${product.id}`}
@@ -2850,7 +2850,7 @@ export function ProductEditModal({
                 ) : null}
 
                 {activeTab === "production" && isNew ? (
-                  <p className="text-sm text-slate-500">Zapisz produkt, aby dodać kompozycje (zestawy i produkcja).</p>
+                  <p className="text-sm text-slate-500">Zapisz produkt, aby zdefiniować recepturę produkcyjną (BOM).</p>
                 ) : null}
 
                 {activeTab === "offers" && (

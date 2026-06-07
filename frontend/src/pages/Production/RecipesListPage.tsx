@@ -113,7 +113,7 @@ export default function RecipesListPage() {
             ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-slate-500">
-                  Brak receptur. Utwórz kompozycję produkcyjną w module receptur lub na karcie produktu (podsumowanie).
+                  Brak receptur. Utwórz recepturę produkcyjną na karcie produktu (zakładka Produkcja) lub tutaj w module ERP.
                 </td>
               </tr>
             ) : (

@@ -54,17 +54,17 @@ export default function ProductionDashboardPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            to={erpProductionPaths.planning}
+            to={erpProductionPaths.orders}
             className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900"
           >
             <Plus className="h-4 w-4" aria-hidden />
-            Nowe planowanie
+            Zlecenia produkcyjne
           </Link>
           <Link
-            to={erpProductionPaths.orders}
+            to={erpProductionPaths.planning}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            Zlecenia
+            Planowanie
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
         </div>
