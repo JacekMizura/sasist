@@ -269,13 +269,19 @@ def create_and_post_wz_for_direct_sale(
     Create linked WZ, reserve stock, FIFO issue — sole warehouse-effect path for direct sales.
     PA/FV (``sale_document``) must already exist; stock is never removed by commercial docs.
     """
-    existing = load_wz_for_sale_document(db, sale_document_id=str(sale_document.id))
+    sale_doc_id = str(sale_document.id)
+    session_id = int(sess.id)
+    order_id = int(order.id)
+    tenant_id = int(order.tenant_id)
+    warehouse_id = int(order.warehouse_id)
+
+    existing = load_wz_for_sale_document(db, sale_document_id=sale_doc_id)
     if existing is not None:
         label = str(getattr(existing, "document_number", None) or "")
         link = (
             db.query(SaleDocumentStockLink)
             .filter(
-                SaleDocumentStockLink.sale_document_id == str(sale_document.id),
+                SaleDocumentStockLink.sale_document_id == sale_doc_id,
                 SaleDocumentStockLink.stock_document_id == int(existing.id),
             )
             .first()
@@ -294,18 +300,18 @@ def create_and_post_wz_for_direct_sale(
     wz_series = resolve_wz_series_for_sale_series(
         db,
         sale_series,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
     )
 
     wz = StockDocument(
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
         document_type="WZ",
         creation_source="DIRECT_SALE",
-        order_id=int(order.id),
-        source_sale_document_id=str(sale_document.id),
-        direct_sale_session_id=int(sess.id),
+        order_id=order_id,
+        source_sale_document_id=sale_doc_id,
+        direct_sale_session_id=session_id,
         status="done",
         currency=str(order.currency or "PLN"),
         created_by_user_id=int(performed_by_user_id) if performed_by_user_id else None,
@@ -353,28 +359,32 @@ def create_and_post_wz_for_direct_sale(
         performed_by_user_id=performed_by_user_id,
     )
 
-    link = SaleDocumentStockLink(
-        sale_document_id=str(sale_document.id),
-        stock_document_id=int(wz.id),
-        link_type="WZ",
-    )
-    db.add(link)
-    db.flush()
+    try:
+        link = SaleDocumentStockLink(
+            sale_document_id=sale_doc_id,
+            stock_document_id=int(wz.id),
+            link_type="WZ",
+        )
+        db.add(link)
+        db.flush()
+    except Exception:
+        db.rollback()
+        raise
 
     emit_operational_sales_event(
         db,
         "wz.created",
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        order_id=int(order.id),
-        session_id=int(sess.id),
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        order_id=order_id,
+        session_id=session_id,
         source="direct_sales",
         performed_by_user_id=performed_by_user_id,
         device_id=int(sess.workstation_id) if sess.workstation_id else None,
         extra={
             "wz_id": int(wz.id),
             "wz_number": doc_number,
-            "sale_document_id": str(sale_document.id),
+            "sale_document_id": sale_doc_id,
         },
     )
     logger.info(

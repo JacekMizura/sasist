@@ -222,11 +222,13 @@ def complete_direct_sale_session(
     performed_by_user_id: int | None = None,
 ) -> DirectSaleCompleteResult:
     sid = int(sess.id)
+    tid = int(sess.tenant_id)
+    wid = int(sess.warehouse_id)
     logger.info(
         "[direct-sales.complete.start] session_id=%s tenant_id=%s warehouse_id=%s status=%s pipeline=%s",
         sid,
-        int(sess.tenant_id),
-        int(sess.warehouse_id),
+        tid,
+        wid,
         sess.status,
         infer_pipeline_status_from_session(sess),
     )
@@ -265,8 +267,8 @@ def complete_direct_sale_session(
         log_unhandled_complete_exception(
             exc,
             session_id=sid,
-            tenant_id=int(sess.tenant_id),
-            warehouse_id=int(sess.warehouse_id),
+            tenant_id=tid,
+            warehouse_id=wid,
             stage="pipeline",
             context="complete_service",
         )
@@ -275,7 +277,7 @@ def complete_direct_sale_session(
             sid,
             traceback.format_exc(),
         )
-        raise
+        raise exc
 
     if not entities.order_id or not entities.payment_id:
         raise DirectSaleError(
@@ -286,7 +288,7 @@ def complete_direct_sale_session(
 
     pay = db.query(Payment).filter(Payment.id == int(entities.payment_id)).first()
     order = db.query(Order).filter(Order.id == int(entities.order_id)).first()
-    total = round(float(order.value or 0), 2) if order and order.value is not None else _session_total(sess)
+    total = round(float(order.value or 0), 2) if order and order.value is not None else 0.0
 
     return DirectSaleCompleteResult(
         session_id=sid,

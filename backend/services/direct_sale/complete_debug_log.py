@@ -18,6 +18,7 @@ try:
     from sqlalchemy.exc import FlushError
 except ImportError:
     FlushError = type("FlushError", (SQLAlchemyError,), {})  # type: ignore[misc,assignment]
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -32,21 +33,88 @@ _SA_TYPES = (
 )
 
 
+def root_complete_exception(exc: BaseException) -> BaseException:
+    """Unwrap PendingRollbackError chains to the original DB failure."""
+    seen: set[int] = set()
+    current = exc
+    while id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, PendingRollbackError):
+            cause = current.__cause__
+            if cause is not None:
+                current = cause
+                continue
+        break
+    return current
+
+
+def rollback_db_safely(db: Session | None, *, context: str = "complete") -> None:
+    if db is None:
+        return
+    try:
+        if db.is_active:
+            db.rollback()
+            logger.warning("[direct_sales.rollback] context=%s active=True", context)
+    except Exception as rb_exc:
+        logger.warning("[direct_sales.rollback] context=%s failed=%s", context, rb_exc)
+
+
+def log_orm_serialize_state(
+    entity: object | None,
+    *,
+    label: str,
+    stage: str,
+    relationship: str | None = None,
+) -> None:
+    """TEMP: log ORM bound/expired state before response serialization."""
+    if entity is None:
+        logger.warning(
+            "[direct_sales.serialize] label=%s stage=%s entity=None",
+            label,
+            stage,
+        )
+        return
+    try:
+        state = sa_inspect(entity)
+        logger.warning(
+            "[direct_sales.serialize] label=%s stage=%s relationship=%s "
+            "session_bound=%s detached=%s expired=%s persistent=%s",
+            label,
+            stage,
+            relationship,
+            state.session is not None,
+            state.detached,
+            state.expired,
+            state.persistent,
+        )
+    except Exception as inspect_exc:
+        logger.warning(
+            "[direct_sales.serialize] label=%s stage=%s inspect_failed=%s",
+            label,
+            stage,
+            inspect_exc,
+        )
+
+
 def sqlalchemy_exception_details(exc: BaseException) -> dict[str, Any]:
     """Extract repr, str, and .orig for SQLAlchemy errors."""
+    root = root_complete_exception(exc)
     out: dict[str, Any] = {
-        "error_type": type(exc).__name__,
-        "repr": repr(exc),
-        "message": str(exc),
+        "error_type": type(root).__name__,
+        "repr": repr(root),
+        "message": str(root),
     }
-    orig = getattr(exc, "orig", None)
+    if root is not exc:
+        out["wrapped_error_type"] = type(exc).__name__
+        out["wrapped_message"] = str(exc)
+    orig = getattr(root, "orig", None)
     if orig is not None:
         out["orig_type"] = type(orig).__name__
         out["orig_repr"] = repr(orig)
         out["orig_message"] = str(orig)
-    if isinstance(exc, _SA_TYPES):
+    if isinstance(root, _SA_TYPES):
         out["is_sqlalchemy"] = True
-    cause = exc.__cause__
+    cause = root.__cause__
     if cause is not None:
         out["cause_type"] = type(cause).__name__
         out["cause_message"] = str(cause)
@@ -100,17 +168,20 @@ def real_failure_json_response(
     tenant_id: int | None = None,
     warehouse_id: int | None = None,
     traceback_str: str | None = None,
+    db: Session | None = None,
 ):
     """
     TEMP debug: flat JSON body — never wrapped in HTTPException/detail/SESSION_INVALID.
-    Import JSONResponse at call site to avoid circular imports.
+    Never touches ORM entities — scalars only. Rolls back session first.
     """
     from starlette.responses import JSONResponse
 
+    rollback_db_safely(db, context=f"real_failure_json_response:{stage}")
+    root = root_complete_exception(exc)
     tb = traceback_str or traceback.format_exc()
     details = sqlalchemy_exception_details(exc)
     log_unhandled_complete_exception(
-        exc,
+        root,
         session_id=session_id,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -225,6 +296,7 @@ def commit_with_logging(
                 str(exc),
                 getattr(exc, "orig", None),
             )
+        rollback_db_safely(db, context=f"commit_failed:{stage}")
         raise
     else:
         logger.warning(

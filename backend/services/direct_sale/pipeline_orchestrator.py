@@ -111,8 +111,12 @@ def _commit_stage(db: Session, sess: DirectSaleSession, *, stage: str, entities:
 
 
 def _fail_stage(db: Session, sess: DirectSaleSession, *, stage: str, exc: Exception, entities: StageEntities) -> None:
+    # Scalars only — never touch relationships on a session that may be pending rollback.
+    sid = int(sess.id)
+    tid = int(sess.tenant_id)
+    wid = int(sess.warehouse_id)
     db.rollback()
-    sess = reload_session_for_stage(db, session_id=int(sess.id), tenant_id=int(sess.tenant_id))
+    sess = reload_session_for_stage(db, session_id=sid, tenant_id=tid)
     if sess is None:
         raise DirectSaleError("Sesja nie istnieje po błędzie pipeline.", code="pipeline_failed", step=stage) from exc
     mark_pipeline_failed(sess, stage=stage, exc=exc, entity_patch=entities.as_dict())
@@ -120,9 +124,9 @@ def _fail_stage(db: Session, sess: DirectSaleSession, *, stage: str, exc: Except
         commit_with_logging(
             db,
             stage=f"{stage}_failure_persist",
-            session_id=int(sess.id),
-            tenant_id=int(sess.tenant_id),
-            warehouse_id=int(sess.warehouse_id),
+            session_id=sid,
+            tenant_id=tid,
+            warehouse_id=wid,
         )
     except Exception as commit_exc:
         from .complete_debug_log import log_unhandled_complete_exception

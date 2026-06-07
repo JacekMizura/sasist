@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-04 — Direct Sales /complete PendingRollbackError guard
+
+- Failure paths: explicit `db.rollback()` before error JSON; no ORM relationship access after rollback.
+- `root_complete_exception()` unwraps PendingRollbackError → underlying IntegrityError/OperationalError.
+- `wz_service`: scalar capture of `sale_document.id` before flush; rollback on link flush failure.
+- `_fail_stage`: scalar capture before rollback; reload fresh session with joinedload.
+- `expire_on_commit=True` (SQLAlchemy default) — success path uses fresh queries / result scalars only.
+- Tests: `test_direct_sale_complete_rollback.py`.
+
 ## 2026-06-04 — Direct Sales /complete root cause + fix
 
 - `OperationalError`: missing `sale_documents.document_type_id` at `generate_documents` — `ensure_sale_documents_extended_columns` in complete schema bootstrap.

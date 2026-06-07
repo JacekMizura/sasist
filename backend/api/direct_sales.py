@@ -8,6 +8,7 @@ import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from starlette.responses import JSONResponse
 
 from ..api.operational_features_deps import operational_sales_sessions_for_request
 from ..auth.deps import get_current_user
@@ -540,24 +541,38 @@ def post_session_complete(
     """
     from ..services.direct_sale.complete_debug_log import (
         commit_with_logging,
+        log_orm_serialize_state,
         real_failure_json_response,
+        rollback_db_safely,
     )
 
     _complete_log = logging.getLogger(__name__)
     warehouse_id: int | None = None
     current_step = "validation"
+
+    def _failure_response(exc: BaseException, *, stage: str) -> JSONResponse:
+        return real_failure_json_response(
+            exc,
+            stage=stage,
+            session_id=session_id,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            db=db,
+        )
+
     try:
         sess = get_session_for_complete(db, session_id=session_id, tenant_id=tenant_id)
         if sess is None:
             raise HTTPException(status_code=404, detail="Direct sale session not found.")
         warehouse_id = int(sess.warehouse_id)
+        lines_count = len(sess.lines or [])
         _complete_log.info(
             "[direct-sales.complete.validation] session_id=%s tenant_id=%s warehouse_id=%s status=%s lines=%s",
             session_id,
             tenant_id,
             warehouse_id,
             sess.status,
-            len(sess.lines or []),
+            lines_count,
         )
         splits = None
         if body.payment_splits:
@@ -600,18 +615,16 @@ def post_session_complete(
                     )
                     result = replay
                 else:
-                    return real_failure_json_response(
-                        commit_exc,
-                        stage="commit",
-                        session_id=session_id,
-                        tenant_id=tenant_id,
-                        warehouse_id=warehouse_id,
-                    )
+                    return _failure_response(commit_exc, stage="commit")
         current_step = "response"
+        log_orm_serialize_state(sess, label="session", stage=current_step, relationship="pre_completion_read")
         completion = None
-        completion_read = None
         try:
-            completion_read = build_direct_sale_completion_read(db, tenant_id=tenant_id, session_id=int(sess.id))
+            completion_read = build_direct_sale_completion_read(
+                db,
+                tenant_id=tenant_id,
+                session_id=int(result.session_id),
+            )
             if completion_read:
                 completion = DirectSaleCompletionRead(**completion_read)
         except Exception as read_exc:
@@ -634,38 +647,20 @@ def post_session_complete(
         )
         return payload
     except HTTPException as http_exc:
+        rollback_db_safely(db, context="complete_http_exception")
         if isinstance(http_exc.detail, dict):
-            return real_failure_json_response(
+            return _failure_response(
                 Exception(str(http_exc.detail.get("message") or http_exc.detail)),
                 stage=current_step,
-                session_id=session_id,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
             )
-        return real_failure_json_response(
-            Exception(str(http_exc.detail)),
-            stage=current_step,
-            session_id=session_id,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-        )
+        return _failure_response(Exception(str(http_exc.detail)), stage=current_step)
     except DirectSaleError as exc:
+        rollback_db_safely(db, context="complete_direct_sale_error")
         root = exc.__cause__ or exc
-        return real_failure_json_response(
-            root,
-            stage=getattr(exc, "step", None) or current_step,
-            session_id=session_id,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-        )
+        return _failure_response(root, stage=getattr(exc, "step", None) or current_step)
     except Exception as exc:
-        return real_failure_json_response(
-            exc,
-            stage=current_step,
-            session_id=session_id,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-        )
+        rollback_db_safely(db, context="complete_unhandled")
+        return _failure_response(exc, stage=current_step)
 
 
 @router.post("/documents/{job_id}/reprint")
