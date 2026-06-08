@@ -20,6 +20,7 @@ Enterprise **Inventory / Stock Count** module — ERP planning + WMS blind count
   - Only unknown catalog barcodes → 404 `barcode_not_found`
   - Carrier optional: location → product; nośnik via optional button
   - Terminal UI: scanned product card (photo, EAN, SKU, qty, badges), recent scans, session summary
+  - **Blind terminal strip-down (2026-06-08)**: no expected/diff/progress; white scanner UI; auto +1 on scan; manual qty toggle only; single search field; no emergency search on execution screen
   - Fix: `GET /warehouses/{id}/locations` 500 (`round(None,4)` when `max_weight_kg` unset)
 - Full design: `memory/inventory-count-module.md`
 
