@@ -6,13 +6,18 @@ import {
   formatInventoryAuditTimestamp,
   type InventoryAuditTimelineEntry,
 } from "../../inventoryAuditEventLabels";
+import type { InventoryTableFilters } from "../../inventoryTableFilters";
+import { filterAuditTimeline } from "../../inventoryTableFilters";
 import { InventoryProductThumb } from "./InventoryLineBadges";
 import { InventorySection } from "./InventoryPageShell";
+import InventoryTableFilterBar from "./InventoryTableFilterBar";
 
 type Props = {
   auditLog: InventoryAuditEventRead[];
   timelines: InventoryDocumentTimelines | null;
   loading?: boolean;
+  filters?: InventoryTableFilters;
+  onFiltersChange?: (filters: InventoryTableFilters) => void;
 };
 
 function TimelineRow({ entry }: { entry: InventoryAuditTimelineEntry }) {
@@ -74,16 +79,26 @@ function TimelineRow({ entry }: { entry: InventoryAuditTimelineEntry }) {
   );
 }
 
-export default function InventoryAuditPanel({ auditLog, timelines, loading }: Props) {
-  const entries = useMemo(
-    () => buildInventoryAuditTimeline(auditLog, timelines),
-    [auditLog, timelines],
-  );
+export default function InventoryAuditPanel({
+  auditLog,
+  timelines,
+  loading,
+  filters,
+  onFiltersChange,
+}: Props) {
+  const entries = useMemo(() => {
+    const built = buildInventoryAuditTimeline(auditLog, timelines);
+    if (!filters) return built;
+    return filterAuditTimeline(built, filters);
+  }, [auditLog, timelines, filters]);
 
   if (loading) return <p className="py-3 text-xs text-slate-500">Wczytywanie kontroli…</p>;
 
   return (
     <InventorySection title="Oś czasu operacyjna">
+      {filters && onFiltersChange ? (
+        <InventoryTableFilterBar filters={filters} onChange={onFiltersChange} showDifferenceToggle={false} />
+      ) : null}
       <div className="max-h-[480px] overflow-auto">
         <table className="w-full min-w-[720px] border-collapse text-xs">
           <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] font-bold uppercase tracking-widest text-slate-500">

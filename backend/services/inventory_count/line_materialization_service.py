@@ -142,6 +142,35 @@ def _line_matches_filters(
     return True
 
 
+def parse_document_filters(doc: InventoryDocument) -> dict[str, Any]:
+    return _parse_filters(doc)
+
+
+def line_matches_inventory_filters(
+    *,
+    filters: dict[str, Any],
+    location_id: int,
+    product_id: int,
+    carrier_id: int | None,
+    qty: float,
+    loc: Location | None,
+    product: Product | None,
+) -> bool:
+    return _line_matches_filters(
+        filters=filters,
+        location_id=location_id,
+        product_id=product_id,
+        carrier_id=carrier_id,
+        qty=qty,
+        loc=loc,
+        product=product,
+    )
+
+
+def scope_mode_from_filters(filters: dict[str, Any]) -> str:
+    return _scope_mode(filters)
+
+
 def get_stock_snapshot(db: Session, document_id: int) -> InventorySnapshot | None:
     return (
         db.query(InventorySnapshot)

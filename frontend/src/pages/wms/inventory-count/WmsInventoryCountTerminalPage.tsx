@@ -237,6 +237,7 @@ export default function WmsInventoryCountTerminalPage() {
       {counting ? (
         <WmsInventoryLocationCounts
           groups={countedProductGroups}
+          locationCode={locationContext?.locationCode ?? null}
           activeLineId={activeLineId}
           pulseLineId={pulseLineId}
           onSelect={selectCountedProduct}

@@ -13,6 +13,7 @@ export type InventoryDocumentRead = {
   tenant_id: number;
   warehouse_id: number;
   number: string;
+  title?: string | null;
   inventory_type: string;
   status: string;
   count_mode: string;
@@ -350,6 +351,21 @@ export async function listDocumentLines(
   return data.items ?? [];
 }
 
+export async function previewInventoryScope(
+  tenantId: number,
+  warehouseId: number,
+  filters: Record<string, unknown>,
+) {
+  const { data } = await api.post<{
+    scope_mode: string;
+    location_count: number;
+    product_count: number;
+    line_count: number;
+    warehouse_id: number;
+  }>("/inventory-count/scope-preview", { warehouse_id: warehouseId, filters }, { params: { tenant_id: tenantId } });
+  return data;
+}
+
 export async function getDocumentDifferenceAnalysis(tenantId: number, documentId: number) {
   const { data } = await api.get(`/inventory-count/documents/${documentId}/differences`, {
     params: { tenant_id: tenantId },
@@ -359,6 +375,8 @@ export async function getDocumentDifferenceAnalysis(tenantId: number, documentId
     thresholds: Record<string, number>;
     summary: Record<string, number>;
     total_value_impact_net: number;
+    surplus_value_net?: number;
+    shortage_value_net?: number;
     lines: Array<Record<string, unknown>>;
   };
 }

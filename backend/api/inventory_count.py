@@ -19,7 +19,8 @@ from ..schemas.inventory_count import (
     InventoryDocumentRead,
     InventoryDocumentWizardUpdateBody,
     InventoryGenerateTasksBody,
-    InventoryReportsCatalogRead,
+    InventoryScopePreviewBody,
+    InventoryScopePreviewRead,
     InventoryReportKindRead,
     InventoryDifferenceAnalysisRead,
     InventoryLineRead,
@@ -36,6 +37,7 @@ from ..services.inventory_count.adjustment_service import post_inventory_adjustm
 from ..services.inventory_count.audit_package_service import build_audit_package
 from ..services.inventory_count.line_service import get_document_difference_analysis, list_document_lines
 from ..services.inventory_count.recount_service import complete_recount, create_recounts_for_document
+from ..services.inventory_count.scope_preview_service import preview_document_scope, preview_inventory_scope
 from ..api.inventory_count_deps import require_inventory_permission
 from ..services.inventory_count.permissions import (
     PERM_APPROVE,
@@ -224,6 +226,7 @@ def inventory_count_wizard_update(
             document_id=document_id,
             user_id=user.id if user else None,
             inventory_type=body.inventory_type,
+            title=body.title,
             filters=body.filters.model_dump() if body.filters else None,
             count_mode=body.count_mode,
             lock_mode=body.lock_mode,
@@ -236,6 +239,36 @@ def inventory_count_wizard_update(
         )
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
+
+
+@router.post("/scope-preview", response_model=InventoryScopePreviewRead)
+def inventory_count_scope_preview(
+    body: InventoryScopePreviewBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    return preview_inventory_scope(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=body.warehouse_id,
+        filters=body.filters.model_dump(),
+    )
+
+
+@router.get("/documents/{document_id}/scope-preview", response_model=InventoryScopePreviewRead)
+def inventory_count_document_scope_preview(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    doc = (
+        db.query(InventoryDocument)
+        .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return preview_document_scope(db, document=doc)
 
 
 @router.post("/documents/{document_id}/plan", response_model=InventoryDocumentRead)

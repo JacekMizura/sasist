@@ -17,6 +17,9 @@ from ...models.inventory_count.constants import (
     INV_STATUS_DRAFT,
     INV_STATUS_IN_PROGRESS,
     INV_STATUS_PLANNED,
+    INV_STATUS_POSTED,
+    INV_STATUS_CANCELLED,
+    INV_STATUS_ARCHIVED,
     INV_TYPE_FULL,
     TASK_STATUS_OPEN,
 )
@@ -45,14 +48,32 @@ def _serialize_json(value: dict[str, Any] | None) -> str | None:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
+def _doc_title(doc: InventoryDocument) -> str | None:
+    meta = _parse_metadata(doc)
+    t = meta.get("title")
+    return str(t).strip() if t else None
+
+
+def _parse_metadata(doc: InventoryDocument) -> dict[str, Any]:
+    if not doc.metadata_json:
+        return {}
+    try:
+        data = json.loads(doc.metadata_json)
+        return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
 def _doc_to_dict(doc: InventoryDocument) -> dict[str, Any]:
     strategy = parse_strategy(doc)
+    metadata = _parse_metadata(doc)
     movement = normalize_movement_policy(doc.lock_mode)
     return {
         "id": doc.id,
         "tenant_id": doc.tenant_id,
         "warehouse_id": doc.warehouse_id,
         "number": doc.number,
+        "title": metadata.get("title") or None,
         "inventory_type": doc.inventory_type,
         "status": doc.status,
         "count_mode": doc.count_mode,
@@ -63,7 +84,7 @@ def _doc_to_dict(doc: InventoryDocument) -> dict[str, Any]:
         "scan_mode": doc.scan_mode,
         "filters": json.loads(doc.filters_json) if doc.filters_json else {},
         "strategy": json.loads(doc.strategy_json) if doc.strategy_json else {},
-        "metadata": json.loads(doc.metadata_json) if doc.metadata_json else {},
+        "metadata": metadata,
         "notes": doc.notes,
         "planned_start_at": doc.planned_start_at.isoformat() if doc.planned_start_at else None,
         "planned_end_at": doc.planned_end_at.isoformat() if doc.planned_end_at else None,
@@ -153,6 +174,7 @@ def update_inventory_document_wizard(
     document_id: int,
     user_id: int | None = None,
     inventory_type: str | None = None,
+    title: str | None = None,
     filters: dict[str, Any] | None = None,
     count_mode: str | None = None,
     lock_mode: str | None = None,
@@ -170,11 +192,35 @@ def update_inventory_document_wizard(
     )
     if doc is None:
         raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
-    if doc.status not in (INV_STATUS_DRAFT, INV_STATUS_PLANNED):
+
+    meta_only = (title is not None or notes is not None) and not any(
+        [
+            inventory_type,
+            filters is not None,
+            count_mode,
+            lock_mode,
+            recount_required is not None,
+            scan_mode,
+            strategy is not None,
+            planned_start_at is not None,
+            planned_end_at is not None,
+        ]
+    )
+    if doc.status not in (INV_STATUS_DRAFT, INV_STATUS_PLANNED) and not meta_only:
         raise InventoryInvalidTransitionError("Document can only be edited in draft or planned status")
+    if doc.status in (INV_STATUS_POSTED, INV_STATUS_CANCELLED, INV_STATUS_ARCHIVED):
+        raise InventoryInvalidTransitionError("Document cannot be edited in this status")
 
     if inventory_type:
         doc.inventory_type = str(inventory_type).upper()
+    if title is not None:
+        meta = _parse_metadata(doc)
+        trimmed = str(title).strip()
+        if trimmed:
+            meta["title"] = trimmed
+        else:
+            meta.pop("title", None)
+        doc.metadata_json = _serialize_json(meta)
     if filters is not None:
         doc.filters_json = _serialize_json(filters)
     if count_mode:

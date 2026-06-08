@@ -69,7 +69,8 @@ class TestSubmitApprovalValidation(unittest.TestCase):
             self.assertEqual(err.details.get("document_status"), INV_STATUS_PLANNED)
             self.assertIn(INV_STATUS_IN_PROGRESS, err.details.get("allowed_statuses", []))
 
-    def test_rejects_incomplete_count_with_details(self):
+    def test_allows_partial_count_with_differences(self):
+        """FULL inventory may submit with uncounted lines and variances — only empty doc blocks."""
         with self.Session() as db:
             doc = self._doc(db)
             db.add(
@@ -88,6 +89,16 @@ class TestSubmitApprovalValidation(unittest.TestCase):
                     location_id=11,
                     product_id=6,
                     expected_quantity=5.0,
+                    counted_quantity=3.0,
+                    status=LINE_STATUS_COUNTED,
+                )
+            )
+            db.add(
+                InventoryDocumentLine(
+                    inventory_document_id=doc.id,
+                    location_id=12,
+                    product_id=7,
+                    expected_quantity=2.0,
                     status=LINE_STATUS_OPEN,
                 )
             )
@@ -96,13 +107,8 @@ class TestSubmitApprovalValidation(unittest.TestCase):
             recompute_document_kpis(db, doc)
             db.commit()
 
-            with self.assertRaises(InventoryIncompleteCountError) as ctx:
-                submit_for_approval(db, tenant_id=1, document_id=doc.id, user_id=1)
-            err = ctx.exception
-            self.assertEqual(err.code, "incomplete_count")
-            self.assertEqual(err.details.get("counted_lines"), 1)
-            self.assertEqual(err.details.get("total_lines"), 2)
-            self.assertEqual(err.details.get("uncounted_lines"), 1)
+            result = submit_for_approval(db, tenant_id=1, document_id=doc.id, user_id=1)
+            self.assertEqual(result["status"], INV_STATUS_AWAITING_APPROVAL)
 
     def test_success_when_all_lines_counted(self):
         with self.Session() as db:
@@ -177,9 +183,8 @@ class TestSubmitApprovalValidation(unittest.TestCase):
             self.assertEqual(ctx.exception.code, "partial_submit_not_ready")
             self.assertEqual(ctx.exception.details.get("reason"), "no_counted_lines")
 
-    def test_partial_rejects_active_tasks_with_incomplete_location(self):
-        from backend.services.inventory_count.errors import InventoryActiveCountingTasksError
-
+    def test_allows_submit_with_open_wms_tasks(self):
+        """Open WMS tasks must not block supervisor submit — partial counting is allowed."""
         with self.Session() as db:
             doc = self._doc(db, inventory_type=INV_TYPE_PARTIAL)
             db.add(
@@ -217,10 +222,8 @@ class TestSubmitApprovalValidation(unittest.TestCase):
             recompute_document_kpis(db, doc)
             db.commit()
 
-            with self.assertRaises(InventoryActiveCountingTasksError) as ctx:
-                submit_for_approval(db, tenant_id=1, document_id=doc.id, user_id=1)
-            self.assertEqual(ctx.exception.code, "active_counting_tasks")
-            self.assertEqual(ctx.exception.details.get("pending_tasks"), 1)
+            result = submit_for_approval(db, tenant_id=1, document_id=doc.id, user_id=1)
+            self.assertEqual(result["status"], INV_STATUS_AWAITING_APPROVAL)
 
     def test_partial_allows_in_progress_task_when_location_fully_counted(self):
         with self.Session() as db:

@@ -17,6 +17,7 @@ from ...models.inventory_count.constants import (
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.product import Product
+from .recount_conflict_service import lines_with_unresolved_operator_conflicts
 
 
 def _thresholds(doc: InventoryDocument) -> dict[str, float]:
@@ -71,6 +72,8 @@ def analyze_document_differences(
     rows: list[dict[str, Any]] = []
     counts = {DIFF_CLASS_NONE: 0, DIFF_CLASS_AUTO: 0, DIFF_CLASS_REVIEW: 0, DIFF_CLASS_VARIANCE: 0}
     total_value_impact = 0.0
+    surplus_value = 0.0
+    shortage_value = 0.0
 
     for line, product in lines:
         line.recompute_difference()
@@ -84,6 +87,10 @@ def analyze_document_differences(
         unit_cost = float(getattr(product, "purchase_price_net", 0) or 0) if product else 0.0
         value_impact = diff_qty * unit_cost
         total_value_impact += value_impact
+        if value_impact > 0:
+            surplus_value += value_impact
+        elif value_impact < 0:
+            shortage_value += abs(value_impact)
         if line.metadata_json:
             try:
                 meta = json.loads(line.metadata_json)
@@ -111,10 +118,18 @@ def analyze_document_differences(
             }
         )
 
+    operator_conflicts = len(lines_with_unresolved_operator_conflicts(db, document_id=int(document.id)))
+
     return {
         "document_id": document.id,
         "thresholds": thresholds,
-        "summary": counts,
+        "summary": {
+            **counts,
+            "operator_conflicts": operator_conflicts,
+            "difference_lines": counts.get(DIFF_CLASS_REVIEW, 0) + counts.get(DIFF_CLASS_VARIANCE, 0),
+        },
         "total_value_impact_net": round(total_value_impact, 2),
+        "surplus_value_net": round(surplus_value, 2),
+        "shortage_value_net": round(shortage_value, 2),
         "lines": rows,
     }

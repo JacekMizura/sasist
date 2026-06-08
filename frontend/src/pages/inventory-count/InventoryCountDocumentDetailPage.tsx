@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Download, FileSpreadsheet, Loader2, ShieldCheck } from "lucide-react";
+import { Download, FileSpreadsheet, Loader2, Pencil, ShieldCheck } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -15,6 +15,7 @@ import {
   postInventoryDocumentAdjustments,
   rejectInventoryDocument,
   submitInventoryDocumentForApproval,
+  updateInventoryWizard,
   type InventoryDocumentRead,
   type InventoryLineFocus,
   type InventoryLineRead,
@@ -22,6 +23,7 @@ import {
 import InventoryAuditPanel from "../../modules/inventoryCount/erp/components/InventoryAuditPanel";
 import { InventoryDocumentStatusBadge } from "../../modules/inventoryCount/erp/components/InventoryDocumentStatusBadge";
 import InventoryLineTable from "../../modules/inventoryCount/erp/components/InventoryLineTable";
+import InventoryTableFilterBar from "../../modules/inventoryCount/erp/components/InventoryTableFilterBar";
 import { InventoryKpiTile, InventorySection } from "../../modules/inventoryCount/erp/components/InventoryPageShell";
 import { triggerBrowserDownload } from "../../modules/inventoryCount/erp/downloadHelpers";
 import { formatInventoryRequestError } from "../../modules/inventoryCount/inventoryCountApiErrors";
@@ -29,6 +31,11 @@ import {
   canSubmitInventoryDocument,
   inventorySubmitBlockHint,
 } from "../../modules/inventoryCount/inventorySubmitReadiness";
+import {
+  EMPTY_TABLE_FILTERS,
+  filterInventoryLines,
+  type InventoryTableFilters,
+} from "../../modules/inventoryCount/inventoryTableFilters";
 import {
   inventoryCountModeLabel,
   inventoryMovementPolicyLabel,
@@ -57,6 +64,10 @@ export default function InventoryCountDocumentDetailPage() {
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [linesLoading, setLinesLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [tableFilters, setTableFilters] = useState<InventoryTableFilters>(EMPTY_TABLE_FILTERS);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
 
   const lineFocus: InventoryLineFocus =
     tab === "differences" ? "differences" : showUncounted ? "all" : "operational";
@@ -109,6 +120,29 @@ export default function InventoryCountDocumentDetailPage() {
     }
   }, [tab, loadLines, loadAudit]);
 
+  const filteredLines = useMemo(
+    () => filterInventoryLines(lines, tableFilters),
+    [lines, tableFilters],
+  );
+
+  const saveTitle = useCallback(async () => {
+    if (!doc) return;
+    setBusy(true);
+    try {
+      const updated = await updateInventoryWizard(tenantId, doc.id, {
+        title: titleDraft.trim() || null,
+        notes: notesDraft.trim() || null,
+      });
+      setDoc(updated);
+      setEditingTitle(false);
+      toast.success("Zapisano tytuł dokumentu.");
+    } catch {
+      toast.error("Nie udało się zapisać tytułu.");
+    } finally {
+      setBusy(false);
+    }
+  }, [doc, tenantId, titleDraft, notesDraft]);
+
   const action = async (kind: "submit-approval" | "approve" | "reject" | "post") => {
     setBusy(true);
     try {
@@ -149,6 +183,10 @@ export default function InventoryCountDocumentDetailPage() {
   const updatesStock = resultPolicy === "update_stock";
   const scopeMode = String(doc.filters?.scope_mode ?? "full");
   const movementPolicy = doc.movement_policy ?? doc.lock_mode;
+  const conflictCount = analysis?.summary?.operator_conflicts ?? 0;
+  const surplus = analysis?.surplus_value_net ?? 0;
+  const shortage = analysis?.shortage_value_net ?? 0;
+  const hasValueBreakdown = surplus > 0 || shortage > 0;
 
   const tabBtn = (key: DocTab, label: string) => (
     <button
@@ -167,7 +205,55 @@ export default function InventoryCountDocumentDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Dokument inwentaryzacji</p>
-          <h2 className="text-lg font-semibold tracking-tight text-slate-900">{doc.number}</h2>
+          {editingTitle ? (
+            <div className="mt-1 space-y-1">
+              <input
+                className="w-full max-w-md rounded border border-slate-300 px-2 py-1 text-sm font-semibold"
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                placeholder="Tytuł inwentaryzacji…"
+              />
+              <textarea
+                className="w-full max-w-md rounded border border-slate-200 px-2 py-1 text-xs"
+                rows={2}
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                placeholder="Opis / notatka…"
+              />
+              <div className="flex gap-1">
+                <button type="button" disabled={busy} onClick={() => void saveTitle()} className="rounded bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">
+                  Zapisz
+                </button>
+                <button type="button" onClick={() => setEditingTitle(false)} className="text-[11px] text-slate-500">
+                  Anuluj
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-1">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+                  {doc.title?.trim() || doc.number}
+                </h2>
+                <p className="font-mono text-[10px] text-slate-400">Nr systemowy: {doc.number}</p>
+                {doc.notes ? <p className="mt-0.5 text-xs text-slate-600">{doc.notes}</p> : null}
+              </div>
+              {["draft", "planned", "in_progress", "awaiting_approval"].includes(doc.status) ? (
+                <button
+                  type="button"
+                  title="Edytuj tytuł"
+                  onClick={() => {
+                    setTitleDraft(doc.title ?? "");
+                    setNotesDraft(doc.notes ?? "");
+                    setEditingTitle(true);
+                  }}
+                  className="mt-0.5 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+          )}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span>{inventoryTypeLabel(doc.inventory_type)}</span>
             <InventoryDocumentStatusBadge status={doc.status} />
@@ -218,11 +304,29 @@ export default function InventoryCountDocumentDetailPage() {
       </div>
 
       {analysis ? (
-        <div className="grid gap-2 sm:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <InventoryKpiTile label="Pozycje z różnicą" value={doc.difference_lines} />
-          <InventoryKpiTile label="Wpływ netto" value={analysis.total_value_impact_net.toFixed(2)} />
-          <InventoryKpiTile label="Ponowne liczenie" value={analysis.summary.mandatory_recount ?? 0} />
-          <InventoryKpiTile label="Policzone" value={`${doc.counted_lines}/${doc.total_lines}`} />
+          <InventoryKpiTile
+            label="Konflikty liczenia"
+            value={conflictCount}
+            hint="Pozycje policzone wielokrotnie z różnymi wynikami"
+          />
+          {hasValueBreakdown ? (
+            <>
+              <InventoryKpiTile
+                label="Wartość nadwyżek"
+                value={`+${surplus.toLocaleString("pl-PL")} PLN`}
+                hint="Ilość × cena zakupu netto"
+              />
+              <InventoryKpiTile
+                label="Wartość braków"
+                value={`−${shortage.toLocaleString("pl-PL")} PLN`}
+                hint="Ilość × cena zakupu netto"
+              />
+            </>
+          ) : (
+            <InventoryKpiTile label="Policzone" value={`${doc.counted_lines}/${doc.total_lines}`} />
+          )}
         </div>
       ) : null}
 
@@ -264,7 +368,12 @@ export default function InventoryCountDocumentDetailPage() {
       </div>
 
       {tab === "control" ? (
-        <InventoryAuditPanel auditLog={auditLog?.items ?? []} timelines={timelines} />
+        <InventoryAuditPanel
+          auditLog={auditLog?.items ?? []}
+          timelines={timelines}
+          filters={tableFilters}
+          onFiltersChange={setTableFilters}
+        />
       ) : (
         <InventorySection
           title={tab === "differences" ? "Pozycje z różnicą" : "Przebieg liczenia"}
@@ -282,13 +391,20 @@ export default function InventoryCountDocumentDetailPage() {
             ) : undefined
           }
         >
+          <InventoryTableFilterBar
+            filters={tableFilters}
+            onChange={setTableFilters}
+            showDifferenceToggle={tab === "progress"}
+            showRecountToggle
+            showUnknownToggle={tab === "progress"}
+          />
           <InventoryLineTable
-            lines={lines}
+            lines={filteredLines}
             loading={linesLoading}
             emptyMessage={
               tab === "differences"
-                ? "Brak różnic w tym dokumencie."
-                : "Brak policzonych pozycji — włącz „Pokaż niepoliczone” lub przejdź do terminala WMS."
+                ? "Brak różnic pasujących do filtrów."
+                : "Brak pozycji pasujących do filtrów."
             }
           />
         </InventorySection>

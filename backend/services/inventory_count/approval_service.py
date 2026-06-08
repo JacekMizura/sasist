@@ -217,25 +217,19 @@ def _submit_block_message(code: str, blockers: dict[str, Any]) -> str:
     if code == "invalid_status_transition":
         current = blockers.get("document_status")
         return f"Nie można wysłać do zatwierdzenia: dokument musi być w trakcie liczenia (obecny status: {current})."
-    if code == "active_counting_tasks":
-        pending = blockers.get("pending_tasks")
-        return f"Nie można wysłać do zatwierdzenia: otwarte zadania liczenia ({pending})."
+    if code == "empty_document":
+        return "Dokument nie zawiera policzonych pozycji."
     if code == "partial_submit_not_ready":
         return "Dokument nie zawiera policzonych pozycji."
-    if code == "incomplete_count":
-        counted = blockers.get("counted_lines")
-        total = blockers.get("total_lines")
-        return f"Nie wszystkie pozycje dokumentu zostały policzone ({counted}/{total})."
     if code == "pending_recounts":
-        pending = blockers.get("pending_recounts") or blockers.get("projected_recounts")
-        return f"Nie można wysłać do zatwierdzenia: dokończ ponowne liczenia ({pending} aktywnych)."
+        pending = blockers.get("pending_recounts") or blockers.get("operator_conflicts")
+        return f"Nie można wysłać do zatwierdzenia: dokończ weryfikację konfliktów liczenia ({pending})."
     return "Nie można wysłać dokumentu do zatwierdzenia."
 
 
 def evaluate_submit_readiness(db: Session, doc: InventoryDocument) -> dict[str, Any]:
-    """Non-throwing submit gate — for ERP document detail UI."""
+    """Submit when ≥1 counted line; block only on empty doc, wrong status, or operator recount conflicts."""
     blockers = _submit_blockers(db, doc)
-    scoped = _allows_partial_coverage(doc)
 
     if blockers["document_status"] != INV_STATUS_IN_PROGRESS:
         code = "invalid_status_transition"
@@ -246,8 +240,9 @@ def evaluate_submit_readiness(db: Session, doc: InventoryDocument) -> dict[str, 
             "details": blockers,
         }
 
-    if blockers["pending_tasks"] > 0:
-        code = "active_counting_tasks"
+    if int(blockers["counted_lines"] or 0) < 1:
+        code = "empty_document"
+        blockers = {**blockers, "reason": "no_counted_lines"}
         return {
             "can_submit": False,
             "block_code": code,
@@ -255,32 +250,14 @@ def evaluate_submit_readiness(db: Session, doc: InventoryDocument) -> dict[str, 
             "details": blockers,
         }
 
-    if scoped:
-        if blockers["counted_lines"] < 1:
-            code = "partial_submit_not_ready"
-            blockers = {**blockers, "reason": "no_counted_lines"}
-            return {
-                "can_submit": False,
-                "block_code": code,
-                "block_message": _submit_block_message(code, blockers),
-                "details": blockers,
-            }
-    elif blockers["counted_lines"] < blockers["total_lines"]:
-        code = "incomplete_count"
-        return {
-            "can_submit": False,
-            "block_code": code,
-            "block_message": _submit_block_message(code, blockers),
-            "details": blockers,
-        }
-
+    operator_conflicts = len(lines_with_unresolved_operator_conflicts(db, document_id=int(doc.id)))
     pending_recounts = int(blockers.get("pending_recounts") or 0)
-    projected_recounts = int(blockers.get("projected_recounts") or 0)
-    if pending_recounts > 0 or projected_recounts > 0:
+    if pending_recounts > 0 or operator_conflicts > 0:
         code = "pending_recounts"
         blockers = {
             **blockers,
-            "pending_recounts": max(pending_recounts, projected_recounts),
+            "operator_conflicts": operator_conflicts,
+            "pending_recounts": max(pending_recounts, operator_conflicts),
         }
         return {
             "can_submit": False,
@@ -308,7 +285,7 @@ def _assert_submit_ready(db: Session, doc: InventoryDocument, blockers: dict[str
         raise InventoryInvalidTransitionError(message, details=details)
     if code == "active_counting_tasks":
         raise InventoryActiveCountingTasksError(message, details=details)
-    if code == "partial_submit_not_ready":
+    if code == "partial_submit_not_ready" or code == "empty_document":
         raise InventoryPartialSubmitNotReadyError(message, details=details)
     if code == "incomplete_count":
         raise InventoryIncompleteCountError(message, details=details)

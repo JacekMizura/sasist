@@ -1,3 +1,8 @@
+import { useEffect, useMemo, useState } from "react";
+
+import { previewInventoryScope } from "@/api/inventoryCountApi";
+import { getWarehouseLocations, type WarehouseLocationItem } from "@/api/warehouseGraphApi";
+import { searchProductsCatalog, type ProductSearchHit } from "@/api/productsSearchApi";
 import type {
   InventoryCountMode,
   InventoryDocumentFiltersConfig,
@@ -41,6 +46,7 @@ function OptionCard({ selected, title, hint, onSelect }: OptionCardProps) {
 }
 
 type ScopeStepProps = {
+  tenantId: number;
   inventoryType: string;
   scopeMode: InventoryScopeMode;
   filters: InventoryDocumentFiltersConfig;
@@ -51,6 +57,7 @@ type ScopeStepProps = {
 };
 
 export function InventoryWizardScopeStep({
+  tenantId,
   inventoryType,
   scopeMode,
   filters,
@@ -60,8 +67,66 @@ export function InventoryWizardScopeStep({
   onFiltersChange,
 }: ScopeStepProps) {
   const isFullType = inventoryType === "FULL";
+  const effectiveScope = isFullType ? "full" : scopeMode;
+  const [preview, setPreview] = useState<{ location_count: number; product_count: number; line_count: number } | null>(
+    null,
+  );
+  const [locations, setLocations] = useState<WarehouseLocationItem[]>([]);
+  const [locSearch, setLocSearch] = useState("");
+  const [prodSearch, setProdSearch] = useState("");
+  const [prodHits, setProdHits] = useState<ProductSearchHit[]>([]);
+
   const patch = (partial: Partial<InventoryDocumentFiltersConfig>) =>
-    onFiltersChange({ ...filters, ...partial, scope_mode: scopeMode });
+    onFiltersChange({ ...filters, ...partial, scope_mode: effectiveScope as InventoryScopeMode });
+
+  useEffect(() => {
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void previewInventoryScope(tenantId, warehouseId, { ...filters, scope_mode: effectiveScope }).then((p) => {
+        if (!cancelled) setPreview(p);
+      });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [tenantId, warehouseId, filters, effectiveScope]);
+
+  useEffect(() => {
+    if (effectiveScope !== "locations") return;
+    void getWarehouseLocations(warehouseId).then(setLocations).catch(() => setLocations([]));
+  }, [warehouseId, effectiveScope]);
+
+  useEffect(() => {
+    if (effectiveScope !== "products" || prodSearch.trim().length < 2) {
+      setProdHits([]);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void searchProductsCatalog(tenantId, prodSearch, 20).then(setProdHits).catch(() => setProdHits([]));
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [tenantId, prodSearch, effectiveScope]);
+
+  const filteredLocations = useMemo(() => {
+    const q = locSearch.trim().toLowerCase();
+    if (!q) return locations.slice(0, 50);
+    return locations.filter((l) => (l.name ?? l.code ?? "").toLowerCase().includes(q)).slice(0, 50);
+  }, [locations, locSearch]);
+
+  const toggleLocation = (locId: number) => {
+    const set = new Set(filters.location_ids ?? []);
+    if (set.has(locId)) set.delete(locId);
+    else set.add(locId);
+    patch({ location_ids: [...set] });
+  };
+
+  const toggleProduct = (prodId: number) => {
+    const set = new Set(filters.product_ids ?? []);
+    if (set.has(prodId)) set.delete(prodId);
+    else set.add(prodId);
+    patch({ product_ids: [...set] });
+  };
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
@@ -110,27 +175,63 @@ export function InventoryWizardScopeStep({
       ) : null}
 
       {scopeMode === "locations" ? (
-        <label className="block text-xs">
-          <span className={labelClass}>ID lokalizacji (po przecinku)</span>
+        <div className="space-y-2 text-xs">
           <input
             className={fieldClass}
-            placeholder="np. 101, 102, 103"
-            defaultValue={(filters.location_ids ?? []).join(", ")}
-            onBlur={(e) => patch({ location_ids: parseIdList(e.target.value) })}
+            placeholder="Szukaj lokalizacji…"
+            value={locSearch}
+            onChange={(e) => setLocSearch(e.target.value)}
           />
-        </label>
+          <div className="max-h-40 overflow-auto rounded border border-slate-200">
+            {filteredLocations.map((loc) => {
+              const selected = (filters.location_ids ?? []).includes(loc.id);
+              return (
+                <button
+                  key={loc.id}
+                  type="button"
+                  onClick={() => toggleLocation(loc.id)}
+                  className={`flex w-full items-center justify-between px-2 py-1 text-left hover:bg-slate-50 ${
+                    selected ? "bg-slate-100 font-semibold" : ""
+                  }`}
+                >
+                  <span>{loc.name ?? loc.code}</span>
+                  {selected ? <span className="text-[10px] text-emerald-700">✓</span> : null}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-slate-500">Wybrano: {(filters.location_ids ?? []).length} lokalizacji</p>
+        </div>
       ) : null}
 
       {scopeMode === "products" ? (
-        <label className="block text-xs">
-          <span className={labelClass}>ID produktów (po przecinku)</span>
+        <div className="space-y-2 text-xs">
           <input
             className={fieldClass}
-            placeholder="np. 5001, 5002"
-            defaultValue={(filters.product_ids ?? []).join(", ")}
-            onBlur={(e) => patch({ product_ids: parseIdList(e.target.value) })}
+            placeholder="Szukaj produktu (min. 2 znaki)…"
+            value={prodSearch}
+            onChange={(e) => setProdSearch(e.target.value)}
           />
-        </label>
+          <div className="max-h-40 overflow-auto rounded border border-slate-200">
+            {prodHits.map((p) => {
+              const selected = (filters.product_ids ?? []).includes(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => toggleProduct(p.id)}
+                  className={`flex w-full flex-col px-2 py-1 text-left hover:bg-slate-50 ${
+                    selected ? "bg-slate-100" : ""
+                  }`}
+                >
+                  <span className="font-semibold">{p.name ?? p.sku}</span>
+                  <span className="text-[10px] text-slate-500">{p.sku ?? p.ean}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-slate-500">Wybrano: {(filters.product_ids ?? []).length} produktów</p>
+        </div>
       ) : null}
 
       {scopeMode === "categories" ? (
@@ -218,6 +319,17 @@ export function InventoryWizardScopeStep({
               }
             />
           </label>
+        </div>
+      ) : null}
+
+      {preview ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          <p className="font-bold">Zakres obejmuje (szacunek na podstawie bieżących stanów):</p>
+          <ul className="mt-1 list-inside list-disc">
+            <li>{preview.location_count} lokalizacji</li>
+            <li>{preview.product_count} produktów</li>
+            <li>{preview.line_count} pozycji magazynowych</li>
+          </ul>
         </div>
       ) : null}
 

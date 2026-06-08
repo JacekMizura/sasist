@@ -49,6 +49,7 @@ class InventoryDocumentCreateBody(BaseModel):
 
 class InventoryDocumentWizardUpdateBody(BaseModel):
     inventory_type: str | None = None
+    title: str | None = None
     filters: InventoryDocumentFilters | None = None
     count_mode: str | None = None
     lock_mode: str | None = None
@@ -71,11 +72,25 @@ class InventorySubmitReadinessRead(BaseModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
+class InventoryScopePreviewBody(BaseModel):
+    warehouse_id: int
+    filters: InventoryDocumentFilters = Field(default_factory=InventoryDocumentFilters)
+
+
+class InventoryScopePreviewRead(BaseModel):
+    scope_mode: str
+    location_count: int
+    product_count: int
+    line_count: int
+    warehouse_id: int
+
+
 class InventoryDocumentRead(BaseModel):
     id: int
     tenant_id: int
     warehouse_id: int
     number: str
+    title: str | None = None
     inventory_type: str
     status: str
     count_mode: str

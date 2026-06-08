@@ -63,6 +63,8 @@ export default function InventoryCountWizardPage() {
   const [filters, setFilters] = useState<InventoryDocumentFiltersConfig>(emptyFilters("full"));
   const [countMode, setCountMode] = useState<InventoryCountMode>("blind");
   const [movementPolicy, setMovementPolicy] = useState<InventoryMovementPolicy>("allow_operations");
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
   const [resultPolicy, setResultPolicy] = useState<InventoryResultPolicy>("update_stock");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -78,6 +80,8 @@ export default function InventoryCountWizardPage() {
     const sm = (f.scope_mode as InventoryScopeMode) || defaultScopeForInventoryType(d.inventory_type);
     setScopeMode(sm);
     setFilters({ ...emptyFilters(sm), ...f, scope_mode: sm });
+    setTitle(String(d.title ?? (d.metadata?.title as string) ?? ""));
+    setNotes(d.notes ?? "");
   }, []);
 
   useEffect(() => {
@@ -114,7 +118,11 @@ export default function InventoryCountWizardPage() {
     try {
       const current = await ensureDocument();
       if (step === 0) {
-        const updated = await updateInventoryWizard(tenantId, current.id, { inventory_type: inventoryType });
+        const updated = await updateInventoryWizard(tenantId, current.id, {
+          inventory_type: inventoryType,
+          title: title.trim() || null,
+          notes: notes.trim() || null,
+        });
         hydrateFromDoc(updated);
       }
       if (step === 1) {
@@ -178,27 +186,51 @@ export default function InventoryCountWizardPage() {
       {err ? <p className="text-xs text-rose-600">{err}</p> : null}
 
       {step === 0 ? (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {INV_TYPES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => onTypeChange(t.id)}
-              className={`border p-3 text-left transition ${
-                inventoryType === t.id
-                  ? "border-slate-900 bg-slate-50 ring-1 ring-slate-900"
-                  : "border-slate-200 bg-white hover:border-slate-300"
-              }`}
-            >
-              <p className="text-sm font-semibold text-slate-900">{t.label}</p>
-              <p className="mt-0.5 text-xs text-slate-500">{t.hint}</p>
-            </button>
-          ))}
+        <div className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {INV_TYPES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => onTypeChange(t.id)}
+                className={`border p-3 text-left transition ${
+                  inventoryType === t.id
+                    ? "border-slate-900 bg-slate-50 ring-1 ring-slate-900"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <p className="text-sm font-semibold text-slate-900">{t.label}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{t.hint}</p>
+              </button>
+            ))}
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+            <label className="block text-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Tytuł inwentaryzacji</span>
+              <input
+                className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="np. Roczna inwentaryzacja 2026"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Opis / notatka</span>
+              <textarea
+                className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs"
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Opcjonalny opis dla zespołu magazynowego"
+              />
+            </label>
+          </div>
         </div>
       ) : null}
 
       {step === 1 ? (
         <InventoryWizardScopeStep
+          tenantId={tenantId}
           inventoryType={inventoryType}
           scopeMode={effectiveScope}
           filters={filters}
@@ -227,6 +259,7 @@ export default function InventoryCountWizardPage() {
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <p className="text-sm font-semibold text-slate-900">Podsumowanie</p>
           <ul className="mt-2 space-y-0.5 text-xs text-slate-700">
+            <li>Tytuł: {title.trim() || "—"}</li>
             <li>Typ: {inventoryTypeLabel(inventoryType)}</li>
             <li>Zakres: {inventoryScopeModeLabel(effectiveScope)}</li>
             <li>Tryb liczenia: {inventoryCountModeLabel(countMode)}</li>

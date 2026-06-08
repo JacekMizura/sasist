@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Inventory UX production cleanup
+- Submit-for-approval: only blocks empty doc, wrong status, operator recount conflicts (not partial count, differences, open WMS tasks)
+- KPI: „Konflikty liczenia” + wartość nadwyżek/braków PLN (removed dead „Wpływ netto”)
+- ERP tabs: filter toolbar on Przebieg / Różnice / Kontrola
+- WMS: carrier hierarchy card (LOCATION → CARRIER → PRODUCTS)
+- Editable document title + notes; scope preview API + wizard location/product pickers
+- Wizard: 4 steps (removed fake Zadania step)
+
 ## 2026-06-08 — Inventory strategy simplification (operator-first config)
 - Replaced snapshot/soft/hard with movement policies: allow_operations | block_picking | block_all
 - Result policy: update_stock | count_only | report_only — post skips RW/PW for non-update modes
