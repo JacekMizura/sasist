@@ -43,7 +43,7 @@ from ..services.inventory_count.wms_search_service import (
     resolve_product_for_task_location,
     search_inventory_execution,
 )
-from ..services.inventory_count.wms_task_queue_service import list_tasks_paginated
+from ..services.inventory_count.wms_task_queue_service import list_tasks_paginated, resolve_task_by_location_scan
 from ..services.inventory_count.wms_variance_service import get_audit_queues, get_location_execution_summary
 from ..api.inventory_count_deps import require_inventory_permission_optional
 from ..services.inventory_count.permissions import PERM_EXECUTE
@@ -102,23 +102,51 @@ def wms_inventory_task_queue(
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(get_optional_current_user),
 ):
-    return list_tasks_paginated(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        document_id=document_id,
-        user_id=user.id if user else None,
-        zone=zone,
-        assigned_user_id=assigned_user_id,
-        status=status,
-        recount_only=recount_only,
-        unresolved_only=unresolved_only,
-        variance_only=variance_only,
-        completed_only=completed_only,
-        search=search,
-        offset=offset,
-        limit=limit,
-    )
+    try:
+        return list_tasks_paginated(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            document_id=document_id,
+            user_id=user.id if user else None,
+            search=search,
+            offset=offset,
+            limit=limit,
+        )
+    except Exception:
+        logger.exception(
+            "[inventory_count.queue] api_failed tenant_id=%s warehouse_id=%s search=%s",
+            tenant_id,
+            warehouse_id,
+            (search or "")[:64],
+        )
+        return {"items": [], "total": 0, "offset": offset, "limit": limit, "has_more": False}
+
+
+@router.get("/resolve-location")
+def wms_inventory_resolve_location(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    code: str = Query(..., min_length=1),
+    document_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return resolve_task_by_location_scan(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            scanned_code=code,
+            document_id=document_id,
+        )
+    except Exception:
+        logger.exception(
+            "[inventory_count.resolve_location] failed tenant_id=%s warehouse_id=%s code=%s",
+            tenant_id,
+            warehouse_id,
+            code[:64],
+        )
+        return {"found": False, "reason": "internal_error"}
 
 
 @router.get("/search", response_model=InventoryUniversalSearchRead)

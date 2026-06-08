@@ -208,8 +208,7 @@ import InventoryCountWizardPage from "./pages/inventory-count/InventoryCountWiza
 import InventoryCountReportsPage from "./pages/inventory-count/InventoryCountReportsPage"
 import InventoryCountDocumentDetailPage from "./pages/inventory-count/InventoryCountDocumentDetailPage"
 import WmsInventoryCountLayout from "./pages/wms/inventory-count/WmsInventoryCountLayout"
-import WmsInventoryCountTasksPage from "./pages/wms/inventory-count/WmsInventoryCountTasksPage"
-import WmsInventoryCountExecutionPage from "./pages/wms/inventory-count/WmsInventoryCountExecutionPage"
+import WmsInventoryCountTerminalPage from "./pages/wms/inventory-count/WmsInventoryCountTerminalPage"
 import CustomersListPage from "./pages/customers/CustomersListPage"
 import CustomerEditPage from "./pages/customers/CustomerEditPage"
 import PurchaseOrdersPage from "./pages/Assortment/PurchaseOrdersPage"
@@ -467,8 +466,8 @@ export const router = createBrowserRouter(
           }
         >
           <Route index element={<Navigate to="tasks" replace />} />
-          <Route path="tasks" element={<WmsInventoryCountTasksPage />} />
-          <Route path="count/:taskId" element={<WmsInventoryCountExecutionPage />} />
+          <Route path="tasks" element={<WmsInventoryCountTerminalPage />} />
+          <Route path="count/:taskId" element={<WmsInventoryCountTerminalPage />} />
         </Route>
       </Route>
       <Route element={<SettingsAdminLayout />}>

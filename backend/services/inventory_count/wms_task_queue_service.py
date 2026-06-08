@@ -1,12 +1,13 @@
-"""Scalable WMS inventory task queue — paginated, filterable, compact DTOs."""
+"""Scalable WMS inventory task queue — minimal operational list."""
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import and_, case, func, or_
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 
 from ...models.app_user import AppUser
 from ...models.inventory_count.constants import LINE_STATUS_RECOUNT, TASK_STATUS_DONE, TASK_ACTIVE_STATUSES
@@ -15,6 +16,8 @@ from ...models.inventory_count.task import InventoryTask
 from ...models.location import Location
 from ...models.product import Product
 
+logger = logging.getLogger(__name__)
+
 
 def _operator_display_name(user: AppUser | None) -> str | None:
     if user is None:
@@ -22,6 +25,95 @@ def _operator_display_name(user: AppUser | None) -> str | None:
     parts = [str(getattr(user, "first_name", "") or "").strip(), str(getattr(user, "last_name", "") or "").strip()]
     name = " ".join(p for p in parts if p)
     return name or str(getattr(user, "login", "") or "") or None
+
+
+def _safe_like_term(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    term = str(raw).strip()
+    if len(term) < 1:
+        return None
+    return f"%{term}%"
+
+
+def _product_search_conditions(term: str, tenant_id: int):
+    """Defensive OR — only columns guaranteed on Product model."""
+    clauses = []
+    for col in (Product.ean, Product.sku, Product.symbol, Product.name, Product.barcode):
+        clauses.append(col.ilike(term))
+    if hasattr(Product, "catalog_number"):
+        clauses.append(Product.catalog_number.ilike(term))
+    return and_(Product.tenant_id == int(tenant_id), or_(*clauses))
+
+
+def _task_ids_for_search(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    document_id: int | None,
+    term: str,
+) -> list[int]:
+    """Resolve matching task IDs without fragile join aliases."""
+    like = _safe_like_term(term)
+    if not like:
+        return []
+
+    base = db.query(InventoryTask.id).filter(
+        InventoryTask.tenant_id == int(tenant_id),
+        InventoryTask.warehouse_id == int(warehouse_id),
+    )
+    if document_id is not None:
+        base = base.filter(InventoryTask.inventory_document_id == int(document_id))
+
+    clauses = [InventoryTask.task_number.ilike(like)]
+
+    loc_ids = [
+        int(r[0])
+        for r in db.query(Location.id)
+        .filter(
+            Location.warehouse_id == int(warehouse_id),
+            Location.is_active.is_(True),
+            Location.name.ilike(like),
+        )
+        .limit(500)
+        .all()
+        if r[0] is not None
+    ]
+    if loc_ids:
+        clauses.append(InventoryTask.location_id.in_(loc_ids))
+
+    try:
+        product_ids = [
+            int(r[0])
+            for r in db.query(Product.id)
+            .filter(_product_search_conditions(like, tenant_id))
+            .limit(200)
+            .all()
+            if r[0] is not None
+        ]
+    except Exception:
+        logger.exception("[inventory_count.queue] product search failed term=%s", term[:32])
+        product_ids = []
+
+    if product_ids:
+        line_q = db.query(InventoryDocumentLine.inventory_document_id, InventoryDocumentLine.location_id).filter(
+            InventoryDocumentLine.product_id.in_(product_ids)
+        )
+        if document_id is not None:
+            line_q = line_q.filter(InventoryDocumentLine.inventory_document_id == int(document_id))
+        for doc_id_raw, loc_id_raw in line_q.distinct().limit(500).all():
+            if doc_id_raw is None or loc_id_raw is None:
+                continue
+            clauses.append(
+                and_(
+                    InventoryTask.inventory_document_id == int(doc_id_raw),
+                    InventoryTask.location_id == int(loc_id_raw),
+                )
+            )
+
+    rows = base.filter(or_(*clauses)).distinct().limit(5000).all()
+    return [int(r[0]) for r in rows if r[0] is not None]
 
 
 def _task_row_to_compact(
@@ -69,145 +161,169 @@ def list_tasks_paginated(
     warehouse_id: int,
     document_id: int | None = None,
     user_id: int | None = None,
-    zone: str | None = None,
-    assigned_user_id: int | None = None,
-    status: str | None = None,
-    recount_only: bool = False,
-    unresolved_only: bool = False,
-    variance_only: bool = False,
-    completed_only: bool = False,
     search: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    **_ignored_filters,
 ) -> dict[str, Any]:
+    """Minimal paginated queue — search uses safe task-id resolution."""
     limit = max(1, min(int(limit), 200))
     offset = max(0, int(offset))
 
-    agg = (
-        db.query(
-            InventoryDocumentLine.inventory_document_id.label("document_id"),
-            InventoryDocumentLine.location_id.label("location_id"),
-            func.max(InventoryDocumentLine.last_counted_at).label("last_counted_at"),
-            func.sum(
-                case(
-                    (
-                        and_(
-                            InventoryDocumentLine.difference_quantity.isnot(None),
-                            InventoryDocumentLine.difference_quantity != 0,
+    try:
+        agg = (
+            db.query(
+                InventoryDocumentLine.inventory_document_id.label("document_id"),
+                InventoryDocumentLine.location_id.label("location_id"),
+                func.max(InventoryDocumentLine.last_counted_at).label("last_counted_at"),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                InventoryDocumentLine.difference_quantity.isnot(None),
+                                InventoryDocumentLine.difference_quantity != 0,
+                            ),
+                            1,
                         ),
-                        1,
-                    ),
-                    else_=0,
-                )
-            ).label("variance_lines"),
-            func.sum(case((InventoryDocumentLine.status == LINE_STATUS_RECOUNT, 1), else_=0)).label("recount_lines"),
-            func.sum(case((InventoryDocumentLine.counted_quantity.is_(None), 1), else_=0)).label("pending_lines"),
-        )
-        .group_by(InventoryDocumentLine.inventory_document_id, InventoryDocumentLine.location_id)
-        .subquery()
-    )
-
-    q = (
-        db.query(InventoryTask, Location, AppUser, agg)
-        .outerjoin(Location, Location.id == InventoryTask.location_id)
-        .outerjoin(AppUser, AppUser.id == InventoryTask.assigned_user_id)
-        .outerjoin(
-            agg,
-            and_(
-                agg.c.document_id == InventoryTask.inventory_document_id,
-                agg.c.location_id == InventoryTask.location_id,
-            ),
-        )
-        .filter(
-            InventoryTask.tenant_id == int(tenant_id),
-            InventoryTask.warehouse_id == int(warehouse_id),
-        )
-    )
-
-    if completed_only:
-        q = q.filter(InventoryTask.status == TASK_STATUS_DONE)
-    else:
-        q = q.filter(InventoryTask.status.in_(TASK_ACTIVE_STATUSES))
-
-    if document_id is not None:
-        q = q.filter(InventoryTask.inventory_document_id == int(document_id))
-    if user_id is not None:
-        q = q.filter(
-            (InventoryTask.assigned_user_id.is_(None)) | (InventoryTask.assigned_user_id == int(user_id))
-        )
-    if zone:
-        q = q.filter(InventoryTask.zone_code == str(zone))
-    if assigned_user_id is not None:
-        q = q.filter(InventoryTask.assigned_user_id == int(assigned_user_id))
-    if status:
-        q = q.filter(InventoryTask.status == str(status))
-
-    if recount_only:
-        q = q.filter(func.coalesce(agg.c.recount_lines, 0) > 0)
-    if variance_only:
-        q = q.filter(func.coalesce(agg.c.variance_lines, 0) > 0)
-    if unresolved_only:
-        q = q.filter(and_(func.coalesce(agg.c.pending_lines, 0) > 0, InventoryTask.status != TASK_STATUS_DONE))
-
-    if search:
-        term = f"%{str(search).strip()}%"
-        product_subq = (
-            db.query(InventoryDocumentLine.location_id, InventoryDocumentLine.inventory_document_id)
-            .join(Product, Product.id == InventoryDocumentLine.product_id)
-            .filter(
-                Product.tenant_id == int(tenant_id),
-                or_(
-                    Product.ean.ilike(term),
-                    Product.sku.ilike(term),
-                    Product.symbol.ilike(term),
-                    Product.name.ilike(term),
-                    Product.catalog_number.ilike(term),
+                        else_=0,
+                    )
+                ).label("variance_lines"),
+                func.sum(case((InventoryDocumentLine.status == LINE_STATUS_RECOUNT, 1), else_=0)).label(
+                    "recount_lines"
                 ),
+                func.sum(case((InventoryDocumentLine.counted_quantity.is_(None), 1), else_=0)).label("pending_lines"),
             )
+            .group_by(InventoryDocumentLine.inventory_document_id, InventoryDocumentLine.location_id)
             .subquery()
         )
-        ps = aliased(product_subq)
-        q = q.outerjoin(
-            ps,
-            and_(ps.c.inventory_document_id == InventoryTask.inventory_document_id, ps.c.location_id == InventoryTask.location_id),
-        ).filter(
-            or_(
-                Location.name.ilike(term),
-                InventoryTask.task_number.ilike(term),
-                ps.c.location_id.isnot(None),
+
+        q = (
+            db.query(
+                InventoryTask,
+                Location,
+                AppUser,
+                agg.c.last_counted_at,
+                agg.c.variance_lines,
+                agg.c.recount_lines,
+                agg.c.pending_lines,
+            )
+            .outerjoin(Location, Location.id == InventoryTask.location_id)
+            .outerjoin(AppUser, AppUser.id == InventoryTask.assigned_user_id)
+            .outerjoin(
+                agg,
+                and_(
+                    agg.c.document_id == InventoryTask.inventory_document_id,
+                    agg.c.location_id == InventoryTask.location_id,
+                ),
+            )
+            .filter(
+                InventoryTask.tenant_id == int(tenant_id),
+                InventoryTask.warehouse_id == int(warehouse_id),
+                InventoryTask.status.in_(TASK_ACTIVE_STATUSES),
             )
         )
 
-    total = q.count()
-    rows = (
-        q.order_by(InventoryTask.priority.desc(), InventoryTask.sequence_no.asc(), InventoryTask.id.asc())
-        .offset(offset)
-        .limit(limit)
-        .all()
+        if document_id is not None:
+            q = q.filter(InventoryTask.inventory_document_id == int(document_id))
+        if user_id is not None:
+            q = q.filter(
+                (InventoryTask.assigned_user_id.is_(None)) | (InventoryTask.assigned_user_id == int(user_id))
+            )
+
+        if _safe_like_term(search):
+            task_ids = _task_ids_for_search(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                document_id=document_id,
+                term=str(search or "").strip(),
+            )
+            if not task_ids:
+                return {"items": [], "total": 0, "offset": offset, "limit": limit, "has_more": False}
+            q = q.filter(InventoryTask.id.in_(task_ids))
+
+        total = q.count()
+        rows = (
+            q.order_by(InventoryTask.sequence_no.asc(), InventoryTask.id.asc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        items = []
+        for task, loc, operator, last_at, var_lines_raw, rec_lines_raw, pend_lines_raw in rows:
+            var_lines = int(var_lines_raw or 0)
+            rec_lines = int(rec_lines_raw or 0)
+            pend_lines = int(pend_lines_raw or 0)
+            items.append(
+                _task_row_to_compact(
+                    task,
+                    loc,
+                    operator,
+                    last_activity_at=last_at or task.updated_at,
+                    variance_lines=var_lines,
+                    recount_lines=rec_lines,
+                    pending_lines=pend_lines,
+                )
+            )
+
+        return {
+            "items": items,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "has_more": offset + limit < total,
+        }
+    except Exception:
+        logger.exception(
+            "[inventory_count.queue] list_failed tenant_id=%s warehouse_id=%s search=%s",
+            tenant_id,
+            warehouse_id,
+            (search or "")[:64],
+        )
+        return {"items": [], "total": 0, "offset": offset, "limit": limit, "has_more": False}
+
+
+def resolve_task_by_location_scan(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    scanned_code: str,
+    document_id: int | None = None,
+) -> dict[str, Any]:
+    """Map scanned location code to active inventory task."""
+    code = str(scanned_code or "").strip()
+    if not code:
+        return {"found": False, "reason": "empty_code"}
+
+    loc_q = db.query(Location).filter(Location.warehouse_id == int(warehouse_id), Location.is_active.is_(True))
+    if code.isdigit():
+        loc = loc_q.filter(or_(Location.id == int(code), Location.name.ilike(code))).first()
+    else:
+        loc = loc_q.filter(Location.name.ilike(code)).first()
+    if loc is None:
+        loc = loc_q.filter(Location.name.ilike(f"%{code}%")).first()
+    if loc is None:
+        return {"found": False, "reason": "location_not_found"}
+
+    tq = db.query(InventoryTask).filter(
+        InventoryTask.tenant_id == int(tenant_id),
+        InventoryTask.warehouse_id == int(warehouse_id),
+        InventoryTask.location_id == int(loc.id),
+        InventoryTask.status.in_(TASK_ACTIVE_STATUSES),
     )
-
-    items = []
-    for task, loc, operator, agg_row in rows:
-        last_at = getattr(agg_row, "last_counted_at", None) if agg_row is not None else None
-        var_lines = int(getattr(agg_row, "variance_lines", 0) or 0) if agg_row is not None else 0
-        rec_lines = int(getattr(agg_row, "recount_lines", 0) or 0) if agg_row is not None else 0
-        pend_lines = int(getattr(agg_row, "pending_lines", 0) or 0) if agg_row is not None else 0
-        items.append(
-            _task_row_to_compact(
-                task,
-                loc,
-                operator,
-                last_activity_at=last_at or task.updated_at,
-                variance_lines=var_lines,
-                recount_lines=rec_lines,
-                pending_lines=pend_lines,
-            )
-        )
+    if document_id is not None:
+        tq = tq.filter(InventoryTask.inventory_document_id == int(document_id))
+    task = tq.order_by(InventoryTask.sequence_no.asc(), InventoryTask.id.asc()).first()
+    if task is None:
+        return {"found": False, "reason": "no_open_task", "location_id": int(loc.id), "location_code": loc.name}
 
     return {
-        "items": items,
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "has_more": offset + limit < total,
+        "found": True,
+        "task_id": int(task.id),
+        "location_id": int(loc.id),
+        "location_code": str(loc.name or ""),
+        "inventory_document_id": int(task.inventory_document_id),
+        "progress_percent": int(task.progress_percent or 0),
     }

@@ -86,13 +86,20 @@ export type InventoryTaskPage = {
 
 export type InventoryUniversalSearchResult = {
   query: string;
-  locations: Array<{ location_id: number; location_code: string; zone?: string | null }>;
+  locations: Array<{
+    location_id: number;
+    location_code: string;
+    zone?: string | null;
+    carrier_id?: number;
+  }>;
   products: Array<{
     product_id: number;
     sku?: string | null;
     ean?: string | null;
     name?: string | null;
     catalog_number?: string | null;
+    locations?: string[];
+    stock_hint?: string | null;
   }>;
   tasks: Array<{
     task_id: number;
@@ -102,6 +109,16 @@ export type InventoryUniversalSearchResult = {
     status: string;
     progress_percent: number;
   }>;
+};
+
+export type ResolveLocationScanResult = {
+  found: boolean;
+  reason?: string;
+  task_id?: number;
+  location_id?: number;
+  location_code?: string;
+  inventory_document_id?: number;
+  progress_percent?: number;
 };
 
 export type InventoryExecutionLine = {
@@ -315,6 +332,23 @@ export async function listWmsInventoryTasks(
   return data;
 }
 
+export async function resolveWmsInventoryLocationScan(
+  tenantId: number,
+  warehouseId: number,
+  code: string,
+  documentId?: number,
+): Promise<ResolveLocationScanResult> {
+  const { data } = await api.get<ResolveLocationScanResult>("/wms/inventory-count/resolve-location", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      code,
+      ...(documentId != null ? { document_id: documentId } : {}),
+    },
+  });
+  return data;
+}
+
 export async function fetchWmsInventoryTaskQueue(
   tenantId: number,
   warehouseId: number,
@@ -325,12 +359,6 @@ export async function fetchWmsInventoryTaskQueue(
       tenant_id: tenantId,
       warehouse_id: warehouseId,
       ...(query.documentId != null ? { document_id: query.documentId } : {}),
-      ...(query.zone ? { zone: query.zone } : {}),
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.recountOnly ? { recount_only: true } : {}),
-      ...(query.unresolvedOnly ? { unresolved_only: true } : {}),
-      ...(query.varianceOnly ? { variance_only: true } : {}),
-      ...(query.completedOnly ? { completed_only: true } : {}),
       ...(query.search ? { search: query.search } : {}),
       offset: query.offset ?? 0,
       limit: query.limit ?? 50,

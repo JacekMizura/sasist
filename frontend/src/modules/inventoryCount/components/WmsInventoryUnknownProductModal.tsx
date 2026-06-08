@@ -79,7 +79,7 @@ export default function WmsInventoryUnknownProductModal({
       <div className={`w-full max-w-md rounded-xl border-2 ${WMS_INV.borderStrong} ${WMS_INV.surface} shadow-2xl`}>
         <div className={`flex items-center justify-between border-b ${WMS_INV.border} px-4 py-3`}>
           <div>
-            <h2 className="text-lg font-black text-[#1a2b3c]">Nieznany produkt</h2>
+            <h2 className="text-lg font-black text-[#1a2b3c]">Produkt spoza systemu</h2>
             <p className="text-xs font-semibold text-[#5a6b7d]">Lokalizacja: {locationCode}</p>
           </div>
           <button type="button" onClick={onClose} className={WMS_INV.btnGhost} aria-label="Zamknij">
