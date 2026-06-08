@@ -85,9 +85,50 @@ def inventory_count_dashboard(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
-    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
+    user: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
 ):
-    return build_inventory_dashboard(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    try:
+        return build_inventory_dashboard(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            user_id=user.id,
+        )
+    except Exception as exc:
+        logger.exception(
+            "INVENTORY_DASHBOARD_FATAL tenant_id=%s warehouse_id=%s",
+            tenant_id,
+            warehouse_id,
+        )
+        import traceback as tb
+
+        return {
+            "kpis": {
+                "active_inventories": 0,
+                "awaiting_approval": 0,
+                "open_differences": 0,
+                "completed_last_7_days": 0,
+                "warehouse_coverage_percent": 0,
+                "active_operator_sessions": 0,
+            },
+            "active_inventories": [],
+            "awaiting_approval": [],
+            "recent_completed": [],
+            "difference_stats": {},
+            "heatmap_preview": [],
+            "operator_activity": [],
+            "dashboard_status": "failed",
+            "failed_sections": ["fatal"],
+            "section_errors": [
+                {
+                    "section": "fatal",
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                    "traceback": tb.format_exc(),
+                }
+            ],
+            "schema_audit": None,
+        }
 
 
 @router.get("/documents", response_model=List[InventoryDocumentRead])

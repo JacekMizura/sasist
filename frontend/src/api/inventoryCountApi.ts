@@ -35,6 +35,18 @@ export type InventoryDashboardPayload = {
   active_inventories: InventoryDocumentRead[];
   awaiting_approval: InventoryDocumentRead[];
   recent_completed: InventoryDocumentRead[];
+  difference_stats?: Record<string, number>;
+  heatmap_preview?: Array<Record<string, unknown>>;
+  operator_activity?: Array<Record<string, unknown>>;
+  dashboard_status?: string;
+  failed_sections?: string[];
+  section_errors?: Array<{
+    section: string;
+    error_type: string;
+    message: string;
+    traceback?: string | null;
+  }>;
+  schema_audit?: Record<string, unknown> | null;
 };
 
 export type InventoryTaskRead = {

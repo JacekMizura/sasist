@@ -96,11 +96,25 @@ class InventoryDashboardKpisRead(BaseModel):
     active_operator_sessions: int
 
 
+class InventoryDashboardSectionErrorRead(BaseModel):
+    section: str
+    error_type: str
+    message: str
+    traceback: str | None = None
+
+
 class InventoryDashboardRead(BaseModel):
     kpis: InventoryDashboardKpisRead
     active_inventories: list[InventoryDocumentRead]
     awaiting_approval: list[InventoryDocumentRead]
     recent_completed: list[InventoryDocumentRead]
+    difference_stats: dict[str, Any] = Field(default_factory=dict)
+    heatmap_preview: list[dict[str, Any]] = Field(default_factory=list)
+    operator_activity: list[dict[str, Any]] = Field(default_factory=list)
+    dashboard_status: str = "ok"
+    failed_sections: list[str] = Field(default_factory=list)
+    section_errors: list[InventoryDashboardSectionErrorRead] = Field(default_factory=list)
+    schema_audit: dict[str, Any] | None = None
 
 
 class InventoryTaskRead(BaseModel):
