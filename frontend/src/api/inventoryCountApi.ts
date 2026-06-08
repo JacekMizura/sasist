@@ -17,6 +17,8 @@ export type InventoryDocumentRead = {
   status: string;
   count_mode: string;
   lock_mode: string;
+  movement_policy?: string;
+  result_policy?: string;
   recount_required: boolean;
   scan_mode: string;
   filters: Record<string, unknown>;

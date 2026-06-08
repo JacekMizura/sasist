@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Inventory strategy simplification (operator-first config)
+- Replaced snapshot/soft/hard with movement policies: allow_operations | block_picking | block_all
+- Result policy: update_stock | count_only | report_only — post skips RW/PW for non-update modes
+- Partial scope modes in wizard: zones, locations, products, categories, carriers, dynamic filters
+- Materialization respects scope_mode + expanded filters; legacy lock_mode values normalized
+- Wizard redesigned: Typ → Zakres → Ustawienia → Podsumowanie; removed recount_required checkbox
+- Detail page shows operator settings; conditional „Zakończ bez korekt” vs „Księguj RW/PW”
+
 ## 2026-06-08 — Recount vs inventory variance (domain fix)
 - Różnice expected≠counted → supervisor_review, NIE mandatory recount
 - `recount_conflict_service`: recount tylko przy konflikcie operatorów (ten sam produkt/lokalizacja, różne ilości)

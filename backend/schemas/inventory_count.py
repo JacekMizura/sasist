@@ -8,28 +8,37 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class InventoryDocumentDynamicFilters(BaseModel):
+    stock_gt_zero: bool = False
+    include_zero_stock: bool = False
+    inactive_stock: bool = False
+    no_movement_days: int | None = None
+    manufacturer_ids: list[int] = Field(default_factory=list)
+    missing_ean: bool = False
+
+
 class InventoryDocumentFilters(BaseModel):
-    zone_id: int | None = None
+    scope_mode: str = "full"
+    zone_ids: list[int] = Field(default_factory=list)
+    zone_id: int | None = None  # legacy single zone
     aisle: str | None = None
     rack: str | None = None
     location_ids: list[int] = Field(default_factory=list)
     product_ids: list[int] = Field(default_factory=list)
     category_id: int | None = None
+    category_ids: list[int] = Field(default_factory=list)
     brand_id: int | None = None
     abc_class: str | None = None
+    carrier_ids: list[int] = Field(default_factory=list)
+    dynamic: InventoryDocumentDynamicFilters | None = None
+    include_zero_stock: bool = False
 
 
 class InventoryDocumentStrategy(BaseModel):
+    result_policy: str = "update_stock"
+    movement_policy: str | None = None
     blind_count: bool = True
     visible_quantities: bool = False
-    recount_required: bool = False
-    lock_mode: str = "snapshot"
-    scan_mode: str = "scan_increment"
-    # Placeholders
-    abc_cycle_automation: bool = False
-    heatmap_scope: bool = False
-    qr_session_enabled: bool = False
-    confidence_scoring: bool = False
 
 
 class InventoryDocumentCreateBody(BaseModel):
@@ -71,6 +80,8 @@ class InventoryDocumentRead(BaseModel):
     status: str
     count_mode: str
     lock_mode: str
+    movement_policy: str
+    result_policy: str
     recount_required: bool
     scan_mode: str
     filters: dict[str, Any] = Field(default_factory=dict)

@@ -8,7 +8,12 @@ from ...models.inventory_count.constants import AUDIT_LOCK, AUDIT_UNLOCK
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.inventory_count.location_lock import InventoryLocationLock
-from .audit_service import log_inventory_audit
+from .movement_policy_service import (
+    movement_policy_blocks_all_movements,
+    movement_policy_blocks_picking,
+    movement_policy_creates_locks,
+    normalize_movement_policy,
+)
 
 
 def apply_location_locks_for_document(
@@ -17,7 +22,8 @@ def apply_location_locks_for_document(
     document: InventoryDocument,
     user_id: int | None = None,
 ) -> int:
-    if document.lock_mode == "snapshot":
+    policy = normalize_movement_policy(document.lock_mode)
+    if not movement_policy_creates_locks(policy):
         return 0
 
     loc_ids = {
@@ -44,7 +50,7 @@ def apply_location_locks_for_document(
             InventoryLocationLock(
                 inventory_document_id=int(document.id),
                 location_id=loc_id,
-                lock_mode=str(document.lock_mode),
+                lock_mode=policy,
                 locked_by_user_id=user_id,
             )
         )
@@ -57,7 +63,11 @@ def apply_location_locks_for_document(
             action=AUDIT_LOCK,
             entity_type="location",
             entity_id=loc_id,
-            detail={"lock_mode": document.lock_mode},
+            detail={
+                "movement_policy": policy,
+                "blocks_picking": movement_policy_blocks_picking(policy),
+                "blocks_all_movements": movement_policy_blocks_all_movements(policy),
+            },
         )
     return created
 

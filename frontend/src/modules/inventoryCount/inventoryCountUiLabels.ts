@@ -30,14 +30,37 @@ const INV_TYPE: Record<string, string> = {
 
 const COUNT_MODE: Record<string, string> = {
   blind: "Liczba ślepa",
-  visible: "Liczba z widocznym stanem",
+  visible: "Liczba kontrolna",
 };
 
-const LOCK_MODE: Record<string, string> = {
-  snapshot: "Migawka stanów",
-  soft: "Miękka blokada",
-  hard: "Twarda blokada",
+const MOVEMENT_POLICY: Record<string, string> = {
+  allow_operations: "Operacje dozwolone",
+  block_picking: "Zablokowane zbieranie",
+  block_all: "Blokada wszystkich ruchów",
+  // legacy
+  snapshot: "Operacje dozwolone",
+  soft: "Zablokowane zbieranie",
+  hard: "Blokada wszystkich ruchów",
 };
+
+const RESULT_POLICY: Record<string, string> = {
+  update_stock: "Aktualizacja stanów magazynowych",
+  count_only: "Tryb kontrolny (bez korekt)",
+  report_only: "Tylko raport różnic",
+};
+
+const SCOPE_MODE: Record<string, string> = {
+  full: "Cały magazyn",
+  zones: "Strefy magazynu",
+  locations: "Wybrane lokalizacje",
+  products: "Wybrane produkty",
+  categories: "Grupy produktów",
+  carriers: "Nośniki",
+  dynamic: "Filtry dynamiczne",
+};
+
+/** @deprecated use inventoryMovementPolicyLabel */
+const LOCK_MODE: Record<string, string> = MOVEMENT_POLICY;
 
 const LINE_STATUS: Record<string, string> = {
   open: "Otwarta",
@@ -100,8 +123,21 @@ export function inventoryCountModeLabel(mode: unknown): string {
   return safeLookup(COUNT_MODE, mode, String(mode ?? "—"));
 }
 
+export function inventoryMovementPolicyLabel(mode: unknown): string {
+  return safeLookup(MOVEMENT_POLICY, mode, String(mode ?? "—"));
+}
+
+/** @deprecated alias — movement policy replaced lock_mode jargon */
 export function inventoryLockModeLabel(mode: unknown): string {
-  return safeLookup(LOCK_MODE, mode, String(mode ?? "—"));
+  return inventoryMovementPolicyLabel(mode);
+}
+
+export function inventoryResultPolicyLabel(policy: unknown): string {
+  return safeLookup(RESULT_POLICY, policy, String(policy ?? "—"));
+}
+
+export function inventoryScopeModeLabel(mode: unknown): string {
+  return safeLookup(SCOPE_MODE, mode, String(mode ?? "—"));
 }
 
 export function inventoryLineStatusLabel(status: unknown): string {

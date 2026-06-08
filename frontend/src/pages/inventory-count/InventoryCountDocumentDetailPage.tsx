@@ -29,7 +29,13 @@ import {
   canSubmitInventoryDocument,
   inventorySubmitBlockHint,
 } from "../../modules/inventoryCount/inventorySubmitReadiness";
-import { inventoryTypeLabel } from "../../modules/inventoryCount/inventoryCountUiLabels";
+import {
+  inventoryCountModeLabel,
+  inventoryMovementPolicyLabel,
+  inventoryResultPolicyLabel,
+  inventoryScopeModeLabel,
+  inventoryTypeLabel,
+} from "../../modules/inventoryCount/inventoryCountUiLabels";
 import { useWarehouse } from "../../context/WarehouseContext";
 
 type DocTab = "progress" | "differences" | "control";
@@ -139,6 +145,10 @@ export default function InventoryCountDocumentDetailPage() {
 
   const submitReady = canSubmitInventoryDocument(doc);
   const submitHint = inventorySubmitBlockHint(doc);
+  const resultPolicy = doc.result_policy ?? (doc.strategy?.result_policy as string) ?? "update_stock";
+  const updatesStock = resultPolicy === "update_stock";
+  const scopeMode = String(doc.filters?.scope_mode ?? "full");
+  const movementPolicy = doc.movement_policy ?? doc.lock_mode;
 
   const tabBtn = (key: DocTab, label: string) => (
     <button
@@ -165,6 +175,12 @@ export default function InventoryCountDocumentDetailPage() {
               Pokrycie {doc.coverage_percent}% · {doc.counted_lines}/{doc.total_lines} poz.
             </span>
           </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+            <span>Zakres: {inventoryScopeModeLabel(scopeMode)}</span>
+            <span>Liczenie: {inventoryCountModeLabel(doc.count_mode)}</span>
+            <span>Ruchy: {inventoryMovementPolicyLabel(movementPolicy)}</span>
+            <span>Wynik: {inventoryResultPolicyLabel(resultPolicy)}</span>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1">
           {doc.status === "in_progress" ? (
@@ -189,8 +205,13 @@ export default function InventoryCountDocumentDetailPage() {
             </>
           ) : null}
           {doc.status === "approved" ? (
-            <button type="button" disabled={busy} onClick={() => void action("post")} className="rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
-              Księguj RW/PW
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void action("post")}
+              className="rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white"
+            >
+              {updatesStock ? "Księguj RW/PW" : "Zakończ bez korekt stanów"}
             </button>
           ) : null}
         </div>

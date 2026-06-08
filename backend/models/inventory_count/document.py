@@ -12,7 +12,7 @@ from .constants import (
     COUNT_MODE_BLIND,
     INV_STATUS_DRAFT,
     INV_TYPE_FULL,
-    LOCK_MODE_SNAPSHOT,
+    MOVEMENT_POLICY_ALLOW,
 )
 
 
@@ -38,7 +38,7 @@ class InventoryDocument(Base, BaseModelMixin):
 
     # Strategy
     count_mode = Column(String(32), nullable=False, default=COUNT_MODE_BLIND)
-    lock_mode = Column(String(32), nullable=False, default=LOCK_MODE_SNAPSHOT)
+    lock_mode = Column(String(32), nullable=False, default=MOVEMENT_POLICY_ALLOW)
     recount_required = Column(Integer, nullable=False, default=0)
     scan_mode = Column(String(32), nullable=False, default="scan_increment")
 

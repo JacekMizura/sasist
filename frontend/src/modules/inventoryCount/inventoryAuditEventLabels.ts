@@ -4,7 +4,7 @@
  */
 
 import type { InventoryAuditEventRead, InventoryDocumentTimelines } from "@/api/inventoryCountApi";
-import { inventoryDocumentStatusLabel } from "./inventoryCountUiLabels";
+import { inventoryDocumentStatusLabel, inventoryMovementPolicyLabel } from "./inventoryCountUiLabels";
 
 /** Kanoniczne akcje audytu z backendu → polskie etykiety operacyjne. */
 export const INVENTORY_AUDIT_EVENT_LABELS: Record<string, string> = {
@@ -139,14 +139,6 @@ function statusChangeNote(detail: Record<string, unknown> | null): string | null
   return `${fromLabel} → ${toLabel}`;
 }
 
-function lockModeLabel(mode: unknown): string | null {
-  const m = String(mode ?? "").trim().toLowerCase();
-  if (m === "snapshot") return "migawka stanów";
-  if (m === "soft") return "miękka blokada";
-  if (m === "hard") return "twarda blokada";
-  return null;
-}
-
 function approvalNotesLookup(
   timelines: InventoryDocumentTimelines | null,
   auditAction: string,
@@ -238,8 +230,9 @@ function formatAuditEvent(
       const loc = ev.location_name ?? ctx?.location_name;
       if (loc) note = loc;
       if (ev.action === "location.locked") {
-        const mode = lockModeLabel(detail?.lock_mode);
-        if (mode) note = note ? `${note} (${mode})` : mode;
+        const policy = detail?.movement_policy ?? detail?.lock_mode;
+        const mode = policy ? inventoryMovementPolicyLabel(policy) : null;
+        if (mode && mode !== "—") note = note ? `${note} (${mode})` : mode;
       }
       break;
     }

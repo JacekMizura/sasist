@@ -39,6 +39,7 @@ from .errors import (
 from .kpi_service import recompute_document_kpis
 from .location_lock_service import release_location_locks_for_document
 from .observability import log_inventory_structured, observe_duration
+from .strategy_service import get_result_policy, result_policy_updates_stock
 from .valuation_service import resolve_line_unit_cost_net
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,54 @@ def _idempotent_post_response(doc: InventoryDocument, *, duplicate: bool = False
         "rw_stock_document_id": doc.rw_stock_document_id,
         "pw_stock_document_id": doc.pw_stock_document_id,
         "idempotent": duplicate,
+        "result_policy": get_result_policy(doc),
+    }
+
+
+def finalize_inventory_without_stock_update(
+    db: Session,
+    *,
+    doc: InventoryDocument,
+    tenant_id: int,
+    user_id: int | None = None,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """Close document without RW/PW — count-only or report-only result policy."""
+    if doc.status == INV_STATUS_POSTED:
+        return _idempotent_post_response(doc, duplicate=True)
+
+    prev_state = {"status": doc.status, "version": int(doc.version or 0)}
+    if idempotency_key:
+        doc.post_idempotency_key = str(idempotency_key)
+    doc.status = INV_STATUS_POSTED
+    doc.posted_at = datetime.utcnow()
+    doc.posted_by_user_id = user_id
+    doc.completed_at = datetime.utcnow()
+    doc.posting_in_progress = 0
+    doc.bump_version()
+    release_location_locks_for_document(db, document=doc, user_id=user_id)
+    recompute_document_kpis(db, doc)
+    policy = get_result_policy(doc)
+    log_inventory_audit(
+        db,
+        tenant_id=int(tenant_id),
+        inventory_document_id=int(doc.id),
+        user_id=user_id,
+        action=AUDIT_POSTED,
+        previous_state=prev_state,
+        next_state={"status": doc.status, "result_policy": policy, "stock_updated": False},
+        detail={"result_policy": policy, "adjustments": 0},
+    )
+    db.commit()
+    db.refresh(doc)
+    return {
+        "status": doc.status,
+        "rw_stock_document_id": None,
+        "pw_stock_document_id": None,
+        "adjustments_created": 0,
+        "idempotent": False,
+        "result_policy": policy,
+        "stock_updated": False,
     }
 
 
@@ -130,6 +179,15 @@ def post_inventory_adjustments(
 
             if doc.status != INV_STATUS_APPROVED:
                 raise InventoryInvalidTransitionError("Document must be approved before posting")
+
+            if not result_policy_updates_stock(doc):
+                return finalize_inventory_without_stock_update(
+                    db,
+                    doc=doc,
+                    tenant_id=int(tenant_id),
+                    user_id=user_id,
+                    idempotency_key=idempotency_key,
+                )
 
             if expected_version is not None and int(doc.version or 0) != int(expected_version):
                 raise InventoryInvalidTransitionError(

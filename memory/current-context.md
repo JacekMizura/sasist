@@ -1,7 +1,13 @@
 # Current context
 
 ## Active goal
-Enterprise **Inventory / Stock Count** module — ERP planning + WMS blind counting + snapshot-based reconciliation.
+Enterprise **Inventory / Stock Count** module — operator-first configuration + WMS blind counting + scoped reconciliation.
+
+## Inventory config redesign (2026-06-08)
+- Movement policy replaces lock jargon (allow / block pick / block all)
+- Result policy: update stock vs count-only vs report-only
+- Wizard scope step: partial modes + dynamic filters (stock>0, missing EAN, ABC, manufacturers)
+- Recount only on operator conflict (not variance); blind vs control count drives WMS expected qty visibility
 
 ## Inventory count module (2026-06-08)
 - **Phase 1**: 13 tables, ERP dashboard/wizard, WMS shell, snapshot capture

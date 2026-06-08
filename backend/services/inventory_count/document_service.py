@@ -27,7 +27,9 @@ from .errors import InventoryDocumentNotFoundError, InventoryInvalidTransitionEr
 from .kpi_service import recompute_document_kpis
 from .line_materialization_service import materialize_document_lines_from_snapshot
 from .location_lock_service import apply_location_locks_for_document
+from .movement_policy_service import normalize_movement_policy
 from .snapshot_service import capture_inventory_snapshots
+from .strategy_service import build_operator_strategy, get_result_policy, parse_strategy
 from .task_generation_service import generate_tasks_from_document_lines
 
 
@@ -44,6 +46,8 @@ def _serialize_json(value: dict[str, Any] | None) -> str | None:
 
 
 def _doc_to_dict(doc: InventoryDocument) -> dict[str, Any]:
+    strategy = parse_strategy(doc)
+    movement = normalize_movement_policy(doc.lock_mode)
     return {
         "id": doc.id,
         "tenant_id": doc.tenant_id,
@@ -52,7 +56,9 @@ def _doc_to_dict(doc: InventoryDocument) -> dict[str, Any]:
         "inventory_type": doc.inventory_type,
         "status": doc.status,
         "count_mode": doc.count_mode,
-        "lock_mode": doc.lock_mode,
+        "lock_mode": movement,
+        "movement_policy": movement,
+        "result_policy": get_result_policy(doc),
         "recount_required": bool(doc.recount_required),
         "scan_mode": doc.scan_mode,
         "filters": json.loads(doc.filters_json) if doc.filters_json else {},
@@ -174,13 +180,32 @@ def update_inventory_document_wizard(
     if count_mode:
         doc.count_mode = str(count_mode)
     if lock_mode:
-        doc.lock_mode = str(lock_mode)
+        doc.lock_mode = normalize_movement_policy(str(lock_mode))
     if recount_required is not None:
         doc.recount_required = 1 if recount_required else 0
     if scan_mode:
         doc.scan_mode = str(scan_mode)
     if strategy is not None:
-        doc.strategy_json = _serialize_json(strategy)
+        merged = {**parse_strategy(doc), **strategy}
+        movement = merged.pop("movement_policy", None) or merged.pop("lock_mode", None)
+        if movement:
+            doc.lock_mode = normalize_movement_policy(str(movement))
+        result = str(merged.get("result_policy") or get_result_policy(doc))
+        doc.strategy_json = _serialize_json(
+            build_operator_strategy(
+                count_mode=str(doc.count_mode),
+                movement_policy=normalize_movement_policy(doc.lock_mode),
+                result_policy=result,
+            )
+        )
+    elif lock_mode or count_mode:
+        doc.strategy_json = _serialize_json(
+            build_operator_strategy(
+                count_mode=str(doc.count_mode),
+                movement_policy=normalize_movement_policy(doc.lock_mode),
+                result_policy=get_result_policy(doc),
+            )
+        )
     if notes is not None:
         doc.notes = notes
     if planned_start_at is not None:

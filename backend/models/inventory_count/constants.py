@@ -35,9 +35,51 @@ ACTIVE_DOCUMENT_STATUSES = (
 COUNT_MODE_BLIND = "blind"
 COUNT_MODE_VISIBLE = "visible"
 
+# Operator movement policy (stored in lock_mode column; legacy snapshot/soft/hard still accepted)
+MOVEMENT_POLICY_ALLOW = "allow_operations"
+MOVEMENT_POLICY_BLOCK_PICK = "block_picking"
+MOVEMENT_POLICY_BLOCK_ALL = "block_all"
+
+MOVEMENT_POLICIES = (
+    MOVEMENT_POLICY_ALLOW,
+    MOVEMENT_POLICY_BLOCK_PICK,
+    MOVEMENT_POLICY_BLOCK_ALL,
+)
+
+# Legacy aliases — normalize via movement_policy_service
 LOCK_MODE_SOFT = "soft"
 LOCK_MODE_HARD = "hard"
 LOCK_MODE_SNAPSHOT = "snapshot"
+
+# Inventory scope (partial count filters)
+SCOPE_MODE_FULL = "full"
+SCOPE_MODE_ZONES = "zones"
+SCOPE_MODE_LOCATIONS = "locations"
+SCOPE_MODE_PRODUCTS = "products"
+SCOPE_MODE_CATEGORIES = "categories"
+SCOPE_MODE_CARRIERS = "carriers"
+SCOPE_MODE_DYNAMIC = "dynamic"
+
+SCOPE_MODES = (
+    SCOPE_MODE_FULL,
+    SCOPE_MODE_ZONES,
+    SCOPE_MODE_LOCATIONS,
+    SCOPE_MODE_PRODUCTS,
+    SCOPE_MODE_CATEGORIES,
+    SCOPE_MODE_CARRIERS,
+    SCOPE_MODE_DYNAMIC,
+)
+
+# Post-approval result policy (strategy_json.result_policy)
+RESULT_POLICY_UPDATE_STOCK = "update_stock"
+RESULT_POLICY_COUNT_ONLY = "count_only"
+RESULT_POLICY_REPORT_ONLY = "report_only"
+
+RESULT_POLICIES = (
+    RESULT_POLICY_UPDATE_STOCK,
+    RESULT_POLICY_COUNT_ONLY,
+    RESULT_POLICY_REPORT_ONLY,
+)
 
 SCAN_MODE_INCREMENT = "scan_increment"
 SCAN_MODE_MANUAL = "manual_quantity"
