@@ -8,7 +8,9 @@ Coordinates (x, y, z) and dimensions (width, depth, height) are stored in centim
 Locations represent real storage bins in the warehouse.
 """
 
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean
+from datetime import datetime
+
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -65,6 +67,13 @@ class Location(Base, BaseModelMixin):
 
     # Order along the warehouse picking path. Used to select pick location by path order (not nearest).
     pick_sequence = Column(Integer, nullable=True, index=True)
+
+    # Slotting / capacity engine (Phase 4)
+    occupied_volume_dm3 = Column(Float, nullable=False, default=0.0, server_default="0")
+    occupied_weight_kg = Column(Float, nullable=False, default=0.0, server_default="0")
+    capacity_utilization_percent = Column(Float, nullable=False, default=0.0, server_default="0")
+    last_capacity_recalculated_at = Column(DateTime, nullable=True)
+    max_weight_kg = Column(Float, nullable=True)
 
     warehouse = relationship("Warehouse", back_populates="locations")
     inventory = relationship(

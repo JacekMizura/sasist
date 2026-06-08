@@ -31,6 +31,11 @@ export type WarehouseLocationItem = {
   capacity_type?: string | null;
   x: number | null;
   y: number | null;
+  occupied_volume_dm3?: number;
+  occupied_weight_kg?: number;
+  capacity_utilization_percent?: number;
+  remaining_volume_dm3?: number;
+  remaining_weight_kg?: number | null;
 };
 
 export async function getWarehouseGraphNodes(

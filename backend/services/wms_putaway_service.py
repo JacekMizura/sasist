@@ -70,6 +70,9 @@ def _stamp_putaway_line_last_audit(
     row.putaway_last_admin_id = int(performed_by.id)
     row.putaway_last_quantity = float(quantity_increment)
 from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_stock_document_id
+from .slotting import recalculate_location_occupancy, suggest_putaway_locations as slotting_suggest_putaway_locations, validate_putaway_assignment
+from .slotting.capacity_service import calculate_location_capacity, location_volume_capacity_dm3
+from .slotting.slotting_models import STRATEGY_CONSOLIDATE_SKU
 
 
 def _sync_po_from_pz(db: Session, tenant_id: int, doc_id: int) -> None:
@@ -701,19 +704,53 @@ def _suggestion_row_from_location(
     current_quantity: float,
     priority_score: float,
     storage_type: str,
+    max_fit_quantity: float | None = None,
+    remaining_capacity_percent: float | None = None,
+    same_sku_present: bool = False,
+    reason_tags: list[str] | None = None,
+    capacity_fits: bool = True,
+    capacity_warnings: list[str] | None = None,
 ) -> WmsPutawayLocationSuggestionRow:
     code = (loc.name or "").strip() or f"#{loc.id}"
     zone = (getattr(loc, "rack_name", None) or "").strip() or None
+    total_vol = location_volume_capacity_dm3(loc)
+    occ_vol = float(getattr(loc, "occupied_volume_dm3", 0) or 0)
+    free_cap = max(0.0, total_vol - occ_vol) if total_vol > 0 else None
     return WmsPutawayLocationSuggestionRow(
         location_id=int(loc.id),
         code=code,
         current_quantity=float(current_quantity),
-        free_capacity=None,
+        free_capacity=free_cap,
         warehouse_zone=zone,
         priority_score=float(priority_score),
         location_type=wms_location_badge_kind(loc),
         storage_type=storage_type,
+        max_fit_quantity=max_fit_quantity,
+        remaining_capacity_percent=remaining_capacity_percent,
+        same_sku_present=same_sku_present,
+        reason_tags=list(reason_tags or []),
+        capacity_fits=capacity_fits,
+        capacity_warnings=list(capacity_warnings or []),
     )
+
+
+def _putaway_remaining_quantity(db: Session, row: StockDocumentItem) -> float:
+    rec = float(row.received_quantity or 0)
+    if rec <= 1e-9:
+        return 0.0
+    put_eff = _effective_putaway_quantity(db, row)
+    return max(0.0, rec - put_eff)
+
+
+def _capacity_warnings_for_fit(fit) -> list[str]:
+    warnings: list[str] = []
+    if fit.failure_reason:
+        warnings.append(fit.failure_reason)
+    if fit.limiting_factor == "orientation":
+        warnings.append("Orientation incompatible")
+    if fit.limiting_factor == "stacking":
+        warnings.append("Stacking restrictions apply")
+    return warnings
 
 
 def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsPutawayLocationSuggestionsOut:
@@ -755,6 +792,27 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
 
     product_id = int(row.product_id)
     dock_id = doc.location_id
+    remaining_qty = _putaway_remaining_quantity(db, row) or float(row.received_quantity or 0)
+
+    slotting_by_lid: dict[int, object] = {}
+    try:
+        slotting_rows = slotting_suggest_putaway_locations(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=int(wh_id),
+            product_id=product_id,
+            quantity=max(1.0, remaining_qty),
+            strategy=STRATEGY_CONSOLIDATE_SKU,
+            limit=30,
+            exclude_location_ids=mm_skip_source,
+        )
+        slotting_by_lid = {int(s.location_id): s for s in slotting_rows}
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("slotting suggest_putaway failed item_id=%s", item_id)
+
+    product = db.query(Product).filter(Product.id == product_id, Product.tenant_id == tenant_id).first()
 
     inv_by_loc = (
         db.query(Inventory.location_id, func.coalesce(func.sum(Inventory.quantity), 0.0))
@@ -799,41 +857,76 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
         loc = loc_by_id.get(lid)
         if not loc:
             continue
+        slot = slotting_by_lid.get(lid)
+        fit = None
+        if product is not None:
+            fit = calculate_location_capacity(loc, product, remaining_qty)
         existing_stock.append(
             _suggestion_row_from_location(
                 loc,
                 current_quantity=qty,
-                priority_score=qty,
+                priority_score=float(slot.score) if slot else qty,
                 storage_type=st_by_lid.get(lid, "unknown"),
+                max_fit_quantity=float(slot.max_fit_quantity) if slot else (fit.max_units if fit else None),
+                remaining_capacity_percent=float(slot.remaining_capacity_percent) if slot else None,
+                same_sku_present=True,
+                reason_tags=list(slot.reason_tags) if slot else (["same_sku_present"] if qty > 0 else []),
+                capacity_fits=bool(fit.fits) if fit else True,
+                capacity_warnings=_capacity_warnings_for_fit(fit) if fit and not fit.fits else [],
             )
         )
 
-    stocked_lids = set(qty_by_lid.keys())
     primary_candidates: list[WmsPutawayLocationSuggestionRow] = []
     overflow_candidates: list[WmsPutawayLocationSuggestionRow] = []
 
-    for loc in active_locs:
-        lid = int(loc.id)
-        if lid in mm_skip_source:
-            continue
-        if dock_id is not None and lid == int(dock_id):
-            continue
-        if lid in stocked_lids:
-            continue
-        ps = getattr(loc, "pick_sequence", None)
-        seq_score = float(ps) if ps is not None else 1_000_000.0
-        priority = max(0.0, 10_000.0 - seq_score)
-        st = st_by_lid.get(lid, "unknown")
-        sug = _suggestion_row_from_location(
-            loc,
-            current_quantity=0.0,
-            priority_score=priority,
-            storage_type=st,
-        )
-        if _location_is_overflow_storage(loc):
-            overflow_candidates.append(sug)
-        else:
-            primary_candidates.append(sug)
+    if slotting_by_lid:
+        for slot in sorted(slotting_by_lid.values(), key=lambda s: (-s.score, s.location_code)):
+            loc = loc_by_id.get(int(slot.location_id))
+            if loc is None:
+                continue
+            if dock_id is not None and int(loc.id) == int(dock_id):
+                continue
+            fit = slot.capacity_result
+            sug = _suggestion_row_from_location(
+                loc,
+                current_quantity=float(qty_by_lid.get(int(loc.id), 0)),
+                priority_score=float(slot.score),
+                storage_type=st_by_lid.get(int(loc.id), "unknown"),
+                max_fit_quantity=float(slot.max_fit_quantity),
+                remaining_capacity_percent=float(slot.remaining_capacity_percent),
+                same_sku_present=bool(slot.same_sku_present),
+                reason_tags=list(slot.reason_tags),
+                capacity_fits=bool(fit.fits) if fit else True,
+                capacity_warnings=_capacity_warnings_for_fit(fit) if fit and not fit.fits else [],
+            )
+            if _location_is_overflow_storage(loc):
+                overflow_candidates.append(sug)
+            else:
+                primary_candidates.append(sug)
+    else:
+        stocked_lids = set(qty_by_lid.keys())
+        for loc in active_locs:
+            lid = int(loc.id)
+            if lid in mm_skip_source:
+                continue
+            if dock_id is not None and lid == int(dock_id):
+                continue
+            if lid in stocked_lids:
+                continue
+            ps = getattr(loc, "pick_sequence", None)
+            seq_score = float(ps) if ps is not None else 1_000_000.0
+            priority = max(0.0, 10_000.0 - seq_score)
+            st = st_by_lid.get(lid, "unknown")
+            sug = _suggestion_row_from_location(
+                loc,
+                current_quantity=0.0,
+                priority_score=priority,
+                storage_type=st,
+            )
+            if _location_is_overflow_storage(loc):
+                overflow_candidates.append(sug)
+            else:
+                primary_candidates.append(sug)
 
     primary_candidates.sort(key=lambda r: (-r.priority_score, r.code))
     overflow_candidates.sort(key=lambda r: (-r.priority_score, r.code))
@@ -883,6 +976,17 @@ def _patch_wms_putaway_mm_line(
         raise ValueError("Lokalizacja nie należy do magazynu tej PZ")
     if int(loc.id) == from_id:
         raise ValueError("Lokalizacja docelowa musi być inna niż źródłowa")
+
+    cap_check = validate_putaway_assignment(
+        db,
+        tenant_id=tenant_id,
+        location_id=int(body.location_id),
+        product_id=int(row.product_id),
+        quantity=float(q),
+    )
+    if not cap_check["fits"]:
+        msg = cap_check["warnings"][0] if cap_check["warnings"] else "Przekroczono pojemność lokalizacji"
+        raise ValueError(msg)
 
     allocations = _allocate_fifo_from_source(db, tenant_id, wh_id, from_id, int(row.product_id), q)
     loc_uuid_to = _normalize_location_uuid(getattr(loc, "location_uuid", None))
@@ -1003,6 +1107,12 @@ def _patch_wms_putaway_mm_line(
         packaging_type="UNIT",
         packaging_quantity=float(q),
     )
+    try:
+        recalculate_location_occupancy(db, int(body.location_id), commit=False)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("occupancy recalc failed location_id=%s", body.location_id)
     db.commit()
     db.refresh(doc)
     db.refresh(row)
@@ -1074,6 +1184,17 @@ def patch_wms_putaway_item(
     )
     if not loc:
         raise ValueError("Lokalizacja nie należy do magazynu tej PZ")
+
+    cap_check = validate_putaway_assignment(
+        db,
+        tenant_id=tenant_id,
+        location_id=int(body.location_id),
+        product_id=int(row.product_id),
+        quantity=float(q),
+    )
+    if not cap_check["fits"]:
+        msg = cap_check["warnings"][0] if cap_check["warnings"] else "Przekroczono pojemność lokalizacji"
+        raise ValueError(msg)
 
     bn, ed_store = dock_lot_keys_for_pz_line(row)
     loc_uuid = _normalize_location_uuid(getattr(loc, "location_uuid", None))
@@ -1270,6 +1391,12 @@ def patch_wms_putaway_item(
         logging.getLogger(__name__).exception(
             "waiting_supply promote after putaway pz=%s item=%s", doc.id, row.id
         )
+    try:
+        recalculate_location_occupancy(db, int(body.location_id), commit=False)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("occupancy recalc failed location_id=%s", body.location_id)
     db.commit()
     db.refresh(doc)
     db.refresh(row)

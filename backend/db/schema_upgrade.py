@@ -4129,6 +4129,13 @@ def ensure_inventory_count_schema(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_slotting_schema(engine: Engine) -> None:
+    """Warehouse capacity / slotting engine — location occupancy columns."""
+    from .slotting_schema import ensure_slotting_schema as _impl
+
+    _impl(engine)
+
+
 def ensure_wms_operational_tasks_table(engine: Engine) -> None:
     """WMS operational tasks — product-centric work queue (source of truth)."""
     with engine.connect() as conn:

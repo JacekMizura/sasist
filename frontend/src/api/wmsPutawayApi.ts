@@ -45,6 +45,12 @@ export type WmsPutawayLocationSuggestionRow = {
   priority_score: number;
   location_type: string;
   storage_type: string;
+  max_fit_quantity?: number | null;
+  remaining_capacity_percent?: number | null;
+  same_sku_present?: boolean;
+  reason_tags?: string[];
+  capacity_fits?: boolean;
+  capacity_warnings?: string[];
 };
 
 export type WmsPutawayLocationSuggestions = {

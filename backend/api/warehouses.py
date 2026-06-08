@@ -127,6 +127,29 @@ def get_warehouse_locations(warehouse_id: int, db: Session = Depends(get_db)):
                 "capacity_type": ct,
                 "x": loc.x,
                 "y": loc.y,
+                "occupied_volume_dm3": round(float(getattr(loc, "occupied_volume_dm3", 0) or 0), 4),
+                "occupied_weight_kg": round(float(getattr(loc, "occupied_weight_kg", 0) or 0), 4),
+                "capacity_utilization_percent": round(float(getattr(loc, "capacity_utilization_percent", 0) or 0), 2),
+                "remaining_volume_dm3": round(
+                    max(
+                        0.0,
+                        float(getattr(loc, "width", 0) or 0)
+                        * float(getattr(loc, "depth", 0) or 0)
+                        * float(getattr(loc, "height", 0) or 0)
+                        / 1000.0
+                        - float(getattr(loc, "occupied_volume_dm3", 0) or 0),
+                    ),
+                    4,
+                ),
+                "remaining_weight_kg": round(
+                    max(
+                        0.0,
+                        float(getattr(loc, "max_weight_kg", 0) or 0)
+                        - float(getattr(loc, "occupied_weight_kg", 0) or 0),
+                    )
+                    if getattr(loc, "max_weight_kg", None)
+                    else None,
+                ),
             }
         )
     return out

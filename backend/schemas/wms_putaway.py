@@ -54,6 +54,12 @@ class WmsPutawayLocationSuggestionRow(BaseModel):
     priority_score: float = 0.0
     location_type: str = Field(default="PICK", description="WMS badge kind (PICK | BUFFER | …).")
     storage_type: str = Field(default="unknown", description="Layout bin chrome for LocationBadge.")
+    max_fit_quantity: Optional[float] = None
+    remaining_capacity_percent: Optional[float] = None
+    same_sku_present: bool = False
+    reason_tags: List[str] = Field(default_factory=list)
+    capacity_fits: bool = True
+    capacity_warnings: List[str] = Field(default_factory=list)
 
 
 class WmsPutawayLocationSuggestionsOut(BaseModel):
