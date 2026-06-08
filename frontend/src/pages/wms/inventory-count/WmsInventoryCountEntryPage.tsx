@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ScanLine } from "lucide-react";
 
 import { fetchWmsInventoryTask, openWmsInventorySession, resolveWmsInventoryLocationScan } from "../../../api/inventoryCountApi";
+import WmsInventoryScanField from "../../../modules/inventoryCount/components/WmsInventoryScanField";
+import { useInventoryScanInput } from "../../../modules/inventoryCount/hooks/useInventoryScanInput";
 import { wmsInventoryCountPaths } from "../../../modules/inventoryCount/inventoryCountPaths";
 import {
   loadRecentLocations,
   pushRecentLocation,
   type RecentLocationEntry,
 } from "../../../modules/inventoryCount/recentLocationsStorage";
-import { useInventoryScanInput } from "../../../modules/inventoryCount/hooks/useInventoryScanInput";
 import { WMS_INV } from "../../../modules/inventoryCount/wmsIndustrialTheme";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { useScanFeedback } from "../../../components/wms/execution/useScanFeedback";
@@ -91,49 +91,32 @@ export default function WmsInventoryCountEntryPage() {
   });
 
   if (!warehouseId) {
-    return <p className={`py-8 text-center ${WMS_INV.textMuted}`}>Wybierz magazyn.</p>;
+    return <p className={`py-4 text-sm font-bold ${WMS_INV.textMuted}`}>Wybierz magazyn.</p>;
   }
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col justify-center px-3">
-      <h1 className="text-center text-xl font-black uppercase tracking-wide text-[#1a2b3c]">Inwentaryzacja</h1>
+    <div className={WMS_INV.shell}>
+      <h1 className={WMS_INV.textLabel}>Inwentaryzacja</h1>
 
-      <form
-        className="mt-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submitScanOnce(query);
-        }}
-      >
-        <div className="relative">
-          <ScanLine className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9bb0]" />
-          <input
-            ref={inputRef}
-            type="text"
-            autoComplete="off"
-            inputMode="search"
-            value={query}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="Zeskanuj lokalizację"
-            disabled={busy}
-            className={`${WMS_INV.inputTerminal} pl-9`}
-            aria-label="Zeskanuj lokalizację"
-          />
-        </div>
-      </form>
+      <WmsInventoryScanField
+        inputRef={inputRef}
+        value={query}
+        onChange={onChange}
+        onSubmit={() => void submitScanOnce(query)}
+        placeholder="Zeskanuj lokalizację"
+        disabled={busy}
+      />
 
       {recent.length > 0 ? (
-        <section className="mt-5">
-          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#8a9bb0]">
-            Ostatnie lokalizacje
-          </p>
-          <ul className="space-y-0.5">
+        <section>
+          <p className={`${WMS_INV.textLabel} mb-0.5`}>Ostatnie lokalizacje</p>
+          <ul>
             {recent.map((item) => (
               <li key={`${item.taskId}-${item.at}`}>
                 <button
                   type="button"
                   disabled={busy}
-                  className="w-full py-1.5 text-left text-lg font-bold text-[#1e4d8c] active:text-[#163a6b]"
+                  className="py-1 text-left text-base font-black text-[#1e4d8c] active:text-[#163a6b] disabled:opacity-40"
                   onClick={() => void openLocation(item.code, item.taskId)}
                 >
                   {item.code}
@@ -144,7 +127,7 @@ export default function WmsInventoryCountEntryPage() {
         </section>
       ) : null}
 
-      <Link to="/wms/menu" className={`mt-6 text-center text-xs font-semibold ${WMS_INV.textMuted}`}>
+      <Link to="/wms/menu" className={`inline-block text-[10px] font-bold uppercase tracking-wide ${WMS_INV.textMuted}`}>
         ← Menu WMS
       </Link>
     </div>

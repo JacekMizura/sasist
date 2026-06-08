@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 
-import { WMS_INV } from "../wmsIndustrialTheme";
-
 type Props = {
   quantity: number;
   disabled?: boolean;
@@ -26,11 +24,11 @@ export default function WmsInventoryQtyControl({ quantity, disabled, onAdjust, o
   };
 
   return (
-    <div className="grid grid-cols-[44px_1fr_44px] overflow-hidden rounded border border-[#d0d7e2]">
+    <div className="grid max-w-xs grid-cols-[36px_1fr_36px] border-2 border-slate-200 bg-white">
       <button
         type="button"
         disabled={disabled}
-        className={`${WMS_INV.btnQuick} rounded-none border-0 border-r border-[#d0d7e2] text-lg`}
+        className="flex h-8 items-center justify-center border-r border-slate-200 text-base font-black text-slate-800 active:bg-slate-50 disabled:opacity-40"
         onClick={() => onAdjust(-1)}
         aria-label="Zmniejsz"
       >
@@ -49,13 +47,13 @@ export default function WmsInventoryQtyControl({ quantity, disabled, onAdjust, o
             commitDraft();
           }
         }}
-        className="h-9 border-0 bg-white text-center text-lg font-black tabular-nums text-[#1e4d8c] focus:outline-none focus:ring-1 focus:ring-[#1e4d8c]/40"
+        className="h-8 border-0 bg-transparent text-center text-base font-black tabular-nums text-[#1e4d8c] focus:outline-none focus:ring-1 focus:ring-[#1e4d8c]/30"
         aria-label="Ilość"
       />
       <button
         type="button"
         disabled={disabled}
-        className={`${WMS_INV.btnQuick} rounded-none border-0 border-l border-[#d0d7e2] text-lg`}
+        className="flex h-8 items-center justify-center border-l border-slate-200 text-base font-black text-slate-800 active:bg-slate-50 disabled:opacity-40"
         onClick={() => onAdjust(1)}
         aria-label="Zwiększ"
       >

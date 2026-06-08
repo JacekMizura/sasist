@@ -2,11 +2,11 @@ import { Outlet } from "react-router-dom";
 
 import { WMS_OPERATIONAL_CONTAINER } from "../../../components/wms/execution/wmsLayoutTokens";
 
-/** WMS inventory — blind-count scanner shell. */
+/** WMS inventory — top-anchored operational shell. */
 export default function WmsInventoryCountLayout() {
   return (
-    <div className="flex min-h-full flex-col bg-white text-[#1a2b3c]">
-      <div className={`${WMS_OPERATIONAL_CONTAINER} flex-1 py-2`}>
+    <div className="bg-white font-sans text-slate-900">
+      <div className={`${WMS_OPERATIONAL_CONTAINER} pt-1 pb-3`}>
         <Outlet />
       </div>
     </div>

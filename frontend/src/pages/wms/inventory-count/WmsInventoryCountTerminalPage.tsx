@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ScanLine, Search } from "lucide-react";
 
 import WmsInventoryLastScans from "../../../modules/inventoryCount/components/WmsInventoryLastScans";
 import WmsInventoryLiveSearchPanel from "../../../modules/inventoryCount/components/WmsInventoryLiveSearchPanel";
@@ -12,6 +11,7 @@ import {
 } from "../../../modules/inventoryCount/components/WmsInventoryLiveSearchDropdown";
 import WmsInventoryProductPreview from "../../../modules/inventoryCount/components/WmsInventoryProductPreview";
 import WmsInventoryQtyControl from "../../../modules/inventoryCount/components/WmsInventoryQtyControl";
+import WmsInventoryScanField from "../../../modules/inventoryCount/components/WmsInventoryScanField";
 import WmsInventoryUnknownProductModal from "../../../modules/inventoryCount/components/WmsInventoryUnknownProductModal";
 import { useInventoryScanInput } from "../../../modules/inventoryCount/hooks/useInventoryScanInput";
 import { useWmsInventoryCountTerminal } from "../../../modules/inventoryCount/hooks/useWmsInventoryCountTerminal";
@@ -104,8 +104,7 @@ export default function WmsInventoryCountTerminalPage() {
     [clearInput, clearSearch, closeSearch, handleSearchCarrier, handleSearchLocation, handleSearchProduct],
   );
 
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitField = () => {
     if (searchActive && !searchLoading && !isScannerMode) {
       const first = pickFirstLiveSearch(searchRows);
       if (first) {
@@ -131,18 +130,18 @@ export default function WmsInventoryCountTerminalPage() {
   };
 
   if (!warehouseId) {
-    return <p className={`py-8 text-center ${WMS_INV.textMuted}`}>Wybierz magazyn.</p>;
+    return <p className={`py-4 ${WMS_INV.textMuted} text-sm font-bold`}>Wybierz magazyn.</p>;
   }
 
   if (loading && !task) {
-    return <p className={`py-6 text-center ${WMS_INV.textMuted}`}>…</p>;
+    return <p className={`py-2 ${WMS_INV.textMuted} text-sm font-bold`}>…</p>;
   }
 
   if (!Number.isFinite(taskId)) {
     return (
-      <div className="text-center">
-        <p className="text-lg font-bold text-[#b42318]">Brak lokalizacji w adresie URL.</p>
-        <Link to={wmsInventoryCountPaths.root} className={`mt-3 inline-block text-sm ${WMS_INV.textMuted}`}>
+      <div>
+        <p className="text-sm font-black text-red-700">Brak lokalizacji w adresie URL.</p>
+        <Link to={wmsInventoryCountPaths.root} className={`mt-1 inline-block text-xs font-bold ${WMS_INV.textMuted}`}>
           Wróć
         </Link>
       </div>
@@ -151,9 +150,9 @@ export default function WmsInventoryCountTerminalPage() {
 
   if (error) {
     return (
-      <div className="text-center">
-        <p className="text-lg font-bold text-[#b42318]">{error}</p>
-        <Link to={wmsInventoryCountPaths.root} className={`mt-3 inline-block text-sm ${WMS_INV.textMuted}`}>
+      <div>
+        <p className="text-sm font-black text-red-700">{error}</p>
+        <Link to={wmsInventoryCountPaths.root} className={`mt-1 inline-block text-xs font-bold ${WMS_INV.textMuted}`}>
           Wróć
         </Link>
       </div>
@@ -163,32 +162,22 @@ export default function WmsInventoryCountTerminalPage() {
   const placeholder = carrierScanMode ? "Nośnik" : "Kod / EAN / SKU / nazwa";
 
   return (
-    <div className="mx-auto flex max-w-lg flex-col px-3 pb-2">
-      <header className="shrink-0 text-center">
-        <p className="text-2xl font-black tracking-tight text-[#1a2b3c]">{locationLabel}</p>
-        {locationSubline ? (
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a9bb0]">{locationSubline}</p>
-        ) : null}
+    <div className={WMS_INV.shell}>
+      <header>
+        <p className={WMS_INV.locationCode}>{locationLabel}</p>
+        {locationSubline ? <p className={WMS_INV.locationSub}>{locationSubline}</p> : null}
       </header>
 
-      <form onSubmit={onSubmit} className="mt-1.5 w-full shrink-0">
-        <div className="relative">
-          <ScanLine className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9bb0]" />
-          <input
-            ref={inputRef}
-            type="text"
-            autoComplete="off"
-            inputMode="search"
-            value={query}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={onInputKeyDown}
-            placeholder={placeholder}
-            className={`${WMS_INV.inputTerminal} pl-9 pr-9`}
-            aria-label={placeholder}
-            aria-expanded={searchActive}
-          />
-          <Search className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9bb0]" />
-          {counting && !carrierScanMode ? (
+      <WmsInventoryScanField
+        inputRef={inputRef}
+        value={query}
+        onChange={onChange}
+        onSubmit={submitField}
+        onKeyDown={onInputKeyDown}
+        placeholder={placeholder}
+        aria-expanded={searchActive}
+        dropdown={
+          counting && !carrierScanMode ? (
             <WmsInventoryLiveSearchPanel
               query={query}
               open={searchActive}
@@ -198,59 +187,49 @@ export default function WmsInventoryCountTerminalPage() {
               carrierRows={searchRows.carriers}
               onPick={(pick) => void applyLivePick(pick)}
             />
-          ) : null}
-        </div>
+          ) : null
+        }
+      />
 
-        <div className="mt-1 flex items-center gap-1.5">
-          {carrierCode ? (
-            <span className="rounded border border-[#d0d7e2] px-2 py-0.5 text-[10px] font-bold uppercase text-[#1e4d8c]">
-              Nośnik: {carrierCode}
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={enterCarrierScan}
-              className="rounded border border-[#e8edf3] px-2 py-0.5 text-[10px] font-semibold text-[#5a6b7d]"
-            >
-              + nośnik
-            </button>
-          )}
-          {carrierScanMode ? (
-            <button type="button" onClick={skipCarrier} className="text-[10px] font-semibold text-[#8a9bb0] underline">
-              Pomiń
-            </button>
-          ) : null}
-        </div>
-      </form>
-
-      <div className="mt-1 shrink-0 border-b border-[#eef1f5] pb-1">
-        <WmsInventoryProductPreview scan={counting ? activeScan : null} pulse={qtyPulse} invalid={invalidPulse} />
+      <div className="flex items-center gap-2">
+        {carrierCode ? (
+          <span className={`${WMS_INV.chip} ${WMS_INV.chipActive}`}>Nośnik: {carrierCode}</span>
+        ) : (
+          <button type="button" onClick={enterCarrierScan} className={WMS_INV.chip}>
+            + nośnik
+          </button>
+        )}
+        {carrierScanMode ? (
+          <button type="button" onClick={skipCarrier} className="text-[10px] font-bold text-slate-400 underline">
+            Pomiń
+          </button>
+        ) : null}
       </div>
 
-      {counting ? (
-        <div className="mt-1.5 shrink-0">
+      {counting && activeScan ? (
+        <>
+          <WmsInventoryProductPreview scan={activeScan} pulse={qtyPulse} invalid={invalidPulse} />
           <WmsInventoryQtyControl
-            quantity={activeScan?.counted_quantity ?? 0}
-            disabled={!activeScan}
+            quantity={activeScan.counted_quantity ?? 0}
             onAdjust={(d) => void adjustQty(d)}
             onSetQuantity={(q) => void setQty(q)}
           />
-        </div>
+        </>
+      ) : counting ? (
+        <p className="text-[11px] font-bold text-slate-400">Zeskanuj produkt</p>
       ) : null}
 
-      <div className="mt-2 shrink-0">
-        {counting ? <WmsInventoryLastScans items={lastScans} /> : null}
-      </div>
+      {counting ? <WmsInventoryLastScans items={lastScans} /> : null}
 
       {counting ? (
-        <footer className="mt-2 grid shrink-0 grid-cols-2 gap-1.5">
-          <button type="button" className={WMS_INV.btnFooter} onClick={() => setUnknownOpen(true)}>
+        <div className={`${WMS_INV.divider} space-y-1 pt-2`}>
+          <button type="button" className={WMS_INV.btnAction} onClick={() => setUnknownOpen(true)}>
             Nieznany produkt
           </button>
-          <button type="button" className={`${WMS_INV.btnFooter} bg-[#1e4d8c] text-white`} onClick={finishLocation}>
+          <button type="button" className={WMS_INV.btnActionPrimary} onClick={finishLocation}>
             Zakończ lokalizację
           </button>
-        </footer>
+        </div>
       ) : null}
 
       {task ? (
