@@ -7,13 +7,18 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ...models.inventory_count.constants import TASK_ACTIVE_STATUSES
+from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.task import InventoryTask
 from ...models.location import Location
 from .errors import InventoryTaskNotFoundError
 
 
-def _task_to_dict(task: InventoryTask, location: Location | None = None) -> dict[str, Any]:
-    return {
+def _task_to_dict(
+    task: InventoryTask,
+    location: Location | None = None,
+    document: InventoryDocument | None = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
         "id": task.id,
         "inventory_document_id": task.inventory_document_id,
         "warehouse_id": task.warehouse_id,
@@ -31,6 +36,9 @@ def _task_to_dict(task: InventoryTask, location: Location | None = None) -> dict
         "zone_code": task.zone_code,
         "aisle_code": task.aisle_code,
     }
+    if document is not None:
+        out["inventory_type"] = document.inventory_type
+    return out
 
 
 def list_open_tasks(
@@ -63,12 +71,13 @@ def list_open_tasks(
 
 def get_task(db: Session, *, tenant_id: int, task_id: int) -> dict[str, Any]:
     row = (
-        db.query(InventoryTask, Location)
+        db.query(InventoryTask, Location, InventoryDocument)
         .outerjoin(Location, Location.id == InventoryTask.location_id)
+        .join(InventoryDocument, InventoryDocument.id == InventoryTask.inventory_document_id)
         .filter(InventoryTask.id == int(task_id), InventoryTask.tenant_id == int(tenant_id))
         .first()
     )
     if row is None:
         raise InventoryTaskNotFoundError(f"Inventory task {task_id} not found")
-    task, loc = row
-    return _task_to_dict(task, loc)
+    task, loc, doc = row
+    return _task_to_dict(task, loc, doc)

@@ -104,6 +104,7 @@ def get_task_lines(
             "sku": getattr(product, "sku", None) if product else None,
             "ean": getattr(product, "ean", None) if product else None,
             "product_name": getattr(product, "name", None) if product else None,
+            "image_url": getattr(product, "image_url", None) if product else None,
             "counted_quantity": line.counted_quantity,
             "status": line.status,
             "batch_number": line.batch_number,

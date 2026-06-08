@@ -66,6 +66,18 @@ export type InventoryTaskRead = {
   aisle_code?: string | null;
   line_count?: number;
   counted_line_count?: number;
+  inventory_type?: string | null;
+};
+
+export type WmsTaskLineRead = {
+  id: number;
+  product_id: number | null;
+  sku: string | null;
+  ean: string | null;
+  product_name: string | null;
+  image_url?: string | null;
+  counted_quantity: number | null;
+  status: string;
 };
 
 export type InventoryTaskCompact = InventoryTaskRead & {
@@ -434,17 +446,11 @@ export async function resolveWmsInventoryBarcode(
   }
 }
 
-export async function fetchWmsTaskLines(tenantId: number, taskId: number) {
-  const { data } = await api.get(`/wms/inventory-count/tasks/${taskId}/lines`, {
+export async function fetchWmsTaskLines(tenantId: number, taskId: number): Promise<WmsTaskLineRead[]> {
+  const { data } = await api.get<WmsTaskLineRead[]>(`/wms/inventory-count/tasks/${taskId}/lines`, {
     params: { tenant_id: tenantId },
   });
-  return data as Array<{
-    id: number;
-    product_name: string | null;
-    sku: string | null;
-    counted_quantity: number | null;
-    status: string;
-  }>;
+  return data;
 }
 
 export async function startInventoryDocument(tenantId: number, documentId: number): Promise<InventoryDocumentRead> {

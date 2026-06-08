@@ -4,12 +4,14 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   confirmWmsInventoryLocation,
   fetchWmsInventoryTask,
+  fetchWmsTaskLines,
   openWmsInventorySession,
   recordInventoryScan,
   resolveWmsInventoryBarcode,
   WmsBarcodeResolveError,
   type InventoryTaskRead,
   type WmsBarcodeResolveResult,
+  type WmsTaskLineRead,
 } from "../../../api/inventoryCountApi";
 import { useScanFeedback } from "../../../components/wms/execution/useScanFeedback";
 import { wmsInventoryCountPaths } from "../inventoryCountPaths";
@@ -18,20 +20,22 @@ import { useInventoryCountOfflineStatus } from "../offline/useInventoryCountOffl
 
 export type WmsTerminalStep = "location" | "product";
 
-export type WmsLastScanEntry = {
-  at: string;
+/** Aggregated counted product in current location — one row per line_id, not per scan event. */
+export type WmsCountedProduct = {
   line_id: number;
+  product_id: number;
   product_name: string | null;
   sku?: string | null;
   ean?: string | null;
   image_url?: string | null;
-  delta: number;
   counted_quantity: number;
+  updatedAt: number;
   scan: WmsBarcodeResolveResult;
 };
 
 const SCAN_LOCK_MS = 250;
-const LAST_SCAN_LIMIT = 4;
+const PULSE_MS = 280;
+const RECENT_LIMIT = 5;
 
 function buildLocationSubline(task: InventoryTaskRead | null): string | null {
   if (!task) return null;
@@ -43,20 +47,53 @@ function buildLocationSubline(task: InventoryTaskRead | null): string | null {
   return null;
 }
 
+function lineToCountedProduct(line: WmsTaskLineRead, task: InventoryTaskRead): WmsCountedProduct | null {
+  if (line.counted_quantity == null || line.product_id == null) return null;
+  const qty = line.counted_quantity;
+  const scan: WmsBarcodeResolveResult = {
+    line_id: line.id,
+    product_id: line.product_id,
+    product_name: line.product_name,
+    sku: line.sku,
+    ean: line.ean,
+    barcode: line.ean ?? line.sku ?? "",
+    image_url: line.image_url,
+    expected_quantity: 0,
+    counted_quantity: qty,
+    discrepancy_class: "EXPECTED",
+    discrepancy_label: "",
+    location_id: task.location_id,
+    location_code: task.location_code,
+  };
+  return {
+    line_id: line.id,
+    product_id: line.product_id,
+    product_name: line.product_name,
+    sku: line.sku,
+    ean: line.ean,
+    image_url: line.image_url,
+    counted_quantity: qty,
+    updatedAt: 0,
+    scan,
+  };
+}
+
 function resetCountingUi(setters: {
   setStep: (s: WmsTerminalStep) => void;
   setCarrierCode: (v: string | null) => void;
   setCarrierScanMode: (v: boolean) => void;
   setActiveLineId: (v: number | null) => void;
   setActiveScan: (v: WmsBarcodeResolveResult | null) => void;
-  setLastScans: (v: WmsLastScanEntry[]) => void;
+  setCountedProducts: (v: Record<number, WmsCountedProduct>) => void;
+  setPulseLineId: (v: number | null) => void;
 }) {
   setters.setStep("product");
   setters.setCarrierCode(null);
   setters.setCarrierScanMode(false);
   setters.setActiveLineId(null);
   setters.setActiveScan(null);
-  setters.setLastScans([]);
+  setters.setCountedProducts({});
+  setters.setPulseLineId(null);
 }
 
 /**
@@ -79,6 +116,7 @@ export function useWmsInventoryCountTerminal(
   const scanInFlight = useRef(false);
   const lastScanSubmit = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const hydratedTaskIdRef = useRef<number | null>(null);
+  const pulseTimerRef = useRef<number | null>(null);
 
   const [loading, setLoading] = useState(Boolean(taskId));
   const [error, setError] = useState<string | null>(null);
@@ -89,8 +127,8 @@ export function useWmsInventoryCountTerminal(
   const [carrierScanMode, setCarrierScanMode] = useState(false);
   const [activeLineId, setActiveLineId] = useState<number | null>(null);
   const [activeScan, setActiveScan] = useState<WmsBarcodeResolveResult | null>(null);
-  const [lastScans, setLastScans] = useState<WmsLastScanEntry[]>([]);
-  const [qtyPulse, setQtyPulse] = useState(false);
+  const [countedProducts, setCountedProducts] = useState<Record<number, WmsCountedProduct>>({});
+  const [pulseLineId, setPulseLineId] = useState<number | null>(null);
   const [invalidPulse, setInvalidPulse] = useState(false);
   const [unknownOpen, setUnknownOpen] = useState(false);
   const [lastScanCode, setLastScanCode] = useState<string | null>(null);
@@ -102,7 +140,8 @@ export function useWmsInventoryCountTerminal(
       setCarrierScanMode,
       setActiveLineId,
       setActiveScan,
-      setLastScans,
+      setCountedProducts,
+      setPulseLineId,
     }),
     [],
   );
@@ -153,8 +192,18 @@ export function useWmsInventoryCountTerminal(
         }
         if (cancelled) return;
 
+        const lines = await fetchWmsTaskLines(tenantId, t.id);
+        if (cancelled) return;
+
+        const hydrated: Record<number, WmsCountedProduct> = {};
+        for (const line of lines) {
+          const item = lineToCountedProduct(line, t);
+          if (item) hydrated[item.line_id] = item;
+        }
+
         setTask(t);
         setSessionId(sid);
+        setCountedProducts(hydrated);
         setStep(locationConfirmed ? "product" : "location");
         hydratedTaskIdRef.current = taskId;
         cacheTaskSnapshot({
@@ -191,12 +240,30 @@ export function useWmsInventoryCountTerminal(
     if (navSessionId != null) setSessionId(navSessionId);
   }, [navSessionId]);
 
+  useEffect(() => {
+    return () => {
+      if (pulseTimerRef.current != null) window.clearTimeout(pulseTimerRef.current);
+    };
+  }, []);
+
   const locationLabel = task?.location_code ?? task?.location_name ?? (task ? `#${task.location_id}` : "—");
   const locationSubline = useMemo(() => buildLocationSubline(task), [task]);
+  const inventoryType = (task?.inventory_type ?? "FULL").toUpperCase();
+  const isPartialInventory = inventoryType === "PARTIAL";
 
-  const pulseOk = useCallback(() => {
-    setQtyPulse(true);
-    window.setTimeout(() => setQtyPulse(false), 280);
+  const countedProductList = useMemo(
+    () => Object.values(countedProducts).sort((a, b) => b.updatedAt - a.updatedAt),
+    [countedProducts],
+  );
+
+  const recentlyUpdated = useMemo(() => countedProductList.slice(0, RECENT_LIMIT), [countedProductList]);
+
+  const qtyPulse = pulseLineId != null && pulseLineId === activeLineId;
+
+  const pulseLine = useCallback((lineId: number) => {
+    setPulseLineId(lineId);
+    if (pulseTimerRef.current != null) window.clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = window.setTimeout(() => setPulseLineId(null), PULSE_MS);
   }, []);
 
   const pulseBad = useCallback(() => {
@@ -204,29 +271,32 @@ export function useWmsInventoryCountTerminal(
     window.setTimeout(() => setInvalidPulse(false), 400);
   }, []);
 
-  const pushLastScan = useCallback((scan: WmsBarcodeResolveResult, delta: number, counted: number) => {
-    const entry: WmsLastScanEntry = {
-      at: `${Date.now()}-${scan.line_id}`,
-      line_id: scan.line_id,
-      product_name: scan.product_name,
-      sku: scan.sku,
-      ean: scan.ean,
-      image_url: scan.image_url,
-      delta,
-      counted_quantity: counted,
-      scan,
-    };
-    setLastScans((prev) => [entry, ...prev].slice(0, LAST_SCAN_LIMIT));
-  }, []);
+  const upsertCountedProduct = useCallback((scan: WmsBarcodeResolveResult, qty: number) => {
+    const snapshot: WmsBarcodeResolveResult = { ...scan, counted_quantity: qty };
+    setCountedProducts((prev) => ({
+      ...prev,
+      [scan.line_id]: {
+        line_id: scan.line_id,
+        product_id: scan.product_id,
+        product_name: scan.product_name,
+        sku: scan.sku,
+        ean: scan.ean,
+        image_url: scan.image_url,
+        counted_quantity: qty,
+        updatedAt: Date.now(),
+        scan: snapshot,
+      },
+    }));
+    pulseLine(scan.line_id);
+  }, [pulseLine]);
 
   const applyScanQty = useCallback(
-    (scan: WmsBarcodeResolveResult, nextQty: number, delta: number) => {
+    (scan: WmsBarcodeResolveResult, nextQty: number) => {
       setActiveScan({ ...scan, counted_quantity: nextQty });
       setActiveLineId(scan.line_id);
-      if (delta !== 0) pushLastScan({ ...scan, counted_quantity: nextQty }, delta, nextQty);
-      pulseOk();
+      upsertCountedProduct(scan, nextQty);
     },
-    [pulseOk, pushLastScan],
+    [upsertCountedProduct],
   );
 
   const recordScan = useCallback(
@@ -291,7 +361,7 @@ export function useWmsInventoryCountTerminal(
     async (resolved: WmsBarcodeResolveResult, delta: number, barcode?: string) => {
       await recordScan(resolved.line_id, { delta, barcode });
       const nextQty = Math.max(0, (resolved.counted_quantity ?? 0) + delta);
-      applyScanQty(resolved, nextQty, delta);
+      applyScanQty(resolved, nextQty);
     },
     [applyScanQty, recordScan],
   );
@@ -334,7 +404,7 @@ export function useWmsInventoryCountTerminal(
       if (nextQty === current) return;
       try {
         await recordScan(base.line_id, { quantity: nextQty });
-        applyScanQty(base, nextQty, nextQty - current);
+        applyScanQty(base, nextQty);
       } catch {
         scanFeedback.error("Błąd zapisu");
       }
@@ -351,13 +421,18 @@ export function useWmsInventoryCountTerminal(
       if (qty === current) return;
       try {
         await recordScan(base.line_id, { quantity: qty });
-        applyScanQty(base, qty, qty - current);
+        applyScanQty(base, qty);
       } catch {
         scanFeedback.error("Błąd zapisu");
       }
     },
     [activeScan, applyScanQty, recordScan, scanFeedback],
   );
+
+  const selectCountedProduct = useCallback((item: WmsCountedProduct) => {
+    setActiveScan(item.scan);
+    setActiveLineId(item.line_id);
+  }, []);
 
   /** Single scan pipeline — dedupe lock + in-flight guard. */
   const handleScan = useCallback(
@@ -439,8 +514,13 @@ export function useWmsInventoryCountTerminal(
     carrierScanMode,
     locationLabel,
     locationSubline,
+    inventoryType,
+    isPartialInventory,
     activeScan,
-    lastScans,
+    activeLineId,
+    countedProductList,
+    recentlyUpdated,
+    pulseLineId,
     qtyPulse,
     invalidPulse,
     unknownOpen,
@@ -448,6 +528,7 @@ export function useWmsInventoryCountTerminal(
     setUnknownOpen,
     adjustQty,
     setQty,
+    selectCountedProduct,
     enterCarrierScan,
     skipCarrier,
     finishLocation,

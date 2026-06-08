@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import WmsInventoryLastScans from "../../../modules/inventoryCount/components/WmsInventoryLastScans";
+import WmsInventoryLocationCounts from "../../../modules/inventoryCount/components/WmsInventoryLocationCounts";
 import WmsInventoryLiveSearchPanel from "../../../modules/inventoryCount/components/WmsInventoryLiveSearchPanel";
+import WmsInventoryPartialProductLocations from "../../../modules/inventoryCount/components/WmsInventoryPartialProductLocations";
+import WmsInventoryRecentUpdates from "../../../modules/inventoryCount/components/WmsInventoryRecentUpdates";
 import {
   buildLiveSearchRows,
   pickFirstLiveSearch,
@@ -40,7 +42,11 @@ export default function WmsInventoryCountTerminalPage() {
     locationLabel,
     locationSubline,
     activeScan,
-    lastScans,
+    activeLineId,
+    countedProductList,
+    recentlyUpdated,
+    pulseLineId,
+    isPartialInventory,
     qtyPulse,
     invalidPulse,
     carrierCode,
@@ -50,6 +56,7 @@ export default function WmsInventoryCountTerminalPage() {
     setUnknownOpen,
     adjustQty,
     setQty,
+    selectCountedProduct,
     enterCarrierScan,
     skipCarrier,
     finishLocation,
@@ -217,12 +224,31 @@ export default function WmsInventoryCountTerminalPage() {
             onAdjust={(d) => void adjustQty(d)}
             onSetQuantity={(q) => void setQty(q)}
           />
+          {isPartialInventory ? (
+            <WmsInventoryPartialProductLocations
+              tenantId={tenantId}
+              warehouseId={warehouseId}
+              productId={activeScan.product_id}
+              currentLocationId={task?.location_id}
+            />
+          ) : null}
         </>
       ) : counting ? (
         <p className="text-[11px] font-bold text-slate-400">Zeskanuj produkt</p>
       ) : null}
 
-      {counting ? <WmsInventoryLastScans items={lastScans} /> : null}
+      {counting ? (
+        <WmsInventoryLocationCounts
+          items={countedProductList}
+          activeLineId={activeLineId}
+          pulseLineId={pulseLineId}
+          onSelect={selectCountedProduct}
+        />
+      ) : null}
+
+      {counting && countedProductList.length > 1 ? (
+        <WmsInventoryRecentUpdates items={recentlyUpdated} pulseLineId={pulseLineId} />
+      ) : null}
 
       {counting ? (
         <div className={`${WMS_INV.divider} space-y-1 pt-2`}>
