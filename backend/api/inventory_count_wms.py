@@ -25,6 +25,7 @@ from ..schemas.inventory_count import (
     InventoryUniversalSearchRead,
     InventoryUnknownProductCreateBody,
     InventoryUnknownProductRead,
+    WmsActiveInventoryDocumentRead,
 )
 from ..services.inventory_count import (
     InventoryCountError,
@@ -40,6 +41,7 @@ from ..services.inventory_count.unknown_product_service import (
     create_unknown_product_draft,
     list_unknown_products,
 )
+from ..services.inventory_count.wms_active_documents_service import list_wms_active_inventory_documents
 from ..services.inventory_count.wms_search_service import (
     resolve_product_for_task_location,
     search_inventory_execution,
@@ -108,6 +110,17 @@ def _map_error(exc: InventoryCountError) -> HTTPException:
     if exc.details:
         detail["details"] = exc.details
     return HTTPException(status_code=status, detail=detail)
+
+
+@router.get("/active-documents", response_model=list[WmsActiveInventoryDocumentRead])
+def wms_inventory_active_documents(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser | None = Depends(require_inventory_permission_optional(PERM_EXECUTE)),
+):
+    """Operator landing — in_progress and awaiting_approval only (no drafts)."""
+    return list_wms_active_inventory_documents(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
 
 
 @router.get("/tasks", response_model=List[InventoryTaskRead])

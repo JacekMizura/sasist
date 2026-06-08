@@ -36,6 +36,14 @@ export type InventoryDocumentRead = {
   submit_readiness?: InventorySubmitReadiness | null;
 };
 
+export type WmsActiveInventoryDocumentRead = InventoryDocumentRead & {
+  scope_summary: string;
+  operator_count: number;
+  conflict_count: number;
+  last_activity_at: string | null;
+  can_count: boolean;
+};
+
 export type InventoryPostingPreviewLine = {
   line_id: number;
   product_id: number | null;
@@ -736,6 +744,16 @@ export async function rejectInventoryUnknownProduct(
     { reason: reason ?? null },
     { params: { tenant_id: tenantId } },
   );
+  return data;
+}
+
+export async function fetchWmsActiveInventoryDocuments(
+  tenantId: number,
+  warehouseId: number,
+): Promise<WmsActiveInventoryDocumentRead[]> {
+  const { data } = await api.get<WmsActiveInventoryDocumentRead[]>("/wms/inventory-count/active-documents", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
   return data;
 }
 

@@ -52,7 +52,7 @@ export default function WmsInventoryCountExecutionPage() {
     return (
       <div className="text-center">
         <p className="text-lg font-bold text-[#b42318]">{error ?? "Zadanie niedostępne."}</p>
-        <Link to={wmsInventoryCountPaths.tasks} className={`mt-6 inline-block text-sm font-semibold ${WMS_INV.textMuted}`}>
+        <Link to={wmsInventoryCountPaths.root} className={`mt-6 inline-block text-sm font-semibold ${WMS_INV.textMuted}`}>
           ← Kolejka zadań
         </Link>
       </div>
@@ -174,7 +174,7 @@ export default function WmsInventoryCountExecutionPage() {
         </button>
       </div>
 
-      <Link to={wmsInventoryCountPaths.tasks} className={`text-center text-sm font-semibold ${WMS_INV.textMuted}`}>
+      <Link to={wmsInventoryCountPaths.root} className={`text-center text-sm font-semibold ${WMS_INV.textMuted}`}>
         ← Kolejka zadań
       </Link>
 

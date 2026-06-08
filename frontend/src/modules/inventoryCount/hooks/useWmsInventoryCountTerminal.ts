@@ -16,6 +16,7 @@ import {
 } from "@/api/inventoryCountApi";
 import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
 import { wmsInventoryCountPaths } from "../inventoryCountPaths";
+import { setActiveInventoryDocumentId } from "../wmsActiveDocumentStorage";
 import {
   commitLocationSessionToRecent,
   syncLocationSessionProduct,
@@ -109,6 +110,7 @@ export function useWmsInventoryCountTerminal(
   taskId: number | undefined,
   tenantId: number,
   warehouseId: number | undefined,
+  expectedDocumentId?: number,
 ) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -166,14 +168,16 @@ export function useWmsInventoryCountTerminal(
   );
 
   const goToTask = useCallback(
-    (nextTaskId: number, nextSessionId?: number | null) => {
+    (nextTaskId: number, nextSessionId?: number | null, nextDocumentId?: number) => {
       if (!Number.isFinite(nextTaskId)) return;
       if (Number(taskId) === nextTaskId) return;
-      navigate(wmsInventoryCountPaths.count(nextTaskId), {
+      const docId = nextDocumentId ?? task?.inventory_document_id;
+      if (!docId) return;
+      navigate(wmsInventoryCountPaths.count(docId, nextTaskId), {
         state: { sessionId: nextSessionId, locationConfirmed: true },
       });
     },
-    [navigate, taskId],
+    [navigate, task, taskId],
   );
 
   useEffect(() => {
@@ -200,6 +204,16 @@ export function useWmsInventoryCountTerminal(
       try {
         const t = await fetchWmsInventoryTask(tenantId, taskId);
         if (cancelled) return;
+
+        if (expectedDocumentId != null && t.inventory_document_id !== expectedDocumentId) {
+          setError("Zadanie nie należy do wybranego dokumentu inwentaryzacji.");
+          setLoading(false);
+          return;
+        }
+
+        if (warehouseId) {
+          setActiveInventoryDocumentId(warehouseId, t.inventory_document_id);
+        }
 
         let sid = navSessionId ?? sessionId;
         if (!sid) {
@@ -271,7 +285,7 @@ export function useWmsInventoryCountTerminal(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate on route taskId / warehouse
-  }, [taskId, warehouseId, tenantId]);
+  }, [taskId, warehouseId, tenantId, expectedDocumentId]);
 
   useEffect(() => {
     if (navSessionId != null) setSessionId(navSessionId);
@@ -584,11 +598,16 @@ export function useWmsInventoryCountTerminal(
   const finishLocation = useCallback(() => {
     if (task) commitLocationSessionToRecent(task.id);
     hydratedTaskIdRef.current = null;
+    const docId = task?.inventory_document_id;
     setTask(null);
     resetCountingUi(uiResetters);
-    navigate(wmsInventoryCountPaths.root, { replace: true });
+    if (docId) {
+      navigate(wmsInventoryCountPaths.document(docId), { replace: true });
+    } else {
+      navigate(wmsInventoryCountPaths.root, { replace: true });
+    }
     scanFeedback.success(undefined);
-  }, [navigate, scanFeedback, uiResetters]);
+  }, [navigate, scanFeedback, task, uiResetters]);
 
   return {
     loading,

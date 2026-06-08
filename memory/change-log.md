@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — WMS inventory document-scoped entry flow
+- WMS `/wms/inventory-count` landing: active docs only (`in_progress`, `awaiting_approval`); drafts/approved/cancelled hidden
+- Document cards: number, title, type, scope, progress, operators, conflicts, movement policy, last activity
+- Routes: `/d/:documentId` (location scan), `/d/:documentId/count/:taskId` (terminal); legacy `/count/:taskId` redirects
+- Sticky header switcher (`WmsInventoryDocumentSwitcher`); sessionStorage per warehouse for active document
+- Empty state „Brak aktywnych inwentaryzacji”; „Utwórz dokument” gated by `inventory.submit`
+- Backend: `GET /wms/inventory-count/active-documents` + `wms_active_documents_service`
+
 ## 2026-06-08 — Inventory start stability + movement enforcement + wizard UX
 - **500 on start fixed**: missing `log_inventory_audit` import in `location_lock_service` (triggered when movement policy ≠ allow)
 - Start returns structured errors: `scope_not_configured`, `scope_not_materialized`, `inventory_start_failed` (+ 500 fallback with code/details)

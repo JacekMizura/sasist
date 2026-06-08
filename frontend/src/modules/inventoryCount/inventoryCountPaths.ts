@@ -9,10 +9,12 @@ export const erpInventoryCountPaths = {
   reports: "/inventory-count/reports",
 } as const;
 
-/** WMS execution paths */
+/** WMS execution paths — document-scoped operator flow */
 export const wmsInventoryCountPaths = {
   root: "/wms/inventory-count",
-  /** @deprecated use root — operator entry is location scan, not queue */
-  tasks: "/wms/inventory-count",
-  count: (taskId: number | string) => `/wms/inventory-count/count/${taskId}`,
+  document: (documentId: number | string) => `/wms/inventory-count/d/${documentId}`,
+  count: (documentId: number | string, taskId: number | string) =>
+    `/wms/inventory-count/d/${documentId}/count/${taskId}`,
+  /** @deprecated use count(documentId, taskId) — kept for legacy redirects */
+  countLegacy: (taskId: number | string) => `/wms/inventory-count/count/${taskId}`,
 } as const;

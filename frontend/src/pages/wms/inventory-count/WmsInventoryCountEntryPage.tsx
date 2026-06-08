@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { fetchWmsInventoryTask, openWmsInventorySession, resolveWmsInventoryLocationScan } from "@/api/inventoryCountApi";
+import {
+  fetchInventoryDocument,
+  fetchWmsInventoryTask,
+  openWmsInventorySession,
+  resolveWmsInventoryLocationScan,
+} from "@/api/inventoryCountApi";
 import WmsInventoryRecentLocationContext from "@/modules/inventoryCount/components/WmsInventoryRecentLocationContext";
 import WmsInventoryScanField from "@/modules/inventoryCount/components/WmsInventoryScanField";
 import { useInventoryScanInput } from "@/modules/inventoryCount/hooks/useInventoryScanInput";
@@ -11,6 +16,7 @@ import {
   touchRecentLocation,
   type RecentLocationSession,
 } from "@/modules/inventoryCount/recentLocationsStorage";
+import { setActiveInventoryDocumentId } from "@/modules/inventoryCount/wmsActiveDocumentStorage";
 import { WMS_INV } from "@/modules/inventoryCount/wmsIndustrialTheme";
 import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
 import { useWarehouse } from "@/context/WarehouseContext";
@@ -19,6 +25,8 @@ const TENANT_ID = 1;
 
 export default function WmsInventoryCountEntryPage() {
   const navigate = useNavigate();
+  const { documentId: documentIdParam } = useParams();
+  const documentId = documentIdParam ? Number(documentIdParam) : NaN;
   const { warehouse } = useWarehouse();
   const scanFeedback = useScanFeedback();
   const warehouseId = warehouse?.id;
@@ -26,8 +34,24 @@ export default function WmsInventoryCountEntryPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [recentTick, setRecentTick] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [docTitle, setDocTitle] = useState<string | null>(null);
+  const [docBlocked, setDocBlocked] = useState<string | null>(null);
 
   const recent = useMemo(() => loadRecentLocationSessions(), [recentTick]);
+
+  useEffect(() => {
+    if (!Number.isFinite(documentId)) return;
+    void fetchInventoryDocument(tenantId, documentId)
+      .then((d) => {
+        if (d.status !== "in_progress") {
+          setDocBlocked("Ten dokument nie jest w trakcie liczenia.");
+          return;
+        }
+        setDocTitle(d.title?.trim() || d.number);
+        if (warehouseId) setActiveInventoryDocumentId(warehouseId, documentId);
+      })
+      .catch(() => setDocBlocked("Nie znaleziono dokumentu inwentaryzacji."));
+  }, [documentId, tenantId, warehouseId]);
 
   const focusScan = useCallback(() => {
     window.requestAnimationFrame(() => inputRef.current?.focus());
@@ -50,43 +74,43 @@ export default function WmsInventoryCountEntryPage() {
 
   const openLocation = useCallback(
     async (code: string, knownTaskId?: number, knownLocationId?: number) => {
-      if (!warehouseId || busy) return;
+      if (!warehouseId || busy || !Number.isFinite(documentId) || docBlocked) return;
       const trimmed = code.trim();
       if (!trimmed) return;
 
       setBusy(true);
       try {
         let taskId = knownTaskId;
-        let documentId: number | undefined;
         let locationId = knownLocationId ?? 0;
         let locationCode = trimmed.toUpperCase();
 
         if (!taskId) {
-          const resolved = await resolveWmsInventoryLocationScan(tenantId, warehouseId, trimmed);
+          const resolved = await resolveWmsInventoryLocationScan(tenantId, warehouseId, trimmed, documentId);
           if (!resolved.found || !resolved.task_id) {
             scanFeedback.error(
               resolved.reason === "location_not_found"
                 ? "Nieznana lokalizacja"
                 : resolved.reason === "no_open_task"
-                  ? "Brak zadania dla lokalizacji"
+                  ? "Brak zadania dla tej lokalizacji w tym dokumencie"
                   : "Nie rozpoznano lokalizacji",
             );
             return;
           }
           taskId = resolved.task_id;
-          documentId = resolved.inventory_document_id;
           locationId = resolved.location_id ?? 0;
           locationCode = (resolved.location_code ?? trimmed).toUpperCase();
+          if (resolved.inventory_document_id && resolved.inventory_document_id !== documentId) {
+            scanFeedback.error("Lokalizacja należy do innego dokumentu inwentaryzacji");
+            return;
+          }
         } else {
           const t = await fetchWmsInventoryTask(tenantId, taskId);
-          documentId = t.inventory_document_id;
+          if (t.inventory_document_id !== documentId) {
+            scanFeedback.error("Zadanie należy do innego dokumentu");
+            return;
+          }
           locationId = t.location_id;
           locationCode = (t.location_code ?? t.location_name ?? trimmed).toUpperCase();
-        }
-
-        if (!documentId) {
-          scanFeedback.error("Brak dokumentu inwentaryzacji");
-          return;
         }
 
         const session = await openWmsInventorySession(tenantId, warehouseId, {
@@ -95,7 +119,7 @@ export default function WmsInventoryCountEntryPage() {
         });
         touchRecentLocation({ code: locationCode, taskId, locationId });
         setRecentTick((n) => n + 1);
-        navigate(wmsInventoryCountPaths.count(taskId), {
+        navigate(wmsInventoryCountPaths.count(documentId, taskId), {
           state: { sessionId: session.id, locationConfirmed: true },
         });
         scanFeedback.success(undefined);
@@ -105,7 +129,7 @@ export default function WmsInventoryCountEntryPage() {
         setBusy(false);
       }
     },
-    [busy, navigate, scanFeedback, tenantId, warehouseId],
+    [busy, docBlocked, documentId, navigate, scanFeedback, tenantId, warehouseId],
   );
 
   const openRecent = useCallback(
@@ -124,16 +148,39 @@ export default function WmsInventoryCountEntryPage() {
     return <p className={`py-4 text-sm font-bold ${WMS_INV.textMuted}`}>Wybierz magazyn.</p>;
   }
 
+  if (!Number.isFinite(documentId)) {
+    return (
+      <p className="text-sm text-rose-700">
+        Brak dokumentu.{" "}
+        <Link to={wmsInventoryCountPaths.root} className="underline">
+          Wróć do listy
+        </Link>
+      </p>
+    );
+  }
+
+  if (docBlocked) {
+    return (
+      <div className={WMS_INV.shell}>
+        <p className="text-sm text-rose-700">{docBlocked}</p>
+        <Link to={wmsInventoryCountPaths.root} className="mt-2 inline-block text-xs font-bold underline">
+          Wróć do listy inwentaryzacji
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className={WMS_INV.shell}>
-      <h1 className={WMS_INV.textLabel}>Inwentaryzacja</h1>
+      {docTitle ? <p className="mb-1 text-[11px] font-semibold text-slate-600">{docTitle}</p> : null}
+      <h1 className={WMS_INV.textLabel}>Zeskanuj lokalizację</h1>
 
       <WmsInventoryScanField
         inputRef={inputRef}
         value={query}
         onChange={onChange}
         onSubmit={() => void submitScanOnce(query)}
-        placeholder="Zeskanuj lokalizację"
+        placeholder="Kod lokalizacji"
         disabled={busy}
       />
 

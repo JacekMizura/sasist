@@ -25,8 +25,9 @@ import { useWarehouse } from "../../../context/WarehouseContext";
 const TENANT_ID = 1;
 
 export default function WmsInventoryCountTerminalPage() {
-  const { taskId: taskIdParam } = useParams();
+  const { taskId: taskIdParam, documentId: documentIdParam } = useParams();
   const taskId = taskIdParam ? Number(taskIdParam) : NaN;
+  const documentId = documentIdParam ? Number(documentIdParam) : NaN;
   const { warehouse } = useWarehouse();
   const tenantId = TENANT_ID;
   const warehouseId = warehouse?.id;
@@ -64,7 +65,12 @@ export default function WmsInventoryCountTerminalPage() {
     handleSearchProduct,
     handleSearchLocation,
     handleSearchCarrier,
-  } = useWmsInventoryCountTerminal(Number.isFinite(taskId) ? taskId : undefined, tenantId, warehouseId);
+  } = useWmsInventoryCountTerminal(
+    Number.isFinite(taskId) ? taskId : undefined,
+    tenantId,
+    warehouseId,
+    Number.isFinite(documentId) ? documentId : undefined,
+  );
 
   const { loading: searchLoading, result, taskMatches, runSearch, clearSearch } = useWmsInventoryLiveSearch(
     tenantId,
@@ -150,7 +156,10 @@ export default function WmsInventoryCountTerminalPage() {
     return (
       <div>
         <p className="text-sm font-black text-red-700">Brak lokalizacji w adresie URL.</p>
-        <Link to={wmsInventoryCountPaths.root} className={`mt-1 inline-block text-xs font-bold ${WMS_INV.textMuted}`}>
+        <Link
+          to={Number.isFinite(documentId) ? wmsInventoryCountPaths.document(documentId) : wmsInventoryCountPaths.root}
+          className={`mt-1 inline-block text-xs font-bold ${WMS_INV.textMuted}`}
+        >
           Wróć
         </Link>
       </div>
@@ -161,7 +170,10 @@ export default function WmsInventoryCountTerminalPage() {
     return (
       <div>
         <p className="text-sm font-black text-red-700">{error}</p>
-        <Link to={wmsInventoryCountPaths.root} className={`mt-1 inline-block text-xs font-bold ${WMS_INV.textMuted}`}>
+        <Link
+          to={Number.isFinite(documentId) ? wmsInventoryCountPaths.document(documentId) : wmsInventoryCountPaths.root}
+          className={`mt-1 inline-block text-xs font-bold ${WMS_INV.textMuted}`}
+        >
           Wróć
         </Link>
       </div>

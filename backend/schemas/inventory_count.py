@@ -121,6 +121,14 @@ class InventoryDocumentRead(BaseModel):
     submit_readiness: InventorySubmitReadinessRead | None = None
 
 
+class WmsActiveInventoryDocumentRead(InventoryDocumentRead):
+    scope_summary: str = ""
+    operator_count: int = 0
+    conflict_count: int = 0
+    last_activity_at: str | None = None
+    can_count: bool = True
+
+
 class InventoryDashboardKpisRead(BaseModel):
     active_inventories: int
     awaiting_approval: int
