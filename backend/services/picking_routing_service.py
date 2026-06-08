@@ -88,6 +88,23 @@ class PickingRoutingService:
                 wh_product_pairs.add((int(o.warehouse_id), int(oi.product_id)))
 
         inv_by_wh_product = self._load_inventory_by_warehouse_product(wh_product_pairs)
+        if tenant_id is not None:
+            from ..services.inventory_count.inventory_movement_guard_service import locked_location_ids_for_picking
+
+            loc_ids: set[int] = set()
+            for lst in inv_by_wh_product.values():
+                for lid, _, _ in lst:
+                    loc_ids.add(int(lid))
+            blocked = locked_location_ids_for_picking(
+                self.db,
+                tenant_id=int(tenant_id),
+                location_ids=loc_ids,
+            )
+            if blocked:
+                for key, lst in list(inv_by_wh_product.items()):
+                    inv_by_wh_product[key] = [
+                        (lid, q, name) for lid, q, name in lst if int(lid) not in blocked
+                    ]
 
         seen_orders = {int(o.id) for o in orders}
         warnings: list[str] = []

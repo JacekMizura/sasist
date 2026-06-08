@@ -126,6 +126,29 @@ def complete_pick(
         raise HTTPException(status_code=400, detail="Pick already completed")
     if not task.order:
         raise HTTPException(status_code=400, detail="Order not found")
+
+    from ..services.inventory_count.inventory_movement_guard_service import (
+        MOVEMENT_PICK,
+        assert_location_movement_allowed,
+    )
+
+    try:
+        assert_location_movement_allowed(
+            db,
+            location_id=int(task.location_id),
+            movement_kind=MOVEMENT_PICK,
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:
+        from ..services.inventory_count.errors import InventoryLocationMovementBlockedError
+
+        if isinstance(exc, InventoryLocationMovementBlockedError):
+            raise HTTPException(
+                status_code=423,
+                detail={"code": exc.code, "message": str(exc), "details": exc.details},
+            ) from exc
+        raise
+
     qty = (body and body.quantity) if (body and body.quantity is not None) else task.quantity
     qty = float(qty)
     if qty <= 0 or qty > task.quantity:

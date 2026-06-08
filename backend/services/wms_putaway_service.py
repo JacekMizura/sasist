@@ -1185,6 +1185,18 @@ def patch_wms_putaway_item(
     if not loc:
         raise ValueError("Lokalizacja nie należy do magazynu tej PZ")
 
+    from ..services.inventory_count.inventory_movement_guard_service import (
+        MOVEMENT_PUTAWAY,
+        assert_location_movement_allowed,
+    )
+
+    assert_location_movement_allowed(
+        db,
+        location_id=int(body.location_id),
+        movement_kind=MOVEMENT_PUTAWAY,
+        tenant_id=tenant_id,
+    )
+
     cap_check = validate_putaway_assignment(
         db,
         tenant_id=tenant_id,

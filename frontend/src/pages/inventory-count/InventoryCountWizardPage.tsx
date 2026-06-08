@@ -4,15 +4,19 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   createInventoryDocument,
   fetchInventoryDocument,
+  previewInventoryScope,
   startInventoryDocument,
   updateInventoryWizard,
   type InventoryDocumentRead,
 } from "../../api/inventoryCountApi";
+import type { ProductSearchHit } from "../../api/productsSearchApi";
+import type { WarehouseLocationItem } from "../../api/warehouseGraphApi";
 import {
   InventoryWizardScopeStep,
   InventoryWizardStrategyStep,
 } from "../../modules/inventoryCount/erp/components/InventoryCountWizardSteps";
 import { InventoryPageHeader } from "../../modules/inventoryCount/erp/components/InventoryPageShell";
+import { formatInventoryRequestError } from "../../modules/inventoryCount/inventoryCountApiErrors";
 import {
   inventoryCountModeLabel,
   inventoryMovementPolicyLabel,
@@ -68,6 +72,15 @@ export default function InventoryCountWizardPage() {
   const [resultPolicy, setResultPolicy] = useState<InventoryResultPolicy>("update_stock");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [summaryPreview, setSummaryPreview] = useState<{
+    location_count: number;
+    product_count: number;
+    line_count: number;
+  } | null>(null);
+  const [selectionMeta, setSelectionMeta] = useState<{
+    products: ProductSearchHit[];
+    locations: WarehouseLocationItem[];
+  }>({ products: [], locations: [] });
 
   const hydrateFromDoc = useCallback((d: InventoryDocumentRead) => {
     setDoc(d);
@@ -112,6 +125,32 @@ export default function InventoryCountWizardPage() {
     setResultPolicy(defaultResultPolicyForType(type));
   };
 
+  useEffect(() => {
+    if (step !== 3) return;
+    const effectiveScope = inventoryType === "FULL" ? "full" : scopeMode;
+    void previewInventoryScope(tenantId, warehouseId, { ...filters, scope_mode: effectiveScope })
+      .then(setSummaryPreview)
+      .catch(() => setSummaryPreview(null));
+  }, [step, tenantId, warehouseId, filters, scopeMode, inventoryType]);
+
+  const persistFullWizardState = async (documentId: number) => {
+    const effectiveScope = inventoryType === "FULL" ? "full" : scopeMode;
+    return updateInventoryWizard(tenantId, documentId, {
+      inventory_type: inventoryType,
+      title: title.trim() || null,
+      notes: notes.trim() || null,
+      filters: { ...filters, scope_mode: effectiveScope },
+      count_mode: countMode,
+      lock_mode: movementPolicy,
+      strategy: {
+        result_policy: resultPolicy,
+        movement_policy: movementPolicy,
+        blind_count: countMode === "blind",
+        visible_quantities: countMode === "visible",
+      },
+    });
+  };
+
   const saveStep = async () => {
     setBusy(true);
     setErr(null);
@@ -124,34 +163,25 @@ export default function InventoryCountWizardPage() {
           notes: notes.trim() || null,
         });
         hydrateFromDoc(updated);
-      }
-      if (step === 1) {
+      } else if (step === 1) {
         const effectiveScope = inventoryType === "FULL" ? "full" : scopeMode;
-        await updateInventoryWizard(tenantId, current.id, {
+        const updated = await updateInventoryWizard(tenantId, current.id, {
           filters: { ...filters, scope_mode: effectiveScope },
         });
-      }
-      if (step === 2) {
-        const updated = await updateInventoryWizard(tenantId, current.id, {
-          count_mode: countMode,
-          lock_mode: movementPolicy,
-          strategy: {
-            result_policy: resultPolicy,
-            movement_policy: movementPolicy,
-            blind_count: countMode === "blind",
-            visible_quantities: countMode === "visible",
-          },
-        });
         hydrateFromDoc(updated);
-      }
-      if (step === STEPS.length - 1 && doc) {
-        await startInventoryDocument(tenantId, doc.id);
-        navigate(erpInventoryCountPaths.document(doc.id));
+      } else if (step === 2) {
+        const updated = await persistFullWizardState(current.id);
+        hydrateFromDoc(updated);
+      } else if (step === STEPS.length - 1) {
+        const updated = await persistFullWizardState(current.id);
+        hydrateFromDoc(updated);
+        await startInventoryDocument(tenantId, updated.id);
+        navigate(erpInventoryCountPaths.document(updated.id));
         return;
       }
       setStep((s) => Math.min(s + 1, STEPS.length - 1));
-    } catch {
-      setErr("Nie udało się zapisać kroku kreatora.");
+    } catch (e) {
+      setErr(formatInventoryRequestError(e, "Nie udało się zapisać kroku kreatora."));
     } finally {
       setBusy(false);
     }
@@ -241,6 +271,7 @@ export default function InventoryCountWizardPage() {
             setFilters(emptyFilters(mode));
           }}
           onFiltersChange={setFilters}
+          onSelectionMetaChange={setSelectionMeta}
         />
       ) : null}
 
@@ -256,20 +287,76 @@ export default function InventoryCountWizardPage() {
       ) : null}
 
       {step === 3 ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
-          <p className="text-sm font-semibold text-slate-900">Podsumowanie</p>
-          <ul className="mt-2 space-y-0.5 text-xs text-slate-700">
-            <li>Tytuł: {title.trim() || "—"}</li>
-            <li>Typ: {inventoryTypeLabel(inventoryType)}</li>
-            <li>Zakres: {inventoryScopeModeLabel(effectiveScope)}</li>
-            <li>Tryb liczenia: {inventoryCountModeLabel(countMode)}</li>
-            <li>Ruchy magazynowe: {inventoryMovementPolicyLabel(movementPolicy)}</li>
-            <li>Wynik: {inventoryResultPolicyLabel(resultPolicy)}</li>
-            <li>Dokument: {doc?.number ?? "—"}</li>
-          </ul>
-          <p className="mt-2 text-[10px] text-slate-500">
-            Uruchomienie rozpocznie liczenie w WMS. Operatorzy zobaczą tylko pozycje objęte zakresem
-            dokumentu.
+        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+          <p className="text-sm font-semibold text-slate-900">Podsumowanie przed uruchomieniem</p>
+          <div className="grid gap-2 sm:grid-cols-2 text-xs text-slate-700">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Tytuł</p>
+              <p className="font-semibold">{title.trim() || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Dokument</p>
+              <p className="font-mono">{doc?.number ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Typ</p>
+              <p>{inventoryTypeLabel(inventoryType)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Zakres</p>
+              <p>{inventoryScopeModeLabel(effectiveScope)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Liczenie</p>
+              <p>{inventoryCountModeLabel(countMode)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Ruchy</p>
+              <p>{inventoryMovementPolicyLabel(movementPolicy)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Wynik</p>
+              <p>{inventoryResultPolicyLabel(resultPolicy)}</p>
+            </div>
+          </div>
+
+          {selectionMeta.locations.length > 0 ? (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Wybrane lokalizacje ({selectionMeta.locations.length})</p>
+              <p className="mt-0.5 text-xs text-slate-600">
+                {selectionMeta.locations.map((l) => l.name ?? l.code).join(", ")}
+              </p>
+            </div>
+          ) : null}
+          {selectionMeta.products.length > 0 ? (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Wybrane produkty ({selectionMeta.products.length})</p>
+              <p className="mt-0.5 text-xs text-slate-600">
+                {selectionMeta.products.map((p) => p.name ?? p.sku).join(", ")}
+              </p>
+            </div>
+          ) : null}
+
+          {summaryPreview ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              <p className="font-bold">Szacowany zakres (bieżące stany)</p>
+              <ul className="mt-1 list-inside list-disc">
+                <li>{summaryPreview.location_count} lokalizacji</li>
+                <li>{summaryPreview.product_count} produktów</li>
+                <li>{summaryPreview.line_count} pozycji magazynowych</li>
+              </ul>
+            </div>
+          ) : null}
+
+          {notes.trim() ? (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Notatka</p>
+              <p className="text-xs text-slate-600">{notes.trim()}</p>
+            </div>
+          ) : null}
+
+          <p className="text-[10px] text-slate-500">
+            Uruchomienie utworzy migawkę stanów, wygeneruje zadania WMS i — jeśli wybrano — zablokuje ruchy w objętych lokalizacjach.
           </p>
         </div>
       ) : null}

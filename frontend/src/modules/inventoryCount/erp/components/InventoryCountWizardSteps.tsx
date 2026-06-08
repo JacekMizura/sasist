@@ -15,12 +15,34 @@ import {
   COUNT_MODE_OPTIONS,
   MOVEMENT_POLICY_OPTIONS,
   RESULT_POLICY_OPTIONS,
-  SCOPE_MODE_OPTIONS,
+  WIZARD_SCOPE_MODE_OPTIONS,
   parseIdList,
 } from "../../inventoryStrategyConfig";
 
 const fieldClass = "mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs";
 const labelClass = "text-[10px] font-bold uppercase tracking-wide text-slate-500";
+
+function SelectionTag({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-800">
+      {label}
+      <button type="button" onClick={onRemove} className="text-slate-400 hover:text-rose-600" aria-label="Usuń">
+        ×
+      </button>
+    </span>
+  );
+}
+
+function ProductThumb({ url, name }: { url?: string | null; name?: string | null }) {
+  if (url) {
+    return <img src={url} alt="" className="h-8 w-8 shrink-0 rounded border border-slate-100 object-cover" />;
+  }
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-100 bg-slate-50 text-[9px] font-bold text-slate-400">
+      {(name ?? "?").slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
 
 type OptionCardProps = {
   selected: boolean;
@@ -55,6 +77,10 @@ type ScopeStepProps = {
   warehouseId: number;
   onScopeModeChange: (mode: InventoryScopeMode) => void;
   onFiltersChange: (filters: InventoryDocumentFiltersConfig) => void;
+  onSelectionMetaChange?: (meta: {
+    products: ProductSearchHit[];
+    locations: WarehouseLocationItem[];
+  }) => void;
 };
 
 export function InventoryWizardScopeStep({
@@ -66,6 +92,7 @@ export function InventoryWizardScopeStep({
   warehouseId,
   onScopeModeChange,
   onFiltersChange,
+  onSelectionMetaChange,
 }: ScopeStepProps) {
   const isFullType = inventoryType === "FULL";
   const effectiveScope = isFullType ? "full" : scopeMode;
@@ -76,6 +103,10 @@ export function InventoryWizardScopeStep({
   const [locSearch, setLocSearch] = useState("");
   const [prodSearch, setProdSearch] = useState("");
   const [prodHits, setProdHits] = useState<ProductSearchHit[]>([]);
+  const [locPickerOpen, setLocPickerOpen] = useState(false);
+  const [prodPickerOpen, setProdPickerOpen] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState<ProductSearchHit[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<WarehouseLocationItem[]>([]);
 
   const patch = (partial: Partial<InventoryDocumentFiltersConfig>) =>
     onFiltersChange({ ...filters, ...partial, scope_mode: effectiveScope as InventoryScopeMode });
@@ -115,19 +146,38 @@ export function InventoryWizardScopeStep({
     return locations.filter((l) => (l.name ?? l.code ?? "").toLowerCase().includes(q)).slice(0, 50);
   }, [locations, locSearch]);
 
-  const toggleLocation = (locId: number) => {
+  const toggleLocation = (loc: WarehouseLocationItem) => {
     const set = new Set(filters.location_ids ?? []);
-    if (set.has(locId)) set.delete(locId);
-    else set.add(locId);
+    if (set.has(loc.id)) {
+      set.delete(loc.id);
+      setSelectedLocations((prev) => prev.filter((l) => l.id !== loc.id));
+    } else {
+      set.add(loc.id);
+      setSelectedLocations((prev) => (prev.some((l) => l.id === loc.id) ? prev : [...prev, loc]));
+      setLocPickerOpen(false);
+      setLocSearch("");
+    }
     patch({ location_ids: [...set] });
   };
 
-  const toggleProduct = (prodId: number) => {
+  const toggleProduct = (p: ProductSearchHit) => {
     const set = new Set(filters.product_ids ?? []);
-    if (set.has(prodId)) set.delete(prodId);
-    else set.add(prodId);
+    if (set.has(p.id)) {
+      set.delete(p.id);
+      setSelectedProducts((prev) => prev.filter((x) => x.id !== p.id));
+    } else {
+      set.add(p.id);
+      setSelectedProducts((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p]));
+      setProdPickerOpen(false);
+      setProdSearch("");
+      setProdHits([]);
+    }
     patch({ product_ids: [...set] });
   };
+
+  useEffect(() => {
+    onSelectionMetaChange?.({ products: selectedProducts, locations: selectedLocations });
+  }, [selectedProducts, selectedLocations, onSelectionMetaChange]);
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
@@ -146,7 +196,7 @@ export function InventoryWizardScopeStep({
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Presety operacyjne</p>
             <div className="flex flex-wrap gap-1">
-              {INVENTORY_SCOPE_PRESETS.map((preset) => (
+              {INVENTORY_SCOPE_PRESETS.filter((p) => p.scopeMode !== "zones").map((preset) => (
                 <button
                   key={preset.id}
                   type="button"
@@ -163,7 +213,7 @@ export function InventoryWizardScopeStep({
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            {SCOPE_MODE_OPTIONS.filter((o) => o.id !== "full").map((opt) => (
+            {WIZARD_SCOPE_MODE_OPTIONS.filter((o) => o.id !== "full").map((opt) => (
               <OptionCard
                 key={opt.id}
                 selected={scopeMode === opt.id}
@@ -176,81 +226,125 @@ export function InventoryWizardScopeStep({
         </>
       )}
 
-      {scopeMode === "zones" ? (
-        <label className="block text-xs">
-          <span className={labelClass}>ID stref (po przecinku)</span>
-          <input
-            className={fieldClass}
-            placeholder="np. 1, 2, 3"
-            defaultValue={(filters.zone_ids ?? []).join(", ")}
-            onBlur={(e) => patch({ zone_ids: parseIdList(e.target.value) })}
-          />
-          <input
-            className={`${fieldClass} mt-1`}
-            placeholder="Alejka (opcjonalnie)"
-            defaultValue={filters.aisle ?? ""}
-            onBlur={(e) => patch({ aisle: e.target.value.trim() || undefined })}
-          />
-        </label>
-      ) : null}
-
       {scopeMode === "locations" ? (
         <div className="space-y-2 text-xs">
-          <input
-            className={fieldClass}
-            placeholder="Szukaj lokalizacji…"
-            value={locSearch}
-            onChange={(e) => setLocSearch(e.target.value)}
-          />
-          <div className="max-h-40 overflow-auto rounded border border-slate-200">
-            {filteredLocations.map((loc) => {
-              const selected = (filters.location_ids ?? []).includes(loc.id);
-              return (
-                <button
+          {(filters.location_ids ?? []).length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {selectedLocations.map((loc) => (
+                <SelectionTag
                   key={loc.id}
-                  type="button"
-                  onClick={() => toggleLocation(loc.id)}
-                  className={`flex w-full items-center justify-between px-2 py-1 text-left hover:bg-slate-50 ${
-                    selected ? "bg-slate-100 font-semibold" : ""
-                  }`}
-                >
-                  <span>{loc.name ?? loc.code}</span>
-                  {selected ? <span className="text-[10px] text-emerald-700">✓</span> : null}
+                  label={loc.name ?? loc.code ?? `#${loc.id}`}
+                  onRemove={() => toggleLocation(loc)}
+                />
+              ))}
+            </div>
+          ) : null}
+          {locPickerOpen ? (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-slate-700">Wybierz lokalizacje</p>
+                <button type="button" className="text-[10px] font-bold text-slate-500 underline" onClick={() => setLocPickerOpen(false)}>
+                  Zamknij
                 </button>
-              );
-            })}
-          </div>
-          <p className="text-[10px] text-slate-500">Wybrano: {(filters.location_ids ?? []).length} lokalizacji</p>
+              </div>
+              <input
+                className={fieldClass}
+                placeholder="Szukaj lokalizacji…"
+                value={locSearch}
+                onChange={(e) => setLocSearch(e.target.value)}
+              />
+              <div className="max-h-40 overflow-auto rounded border border-slate-200">
+                {filteredLocations.map((loc) => {
+                  const selected = (filters.location_ids ?? []).includes(loc.id);
+                  return (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => toggleLocation(loc)}
+                      className={`flex w-full items-center justify-between px-2 py-1 text-left hover:bg-slate-50 ${
+                        selected ? "bg-slate-100 font-semibold" : ""
+                      }`}
+                    >
+                      <span>{loc.name ?? loc.code}</span>
+                      {selected ? <span className="text-[10px] text-emerald-700">✓</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setLocPickerOpen(true)}
+              className="rounded border border-dashed border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400"
+            >
+              + Dodaj lokalizacje
+            </button>
+          )}
         </div>
       ) : null}
 
       {scopeMode === "products" ? (
         <div className="space-y-2 text-xs">
-          <input
-            className={fieldClass}
-            placeholder="Szukaj produktu (min. 2 znaki)…"
-            value={prodSearch}
-            onChange={(e) => setProdSearch(e.target.value)}
-          />
-          <div className="max-h-40 overflow-auto rounded border border-slate-200">
-            {prodHits.map((p) => {
-              const selected = (filters.product_ids ?? []).includes(p.id);
-              return (
-                <button
+          {(filters.product_ids ?? []).length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {selectedProducts.map((p) => (
+                <SelectionTag
                   key={p.id}
-                  type="button"
-                  onClick={() => toggleProduct(p.id)}
-                  className={`flex w-full flex-col px-2 py-1 text-left hover:bg-slate-50 ${
-                    selected ? "bg-slate-100" : ""
-                  }`}
-                >
-                  <span className="font-semibold">{p.name ?? p.sku}</span>
-                  <span className="text-[10px] text-slate-500">{p.sku ?? p.ean}</span>
+                  label={p.name ?? p.sku ?? `#${p.id}`}
+                  onRemove={() => toggleProduct(p)}
+                />
+              ))}
+            </div>
+          ) : null}
+          {prodPickerOpen ? (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-slate-700">Wybierz produkty</p>
+                <button type="button" className="text-[10px] font-bold text-slate-500 underline" onClick={() => setProdPickerOpen(false)}>
+                  Zamknij
                 </button>
-              );
-            })}
-          </div>
-          <p className="text-[10px] text-slate-500">Wybrano: {(filters.product_ids ?? []).length} produktów</p>
+              </div>
+              <input
+                className={fieldClass}
+                placeholder="Szukaj produktu (min. 2 znaki)…"
+                value={prodSearch}
+                onChange={(e) => setProdSearch(e.target.value)}
+              />
+              <div className="max-h-48 overflow-auto rounded border border-slate-200">
+                {prodHits.map((p) => {
+                  const selected = (filters.product_ids ?? []).includes(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => toggleProduct(p)}
+                      className={`flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-slate-50 ${
+                        selected ? "bg-slate-100" : ""
+                      }`}
+                    >
+                      <ProductThumb url={p.image_url} name={p.name ?? p.sku} />
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{p.name ?? p.sku}</span>
+                        <span className="text-[10px] text-slate-500">
+                          {[p.sku, p.ean].filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                      {selected ? <span className="text-[10px] text-emerald-700">✓</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setProdPickerOpen(true)}
+              className="rounded border border-dashed border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400"
+            >
+              + Dodaj produkty
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -353,9 +447,20 @@ export function InventoryWizardScopeStep({
         </div>
       ) : null}
 
+      {!isFullType ? (
+        <div className="rounded-md border border-amber-100 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-950">
+          <p className="font-bold">Skutek operacyjny inwentaryzacji częściowej</p>
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
+            <li>W WMS operator liczy tylko lokalizacje i produkty objęte zakresem.</li>
+            <li>Zatwierdzenie i różnice dotyczą wyłącznie pozycji w tym zakresie.</li>
+            <li>Blokada ruchów (jeśli włączona) obejmuje tylko objęte lokalizacje.</li>
+            <li>Korekty RW/PW (jeśli włączone) dotyczą tylko policzonych pozycji w zakresie.</li>
+          </ul>
+        </div>
+      ) : null}
+
       <p className="text-[10px] text-slate-400">
-        WMS pokazuje wyłącznie lokalizacje i produkty objęte zakresem. Postęp i zatwierdzenie dotyczą
-        tylko tego zakresu.
+        Zakres jest zapisywany na serwerze przy przejściu do kolejnego kroku.
       </p>
     </div>
   );

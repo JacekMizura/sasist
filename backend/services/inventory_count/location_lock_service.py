@@ -8,6 +8,7 @@ from ...models.inventory_count.constants import AUDIT_LOCK, AUDIT_UNLOCK
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.inventory_count.location_lock import InventoryLocationLock
+from .audit_service import log_inventory_audit
 from .movement_policy_service import (
     movement_policy_blocks_all_movements,
     movement_policy_blocks_picking,

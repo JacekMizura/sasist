@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Inventory start stability + movement enforcement + wizard UX
+- **500 on start fixed**: missing `log_inventory_audit` import in `location_lock_service` (triggered when movement policy ≠ allow)
+- Start returns structured errors: `scope_not_configured`, `scope_not_materialized`, `inventory_start_failed` (+ 500 fallback with code/details)
+- `inventory_movement_guard_service`: real enforcement — picking complete, putaway, replenishment, pick routing suggestions
+- Wizard: collapsible product/location pickers, tag chips, product thumbnails, zones hidden, richer summary + full server persist before start
+- Partial scope operational impact copy; `formatInventoryRequestError` for start failures
+
 ## 2026-06-08 — Inventory operational polish (supervisor + WMS ergonomics)
 - Approval safety modal: shortages/surpluses, unknown count, locations, RW/PW preview before submit/approve/post
 - `posting_preview_service` + `GET .../posting-preview`; unresolved conflicts in preview

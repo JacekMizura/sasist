@@ -44,19 +44,22 @@ export const SCOPE_MODE_OPTIONS: ReadonlyArray<{
   id: InventoryScopeMode;
   label: string;
   hint: string;
+  disabled?: boolean;
 }> = [
   { id: "full", label: "Pełna inwentaryzacja", hint: "Wszystkie lokalizacje magazynu" },
-  { id: "zones", label: "Strefy magazynu", hint: "Wybrane alejki i obszary" },
-  { id: "locations", label: "Lokalizacje", hint: "Ręczny wybór lokalizacji (ID)" },
-  { id: "products", label: "Produkty", hint: "Wybrane SKU / produkty (ID)" },
+  { id: "locations", label: "Lokalizacje", hint: "Ręczny wybór lokalizacji" },
+  { id: "products", label: "Produkty", hint: "Wybrane SKU / produkty" },
   { id: "categories", label: "Grupy produktów", hint: "Kategorie / grupy asortymentowe" },
-  { id: "carriers", label: "Nośniki", hint: "Palety, kontenery (ID nośników)" },
+  { id: "carriers", label: "Nośniki", hint: "Palety, kontenery" },
   {
     id: "dynamic",
     label: "Filtry dynamiczne",
     hint: "Stan > 0, brak ruchu, brak EAN, klasa ABC…",
   },
 ];
+
+/** Visible in wizard UI — zones not implemented in warehouse topology yet. */
+export const WIZARD_SCOPE_MODE_OPTIONS = SCOPE_MODE_OPTIONS.filter((o) => o.id !== "zones");
 
 export const MOVEMENT_POLICY_OPTIONS: ReadonlyArray<{
   id: InventoryMovementPolicy;

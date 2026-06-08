@@ -99,6 +99,10 @@ def _map_inventory_error(exc: InventoryCountError) -> HTTPException:
         status = 409
     elif exc.code == "permission_denied":
         status = 403
+    elif exc.code in ("scope_not_configured", "scope_not_materialized", "inventory_start_failed"):
+        status = 400
+    elif exc.code == "location_inventory_locked":
+        status = 423
     else:
         status = 400
 
@@ -316,6 +320,23 @@ def inventory_count_start_document(
         )
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
+    except Exception as exc:
+        logger.exception(
+            "inventory_start_unhandled document_id=%s tenant_id=%s",
+            document_id,
+            tenant_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "inventory_start_failed",
+                "message": str(exc) or "Start inwentaryzacji nie powiódł się.",
+                "details": {
+                    "document_id": document_id,
+                    "error_type": type(exc).__name__,
+                },
+            },
+        ) from exc
 
 
 @router.post("/documents/{document_id}/generate-tasks")

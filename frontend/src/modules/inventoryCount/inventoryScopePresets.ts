@@ -43,13 +43,6 @@ export const INVENTORY_SCOPE_PRESETS: InventoryScopePreset[] = [
     }),
   },
   {
-    id: "pick_zone",
-    label: "Strefa kompletacji",
-    hint: "Wybierz strefę lub alejkę poniżej",
-    scopeMode: "zones",
-    apply: () => ({ scope_mode: "zones", zone_ids: [] }),
-  },
-  {
     id: "carriers",
     label: "Nośniki niezweryfikowane",
     hint: "Wybierz nośniki do weryfikacji",

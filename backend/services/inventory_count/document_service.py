@@ -26,9 +26,20 @@ from ...models.inventory_count.constants import (
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.task import InventoryTask
 from .audit_service import log_inventory_audit
-from .errors import InventoryDocumentNotFoundError, InventoryInvalidTransitionError
+from .errors import (
+    InventoryCountError,
+    InventoryDocumentNotFoundError,
+    InventoryInvalidTransitionError,
+    InventoryScopeMaterializationError,
+    InventoryScopeNotReadyError,
+    InventoryStartFailedError,
+)
 from .kpi_service import recompute_document_kpis
-from .line_materialization_service import materialize_document_lines_from_snapshot
+from .line_materialization_service import (
+    materialize_document_lines_from_snapshot,
+    parse_document_filters,
+    scope_mode_from_filters,
+)
 from .location_lock_service import apply_location_locks_for_document
 from .movement_policy_service import normalize_movement_policy
 from .snapshot_service import capture_inventory_snapshots
@@ -288,6 +299,10 @@ def start_inventory_document(
     document_id: int,
     user_id: int | None = None,
 ) -> dict[str, Any]:
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     doc = (
         db.query(InventoryDocument)
         .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
@@ -296,36 +311,111 @@ def start_inventory_document(
     if doc is None:
         raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
     if doc.status not in (INV_STATUS_PLANNED, INV_STATUS_DRAFT):
-        raise InventoryInvalidTransitionError(f"Cannot start inventory from status {doc.status}")
+        raise InventoryInvalidTransitionError(
+            f"Cannot start inventory from status {doc.status}",
+            details={"document_status": doc.status},
+        )
 
-    capture_inventory_snapshots(db, document=doc, user_id=user_id)
-    materialize_document_lines_from_snapshot(db, document=doc, user_id=user_id)
-    apply_location_locks_for_document(db, document=doc, user_id=user_id)
-    recompute_document_kpis(db, doc)
-    generate_tasks_from_document_lines(db, document=doc)
-    doc.status = INV_STATUS_IN_PROGRESS
-    doc.started_at = datetime.utcnow()
-    doc.snapshot_created_at = datetime.utcnow()
-    doc.touch_updated()
-    log_inventory_audit(
-        db,
-        tenant_id=int(tenant_id),
-        inventory_document_id=doc.id,
-        user_id=user_id,
-        action=AUDIT_SNAPSHOT,
-        detail={"snapshot_created_at": doc.snapshot_created_at.isoformat()},
-    )
-    log_inventory_audit(
-        db,
-        tenant_id=int(tenant_id),
-        inventory_document_id=doc.id,
-        user_id=user_id,
-        action=AUDIT_DOC_STATUS,
-        detail={"from": INV_STATUS_PLANNED, "to": INV_STATUS_IN_PROGRESS},
-    )
-    db.commit()
-    db.refresh(doc)
-    return _doc_to_dict(doc)
+    filters = parse_document_filters(doc)
+    scope_mode = scope_mode_from_filters(filters)
+    _validate_scope_config(scope_mode, filters)
+
+    try:
+        snap_result = capture_inventory_snapshots(db, document=doc, user_id=user_id)
+        mat_result = materialize_document_lines_from_snapshot(db, document=doc, user_id=user_id)
+
+        if mat_result.get("error") == "no_stock_snapshot":
+            raise InventoryScopeMaterializationError(
+                "Brak migawki stanów — nie można utworzyć pozycji inwentaryzacji.",
+                details={"document_id": int(doc.id), "scope_mode": scope_mode, **snap_result},
+            )
+
+        lines_created = int(mat_result.get("lines_created") or 0)
+        if lines_created < 1:
+            raise InventoryScopeMaterializationError(
+                "Zakres inwentaryzacji nie wygenerował żadnych pozycji — sprawdź filtry i stany magazynowe.",
+                details={
+                    "document_id": int(doc.id),
+                    "scope_mode": scope_mode,
+                    "filters": filters,
+                    "snapshot_stock_rows": snap_result.get("stock_rows"),
+                    "materialization": mat_result,
+                },
+            )
+
+        apply_location_locks_for_document(db, document=doc, user_id=user_id)
+        recompute_document_kpis(db, doc)
+        task_result = generate_tasks_from_document_lines(db, document=doc)
+        doc.status = INV_STATUS_IN_PROGRESS
+        doc.started_at = datetime.utcnow()
+        doc.snapshot_created_at = datetime.utcnow()
+        doc.touch_updated()
+        log_inventory_audit(
+            db,
+            tenant_id=int(tenant_id),
+            inventory_document_id=doc.id,
+            user_id=user_id,
+            action=AUDIT_SNAPSHOT,
+            detail={"snapshot_created_at": doc.snapshot_created_at.isoformat(), **snap_result},
+        )
+        log_inventory_audit(
+            db,
+            tenant_id=int(tenant_id),
+            inventory_document_id=doc.id,
+            user_id=user_id,
+            action=AUDIT_DOC_STATUS,
+            detail={"from": INV_STATUS_PLANNED, "to": INV_STATUS_IN_PROGRESS, "tasks": task_result},
+        )
+        db.commit()
+        db.refresh(doc)
+        return _doc_to_dict(doc)
+    except InventoryCountError:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "inventory_start_failed document_id=%s tenant_id=%s scope=%s",
+            document_id,
+            tenant_id,
+            scope_mode,
+        )
+        raise InventoryStartFailedError(
+            str(exc) or "Start inwentaryzacji nie powiódł się.",
+            details={
+                "document_id": int(document_id),
+                "scope_mode": scope_mode,
+                "error_type": type(exc).__name__,
+            },
+        ) from exc
+
+
+def _validate_scope_config(scope_mode: str, filters: dict[str, Any]) -> None:
+    if scope_mode == "locations" and not (filters.get("location_ids") or []):
+        raise InventoryScopeNotReadyError(
+            "Wybierz co najmniej jedną lokalizację przed uruchomieniem.",
+            details={"scope_mode": scope_mode, "missing": "location_ids"},
+        )
+    if scope_mode == "products" and not (filters.get("product_ids") or []):
+        raise InventoryScopeNotReadyError(
+            "Wybierz co najmniej jeden produkt przed uruchomieniem.",
+            details={"scope_mode": scope_mode, "missing": "product_ids"},
+        )
+    if scope_mode == "carriers" and not (filters.get("carrier_ids") or []):
+        raise InventoryScopeNotReadyError(
+            "Wybierz co najmniej jeden nośnik przed uruchomieniem.",
+            details={"scope_mode": scope_mode, "missing": "carrier_ids"},
+        )
+    if scope_mode == "categories" and not (filters.get("category_ids") or filters.get("category_id")):
+        raise InventoryScopeNotReadyError(
+            "Wybierz kategorię produktów przed uruchomieniem.",
+            details={"scope_mode": scope_mode, "missing": "category_ids"},
+        )
+    if scope_mode == "zones":
+        raise InventoryScopeNotReadyError(
+            "Strefy magazynowe nie są jeszcze dostępne — wybierz lokalizacje lub produkty.",
+            details={"scope_mode": scope_mode, "feature": "zones_not_implemented"},
+        )
 
 
 def generate_inventory_tasks(

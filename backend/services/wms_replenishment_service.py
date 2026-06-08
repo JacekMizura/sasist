@@ -827,6 +827,24 @@ def execute_replenishment_task(
     if from_body != int(pending["location_id"]):
         raise ValueError("Zeskanuj aktualną lokalizację źródłową (właściwy segment łańcucha)")
 
+    from ..services.inventory_count.inventory_movement_guard_service import (
+        MOVEMENT_REPLENISH,
+        assert_location_movement_allowed,
+    )
+
+    assert_location_movement_allowed(
+        db,
+        location_id=from_body,
+        movement_kind=MOVEMENT_REPLENISH,
+        tenant_id=tenant_id,
+    )
+    assert_location_movement_allowed(
+        db,
+        location_id=int(task.target_location_id),
+        movement_kind=MOVEMENT_REPLENISH,
+        tenant_id=tenant_id,
+    )
+
     rem_seg = float(pending["quantity_planned"]) - float(pending.get("quantity_done", 0) or 0)
     qty_req = float(body.quantity)
     if qty_req <= _EPS:

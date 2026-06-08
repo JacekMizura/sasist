@@ -52,6 +52,22 @@ const CODE_MESSAGES_PL: Record<string, (details?: Record<string, unknown>) => st
   },
   document_not_found: () => "Nie znaleziono dokumentu inwentaryzacji.",
   permission_denied: () => "Brak uprawnień do wysłania dokumentu do zatwierdzenia.",
+  scope_not_configured: (d) => {
+    const missing = d?.missing ? String(d.missing) : "";
+    if (missing === "location_ids") return "Wybierz co najmniej jedną lokalizację przed uruchomieniem.";
+    if (missing === "product_ids") return "Wybierz co najmniej jeden produkt przed uruchomieniem.";
+    if (d?.feature === "zones_not_implemented") {
+      return "Strefy magazynowe nie są jeszcze dostępne — wybierz lokalizacje lub produkty.";
+    }
+    return "Uzupełnij zakres inwentaryzacji przed uruchomieniem.";
+  },
+  scope_not_materialized: () =>
+    "Zakres nie wygenerował pozycji — sprawdź filtry, stany magazynowe i zapis kroku „Zakres”.",
+  inventory_start_failed: (d) => {
+    const errType = d?.error_type ? ` (${String(d.error_type)})` : "";
+    return `Uruchomienie inwentaryzacji nie powiodło się${errType}. Sprawdź zakres i ustawienia dokumentu.`;
+  },
+  location_inventory_locked: () => "Lokalizacja objęta aktywną inwentaryzacją — operacja zablokowana.",
   inventory_count_error: () => "Operacja inwentaryzacji nie powiodła się.",
 };
 

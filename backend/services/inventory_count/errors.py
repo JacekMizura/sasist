@@ -81,6 +81,22 @@ class InventoryPermissionDeniedError(InventoryCountError):
     code = "permission_denied"
 
 
+class InventoryScopeNotReadyError(InventoryCountError):
+    code = "scope_not_configured"
+
+
+class InventoryScopeMaterializationError(InventoryCountError):
+    code = "scope_not_materialized"
+
+
+class InventoryStartFailedError(InventoryCountError):
+    code = "inventory_start_failed"
+
+
+class InventoryLocationMovementBlockedError(InventoryCountError):
+    code = "location_inventory_locked"
+
+
 class InventoryBarcodeNotFoundError(InventoryCountError):
     code = "barcode_not_found"
 
