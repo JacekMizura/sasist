@@ -55,6 +55,13 @@ class InventoryGenerateTasksBody(BaseModel):
     location_ids: list[int] = Field(default_factory=list)
 
 
+class InventorySubmitReadinessRead(BaseModel):
+    can_submit: bool
+    block_code: str | None = None
+    block_message: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class InventoryDocumentRead(BaseModel):
     id: int
     tenant_id: int
@@ -85,6 +92,7 @@ class InventoryDocumentRead(BaseModel):
     approved_by_user_id: int | None = None
     created_at: str | None = None
     updated_at: str | None = None
+    submit_readiness: InventorySubmitReadinessRead | None = None
 
 
 class InventoryDashboardKpisRead(BaseModel):

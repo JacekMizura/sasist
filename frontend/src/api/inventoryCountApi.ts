@@ -1,6 +1,13 @@
 import api from "./axios";
 import { getApiErrorMessage } from "../utils/apiError";
 
+export type InventorySubmitReadiness = {
+  can_submit: boolean;
+  block_code?: string | null;
+  block_message?: string | null;
+  details?: Record<string, unknown>;
+};
+
 export type InventoryDocumentRead = {
   id: number;
   tenant_id: number;
@@ -22,6 +29,7 @@ export type InventoryDocumentRead = {
   coverage_percent: number;
   snapshot_created_at: string | null;
   updated_at: string | null;
+  submit_readiness?: InventorySubmitReadiness | null;
 };
 
 export type InventoryDashboardPayload = {
@@ -266,14 +274,30 @@ export type InventoryLineRead = {
 
 export type InventoryLineFocus = "operational" | "all" | "differences" | "uncounted";
 
+export type InventoryAuditLineContext = {
+  line_id?: number;
+  product_id?: number | null;
+  product_name?: string | null;
+  sku?: string | null;
+  ean?: string | null;
+  product_image_url?: string | null;
+  location_id?: number | null;
+  location_name?: string | null;
+};
+
 export type InventoryAuditEventRead = {
   id: number;
   action: string;
   user_id: number | null;
   user_name?: string | null;
+  inventory_document_line_id?: number | null;
   session_id?: number | null;
   device_id?: string | null;
   detail?: unknown;
+  previous_state?: unknown;
+  next_state?: unknown;
+  line_context?: InventoryAuditLineContext | null;
+  location_name?: string | null;
   created_at: string | null;
 };
 
@@ -283,6 +307,7 @@ export type InventoryDocumentTimelines = {
     id: number;
     action: string;
     user_id: number | null;
+    user_name?: string | null;
     notes: string | null;
     created_at: string | null;
   }>;
@@ -291,9 +316,12 @@ export type InventoryDocumentTimelines = {
     status: string;
     line_id: number;
     assigned_user_id: number | null;
+    assigned_user_name?: string | null;
+    completed_by_user_name?: string | null;
     reason: string | null;
     created_at: string | null;
     completed_at: string | null;
+    line_context?: InventoryAuditLineContext | null;
   }>;
   posting_timeline: InventoryAuditEventRead[];
 };

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..auth.deps import get_optional_current_user
 from ..database import get_db
 from ..models.app_user import AppUser
+from ..models.inventory_count.document import InventoryDocument
 from ..schemas.inventory_count import (
     InventoryDashboardRead,
     InventoryDocumentCreateBody,
@@ -27,6 +28,7 @@ from ..schemas.inventory_count import (
 )
 from ..services.inventory_count.approval_service import (
     approve_inventory_document,
+    evaluate_submit_readiness,
     reject_inventory_document,
     submit_for_approval,
 )
@@ -174,7 +176,18 @@ def inventory_count_get_document(
     db: Session = Depends(get_db),
 ):
     try:
-        return get_inventory_document(db, tenant_id=tenant_id, document_id=document_id)
+        payload = get_inventory_document(db, tenant_id=tenant_id, document_id=document_id)
+        doc = (
+            db.query(InventoryDocument)
+            .filter(
+                InventoryDocument.id == int(document_id),
+                InventoryDocument.tenant_id == int(tenant_id),
+            )
+            .first()
+        )
+        if doc is not None:
+            payload["submit_readiness"] = evaluate_submit_readiness(db, doc)
+        return payload
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
 

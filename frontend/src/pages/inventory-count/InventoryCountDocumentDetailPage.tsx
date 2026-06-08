@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Download, FileSpreadsheet, Loader2, ShieldCheck } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -25,8 +25,11 @@ import InventoryLineTable from "../../modules/inventoryCount/erp/components/Inve
 import { InventoryKpiTile, InventorySection } from "../../modules/inventoryCount/erp/components/InventoryPageShell";
 import { triggerBrowserDownload } from "../../modules/inventoryCount/erp/downloadHelpers";
 import { formatInventoryApiError } from "../../modules/inventoryCount/inventoryCountApiErrors";
+import {
+  canSubmitInventoryDocument,
+  inventorySubmitBlockHint,
+} from "../../modules/inventoryCount/inventorySubmitReadiness";
 import { inventoryTypeLabel } from "../../modules/inventoryCount/inventoryCountUiLabels";
-import { erpInventoryCountPaths } from "../../modules/inventoryCount/inventoryCountPaths";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { parseApiErrorPayload } from "../../utils/apiError";
 
@@ -135,6 +138,9 @@ export default function InventoryCountDocumentDetailPage() {
   if (err) return <p className="text-xs text-rose-600">{err}</p>;
   if (!doc) return <p className="text-xs text-slate-500">Wczytywanie…</p>;
 
+  const submitReady = canSubmitInventoryDocument(doc);
+  const submitHint = inventorySubmitBlockHint(doc);
+
   const tabBtn = (key: DocTab, label: string) => (
     <button
       type="button"
@@ -165,12 +171,8 @@ export default function InventoryCountDocumentDetailPage() {
           {doc.status === "in_progress" ? (
             <button
               type="button"
-              disabled={busy || doc.counted_lines < doc.total_lines}
-              title={
-                doc.counted_lines < doc.total_lines
-                  ? `Policzono ${doc.counted_lines}/${doc.total_lines} pozycji`
-                  : undefined
-              }
+              disabled={busy || !submitReady}
+              title={submitHint}
               onClick={() => void action("submit-approval")}
               className="rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
             >
@@ -272,9 +274,6 @@ export default function InventoryCountDocumentDetailPage() {
         </InventorySection>
       )}
 
-      <Link to={erpInventoryCountPaths.documents} className="text-xs font-semibold text-slate-600 hover:underline">
-        ← Lista dokumentów
-      </Link>
     </div>
   );
 }

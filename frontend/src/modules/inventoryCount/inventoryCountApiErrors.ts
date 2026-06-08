@@ -14,6 +14,10 @@ const CODE_MESSAGES_PL: Record<string, (details?: Record<string, unknown>) => st
     return `Nie można wysłać dokumentu w statusie „${currentLabel}”. Wymagany status: ${allowed}.`;
   },
   incomplete_count: (d) => {
+    const invType = String(d?.inventory_type ?? "FULL").toUpperCase();
+    if (invType === "PARTIAL") {
+      return "Inwentaryzacja częściowa — nie wymaga pełnego pokrycia dokumentu.";
+    }
     const counted = num(d?.counted_lines);
     const total = num(d?.total_lines);
     const uncounted = num(d?.uncounted_lines);
@@ -34,6 +38,19 @@ const CODE_MESSAGES_PL: Record<string, (details?: Record<string, unknown>) => st
       if (locs.length) extras.push(`Np. lokalizacje: ${locs.join(", ")}.`);
     }
     return extras.length ? `${base} ${extras.join(" ")}` : base;
+  },
+  partial_submit_not_ready: (d) => {
+    const reason = String(d?.reason ?? "");
+    if (reason === "no_counted_lines") {
+      return "Inwentaryzacja częściowa — wymagana co najmniej jedna policzona pozycja.";
+    }
+    return "Inwentaryzacja częściowa nie spełnia warunków wysłania do zatwierdzenia.";
+  },
+  active_counting_tasks: (d) => {
+    const pending = num(d?.pending_tasks);
+    return pending != null && pending > 0
+      ? `Zakończ aktywne zadania liczenia WMS (${pending}).`
+      : "Zakończ aktywne zadania liczenia WMS przed wysłaniem.";
   },
   pending_recounts: (d) => {
     const pending = num(d?.pending_recounts);

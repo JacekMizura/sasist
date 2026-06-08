@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { fetchWmsInventoryTask, openWmsInventorySession, resolveWmsInventoryLocationScan } from "@/api/inventoryCountApi";
 import WmsInventoryRecentLocationContext from "@/modules/inventoryCount/components/WmsInventoryRecentLocationContext";
@@ -138,10 +138,6 @@ export default function WmsInventoryCountEntryPage() {
       />
 
       <WmsInventoryRecentLocationContext items={recent} disabled={busy} onSelect={openRecent} />
-
-      <Link to="/wms/menu" className={`inline-block text-[10px] font-bold uppercase tracking-wide ${WMS_INV.textMuted}`}>
-        ← Menu WMS
-      </Link>
     </div>
   );
 }

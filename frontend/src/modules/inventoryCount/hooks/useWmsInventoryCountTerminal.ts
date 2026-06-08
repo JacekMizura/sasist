@@ -213,6 +213,8 @@ export function useWmsInventoryCountTerminal(
               productId: line.product_id,
               productName: line.product_name,
               sku: line.sku ?? undefined,
+              ean: line.ean ?? undefined,
+              imageUrl: line.image_url ?? undefined,
               countedQuantity: line.counted_quantity,
             });
           }
@@ -311,6 +313,8 @@ export function useWmsInventoryCountTerminal(
           productId: scan.product_id,
           productName: scan.product_name,
           sku: scan.sku ?? undefined,
+          ean: scan.ean ?? undefined,
+          imageUrl: scan.image_url ?? undefined,
           countedQuantity: qty,
         });
       }

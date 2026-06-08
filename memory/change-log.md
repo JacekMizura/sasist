@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — ERP inwentaryzacja: oś czasu Kontrola
+- `inventoryAuditEventLabels.ts` — mapowanie zdarzeń audytu na polskie etykiety operacyjne + `buildInventoryAuditTimeline`
+- `InventoryAuditPanel` — gęsta tabela ERP (operator, czas, operacja, produkt/EAN/miniatura, delta ilości); bez surowego JSON/kluczy
+- Backend `audit_log_service` — wzbogacenie o `user_name`, `line_context`, `location_name`
+- Usunięto redundantny link „← Lista dokumentów” z widoku szczegółów dokumentu
+
 ## 2026-06-04 — WMS production execution UI shell alignment
 - `/wms/production/*` renders inside shared `WmsOperationalLayout` + `WmsTopBar` (removed hideProductionTopBar)
 - Removed duplicate header from `WmsProductionExecutionLayout` (icon, TERMINAL WMS, mode title, Menu WMS)

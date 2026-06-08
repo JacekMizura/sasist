@@ -7,6 +7,8 @@ export type SessionProductAggregate = {
   product_id: number;
   product_name: string | null;
   sku?: string | null;
+  ean?: string | null;
+  image_url?: string | null;
   counted_quantity: number;
   updatedAt: string;
 };
@@ -19,6 +21,8 @@ export type RecentLocationSession = {
   at: string;
   lastProductId: number | null;
   lastProductName: string | null;
+  lastProductEan?: string | null;
+  lastProductImageUrl?: string | null;
   lastProductQty: number;
 };
 
@@ -106,6 +110,8 @@ function sessionToRecentEntry(taskId: number, bucket: LocationSessionBucket): Re
     at: bucket.updatedAt,
     lastProductId: last?.product_id ?? null,
     lastProductName: last?.product_name ?? last?.sku ?? null,
+    lastProductEan: last?.ean ?? null,
+    lastProductImageUrl: last?.image_url ?? null,
     lastProductQty: last?.counted_quantity ?? 0,
   };
 }
@@ -140,6 +146,8 @@ export function touchRecentLocation(entry: {
     at: now,
     lastProductId: existing?.lastProductId ?? null,
     lastProductName: existing?.lastProductName ?? null,
+    lastProductEan: existing?.lastProductEan ?? null,
+    lastProductImageUrl: existing?.lastProductImageUrl ?? null,
     lastProductQty: existing?.lastProductQty ?? 0,
   });
 }
@@ -157,6 +165,8 @@ export function syncLocationSessionProduct(args: {
   productId: number;
   productName: string | null;
   sku?: string | null;
+  ean?: string | null;
+  imageUrl?: string | null;
   countedQuantity: number;
 }) {
   const now = new Date().toISOString();
@@ -176,6 +186,8 @@ export function syncLocationSessionProduct(args: {
     product_id: args.productId,
     product_name: args.productName,
     sku: args.sku,
+    ean: args.ean,
+    image_url: args.imageUrl,
     counted_quantity: args.countedQuantity,
     updatedAt: now,
   };

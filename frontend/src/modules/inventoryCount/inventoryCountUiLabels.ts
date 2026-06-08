@@ -75,19 +75,6 @@ const REPORT_DESCRIPTION: Record<string, string> = {
   opening_balance: "Bilans otwarcia z migawki stanów.",
 };
 
-const AUDIT_ACTION: Record<string, string> = {
-  document_created: "Utworzono dokument",
-  document_started: "Uruchomiono liczenie",
-  document_submitted: "Wysłano do zatwierdzenia",
-  document_approved: "Zatwierdzono",
-  document_rejected: "Odrzucono",
-  document_posted: "Zaksięgowano korekty",
-  scan_recorded: "Zapisano skan",
-  line_updated: "Zaktualizowano pozycję",
-  recount_requested: "Zlecono ponowne liczenie",
-  export_generated: "Wygenerowano eksport",
-};
-
 function safeLookup(map: Record<string, string>, key: unknown, fallback = "—"): string {
   const k = String(key ?? "").trim();
   if (!k) return fallback;
@@ -128,12 +115,7 @@ export function inventoryReportDescription(kind: unknown): string {
   return safeLookup(REPORT_DESCRIPTION, kind, "Eksport danych inwentaryzacji.");
 }
 
-export function inventoryAuditActionLabel(action: unknown): string {
-  const raw = String(action ?? "").trim();
-  if (!raw) return "—";
-  const key = raw.toLowerCase().replace(/\s+/g, "_");
-  return AUDIT_ACTION[key] ?? raw.replace(/_/g, " ");
-}
+export { inventoryAuditEventLabel as inventoryAuditActionLabel } from "./inventoryAuditEventLabels";
 
 export function inventoryDocumentStatusBadgeClass(status: unknown): string {
   const s = String(status ?? "").toLowerCase();

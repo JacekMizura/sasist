@@ -33,6 +33,14 @@ class InventoryIncompleteCountError(InventoryCountError):
     code = "incomplete_count"
 
 
+class InventoryPartialSubmitNotReadyError(InventoryCountError):
+    code = "partial_submit_not_ready"
+
+
+class InventoryActiveCountingTasksError(InventoryCountError):
+    code = "active_counting_tasks"
+
+
 class InventoryPendingRecountsError(InventoryCountError):
     code = "pending_recounts"
 
