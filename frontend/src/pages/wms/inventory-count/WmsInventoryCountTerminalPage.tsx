@@ -180,6 +180,7 @@ export default function WmsInventoryCountTerminalPage() {
         <WmsInventoryActiveContextBar
           location={locationContext}
           carrier={carrierContext}
+          activeProduct={activeScan}
           carrierScanMode={carrierScanMode}
           onEnterCarrierScan={enterCarrierScan}
           onClearCarrier={clearCarrier}

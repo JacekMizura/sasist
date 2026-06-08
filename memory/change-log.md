@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-06-08 — Inventory operational polish (supervisor + WMS ergonomics)
+- Approval safety modal: shortages/surpluses, unknown count, locations, RW/PW preview before submit/approve/post
+- `posting_preview_service` + `GET .../posting-preview`; unresolved conflicts in preview
+- Dedicated conflict panel: operators, qty, timestamps, carrier, recount state (`GET .../conflicts`)
+- Unknown product supervisor resolution: map to catalog product or reject (`GET/POST unknown-products`)
+- ERP detail: ops metadata bar (type, policies, warehouse, operators, started/last activity)
+- Line table „Źródło stanu”: Na półce vs W nośniku
+- WMS sticky context bar: LOKALIZACJA → NOŚNIK → PRODUKT always visible during counting
+- Filter/tab state persisted in sessionStorage across Przebieg/Różnice/Kontrola
+- KPI valuation tooltips (purchase net / snapshot / FIFO foundation)
+- Wizard scope operational presets (bez EAN, ABC A, brak ruchu, nośniki, …)
+
 ## 2026-06-08 — Inventory UX production cleanup
 - Submit-for-approval: only blocks empty doc, wrong status, operator recount conflicts (not partial count, differences, open WMS tasks)
 - KPI: „Konflikty liczenia” + wartość nadwyżek/braków PLN (removed dead „Wpływ netto”)

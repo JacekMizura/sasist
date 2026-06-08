@@ -338,6 +338,60 @@ class InventoryUnknownProductCreateBody(BaseModel):
     photo_url: str | None = None
 
 
+class InventoryUnknownProductMapBody(BaseModel):
+    product_id: int
+
+
+class InventoryUnknownProductRejectBody(BaseModel):
+    reason: str | None = None
+
+
+class InventoryPostingPreviewRead(BaseModel):
+    document_id: int
+    document_number: str
+    result_policy: str
+    updates_stock: bool
+    valuation_method: str
+    valuation_label: str
+    shortage_lines: int
+    surplus_lines: int
+    unknown_products_count: int
+    affected_locations_count: int
+    total_shortage_value_net: float
+    total_surplus_value_net: float
+    net_correction_value: float
+    operator_count: int = 0
+    unresolved_conflicts: int = 0
+    rw_preview: list[dict[str, Any]] = Field(default_factory=list)
+    pw_preview: list[dict[str, Any]] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class InventoryConflictItemRead(BaseModel):
+    line_id: int
+    location_id: int
+    location_name: str | None = None
+    product_id: int
+    sku: str | None = None
+    product_name: str | None = None
+    carrier_id: int | None = None
+    carrier_code: str | None = None
+    stock_source: str
+    expected_quantity: float | None = None
+    counted_quantity: float | None = None
+    operators: list[dict[str, Any]] = Field(default_factory=list)
+    recount_state: str
+    recount_id: int | None = None
+    recount_status: str | None = None
+
+
+class InventoryConflictsRead(BaseModel):
+    document_id: int
+    total_conflicts: int
+    unresolved_conflicts: int
+    items: list[InventoryConflictItemRead] = Field(default_factory=list)
+
+
 class InventoryUnknownProductRead(BaseModel):
     id: int
     inventory_document_id: int

@@ -21,6 +21,27 @@ export const EMPTY_TABLE_FILTERS: InventoryTableFilters = {
   unknownOnly: false,
 };
 
+const FILTER_STORAGE_PREFIX = "inv-doc-filters-";
+
+export function loadPersistedTableFilters(documentId: number): InventoryTableFilters {
+  try {
+    const raw = sessionStorage.getItem(`${FILTER_STORAGE_PREFIX}${documentId}`);
+    if (!raw) return EMPTY_TABLE_FILTERS;
+    const parsed = JSON.parse(raw) as Partial<InventoryTableFilters>;
+    return { ...EMPTY_TABLE_FILTERS, ...parsed };
+  } catch {
+    return EMPTY_TABLE_FILTERS;
+  }
+}
+
+export function persistTableFilters(documentId: number, filters: InventoryTableFilters): void {
+  try {
+    sessionStorage.setItem(`${FILTER_STORAGE_PREFIX}${documentId}`, JSON.stringify(filters));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 function haystackLine(line: InventoryLineRead): string {
   return [
     line.product_name,

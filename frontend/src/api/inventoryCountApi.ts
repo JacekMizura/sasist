@@ -31,8 +31,92 @@ export type InventoryDocumentRead = {
   difference_lines: number;
   coverage_percent: number;
   snapshot_created_at: string | null;
+  started_at: string | null;
   updated_at: string | null;
   submit_readiness?: InventorySubmitReadiness | null;
+};
+
+export type InventoryPostingPreviewLine = {
+  line_id: number;
+  product_id: number | null;
+  sku: string | null;
+  location_id: number;
+  location_name: string | null;
+  carrier_code: string | null;
+  quantity: number;
+  unit_cost_net?: number;
+  value_net?: number;
+  stock_source?: string;
+};
+
+export type InventoryPostingPreview = {
+  document_id: number;
+  document_number: string;
+  result_policy: string;
+  updates_stock: boolean;
+  valuation_method: string;
+  valuation_label: string;
+  shortage_lines: number;
+  surplus_lines: number;
+  unknown_products_count: number;
+  affected_locations_count: number;
+  total_shortage_value_net: number;
+  total_surplus_value_net: number;
+  net_correction_value: number;
+  operator_count: number;
+  unresolved_conflicts: number;
+  rw_preview: InventoryPostingPreviewLine[];
+  pw_preview: InventoryPostingPreviewLine[];
+  summary: Record<string, unknown>;
+};
+
+export type InventoryConflictOperator = {
+  user_id: number | null;
+  operator_name: string;
+  quantity: number;
+  counted_at: string | null;
+};
+
+export type InventoryConflictItem = {
+  line_id: number;
+  location_id: number;
+  location_name: string | null;
+  product_id: number;
+  sku: string | null;
+  product_name: string | null;
+  carrier_id: number | null;
+  carrier_code: string | null;
+  stock_source: string;
+  expected_quantity: number | null;
+  counted_quantity: number | null;
+  operators: InventoryConflictOperator[];
+  recount_state: string;
+  recount_id: number | null;
+  recount_status: string | null;
+};
+
+export type InventoryConflictsRead = {
+  document_id: number;
+  total_conflicts: number;
+  unresolved_conflicts: number;
+  items: InventoryConflictItem[];
+};
+
+export type InventoryUnknownProductRead = {
+  id: number;
+  inventory_document_id: number;
+  inventory_task_id: number | null;
+  warehouse_id: number;
+  location_id: number;
+  temporary_name: string;
+  barcode_value: string | null;
+  quantity: number;
+  notes: string | null;
+  photo_url: string | null;
+  status: string;
+  mapped_product_id: number | null;
+  reported_by_user_id: number | null;
+  created_at: string | null;
 };
 
 export type InventoryDashboardPayload = {
@@ -590,6 +674,66 @@ export async function postInventoryDocumentAdjustments(
   const { data } = await api.post<InventoryApprovalActionResult>(
     `/inventory-count/documents/${documentId}/post`,
     {},
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function fetchInventoryPostingPreview(
+  tenantId: number,
+  documentId: number,
+): Promise<InventoryPostingPreview> {
+  const { data } = await api.get<InventoryPostingPreview>(
+    `/inventory-count/documents/${documentId}/posting-preview`,
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function fetchInventoryConflicts(
+  tenantId: number,
+  documentId: number,
+): Promise<InventoryConflictsRead> {
+  const { data } = await api.get<InventoryConflictsRead>(
+    `/inventory-count/documents/${documentId}/conflicts`,
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function fetchInventoryUnknownProducts(
+  tenantId: number,
+  documentId: number,
+  status = "draft",
+): Promise<InventoryUnknownProductRead[]> {
+  const { data } = await api.get<InventoryUnknownProductRead[]>(
+    `/inventory-count/documents/${documentId}/unknown-products`,
+    { params: { tenant_id: tenantId, status } },
+  );
+  return data;
+}
+
+export async function mapInventoryUnknownProduct(
+  tenantId: number,
+  unknownId: number,
+  productId: number,
+): Promise<InventoryUnknownProductRead> {
+  const { data } = await api.post<InventoryUnknownProductRead>(
+    `/inventory-count/unknown-products/${unknownId}/map`,
+    { product_id: productId },
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function rejectInventoryUnknownProduct(
+  tenantId: number,
+  unknownId: number,
+  reason?: string,
+): Promise<InventoryUnknownProductRead> {
+  const { data } = await api.post<InventoryUnknownProductRead>(
+    `/inventory-count/unknown-products/${unknownId}/reject`,
+    { reason: reason ?? null },
     { params: { tenant_id: tenantId } },
   );
   return data;

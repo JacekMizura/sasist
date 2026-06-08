@@ -136,3 +136,27 @@ def _unknown_to_dict(row: InventoryUnknownProduct) -> dict[str, Any]:
         "reported_by_user_id": row.reported_by_user_id,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
+
+
+def reject_unknown_product(
+    db: Session,
+    *,
+    tenant_id: int,
+    unknown_id: int,
+    user_id: int | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    row = (
+        db.query(InventoryUnknownProduct)
+        .filter(InventoryUnknownProduct.id == int(unknown_id), InventoryUnknownProduct.tenant_id == int(tenant_id))
+        .first()
+    )
+    if row is None:
+        raise InventoryDocumentNotFoundError(f"Unknown product {unknown_id} not found")
+    row.status = "rejected"
+    if reason:
+        row.notes = ((row.notes or "").strip() + f"\nOdrzucono: {reason}").strip()
+    row.touch_updated()
+    db.commit()
+    db.refresh(row)
+    return _unknown_to_dict(row)

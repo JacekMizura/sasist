@@ -1,6 +1,7 @@
 import { User } from "lucide-react";
 
 import type { InventoryLineRead } from "@/api/inventoryCountApi";
+import { inventoryStockSourceLabel } from "../../inventoryStockSourceLabel";
 import { ERP_INV } from "../erpInventoryTheme";
 import {
   InventoryLineStatusBadge,
@@ -39,6 +40,7 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
           <tr>
             <th className={ERP_INV.th}>Produkt</th>
             <th className={ERP_INV.th}>Lokalizacja</th>
+            <th className={ERP_INV.th}>Źródło stanu</th>
             <th className={`${ERP_INV.th} text-right`}>Oczek.</th>
             <th className={`${ERP_INV.th} text-right`}>Policz.</th>
             <th className={`${ERP_INV.th} text-right`}>Różn.</th>
@@ -66,6 +68,17 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
               </td>
               <td className={ERP_INV.td}>
                 <InventoryLocationBadge code={ln.location_name ?? `#${ln.location_id}`} />
+              </td>
+              <td className={ERP_INV.td}>
+                {(() => {
+                  const src = inventoryStockSourceLabel(ln);
+                  return (
+                    <div>
+                      <p className="font-semibold text-slate-800">{src.label}</p>
+                      <p className="text-[10px] text-slate-500">{src.detail}</p>
+                    </div>
+                  );
+                })()}
               </td>
               <td className={`${ERP_INV.td} text-right tabular-nums`}>{ln.expected_quantity ?? "—"}</td>
               <td className={`${ERP_INV.td} text-right tabular-nums font-semibold text-slate-900`}>

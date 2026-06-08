@@ -22,7 +22,12 @@ from ..schemas.inventory_count import (
     InventoryScopePreviewBody,
     InventoryScopePreviewRead,
     InventoryReportKindRead,
+    InventoryConflictsRead,
     InventoryDifferenceAnalysisRead,
+    InventoryUnknownProductMapBody,
+    InventoryUnknownProductRead,
+    InventoryUnknownProductRejectBody,
+    InventoryPostingPreviewRead,
     InventoryLineRead,
     InventoryApprovalNotesBody,
     InventoryRecountCompleteBody,
@@ -38,6 +43,12 @@ from ..services.inventory_count.audit_package_service import build_audit_package
 from ..services.inventory_count.line_service import get_document_difference_analysis, list_document_lines
 from ..services.inventory_count.recount_service import complete_recount, create_recounts_for_document
 from ..services.inventory_count.scope_preview_service import preview_document_scope, preview_inventory_scope
+from ..services.inventory_count.posting_preview_service import build_posting_preview
+from ..services.inventory_count.unknown_product_service import (
+    list_unknown_products,
+    map_unknown_to_product,
+    reject_unknown_product,
+)
 from ..api.inventory_count_deps import require_inventory_permission
 from ..services.inventory_count.permissions import (
     PERM_APPROVE,
@@ -374,6 +385,83 @@ def inventory_count_differences(
 ):
     try:
         return get_document_difference_analysis(db, tenant_id=tenant_id, document_id=document_id)
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.get("/documents/{document_id}/posting-preview", response_model=InventoryPostingPreviewRead)
+def inventory_count_posting_preview(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
+):
+    try:
+        return build_posting_preview(db, tenant_id=tenant_id, document_id=document_id)
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.get("/documents/{document_id}/conflicts", response_model=InventoryConflictsRead)
+def inventory_count_conflicts(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
+):
+    try:
+        return list_document_conflicts(db, tenant_id=tenant_id, document_id=document_id)
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.get("/documents/{document_id}/unknown-products", response_model=list[InventoryUnknownProductRead])
+def inventory_count_unknown_products(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    status: str = Query("draft"),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
+):
+    return list_unknown_products(db, tenant_id=tenant_id, document_id=document_id, status=status or None)
+
+
+@router.post("/unknown-products/{unknown_id}/map", response_model=InventoryUnknownProductRead)
+def inventory_count_map_unknown(
+    unknown_id: int,
+    body: InventoryUnknownProductMapBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        return map_unknown_to_product(
+            db,
+            tenant_id=tenant_id,
+            unknown_id=unknown_id,
+            product_id=body.product_id,
+            user_id=user.id if user else None,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/unknown-products/{unknown_id}/reject", response_model=InventoryUnknownProductRead)
+def inventory_count_reject_unknown(
+    unknown_id: int,
+    body: InventoryUnknownProductRejectBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        return reject_unknown_product(
+            db,
+            tenant_id=tenant_id,
+            unknown_id=unknown_id,
+            user_id=user.id if user else None,
+            reason=body.reason,
+        )
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
 

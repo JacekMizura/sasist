@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { previewInventoryScope } from "@/api/inventoryCountApi";
 import { getWarehouseLocations, type WarehouseLocationItem } from "@/api/warehouseGraphApi";
 import { searchProductsCatalog, type ProductSearchHit } from "@/api/productsSearchApi";
+import { INVENTORY_SCOPE_PRESETS } from "../../inventoryScopePresets";
 import type {
   InventoryCountMode,
   InventoryDocumentFiltersConfig,
@@ -142,6 +143,25 @@ export function InventoryWizardScopeStep({
       ) : (
         <>
           <p className={labelClass}>Zakres inwentaryzacji</p>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Presety operacyjne</p>
+            <div className="flex flex-wrap gap-1">
+              {INVENTORY_SCOPE_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  title={preset.hint}
+                  onClick={() => {
+                    onScopeModeChange(preset.scopeMode);
+                    onFiltersChange({ ...filters, ...preset.apply() });
+                  }}
+                  className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:border-slate-400"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {SCOPE_MODE_OPTIONS.filter((o) => o.id !== "full").map((opt) => (
               <OptionCard
