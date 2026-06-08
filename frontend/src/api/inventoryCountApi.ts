@@ -127,10 +127,13 @@ export type InventoryLineRead = {
 };
 
 export async function listDocumentLines(tenantId: number, documentId: number): Promise<InventoryLineRead[]> {
-  const { data } = await api.get<InventoryLineRead[]>(`/inventory-count/documents/${documentId}/lines`, {
-    params: { tenant_id: tenantId, supervisor: true },
-  });
-  return data;
+  const { data } = await api.get<{ items: InventoryLineRead[]; total: number }>(
+    `/inventory-count/documents/${documentId}/lines`,
+    {
+      params: { tenant_id: tenantId, supervisor: true },
+    },
+  );
+  return data.items ?? [];
 }
 
 export async function getDocumentDifferenceAnalysis(tenantId: number, documentId: number) {

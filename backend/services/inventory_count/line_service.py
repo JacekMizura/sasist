@@ -20,7 +20,9 @@ def list_document_lines(
     tenant_id: int,
     document_id: int,
     include_supervisor_fields: bool = True,
-) -> list[dict[str, Any]]:
+    offset: int = 0,
+    limit: int = 500,
+) -> dict[str, Any]:
     doc = (
         db.query(InventoryDocument)
         .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
@@ -29,15 +31,20 @@ def list_document_lines(
     if doc is None:
         raise InventoryDocumentNotFoundError(f"Document {document_id} not found")
 
-    rows = (
+    blind = doc.count_mode == "blind" and not include_supervisor_fields
+    base_q = (
         db.query(InventoryDocumentLine, Product, Location)
         .outerjoin(Product, Product.id == InventoryDocumentLine.product_id)
         .outerjoin(Location, Location.id == InventoryDocumentLine.location_id)
         .filter(InventoryDocumentLine.inventory_document_id == int(document_id))
-        .order_by(Location.name.asc(), Product.sku.asc())
+    )
+    total = base_q.count()
+    rows = (
+        base_q.order_by(Location.name.asc(), Product.sku.asc())
+        .offset(max(0, int(offset)))
+        .limit(min(int(limit), 2000))
         .all()
     )
-    blind = doc.count_mode == "blind" and not include_supervisor_fields
     out: list[dict[str, Any]] = []
     for line, product, loc in rows:
         item: dict[str, Any] = {
@@ -54,12 +61,13 @@ def list_document_lines(
             "serial_number": line.serial_number,
             "recount_count": line.recount_count,
             "confidence_score": line.confidence_score,
+            "version": line.version,
         }
         if not blind or include_supervisor_fields:
             item["expected_quantity"] = line.expected_quantity
             item["difference_quantity"] = line.difference_quantity
         out.append(item)
-    return out
+    return {"items": out, "total": total, "offset": offset, "limit": limit}
 
 
 def get_document_difference_analysis(

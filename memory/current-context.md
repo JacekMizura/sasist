@@ -5,15 +5,15 @@ Enterprise **Inventory / Stock Count** module — ERP planning + WMS blind count
 
 ## Inventory count module (2026-06-08)
 - **Phase 1**: 13 tables, ERP dashboard/wizard, WMS shell, snapshot capture
-- **Phase 2 (latest)**:
-  - Line materialization from frozen snapshot (expected qty SSOT)
-  - Difference engine with configurable thresholds (auto/review/recount)
-  - Approval workflow: submit → approve/reject → post RW/PW adjustments
-  - Recount documents + WMS recount tasks
-  - Report engine (XLSX + HTML/PDF via Puppeteer when available) — 15+ report kinds
-  - Audit package ZIP export
-  - Location locks on start (soft/hard; snapshot mode skips)
-  - WMS: task lines, barcode→product resolution, KPI/task progress on scan
+- **Phase 2**: line materialization, difference engine, approval→post RW/PW, reports, audit ZIP, WMS execution
+- **Phase 3 (latest)**:
+  - Granular RBAC (`inventory.*` permissions + 6 role presets)
+  - Transactional posting with rollback, idempotency key, duplicate-post guard
+  - Optimistic versioning (document + lines) + soft line locks + session heartbeat
+  - Immutable audit (previous/next state, session/device/IP)
+  - Background jobs (`inventory_jobs`) for reports/audit ZIP
+  - Paginated line queries, audit log + timelines API, metrics endpoint
+  - Valuation-safe posting via snapshot unit cost metadata
 - Full design: `memory/inventory-count-module.md`
 
 ## Prior goal

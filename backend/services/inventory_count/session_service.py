@@ -105,3 +105,30 @@ def close_session(
     db.commit()
     db.refresh(session)
     return _session_to_dict(session)
+
+
+def heartbeat_session(
+    db: Session,
+    *,
+    tenant_id: int,
+    session_id: int,
+    user_id: int | None = None,
+    device_id: str | None = None,
+) -> dict[str, Any]:
+    from .concurrency_service import touch_session_heartbeat
+
+    session = (
+        db.query(InventorySession)
+        .filter(InventorySession.id == int(session_id), InventorySession.tenant_id == int(tenant_id))
+        .first()
+    )
+    if session is None:
+        raise InventorySessionNotFoundError(f"Session {session_id} not found")
+    if session.status != SESSION_STATUS_ACTIVE:
+        raise InventorySessionNotFoundError("Session is not active")
+    touch_session_heartbeat(db, session)
+    if device_id:
+        session.device_id = device_id
+    db.commit()
+    db.refresh(session)
+    return _session_to_dict(session)

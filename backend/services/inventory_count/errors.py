@@ -34,3 +34,23 @@ class InventoryLocationMismatchError(InventoryCountError):
 
 class InventoryBlindCountViolationError(InventoryCountError):
     code = "blind_count_violation"
+
+
+class InventoryConcurrentUpdateError(InventoryCountError):
+    code = "concurrent_update"
+
+
+class InventoryLineLockedError(InventoryCountError):
+    code = "line_locked"
+
+
+class InventoryDuplicatePostError(InventoryCountError):
+    code = "duplicate_post"
+
+
+class InventoryPostingInProgressError(InventoryCountError):
+    code = "posting_in_progress"
+
+
+class InventoryPermissionDeniedError(InventoryCountError):
+    code = "permission_denied"

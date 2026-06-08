@@ -63,5 +63,14 @@ class InventoryDocument(Base, BaseModelMixin):
     rw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
     pw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
 
+    # Optimistic concurrency + posting safety (Phase 3)
+    version = Column(Integer, nullable=False, default=0)
+    posting_in_progress = Column(Integer, nullable=False, default=0)
+    post_idempotency_key = Column(String(128), nullable=True, unique=True, index=True)
+
     def touch_updated(self) -> None:
+        self.updated_at = datetime.utcnow()
+
+    def bump_version(self) -> None:
+        self.version = int(self.version or 0) + 1
         self.updated_at = datetime.utcnow()

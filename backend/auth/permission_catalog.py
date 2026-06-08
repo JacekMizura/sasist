@@ -146,6 +146,25 @@ PERMISSION_TREE: list[dict[str, Any]] = [
                     _leaf("inventory.status.closed", "Zamknięty"),
                 ],
             ),
+            _node(
+                "sec_inv_count",
+                "Inwentaryzacja (ERP/WMS)",
+                [
+                    _leaf("inventory.view", "Podgląd inwentaryzacji"),
+                    _leaf("inventory.export", "Eksport raportów"),
+                    _leaf("inventory.audit_package", "Pakiet audytowy"),
+                    _leaf("inventory.execute", "Liczenie WMS"),
+                    _leaf("inventory.recount", "Przeliczenia"),
+                    _leaf("inventory.override", "Override liczenia"),
+                    _leaf("inventory.submit", "Przekazanie do zatwierdzenia"),
+                    _leaf("inventory.approve", "Zatwierdzenie"),
+                    _leaf("inventory.reject", "Odrzucenie"),
+                    _leaf("inventory.post", "Księgowanie RW/PW"),
+                    _leaf("inventory.force_unlock", "Wymuszone odblokowanie"),
+                    _leaf("inventory.cancel", "Anulowanie inwentaryzacji"),
+                    _leaf("inventory.delete", "Usuwanie dokumentów"),
+                ],
+            ),
         ],
     ),
     _node(
@@ -441,3 +460,8 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
         "warehouse.operations",
     ),
 }
+
+# Inventory module role presets (Phase 3)
+from ..services.inventory_count.permissions import INVENTORY_ROLE_PRESETS  # noqa: E402
+
+ROLE_PERMISSION_PRESETS.update(INVENTORY_ROLE_PRESETS)

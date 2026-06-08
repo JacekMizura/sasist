@@ -47,5 +47,8 @@ class InventoryTask(Base, BaseModelMixin):
 
     metadata_json = Column(Text, nullable=True)
 
+    version = Column(Integer, nullable=False, default=0)
+
     def touch_updated(self) -> None:
         self.updated_at = datetime.utcnow()
+        self.version = int(self.version or 0) + 1

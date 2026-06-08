@@ -34,8 +34,22 @@ from ..services.inventory_count.adjustment_service import post_inventory_adjustm
 from ..services.inventory_count.audit_package_service import build_audit_package
 from ..services.inventory_count.line_service import get_document_difference_analysis, list_document_lines
 from ..services.inventory_count.recount_service import complete_recount, create_recounts_for_document
+from ..api.inventory_count_deps import require_inventory_permission
+from ..services.inventory_count.permissions import (
+    PERM_APPROVE,
+    PERM_AUDIT_PACKAGE,
+    PERM_EXPORT,
+    PERM_POST,
+    PERM_RECOUNT,
+    PERM_REJECT,
+    PERM_SUBMIT,
+    PERM_VIEW,
+)
+from ..services.inventory_count.audit_log_service import get_document_timelines, list_document_audit_log
+from ..services.inventory_count.job_service import ASYNC_EXPORT_LINE_THRESHOLD, enqueue_inventory_job, get_inventory_job
 from ..services.inventory_count.report_service import REPORT_KINDS, generate_inventory_report
 from ..models.inventory_count.constants import REPORT_FORMAT_PDF, REPORT_FORMAT_XLSX
+from ..services.inventory_count.observability import inventory_metrics_snapshot
 from ..services.inventory_count import (
     InventoryCountError,
     build_inventory_dashboard,
@@ -53,7 +67,16 @@ logger = logging.getLogger(__name__)
 
 
 def _map_inventory_error(exc: InventoryCountError) -> HTTPException:
-    status = 404 if "not_found" in exc.code else 400
+    if "not_found" in exc.code:
+        status = 404
+    elif exc.code in ("concurrent_update", "posting_in_progress"):
+        status = 409
+    elif exc.code == "line_locked":
+        status = 423
+    elif exc.code == "duplicate_post":
+        status = 409
+    else:
+        status = 400
     return HTTPException(status_code=status, detail={"code": exc.code, "message": str(exc)})
 
 
@@ -62,6 +85,7 @@ def inventory_count_dashboard(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
+    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
 ):
     return build_inventory_dashboard(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
 
@@ -211,12 +235,15 @@ def inventory_count_reports_catalog():
     return InventoryReportsCatalogRead(reports=reports)
 
 
-@router.get("/documents/{document_id}/lines", response_model=List[InventoryLineRead])
+@router.get("/documents/{document_id}/lines")
 def inventory_count_document_lines(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
     supervisor: bool = Query(True),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=2000),
     db: Session = Depends(get_db),
+    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
 ):
     try:
         return list_document_lines(
@@ -224,6 +251,8 @@ def inventory_count_document_lines(
             tenant_id=tenant_id,
             document_id=document_id,
             include_supervisor_fields=supervisor,
+            offset=offset,
+            limit=limit,
         )
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
@@ -247,7 +276,7 @@ def inventory_count_submit_approval(
     body: InventoryApprovalNotesBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(require_inventory_permission(PERM_SUBMIT)),
 ):
     try:
         return submit_for_approval(
@@ -267,7 +296,7 @@ def inventory_count_approve(
     body: InventoryApprovalNotesBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(require_inventory_permission(PERM_APPROVE)),
 ):
     try:
         return approve_inventory_document(
@@ -287,7 +316,7 @@ def inventory_count_reject(
     body: InventoryApprovalNotesBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(require_inventory_permission(PERM_REJECT)),
 ):
     try:
         return reject_inventory_document(
@@ -305,15 +334,19 @@ def inventory_count_reject(
 def inventory_count_post(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    idempotency_key: Optional[str] = Query(None, max_length=128),
+    expected_version: Optional[int] = Query(None, ge=0),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(require_inventory_permission(PERM_POST)),
 ):
     try:
         return post_inventory_adjustments(
             db,
             tenant_id=tenant_id,
             document_id=document_id,
-            user_id=user.id if user else None,
+            user_id=user.id,
+            idempotency_key=idempotency_key,
+            expected_version=expected_version,
         )
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
@@ -364,7 +397,7 @@ def inventory_count_download_report(
     tenant_id: int = Query(..., ge=1),
     format: str = Query("xlsx", pattern="^(pdf|xlsx)$"),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(require_inventory_permission(PERM_EXPORT)),
 ):
     fmt = REPORT_FORMAT_PDF if format.lower() == "pdf" else REPORT_FORMAT_XLSX
     try:
@@ -374,7 +407,7 @@ def inventory_count_download_report(
             document_id=document_id,
             report_kind=report_kind,
             report_format=fmt,
-            user_id=user.id if user else None,
+            user_id=user.id,
         )
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
@@ -392,14 +425,14 @@ def inventory_count_audit_package(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(require_inventory_permission(PERM_AUDIT_PACKAGE)),
 ):
     try:
         result = build_audit_package(
             db,
             tenant_id=tenant_id,
             document_id=document_id,
-            user_id=user.id if user else None,
+            user_id=user.id,
         )
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
@@ -408,3 +441,76 @@ def inventory_count_audit_package(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{result["file_name"]}"'},
     )
+
+
+@router.get("/metrics")
+def inventory_count_metrics(
+    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
+):
+    return inventory_metrics_snapshot()
+
+
+@router.get("/documents/{document_id}/audit-log")
+def inventory_count_audit_log(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
+):
+    try:
+        return list_document_audit_log(
+            db, tenant_id=tenant_id, document_id=document_id, offset=offset, limit=limit
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.get("/documents/{document_id}/timelines")
+def inventory_count_timelines(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
+):
+    try:
+        return get_document_timelines(db, tenant_id=tenant_id, document_id=document_id)
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/jobs")
+def inventory_count_enqueue_job(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    job_kind: str = Query("report"),
+    report_kind: str = Query("differences"),
+    format: str = Query("xlsx"),
+    idempotency_key: Optional[str] = Query(None, max_length=128),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(require_inventory_permission(PERM_EXPORT)),
+):
+    job = enqueue_inventory_job(
+        db,
+        tenant_id=tenant_id,
+        document_id=document_id,
+        job_kind=job_kind,
+        payload={"report_kind": report_kind, "format": format, "document_id": document_id},
+        user_id=user.id,
+        idempotency_key=idempotency_key,
+    )
+    return {"job_id": job.id, "status": job.status}
+
+
+@router.get("/jobs/{job_id}")
+def inventory_count_job_status(
+    job_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(require_inventory_permission(PERM_EXPORT)),
+):
+    try:
+        return get_inventory_job(db, tenant_id=tenant_id, job_id=job_id)
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc

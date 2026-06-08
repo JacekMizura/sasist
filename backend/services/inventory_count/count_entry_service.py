@@ -39,6 +39,8 @@ def record_count_scan(
     barcode_value: str | None = None,
     source: str = ENTRY_SOURCE_SCANNER,
     delta: float | None = None,
+    expected_line_version: int | None = None,
+    device_id: str | None = None,
 ) -> dict[str, Any]:
     doc = (
         db.query(InventoryDocument)
@@ -58,6 +60,16 @@ def record_count_scan(
     )
     if line is None:
         raise InventoryDocumentNotFoundError(f"Inventory line {line_id} not found")
+
+    from .concurrency_service import acquire_line_count_lock, assert_line_version, touch_session_heartbeat
+    from ...models.inventory_count.session import InventorySession
+
+    assert_line_version(line, expected_line_version)
+    acquire_line_count_lock(db, line=line, session_id=session_id, user_id=user_id)
+    if session_id is not None:
+        session = db.query(InventorySession).filter(InventorySession.id == int(session_id)).first()
+        if session is not None:
+            touch_session_heartbeat(db, session)
 
     prev_qty = float(line.counted_quantity or 0)
     if delta is not None:
@@ -90,7 +102,11 @@ def record_count_scan(
         inventory_document_id=doc.id,
         inventory_document_line_id=line.id,
         user_id=user_id,
+        session_id=session_id,
+        device_id=device_id,
         action=AUDIT_SCAN,
+        previous_state={"counted_quantity": prev_qty},
+        next_state={"counted_quantity": new_qty},
         detail={"quantity": new_qty, "barcode": barcode_value},
     )
     log_inventory_audit(
@@ -99,7 +115,11 @@ def record_count_scan(
         inventory_document_id=doc.id,
         inventory_document_line_id=line.id,
         user_id=user_id,
+        session_id=session_id,
+        device_id=device_id,
         action=AUDIT_QTY_CHANGED,
+        previous_state={"counted_quantity": prev_qty},
+        next_state={"counted_quantity": new_qty},
         detail={"from": prev_qty, "to": new_qty},
     )
     from .kpi_service import recompute_document_kpis
@@ -124,6 +144,7 @@ def record_count_scan(
         "counted_quantity": line.counted_quantity,
         "difference_quantity": line.difference_quantity,
         "status": line.status,
+        "version": line.version,
         "blind_mode": doc.count_mode == COUNT_MODE_BLIND,
     }
 

@@ -29,7 +29,10 @@ from ..services.inventory_count import (
     open_session,
     record_count_scan,
 )
+from ..api.inventory_count_deps import require_inventory_permission_optional
+from ..services.inventory_count.permissions import PERM_EXECUTE
 from ..services.inventory_count.count_entry_service import resolve_barcode_to_line
+from ..services.inventory_count.session_service import heartbeat_session
 from ..services.inventory_count.task_generation_service import get_task_lines
 
 router = APIRouter(prefix="/wms/inventory-count", tags=["WMS Inventory Count"])
@@ -39,6 +42,10 @@ logger = logging.getLogger(__name__)
 def _map_error(exc: InventoryCountError) -> HTTPException:
     if exc.code == "blind_count_violation":
         return HTTPException(status_code=403, detail={"code": exc.code, "message": str(exc)})
+    if exc.code in ("concurrent_update", "duplicate_post", "posting_in_progress"):
+        return HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)})
+    if exc.code == "line_locked":
+        return HTTPException(status_code=423, detail={"code": exc.code, "message": str(exc)})
     status = 404 if "not_found" in exc.code else 400
     return HTTPException(status_code=status, detail={"code": exc.code, "message": str(exc)})
 
@@ -180,7 +187,7 @@ def wms_inventory_record_scan(
     tenant_id: int = Query(..., ge=1),
     session_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser | None = Depends(require_inventory_permission_optional(PERM_EXECUTE)),
 ):
     try:
         return record_count_scan(
@@ -194,6 +201,26 @@ def wms_inventory_record_scan(
             barcode_value=body.barcode_value,
             source=body.source,
             delta=body.delta,
+        )
+    except InventoryCountError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.post("/sessions/{session_id}/heartbeat", response_model=InventorySessionRead)
+def wms_inventory_session_heartbeat(
+    session_id: int,
+    tenant_id: int = Query(..., ge=1),
+    device_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(require_inventory_permission_optional(PERM_EXECUTE)),
+):
+    try:
+        return heartbeat_session(
+            db,
+            tenant_id=tenant_id,
+            session_id=session_id,
+            user_id=user.id if user else None,
+            device_id=device_id,
         )
     except InventoryCountError as exc:
         raise _map_error(exc) from exc

@@ -35,6 +35,10 @@ class InventoryAuditEvent(Base):
     entity_type = Column(String(64), nullable=True)
     entity_id = Column(Integer, nullable=True)
     detail_json = Column(Text, nullable=True)
+    previous_state_json = Column(Text, nullable=True)
+    next_state_json = Column(Text, nullable=True)
+    session_id = Column(Integer, ForeignKey("inventory_sessions.id", ondelete="SET NULL"), nullable=True, index=True)
+    device_id = Column(String(128), nullable=True)
     ip_address = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 

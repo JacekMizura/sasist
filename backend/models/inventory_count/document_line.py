@@ -48,6 +48,17 @@ class InventoryDocumentLine(Base, BaseModelMixin):
     notes = Column(Text, nullable=True)
     metadata_json = Column(Text, nullable=True)
 
+    # Optimistic concurrency + soft line lock (Phase 3)
+    version = Column(Integer, nullable=False, default=0)
+    count_lock_session_id = Column(
+        Integer,
+        ForeignKey("inventory_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    count_lock_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
+    count_lock_at = Column(DateTime, nullable=True)
+
     def recompute_difference(self) -> None:
         if self.counted_quantity is None:
             self.difference_quantity = None
@@ -56,3 +67,4 @@ class InventoryDocumentLine(Base, BaseModelMixin):
 
     def touch_updated(self) -> None:
         self.updated_at = datetime.utcnow()
+        self.version = int(self.version or 0) + 1

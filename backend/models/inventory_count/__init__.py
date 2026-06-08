@@ -4,6 +4,7 @@ from .adjustment import InventoryAdjustment
 from .approval import InventoryApproval
 from .recount import InventoryRecount
 from .report import InventoryReport
+from .job import InventoryJob
 from .audit_event import InventoryAuditEvent, InventoryLineAttachment
 from .constants import (
     ADJ_STATUS_DRAFT,
@@ -87,6 +88,7 @@ __all__ = [
     "InventoryCountEntry",
     "InventoryDocument",
     "InventoryDocumentLine",
+    "InventoryJob",
     "InventoryLineAttachment",
     "InventoryLocationLock",
     "InventorySession",

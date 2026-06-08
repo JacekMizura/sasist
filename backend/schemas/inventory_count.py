@@ -150,6 +150,8 @@ class InventoryCountScanBody(BaseModel):
     delta: float | None = None
     barcode_value: str | None = None
     source: str = "scanner"
+    expected_line_version: int | None = None
+    device_id: str | None = None
 
 
 class InventoryCountLineRead(BaseModel):

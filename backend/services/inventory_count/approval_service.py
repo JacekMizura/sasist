@@ -100,6 +100,7 @@ def submit_for_approval(
         }
 
     doc.status = INV_STATUS_AWAITING_APPROVAL
+    doc.bump_version()
     doc.touch_updated()
     _record_approval(db, document_id=int(doc.id), action=APPROVAL_ACTION_SUBMIT, user_id=user_id, notes=notes, detail=analysis["summary"])
     log_inventory_audit(
@@ -140,7 +141,7 @@ def approve_inventory_document(
     doc.status = INV_STATUS_APPROVED
     doc.approved_at = datetime.utcnow()
     doc.approved_by_user_id = user_id
-    doc.touch_updated()
+    doc.bump_version()
     _record_approval(db, document_id=int(doc.id), action=APPROVAL_ACTION_APPROVE, user_id=user_id, notes=notes)
     log_inventory_audit(
         db,
@@ -173,7 +174,7 @@ def reject_inventory_document(
         raise InventoryInvalidTransitionError("Document is not awaiting approval")
 
     doc.status = INV_STATUS_IN_PROGRESS
-    doc.touch_updated()
+    doc.bump_version()
     _record_approval(db, document_id=int(doc.id), action=APPROVAL_ACTION_REJECT, user_id=user_id, notes=notes)
     log_inventory_audit(
         db,
