@@ -8,6 +8,7 @@ import {
   openWmsInventorySession,
   recordInventoryScan,
   resolveWmsInventoryBarcode,
+  resolveWmsInventoryCarrier,
   WmsBarcodeResolveError,
   type InventoryTaskRead,
   type WmsBarcodeResolveResult,
@@ -18,24 +19,23 @@ import { wmsInventoryCountPaths } from "../inventoryCountPaths";
 import {
   commitLocationSessionToRecent,
   syncLocationSessionProduct,
+  touchRecentLocation,
 } from "../recentLocationsStorage";
 import { cacheTaskSnapshot, inventoryCountSyncQueue } from "../offline/inventoryCountSyncQueue";
 import { useInventoryCountOfflineStatus } from "../offline/useInventoryCountOfflineStatus";
+import {
+  buildLocationContextFromTask,
+  groupCountedProductsByCarrier,
+  isCarrierBarcode,
+  locationCodesMatch,
+  type WmsCarrierContext,
+  type WmsCountedProduct,
+  type WmsLocationContext,
+} from "../wmsInventoryExecutionContext";
+
+export type { WmsCountedProduct } from "../wmsInventoryExecutionContext";
 
 export type WmsTerminalStep = "location" | "product";
-
-/** Aggregated counted product in current location — one row per line_id, not per scan event. */
-export type WmsCountedProduct = {
-  line_id: number;
-  product_id: number;
-  product_name: string | null;
-  sku?: string | null;
-  ean?: string | null;
-  image_url?: string | null;
-  counted_quantity: number;
-  updatedAt: number;
-  scan: WmsBarcodeResolveResult;
-};
 
 const SCAN_LOCK_MS = 250;
 const PULSE_MS = 280;
@@ -67,6 +67,7 @@ function lineToCountedProduct(line: WmsTaskLineRead, task: InventoryTaskRead): W
     discrepancy_label: "",
     location_id: task.location_id,
     location_code: task.location_code,
+    carrier_id: line.carrier_id ?? null,
   };
   return {
     line_id: line.id,
@@ -75,6 +76,8 @@ function lineToCountedProduct(line: WmsTaskLineRead, task: InventoryTaskRead): W
     sku: line.sku,
     ean: line.ean,
     image_url: line.image_url,
+    carrier_id: line.carrier_id ?? null,
+    carrier_code: line.carrier_code ?? null,
     counted_quantity: qty,
     updatedAt: 0,
     scan,
@@ -82,16 +85,16 @@ function lineToCountedProduct(line: WmsTaskLineRead, task: InventoryTaskRead): W
 }
 
 function resetCountingUi(setters: {
-  setStep: (s: WmsTerminalStep) => void;
-  setCarrierCode: (v: string | null) => void;
+  setLocationContext: (v: WmsLocationContext | null) => void;
+  setCarrierContext: (v: WmsCarrierContext) => void;
   setCarrierScanMode: (v: boolean) => void;
   setActiveLineId: (v: number | null) => void;
   setActiveScan: (v: WmsBarcodeResolveResult | null) => void;
   setCountedProducts: (v: Record<number, WmsCountedProduct>) => void;
   setPulseLineId: (v: number | null) => void;
 }) {
-  setters.setStep("product");
-  setters.setCarrierCode(null);
+  setters.setLocationContext(null);
+  setters.setCarrierContext(null);
   setters.setCarrierScanMode(false);
   setters.setActiveLineId(null);
   setters.setActiveScan(null);
@@ -100,8 +103,7 @@ function resetCountingUi(setters: {
 }
 
 /**
- * WMS inventory terminal — route param `taskId` is the ONLY source of truth for active task.
- * Operator flow: entry scan → count products → finish → entry.
+ * WMS inventory terminal — route `taskId` binds location; carrier/product are execution context.
  */
 export function useWmsInventoryCountTerminal(
   taskId: number | undefined,
@@ -114,7 +116,7 @@ export function useWmsInventoryCountTerminal(
   const { refresh: refreshOffline } = useInventoryCountOfflineStatus();
   const navState = (location.state as { sessionId?: number; locationConfirmed?: boolean } | null) ?? null;
   const navSessionId = navState?.sessionId ?? null;
-  const locationConfirmed = Boolean(navState?.locationConfirmed);
+  const navLocationConfirmed = Boolean(navState?.locationConfirmed);
 
   const scanInFlight = useRef(false);
   const lastScanSubmit = useRef<{ code: string; at: number }>({ code: "", at: 0 });
@@ -125,8 +127,8 @@ export function useWmsInventoryCountTerminal(
   const [error, setError] = useState<string | null>(null);
   const [task, setTask] = useState<InventoryTaskRead | null>(null);
   const [sessionId, setSessionId] = useState<number | null>(navSessionId);
-  const [step, setStep] = useState<WmsTerminalStep>(locationConfirmed ? "product" : "location");
-  const [carrierCode, setCarrierCode] = useState<string | null>(null);
+  const [locationContext, setLocationContext] = useState<WmsLocationContext | null>(null);
+  const [carrierContext, setCarrierContext] = useState<WmsCarrierContext>(null);
   const [carrierScanMode, setCarrierScanMode] = useState(false);
   const [activeLineId, setActiveLineId] = useState<number | null>(null);
   const [activeScan, setActiveScan] = useState<WmsBarcodeResolveResult | null>(null);
@@ -138,8 +140,8 @@ export function useWmsInventoryCountTerminal(
 
   const uiResetters = useMemo(
     () => ({
-      setStep,
-      setCarrierCode,
+      setLocationContext,
+      setCarrierContext,
       setCarrierScanMode,
       setActiveLineId,
       setActiveScan,
@@ -147,6 +149,20 @@ export function useWmsInventoryCountTerminal(
       setPulseLineId,
     }),
     [],
+  );
+
+  const locationActive = Boolean(locationContext?.confirmed);
+  const step: WmsTerminalStep = locationActive ? "product" : "location";
+  const activeCarrierId = carrierContext?.carrierId ?? null;
+
+  const activateLocationContext = useCallback(
+    (t: InventoryTaskRead, opts?: { fromScan?: boolean }) => {
+      const ctx = buildLocationContextFromTask(t, true);
+      setLocationContext(ctx);
+      touchRecentLocation({ code: ctx.locationCode, taskId: t.id, locationId: t.location_id });
+      if (opts?.fromScan) scanFeedback.success(undefined);
+    },
+    [scanFeedback],
   );
 
   const goToTask = useCallback(
@@ -223,21 +239,23 @@ export function useWmsInventoryCountTerminal(
         setTask(t);
         setSessionId(sid);
         setCountedProducts(hydrated);
-        setStep(locationConfirmed ? "product" : "location");
         hydratedTaskIdRef.current = taskId;
+
+        activateLocationContext(t);
+
+        if (navLocationConfirmed) {
+          void confirmWmsInventoryLocation(tenantId, t.id, {
+            location_id: t.location_id,
+            scanned_code: t.location_code ?? t.location_name ?? String(t.location_id),
+          }).catch(() => undefined);
+        }
+
         cacheTaskSnapshot({
           taskId: t.id,
           locationCode: t.location_code ?? t.location_name ?? `#${t.location_id}`,
           progressPercent: t.progress_percent,
           cachedAt: new Date().toISOString(),
         });
-
-        if (locationConfirmed) {
-          void confirmWmsInventoryLocation(tenantId, t.id, {
-            location_id: t.location_id,
-            scanned_code: t.location_code ?? t.location_name ?? String(t.location_id),
-          }).catch(() => undefined);
-        }
       } catch {
         if (!cancelled) {
           setError("Nie udało się wczytać zadania.");
@@ -252,7 +270,7 @@ export function useWmsInventoryCountTerminal(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate only when route taskId / warehouse changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate on route taskId / warehouse
   }, [taskId, warehouseId, tenantId]);
 
   useEffect(() => {
@@ -265,7 +283,7 @@ export function useWmsInventoryCountTerminal(
     };
   }, []);
 
-  const locationLabel = task?.location_code ?? task?.location_name ?? (task ? `#${task.location_id}` : "—");
+  const locationLabel = locationContext?.locationCode ?? task?.location_code ?? task?.location_name ?? "—";
   const locationSubline = useMemo(() => buildLocationSubline(task), [task]);
   const inventoryType = (task?.inventory_type ?? "FULL").toUpperCase();
   const isPartialInventory = inventoryType === "PARTIAL";
@@ -273,6 +291,11 @@ export function useWmsInventoryCountTerminal(
   const countedProductList = useMemo(
     () => Object.values(countedProducts).sort((a, b) => b.updatedAt - a.updatedAt),
     [countedProducts],
+  );
+
+  const countedProductGroups = useMemo(
+    () => groupCountedProductsByCarrier(countedProductList),
+    [countedProductList],
   );
 
   const qtyPulse = pulseLineId != null && pulseLineId === activeLineId;
@@ -289,8 +312,10 @@ export function useWmsInventoryCountTerminal(
   }, []);
 
   const upsertCountedProduct = useCallback(
-    (scan: WmsBarcodeResolveResult, qty: number) => {
-      const snapshot: WmsBarcodeResolveResult = { ...scan, counted_quantity: qty };
+    (scan: WmsBarcodeResolveResult, qty: number, carrier?: WmsCarrierContext) => {
+      const carrierId = scan.carrier_id ?? carrier?.carrierId ?? activeCarrierId;
+      const carrierCode = carrier?.code ?? carrierContext?.code ?? null;
+      const snapshot: WmsBarcodeResolveResult = { ...scan, counted_quantity: qty, carrier_id: carrierId };
       setCountedProducts((prev) => ({
         ...prev,
         [scan.line_id]: {
@@ -300,6 +325,8 @@ export function useWmsInventoryCountTerminal(
           sku: scan.sku,
           ean: scan.ean,
           image_url: scan.image_url,
+          carrier_id: carrierId,
+          carrier_code: carrierCode,
           counted_quantity: qty,
           updatedAt: Date.now(),
           scan: snapshot,
@@ -320,7 +347,7 @@ export function useWmsInventoryCountTerminal(
       }
       pulseLine(scan.line_id);
     },
-    [pulseLine, task],
+    [activeCarrierId, carrierContext?.code, pulseLine, task],
   );
 
   const applyScanQty = useCallback(
@@ -333,7 +360,7 @@ export function useWmsInventoryCountTerminal(
   );
 
   const recordScan = useCallback(
-    async (lineId: number, opts: { delta?: number; quantity?: number; barcode?: string }) => {
+    async (lineId: number, opts: { delta?: number; quantity?: number; barcode?: string; source?: string }) => {
       if (!task) return;
       try {
         await recordInventoryScan(
@@ -344,6 +371,8 @@ export function useWmsInventoryCountTerminal(
             delta: opts.delta,
             quantity: opts.quantity,
             barcode_value: opts.barcode,
+            source: opts.source ?? "scanner",
+            carrier_id: activeCarrierId,
           },
           sessionId ?? undefined,
         );
@@ -362,15 +391,20 @@ export function useWmsInventoryCountTerminal(
         throw new Error("offline_queue");
       }
     },
-    [refreshOffline, sessionId, task, tenantId],
+    [activeCarrierId, refreshOffline, sessionId, task, tenantId],
   );
 
   const resolveLocationScan = useCallback(
     async (code: string) => {
       if (!task) return false;
-      const locLabel = task.location_name ?? task.location_code ?? "";
-      const matches =
-        code.toUpperCase() === locLabel.toUpperCase() || code === String(task.location_id);
+      const labels = [
+        task.location_code,
+        task.location_name,
+        String(task.location_id),
+        locationContext?.locationCode,
+      ];
+      const matches = labels.some((label) => label && locationCodesMatch(String(label), code));
+
       if (!matches) {
         try {
           await confirmWmsInventoryLocation(tenantId, task.id, {
@@ -383,16 +417,35 @@ export function useWmsInventoryCountTerminal(
           return false;
         }
       }
-      setStep("product");
-      scanFeedback.success(undefined);
+
+      activateLocationContext(task, { fromScan: true });
       return true;
     },
-    [pulseBad, scanFeedback, task, tenantId],
+    [activateLocationContext, locationContext?.locationCode, pulseBad, scanFeedback, task, tenantId],
+  );
+
+  const attachCarrier = useCallback(
+    async (code: string) => {
+      const trimmed = code.trim();
+      if (!trimmed) return false;
+      try {
+        const resolved = await resolveWmsInventoryCarrier(tenantId, trimmed);
+        setCarrierContext({ carrierId: resolved.carrier_id, code: resolved.code });
+        setCarrierScanMode(false);
+        scanFeedback.success(undefined);
+        return true;
+      } catch {
+        scanFeedback.error("Nie rozpoznano nośnika");
+        pulseBad();
+        return false;
+      }
+    },
+    [pulseBad, scanFeedback, tenantId],
   );
 
   const commitProductDelta = useCallback(
-    async (resolved: WmsBarcodeResolveResult, delta: number, barcode?: string) => {
-      await recordScan(resolved.line_id, { delta, barcode });
+    async (resolved: WmsBarcodeResolveResult, delta: number, barcode?: string, source = "scanner") => {
+      await recordScan(resolved.line_id, { delta, barcode, source });
       const nextQty = Math.max(0, (resolved.counted_quantity ?? 0) + delta);
       applyScanQty(resolved, nextQty);
     },
@@ -400,11 +453,11 @@ export function useWmsInventoryCountTerminal(
   );
 
   const handleProductScan = useCallback(
-    async (code: string) => {
-      if (!task) return;
+    async (code: string, source = "scanner") => {
+      if (!task || !locationActive) return;
       try {
-        const resolved = await resolveWmsInventoryBarcode(tenantId, task.id, code);
-        await commitProductDelta(resolved, 1, code);
+        const resolved = await resolveWmsInventoryBarcode(tenantId, task.id, code, activeCarrierId);
+        await commitProductDelta(resolved, 1, code, source);
         scanFeedback.success(undefined);
       } catch (err) {
         pulseBad();
@@ -422,7 +475,7 @@ export function useWmsInventoryCountTerminal(
         setLastScanCode(code);
       }
     },
-    [commitProductDelta, pulseBad, scanFeedback, task, tenantId],
+    [activeCarrierId, commitProductDelta, locationActive, pulseBad, scanFeedback, task, tenantId],
   );
 
   const adjustQty = useCallback(
@@ -436,7 +489,7 @@ export function useWmsInventoryCountTerminal(
       const nextQty = Math.max(0, current + delta);
       if (nextQty === current) return;
       try {
-        await recordScan(base.line_id, { quantity: nextQty });
+        await recordScan(base.line_id, { quantity: nextQty, source: "manual" });
         applyScanQty(base, nextQty);
       } catch {
         scanFeedback.error("Błąd zapisu");
@@ -453,7 +506,7 @@ export function useWmsInventoryCountTerminal(
       const qty = Math.max(0, Math.round(nextQty));
       if (qty === current) return;
       try {
-        await recordScan(base.line_id, { quantity: qty });
+        await recordScan(base.line_id, { quantity: qty, source: "manual" });
         applyScanQty(base, qty);
       } catch {
         scanFeedback.error("Błąd zapisu");
@@ -467,7 +520,6 @@ export function useWmsInventoryCountTerminal(
     setActiveLineId(item.line_id);
   }, []);
 
-  /** Single scan pipeline — dedupe lock + in-flight guard. */
   const handleScan = useCallback(
     async (raw: string) => {
       const code = raw.trim();
@@ -481,14 +533,12 @@ export function useWmsInventoryCountTerminal(
       lastScanSubmit.current = { code, at: now };
 
       try {
-        if (step === "location") {
+        if (!locationActive) {
           await resolveLocationScan(code);
           return;
         }
-        if (carrierScanMode) {
-          setCarrierCode(code);
-          setCarrierScanMode(false);
-          scanFeedback.success(undefined);
+        if (carrierScanMode || isCarrierBarcode(code)) {
+          await attachCarrier(code);
           return;
         }
         await handleProductScan(code);
@@ -496,14 +546,14 @@ export function useWmsInventoryCountTerminal(
         scanInFlight.current = false;
       }
     },
-    [carrierScanMode, handleProductScan, resolveLocationScan, scanFeedback, step, task],
+    [attachCarrier, carrierScanMode, handleProductScan, locationActive, resolveLocationScan, task],
   );
 
   const handleSearchProduct = useCallback(
     (code: string) => {
-      if (task && step === "product") void handleProductScan(code);
+      if (task && locationActive) void handleProductScan(code, "search");
     },
-    [handleProductScan, step, task],
+    [handleProductScan, locationActive, task],
   );
 
   const handleSearchLocation = useCallback(
@@ -519,15 +569,17 @@ export function useWmsInventoryCountTerminal(
 
   const handleSearchCarrier = useCallback(
     (code: string) => {
-      setCarrierCode(code);
-      setCarrierScanMode(false);
-      scanFeedback.success(undefined);
+      void attachCarrier(code);
     },
-    [scanFeedback],
+    [attachCarrier],
   );
 
   const enterCarrierScan = useCallback(() => setCarrierScanMode(true), []);
   const skipCarrier = useCallback(() => setCarrierScanMode(false), []);
+  const clearCarrier = useCallback(() => {
+    setCarrierContext(null);
+    setCarrierScanMode(false);
+  }, []);
 
   const finishLocation = useCallback(() => {
     if (task) commitLocationSessionToRecent(task.id);
@@ -544,8 +596,9 @@ export function useWmsInventoryCountTerminal(
     task,
     sessionId,
     step,
-    carrierCode,
-    carrierScanMode,
+    locationContext,
+    carrierContext,
+    locationActive,
     locationLabel,
     locationSubline,
     inventoryType,
@@ -553,9 +606,11 @@ export function useWmsInventoryCountTerminal(
     activeScan,
     activeLineId,
     countedProductList,
+    countedProductGroups,
     pulseLineId,
     qtyPulse,
     invalidPulse,
+    carrierScanMode,
     unknownOpen,
     lastScanCode,
     setUnknownOpen,
@@ -564,6 +619,7 @@ export function useWmsInventoryCountTerminal(
     selectCountedProduct,
     enterCarrierScan,
     skipCarrier,
+    clearCarrier,
     finishLocation,
     goToTask,
     handleScan,

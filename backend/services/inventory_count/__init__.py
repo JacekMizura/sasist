@@ -3,7 +3,7 @@
 from .adjustment_service import post_inventory_adjustments
 from .approval_service import approve_inventory_document, reject_inventory_document, submit_for_approval
 from .audit_package_service import build_audit_package
-from .count_entry_service import confirm_location_scan, get_line_for_operator, record_count_scan, resolve_barcode_to_line
+from .count_entry_service import confirm_location_scan, get_line_for_operator, record_count_scan, resolve_barcode_to_line, resolve_carrier_by_code
 from .dashboard_service import build_inventory_dashboard
 from .document_service import (
     create_inventory_document,

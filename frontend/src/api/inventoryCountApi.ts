@@ -86,6 +86,8 @@ export type WmsTaskLineRead = {
   image_url?: string | null;
   counted_quantity: number | null;
   status: string;
+  carrier_id?: number | null;
+  carrier_code?: string | null;
 };
 
 export type InventoryTaskCompact = InventoryTaskRead & {
@@ -398,7 +400,16 @@ export type WmsBarcodeResolveResult = {
   discrepancy_label: string;
   location_id: number;
   location_code?: string | null;
+  carrier_id?: number | null;
   line_created?: boolean;
+};
+
+export type WmsCarrierResolveResult = {
+  carrier_id: number;
+  code: string;
+  barcode?: string | null;
+  name?: string | null;
+  current_location_id?: number | null;
 };
 
 export type WmsRecentScanEntry = WmsBarcodeResolveResult & {
@@ -459,19 +470,34 @@ export async function resolveWmsInventoryBarcode(
   tenantId: number,
   taskId: number,
   barcodeValue: string,
+  carrierId?: number | null,
 ): Promise<WmsBarcodeResolveResult> {
   try {
     const { data } = await api.post<WmsBarcodeResolveResult>(
       `/wms/inventory-count/tasks/${taskId}/resolve-barcode`,
       null,
       {
-        params: { tenant_id: tenantId, barcode_value: barcodeValue },
+        params: {
+          tenant_id: tenantId,
+          barcode_value: barcodeValue,
+          ...(carrierId != null ? { carrier_id: carrierId } : {}),
+        },
       },
     );
     return data;
   } catch (err) {
     throw parseWmsBarcodeResolveError(err, barcodeValue);
   }
+}
+
+export async function resolveWmsInventoryCarrier(
+  tenantId: number,
+  code: string,
+): Promise<WmsCarrierResolveResult> {
+  const { data } = await api.post<WmsCarrierResolveResult>(`/wms/inventory-count/resolve-carrier`, null, {
+    params: { tenant_id: tenantId, code },
+  });
+  return data;
 }
 
 export async function fetchWmsTaskLines(tenantId: number, taskId: number): Promise<WmsTaskLineRead[]> {
@@ -680,7 +706,14 @@ export async function openWmsInventorySession(
 export async function recordInventoryScan(
   tenantId: number,
   documentId: number,
-  body: { line_id: number; quantity?: number; delta?: number; barcode_value?: string },
+  body: {
+    line_id: number;
+    quantity?: number;
+    delta?: number;
+    barcode_value?: string;
+    source?: string;
+    carrier_id?: number | null;
+  },
   sessionId?: number,
 ) {
   const { data } = await api.post(`/wms/inventory-count/documents/${documentId}/scan`, body, {

@@ -174,6 +174,15 @@ class InventoryCountScanBody(BaseModel):
     source: str = "scanner"
     expected_line_version: int | None = None
     device_id: str | None = None
+    carrier_id: int | None = None
+
+
+class InventoryCarrierResolveRead(BaseModel):
+    carrier_id: int
+    code: str
+    barcode: str | None = None
+    name: str | None = None
+    current_location_id: int | None = None
 
 
 class InventoryCountLineRead(BaseModel):

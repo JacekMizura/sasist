@@ -76,6 +76,7 @@ def get_task_lines(
     blind: bool = True,
 ) -> list[dict[str, Any]]:
     from ...models.product import Product
+    from ...models.warehouse_carrier import WarehouseCarrier
 
     row = (
         db.query(InventoryTask, InventoryDocument)
@@ -88,16 +89,20 @@ def get_task_lines(
     task, doc = row
     is_blind = blind or doc.count_mode == "blind"
     q = (
-        db.query(InventoryDocumentLine, Product)
+        db.query(InventoryDocumentLine, Product, WarehouseCarrier)
         .outerjoin(Product, Product.id == InventoryDocumentLine.product_id)
+        .outerjoin(WarehouseCarrier, WarehouseCarrier.id == InventoryDocumentLine.carrier_id)
         .filter(
             InventoryDocumentLine.inventory_document_id == int(task.inventory_document_id),
             InventoryDocumentLine.location_id == int(task.location_id),
         )
-        .order_by(InventoryDocumentLine.id.asc())
+        .order_by(
+            InventoryDocumentLine.carrier_id.asc(),
+            InventoryDocumentLine.id.asc(),
+        )
     )
     out: list[dict[str, Any]] = []
-    for line, product in q.all():
+    for line, product, carrier in q.all():
         item = {
             "id": line.id,
             "product_id": line.product_id,
@@ -109,6 +114,8 @@ def get_task_lines(
             "status": line.status,
             "batch_number": line.batch_number,
             "serial_number": line.serial_number,
+            "carrier_id": line.carrier_id,
+            "carrier_code": getattr(carrier, "code", None) if carrier else None,
         }
         if not is_blind:
             item["expected_quantity"] = line.expected_quantity

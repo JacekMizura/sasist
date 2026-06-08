@@ -11,12 +11,19 @@ export function isBarcodeLikeInput(value: string): boolean {
 
 type Options = {
   searchEnabled: boolean;
+  /** Codes handled by scan pipeline (e.g. PAL-*) — do not block autocomplete when typed slowly. */
+  isDedicatedScanCode?: (code: string) => boolean;
   onScan: (code: string) => void | Promise<void>;
   onSearchQuery?: (query: string) => void;
 };
 
 /** Single input pipeline — scanner vs human typing. */
-export function useInventoryScanInput({ searchEnabled, onScan, onSearchQuery }: Options) {
+export function useInventoryScanInput({
+  searchEnabled,
+  isDedicatedScanCode,
+  onScan,
+  onSearchQuery,
+}: Options) {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const firstKeyAt = useRef<number | null>(null);
@@ -26,8 +33,11 @@ export function useInventoryScanInput({ searchEnabled, onScan, onSearchQuery }: 
   const debounceRef = useRef<number | null>(null);
 
   const isScannerMode = useCallback(
-    (value: string) => scannerBurst.current || isBarcodeLikeInput(value),
-    [],
+    (value: string) => {
+      if (isDedicatedScanCode?.(value)) return false;
+      return scannerBurst.current || isBarcodeLikeInput(value);
+    },
+    [isDedicatedScanCode],
   );
 
   const submitScanOnce = useCallback(

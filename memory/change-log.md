@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — WMS inwentaryzacja: location → carrier → product
+- `wmsInventoryExecutionContext.ts` — locationContext, carrierContext, grouping, PAL-/BOX- detection
+- Hook: auto-aktywacja lokalizacji po załadowaniu taska; carrier przez API; scan z carrier_id
+- Backend: linie liczone per (location × product × carrier); `resolve-carrier`; task lines z carrier_code
+- UI: `WmsInventoryActiveContextBar`, grupowana lista „Policzone w lokalizacji”
+
 ## 2026-06-08 — Submit approval: scoped inventory + Polish errors
 - `approval_service`: PARTIAL/CYCLE/CONTROL skip full coverage; smarter WMS task blocking (only incomplete locations); projected recount gate; Polish block messages; rollback on recount failure
 - Frontend: `formatInventoryRequestError`, toast + reload doc after failed submit; scoped types in `canSubmitInventoryDocument`

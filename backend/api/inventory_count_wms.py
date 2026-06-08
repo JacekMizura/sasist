@@ -13,6 +13,7 @@ from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.inventory_count import (
     InventoryAuditQueuesRead,
+    InventoryCarrierResolveRead,
     InventoryCountLineRead,
     InventoryCountScanBody,
     InventoryLocationConfirmBody,
@@ -47,7 +48,7 @@ from ..services.inventory_count.wms_task_queue_service import list_tasks_paginat
 from ..services.inventory_count.wms_variance_service import get_audit_queues, get_location_execution_summary
 from ..api.inventory_count_deps import require_inventory_permission_optional
 from ..services.inventory_count.permissions import PERM_EXECUTE
-from ..services.inventory_count.count_entry_service import resolve_barcode_to_line
+from ..services.inventory_count.count_entry_service import resolve_barcode_to_line, resolve_carrier_by_code
 from ..services.inventory_count.session_service import heartbeat_session
 from ..services.inventory_count.task_generation_service import get_task_lines
 
@@ -330,13 +331,15 @@ def wms_inventory_resolve_barcode(
     task_id: int,
     barcode_value: str = Query(..., min_length=1),
     tenant_id: int = Query(..., ge=1),
+    carrier_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     logger.info(
-        "[inventory_count.api] resolve_barcode POST task_id=%s tenant_id=%s barcode=%s",
+        "[inventory_count.api] resolve_barcode POST task_id=%s tenant_id=%s barcode=%s carrier_id=%s",
         task_id,
         tenant_id,
         barcode_value[:64],
+        carrier_id,
     )
     try:
         return resolve_barcode_to_line(
@@ -344,6 +347,7 @@ def wms_inventory_resolve_barcode(
             tenant_id=tenant_id,
             task_id=task_id,
             barcode_value=barcode_value,
+            carrier_id=carrier_id,
         )
     except InventoryCountError as exc:
         logger.info(
@@ -352,6 +356,18 @@ def wms_inventory_resolve_barcode(
             exc.code,
             barcode_value[:64],
         )
+        raise _map_error(exc) from exc
+
+
+@router.post("/resolve-carrier", response_model=InventoryCarrierResolveRead)
+def wms_inventory_resolve_carrier(
+    code: str = Query(..., min_length=1),
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return resolve_carrier_by_code(db, tenant_id=tenant_id, code=code)
+    except InventoryCountError as exc:
         raise _map_error(exc) from exc
 
 
@@ -447,6 +463,9 @@ def wms_inventory_record_scan(
             barcode_value=body.barcode_value,
             source=body.source,
             delta=body.delta,
+            expected_line_version=body.expected_line_version,
+            device_id=body.device_id,
+            carrier_id=body.carrier_id,
         )
     except InventoryCountError as exc:
         raise _map_error(exc) from exc

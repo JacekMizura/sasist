@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import WmsInventoryActiveContextBar from "../../../modules/inventoryCount/components/WmsInventoryActiveContextBar";
 import WmsInventoryLocationCounts from "../../../modules/inventoryCount/components/WmsInventoryLocationCounts";
 import WmsInventoryLiveSearchPanel from "../../../modules/inventoryCount/components/WmsInventoryLiveSearchPanel";
 import WmsInventoryPartialProductLocations from "../../../modules/inventoryCount/components/WmsInventoryPartialProductLocations";
@@ -17,7 +18,7 @@ import WmsInventoryUnknownProductModal from "../../../modules/inventoryCount/com
 import { useInventoryScanInput } from "../../../modules/inventoryCount/hooks/useInventoryScanInput";
 import { useWmsInventoryCountTerminal } from "../../../modules/inventoryCount/hooks/useWmsInventoryCountTerminal";
 import { wmsInventoryCountPaths } from "../../../modules/inventoryCount/inventoryCountPaths";
-import { LocationBadge } from "../../../components/warehouse/LocationBadge";
+import { isCarrierBarcode } from "../../../modules/inventoryCount/wmsInventoryExecutionContext";
 import { WMS_INV } from "../../../modules/inventoryCount/wmsIndustrialTheme";
 import { useWarehouse } from "../../../context/WarehouseContext";
 
@@ -37,17 +38,17 @@ export default function WmsInventoryCountTerminalPage() {
     error,
     task,
     sessionId,
-    step,
-    locationLabel,
+    locationContext,
+    carrierContext,
+    locationActive,
     locationSubline,
     activeScan,
     activeLineId,
-    countedProductList,
+    countedProductGroups,
     pulseLineId,
     isPartialInventory,
     qtyPulse,
     invalidPulse,
-    carrierCode,
     carrierScanMode,
     unknownOpen,
     lastScanCode,
@@ -57,6 +58,7 @@ export default function WmsInventoryCountTerminalPage() {
     selectCountedProduct,
     enterCarrierScan,
     skipCarrier,
+    clearCarrier,
     finishLocation,
     handleScan,
     handleSearchProduct,
@@ -72,11 +74,12 @@ export default function WmsInventoryCountTerminalPage() {
   );
 
   const searchRows = useMemo(() => buildLiveSearchRows(result, taskMatches), [result, taskMatches]);
-  const counting = Boolean(task && step === "product");
+  const counting = Boolean(task && locationActive);
 
   const { query, searchOpen, isScannerMode, onChange, submitScanOnce, closeSearch, clearInput } =
     useInventoryScanInput({
       searchEnabled: counting && !carrierScanMode,
+      isDedicatedScanCode: isCarrierBarcode,
       onScan: handleScan,
       onSearchQuery: runSearch,
     });
@@ -89,7 +92,7 @@ export default function WmsInventoryCountTerminalPage() {
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, [step, task, carrierScanMode]);
+  }, [locationActive, task, carrierScanMode]);
 
   const applyLivePick = useCallback(
     async (pick: LiveSearchPick) => {
@@ -165,14 +168,25 @@ export default function WmsInventoryCountTerminalPage() {
     );
   }
 
-  const placeholder = carrierScanMode ? "Nośnik" : "Kod / EAN / SKU / nazwa";
+  const placeholder = !locationActive
+    ? "Zeskanuj lokalizację"
+    : carrierScanMode
+      ? "Zeskanuj nośnik (PAL-…)"
+      : "Kod / EAN / SKU / nazwa";
 
   return (
     <div className={WMS_INV.shell}>
-      <header>
-        <LocationBadge code={locationLabel} type="PICK" />
-        {locationSubline ? (
-          <p className={`${WMS_INV.locationSub} mt-0.5`}>{locationSubline}</p>
+      <header className="space-y-1">
+        <WmsInventoryActiveContextBar
+          location={locationContext}
+          carrier={carrierContext}
+          carrierScanMode={carrierScanMode}
+          onEnterCarrierScan={enterCarrierScan}
+          onClearCarrier={clearCarrier}
+          onSkipCarrier={skipCarrier}
+        />
+        {locationSubline && locationActive ? (
+          <p className={WMS_INV.locationSub}>{locationSubline}</p>
         ) : null}
       </header>
 
@@ -199,21 +213,6 @@ export default function WmsInventoryCountTerminalPage() {
         }
       />
 
-      <div className="flex items-center gap-2">
-        {carrierCode ? (
-          <span className={`${WMS_INV.chip} ${WMS_INV.chipActive}`}>Nośnik: {carrierCode}</span>
-        ) : (
-          <button type="button" onClick={enterCarrierScan} className={WMS_INV.chip}>
-            + nośnik
-          </button>
-        )}
-        {carrierScanMode ? (
-          <button type="button" onClick={skipCarrier} className="text-[10px] font-bold text-slate-400 underline">
-            Pomiń
-          </button>
-        ) : null}
-      </div>
-
       {counting && activeScan ? (
         <>
           <WmsInventoryProductPreview scan={activeScan} pulse={qtyPulse} invalid={invalidPulse} />
@@ -232,12 +231,12 @@ export default function WmsInventoryCountTerminalPage() {
           ) : null}
         </>
       ) : counting ? (
-        <p className="text-[11px] font-bold text-slate-400">Zeskanuj produkt</p>
+        <p className="text-[11px] font-bold text-slate-400">Zeskanuj produkt lub wyszukaj po nazwie</p>
       ) : null}
 
       {counting ? (
         <WmsInventoryLocationCounts
-          items={countedProductList}
+          groups={countedProductGroups}
           activeLineId={activeLineId}
           pulseLineId={pulseLineId}
           onSelect={selectCountedProduct}
@@ -264,7 +263,7 @@ export default function WmsInventoryCountTerminalPage() {
           documentId={task.inventory_document_id}
           taskId={task.id}
           locationId={task.location_id}
-          locationCode={locationLabel}
+          locationCode={locationContext?.locationCode ?? ""}
           sessionId={sessionId}
           initialBarcode={lastScanCode ?? undefined}
           onCreated={() => setUnknownOpen(false)}

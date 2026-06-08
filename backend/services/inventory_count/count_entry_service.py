@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ...models.inventory_count.constants import (
@@ -28,6 +28,8 @@ from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.inventory_count.task import InventoryTask
 from ...models.product import Product
+from ...models.warehouse_carrier import WarehouseCarrier
+from ...utils.carrier_barcode import infer_prefix_from_barcode
 from .audit_service import log_inventory_audit
 from .errors import (
     InventoryBarcodeAmbiguousError,
@@ -47,6 +49,55 @@ _DISCREPANCY_LABELS = {
 }
 
 
+def _carrier_id_key(carrier_id: int | None) -> int | None:
+    return int(carrier_id) if carrier_id is not None else None
+
+
+def _filter_line_by_carrier(q, carrier_id: int | None):
+    cid = _carrier_id_key(carrier_id)
+    if cid is not None:
+        return q.filter(InventoryDocumentLine.carrier_id == cid)
+    return q.filter(InventoryDocumentLine.carrier_id.is_(None))
+
+
+def resolve_carrier_by_code(
+    db: Session,
+    *,
+    tenant_id: int,
+    code: str,
+) -> dict[str, Any]:
+    """Resolve warehouse carrier barcode/code for WMS counting context."""
+    raw = str(code or "").strip()
+    if not raw:
+        raise InventoryBarcodeNotFoundError("Empty carrier code", barcode=raw)
+
+    normalized = raw.upper()
+    clauses = [
+        func.lower(WarehouseCarrier.code) == normalized.lower(),
+        func.lower(WarehouseCarrier.barcode) == normalized.lower(),
+    ]
+    if infer_prefix_from_barcode(normalized):
+        clauses.append(WarehouseCarrier.barcode.ilike(normalized))
+
+    row = (
+        db.query(WarehouseCarrier)
+        .filter(WarehouseCarrier.tenant_id == int(tenant_id), or_(*clauses))
+        .order_by(WarehouseCarrier.id.asc())
+        .first()
+    )
+    if row is None:
+        raise InventoryBarcodeNotFoundError(f"Carrier not found: {raw}", barcode=raw)
+
+    display = str(getattr(row, "code", None) or row.barcode or raw).strip()
+    return {
+        "carrier_id": int(row.id),
+        "code": display,
+        "barcode": getattr(row, "barcode", None),
+        "name": getattr(row, "name", None),
+        "current_location_id": int(row.current_location_id) if row.current_location_id else None,
+    }
+
+
 def record_count_scan(
     db: Session,
     *,
@@ -61,6 +112,7 @@ def record_count_scan(
     delta: float | None = None,
     expected_line_version: int | None = None,
     device_id: str | None = None,
+    carrier_id: int | None = None,
 ) -> dict[str, Any]:
     doc = (
         db.query(InventoryDocument)
@@ -80,6 +132,11 @@ def record_count_scan(
     )
     if line is None:
         raise InventoryDocumentNotFoundError(f"Inventory line {line_id} not found")
+
+    if carrier_id is not None and line.carrier_id is None:
+        line.carrier_id = int(carrier_id)
+    elif carrier_id is not None and int(line.carrier_id) != int(carrier_id):
+        raise InventoryLocationMismatchError("Line carrier does not match active carrier context")
 
     from .concurrency_service import acquire_line_count_lock, assert_line_version, touch_session_heartbeat
     from ...models.inventory_count.session import InventorySession
@@ -165,6 +222,7 @@ def record_count_scan(
         "status": line.status,
         "version": line.version,
         "blind_mode": doc.count_mode == COUNT_MODE_BLIND,
+        "carrier_id": line.carrier_id,
     }
 
 
@@ -263,20 +321,22 @@ def _pick_product_for_task(
     document_id: int,
     location_id: int,
     barcode: str,
+    carrier_id: int | None = None,
 ) -> Product:
     if len(products) == 1:
         return products[0]
 
     product_ids = [int(p.id) for p in products]
-    lines = (
+    line_q = (
         db.query(InventoryDocumentLine)
         .filter(
             InventoryDocumentLine.inventory_document_id == int(document_id),
             InventoryDocumentLine.location_id == int(location_id),
             InventoryDocumentLine.product_id.in_(product_ids),
         )
-        .all()
     )
+    line_q = _filter_line_by_carrier(line_q, carrier_id)
+    lines = line_q.all()
     planned_at_loc = {
         int(ln.product_id)
         for ln in lines
@@ -309,16 +369,18 @@ def _ensure_count_line_at_location(
     document_id: int,
     location_id: int,
     product_id: int,
+    carrier_id: int | None = None,
 ) -> tuple[InventoryDocumentLine, bool]:
-    line = (
+    line_q = (
         db.query(InventoryDocumentLine)
         .filter(
             InventoryDocumentLine.inventory_document_id == int(document_id),
             InventoryDocumentLine.location_id == int(location_id),
             InventoryDocumentLine.product_id == int(product_id),
         )
-        .first()
     )
+    line_q = _filter_line_by_carrier(line_q, carrier_id)
+    line = line_q.first()
     if line is not None:
         return line, False
 
@@ -326,6 +388,7 @@ def _ensure_count_line_at_location(
         inventory_document_id=int(document_id),
         location_id=int(location_id),
         product_id=int(product_id),
+        carrier_id=_carrier_id_key(carrier_id),
         expected_quantity=0.0,
         status=LINE_STATUS_OPEN,
         metadata_json=json.dumps({"operator_scan": True, "unplanned": True}),
@@ -376,6 +439,7 @@ def resolve_barcode_to_line(
     tenant_id: int,
     task_id: int,
     barcode_value: str,
+    carrier_id: int | None = None,
 ) -> dict[str, Any]:
     """Resolve barcode globally, ensure a count line exists, classify discrepancy."""
     from .task_generation_service import update_task_progress
@@ -411,6 +475,7 @@ def resolve_barcode_to_line(
         document_id=document_id,
         location_id=location_id,
         barcode=code,
+        carrier_id=carrier_id,
     )
 
     line, line_created = _ensure_count_line_at_location(
@@ -418,6 +483,7 @@ def resolve_barcode_to_line(
         document_id=document_id,
         location_id=location_id,
         product_id=int(product.id),
+        carrier_id=carrier_id,
     )
     discrepancy_class = _classify_discrepancy(
         db,
@@ -473,5 +539,6 @@ def resolve_barcode_to_line(
         "discrepancy_label": _DISCREPANCY_LABELS.get(discrepancy_class, discrepancy_class),
         "location_id": location_id,
         "location_code": task.get("location_code") or task.get("location_name"),
+        "carrier_id": line.carrier_id,
         "line_created": line_created,
     }
