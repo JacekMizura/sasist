@@ -7,7 +7,6 @@ import {
   openWmsInventorySession,
   recordInventoryScan,
   resolveWmsInventoryBarcode,
-  resolveWmsInventoryLocationScan,
   WmsBarcodeResolveError,
   type InventoryTaskRead,
   type WmsBarcodeResolveResult,
@@ -46,6 +45,30 @@ function buildLocationMeta(task: InventoryTaskRead | null): string | null {
   return parts.length ? parts.join(" • ") : null;
 }
 
+function resetCountingUi(setters: {
+  setStep: (s: WmsTerminalStep) => void;
+  setCarrierCode: (v: string | null) => void;
+  setCarrierScanMode: (v: boolean) => void;
+  setManualOpen: (v: boolean) => void;
+  setActiveLineId: (v: number | null) => void;
+  setActiveScan: (v: WmsBarcodeResolveResult | null) => void;
+  setLastScans: (v: WmsLastScanEntry[]) => void;
+  setPendingQty: (v: number) => void;
+}) {
+  setters.setStep("location");
+  setters.setCarrierCode(null);
+  setters.setCarrierScanMode(false);
+  setters.setManualOpen(false);
+  setters.setActiveLineId(null);
+  setters.setActiveScan(null);
+  setters.setLastScans([]);
+  setters.setPendingQty(1);
+}
+
+/**
+ * WMS inventory terminal — route param `taskId` is the ONLY source of truth for active task.
+ * Never auto-navigate during fetch/hydration; navigate only on explicit operator actions.
+ */
 export function useWmsInventoryCountTerminal(
   taskId: number | undefined,
   tenantId: number,
@@ -57,6 +80,7 @@ export function useWmsInventoryCountTerminal(
   const { refresh: refreshOffline } = useInventoryCountOfflineStatus();
   const navSessionId = (location.state as { sessionId?: number } | null)?.sessionId ?? null;
   const lastScanAt = useRef(0);
+  const hydratedTaskIdRef = useRef<number | null>(null);
 
   const [loading, setLoading] = useState(Boolean(taskId));
   const [error, setError] = useState<string | null>(null);
@@ -75,14 +99,62 @@ export function useWmsInventoryCountTerminal(
   const [unknownOpen, setUnknownOpen] = useState(false);
   const [lastScanCode, setLastScanCode] = useState<string | null>(null);
 
-  const loadTask = useCallback(
-    async (id: number, existingSessionId?: number | null) => {
-      if (!warehouseId) return;
-      setLoading(true);
-      setError(null);
+  const uiResetters = useMemo(
+    () => ({
+      setStep,
+      setCarrierCode,
+      setCarrierScanMode,
+      setManualOpen,
+      setActiveLineId,
+      setActiveScan,
+      setLastScans,
+      setPendingQty,
+    }),
+    [],
+  );
+
+  /** Operator-only navigation to another task route. */
+  const goToTask = useCallback(
+    (nextTaskId: number, nextSessionId?: number | null) => {
+      if (!Number.isFinite(nextTaskId)) return;
+      if (Number(taskId) === nextTaskId) return;
+      navigate(wmsInventoryCountPaths.count(nextTaskId), {
+        state: nextSessionId != null ? { sessionId: nextSessionId } : undefined,
+      });
+    },
+    [navigate, taskId],
+  );
+
+  // Hydrate from route param — fetch only, never navigate.
+  useEffect(() => {
+    if (!warehouseId || !taskId || !Number.isFinite(taskId)) {
+      setLoading(false);
+      setTask(null);
+      setError(taskId ? "Nieprawidłowe zadanie." : null);
+      hydratedTaskIdRef.current = null;
+      return;
+    }
+
+    if (hydratedTaskIdRef.current === taskId) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    if (hydratedTaskIdRef.current !== taskId) {
+      resetCountingUi(uiResetters);
+      hydratedTaskIdRef.current = null;
+    }
+
+    void (async () => {
       try {
-        const t = await fetchWmsInventoryTask(tenantId, id);
-        let sid = existingSessionId ?? sessionId;
+        const t = await fetchWmsInventoryTask(tenantId, taskId);
+        if (cancelled) return;
+
+        let sid = navSessionId ?? sessionId;
         if (!sid) {
           const session = await openWmsInventorySession(tenantId, warehouseId, {
             document_id: t.inventory_document_id,
@@ -90,44 +162,40 @@ export function useWmsInventoryCountTerminal(
           });
           sid = session.id;
         }
+        if (cancelled) return;
+
         setTask(t);
         setSessionId(sid);
-        setStep("location");
-        setCarrierCode(null);
-        setCarrierScanMode(false);
-        setManualOpen(false);
-        setActiveLineId(null);
-        setActiveScan(null);
-        setLastScans([]);
+        hydratedTaskIdRef.current = taskId;
         cacheTaskSnapshot({
           taskId: t.id,
           locationCode: t.location_code ?? t.location_name ?? `#${t.location_id}`,
           progressPercent: t.progress_percent,
           cachedAt: new Date().toISOString(),
         });
-        navigate(wmsInventoryCountPaths.count(t.id), { replace: true, state: { sessionId: sid } });
       } catch {
-        setError("Nie udało się wczytać zadania.");
+        if (!cancelled) {
+          setError("Nie udało się wczytać zadania.");
+          setTask(null);
+          hydratedTaskIdRef.current = null;
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    },
-    [navigate, sessionId, tenantId, warehouseId],
-  );
+    })();
 
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate only when route taskId / warehouse changes
+  }, [taskId, warehouseId, tenantId]);
+
+  // Apply session id from navigation state without re-fetching task.
   useEffect(() => {
-    if (!warehouseId) {
-      setLoading(false);
-      return;
+    if (navSessionId != null) {
+      setSessionId(navSessionId);
     }
-    if (taskId && Number.isFinite(taskId) && (!task || task.id !== taskId)) {
-      void loadTask(taskId, navSessionId);
-    } else if (!taskId) {
-      setLoading(false);
-      setTask(null);
-      setStep("location");
-    }
-  }, [taskId, warehouseId, navSessionId, loadTask, task]);
+  }, [navSessionId]);
 
   const locationLabel = task?.location_code ?? task?.location_name ?? (task ? `#${task.location_id}` : "—");
   const locationMeta = useMemo(() => buildLocationMeta(task), [task]);
@@ -201,48 +269,27 @@ export function useWmsInventoryCountTerminal(
 
   const resolveLocationScan = useCallback(
     async (code: string) => {
-      if (!warehouseId) return false;
-      if (task) {
-        const locLabel = task.location_name ?? task.location_code ?? "";
-        const matches =
-          code.toUpperCase() === locLabel.toUpperCase() || code === String(task.location_id);
-        if (!matches) {
-          try {
-            await confirmWmsInventoryLocation(tenantId, task.id, {
-              location_id: task.location_id,
-              scanned_code: code,
-            });
-          } catch {
-            scanFeedback.error("Nieprawidłowa lokalizacja");
-            pulseBad();
-            return false;
-          }
-        }
-        setStep("product");
-        scanFeedback.success(undefined);
-        return true;
-      }
-
-      try {
-        const resolved = await resolveWmsInventoryLocationScan(tenantId, warehouseId, code);
-        if (!resolved.found || !resolved.task_id) {
-          scanFeedback.error(
-            resolved.reason === "location_not_found" ? "Nie znaleziono lokalizacji" : "Brak zadania",
-          );
+      if (!task) return false;
+      const locLabel = task.location_name ?? task.location_code ?? "";
+      const matches =
+        code.toUpperCase() === locLabel.toUpperCase() || code === String(task.location_id);
+      if (!matches) {
+        try {
+          await confirmWmsInventoryLocation(tenantId, task.id, {
+            location_id: task.location_id,
+            scanned_code: code,
+          });
+        } catch {
+          scanFeedback.error("Nieprawidłowa lokalizacja");
           pulseBad();
           return false;
         }
-        await loadTask(resolved.task_id);
-        setStep("product");
-        scanFeedback.success(undefined);
-        return true;
-      } catch {
-        scanFeedback.error("Błąd skanowania");
-        pulseBad();
-        return false;
       }
+      setStep("product");
+      scanFeedback.success(undefined);
+      return true;
     },
-    [loadTask, pulseBad, scanFeedback, task, tenantId, warehouseId],
+    [pulseBad, scanFeedback, task, tenantId],
   );
 
   const commitProductDelta = useCallback(
@@ -370,7 +417,7 @@ export function useWmsInventoryCountTerminal(
 
   useWmsPageScanHandler(
     useCallback((value: string) => void handleScan(value), [handleScan]),
-    !loading && !error,
+    !loading && !error && Boolean(task),
   );
 
   const handleSearchProduct = useCallback(
@@ -384,14 +431,13 @@ export function useWmsInventoryCountTerminal(
 
   const handleSearchLocation = useCallback(
     async (locationCode: string, pickTaskId?: number | null) => {
-      if (pickTaskId && pickTaskId !== task?.id) {
-        await loadTask(pickTaskId);
-        setStep("product");
+      if (pickTaskId && Number(taskId) !== pickTaskId) {
+        goToTask(pickTaskId, sessionId);
         return;
       }
       await resolveLocationScan(locationCode);
     },
-    [loadTask, resolveLocationScan, task?.id],
+    [goToTask, resolveLocationScan, sessionId, taskId],
   );
 
   const handleSearchCarrier = useCallback((code: string) => {
@@ -404,17 +450,12 @@ export function useWmsInventoryCountTerminal(
   const skipCarrier = useCallback(() => setCarrierScanMode(false), []);
 
   const finishLocation = useCallback(() => {
+    hydratedTaskIdRef.current = null;
     setTask(null);
-    setStep("location");
-    setCarrierCode(null);
-    setCarrierScanMode(false);
-    setManualOpen(false);
-    setActiveLineId(null);
-    setActiveScan(null);
-    setLastScans([]);
+    resetCountingUi(uiResetters);
     navigate(wmsInventoryCountPaths.tasks, { replace: true });
     scanFeedback.success(undefined);
-  }, [navigate, scanFeedback]);
+  }, [navigate, scanFeedback, uiResetters]);
 
   return {
     loading,
@@ -444,7 +485,7 @@ export function useWmsInventoryCountTerminal(
     skipCarrier,
     cancelCarrierScan: skipCarrier,
     finishLocation,
-    loadTask,
+    goToTask,
     handleScan,
     handleSearchProduct,
     handleSearchLocation,

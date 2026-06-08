@@ -14,7 +14,7 @@ const TENANT_ID = 1;
 
 export default function WmsInventoryCountTerminalPage() {
   const { taskId: taskIdParam } = useParams();
-  const taskId = taskIdParam ? Number(taskIdParam) : undefined;
+  const taskId = taskIdParam ? Number(taskIdParam) : NaN;
   const { warehouse } = useWarehouse();
   const tenantId = TENANT_ID;
   const warehouseId = warehouse?.id;
@@ -52,7 +52,7 @@ export default function WmsInventoryCountTerminalPage() {
     handleSearchProduct,
     handleSearchLocation,
     handleSearchCarrier,
-  } = useWmsInventoryCountTerminal(taskId, tenantId, warehouseId);
+  } = useWmsInventoryCountTerminal(Number.isFinite(taskId) ? taskId : undefined, tenantId, warehouseId);
 
   useEffect(() => {
     scanInputRef.current?.focus();
@@ -86,7 +86,18 @@ export default function WmsInventoryCountTerminalPage() {
     return <p className={`py-12 text-center ${WMS_INV.textMuted}`}>…</p>;
   }
 
-  if (error && taskId) {
+  if (!Number.isFinite(taskId)) {
+    return (
+      <div className="text-center">
+        <p className="text-lg font-bold text-[#b42318]">Brak zadania w adresie URL.</p>
+        <Link to="/wms/inventory-count/tasks" className={`mt-4 inline-block text-sm ${WMS_INV.textMuted}`}>
+          Wróć do kolejki
+        </Link>
+      </div>
+    );
+  }
+
+  if (error) {
     return (
       <div className="text-center">
         <p className="text-lg font-bold text-[#b42318]">{error}</p>

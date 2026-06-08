@@ -22,6 +22,7 @@ Enterprise **Inventory / Stock Count** module — ERP planning + WMS blind count
   - Terminal UI: scanned product card (photo, EAN, SKU, qty, badges), recent scans, session summary
   - **Blind terminal strip-down (2026-06-08)**: no expected/diff/progress; white scanner UI; auto +1 on scan; manual qty toggle only; single search field; no emergency search on execution screen
   - Fix: `GET /warehouses/{id}/locations` 500 (`round(None,4)` when `max_weight_kg` unset)
+  - **Routing loop fix (2026-06-08)**: `/tasks` wrongly mounted TerminalPage; `loadTask()` navigated inside hydrate effect; route param is now sole SSOT — fetch-only on `taskId` change, navigate only on operator action
 - Full design: `memory/inventory-count-module.md`
 
 ## Prior goal
