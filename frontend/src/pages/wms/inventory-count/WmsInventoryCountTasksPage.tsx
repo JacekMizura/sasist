@@ -31,11 +31,11 @@ export default function WmsInventoryCountTasksPage() {
 
   const openTask = async (task: InventoryTaskRead) => {
     if (!warehouseId) return;
-    await openWmsInventorySession(tenantId, warehouseId, {
+    const session = await openWmsInventorySession(tenantId, warehouseId, {
       document_id: task.inventory_document_id,
       task_id: task.id,
     });
-    navigate(wmsInventoryCountPaths.count(task.id));
+    navigate(wmsInventoryCountPaths.count(task.id), { state: { sessionId: session.id } });
   };
 
   if (!warehouseId) {

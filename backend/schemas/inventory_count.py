@@ -179,3 +179,51 @@ class InventoryReportKindRead(BaseModel):
 
 class InventoryReportsCatalogRead(BaseModel):
     reports: list[InventoryReportKindRead]
+
+
+class InventoryLineRead(BaseModel):
+    id: int
+    location_id: int
+    location_name: str | None = None
+    product_id: int
+    sku: str | None = None
+    ean: str | None = None
+    product_name: str | None = None
+    expected_quantity: float | None = None
+    counted_quantity: float | None = None
+    difference_quantity: float | None = None
+    status: str
+    batch_number: str | None = None
+    serial_number: str | None = None
+    recount_count: int = 0
+    confidence_score: float | None = None
+
+
+class InventoryDifferenceLineRead(BaseModel):
+    line_id: int
+    location_id: int
+    product_id: int
+    sku: str | None = None
+    expected_quantity: float | None = None
+    counted_quantity: float | None = None
+    difference_quantity: float | None = None
+    difference_percent: float
+    difference_class: str
+    value_impact_net: float
+    status: str
+
+
+class InventoryDifferenceAnalysisRead(BaseModel):
+    document_id: int
+    thresholds: dict[str, float]
+    summary: dict[str, int]
+    total_value_impact_net: float
+    lines: list[InventoryDifferenceLineRead]
+
+
+class InventoryApprovalNotesBody(BaseModel):
+    notes: str | None = None
+
+
+class InventoryRecountCompleteBody(BaseModel):
+    counted_quantity: float

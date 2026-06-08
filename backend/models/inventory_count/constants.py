@@ -99,3 +99,38 @@ AUDIT_POSTED = "document.posted"
 AUDIT_ADJUSTMENT = "adjustment.generated"
 AUDIT_LOCK = "location.locked"
 AUDIT_UNLOCK = "location.unlocked"
+AUDIT_SUBMIT_APPROVAL = "document.submitted_for_approval"
+AUDIT_REJECT = "document.rejected"
+AUDIT_EXPORT = "report.exported"
+AUDIT_RECOUNT_COMPLETE = "recount.completed"
+AUDIT_AUDIT_PACKAGE = "audit_package.generated"
+
+# Approval actions
+APPROVAL_ACTION_SUBMIT = "submit"
+APPROVAL_ACTION_APPROVE = "approve"
+APPROVAL_ACTION_REJECT = "reject"
+
+# Recount status
+RECOUNT_STATUS_OPEN = "open"
+RECOUNT_STATUS_ASSIGNED = "assigned"
+RECOUNT_STATUS_IN_PROGRESS = "in_progress"
+RECOUNT_STATUS_DONE = "done"
+RECOUNT_STATUS_CANCELLED = "cancelled"
+
+RECOUNT_ACTIVE_STATUSES = (RECOUNT_STATUS_OPEN, RECOUNT_STATUS_ASSIGNED, RECOUNT_STATUS_IN_PROGRESS)
+
+# Report formats
+REPORT_FORMAT_PDF = "pdf"
+REPORT_FORMAT_XLSX = "xlsx"
+
+# Difference classification
+DIFF_CLASS_NONE = "none"
+DIFF_CLASS_AUTO = "auto_approve"
+DIFF_CLASS_REVIEW = "supervisor_review"
+DIFF_CLASS_RECOUNT = "mandatory_recount"
+
+DEFAULT_DIFF_THRESHOLDS = {
+    "auto_approve_percent": 1.0,
+    "supervisor_review_percent": 5.0,
+    "mandatory_recount_percent": 10.0,
+}

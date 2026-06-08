@@ -168,12 +168,15 @@ from .bdo_packaging import (  # noqa: F401
 )
 from .inventory_count import (  # noqa: F401 — stock count module
     InventoryAdjustment,
+    InventoryApproval,
     InventoryAuditEvent,
     InventoryCountEntry,
     InventoryDocument,
     InventoryDocumentLine,
     InventoryLineAttachment,
     InventoryLocationLock,
+    InventoryRecount,
+    InventoryReport,
     InventorySession,
     InventorySnapshot,
     InventorySnapshotReservationLine,

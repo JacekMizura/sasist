@@ -24,7 +24,11 @@ from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.task import InventoryTask
 from .audit_service import log_inventory_audit
 from .errors import InventoryDocumentNotFoundError, InventoryInvalidTransitionError
+from .kpi_service import recompute_document_kpis
+from .line_materialization_service import materialize_document_lines_from_snapshot
+from .location_lock_service import apply_location_locks_for_document
 from .snapshot_service import capture_inventory_snapshots
+from .task_generation_service import generate_tasks_from_document_lines
 
 
 def _generate_document_number(tenant_id: int) -> str:
@@ -224,6 +228,10 @@ def start_inventory_document(
         raise InventoryInvalidTransitionError(f"Cannot start inventory from status {doc.status}")
 
     capture_inventory_snapshots(db, document=doc, user_id=user_id)
+    materialize_document_lines_from_snapshot(db, document=doc, user_id=user_id)
+    apply_location_locks_for_document(db, document=doc, user_id=user_id)
+    recompute_document_kpis(db, doc)
+    generate_tasks_from_document_lines(db, document=doc)
     doc.status = INV_STATUS_IN_PROGRESS
     doc.started_at = datetime.utcnow()
     doc.snapshot_created_at = datetime.utcnow()
@@ -269,25 +277,26 @@ def generate_inventory_tasks(
 
     locs = location_ids or []
     if not locs:
-        # Placeholder: real implementation resolves locations from filters + snapshot lines
-        locs = []
-
-    created = 0
-    for seq, loc_id in enumerate(locs, start=1):
-        task = InventoryTask(
-            inventory_document_id=doc.id,
-            tenant_id=doc.tenant_id,
-            warehouse_id=doc.warehouse_id,
-            location_id=int(loc_id),
-            task_number=f"{doc.number}-T{seq:04d}",
-            status=TASK_STATUS_OPEN,
-            sequence_no=seq,
-        )
-        db.add(task)
-        created += 1
+        result = generate_tasks_from_document_lines(db, document=doc)
+        created = int(result.get("tasks_created") or 0)
+    else:
+        created = 0
+        for seq, loc_id in enumerate(locs, start=1):
+            task = InventoryTask(
+                inventory_document_id=doc.id,
+                tenant_id=doc.tenant_id,
+                warehouse_id=doc.warehouse_id,
+                location_id=int(loc_id),
+                task_number=f"{doc.number}-T{seq:04d}",
+                status=TASK_STATUS_OPEN,
+                sequence_no=seq,
+            )
+            db.add(task)
+            created += 1
 
     if doc.status == INV_STATUS_DRAFT:
         doc.status = INV_STATUS_PLANNED
+    recompute_document_kpis(db, doc)
     doc.touch_updated()
     log_inventory_audit(
         db,

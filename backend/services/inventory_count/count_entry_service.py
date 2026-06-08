@@ -18,6 +18,7 @@ from ...models.inventory_count.constants import (
 from ...models.inventory_count.count_entry import InventoryCountEntry
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
+from ...models.product import Product
 from .audit_service import log_inventory_audit
 from .errors import (
     InventoryBlindCountViolationError,
@@ -101,6 +102,21 @@ def record_count_scan(
         action=AUDIT_QTY_CHANGED,
         detail={"from": prev_qty, "to": new_qty},
     )
+    from .kpi_service import recompute_document_kpis
+    from .task_generation_service import update_task_progress
+    from ...models.inventory_count.task import InventoryTask
+
+    recompute_document_kpis(db, doc)
+    tasks = (
+        db.query(InventoryTask)
+        .filter(
+            InventoryTask.inventory_document_id == int(doc.id),
+            InventoryTask.location_id == int(line.location_id),
+        )
+        .all()
+    )
+    for task in tasks:
+        update_task_progress(db, task)
     db.commit()
     db.refresh(line)
     return {
@@ -165,3 +181,49 @@ def confirm_location_scan(
     if int(task["location_id"]) != int(location_id):
         raise InventoryLocationMismatchError("Scanned location does not match task")
     return {"ok": True, "location_id": location_id, "scanned_code": scanned_code}
+
+
+def resolve_barcode_to_line(
+    db: Session,
+    *,
+    tenant_id: int,
+    task_id: int,
+    barcode_value: str,
+) -> dict[str, Any]:
+    """Resolve EAN/SKU barcode to document line within task location."""
+    from .task_service import get_task
+
+    task = get_task(db, tenant_id=tenant_id, task_id=task_id)
+    code = str(barcode_value or "").strip()
+    if not code:
+        raise InventoryDocumentNotFoundError("Empty barcode")
+
+    product = (
+        db.query(Product)
+        .filter(
+            Product.tenant_id == int(tenant_id),
+            (Product.ean == code) | (Product.sku == code) | (Product.symbol == code),
+        )
+        .first()
+    )
+    if product is None:
+        raise InventoryDocumentNotFoundError(f"Product not found for barcode: {code}")
+
+    line = (
+        db.query(InventoryDocumentLine)
+        .filter(
+            InventoryDocumentLine.inventory_document_id == int(task["inventory_document_id"]),
+            InventoryDocumentLine.location_id == int(task["location_id"]),
+            InventoryDocumentLine.product_id == int(product.id),
+        )
+        .first()
+    )
+    if line is None:
+        raise InventoryDocumentNotFoundError("No inventory line for product at this location")
+    return {
+        "line_id": line.id,
+        "product_id": product.id,
+        "product_name": product.name,
+        "sku": product.sku,
+        "ean": product.ean,
+    }

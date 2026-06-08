@@ -4,11 +4,16 @@
 Enterprise **Inventory / Stock Count** module — ERP planning + WMS blind counting + snapshot-based reconciliation.
 
 ## Inventory count module (2026-06-08)
-- **Tier 1 schema**: 13 tables via `ensure_inventory_count_schema` (`inventory_count_schema.py`)
-- **ERP** `/inventory-count/*` — dashboard KPIs, documents, 5-step wizard, reports catalog placeholder
-- **WMS** `/wms/inventory-count/*` — task queue, operator sessions, blind-count execution shell
-- **API** `/api/inventory-count/*` + `/api/wms/inventory-count/*`
-- **Snapshot** on start: stock + reservations + serials (operate against snapshot in phase 2 line materialization)
+- **Phase 1**: 13 tables, ERP dashboard/wizard, WMS shell, snapshot capture
+- **Phase 2 (latest)**:
+  - Line materialization from frozen snapshot (expected qty SSOT)
+  - Difference engine with configurable thresholds (auto/review/recount)
+  - Approval workflow: submit → approve/reject → post RW/PW adjustments
+  - Recount documents + WMS recount tasks
+  - Report engine (XLSX + HTML/PDF via Puppeteer when available) — 15+ report kinds
+  - Audit package ZIP export
+  - Location locks on start (soft/hard; snapshot mode skips)
+  - WMS: task lines, barcode→product resolution, KPI/task progress on scan
 - Full design: `memory/inventory-count-module.md`
 
 ## Prior goal

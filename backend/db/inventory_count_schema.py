@@ -17,7 +17,7 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-INVENTORY_COUNT_SCHEMA_VERSION = "2026.06.08.1"
+INVENTORY_COUNT_SCHEMA_VERSION = "2026.06.08.2"
 
 
 @dataclass(frozen=True)
@@ -31,11 +31,14 @@ def _inventory_count_entity_registry() -> list[InventoryCountEntitySpec]:
     from ..models.inventory_count import (
         InventoryAdjustment,
         InventoryAuditEvent,
+        InventoryApproval,
         InventoryCountEntry,
         InventoryDocument,
         InventoryDocumentLine,
         InventoryLineAttachment,
         InventoryLocationLock,
+        InventoryRecount,
+        InventoryReport,
         InventorySession,
         InventorySnapshot,
         InventorySnapshotReservationLine,
@@ -62,6 +65,9 @@ def _inventory_count_entity_registry() -> list[InventoryCountEntitySpec]:
         InventoryCountEntitySpec("inventory_location_locks", InventoryLocationLock, "location_lock"),
         InventoryCountEntitySpec("inventory_audit_events", InventoryAuditEvent, "audit_event"),
         InventoryCountEntitySpec("inventory_line_attachments", InventoryLineAttachment, "line_attachment"),
+        InventoryCountEntitySpec("inventory_recounts", InventoryRecount, "recount"),
+        InventoryCountEntitySpec("inventory_approvals", InventoryApproval, "approval"),
+        InventoryCountEntitySpec("inventory_reports", InventoryReport, "report"),
     ]
 
 

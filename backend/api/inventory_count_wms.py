@@ -29,6 +29,8 @@ from ..services.inventory_count import (
     open_session,
     record_count_scan,
 )
+from ..services.inventory_count.count_entry_service import resolve_barcode_to_line
+from ..services.inventory_count.task_generation_service import get_task_lines
 
 router = APIRouter(prefix="/wms/inventory-count", tags=["WMS Inventory Count"])
 logger = logging.getLogger(__name__)
@@ -66,6 +68,36 @@ def wms_inventory_task_detail(
 ):
     try:
         return get_task(db, tenant_id=tenant_id, task_id=task_id)
+    except InventoryCountError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.get("/tasks/{task_id}/lines")
+def wms_inventory_task_lines(
+    task_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_task_lines(db, tenant_id=tenant_id, task_id=task_id, blind=True)
+    except InventoryCountError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.post("/tasks/{task_id}/resolve-barcode")
+def wms_inventory_resolve_barcode(
+    task_id: int,
+    barcode_value: str = Query(..., min_length=1),
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return resolve_barcode_to_line(
+            db,
+            tenant_id=tenant_id,
+            task_id=task_id,
+            barcode_value=barcode_value,
+        )
     except InventoryCountError as exc:
         raise _map_error(exc) from exc
 

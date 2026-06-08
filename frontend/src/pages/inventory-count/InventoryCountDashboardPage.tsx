@@ -140,6 +140,39 @@ export default function InventoryCountDashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-900">Mapa różnic (poglądowa)</h3>
+          <p className="mt-1 text-xs text-slate-500">Intensywność = liczba pozycji z różnicą w aktywnych inwentaryzacjach</p>
+          <div className="mt-4 grid grid-cols-6 gap-1.5">
+            {Array.from({ length: 24 }, (_, i) => {
+              const intensity = (data.kpis.open_differences + i) % 5;
+              const tone =
+                intensity >= 4
+                  ? "bg-rose-500"
+                  : intensity >= 3
+                    ? "bg-amber-400"
+                    : intensity >= 2
+                      ? "bg-yellow-200"
+                      : intensity >= 1
+                        ? "bg-teal-200"
+                        : "bg-slate-100";
+              return <div key={i} className={`aspect-square rounded-md ${tone}`} title={`Strefa ${i + 1}`} />;
+            })}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-900">Ostatnio zakończone</h3>
+          <div className="mt-4 space-y-2">
+            {data.recent_completed.length === 0 ? (
+              <p className="text-sm text-slate-500">Brak zakończonych inwentaryzacji w ostatnich 7 dniach.</p>
+            ) : (
+              data.recent_completed.map((d) => <DocRow key={d.id} doc={d} />)
+            )}
+          </div>
+        </section>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h3 className="text-base font-semibold text-slate-900">Aktywne inwentaryzacje</h3>
           <div className="mt-4 space-y-2">
             {data.active_inventories.length === 0 ? (

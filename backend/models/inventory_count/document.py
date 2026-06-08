@@ -59,5 +59,9 @@ class InventoryDocument(Base, BaseModelMixin):
     difference_lines = Column(Integer, nullable=False, default=0)
     coverage_percent = Column(Integer, nullable=False, default=0)
 
+    stock_snapshot_id = Column(Integer, ForeignKey("inventory_snapshots.id", ondelete="SET NULL"), nullable=True, index=True)
+    rw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
+    pw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
+
     def touch_updated(self) -> None:
         self.updated_at = datetime.utcnow()

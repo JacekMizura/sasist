@@ -69,16 +69,31 @@ def capture_inventory_snapshots(
             )
         )
 
-    reservation_rows = (
-        db.query(StockReservation)
-        .join(Location, Location.id == StockReservation.location_id)
-        .filter(
-            StockReservation.tenant_id == tenant_id,
-            Location.warehouse_id == warehouse_id,
-            StockReservation.status == "reserved",
+    reservation_rows: list[StockReservation] = []
+    try:
+        reservation_rows = (
+            db.query(StockReservation)
+            .join(Location, Location.id == StockReservation.location_id)
+            .filter(
+                StockReservation.tenant_id == tenant_id,
+                Location.warehouse_id == warehouse_id,
+                StockReservation.status == "reserved",
+            )
+            .all()
         )
-        .all()
-    )
+    except Exception:
+        logger.exception("[inventory_count.snapshot] reservation snapshot skipped document_id=%s", document.id)
+
+    serial_rows: list[InventorySerial] = []
+    try:
+        serial_rows = (
+            db.query(InventorySerial)
+            .filter(InventorySerial.tenant_id == tenant_id, InventorySerial.warehouse_id == warehouse_id)
+            .all()
+        )
+    except Exception:
+        logger.exception("[inventory_count.snapshot] serial snapshot skipped document_id=%s", document.id)
+
     res_snap = _create_snapshot_header(
         db,
         document=document,
@@ -98,11 +113,6 @@ def capture_inventory_snapshots(
             )
         )
 
-    serial_rows = (
-        db.query(InventorySerial)
-        .filter(InventorySerial.tenant_id == tenant_id, InventorySerial.warehouse_id == warehouse_id)
-        .all()
-    )
     serial_snap = _create_snapshot_header(
         db,
         document=document,

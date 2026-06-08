@@ -102,6 +102,94 @@ export async function updateInventoryWizard(
   return data;
 }
 
+export async function fetchInventoryDocument(tenantId: number, documentId: number): Promise<InventoryDocumentRead> {
+  const { data } = await api.get<InventoryDocumentRead>(`/inventory-count/documents/${documentId}`, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export type InventoryLineRead = {
+  id: number;
+  location_id: number;
+  location_name: string | null;
+  product_id: number;
+  sku: string | null;
+  ean: string | null;
+  product_name: string | null;
+  expected_quantity: number | null;
+  counted_quantity: number | null;
+  difference_quantity: number | null;
+  status: string;
+  batch_number: string | null;
+  serial_number: string | null;
+  recount_count: number;
+};
+
+export async function listDocumentLines(tenantId: number, documentId: number): Promise<InventoryLineRead[]> {
+  const { data } = await api.get<InventoryLineRead[]>(`/inventory-count/documents/${documentId}/lines`, {
+    params: { tenant_id: tenantId, supervisor: true },
+  });
+  return data;
+}
+
+export async function getDocumentDifferenceAnalysis(tenantId: number, documentId: number) {
+  const { data } = await api.get(`/inventory-count/documents/${documentId}/differences`, {
+    params: { tenant_id: tenantId },
+  });
+  return data as {
+    document_id: number;
+    thresholds: Record<string, number>;
+    summary: Record<string, number>;
+    total_value_impact_net: number;
+    lines: Array<Record<string, unknown>>;
+  };
+}
+
+export async function fetchWmsInventoryTask(tenantId: number, taskId: number): Promise<InventoryTaskRead> {
+  const { data } = await api.get<InventoryTaskRead>(`/wms/inventory-count/tasks/${taskId}`, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function confirmWmsInventoryLocation(
+  tenantId: number,
+  taskId: number,
+  body: { location_id: number; scanned_code: string },
+) {
+  const { data } = await api.post(`/wms/inventory-count/tasks/${taskId}/confirm-location`, body, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function resolveWmsInventoryBarcode(tenantId: number, taskId: number, barcodeValue: string) {
+  const { data } = await api.post<{
+    line_id: number;
+    product_id: number;
+    product_name: string | null;
+    sku: string | null;
+    ean: string | null;
+  }>(`/wms/inventory-count/tasks/${taskId}/resolve-barcode`, null, {
+    params: { tenant_id: tenantId, barcode_value: barcodeValue },
+  });
+  return data;
+}
+
+export async function fetchWmsTaskLines(tenantId: number, taskId: number) {
+  const { data } = await api.get(`/wms/inventory-count/tasks/${taskId}/lines`, {
+    params: { tenant_id: tenantId },
+  });
+  return data as Array<{
+    id: number;
+    product_name: string | null;
+    sku: string | null;
+    counted_quantity: number | null;
+    status: string;
+  }>;
+}
+
 export async function startInventoryDocument(tenantId: number, documentId: number): Promise<InventoryDocumentRead> {
   const { data } = await api.post<InventoryDocumentRead>(
     `/inventory-count/documents/${documentId}/start`,

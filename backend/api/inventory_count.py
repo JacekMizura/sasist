@@ -6,6 +6,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_optional_current_user
@@ -19,7 +20,22 @@ from ..schemas.inventory_count import (
     InventoryGenerateTasksBody,
     InventoryReportsCatalogRead,
     InventoryReportKindRead,
+    InventoryDifferenceAnalysisRead,
+    InventoryLineRead,
+    InventoryApprovalNotesBody,
+    InventoryRecountCompleteBody,
 )
+from ..services.inventory_count.approval_service import (
+    approve_inventory_document,
+    reject_inventory_document,
+    submit_for_approval,
+)
+from ..services.inventory_count.adjustment_service import post_inventory_adjustments
+from ..services.inventory_count.audit_package_service import build_audit_package
+from ..services.inventory_count.line_service import get_document_difference_analysis, list_document_lines
+from ..services.inventory_count.recount_service import complete_recount, create_recounts_for_document
+from ..services.inventory_count.report_service import REPORT_KINDS, generate_inventory_report
+from ..models.inventory_count.constants import REPORT_FORMAT_PDF, REPORT_FORMAT_XLSX
 from ..services.inventory_count import (
     InventoryCountError,
     build_inventory_dashboard,
@@ -183,16 +199,212 @@ def inventory_count_generate_tasks(
 
 @router.get("/reports/catalog", response_model=InventoryReportsCatalogRead)
 def inventory_count_reports_catalog():
-    """Report engine placeholder — PDF/XLSX generation in phase 2."""
     reports = [
-        InventoryReportKindRead(kind="counting_sheet", label="Arkusz inwentaryzacji", formats=["pdf", "xlsx"]),
-        InventoryReportKindRead(kind="differences", label="Różnice inwentaryzacyjne", formats=["pdf", "xlsx"]),
-        InventoryReportKindRead(kind="missing_stock", label="Braki", formats=["pdf", "xlsx"]),
-        InventoryReportKindRead(kind="excess_stock", label="Nadwyżki", formats=["pdf", "xlsx"]),
-        InventoryReportKindRead(kind="adjustments", label="Korekty magazynowe", formats=["pdf", "xlsx"]),
-        InventoryReportKindRead(kind="user_activity", label="Aktywność operatorów", formats=["pdf", "xlsx"]),
-        InventoryReportKindRead(kind="empty_locations", label="Puste lokalizacje", formats=["pdf", "xlsx"]),
-        InventoryReportKindRead(kind="problematic_locations", label="Problematyczne lokalizacje", formats=["pdf", "xlsx"]),
-        InventoryReportKindRead(kind="valuation", label="Wycena inwentaryzacji", formats=["pdf", "xlsx"]),
+        InventoryReportKindRead(
+            kind=kind,
+            label=label,
+            formats=["pdf", "xlsx"],
+            status="ready",
+        )
+        for kind, label in REPORT_KINDS.items()
     ]
     return InventoryReportsCatalogRead(reports=reports)
+
+
+@router.get("/documents/{document_id}/lines", response_model=List[InventoryLineRead])
+def inventory_count_document_lines(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    supervisor: bool = Query(True),
+    db: Session = Depends(get_db),
+):
+    try:
+        return list_document_lines(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            include_supervisor_fields=supervisor,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.get("/documents/{document_id}/differences", response_model=InventoryDifferenceAnalysisRead)
+def inventory_count_differences(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_document_difference_analysis(db, tenant_id=tenant_id, document_id=document_id)
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/submit-approval")
+def inventory_count_submit_approval(
+    document_id: int,
+    body: InventoryApprovalNotesBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        return submit_for_approval(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            user_id=user.id if user else None,
+            notes=body.notes,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/approve")
+def inventory_count_approve(
+    document_id: int,
+    body: InventoryApprovalNotesBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        return approve_inventory_document(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            user_id=user.id if user else None,
+            notes=body.notes,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/reject")
+def inventory_count_reject(
+    document_id: int,
+    body: InventoryApprovalNotesBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        return reject_inventory_document(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            user_id=user.id if user else None,
+            notes=body.notes,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/post")
+def inventory_count_post(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        return post_inventory_adjustments(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            user_id=user.id if user else None,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/recounts/generate")
+def inventory_count_generate_recounts(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        return create_recounts_for_document(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            user_id=user.id if user else None,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/recounts/{recount_id}/complete")
+def inventory_count_complete_recount(
+    recount_id: int,
+    body: InventoryRecountCompleteBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        return complete_recount(
+            db,
+            tenant_id=tenant_id,
+            recount_id=recount_id,
+            counted_quantity=body.counted_quantity,
+            user_id=user.id if user else None,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.get("/documents/{document_id}/reports/{report_kind}")
+def inventory_count_download_report(
+    document_id: int,
+    report_kind: str,
+    tenant_id: int = Query(..., ge=1),
+    format: str = Query("xlsx", pattern="^(pdf|xlsx)$"),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    fmt = REPORT_FORMAT_PDF if format.lower() == "pdf" else REPORT_FORMAT_XLSX
+    try:
+        result = generate_inventory_report(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            report_kind=report_kind,
+            report_format=fmt,
+            user_id=user.id if user else None,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=result["content"],
+        media_type=result["media_type"],
+        headers={"Content-Disposition": f'attachment; filename="{result["file_name"]}"'},
+    )
+
+
+@router.get("/documents/{document_id}/audit-package")
+def inventory_count_audit_package(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        result = build_audit_package(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            user_id=user.id if user else None,
+        )
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+    return Response(
+        content=result["content"],
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{result["file_name"]}"'},
+    )

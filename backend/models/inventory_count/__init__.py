@@ -1,6 +1,9 @@
 """Inventory / stock count ORM models."""
 
 from .adjustment import InventoryAdjustment
+from .approval import InventoryApproval
+from .recount import InventoryRecount
+from .report import InventoryReport
 from .audit_event import InventoryAuditEvent, InventoryLineAttachment
 from .constants import (
     ADJ_STATUS_DRAFT,
@@ -77,6 +80,9 @@ from .task import InventoryTask
 
 __all__ = [
     "InventoryAdjustment",
+    "InventoryApproval",
+    "InventoryRecount",
+    "InventoryReport",
     "InventoryAuditEvent",
     "InventoryCountEntry",
     "InventoryDocument",
