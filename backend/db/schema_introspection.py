@@ -241,6 +241,88 @@ def ensure_stock_documents_orm_columns(engine: Engine) -> int:
     return _ensure_orm_columns_for_model(engine, StockDocument)
 
 
+def audit_orm_table_columns(engine: Engine, model: Any) -> dict[str, Any]:
+    """Compare ORM model columns vs physical DB table (startup diagnostics)."""
+    table = model.__tablename__
+    orm_cols = [c.key for c in model.__table__.columns]
+    if not has_table(engine, table):
+        return {
+            "table": table,
+            "exists": False,
+            "orm_columns": orm_cols,
+            "db_columns": [],
+            "missing_in_db": orm_cols,
+            "extra_in_db": [],
+        }
+    db_cols = sorted(get_table_column_names(engine, table))
+    orm_set = set(orm_cols)
+    db_set = set(db_cols)
+    return {
+        "table": table,
+        "exists": True,
+        "orm_columns": sorted(orm_set),
+        "db_columns": db_cols,
+        "missing_in_db": sorted(orm_set - db_set),
+        "extra_in_db": sorted(db_set - orm_set),
+    }
+
+
+def ensure_production_batches_orm_columns(engine: Engine) -> int:
+    """Sync ``production_batches`` ORM columns (WMS workflow fields)."""
+    from ..models.product_composition import ProductionBatch
+
+    return _ensure_orm_columns_for_model(engine, ProductionBatch)
+
+
+def ensure_production_batch_lines_orm_columns(engine: Engine) -> int:
+    """Sync ``production_batch_lines`` ORM columns."""
+    from ..models.product_composition import ProductionBatchLine
+
+    return _ensure_orm_columns_for_model(engine, ProductionBatchLine)
+
+
+def sync_production_batch_orm_columns(engine: Engine) -> int:
+    """
+    Dialect-agnostic production batch schema sync (PostgreSQL + SQLite).
+
+    Uses SQLAlchemy ``CreateColumn`` compilation — never raw ``DATETIME`` on PostgreSQL.
+    Each missing column is added in its own transaction so a failure elsewhere cannot roll back.
+    """
+    from ..models.product_composition import ProductionBatch, ProductionBatchLine
+
+    dialect = engine.dialect.name
+    for model in (ProductionBatch, ProductionBatchLine):
+        audit = audit_orm_table_columns(engine, model)
+        logger.info(
+            "[schema.production_batch] column_audit table=%s dialect=%s missing=%s db_count=%s orm_count=%s",
+            audit["table"],
+            dialect,
+            audit.get("missing_in_db"),
+            len(audit.get("db_columns") or []),
+            len(audit.get("orm_columns") or []),
+        )
+
+    added = ensure_production_batches_orm_columns(engine)
+    added += ensure_production_batch_lines_orm_columns(engine)
+
+    for model in (ProductionBatch, ProductionBatchLine):
+        audit = audit_orm_table_columns(engine, model)
+        if audit.get("missing_in_db"):
+            logger.error(
+                "[schema.production_batch] column_sync_incomplete table=%s still_missing=%s dialect=%s",
+                audit["table"],
+                audit["missing_in_db"],
+                dialect,
+            )
+        else:
+            logger.info(
+                "[schema.production_batch] column_sync_ok table=%s dialect=%s",
+                audit["table"],
+                dialect,
+            )
+    return added
+
+
 def ensure_stock_document_items_orm_columns(engine: Engine) -> int:
     """Sync ``stock_document_items`` ORM columns."""
     from ..models.stock_document import StockDocumentItem

@@ -7402,7 +7402,10 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
                         notes TEXT,
                         rw_stock_document_id INTEGER REFERENCES stock_documents(id) ON DELETE SET NULL,
                         created_by_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        collection_state_json TEXT,
                         started_at TIMESTAMP WITHOUT TIME ZONE,
+                        collecting_completed_at TIMESTAMP WITHOUT TIME ZONE,
+                        production_completed_at TIMESTAMP WITHOUT TIME ZONE,
                         completed_at TIMESTAMP WITHOUT TIME ZONE,
                         created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc'),
                         updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
@@ -7446,9 +7449,7 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
                     "REFERENCES production_batch_lines(id) ON DELETE SET NULL"
                 )
             )
-            conn.execute(text("ALTER TABLE production_batches ADD COLUMN IF NOT EXISTS collection_state_json TEXT"))
-            conn.execute(text("ALTER TABLE production_batches ADD COLUMN IF NOT EXISTS collecting_completed_at TIMESTAMP WITHOUT TIME ZONE"))
-            conn.execute(text("ALTER TABLE production_batches ADD COLUMN IF NOT EXISTS production_completed_at TIMESTAMP WITHOUT TIME ZONE"))
+        ensure_production_batch_schema_sync(engine)
         _migrate_recipes_to_compositions(engine)
         return
     with engine.connect() as conn:
@@ -7503,7 +7504,10 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
                         notes TEXT,
                         rw_stock_document_id INTEGER REFERENCES stock_documents(id),
                         created_by_user_id INTEGER REFERENCES app_users(id),
+                        collection_state_json TEXT,
                         started_at DATETIME,
+                        collecting_completed_at DATETIME,
+                        production_completed_at DATETIME,
                         completed_at DATETIME,
                         created_at DATETIME NOT NULL,
                         updated_at DATETIME NOT NULL
@@ -7539,16 +7543,27 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_id INTEGER REFERENCES production_batches(id)"))
         if sd_cols and "production_batch_line_id" not in sd_cols:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_line_id INTEGER REFERENCES production_batch_lines(id)"))
-        if _table_exists(conn, "production_batches"):
-            pb_cols = _table_column_names(conn, "production_batches")
-            if pb_cols and "collection_state_json" not in pb_cols:
-                conn.execute(text("ALTER TABLE production_batches ADD COLUMN collection_state_json TEXT"))
-            if pb_cols and "collecting_completed_at" not in pb_cols:
-                conn.execute(text("ALTER TABLE production_batches ADD COLUMN collecting_completed_at DATETIME"))
-            if pb_cols and "production_completed_at" not in pb_cols:
-                conn.execute(text("ALTER TABLE production_batches ADD COLUMN production_completed_at DATETIME"))
         conn.commit()
+    ensure_production_batch_schema_sync(engine)
     _migrate_recipes_to_compositions(engine)
+
+
+def ensure_production_batch_schema_sync(engine: Engine) -> int:
+    """
+    Idempotent dialect-safe sync for production_batches / production_batch_lines.
+
+    Runs outside the bulk PostgreSQL transaction so workflow columns are not lost
+    when an unrelated ALTER in the same block rolls back.
+    """
+    from .schema_introspection import sync_production_batch_orm_columns
+
+    added = sync_production_batch_orm_columns(engine)
+    logger.info(
+        "[schema.production_batch] ensure_production_batch_schema_sync dialect=%s columns_added=%s",
+        engine.dialect.name,
+        added,
+    )
+    return added
 
 
 def _migrate_recipes_to_compositions(engine: Engine) -> None:

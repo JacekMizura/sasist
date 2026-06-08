@@ -83,6 +83,7 @@ from .db.schema_upgrade import (
     ensure_complaint_events_table,
     ensure_production_tables,
     ensure_product_compositions_and_batches,
+    ensure_production_batch_schema_sync,
     ensure_bundles_tables_and_order_item_bundle_columns,
     ensure_manufacturers_table_and_product_manufacturer_id,
     ensure_suppliers_and_inbound_deliveries_tables,
@@ -808,6 +809,10 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_compositions_and_batches failed at import")
 try:
+    ensure_production_batch_schema_sync(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_production_batch_schema_sync failed at import")
+try:
     ensure_manufacturers_table_and_product_manufacturer_id(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_manufacturers_table_and_product_manufacturer_id failed at import")
@@ -1069,6 +1074,10 @@ def _upgrade_schema_background() -> None:
         pass
     try:
         ensure_product_compositions_and_batches(engine)
+    except Exception:
+        pass
+    try:
+        ensure_production_batch_schema_sync(engine)
     except Exception:
         pass
     try:
