@@ -61,18 +61,19 @@ def resolve_product_for_task_location(
         .all()
     )
     matches = []
-    for line, product in rows:
-        matches.append(
-            {
-                "line_id": int(line.id),
-                "product_id": int(product.id),
-                "product_name": product.name,
-                "sku": product.sku,
-                "ean": product.ean,
-                "counted_quantity": line.counted_quantity,
-                "status": line.status,
-            }
-        )
+        for line, product in rows:
+            matches.append(
+                {
+                    "line_id": int(line.id),
+                    "product_id": int(product.id),
+                    "product_name": product.name,
+                    "sku": product.sku,
+                    "ean": product.ean,
+                    "image_url": getattr(product, "image_url", None),
+                    "counted_quantity": line.counted_quantity,
+                    "status": line.status,
+                }
+            )
     return {"matches": matches}
 
 
@@ -113,7 +114,8 @@ def search_inventory_execution(
                 {
                     "location_id": int(loc.id),
                     "location_code": str(loc.name or ""),
-                    "zone": getattr(loc, "zone", None),
+                    "zone": getattr(loc, "rack_name", None) or getattr(loc, "zone", None),
+                    "aisle": getattr(loc, "rack_name", None),
                 }
             )
             tq = db.query(InventoryTask).filter(
@@ -198,6 +200,7 @@ def search_inventory_execution(
                     "ean": p.ean,
                     "name": p.name,
                     "catalog_number": getattr(p, "catalog_number", None),
+                    "image_url": getattr(p, "image_url", None),
                     "locations": loc_labels,
                     "stock_hint": loc_labels[0] if loc_labels else None,
                 }

@@ -63,6 +63,7 @@ export type InventoryTaskRead = {
   progress_percent: number;
   sequence_no: number;
   zone_code?: string | null;
+  aisle_code?: string | null;
   line_count?: number;
   counted_line_count?: number;
 };
@@ -91,6 +92,7 @@ export type InventoryUniversalSearchResult = {
     location_id: number;
     location_code: string;
     zone?: string | null;
+    aisle?: string | null;
     carrier_id?: number;
   }>;
   products: Array<{
@@ -99,6 +101,7 @@ export type InventoryUniversalSearchResult = {
     ean?: string | null;
     name?: string | null;
     catalog_number?: string | null;
+    image_url?: string | null;
     locations?: string[];
     stock_hint?: string | null;
   }>;
@@ -529,10 +532,20 @@ export async function fetchWmsExecutionSummary(tenantId: number, taskId: number)
 }
 
 export async function searchWmsTaskProducts(tenantId: number, taskId: number, q: string) {
-  const { data } = await api.get<{ matches: Array<{ line_id: number; product_id: number; product_name: string | null; sku: string | null; ean: string | null; counted_quantity: number | null; status: string }> }>(
-    `/wms/inventory-count/tasks/${taskId}/search-products`,
-    { params: { tenant_id: tenantId, q } },
-  );
+  const { data } = await api.get<{
+    matches: Array<{
+      line_id: number;
+      product_id: number;
+      product_name: string | null;
+      sku: string | null;
+      ean: string | null;
+      image_url?: string | null;
+      counted_quantity: number | null;
+      status: string;
+    }>;
+  }>(`/wms/inventory-count/tasks/${taskId}/search-products`, {
+    params: { tenant_id: tenantId, q },
+  });
   return data.matches ?? [];
 }
 

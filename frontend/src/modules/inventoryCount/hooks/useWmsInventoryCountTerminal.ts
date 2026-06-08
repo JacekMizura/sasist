@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -20,7 +20,31 @@ import { useInventoryCountOfflineStatus } from "../offline/useInventoryCountOffl
 
 export type WmsTerminalStep = "location" | "product";
 
+export type WmsLastScanEntry = {
+  at: string;
+  line_id: number;
+  product_name: string | null;
+  sku?: string | null;
+  ean?: string | null;
+  image_url?: string | null;
+  delta: number;
+  counted_quantity: number;
+  scan: WmsBarcodeResolveResult;
+};
+
 const SCAN_DEBOUNCE_MS = 120;
+const LAST_SCAN_LIMIT = 5;
+
+function buildLocationMeta(task: InventoryTaskRead | null): string | null {
+  if (!task) return null;
+  const parts: string[] = [];
+  if (task.zone_code) parts.push(`STREFA ${task.zone_code}`);
+  if (task.aisle_code) parts.push(`REGAŁ ${task.aisle_code}`);
+  const code = task.location_code ?? task.location_name ?? "";
+  const segs = code.split(/[-/]/).filter(Boolean);
+  if (segs.length >= 3) parts.push(`POZIOM ${segs[segs.length - 1]}`);
+  return parts.length ? parts.join(" • ") : null;
+}
 
 export function useWmsInventoryCountTerminal(
   taskId: number | undefined,
@@ -45,7 +69,9 @@ export function useWmsInventoryCountTerminal(
   const [pendingQty, setPendingQty] = useState(1);
   const [activeLineId, setActiveLineId] = useState<number | null>(null);
   const [activeScan, setActiveScan] = useState<WmsBarcodeResolveResult | null>(null);
+  const [lastScans, setLastScans] = useState<WmsLastScanEntry[]>([]);
   const [qtyPulse, setQtyPulse] = useState(false);
+  const [invalidPulse, setInvalidPulse] = useState(false);
   const [unknownOpen, setUnknownOpen] = useState(false);
   const [lastScanCode, setLastScanCode] = useState<string | null>(null);
 
@@ -72,6 +98,7 @@ export function useWmsInventoryCountTerminal(
         setManualOpen(false);
         setActiveLineId(null);
         setActiveScan(null);
+        setLastScans([]);
         cacheTaskSnapshot({
           taskId: t.id,
           locationCode: t.location_code ?? t.location_name ?? `#${t.location_id}`,
@@ -103,11 +130,41 @@ export function useWmsInventoryCountTerminal(
   }, [taskId, warehouseId, navSessionId, loadTask, task]);
 
   const locationLabel = task?.location_code ?? task?.location_name ?? (task ? `#${task.location_id}` : "—");
+  const locationMeta = useMemo(() => buildLocationMeta(task), [task]);
 
-  const pulseQty = useCallback(() => {
+  const pulseOk = useCallback(() => {
     setQtyPulse(true);
     window.setTimeout(() => setQtyPulse(false), 280);
   }, []);
+
+  const pulseBad = useCallback(() => {
+    setInvalidPulse(true);
+    window.setTimeout(() => setInvalidPulse(false), 400);
+  }, []);
+
+  const pushLastScan = useCallback((scan: WmsBarcodeResolveResult, delta: number, counted: number) => {
+    const entry: WmsLastScanEntry = {
+      at: `${Date.now()}-${scan.line_id}`,
+      line_id: scan.line_id,
+      product_name: scan.product_name,
+      sku: scan.sku,
+      ean: scan.ean,
+      image_url: scan.image_url,
+      delta,
+      counted_quantity: counted,
+      scan,
+    };
+    setLastScans((prev) => [entry, ...prev].slice(0, LAST_SCAN_LIMIT));
+  }, []);
+
+  const applyScanQty = useCallback(
+    (scan: WmsBarcodeResolveResult, nextQty: number, delta: number) => {
+      setActiveScan({ ...scan, counted_quantity: nextQty });
+      pushLastScan({ ...scan, counted_quantity: nextQty }, delta, nextQty);
+      pulseOk();
+    },
+    [pulseOk, pushLastScan],
+  );
 
   const recordScan = useCallback(
     async (lineId: number, opts: { delta?: number; quantity?: number; barcode?: string }) => {
@@ -157,6 +214,7 @@ export function useWmsInventoryCountTerminal(
             });
           } catch {
             scanFeedback.error("Nieprawidłowa lokalizacja");
+            pulseBad();
             return false;
           }
         }
@@ -171,6 +229,7 @@ export function useWmsInventoryCountTerminal(
           scanFeedback.error(
             resolved.reason === "location_not_found" ? "Nie znaleziono lokalizacji" : "Brak zadania",
           );
+          pulseBad();
           return false;
         }
         await loadTask(resolved.task_id);
@@ -179,18 +238,21 @@ export function useWmsInventoryCountTerminal(
         return true;
       } catch {
         scanFeedback.error("Błąd skanowania");
+        pulseBad();
         return false;
       }
     },
-    [loadTask, scanFeedback, task, tenantId, warehouseId],
+    [loadTask, pulseBad, scanFeedback, task, tenantId, warehouseId],
   );
 
-  const applyScanQty = useCallback(
-    (resolved: WmsBarcodeResolveResult, nextQty: number) => {
-      setActiveScan({ ...resolved, counted_quantity: nextQty });
-      pulseQty();
+  const commitProductDelta = useCallback(
+    async (resolved: WmsBarcodeResolveResult, delta: number, barcode?: string) => {
+      await recordScan(resolved.line_id, { delta, barcode });
+      const nextQty = Math.max(0, (resolved.counted_quantity ?? 0) + delta);
+      applyScanQty(resolved, nextQty, delta);
+      scanFeedback.success(delta === 1 ? "Dodano +1" : `Dodano +${delta}`);
     },
-    [pulseQty],
+    [applyScanQty, recordScan, scanFeedback],
   );
 
   const handleProductScan = useCallback(
@@ -207,17 +269,15 @@ export function useWmsInventoryCountTerminal(
           return;
         }
 
-        await recordScan(resolved.line_id, { delta: 1, barcode: code });
-        const nextQty = (resolved.counted_quantity ?? 0) + 1;
-        applyScanQty(resolved, nextQty);
-        scanFeedback.success(undefined);
+        await commitProductDelta(resolved, 1, code);
         setActiveLineId(null);
       } catch (err) {
+        pulseBad();
         if (err instanceof WmsBarcodeResolveError) {
           if (err.code === "task_not_found") {
             scanFeedback.error("Zadanie nie istnieje");
           } else if (err.code === "barcode_ambiguous") {
-            scanFeedback.warning("Wiele produktów — wpisz SKU");
+            scanFeedback.warning("Wiele produktów — użyj Szukaj");
           } else if (err.code === "barcode_not_found") {
             scanFeedback.error("Nieznany produkt");
             setUnknownOpen(true);
@@ -231,15 +291,48 @@ export function useWmsInventoryCountTerminal(
         setLastScanCode(code);
       }
     },
-    [applyScanQty, manualOpen, recordScan, scanFeedback, task, tenantId],
+    [commitProductDelta, manualOpen, pulseBad, scanFeedback, task, tenantId],
   );
+
+  const quickAddDelta = useCallback(
+    async (delta: number) => {
+      const base = activeScan ?? lastScans[0]?.scan;
+      if (!base) {
+        scanFeedback.warning("Zeskanuj produkt");
+        return;
+      }
+      try {
+        await commitProductDelta(base, delta);
+      } catch {
+        scanFeedback.error("Błąd zapisu");
+      }
+    },
+    [activeScan, commitProductDelta, lastScans, scanFeedback],
+  );
+
+  const undoLastScan = useCallback(async () => {
+    const last = lastScans[0];
+    if (!last || last.delta <= 0) {
+      scanFeedback.warning("Brak skanu do cofnięcia");
+      return;
+    }
+    try {
+      await recordScan(last.line_id, { delta: -last.delta });
+      const nextQty = Math.max(0, last.counted_quantity - last.delta);
+      setActiveScan({ ...last.scan, counted_quantity: nextQty });
+      setLastScans((prev) => prev.slice(1));
+      scanFeedback.success("Cofnięto");
+    } catch {
+      scanFeedback.error("Nie cofnięto");
+    }
+  }, [lastScans, recordScan, scanFeedback]);
 
   const confirmManualQty = useCallback(async () => {
     if (!activeLineId || !activeScan) return;
     try {
       await recordScan(activeLineId, { quantity: pendingQty });
-      applyScanQty(activeScan, pendingQty);
-      scanFeedback.success(undefined);
+      applyScanQty(activeScan, pendingQty, pendingQty - (activeScan.counted_quantity ?? 0));
+      scanFeedback.success(`Zapisano ${pendingQty}`);
       setActiveLineId(null);
       setManualOpen(false);
       setPendingQty(1);
@@ -280,9 +373,35 @@ export function useWmsInventoryCountTerminal(
     !loading && !error,
   );
 
-  const enterCarrierScan = useCallback(() => {
-    setCarrierScanMode(true);
-  }, []);
+  const handleSearchProduct = useCallback(
+    (code: string) => {
+      if (task && step === "product") {
+        void handleProductScan(code);
+      }
+    },
+    [handleProductScan, step, task],
+  );
+
+  const handleSearchLocation = useCallback(
+    async (locationCode: string, pickTaskId?: number | null) => {
+      if (pickTaskId && pickTaskId !== task?.id) {
+        await loadTask(pickTaskId);
+        setStep("product");
+        return;
+      }
+      await resolveLocationScan(locationCode);
+    },
+    [loadTask, resolveLocationScan, task?.id],
+  );
+
+  const handleSearchCarrier = useCallback((code: string) => {
+    setCarrierCode(code);
+    setCarrierScanMode(false);
+    scanFeedback.success(undefined);
+  }, [scanFeedback]);
+
+  const enterCarrierScan = useCallback(() => setCarrierScanMode(true), []);
+  const skipCarrier = useCallback(() => setCarrierScanMode(false), []);
 
   const finishLocation = useCallback(() => {
     setTask(null);
@@ -292,6 +411,7 @@ export function useWmsInventoryCountTerminal(
     setManualOpen(false);
     setActiveLineId(null);
     setActiveScan(null);
+    setLastScans([]);
     navigate(wmsInventoryCountPaths.tasks, { replace: true });
     scanFeedback.success(undefined);
   }, [navigate, scanFeedback]);
@@ -302,10 +422,14 @@ export function useWmsInventoryCountTerminal(
     task,
     sessionId,
     step,
+    carrierCode,
     carrierScanMode,
     locationLabel,
+    locationMeta,
     activeScan,
+    lastScans,
     qtyPulse,
+    invalidPulse,
     manualOpen,
     pendingQty,
     unknownOpen,
@@ -314,10 +438,16 @@ export function useWmsInventoryCountTerminal(
     setManualQty: setPendingQty,
     setUnknownOpen,
     confirmManualQty,
+    quickAddDelta,
+    undoLastScan,
     enterCarrierScan,
-    cancelCarrierScan: () => setCarrierScanMode(false),
+    skipCarrier,
+    cancelCarrierScan: skipCarrier,
     finishLocation,
     loadTask,
     handleScan,
+    handleSearchProduct,
+    handleSearchLocation,
+    handleSearchCarrier,
   };
 }

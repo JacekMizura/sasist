@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Package, ScanLine } from "lucide-react";
+import { Search, ScanLine } from "lucide-react";
 
+import WmsInventoryLastScans from "../../../modules/inventoryCount/components/WmsInventoryLastScans";
+import WmsInventoryOperationalSearchModal from "../../../modules/inventoryCount/components/WmsInventoryOperationalSearchModal";
 import WmsInventoryProductPreview from "../../../modules/inventoryCount/components/WmsInventoryProductPreview";
 import WmsInventoryUnknownProductModal from "../../../modules/inventoryCount/components/WmsInventoryUnknownProductModal";
 import { useWmsInventoryCountTerminal } from "../../../modules/inventoryCount/hooks/useWmsInventoryCountTerminal";
@@ -17,6 +19,7 @@ export default function WmsInventoryCountTerminalPage() {
   const tenantId = TENANT_ID;
   const warehouseId = warehouse?.id;
   const scanInputRef = useRef<HTMLInputElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const {
     loading,
@@ -25,10 +28,14 @@ export default function WmsInventoryCountTerminalPage() {
     sessionId,
     step,
     locationLabel,
+    locationMeta,
     activeScan,
+    lastScans,
     qtyPulse,
+    invalidPulse,
     manualOpen,
     pendingQty,
+    carrierCode,
     carrierScanMode,
     unknownOpen,
     lastScanCode,
@@ -36,15 +43,31 @@ export default function WmsInventoryCountTerminalPage() {
     setManualQty,
     setUnknownOpen,
     confirmManualQty,
+    quickAddDelta,
+    undoLastScan,
     enterCarrierScan,
-    cancelCarrierScan,
+    skipCarrier,
     finishLocation,
     handleScan,
+    handleSearchProduct,
+    handleSearchLocation,
+    handleSearchCarrier,
   } = useWmsInventoryCountTerminal(taskId, tenantId, warehouseId);
 
   useEffect(() => {
     scanInputRef.current?.focus();
-  }, [step, task, carrierScanMode, manualOpen]);
+  }, [step, task, carrierScanMode, manualOpen, searchOpen]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +83,7 @@ export default function WmsInventoryCountTerminalPage() {
   }
 
   if (loading && !task) {
-    return <p className={`py-16 text-center ${WMS_INV.textMuted}`}>…</p>;
+    return <p className={`py-12 text-center ${WMS_INV.textMuted}`}>…</p>;
   }
 
   if (error && taskId) {
@@ -75,86 +98,150 @@ export default function WmsInventoryCountTerminalPage() {
   }
 
   const counting = task && step === "product";
-  const placeholder = !task || step === "location" ? "Lokalizacja" : carrierScanMode ? "Nośnik" : "Kod / EAN / SKU / nazwa";
+  const placeholder =
+    !task || step === "location" ? "Lokalizacja" : carrierScanMode ? "Nośnik" : "Kod / EAN / SKU / nazwa";
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-lg flex-col">
-      <div className="shrink-0 pt-2 text-center">
-        {task ? (
-          <p className="text-4xl font-black tracking-tight text-[#1a2b3c]">{locationLabel}</p>
-        ) : (
-          <p className="text-2xl font-bold text-[#5a6b7d]">Inwentaryzacja</p>
-        )}
-      </div>
+    <div className="relative mx-auto flex h-[calc(100dvh-2rem)] max-w-lg flex-col px-3">
+      <button
+        type="button"
+        onClick={() => setSearchOpen(true)}
+        className="absolute right-3 top-0 z-10 inline-flex items-center gap-1 rounded-md border border-[#d0d7e2] bg-white px-2.5 py-1.5 text-xs font-bold text-[#1a2b3c] shadow-sm active:bg-[#f0f2f5]"
+      >
+        <Search className="h-3.5 w-3.5" />
+        Szukaj
+      </button>
 
-      <form onSubmit={onSubmit} className="relative mx-auto mt-8 w-full max-w-md shrink-0">
+      <header className="shrink-0 pt-1 text-center">
+        {task ? (
+          <>
+            <p className="text-3xl font-black tracking-tight text-[#1a2b3c]">{locationLabel}</p>
+            {locationMeta ? <p className="mt-0.5 text-xs font-semibold text-[#8a9bb0]">{locationMeta}</p> : null}
+          </>
+        ) : (
+          <p className="text-xl font-bold text-[#5a6b7d]">Inwentaryzacja</p>
+        )}
+      </header>
+
+      <form onSubmit={onSubmit} className="mx-auto mt-4 w-full shrink-0">
         <div className="relative">
-          <ScanLine
-            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8a9bb0]"
-            strokeWidth={2}
-          />
+          <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9bb0]" />
           <input
             ref={scanInputRef}
             type="text"
             autoComplete="off"
             inputMode="search"
             placeholder={placeholder}
-            className={`${WMS_INV.input} pl-12`}
+            className={`${WMS_INV.inputTerminal} pl-10`}
             aria-label={placeholder}
           />
         </div>
         {counting ? (
-          <button
-            type="button"
-            onClick={carrierScanMode ? cancelCarrierScan : enterCarrierScan}
-            className={`${WMS_INV.btnIcon} absolute -right-2 top-1/2 -translate-y-1/2`}
-            aria-label="Nośnik"
-            title="Nośnik"
-          >
-            <Package className="h-5 w-5" strokeWidth={2} />
-          </button>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={enterCarrierScan} className={WMS_INV.btnCompact}>
+              Przypisz nośnik
+            </button>
+            {carrierScanMode ? (
+              <button type="button" onClick={skipCarrier} className="text-xs font-semibold text-[#5a6b7d] underline">
+                Pomiń
+              </button>
+            ) : null}
+            {carrierCode ? (
+              <span className="rounded bg-[#eef3fa] px-2 py-0.5 text-[10px] font-bold uppercase text-[#1e4d8c]">
+                Nośnik: {carrierCode}
+              </span>
+            ) : null}
+          </div>
         ) : null}
       </form>
 
-      <div className="flex flex-1 flex-col justify-center">
-        <WmsInventoryProductPreview scan={counting ? activeScan : null} pulse={qtyPulse} />
+      <div className="mt-3 shrink-0">
+        <WmsInventoryProductPreview
+          scan={counting ? activeScan : null}
+          pulse={qtyPulse}
+          invalid={invalidPulse}
+        />
       </div>
 
+      {counting ? (
+        <div className="mt-2 grid shrink-0 grid-cols-4 gap-1.5">
+          <button type="button" className={WMS_INV.btnQuick} onClick={() => void quickAddDelta(1)}>
+            +1
+          </button>
+          <button type="button" className={WMS_INV.btnQuick} onClick={() => void quickAddDelta(5)}>
+            +5
+          </button>
+          <button
+            type="button"
+            className={`${WMS_INV.btnQuick} ${manualOpen ? "border-[#1e4d8c] text-[#1e4d8c]" : ""}`}
+            onClick={() => setManualOpen((v) => !v)}
+          >
+            Ilość ręczna
+          </button>
+          <button type="button" className={WMS_INV.btnQuick} onClick={() => void undoLastScan()}>
+            Cofnij
+          </button>
+        </div>
+      ) : null}
+
       {manualOpen && activeScan ? (
-        <div className="mx-auto mb-4 w-full max-w-md shrink-0 space-y-3">
-          <div className="grid grid-cols-4 gap-2">
+        <div className="mt-2 shrink-0 space-y-2">
+          <div className="grid grid-cols-4 gap-1.5">
             {[1, 2, 5, 10, 25, 50, 100].map((n) => (
               <button
                 key={n}
                 type="button"
                 onClick={() => setManualQty(n)}
-                className="min-h-[48px] rounded-lg border border-[#d0d7e2] bg-white text-lg font-bold tabular-nums active:bg-[#f0f2f5]"
+                className="min-h-[40px] rounded-md border border-[#d0d7e2] bg-white text-sm font-bold tabular-nums active:bg-[#f0f2f5]"
               >
                 {n}
               </button>
             ))}
           </div>
-          <p className="text-center text-4xl font-black tabular-nums text-[#1e4d8c]">{pendingQty}</p>
+          <p className="text-center text-2xl font-black tabular-nums text-[#1e4d8c]">{pendingQty}</p>
           <button type="button" className={`${WMS_INV.btnPrimary} w-full`} onClick={() => void confirmManualQty()}>
             Zapisz {pendingQty}
           </button>
         </div>
       ) : null}
 
+      <div className="mt-3 min-h-0 flex-1 overflow-hidden">
+        {counting ? <WmsInventoryLastScans items={lastScans} /> : null}
+      </div>
+
       {counting ? (
-        <div className="sticky bottom-0 mx-auto flex w-full max-w-md shrink-0 gap-3 pb-4 pt-2">
-          <button
-            type="button"
-            className={manualOpen ? `${WMS_INV.btnPrimary}` : WMS_INV.btnSecondary}
-            onClick={() => setManualOpen((v) => !v)}
-          >
-            Ręczna ilość
-          </button>
-          <button type="button" className={WMS_INV.btnPrimary} onClick={finishLocation}>
-            Zakończ lokalizację
-          </button>
-        </div>
+        <footer className="sticky bottom-0 shrink-0 border-t border-[#e8edf3] bg-white pb-2 pt-2">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              className={WMS_INV.btnFooter}
+              onClick={() => {
+                setManualOpen(true);
+              }}
+            >
+              Ilość ręczna
+            </button>
+            <button type="button" className={WMS_INV.btnFooter} onClick={() => setUnknownOpen(true)}>
+              Nieznany produkt
+            </button>
+            <button type="button" className={`${WMS_INV.btnFooter} bg-[#1e4d8c] text-white`} onClick={finishLocation}>
+              Zakończ lokalizację
+            </button>
+          </div>
+        </footer>
       ) : null}
+
+      <WmsInventoryOperationalSearchModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        tenantId={tenantId}
+        warehouseId={warehouseId!}
+        documentId={task?.inventory_document_id}
+        taskId={task?.id}
+        onPickProduct={handleSearchProduct}
+        onPickLocation={(code, tid) => void handleSearchLocation(code, tid)}
+        onPickCarrier={handleSearchCarrier}
+      />
 
       {task ? (
         <WmsInventoryUnknownProductModal
