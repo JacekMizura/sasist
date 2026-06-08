@@ -1,4 +1,5 @@
 import type { ApiErrorPayload } from "@/utils/apiError";
+import { getApiErrorMessage } from "@/utils/apiError";
 import { inventoryDocumentStatusLabel } from "./inventoryCountUiLabels";
 
 function num(v: unknown): number | null {
@@ -9,26 +10,19 @@ function num(v: unknown): number | null {
 const CODE_MESSAGES_PL: Record<string, (details?: Record<string, unknown>) => string> = {
   invalid_status_transition: (d) => {
     const current = d?.document_status;
-    const allowed = Array.isArray(d?.allowed_statuses) ? d.allowed_statuses.join(", ") : "in_progress";
     const currentLabel = current ? inventoryDocumentStatusLabel(current) : "nieznany";
-    return `Nie można wysłać dokumentu w statusie „${currentLabel}”. Wymagany status: ${allowed}.`;
+    return `Nie można wysłać do zatwierdzenia: dokument musi być w trakcie liczenia (obecny status: ${currentLabel}).`;
   },
   incomplete_count: (d) => {
-    const invType = String(d?.inventory_type ?? "FULL").toUpperCase();
-    if (invType === "PARTIAL") {
-      return "Inwentaryzacja częściowa — nie wymaga pełnego pokrycia dokumentu.";
-    }
     const counted = num(d?.counted_lines);
     const total = num(d?.total_lines);
     const uncounted = num(d?.uncounted_lines);
     const base =
       counted != null && total != null
-        ? `Nie wszystkie pozycje zostały policzone (${counted}/${total}).`
-        : "Nie wszystkie pozycje zostały policzone.";
-    const pendingTasks = num(d?.pending_tasks);
+        ? `Nie wszystkie pozycje dokumentu zostały policzone (${counted}/${total}).`
+        : "Nie wszystkie pozycje dokumentu zostały policzone.";
     const extras: string[] = [];
     if (uncounted != null && uncounted > 0) extras.push(`Pozostało: ${uncounted} poz.`);
-    if (pendingTasks != null && pendingTasks > 0) extras.push(`Aktywne zadania WMS: ${pendingTasks}.`);
     const samples = Array.isArray(d?.uncounted_samples) ? d.uncounted_samples : [];
     if (samples.length > 0) {
       const locs = samples
@@ -39,32 +33,26 @@ const CODE_MESSAGES_PL: Record<string, (details?: Record<string, unknown>) => st
     }
     return extras.length ? `${base} ${extras.join(" ")}` : base;
   },
-  partial_submit_not_ready: (d) => {
-    const reason = String(d?.reason ?? "");
-    if (reason === "no_counted_lines") {
-      return "Inwentaryzacja częściowa — wymagana co najmniej jedna policzona pozycja.";
-    }
-    return "Inwentaryzacja częściowa nie spełnia warunków wysłania do zatwierdzenia.";
-  },
+  partial_submit_not_ready: () => "Dokument nie zawiera policzonych pozycji.",
   active_counting_tasks: (d) => {
     const pending = num(d?.pending_tasks);
     return pending != null && pending > 0
-      ? `Zakończ aktywne zadania liczenia WMS (${pending}).`
-      : "Zakończ aktywne zadania liczenia WMS przed wysłaniem.";
+      ? `Nie można wysłać do zatwierdzenia: otwarte zadania liczenia (${pending}).`
+      : "Nie można wysłać do zatwierdzenia: otwarte zadania liczenia.";
   },
   pending_recounts: (d) => {
-    const pending = num(d?.pending_recounts);
+    const pending = num(d?.pending_recounts) ?? num(d?.projected_recounts);
     const created = num(d?.recounts_created);
-    const parts = [
-      pending != null
-        ? `Dokończ ponowne liczenia przed wysłaniem (${pending} aktywnych).`
-        : "Dokończ ponowne liczenia przed wysłaniem.",
-    ];
-    if (created != null && created > 0) parts.push(`Utworzono ${created} nowych zadań ponownego liczenia.`);
-    return parts.join(" ");
+    const base =
+      pending != null && pending > 0
+        ? `Nie można wysłać do zatwierdzenia: dokończ ponowne liczenia (${pending} aktywnych).`
+        : "Nie można wysłać do zatwierdzenia: dokończ ponowne liczenia.";
+    if (created != null && created > 0) return `${base} Utworzono ${created} nowych zadań ponownego liczenia.`;
+    return base;
   },
   document_not_found: () => "Nie znaleziono dokumentu inwentaryzacji.",
-  permission_denied: () => "Brak uprawnień do tej operacji.",
+  permission_denied: () => "Brak uprawnień do wysłania dokumentu do zatwierdzenia.",
+  inventory_count_error: () => "Operacja inwentaryzacji nie powiodła się.",
 };
 
 /** Polish operator-facing message from structured inventory API error. */
@@ -75,4 +63,30 @@ export function formatInventoryApiError(payload: ApiErrorPayload | null, fallbac
   }
   if (payload.message?.trim()) return payload.message.trim();
   return fallback;
+}
+
+/** Resolve toast message from axios error — prefers structured inventory payload. */
+export function formatInventoryRequestError(err: unknown, fallback = "Operacja nie powiodła się."): string {
+  const payload = err && typeof err === "object" && "response" in err
+    ? (() => {
+        const data = (err as { response?: { data?: unknown } }).response?.data;
+        if (data != null && typeof data === "object" && "detail" in data) {
+          const d = (data as { detail: unknown }).detail;
+          if (typeof d === "string") return { message: d } satisfies ApiErrorPayload;
+          if (d != null && typeof d === "object") {
+            const o = d as Record<string, unknown>;
+            return {
+              code: typeof o.code === "string" ? o.code : undefined,
+              message: typeof o.message === "string" ? o.message : undefined,
+              details: o.details != null && typeof o.details === "object" ? (o.details as Record<string, unknown>) : undefined,
+            } satisfies ApiErrorPayload;
+          }
+        }
+        return null;
+      })()
+    : null;
+  const fromPayload = formatInventoryApiError(payload, "");
+  if (fromPayload) return fromPayload;
+  const generic = getApiErrorMessage(err);
+  return generic.trim() || fallback;
 }

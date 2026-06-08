@@ -24,14 +24,13 @@ import { InventoryDocumentStatusBadge } from "../../modules/inventoryCount/erp/c
 import InventoryLineTable from "../../modules/inventoryCount/erp/components/InventoryLineTable";
 import { InventoryKpiTile, InventorySection } from "../../modules/inventoryCount/erp/components/InventoryPageShell";
 import { triggerBrowserDownload } from "../../modules/inventoryCount/erp/downloadHelpers";
-import { formatInventoryApiError } from "../../modules/inventoryCount/inventoryCountApiErrors";
+import { formatInventoryRequestError } from "../../modules/inventoryCount/inventoryCountApiErrors";
 import {
   canSubmitInventoryDocument,
   inventorySubmitBlockHint,
 } from "../../modules/inventoryCount/inventorySubmitReadiness";
 import { inventoryTypeLabel } from "../../modules/inventoryCount/inventoryCountUiLabels";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { parseApiErrorPayload } from "../../utils/apiError";
 
 type DocTab = "progress" | "differences" | "control";
 
@@ -115,8 +114,8 @@ export default function InventoryCountDocumentDetailPage() {
       toast.success("Zapisano.");
     } catch (err) {
       console.error("[inventory-count action]", kind, err);
-      const payload = parseApiErrorPayload(err);
-      toast.error(formatInventoryApiError(payload));
+      toast.error(formatInventoryRequestError(err));
+      await loadDoc();
     } finally {
       setBusy(false);
     }

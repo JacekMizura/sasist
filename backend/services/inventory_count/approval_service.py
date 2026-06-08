@@ -17,13 +17,18 @@ from ...models.inventory_count.constants import (
     AUDIT_APPROVAL,
     AUDIT_REJECT,
     AUDIT_SUBMIT_APPROVAL,
+    DIFF_CLASS_RECOUNT,
     INV_STATUS_APPROVED,
     INV_STATUS_AWAITING_APPROVAL,
     INV_STATUS_IN_PROGRESS,
+    INV_TYPE_CONTROL,
+    INV_TYPE_CYCLE,
+    INV_TYPE_FULL,
     INV_TYPE_PARTIAL,
     LINE_STATUS_COUNTED,
     LINE_STATUS_SKIPPED,
     RECOUNT_ACTIVE_STATUSES,
+    RECOUNT_STATUS_DONE,
     TASK_ACTIVE_STATUSES,
     TASK_STATUS_ASSIGNED,
     TASK_STATUS_IN_PROGRESS,
@@ -109,11 +114,33 @@ def _uncounted_line_samples(db: Session, document_id: int, *, limit: int = 5) ->
 
 
 def _norm_inventory_type(doc: InventoryDocument) -> str:
-    return str(doc.inventory_type or "FULL").strip().upper()
+    return str(doc.inventory_type or INV_TYPE_FULL).strip().upper()
 
 
-def _is_partial_inventory(doc: InventoryDocument) -> bool:
-    return _norm_inventory_type(doc) == INV_TYPE_PARTIAL
+def _allows_partial_coverage(doc: InventoryDocument) -> bool:
+    """PARTIAL / CYCLE / CONTROL — submit on counted subset, not 100% document coverage."""
+    return _norm_inventory_type(doc) in (INV_TYPE_PARTIAL, INV_TYPE_CYCLE, INV_TYPE_CONTROL)
+
+
+def _task_has_incomplete_count_work(db: Session, doc: InventoryDocument, task: InventoryTask) -> bool:
+    """True when counting started at task location but uncounted lines remain."""
+    lines = (
+        db.query(InventoryDocumentLine)
+        .filter(
+            InventoryDocumentLine.inventory_document_id == int(doc.id),
+            InventoryDocumentLine.location_id == int(task.location_id),
+        )
+        .all()
+    )
+    if not lines:
+        return False
+    any_counted = any(ln.counted_quantity is not None for ln in lines)
+    if not any_counted:
+        return False
+    return any(
+        ln.counted_quantity is None and ln.status not in (LINE_STATUS_COUNTED, LINE_STATUS_SKIPPED)
+        for ln in lines
+    )
 
 
 def _pending_recount_count(db: Session, document_id: int) -> int:
@@ -127,11 +154,40 @@ def _pending_recount_count(db: Session, document_id: int) -> int:
     )
 
 
+def _projected_recount_blockers(db: Session, doc: InventoryDocument) -> tuple[int, int]:
+    """Return (active_pending_recounts, lines_still_needing_recount)."""
+    active = _pending_recount_count(db, int(doc.id))
+    needs_recount = 0
+    if not bool(doc.recount_required):
+        return active, 0
+
+    analysis = analyze_document_differences(db, document=doc)
+    for row in analysis.get("lines") or []:
+        if row.get("difference_class") != DIFF_CLASS_RECOUNT:
+            continue
+        line_id = int(row["line_id"])
+        existing = (
+            db.query(InventoryRecount)
+            .filter(
+                InventoryRecount.inventory_document_line_id == line_id,
+                InventoryRecount.status != RECOUNT_STATUS_DONE,
+            )
+            .first()
+        )
+        if existing is None:
+            needs_recount += 1
+    return active, needs_recount
+
+
 def _blocking_task_count(db: Session, doc: InventoryDocument) -> int:
     q = db.query(InventoryTask).filter(InventoryTask.inventory_document_id == int(doc.id))
-    if _is_partial_inventory(doc):
-        # Partial: unvisited open tasks are OK — only operator-started work blocks submit.
-        return q.filter(InventoryTask.status.in_((TASK_STATUS_IN_PROGRESS, TASK_STATUS_ASSIGNED))).count()
+    if _allows_partial_coverage(doc):
+        blocking = 0
+        active_tasks = q.filter(InventoryTask.status.in_((TASK_STATUS_IN_PROGRESS, TASK_STATUS_ASSIGNED))).all()
+        for task in active_tasks:
+            if _task_has_incomplete_count_work(db, doc, task):
+                blocking += 1
+        return blocking
     return q.filter(InventoryTask.status.in_(TASK_ACTIVE_STATUSES)).count()
 
 
@@ -141,18 +197,21 @@ def _submit_blockers(db: Session, doc: InventoryDocument) -> dict[str, Any]:
     pending_tasks = _blocking_task_count(db, doc)
     uncounted_lines = max(0, int(doc.total_lines or 0) - int(doc.counted_lines or 0))
     inv_type = _norm_inventory_type(doc)
+    pending_recounts, projected_recounts = _projected_recount_blockers(db, doc)
     return {
         "document_id": int(doc.id),
         "document_status": status,
         "inventory_type": inv_type,
-        "requires_full_coverage": inv_type != INV_TYPE_PARTIAL,
+        "requires_full_coverage": inv_type == INV_TYPE_FULL,
+        "allows_partial_coverage": _allows_partial_coverage(doc),
         "allowed_statuses": [INV_STATUS_IN_PROGRESS],
         "counted_lines": int(doc.counted_lines or 0),
         "total_lines": int(doc.total_lines or 0),
         "uncounted_lines": uncounted_lines,
         "coverage_percent": int(doc.coverage_percent or 0),
         "pending_tasks": int(pending_tasks),
-        "pending_recounts": int(_pending_recount_count(db, int(doc.id))),
+        "pending_recounts": int(pending_recounts),
+        "projected_recounts": int(projected_recounts),
         "recount_required": bool(doc.recount_required),
         "uncounted_samples": _uncounted_line_samples(db, int(doc.id)),
     }
@@ -160,22 +219,27 @@ def _submit_blockers(db: Session, doc: InventoryDocument) -> dict[str, Any]:
 
 def _submit_block_message(code: str, blockers: dict[str, Any]) -> str:
     if code == "invalid_status_transition":
-        return f"Only in-progress inventories can be submitted (current status: {blockers.get('document_status')})"
+        current = blockers.get("document_status")
+        return f"Nie można wysłać do zatwierdzenia: dokument musi być w trakcie liczenia (obecny status: {current})."
     if code == "active_counting_tasks":
-        return f"Active WMS counting tasks remain ({blockers.get('pending_tasks')})"
+        pending = blockers.get("pending_tasks")
+        return f"Nie można wysłać do zatwierdzenia: otwarte zadania liczenia ({pending})."
     if code == "partial_submit_not_ready":
-        return "Partial inventory requires at least one counted line"
+        return "Dokument nie zawiera policzonych pozycji."
     if code == "incomplete_count":
-        return f"Not all lines counted ({blockers.get('counted_lines')}/{blockers.get('total_lines')})"
+        counted = blockers.get("counted_lines")
+        total = blockers.get("total_lines")
+        return f"Nie wszystkie pozycje dokumentu zostały policzone ({counted}/{total})."
     if code == "pending_recounts":
-        return f"Complete pending recounts before approval ({blockers.get('pending_recounts')})"
-    return "Inventory cannot be submitted for approval"
+        pending = blockers.get("pending_recounts") or blockers.get("projected_recounts")
+        return f"Nie można wysłać do zatwierdzenia: dokończ ponowne liczenia ({pending} aktywnych)."
+    return "Nie można wysłać dokumentu do zatwierdzenia."
 
 
 def evaluate_submit_readiness(db: Session, doc: InventoryDocument) -> dict[str, Any]:
     """Non-throwing submit gate — for ERP document detail UI."""
     blockers = _submit_blockers(db, doc)
-    partial = _is_partial_inventory(doc)
+    scoped = _allows_partial_coverage(doc)
 
     if blockers["document_status"] != INV_STATUS_IN_PROGRESS:
         code = "invalid_status_transition"
@@ -195,7 +259,7 @@ def evaluate_submit_readiness(db: Session, doc: InventoryDocument) -> dict[str, 
             "details": blockers,
         }
 
-    if partial:
+    if scoped:
         if blockers["counted_lines"] < 1:
             code = "partial_submit_not_ready"
             blockers = {**blockers, "reason": "no_counted_lines"}
@@ -214,8 +278,14 @@ def evaluate_submit_readiness(db: Session, doc: InventoryDocument) -> dict[str, 
             "details": blockers,
         }
 
-    if blockers["pending_recounts"] > 0:
+    pending_recounts = int(blockers.get("pending_recounts") or 0)
+    projected_recounts = int(blockers.get("projected_recounts") or 0)
+    if pending_recounts > 0 or projected_recounts > 0:
         code = "pending_recounts"
+        blockers = {
+            **blockers,
+            "pending_recounts": max(pending_recounts, projected_recounts),
+        }
         return {
             "can_submit": False,
             "block_code": code,
@@ -286,9 +356,9 @@ def submit_for_approval(
         .count()
     )
     if pending_recounts > 0:
-        db.commit()
+        db.rollback()
         raise InventoryPendingRecountsError(
-            f"Complete pending recounts before approval ({pending_recounts} active)",
+            _submit_block_message("pending_recounts", {**blockers, "pending_recounts": pending_recounts}),
             details={
                 **blockers,
                 "pending_recounts": int(pending_recounts),

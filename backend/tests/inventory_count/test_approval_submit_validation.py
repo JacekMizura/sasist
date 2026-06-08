@@ -13,6 +13,7 @@ from backend.models.inventory_count.constants import (
     INV_STATUS_AWAITING_APPROVAL,
     INV_STATUS_IN_PROGRESS,
     INV_STATUS_PLANNED,
+    INV_TYPE_CYCLE,
     INV_TYPE_FULL,
     INV_TYPE_PARTIAL,
     LINE_STATUS_COUNTED,
@@ -176,9 +177,52 @@ class TestSubmitApprovalValidation(unittest.TestCase):
             self.assertEqual(ctx.exception.code, "partial_submit_not_ready")
             self.assertEqual(ctx.exception.details.get("reason"), "no_counted_lines")
 
-    def test_partial_rejects_active_tasks(self):
+    def test_partial_rejects_active_tasks_with_incomplete_location(self):
         from backend.services.inventory_count.errors import InventoryActiveCountingTasksError
 
+        with self.Session() as db:
+            doc = self._doc(db, inventory_type=INV_TYPE_PARTIAL)
+            db.add(
+                InventoryDocumentLine(
+                    inventory_document_id=doc.id,
+                    location_id=10,
+                    product_id=5,
+                    expected_quantity=10.0,
+                    counted_quantity=1.0,
+                    status=LINE_STATUS_COUNTED,
+                )
+            )
+            db.add(
+                InventoryDocumentLine(
+                    inventory_document_id=doc.id,
+                    location_id=10,
+                    product_id=6,
+                    expected_quantity=5.0,
+                    status=LINE_STATUS_OPEN,
+                )
+            )
+            db.flush()
+            db.add(
+                InventoryTask(
+                    inventory_document_id=doc.id,
+                    tenant_id=1,
+                    warehouse_id=1,
+                    location_id=10,
+                    task_number="T-1",
+                    status=TASK_STATUS_IN_PROGRESS,
+                )
+            )
+            db.commit()
+            db.refresh(doc)
+            recompute_document_kpis(db, doc)
+            db.commit()
+
+            with self.assertRaises(InventoryActiveCountingTasksError) as ctx:
+                submit_for_approval(db, tenant_id=1, document_id=doc.id, user_id=1)
+            self.assertEqual(ctx.exception.code, "active_counting_tasks")
+            self.assertEqual(ctx.exception.details.get("pending_tasks"), 1)
+
+    def test_partial_allows_in_progress_task_when_location_fully_counted(self):
         with self.Session() as db:
             doc = self._doc(db, inventory_type=INV_TYPE_PARTIAL)
             db.add(
@@ -207,10 +251,8 @@ class TestSubmitApprovalValidation(unittest.TestCase):
             recompute_document_kpis(db, doc)
             db.commit()
 
-            with self.assertRaises(InventoryActiveCountingTasksError) as ctx:
-                submit_for_approval(db, tenant_id=1, document_id=doc.id, user_id=1)
-            self.assertEqual(ctx.exception.code, "active_counting_tasks")
-            self.assertEqual(ctx.exception.details.get("pending_tasks"), 1)
+            result = submit_for_approval(db, tenant_id=1, document_id=doc.id, user_id=1)
+            self.assertEqual(result["status"], INV_STATUS_AWAITING_APPROVAL)
 
     def test_partial_ignores_open_tasks_at_unvisited_locations(self):
         from backend.models.inventory_count.constants import TASK_STATUS_OPEN
@@ -236,6 +278,36 @@ class TestSubmitApprovalValidation(unittest.TestCase):
                     location_id=99,
                     task_number="T-OPEN",
                     status=TASK_STATUS_OPEN,
+                )
+            )
+            db.commit()
+            db.refresh(doc)
+            recompute_document_kpis(db, doc)
+            db.commit()
+
+            result = submit_for_approval(db, tenant_id=1, document_id=doc.id, user_id=1)
+            self.assertEqual(result["status"], INV_STATUS_AWAITING_APPROVAL)
+
+    def test_cycle_allows_partial_coverage(self):
+        with self.Session() as db:
+            doc = self._doc(db, inventory_type=INV_TYPE_CYCLE)
+            db.add(
+                InventoryDocumentLine(
+                    inventory_document_id=doc.id,
+                    location_id=10,
+                    product_id=5,
+                    expected_quantity=10.0,
+                    counted_quantity=2.0,
+                    status=LINE_STATUS_COUNTED,
+                )
+            )
+            db.add(
+                InventoryDocumentLine(
+                    inventory_document_id=doc.id,
+                    location_id=11,
+                    product_id=6,
+                    expected_quantity=5.0,
+                    status=LINE_STATUS_OPEN,
                 )
             )
             db.commit()
