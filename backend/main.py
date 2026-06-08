@@ -262,6 +262,8 @@ from .api.qz import router as qz_router
 from .api.wave import router as wave_router
 from .api.scan import router as scan_router
 from .api.inventory_api import router as inventory_router
+from .api.inventory_count import router as inventory_count_router
+from .api.inventory_count_wms import router as inventory_count_wms_router
 from .api.picks import router as picks_router
 from .api.system import router as system_router
 from .api.dev import router as dev_router
@@ -1549,6 +1551,8 @@ _API_ROUTERS = (
     wave_router,
     scan_router,
     inventory_router,
+    inventory_count_router,
+    inventory_count_wms_router,
     picks_router,
     system_router,
     dev_router,

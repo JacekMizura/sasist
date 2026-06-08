@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Factory,
   Inbox,
+  ListChecks,
   Package,
   ScanSearch,
   ShoppingCart,
@@ -29,7 +30,8 @@ export type WmsTabId =
   | "issues"
   | "direct_sales"
   | "operations"
-  | "production";
+  | "production"
+  | "inventory_count";
 
 /** Backend ``wms_operational_modes`` key; omit = always visible (no mode gate). */
 export type WmsOperationalModeKey = string;
@@ -108,6 +110,15 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     shortDescription: "Zbieranie surowców, wykonanie i odkładanie wyrobów",
   },
   {
+    id: "inventory_count",
+    path: "/wms/inventory-count/tasks",
+    label: "Inwentaryzacja",
+    icon: ListChecks,
+    sortOrder: 56,
+    dashboard: true,
+    shortDescription: "Liczenie magazynu — tryb blind, skaner",
+  },
+  {
     id: "packing",
     path: "/wms/packing",
     label: "Pakowanie",
@@ -172,6 +183,9 @@ export function isWmsTabPathActive(pathname: string, tab: WmsTabConfigItem): boo
   }
   if (tab.id === "production") {
     return p === "/wms/production" || p.startsWith("/wms/production/") || p.startsWith("/wms/production");
+  }
+  if (tab.id === "inventory_count") {
+    return p.startsWith("/wms/inventory-count");
   }
   return p === tab.path || p.startsWith(`${tab.path}/`);
 }

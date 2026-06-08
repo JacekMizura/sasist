@@ -1,6 +1,17 @@
 # Current context
 
 ## Active goal
+Enterprise **Inventory / Stock Count** module — ERP planning + WMS blind counting + snapshot-based reconciliation.
+
+## Inventory count module (2026-06-08)
+- **Tier 1 schema**: 13 tables via `ensure_inventory_count_schema` (`inventory_count_schema.py`)
+- **ERP** `/inventory-count/*` — dashboard KPIs, documents, 5-step wizard, reports catalog placeholder
+- **WMS** `/wms/inventory-count/*` — task queue, operator sessions, blind-count execution shell
+- **API** `/api/inventory-count/*` + `/api/wms/inventory-count/*`
+- **Snapshot** on start: stock + reservations + serials (operate against snapshot in phase 2 line materialization)
+- Full design: `memory/inventory-count-module.md`
+
+## Prior goal
 Production schema integrity as core platform infrastructure — fail-fast startup, `/health/schema`, worker guards.
 
 ## Production schema platform (latest)

@@ -201,6 +201,15 @@ import PurchasingPoDetailPage from "./pages/purchasing/PurchasingPoDetailPage"
 import PurchasingForecastPage from "./pages/purchasing/PurchasingForecastPage"
 import PurchasingReplenishmentPage from "./pages/purchasing/PurchasingReplenishmentPage"
 import PurchasingCooperationHistoryPage from "./pages/purchasing/PurchasingCooperationHistoryPage"
+import InventoryCountErpLayout from "./pages/inventory-count/InventoryCountErpLayout"
+import InventoryCountDashboardPage from "./pages/inventory-count/InventoryCountDashboardPage"
+import InventoryCountDocumentsPage from "./pages/inventory-count/InventoryCountDocumentsPage"
+import InventoryCountWizardPage from "./pages/inventory-count/InventoryCountWizardPage"
+import InventoryCountReportsPage from "./pages/inventory-count/InventoryCountReportsPage"
+import InventoryCountDocumentDetailPage from "./pages/inventory-count/InventoryCountDocumentDetailPage"
+import WmsInventoryCountLayout from "./pages/wms/inventory-count/WmsInventoryCountLayout"
+import WmsInventoryCountTasksPage from "./pages/wms/inventory-count/WmsInventoryCountTasksPage"
+import WmsInventoryCountExecutionPage from "./pages/wms/inventory-count/WmsInventoryCountExecutionPage"
 import CustomersListPage from "./pages/customers/CustomersListPage"
 import CustomerEditPage from "./pages/customers/CustomerEditPage"
 import PurchaseOrdersPage from "./pages/Assortment/PurchaseOrdersPage"
@@ -449,6 +458,18 @@ export const router = createBrowserRouter(
           <Route path="putaway/:batchId" element={<PutawayPage />} />
           <Route path="batch/:batchId" element={<WmsProductionBatchRedirect />} />
         </Route>
+        <Route
+          path="inventory-count"
+          element={
+            <ErrorBoundary>
+              <WmsInventoryCountLayout />
+            </ErrorBoundary>
+          }
+        >
+          <Route index element={<Navigate to="tasks" replace />} />
+          <Route path="tasks" element={<WmsInventoryCountTasksPage />} />
+          <Route path="count/:taskId" element={<WmsInventoryCountExecutionPage />} />
+        </Route>
       </Route>
       <Route element={<SettingsAdminLayout />}>
                 <Route path="setup" element={<Navigate to="/settings/company" replace />} />
@@ -561,6 +582,22 @@ export const router = createBrowserRouter(
                   <Route path="analytics" element={<ProductionAnalyticsPage />} />
                   <Route path="batches" element={<Navigate to="/production/planning" replace />} />
                   <Route path="batch/:batchId" element={<BatchDetailPage />} />
+                </Route>
+                <Route
+                  path="inventory-count"
+                  element={
+                    <ErrorBoundary>
+                      <InventoryCountErpLayout />
+                    </ErrorBoundary>
+                  }
+                >
+                  <Route index element={<Navigate to="dashboard" replace />} />
+                  <Route path="dashboard" element={<InventoryCountDashboardPage />} />
+                  <Route path="documents" element={<InventoryCountDocumentsPage />} />
+                  <Route path="documents/:documentId" element={<InventoryCountDocumentDetailPage />} />
+                  <Route path="wizard" element={<InventoryCountWizardPage />} />
+                  <Route path="wizard/:documentId" element={<InventoryCountWizardPage />} />
+                  <Route path="reports" element={<InventoryCountReportsPage />} />
                 </Route>
                 <Route path="manufacturers" element={<ManufacturersPage />} />
                 <Route path="manufacturers/new" element={<ManufacturersPage defaultCreateOpen={true} />} />

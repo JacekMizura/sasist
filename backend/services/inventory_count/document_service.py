@@ -1,0 +1,336 @@
+"""Inventory document lifecycle — ERP planning, wizard, status transitions."""
+
+from __future__ import annotations
+
+import json
+import uuid
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from ...models.inventory_count.constants import (
+    AUDIT_DOC_CREATED,
+    AUDIT_DOC_STATUS,
+    AUDIT_SNAPSHOT,
+    AUDIT_TASK_GENERATED,
+    INV_STATUS_DRAFT,
+    INV_STATUS_IN_PROGRESS,
+    INV_STATUS_PLANNED,
+    INV_TYPE_FULL,
+    TASK_STATUS_OPEN,
+)
+from ...models.inventory_count.document import InventoryDocument
+from ...models.inventory_count.task import InventoryTask
+from .audit_service import log_inventory_audit
+from .errors import InventoryDocumentNotFoundError, InventoryInvalidTransitionError
+from .snapshot_service import capture_inventory_snapshots
+
+
+def _generate_document_number(tenant_id: int) -> str:
+    stamp = datetime.utcnow().strftime("%Y%m%d")
+    suffix = uuid.uuid4().hex[:6].upper()
+    return f"INV-{tenant_id}-{stamp}-{suffix}"
+
+
+def _serialize_json(value: dict[str, Any] | None) -> str | None:
+    if not value:
+        return None
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _doc_to_dict(doc: InventoryDocument) -> dict[str, Any]:
+    return {
+        "id": doc.id,
+        "tenant_id": doc.tenant_id,
+        "warehouse_id": doc.warehouse_id,
+        "number": doc.number,
+        "inventory_type": doc.inventory_type,
+        "status": doc.status,
+        "count_mode": doc.count_mode,
+        "lock_mode": doc.lock_mode,
+        "recount_required": bool(doc.recount_required),
+        "scan_mode": doc.scan_mode,
+        "filters": json.loads(doc.filters_json) if doc.filters_json else {},
+        "strategy": json.loads(doc.strategy_json) if doc.strategy_json else {},
+        "metadata": json.loads(doc.metadata_json) if doc.metadata_json else {},
+        "notes": doc.notes,
+        "planned_start_at": doc.planned_start_at.isoformat() if doc.planned_start_at else None,
+        "planned_end_at": doc.planned_end_at.isoformat() if doc.planned_end_at else None,
+        "snapshot_created_at": doc.snapshot_created_at.isoformat() if doc.snapshot_created_at else None,
+        "approved_at": doc.approved_at.isoformat() if doc.approved_at else None,
+        "posted_at": doc.posted_at.isoformat() if doc.posted_at else None,
+        "started_at": doc.started_at.isoformat() if doc.started_at else None,
+        "completed_at": doc.completed_at.isoformat() if doc.completed_at else None,
+        "total_lines": doc.total_lines,
+        "counted_lines": doc.counted_lines,
+        "difference_lines": doc.difference_lines,
+        "coverage_percent": doc.coverage_percent,
+        "created_by_user_id": doc.created_by_user_id,
+        "approved_by_user_id": doc.approved_by_user_id,
+        "created_at": doc.created_at.isoformat() if doc.created_at else None,
+        "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+    }
+
+
+def list_inventory_documents(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int | None = None,
+    status: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    q = db.query(InventoryDocument).filter(InventoryDocument.tenant_id == int(tenant_id))
+    if warehouse_id is not None:
+        q = q.filter(InventoryDocument.warehouse_id == int(warehouse_id))
+    if status:
+        q = q.filter(InventoryDocument.status == str(status).strip().lower())
+    rows = q.order_by(InventoryDocument.updated_at.desc()).limit(max(1, min(limit, 200))).all()
+    return [_doc_to_dict(r) for r in rows]
+
+
+def get_inventory_document(db: Session, *, tenant_id: int, document_id: int) -> dict[str, Any]:
+    doc = (
+        db.query(InventoryDocument)
+        .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc is None:
+        raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
+    return _doc_to_dict(doc)
+
+
+def create_inventory_document(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    inventory_type: str = INV_TYPE_FULL,
+    user_id: int | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    doc = InventoryDocument(
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        number=_generate_document_number(int(tenant_id)),
+        inventory_type=str(inventory_type or INV_TYPE_FULL).upper(),
+        status=INV_STATUS_DRAFT,
+        created_by_user_id=user_id,
+        notes=notes,
+    )
+    db.add(doc)
+    db.flush()
+    log_inventory_audit(
+        db,
+        tenant_id=int(tenant_id),
+        inventory_document_id=doc.id,
+        user_id=user_id,
+        action=AUDIT_DOC_CREATED,
+        entity_type="inventory_document",
+        entity_id=doc.id,
+        detail={"number": doc.number, "inventory_type": doc.inventory_type},
+    )
+    db.commit()
+    db.refresh(doc)
+    return _doc_to_dict(doc)
+
+
+def update_inventory_document_wizard(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    user_id: int | None = None,
+    inventory_type: str | None = None,
+    filters: dict[str, Any] | None = None,
+    count_mode: str | None = None,
+    lock_mode: str | None = None,
+    recount_required: bool | None = None,
+    scan_mode: str | None = None,
+    strategy: dict[str, Any] | None = None,
+    notes: str | None = None,
+    planned_start_at: datetime | None = None,
+    planned_end_at: datetime | None = None,
+) -> dict[str, Any]:
+    doc = (
+        db.query(InventoryDocument)
+        .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc is None:
+        raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
+    if doc.status not in (INV_STATUS_DRAFT, INV_STATUS_PLANNED):
+        raise InventoryInvalidTransitionError("Document can only be edited in draft or planned status")
+
+    if inventory_type:
+        doc.inventory_type = str(inventory_type).upper()
+    if filters is not None:
+        doc.filters_json = _serialize_json(filters)
+    if count_mode:
+        doc.count_mode = str(count_mode)
+    if lock_mode:
+        doc.lock_mode = str(lock_mode)
+    if recount_required is not None:
+        doc.recount_required = 1 if recount_required else 0
+    if scan_mode:
+        doc.scan_mode = str(scan_mode)
+    if strategy is not None:
+        doc.strategy_json = _serialize_json(strategy)
+    if notes is not None:
+        doc.notes = notes
+    if planned_start_at is not None:
+        doc.planned_start_at = planned_start_at
+    if planned_end_at is not None:
+        doc.planned_end_at = planned_end_at
+    doc.touch_updated()
+    db.commit()
+    db.refresh(doc)
+    return _doc_to_dict(doc)
+
+
+def plan_inventory_document(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    return _transition_status(
+        db,
+        tenant_id=tenant_id,
+        document_id=document_id,
+        from_statuses=(INV_STATUS_DRAFT,),
+        to_status=INV_STATUS_PLANNED,
+        user_id=user_id,
+    )
+
+
+def start_inventory_document(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    doc = (
+        db.query(InventoryDocument)
+        .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc is None:
+        raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
+    if doc.status not in (INV_STATUS_PLANNED, INV_STATUS_DRAFT):
+        raise InventoryInvalidTransitionError(f"Cannot start inventory from status {doc.status}")
+
+    capture_inventory_snapshots(db, document=doc, user_id=user_id)
+    doc.status = INV_STATUS_IN_PROGRESS
+    doc.started_at = datetime.utcnow()
+    doc.snapshot_created_at = datetime.utcnow()
+    doc.touch_updated()
+    log_inventory_audit(
+        db,
+        tenant_id=int(tenant_id),
+        inventory_document_id=doc.id,
+        user_id=user_id,
+        action=AUDIT_SNAPSHOT,
+        detail={"snapshot_created_at": doc.snapshot_created_at.isoformat()},
+    )
+    log_inventory_audit(
+        db,
+        tenant_id=int(tenant_id),
+        inventory_document_id=doc.id,
+        user_id=user_id,
+        action=AUDIT_DOC_STATUS,
+        detail={"from": INV_STATUS_PLANNED, "to": INV_STATUS_IN_PROGRESS},
+    )
+    db.commit()
+    db.refresh(doc)
+    return _doc_to_dict(doc)
+
+
+def generate_inventory_tasks(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    user_id: int | None = None,
+    location_ids: list[int] | None = None,
+) -> dict[str, Any]:
+    doc = (
+        db.query(InventoryDocument)
+        .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc is None:
+        raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
+    if doc.status not in (INV_STATUS_PLANNED, INV_STATUS_DRAFT, INV_STATUS_IN_PROGRESS):
+        raise InventoryInvalidTransitionError("Tasks can only be generated for draft/planned/in-progress documents")
+
+    locs = location_ids or []
+    if not locs:
+        # Placeholder: real implementation resolves locations from filters + snapshot lines
+        locs = []
+
+    created = 0
+    for seq, loc_id in enumerate(locs, start=1):
+        task = InventoryTask(
+            inventory_document_id=doc.id,
+            tenant_id=doc.tenant_id,
+            warehouse_id=doc.warehouse_id,
+            location_id=int(loc_id),
+            task_number=f"{doc.number}-T{seq:04d}",
+            status=TASK_STATUS_OPEN,
+            sequence_no=seq,
+        )
+        db.add(task)
+        created += 1
+
+    if doc.status == INV_STATUS_DRAFT:
+        doc.status = INV_STATUS_PLANNED
+    doc.touch_updated()
+    log_inventory_audit(
+        db,
+        tenant_id=int(tenant_id),
+        inventory_document_id=doc.id,
+        user_id=user_id,
+        action=AUDIT_TASK_GENERATED,
+        detail={"tasks_created": created},
+    )
+    db.commit()
+    db.refresh(doc)
+    return {"document": _doc_to_dict(doc), "tasks_created": created}
+
+
+def _transition_status(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    from_statuses: tuple[str, ...],
+    to_status: str,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    doc = (
+        db.query(InventoryDocument)
+        .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc is None:
+        raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
+    if doc.status not in from_statuses:
+        raise InventoryInvalidTransitionError(f"Cannot transition from {doc.status} to {to_status}")
+    prev = doc.status
+    doc.status = to_status
+    doc.touch_updated()
+    log_inventory_audit(
+        db,
+        tenant_id=int(tenant_id),
+        inventory_document_id=doc.id,
+        user_id=user_id,
+        action=AUDIT_DOC_STATUS,
+        detail={"from": prev, "to": to_status},
+    )
+    db.commit()
+    db.refresh(doc)
+    return _doc_to_dict(doc)

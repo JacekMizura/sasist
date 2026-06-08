@@ -4122,6 +4122,13 @@ def ensure_operational_runtime_phase4_schema(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_inventory_count_schema(engine: Engine) -> None:
+    """Inventory / stock count module — Tier 1 operational tables."""
+    from .inventory_count_schema import ensure_inventory_count_schema as _impl
+
+    _impl(engine)
+
+
 def ensure_wms_operational_tasks_table(engine: Engine) -> None:
     """WMS operational tasks — product-centric work queue (source of truth)."""
     with engine.connect() as conn:
