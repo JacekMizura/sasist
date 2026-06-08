@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { fetchWmsInventoryTask, openWmsInventorySession, resolveWmsInventoryLocationScan } from "../../../api/inventoryCountApi";
-import WmsInventoryScanField from "../../../modules/inventoryCount/components/WmsInventoryScanField";
-import { useInventoryScanInput } from "../../../modules/inventoryCount/hooks/useInventoryScanInput";
-import { wmsInventoryCountPaths } from "../../../modules/inventoryCount/inventoryCountPaths";
+import { fetchWmsInventoryTask, openWmsInventorySession, resolveWmsInventoryLocationScan } from "@/api/inventoryCountApi";
+import WmsInventoryRecentLocationContext from "@/modules/inventoryCount/components/WmsInventoryRecentLocationContext";
+import WmsInventoryScanField from "@/modules/inventoryCount/components/WmsInventoryScanField";
+import { useInventoryScanInput } from "@/modules/inventoryCount/hooks/useInventoryScanInput";
+import { wmsInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
 import {
-  loadRecentLocations,
-  pushRecentLocation,
-  type RecentLocationEntry,
-} from "../../../modules/inventoryCount/recentLocationsStorage";
-import { WMS_INV } from "../../../modules/inventoryCount/wmsIndustrialTheme";
-import { useWarehouse } from "../../../context/WarehouseContext";
-import { useScanFeedback } from "../../../components/wms/execution/useScanFeedback";
+  loadRecentLocationSessions,
+  touchRecentLocation,
+  type RecentLocationSession,
+} from "@/modules/inventoryCount/recentLocationsStorage";
+import { WMS_INV } from "@/modules/inventoryCount/wmsIndustrialTheme";
+import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
+import { useWarehouse } from "@/context/WarehouseContext";
 
 const TENANT_ID = 1;
 
@@ -23,16 +24,32 @@ export default function WmsInventoryCountEntryPage() {
   const warehouseId = warehouse?.id;
   const tenantId = TENANT_ID;
   const inputRef = useRef<HTMLInputElement>(null);
-  const [recent, setRecent] = useState<RecentLocationEntry[]>([]);
+  const [recentTick, setRecentTick] = useState(0);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    setRecent(loadRecentLocations());
-    inputRef.current?.focus();
+  const recent = useMemo(() => loadRecentLocationSessions(), [recentTick]);
+
+  const focusScan = useCallback(() => {
+    window.requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
+  useEffect(() => {
+    focusScan();
+  }, [focusScan]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setRecentTick((n) => n + 1);
+        focusScan();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [focusScan]);
+
   const openLocation = useCallback(
-    async (code: string, knownTaskId?: number) => {
+    async (code: string, knownTaskId?: number, knownLocationId?: number) => {
       if (!warehouseId || busy) return;
       const trimmed = code.trim();
       if (!trimmed) return;
@@ -41,6 +58,9 @@ export default function WmsInventoryCountEntryPage() {
       try {
         let taskId = knownTaskId;
         let documentId: number | undefined;
+        let locationId = knownLocationId ?? 0;
+        let locationCode = trimmed.toUpperCase();
+
         if (!taskId) {
           const resolved = await resolveWmsInventoryLocationScan(tenantId, warehouseId, trimmed);
           if (!resolved.found || !resolved.task_id) {
@@ -55,9 +75,13 @@ export default function WmsInventoryCountEntryPage() {
           }
           taskId = resolved.task_id;
           documentId = resolved.inventory_document_id;
+          locationId = resolved.location_id ?? 0;
+          locationCode = (resolved.location_code ?? trimmed).toUpperCase();
         } else {
           const t = await fetchWmsInventoryTask(tenantId, taskId);
           documentId = t.inventory_document_id;
+          locationId = t.location_id;
+          locationCode = (t.location_code ?? t.location_name ?? trimmed).toUpperCase();
         }
 
         if (!documentId) {
@@ -69,9 +93,8 @@ export default function WmsInventoryCountEntryPage() {
           document_id: documentId,
           task_id: taskId,
         });
-        const label = trimmed.toUpperCase();
-        pushRecentLocation({ code: label, taskId });
-        setRecent(loadRecentLocations());
+        touchRecentLocation({ code: locationCode, taskId, locationId });
+        setRecentTick((n) => n + 1);
         navigate(wmsInventoryCountPaths.count(taskId), {
           state: { sessionId: session.id, locationConfirmed: true },
         });
@@ -83,6 +106,13 @@ export default function WmsInventoryCountEntryPage() {
       }
     },
     [busy, navigate, scanFeedback, tenantId, warehouseId],
+  );
+
+  const openRecent = useCallback(
+    (item: RecentLocationSession) => {
+      void openLocation(item.code, item.taskId, item.locationId || undefined);
+    },
+    [openLocation],
   );
 
   const { query, onChange, submitScanOnce } = useInventoryScanInput({
@@ -107,25 +137,7 @@ export default function WmsInventoryCountEntryPage() {
         disabled={busy}
       />
 
-      {recent.length > 0 ? (
-        <section>
-          <p className={`${WMS_INV.textLabel} mb-0.5`}>Ostatnie lokalizacje</p>
-          <ul>
-            {recent.map((item) => (
-              <li key={`${item.taskId}-${item.at}`}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="py-1 text-left text-base font-black text-[#1e4d8c] active:text-[#163a6b] disabled:opacity-40"
-                  onClick={() => void openLocation(item.code, item.taskId)}
-                >
-                  {item.code}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      <WmsInventoryRecentLocationContext items={recent} disabled={busy} onSelect={openRecent} />
 
       <Link to="/wms/menu" className={`inline-block text-[10px] font-bold uppercase tracking-wide ${WMS_INV.textMuted}`}>
         ← Menu WMS

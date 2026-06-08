@@ -103,7 +103,10 @@ def _map_error(exc: InventoryCountError) -> HTTPException:
         )
 
     status = 404 if "not_found" in exc.code else 400
-    return HTTPException(status_code=status, detail={"code": exc.code, "message": str(exc)})
+    detail: dict = {"code": exc.code, "message": str(exc)}
+    if exc.details:
+        detail["details"] = exc.details
+    return HTTPException(status_code=status, detail=detail)
 
 
 @router.get("/tasks", response_model=List[InventoryTaskRead])

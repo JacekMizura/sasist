@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class InventoryCountError(Exception):
     code: str = "inventory_count_error"
 
-    def __init__(self, message: str, *, code: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         if code:
             self.code = code
+        self.details: dict[str, Any] = dict(details or {})
 
 
 class InventoryDocumentNotFoundError(InventoryCountError):
@@ -18,6 +27,14 @@ class InventoryDocumentNotFoundError(InventoryCountError):
 
 class InventoryInvalidTransitionError(InventoryCountError):
     code = "invalid_status_transition"
+
+
+class InventoryIncompleteCountError(InventoryCountError):
+    code = "incomplete_count"
+
+
+class InventoryPendingRecountsError(InventoryCountError):
+    code = "pending_recounts"
 
 
 class InventoryTaskNotFoundError(InventoryCountError):
@@ -59,8 +76,14 @@ class InventoryPermissionDeniedError(InventoryCountError):
 class InventoryBarcodeNotFoundError(InventoryCountError):
     code = "barcode_not_found"
 
-    def __init__(self, message: str, *, barcode: str | None = None) -> None:
-        super().__init__(message, code=self.code)
+    def __init__(
+        self,
+        message: str,
+        *,
+        barcode: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message, code=self.code, details=details)
         self.barcode = barcode
 
 
@@ -74,8 +97,16 @@ class InventoryBarcodeLineNotFoundError(InventoryCountError):
         barcode: str | None = None,
         product_id: int | None = None,
         task_id: int | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__(message, code=self.code)
+        merged = dict(details or {})
+        if barcode is not None:
+            merged.setdefault("barcode", barcode)
+        if product_id is not None:
+            merged.setdefault("product_id", product_id)
+        if task_id is not None:
+            merged.setdefault("task_id", task_id)
+        super().__init__(message, code=self.code, details=merged)
         self.barcode = barcode
         self.product_id = product_id
         self.task_id = task_id
@@ -84,7 +115,19 @@ class InventoryBarcodeLineNotFoundError(InventoryCountError):
 class InventoryBarcodeAmbiguousError(InventoryCountError):
     code = "barcode_ambiguous"
 
-    def __init__(self, message: str, *, barcode: str | None = None, product_ids: list[int] | None = None) -> None:
-        super().__init__(message, code=self.code)
+    def __init__(
+        self,
+        message: str,
+        *,
+        barcode: str | None = None,
+        product_ids: list[int] | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        merged = dict(details or {})
+        if barcode is not None:
+            merged.setdefault("barcode", barcode)
+        if product_ids:
+            merged.setdefault("product_ids", product_ids)
+        super().__init__(message, code=self.code, details=merged)
         self.barcode = barcode
         self.product_ids = product_ids or []

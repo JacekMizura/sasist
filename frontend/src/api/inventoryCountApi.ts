@@ -462,6 +462,64 @@ export async function startInventoryDocument(tenantId: number, documentId: numbe
   return data;
 }
 
+export type InventoryApprovalActionResult = {
+  status: string;
+  analysis?: unknown;
+  recounts_created?: number;
+  approved_at?: string | null;
+};
+
+export async function submitInventoryDocumentForApproval(
+  tenantId: number,
+  documentId: number,
+  notes?: string | null,
+): Promise<InventoryApprovalActionResult> {
+  const { data } = await api.post<InventoryApprovalActionResult>(
+    `/inventory-count/documents/${documentId}/submit-approval`,
+    { notes: notes ?? null },
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function approveInventoryDocument(
+  tenantId: number,
+  documentId: number,
+  notes?: string | null,
+): Promise<InventoryApprovalActionResult> {
+  const { data } = await api.post<InventoryApprovalActionResult>(
+    `/inventory-count/documents/${documentId}/approve`,
+    { notes: notes ?? null },
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function rejectInventoryDocument(
+  tenantId: number,
+  documentId: number,
+  notes?: string | null,
+): Promise<InventoryApprovalActionResult> {
+  const { data } = await api.post<InventoryApprovalActionResult>(
+    `/inventory-count/documents/${documentId}/reject`,
+    { notes: notes ?? null },
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function postInventoryDocumentAdjustments(
+  tenantId: number,
+  documentId: number,
+): Promise<InventoryApprovalActionResult> {
+  const { data } = await api.post<InventoryApprovalActionResult>(
+    `/inventory-count/documents/${documentId}/post`,
+    {},
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
 export async function listWmsInventoryTasks(
   tenantId: number,
   warehouseId: number,

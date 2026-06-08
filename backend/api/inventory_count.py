@@ -66,18 +66,37 @@ router = APIRouter(prefix="/inventory-count", tags=["Inventory Count"])
 logger = logging.getLogger(__name__)
 
 
+def _inventory_error_payload(exc: InventoryCountError) -> dict:
+    payload: dict = {"code": exc.code, "message": str(exc)}
+    if exc.details:
+        payload["details"] = exc.details
+    return payload
+
+
 def _map_inventory_error(exc: InventoryCountError) -> HTTPException:
     if "not_found" in exc.code:
         status = 404
-    elif exc.code in ("concurrent_update", "posting_in_progress"):
+    elif exc.code in ("concurrent_update", "posting_in_progress", "pending_recounts"):
         status = 409
     elif exc.code == "line_locked":
         status = 423
     elif exc.code == "duplicate_post":
         status = 409
+    elif exc.code == "permission_denied":
+        status = 403
     else:
         status = 400
-    return HTTPException(status_code=status, detail={"code": exc.code, "message": str(exc)})
+
+    if status in (400, 409):
+        logger.warning(
+            "inventory_api_rejected code=%s status=%s message=%s details=%s",
+            exc.code,
+            status,
+            str(exc),
+            exc.details or {},
+        )
+
+    return HTTPException(status_code=status, detail=_inventory_error_payload(exc))
 
 
 @router.get("/dashboard", response_model=InventoryDashboardRead)

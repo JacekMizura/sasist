@@ -4,7 +4,6 @@ import { Link, useParams } from "react-router-dom";
 import WmsInventoryLocationCounts from "../../../modules/inventoryCount/components/WmsInventoryLocationCounts";
 import WmsInventoryLiveSearchPanel from "../../../modules/inventoryCount/components/WmsInventoryLiveSearchPanel";
 import WmsInventoryPartialProductLocations from "../../../modules/inventoryCount/components/WmsInventoryPartialProductLocations";
-import WmsInventoryRecentUpdates from "../../../modules/inventoryCount/components/WmsInventoryRecentUpdates";
 import {
   buildLiveSearchRows,
   pickFirstLiveSearch,
@@ -44,7 +43,6 @@ export default function WmsInventoryCountTerminalPage() {
     activeScan,
     activeLineId,
     countedProductList,
-    recentlyUpdated,
     pulseLineId,
     isPartialInventory,
     qtyPulse,
@@ -244,10 +242,6 @@ export default function WmsInventoryCountTerminalPage() {
           pulseLineId={pulseLineId}
           onSelect={selectCountedProduct}
         />
-      ) : null}
-
-      {counting && countedProductList.length > 1 ? (
-        <WmsInventoryRecentUpdates items={recentlyUpdated} pulseLineId={pulseLineId} />
       ) : null}
 
       {counting ? (

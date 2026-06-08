@@ -4,6 +4,7 @@ import { Download, FileSpreadsheet, Loader2, ShieldCheck } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
+  approveInventoryDocument,
   downloadInventoryAuditPackageBlob,
   downloadInventoryReportBlob,
   fetchInventoryAuditLog,
@@ -11,6 +12,9 @@ import {
   fetchInventoryDocumentTimelines,
   getDocumentDifferenceAnalysis,
   listDocumentLines,
+  postInventoryDocumentAdjustments,
+  rejectInventoryDocument,
+  submitInventoryDocumentForApproval,
   type InventoryDocumentRead,
   type InventoryLineFocus,
   type InventoryLineRead,
@@ -20,10 +24,11 @@ import { InventoryDocumentStatusBadge } from "../../modules/inventoryCount/erp/c
 import InventoryLineTable from "../../modules/inventoryCount/erp/components/InventoryLineTable";
 import { InventoryKpiTile, InventorySection } from "../../modules/inventoryCount/erp/components/InventoryPageShell";
 import { triggerBrowserDownload } from "../../modules/inventoryCount/erp/downloadHelpers";
+import { formatInventoryApiError } from "../../modules/inventoryCount/inventoryCountApiErrors";
 import { inventoryTypeLabel } from "../../modules/inventoryCount/inventoryCountUiLabels";
 import { erpInventoryCountPaths } from "../../modules/inventoryCount/inventoryCountPaths";
 import { useWarehouse } from "../../context/WarehouseContext";
-import api from "../../api/axios";
+import { parseApiErrorPayload } from "../../utils/apiError";
 
 type DocTab = "progress" | "differences" | "control";
 
@@ -96,14 +101,19 @@ export default function InventoryCountDocumentDetailPage() {
     }
   }, [tab, loadLines, loadAudit]);
 
-  const action = async (path: string) => {
+  const action = async (kind: "submit-approval" | "approve" | "reject" | "post") => {
     setBusy(true);
     try {
-      await api.post(`/inventory-count/documents/${id}/${path}`, { notes: null }, { params: { tenant_id: tenantId } });
+      if (kind === "submit-approval") await submitInventoryDocumentForApproval(tenantId, id);
+      else if (kind === "approve") await approveInventoryDocument(tenantId, id);
+      else if (kind === "reject") await rejectInventoryDocument(tenantId, id);
+      else await postInventoryDocumentAdjustments(tenantId, id);
       await loadDoc();
       toast.success("Zapisano.");
-    } catch {
-      toast.error("Operacja nie powiodła się.");
+    } catch (err) {
+      console.error("[inventory-count action]", kind, err);
+      const payload = parseApiErrorPayload(err);
+      toast.error(formatInventoryApiError(payload));
     } finally {
       setBusy(false);
     }
@@ -153,7 +163,17 @@ export default function InventoryCountDocumentDetailPage() {
         </div>
         <div className="flex flex-wrap gap-1">
           {doc.status === "in_progress" ? (
-            <button type="button" disabled={busy} onClick={() => void action("submit-approval")} className="rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white">
+            <button
+              type="button"
+              disabled={busy || doc.counted_lines < doc.total_lines}
+              title={
+                doc.counted_lines < doc.total_lines
+                  ? `Policzono ${doc.counted_lines}/${doc.total_lines} pozycji`
+                  : undefined
+              }
+              onClick={() => void action("submit-approval")}
+              className="rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+            >
               Wyślij do zatwierdzenia
             </button>
           ) : null}

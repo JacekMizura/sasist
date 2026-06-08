@@ -15,6 +15,10 @@ import {
 } from "@/api/inventoryCountApi";
 import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
 import { wmsInventoryCountPaths } from "../inventoryCountPaths";
+import {
+  commitLocationSessionToRecent,
+  syncLocationSessionProduct,
+} from "../recentLocationsStorage";
 import { cacheTaskSnapshot, inventoryCountSyncQueue } from "../offline/inventoryCountSyncQueue";
 import { useInventoryCountOfflineStatus } from "../offline/useInventoryCountOfflineStatus";
 
@@ -35,7 +39,6 @@ export type WmsCountedProduct = {
 
 const SCAN_LOCK_MS = 250;
 const PULSE_MS = 280;
-const RECENT_LIMIT = 5;
 
 function buildLocationSubline(task: InventoryTaskRead | null): string | null {
   if (!task) return null;
@@ -201,6 +204,20 @@ export function useWmsInventoryCountTerminal(
           if (item) hydrated[item.line_id] = item;
         }
 
+        for (const line of lines) {
+          if (line.product_id != null && line.counted_quantity != null) {
+            syncLocationSessionProduct({
+              taskId: t.id,
+              locationId: t.location_id,
+              locationCode: t.location_code ?? t.location_name ?? `#${t.location_id}`,
+              productId: line.product_id,
+              productName: line.product_name,
+              sku: line.sku ?? undefined,
+              countedQuantity: line.counted_quantity,
+            });
+          }
+        }
+
         setTask(t);
         setSessionId(sid);
         setCountedProducts(hydrated);
@@ -256,8 +273,6 @@ export function useWmsInventoryCountTerminal(
     [countedProducts],
   );
 
-  const recentlyUpdated = useMemo(() => countedProductList.slice(0, RECENT_LIMIT), [countedProductList]);
-
   const qtyPulse = pulseLineId != null && pulseLineId === activeLineId;
 
   const pulseLine = useCallback((lineId: number) => {
@@ -271,24 +286,38 @@ export function useWmsInventoryCountTerminal(
     window.setTimeout(() => setInvalidPulse(false), 400);
   }, []);
 
-  const upsertCountedProduct = useCallback((scan: WmsBarcodeResolveResult, qty: number) => {
-    const snapshot: WmsBarcodeResolveResult = { ...scan, counted_quantity: qty };
-    setCountedProducts((prev) => ({
-      ...prev,
-      [scan.line_id]: {
-        line_id: scan.line_id,
-        product_id: scan.product_id,
-        product_name: scan.product_name,
-        sku: scan.sku,
-        ean: scan.ean,
-        image_url: scan.image_url,
-        counted_quantity: qty,
-        updatedAt: Date.now(),
-        scan: snapshot,
-      },
-    }));
-    pulseLine(scan.line_id);
-  }, [pulseLine]);
+  const upsertCountedProduct = useCallback(
+    (scan: WmsBarcodeResolveResult, qty: number) => {
+      const snapshot: WmsBarcodeResolveResult = { ...scan, counted_quantity: qty };
+      setCountedProducts((prev) => ({
+        ...prev,
+        [scan.line_id]: {
+          line_id: scan.line_id,
+          product_id: scan.product_id,
+          product_name: scan.product_name,
+          sku: scan.sku,
+          ean: scan.ean,
+          image_url: scan.image_url,
+          counted_quantity: qty,
+          updatedAt: Date.now(),
+          scan: snapshot,
+        },
+      }));
+      if (task) {
+        syncLocationSessionProduct({
+          taskId: task.id,
+          locationId: task.location_id,
+          locationCode: task.location_code ?? task.location_name ?? `#${task.location_id}`,
+          productId: scan.product_id,
+          productName: scan.product_name,
+          sku: scan.sku ?? undefined,
+          countedQuantity: qty,
+        });
+      }
+      pulseLine(scan.line_id);
+    },
+    [pulseLine, task],
+  );
 
   const applyScanQty = useCallback(
     (scan: WmsBarcodeResolveResult, nextQty: number) => {
@@ -497,6 +526,7 @@ export function useWmsInventoryCountTerminal(
   const skipCarrier = useCallback(() => setCarrierScanMode(false), []);
 
   const finishLocation = useCallback(() => {
+    if (task) commitLocationSessionToRecent(task.id);
     hydratedTaskIdRef.current = null;
     setTask(null);
     resetCountingUi(uiResetters);
@@ -519,7 +549,6 @@ export function useWmsInventoryCountTerminal(
     activeScan,
     activeLineId,
     countedProductList,
-    recentlyUpdated,
     pulseLineId,
     qtyPulse,
     invalidPulse,
