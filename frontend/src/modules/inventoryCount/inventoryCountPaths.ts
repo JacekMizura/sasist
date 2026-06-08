@@ -12,7 +12,7 @@ export const erpInventoryCountPaths = {
 /** WMS execution paths */
 export const wmsInventoryCountPaths = {
   root: "/wms/inventory-count",
-  tasks: "/wms/inventory-count/tasks",
-  task: (taskId: number | string) => `/wms/inventory-count/tasks/${taskId}`,
+  /** @deprecated use root — operator entry is location scan, not queue */
+  tasks: "/wms/inventory-count",
   count: (taskId: number | string) => `/wms/inventory-count/count/${taskId}`,
 } as const;

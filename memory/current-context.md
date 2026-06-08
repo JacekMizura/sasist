@@ -21,7 +21,8 @@ Enterprise **Inventory / Stock Count** module — ERP planning + WMS blind count
   - Carrier optional: location → product; nośnik via optional button
   - Terminal UI: scanned product card (photo, EAN, SKU, qty, badges), recent scans, session summary
   - **Blind terminal strip-down (2026-06-08)**: no expected/diff/progress; white scanner UI; auto +1 on scan; manual qty toggle only; single search field; no emergency search on execution screen
-  - **Compact industrial terminal (2026-06-08)**: integrated live search dropdown (no Szukaj button/modal); grouped Produkty/Lokalizacje/Nośniki; horizontal product preview; segmented quick actions; larger last-scans strip; inline nośnik chip; ~40% tighter spacing
+  - **Compact industrial terminal (2026-06-08)**: integrated live search dropdown; horizontal product preview; inline nośnik chip
+  - **Operator terminal flow (2026-06-08)**: entry = scan location (no queue table); count screen with [−][qty][+]; single scan pipeline + 250ms dedupe; backend search fix (products were broken by indent error)
   - Fix: `GET /warehouses/{id}/locations` 500 (`round(None,4)` when `max_weight_kg` unset)
   - **Routing loop fix (2026-06-08)**: `/tasks` wrongly mounted TerminalPage; `loadTask()` navigated inside hydrate effect; route param is now sole SSOT — fetch-only on `taskId` change, navigate only on operator action
 - Full design: `memory/inventory-count-module.md`

@@ -210,7 +210,7 @@ import InventoryCountDocumentDetailPage from "./pages/inventory-count/InventoryC
 import ErpPanelRouteErrorPage from "./pages/errors/ErpPanelRouteErrorPage"
 import RouteNotFoundThrow from "./pages/errors/RouteNotFoundThrow"
 import WmsInventoryCountLayout from "./pages/wms/inventory-count/WmsInventoryCountLayout"
-import WmsInventoryCountTasksPage from "./pages/wms/inventory-count/WmsInventoryCountTasksPage"
+import WmsInventoryCountEntryPage from "./pages/wms/inventory-count/WmsInventoryCountEntryPage"
 import WmsInventoryCountTerminalPage from "./pages/wms/inventory-count/WmsInventoryCountTerminalPage"
 import CustomersListPage from "./pages/customers/CustomersListPage"
 import CustomerEditPage from "./pages/customers/CustomerEditPage"
@@ -468,8 +468,8 @@ export const router = createBrowserRouter(
             </ErrorBoundary>
           }
         >
-          <Route index element={<Navigate to="tasks" replace />} />
-          <Route path="tasks" element={<WmsInventoryCountTasksPage />} />
+          <Route index element={<WmsInventoryCountEntryPage />} />
+          <Route path="tasks" element={<Navigate to="/wms/inventory-count" replace />} />
           <Route path="count/:taskId" element={<WmsInventoryCountTerminalPage />} />
         </Route>
       </Route>

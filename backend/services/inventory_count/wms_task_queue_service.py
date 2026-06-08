@@ -298,12 +298,20 @@ def resolve_task_by_location_scan(
         return {"found": False, "reason": "empty_code"}
 
     loc_q = db.query(Location).filter(Location.warehouse_id == int(warehouse_id), Location.is_active.is_(True))
+    code_upper = code.upper()
     if code.isdigit():
-        loc = loc_q.filter(or_(Location.id == int(code), Location.name.ilike(code))).first()
+        loc = loc_q.filter(or_(Location.id == int(code), func.upper(Location.name) == code_upper)).first()
     else:
-        loc = loc_q.filter(Location.name.ilike(code)).first()
+        loc = loc_q.filter(func.upper(Location.name) == code_upper).first()
     if loc is None:
-        loc = loc_q.filter(Location.name.ilike(f"%{code}%")).first()
+        loc = loc_q.filter(
+            or_(
+                Location.name.ilike(f"%{code}%"),
+                Location.location_uuid.ilike(f"%{code}%"),
+                Location.bin.ilike(f"%{code}%"),
+                Location.rack_name.ilike(f"%{code}%"),
+            )
+        ).first()
     if loc is None:
         return {"found": False, "reason": "location_not_found"}
 

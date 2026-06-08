@@ -111,7 +111,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
   },
   {
     id: "inventory_count",
-    path: "/wms/inventory-count/tasks",
+    path: "/wms/inventory-count",
     label: "Inwentaryzacja",
     icon: ListChecks,
     sortOrder: 56,
