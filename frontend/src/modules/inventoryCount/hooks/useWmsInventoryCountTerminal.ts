@@ -34,15 +34,14 @@ export type WmsLastScanEntry = {
 const SCAN_DEBOUNCE_MS = 120;
 const LAST_SCAN_LIMIT = 5;
 
-function buildLocationMeta(task: InventoryTaskRead | null): string | null {
+function buildLocationSubline(task: InventoryTaskRead | null): string | null {
   if (!task) return null;
-  const parts: string[] = [];
-  if (task.zone_code) parts.push(`STREFA ${task.zone_code}`);
-  if (task.aisle_code) parts.push(`REGAŁ ${task.aisle_code}`);
   const code = task.location_code ?? task.location_name ?? "";
   const segs = code.split(/[-/]/).filter(Boolean);
-  if (segs.length >= 3) parts.push(`POZIOM ${segs[segs.length - 1]}`);
-  return parts.length ? parts.join(" • ") : null;
+  if (segs.length >= 3) return `POZIOM ${segs[segs.length - 1]}`;
+  if (task.aisle_code) return `REGAŁ ${task.aisle_code}`;
+  if (task.zone_code) return `STREFA ${task.zone_code}`;
+  return null;
 }
 
 function resetCountingUi(setters: {
@@ -198,7 +197,7 @@ export function useWmsInventoryCountTerminal(
   }, [navSessionId]);
 
   const locationLabel = task?.location_code ?? task?.location_name ?? (task ? `#${task.location_id}` : "—");
-  const locationMeta = useMemo(() => buildLocationMeta(task), [task]);
+  const locationSubline = useMemo(() => buildLocationSubline(task), [task]);
 
   const pulseOk = useCallback(() => {
     setQtyPulse(true);
@@ -466,7 +465,7 @@ export function useWmsInventoryCountTerminal(
     carrierCode,
     carrierScanMode,
     locationLabel,
-    locationMeta,
+    locationSubline,
     activeScan,
     lastScans,
     qtyPulse,
