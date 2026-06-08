@@ -376,9 +376,15 @@ def api_production_dashboard(
 def api_list_recipe_cards(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: Optional[int] = Query(None, ge=1),
+    active_only: bool = Query(False, description="When true, return only active manufacturing recipes."),
     db: Session = Depends(get_db),
 ):
-    return list_recipe_cards(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    return list_recipe_cards(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        active_only=active_only,
+    )
 
 
 def _batch_err(exc: ProductionBatchError) -> HTTPException:
@@ -492,10 +498,19 @@ def api_create_batch(
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(get_optional_current_user),
 ):
+    import json
+
     line_summary = [
         {"product_id": ln.product_id, "composition_id": ln.composition_id, "planned_quantity": ln.planned_quantity}
         for ln in (body.lines or [])
     ]
+    body_dump = body.model_dump()
+    logger.info(
+        "CREATE_BATCH_BODY tenant_id=%s payload=%s",
+        tenant_id,
+        json.dumps(body_dump, default=str),
+    )
+    print(f"CREATE_BATCH_BODY {json.dumps(body_dump, default=str)}", flush=True)
     try:
         logger.info(
             "POST /production/batches tenant_id=%s warehouse_id=%s status=%s lines=%s",
@@ -518,18 +533,20 @@ def api_create_batch(
             exc.message,
         )
         raise _batch_err(exc) from exc
-    except Exception:
+    except Exception as exc:
         db.rollback()
         logger.exception(
-            "POST /production/batches unexpected error tenant_id=%s warehouse_id=%s lines=%s",
+            "POST /production/batches unexpected error tenant_id=%s warehouse_id=%s lines=%s err=%s",
             tenant_id,
             body.warehouse_id,
             line_summary,
+            exc,
         )
+        detail_msg = str(exc).strip() or "Nie udało się utworzyć partii produkcyjnej."
         raise HTTPException(
             status_code=400,
-            detail={"message": "Nie udało się utworzyć partii produkcyjnej.", "code": "create_failed"},
-        )
+            detail={"message": detail_msg, "code": "create_failed"},
+        ) from exc
 
 
 @router.post("/batches/{batch_id}/start", response_model=ProductionBatchRead)

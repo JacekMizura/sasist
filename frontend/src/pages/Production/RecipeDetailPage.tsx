@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus } from "lucide-react";
 import axios from "axios";
+import toast from "react-hot-toast";
+import { extractApiErrorMessage } from "../../api/apiErrorMessage";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   createProductionBatch,
   getRecipeDetail,
+  validateProductionBatchCreateBody,
   type RecipeDetailRead,
 } from "../../api/productionApi";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "./productionUi";
@@ -47,15 +50,30 @@ export default function RecipeDetailPage() {
   }, [load]);
 
   const createBatch = async () => {
-    if (!recipe || !warehouseId) return;
+    if (!recipe) return;
+    const validation = validateProductionBatchCreateBody(warehouseId, [
+      {
+        product_id: recipe.product_id,
+        composition_id: recipe.composition_id,
+        planned_quantity: qty,
+      },
+    ]);
+    if (!validation.ok) {
+      toast.error(validation.message);
+      return;
+    }
+    if (!recipe.is_active) {
+      toast.error("Recipe (composition) is inactive");
+      return;
+    }
+    console.log("CREATE_BATCH_PAYLOAD", { tenant_id: tenantId, ...validation.body });
     setBusy(true);
     try {
-      const batch = await createProductionBatch(tenantId, {
-        warehouse_id: warehouseId,
-        status: "planned",
-        lines: [{ product_id: recipe.product_id, composition_id: recipe.composition_id, planned_quantity: qty }],
-      });
+      const batch = await createProductionBatch(tenantId, validation.body);
+      toast.success("Partia produkcyjna utworzona.");
       navigate(erpProductionPaths.batch(batch.id));
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, "Nie udało się utworzyć partii produkcyjnej."));
     } finally {
       setBusy(false);
     }

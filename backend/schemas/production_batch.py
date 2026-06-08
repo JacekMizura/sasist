@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .composition import AggregatedComponentDemandRead, CompositionLineRead
 from .production import ComponentAllocationWrite, ProductionAllocationRead, ProductionLocationSuggestionRead, StockShortageRead
@@ -47,10 +47,25 @@ class ProductionBatchLineRead(BaseModel):
 
 
 class ProductionBatchCreateBody(BaseModel):
-    warehouse_id: int = Field(..., ge=1)
+    warehouse_id: int = Field(..., ge=1, description="Target warehouse for batch execution")
     notes: Optional[str] = None
     status: ProductionBatchStatus = "planned"
     lines: List[ProductionBatchLineWrite] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_create_body(self) -> "ProductionBatchCreateBody":
+        if int(self.warehouse_id) < 1:
+            raise ValueError("warehouse_id is required")
+        if not self.lines:
+            raise ValueError("At least one batch line is required")
+        for idx, ln in enumerate(self.lines):
+            if int(ln.composition_id) < 1:
+                raise ValueError(f"lines[{idx}].composition_id is required")
+            if int(ln.product_id) < 1:
+                raise ValueError(f"lines[{idx}].product_id is required")
+            if float(ln.planned_quantity) <= 0:
+                raise ValueError(f"lines[{idx}].planned_quantity must be > 0")
+        return self
 
 
 class ProductionBatchPreviewRead(BaseModel):

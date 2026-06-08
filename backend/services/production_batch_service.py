@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import func
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from ..db.schema_introspection import get_table_column_names, has_table
@@ -241,6 +241,56 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
     )
 
 
+def _validate_batch_create_body(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    lines: list,
+    require_active_composition: bool = True,
+) -> None:
+    """Shared validation for preview and create — rejects invalid/orphan/inactive recipes."""
+    tid = int(tenant_id)
+    wid = int(warehouse_id)
+    if wid < 1:
+        raise ProductionBatchError("warehouse_id is required", code="warehouse_required")
+    wh = db.query(Warehouse).filter(Warehouse.id == wid, Warehouse.tenant_id == tid).first()
+    if wh is None:
+        raise ProductionBatchError("warehouse_id is invalid for tenant", code="warehouse_invalid")
+    if not lines:
+        raise ProductionBatchError("At least one batch line is required", code="empty_batch")
+    for idx, ln in enumerate(lines):
+        comp_id = int(getattr(ln, "composition_id", 0) or 0)
+        prod_id = int(getattr(ln, "product_id", 0) or 0)
+        qty = float(getattr(ln, "planned_quantity", 0) or 0)
+        if comp_id < 1:
+            raise ProductionBatchError(f"lines[{idx}].composition_id is required", code="composition_required")
+        if prod_id < 1:
+            raise ProductionBatchError(f"lines[{idx}].product_id is required", code="product_required")
+        if qty <= 0:
+            raise ProductionBatchError(f"lines[{idx}].planned_quantity must be > 0", code="invalid_quantity")
+        comp = resolve_composition_entity(db, tenant_id=tid, composition_id=comp_id)
+        if comp is None:
+            logger.warning(
+                "batch validation — composition not found tenant=%s composition_id=%s",
+                tid,
+                comp_id,
+            )
+            raise ProductionBatchError(f"composition_id {comp_id} not found", code="invalid_composition")
+        if str(comp.composition_mode) != "manufacturing":
+            raise ProductionBatchError(
+                f"composition_id {comp_id} is not a manufacturing recipe",
+                code="invalid_composition",
+            )
+        if require_active_composition and not bool(comp.is_active):
+            raise ProductionBatchError(f"Recipe (composition #{comp_id}) is inactive", code="recipe_inactive")
+        if int(comp.product_id) != prod_id:
+            raise ProductionBatchError("product_id does not match composition", code="product_mismatch")
+        product = db.query(Product).filter(Product.id == prod_id, Product.tenant_id == tid).first()
+        if product is None or getattr(product, "deleted_at", None) is not None:
+            raise ProductionBatchError(f"product_id {prod_id} is deleted or missing", code="product_invalid")
+
+
 def preview_batch_demand(
     db: Session,
     *,
@@ -260,23 +310,14 @@ def preview_batch_demand(
         len(lines or []),
     )
 
-    if not lines:
-        raise ProductionBatchError("Dodaj co najmniej jedną linię.", code="empty_batch")
-    if wid < 1:
-        raise ProductionBatchError("Wybierz magazyn.", code="warehouse_required")
+    _validate_batch_create_body(db, tenant_id=tid, warehouse_id=wid, lines=lines)
 
     demands: list[list[dict[str, Any]]] = []
     total_units = 0.0
     try:
         for ln in lines:
             comp = resolve_composition_entity(db, tenant_id=tid, composition_id=int(ln.composition_id))
-            if comp is None or str(comp.composition_mode) != "manufacturing":
-                raise ProductionBatchError(
-                    f"Kompozycja #{ln.composition_id} nie jest produkcyjna.",
-                    code="invalid_composition",
-                )
-            if int(comp.product_id) != int(ln.product_id):
-                raise ProductionBatchError("Produkt nie zgadza się z kompozycją.", code="product_mismatch")
+            assert comp is not None
             demands.append(calculate_required_components(comp, planned_quantity=float(ln.planned_quantity)))
             total_units += float(ln.planned_quantity)
         totals = aggregate_component_demand(demands)
@@ -419,35 +460,60 @@ def create_batch(
         len(body.lines or []),
         body.status,
     )
-    if not body.lines:
-        raise ProductionBatchError("Dodaj co najmniej jedną linię produktu.", code="empty_batch")
-    batch = ProductionBatch(
+    _validate_batch_create_body(
+        db,
         tenant_id=int(tenant_id),
-        number=_next_batch_number(db, tenant_id=tenant_id),
         warehouse_id=int(body.warehouse_id),
-        status=str(body.status or "planned"),
-        notes=(body.notes or "").strip() or None,
-        created_by_user_id=int(created_by_user_id) if created_by_user_id else None,
+        lines=body.lines,
     )
-    db.add(batch)
-    db.flush()
-    for ln in body.lines:
-        comp = resolve_composition_entity(db, tenant_id=tenant_id, composition_id=int(ln.composition_id))
-        if comp is None or str(comp.composition_mode) != "manufacturing":
-            raise ProductionBatchError(f"Kompozycja #{ln.composition_id} nie istnieje lub nie jest produkcyjna.", code="invalid_composition")
-        if int(comp.product_id) != int(ln.product_id):
-            raise ProductionBatchError("Produkt nie zgadza się z kompozycją.", code="product_mismatch")
-        batch.lines.append(
-            ProductionBatchLine(
-                product_id=int(ln.product_id),
-                composition_id=int(comp.id),
-                planned_quantity=float(ln.planned_quantity),
-                target_location_id=int(ln.target_location_id) if ln.target_location_id else None,
-                notes=(ln.notes or "").strip() or None,
-            )
+    try:
+        batch = ProductionBatch(
+            tenant_id=int(tenant_id),
+            number=_next_batch_number(db, tenant_id=tenant_id),
+            warehouse_id=int(body.warehouse_id),
+            status=str(body.status or "planned"),
+            notes=(body.notes or "").strip() or None,
+            created_by_user_id=int(created_by_user_id) if created_by_user_id else None,
         )
-    db.flush()
-    return serialize_batch(db, batch)
+        db.add(batch)
+        db.flush()
+        for ln in body.lines:
+            comp = resolve_composition_entity(db, tenant_id=tenant_id, composition_id=int(ln.composition_id))
+            assert comp is not None
+            batch.lines.append(
+                ProductionBatchLine(
+                    product_id=int(ln.product_id),
+                    composition_id=int(comp.id),
+                    planned_quantity=float(ln.planned_quantity),
+                    target_location_id=int(ln.target_location_id) if ln.target_location_id else None,
+                    notes=(ln.notes or "").strip() or None,
+                )
+            )
+        db.flush()
+        return serialize_batch(db, batch)
+    except ProductionBatchError:
+        raise
+    except IntegrityError as exc:
+        logger.warning(
+            "create_batch integrity error tenant=%s warehouse=%s: %s",
+            tenant_id,
+            body.warehouse_id,
+            exc,
+        )
+        raise ProductionBatchError(
+            "Nie udało się zapisać partii — magazyn, produkt lub receptura są nieprawidłowe.",
+            code="db_integrity",
+        ) from exc
+    except SQLAlchemyError as exc:
+        logger.exception(
+            "create_batch SQL error tenant=%s warehouse=%s",
+            tenant_id,
+            body.warehouse_id,
+        )
+        raise ProductionBatchError(
+            "Błąd bazy danych podczas tworzenia partii.",
+            code="db_error",
+        ) from exc
 
 
 def list_batches(

@@ -478,6 +478,49 @@ export type ProductionBatchCreateBody = {
   lines: ProductionBatchLineWrite[];
 };
 
+export type ProductionBatchPayloadValidation =
+  | { ok: true; body: ProductionBatchCreateBody }
+  | { ok: false; message: string };
+
+/** Client-side guard before POST /production/batches — mirrors backend DTO. */
+export function validateProductionBatchCreateBody(
+  warehouseId: number | null | undefined,
+  lines: { product_id: number; composition_id: number; planned_quantity: number }[],
+): ProductionBatchPayloadValidation {
+  if (warehouseId == null || !Number.isFinite(warehouseId) || warehouseId < 1) {
+    return { ok: false, message: "warehouse_id is required" };
+  }
+  if (lines.length === 0) {
+    return { ok: false, message: "At least one batch line is required" };
+  }
+  const mapped: ProductionBatchLineWrite[] = [];
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const ln = lines[idx];
+    if (!ln.composition_id || ln.composition_id < 1) {
+      return { ok: false, message: `lines[${idx}].composition_id is required` };
+    }
+    if (!ln.product_id || ln.product_id < 1) {
+      return { ok: false, message: `lines[${idx}].product_id is required` };
+    }
+    if (!Number.isFinite(ln.planned_quantity) || ln.planned_quantity <= 0) {
+      return { ok: false, message: `lines[${idx}].planned_quantity must be > 0` };
+    }
+    mapped.push({
+      product_id: ln.product_id,
+      composition_id: ln.composition_id,
+      planned_quantity: ln.planned_quantity,
+    });
+  }
+  return {
+    ok: true,
+    body: {
+      warehouse_id: warehouseId,
+      status: "planned",
+      lines: mapped,
+    },
+  };
+}
+
 export type BatchAggregatedPickLineRead = {
   component_product_id: number;
   product_name: string;
@@ -554,6 +597,7 @@ export async function createProductionBatch(
   tenantId: number,
   body: ProductionBatchCreateBody,
 ): Promise<ProductionBatchRead> {
+  console.log("CREATE_BATCH_PAYLOAD", { tenant_id: tenantId, ...body });
   const res = await api.post<ProductionBatchRead>("/production/batches", body, {
     params: { tenant_id: tenantId },
   });
@@ -724,9 +768,14 @@ export async function fetchProductionDashboard(
 export async function listRecipeCards(
   tenantId: number,
   warehouseId?: number,
+  opts?: { activeOnly?: boolean },
 ): Promise<RecipeCardRead[]> {
   const res = await api.get<RecipeCardRead[]>("/production/recipes", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      active_only: opts?.activeOnly ? true : undefined,
+    },
   });
   return res.data;
 }

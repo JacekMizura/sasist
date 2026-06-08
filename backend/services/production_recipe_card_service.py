@@ -73,8 +73,9 @@ def list_recipe_cards(
     *,
     tenant_id: int,
     warehouse_id: int | None = None,
+    active_only: bool = False,
 ) -> list[RecipeCardRead]:
-    rows = (
+    q = (
         db.query(ProductComposition)
         .join(Product, Product.id == ProductComposition.product_id)
         .options(joinedload(ProductComposition.lines))
@@ -83,9 +84,10 @@ def list_recipe_cards(
             ProductComposition.composition_mode == "manufacturing",
             Product.deleted_at.is_(None),
         )
-        .order_by(ProductComposition.is_active.desc(), ProductComposition.updated_at.desc())
-        .all()
     )
+    if active_only:
+        q = q.filter(ProductComposition.is_active.is_(True))
+    rows = q.order_by(ProductComposition.is_active.desc(), ProductComposition.updated_at.desc()).all()
     product_ids = {int(r.product_id) for r in rows}
     products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
     out: list[RecipeCardRead] = []

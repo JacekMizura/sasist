@@ -10,10 +10,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import {
   createProductionBatch,
   listRecipeCards,
   previewProductionBatch,
+  validateProductionBatchCreateBody,
   type ProductionBatchPreviewRead,
   type RecipeCardRead,
 } from "../../../api/productionApi";
@@ -42,11 +45,12 @@ export function CreateBatchModal({ open, tenantId, warehouseId, onClose, onCreat
   const [lines, setLines] = useState<LineDraft[]>([]);
   const [preview, setPreview] = useState<ProductionBatchPreviewRead | null>(null);
   const [busy, setBusy] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [search, setSearch] = useState("");
 
   const reloadRecipes = useCallback(async () => {
-    const rows = await listRecipeCards(tenantId, warehouseId);
-    setRecipes(rows.filter((r) => r.is_active));
+    const rows = await listRecipeCards(tenantId, warehouseId, { activeOnly: true });
+    setRecipes(rows);
   }, [tenantId, warehouseId]);
 
   useEffect(() => {
@@ -58,18 +62,25 @@ export function CreateBatchModal({ open, tenantId, warehouseId, onClose, onCreat
       setPreview(null);
       return;
     }
+    const draftLines = lines.map((l) => ({
+      product_id: l.recipe.product_id,
+      composition_id: l.recipe.composition_id,
+      planned_quantity: l.quantity,
+    }));
+    const validation = validateProductionBatchCreateBody(warehouseId, draftLines);
+    if (!validation.ok) {
+      setPreview(null);
+      return;
+    }
     const t = window.setTimeout(() => {
-      void previewProductionBatch(tenantId, {
-        warehouse_id: warehouseId,
-        status: "planned",
-        lines: lines.map((l) => ({
-          product_id: l.recipe.product_id,
-          composition_id: l.recipe.composition_id,
-          planned_quantity: l.quantity,
-        })),
-      })
+      setPreviewBusy(true);
+      void previewProductionBatch(tenantId, validation.body)
         .then(setPreview)
-        .catch(() => setPreview(null));
+        .catch((err: unknown) => {
+          setPreview(null);
+          toast.error(extractApiErrorMessage(err, "Nie udało się wygenerować podglądu partii."));
+        })
+        .finally(() => setPreviewBusy(false));
     }, 300);
     return () => window.clearTimeout(t);
   }, [open, lines, tenantId, warehouseId]);
@@ -101,23 +112,38 @@ export function CreateBatchModal({ open, tenantId, warehouseId, onClose, onCreat
 
   const stepIndex = lines.length === 0 ? 0 : preview ? 2 : 1;
 
+  const payloadValidation = useMemo(() => {
+    if (lines.length === 0) return { ok: false as const, message: "" };
+    return validateProductionBatchCreateBody(
+      warehouseId,
+      lines.map((l) => ({
+        product_id: l.recipe.product_id,
+        composition_id: l.recipe.composition_id,
+        planned_quantity: l.quantity,
+      })),
+    );
+  }, [lines, warehouseId]);
+
+  const canSubmit = payloadValidation.ok && !busy && !previewBusy && preview != null;
+
   const submit = async () => {
-    if (lines.length === 0) return;
+    if (!payloadValidation.ok) {
+      toast.error(payloadValidation.message);
+      return;
+    }
+    const payload = payloadValidation.body;
+    console.log("CREATE_BATCH_PAYLOAD", { tenant_id: tenantId, ...payload });
     setBusy(true);
     try {
-      const batch = await createProductionBatch(tenantId, {
-        warehouse_id: warehouseId,
-        status: "planned",
-        lines: lines.map((l) => ({
-          product_id: l.recipe.product_id,
-          composition_id: l.recipe.composition_id,
-          planned_quantity: l.quantity,
-        })),
-      });
+      const batch = await createProductionBatch(tenantId, payload);
+      toast.success("Partia produkcyjna utworzona.");
       onCreated(batch.id);
       onClose();
       setLines([]);
       setSearch("");
+      setPreview(null);
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, "Nie udało się utworzyć partii produkcyjnej."));
     } finally {
       setBusy(false);
     }
@@ -354,11 +380,11 @@ export function CreateBatchModal({ open, tenantId, warehouseId, onClose, onCreat
               </button>
               <button
                 type="button"
-                disabled={busy || lines.length === 0}
+                disabled={!canSubmit}
                 onClick={() => void submit()}
                 className="flex-[2] rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50"
               >
-                {busy ? "Tworzenie partii…" : "Utwórz partię produkcyjną"}
+                {busy ? "Tworzenie partii…" : previewBusy ? "Obliczanie planu…" : "Utwórz partię produkcyjną"}
               </button>
             </div>
           </div>

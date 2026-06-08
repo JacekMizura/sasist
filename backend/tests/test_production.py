@@ -147,6 +147,43 @@ class TestRecipeCardListing(unittest.TestCase):
         self.assertFalse(_product_is_listable(SimpleNamespace(deleted_at="2024-01-01")))
 
 
+class TestBatchCreateValidation(unittest.TestCase):
+    def test_validate_batch_create_rejects_empty_lines(self):
+        from unittest.mock import MagicMock
+
+        from backend.services.production_batch_service import ProductionBatchError, _validate_batch_create_body
+
+        db = MagicMock()
+        with self.assertRaises(ProductionBatchError) as ctx:
+            _validate_batch_create_body(db, tenant_id=1, warehouse_id=1, lines=[])
+        self.assertEqual(ctx.exception.code, "empty_batch")
+
+    def test_validate_batch_create_rejects_inactive_recipe(self):
+        from unittest.mock import MagicMock, patch
+
+        from backend.services.production_batch_service import ProductionBatchError, _validate_batch_create_body
+
+        ln = MagicMock(product_id=10, composition_id=5, planned_quantity=2)
+        comp = MagicMock()
+        comp.composition_mode = "manufacturing"
+        comp.product_id = 10
+        comp.is_active = False
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = MagicMock()
+        with (
+            patch(
+                "backend.services.production_batch_service.resolve_composition_entity",
+                return_value=comp,
+            ),
+            patch(
+                "backend.services.production_batch_service.Product",
+            ),
+            self.assertRaises(ProductionBatchError) as ctx,
+        ):
+            _validate_batch_create_body(db, tenant_id=1, warehouse_id=1, lines=[ln])
+        self.assertEqual(ctx.exception.code, "recipe_inactive")
+
+
 class TestProductionBatches(unittest.TestCase):
     def test_list_batches_returns_empty_when_schema_missing(self):
         from sqlalchemy.orm import sessionmaker
@@ -171,6 +208,10 @@ class TestProductionBatches(unittest.TestCase):
         comp.id = 1
         db = MagicMock()
         with (
+            patch(
+                "backend.services.production_batch_service._validate_batch_create_body",
+                return_value=None,
+            ),
             patch(
                 "backend.services.production_batch_service.resolve_composition_entity",
                 return_value=comp,
