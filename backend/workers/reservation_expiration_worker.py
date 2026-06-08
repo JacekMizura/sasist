@@ -63,6 +63,9 @@ def close_expired_sessions(db: Session, *, limit: int = 50) -> int:
 
 
 def run_reservation_lifecycle_worker(db: Session) -> dict[str, int]:
+    from .schema_guard import require_production_schema_valid
+
+    require_production_schema_valid(context="run_reservation_lifecycle_worker")
     expired = expire_due_reservations(db)
     sessions = close_expired_sessions(db)
     return {"expired_reservations": expired, "closed_sessions": sessions}

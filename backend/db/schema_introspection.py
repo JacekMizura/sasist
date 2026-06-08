@@ -180,51 +180,226 @@ def _add_column_if_missing(engine: Engine, table: str, col: str, ddl: str) -> bo
     return True
 
 
-def _ensure_orm_columns_for_model(engine: Engine, model: Any) -> int:
-    """
-    Dialect-agnostic sync: add ORM columns missing in DB (PostgreSQL-safe types).
+def _normalize_type_token(type_sql: str) -> str:
+    """Normalize compiled/reflected SQL types for cross-dialect comparison."""
+    t = str(type_sql or "").upper().replace(" ", "")
+    if not t:
+        return "UNKNOWN"
+    if "TIMESTAMP" in t or "DATETIME" in t:
+        return "DATETIME_LIKE"
+    if t.startswith("BOOL"):
+        return "BOOLEAN"
+    if "DOUBLE" in t or t.startswith("REAL") or t.startswith("FLOAT"):
+        return "FLOAT"
+    if "INT" in t:
+        return "INTEGER"
+    if "JSON" in t:
+        return "JSON_LIKE"
+    if "TEXT" in t or "CLOB" in t:
+        return "TEXT_LIKE"
+    if "VARCHAR" in t or "CHARACTER" in t or t.startswith("CHAR"):
+        return "VARCHAR_LIKE"
+    return t
 
-    Run synchronously at startup — never during request handlers.
+
+def _compile_orm_column_type(col: Any, engine: Engine) -> str:
+    return str(col.type.compile(dialect=engine.dialect))
+
+
+def _get_reflected_columns(engine: Engine, table: str) -> dict[str, dict[str, Any]]:
+    insp = inspect(engine)
+    if not insp.has_table(table):
+        return {}
+    return {str(c["name"]): c for c in insp.get_columns(table)}
+
+
+def audit_model_schema(engine: Engine, model: Any) -> dict[str, Any]:
     """
-    from sqlalchemy.schema import CreateColumn
+    Deep ORM vs DB audit: columns, types, nullability, FKs, indexes.
+
+    Does not mutate schema.
+    """
+    table = model.__tablename__
+    orm_cols = list(model.__table__.columns)
+    base = audit_orm_table_columns(engine, model)
+    if not base.get("exists"):
+        return {
+            **base,
+            "type_mismatches": [],
+            "nullable_mismatches": [],
+            "fk_mismatches": [],
+            "missing_indexes": [],
+        }
+
+    reflected = _get_reflected_columns(engine, table)
+    type_mismatches: list[dict[str, str]] = []
+    nullable_mismatches: list[dict[str, str]] = []
+
+    for col in orm_cols:
+        if col.key not in reflected:
+            continue
+        db_col = reflected[col.key]
+        expected_raw = _compile_orm_column_type(col, engine)
+        actual_raw = str(db_col.get("type") or "")
+        expected_norm = _normalize_type_token(expected_raw)
+        actual_norm = _normalize_type_token(actual_raw)
+        if expected_norm != actual_norm:
+            type_mismatches.append(
+                {
+                    "column": col.key,
+                    "expected": expected_raw,
+                    "actual": actual_raw,
+                    "expected_norm": expected_norm,
+                    "actual_norm": actual_norm,
+                }
+            )
+            logger.warning(
+                "[schema.audit] table=%s column=%s expected=%s actual=%s",
+                table,
+                col.key,
+                expected_raw,
+                actual_raw,
+            )
+
+        expected_nullable = bool(col.nullable)
+        actual_nullable = bool(db_col.get("nullable", True))
+        if expected_nullable != actual_nullable:
+            nullable_mismatches.append(
+                {
+                    "column": col.key,
+                    "expected_nullable": str(expected_nullable),
+                    "actual_nullable": str(actual_nullable),
+                }
+            )
+
+    fk_mismatches: list[dict[str, str]] = []
+    insp = inspect(engine)
+    db_fks = insp.get_foreign_keys(table)
+    orm_fk_cols: set[str] = set()
+    for col in orm_cols:
+        for fk in col.foreign_keys:
+            orm_fk_cols.add(col.key)
+    db_fk_cols: set[str] = set()
+    for fk in db_fks:
+        for local_col in fk.get("constrained_columns") or []:
+            db_fk_cols.add(str(local_col))
+    for missing_fk in sorted(orm_fk_cols - db_fk_cols):
+        fk_mismatches.append({"column": missing_fk, "issue": "orm_fk_missing_in_db"})
+    for extra_fk in sorted(db_fk_cols - orm_fk_cols):
+        fk_mismatches.append({"column": extra_fk, "issue": "db_fk_not_in_orm"})
+
+    missing_indexes: list[dict[str, str]] = []
+    db_index_names = {str(i.get("name") or "") for i in insp.get_indexes(table)}
+    for idx in model.__table__.indexes:
+        idx_name = str(idx.name or "")
+        if idx_name and idx_name not in db_index_names:
+            missing_indexes.append({"index": idx_name, "columns": ",".join(c.name for c in idx.columns)})
+
+    return {
+        **base,
+        "type_mismatches": type_mismatches,
+        "nullable_mismatches": nullable_mismatches,
+        "fk_mismatches": fk_mismatches,
+        "missing_indexes": missing_indexes,
+    }
+
+
+def _alter_table_add_column_sql(engine: Engine, table: str, col_sql: str) -> str:
+    """Dialect-correct ``ALTER TABLE ... ADD [COLUMN] ...`` (PostgreSQL requires COLUMN keyword)."""
+    if engine.dialect.name == "postgresql":
+        return f"ALTER TABLE {table} ADD COLUMN {col_sql}"
+    return f"ALTER TABLE {table} ADD COLUMN {col_sql}"
+
+
+def ensure_model_schema_sync(
+    engine: Engine,
+    model: Any,
+    *,
+    log_prefix: str = "schema.model_sync",
+    sync_indexes: bool = False,
+    strict: bool = False,
+) -> int:
+    """
+    Reusable isolated schema sync for a single ORM model.
+
+    - Adds missing columns (one transaction per column)
+    - Optionally creates missing ORM indexes
+    - Never alters existing column types (audit reports drift instead)
+    """
+    from sqlalchemy.schema import CreateColumn, CreateIndex
 
     table = model.__tablename__
     if not has_table(engine, table):
+        logger.info("[%s] skip table=%s reason=missing_table", log_prefix, table)
         return 0
 
     added = 0
+    errors: list[str] = []
     dialect = engine.dialect.name
     db_cols = get_table_column_names(engine, table)
     for col in model.__table__.columns:
         if col.key in db_cols:
             continue
+        col_sql = str(CreateColumn(col).compile(dialect=engine.dialect))
+        stmt = _alter_table_add_column_sql(engine, table, col_sql)
         try:
-            col_sql = str(CreateColumn(col).compile(dialect=engine.dialect))
-            stmt = f"ALTER TABLE {table} ADD {col_sql}"
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             added += 1
+            print(
+                f"PRODUCTION_SCHEMA_ADDED_COLUMN table={table} column={col.key} dialect={dialect}",
+                flush=True,
+            )
             logger.info(
-                "[schema.tier0] %s orm_sync added column=%s dialect=%s",
+                "[%s] added_column table=%s column=%s dialect=%s stmt=%s committed=true",
+                log_prefix,
                 table,
                 col.key,
                 dialect,
+                stmt,
             )
-        except Exception:
+        except Exception as exc:
             logger.exception(
-                "[schema.tier0] %s orm_sync failed column=%s dialect=%s",
+                "[%s] add_column_failed table=%s column=%s dialect=%s stmt=%s",
+                log_prefix,
                 table,
                 col.key,
                 dialect,
+                stmt,
             )
+            errors.append(f"{table}.{col.key}: {exc}")
+            if strict:
+                raise
+
+    if sync_indexes:
+        existing = {str(i.get("name") or "") for i in inspect(engine).get_indexes(table)}
+        for idx in model.__table__.indexes:
+            idx_name = str(idx.name or "")
+            if not idx_name or idx_name in existing:
+                continue
+            try:
+                stmt = str(CreateIndex(idx).compile(dialect=engine.dialect))
+                with engine.begin() as conn:
+                    conn.execute(text(stmt))
+                logger.info("[%s] added_index table=%s index=%s", log_prefix, table, idx_name)
+            except Exception:
+                logger.exception(
+                    "[%s] add_index_failed table=%s index=%s",
+                    log_prefix,
+                    table,
+                    idx_name,
+                )
+
     if added:
-        logger.info(
-            "[schema.tier0] %s orm_sync complete dialect=%s added=%s",
-            table,
-            dialect,
-            added,
-        )
+        logger.info("[%s] complete table=%s dialect=%s columns_added=%s", log_prefix, table, dialect, added)
+    if strict and errors:
+        raise RuntimeError(f"schema sync failed for {table}: {'; '.join(errors)}")
     return added
+
+
+def _ensure_orm_columns_for_model(engine: Engine, model: Any) -> int:
+    """Backward-compatible wrapper — delegates to ``ensure_model_schema_sync``."""
+    return ensure_model_schema_sync(engine, model, log_prefix="schema.tier0")
 
 
 def ensure_sale_documents_orm_columns(engine: Engine) -> int:
@@ -282,45 +457,10 @@ def ensure_production_batch_lines_orm_columns(engine: Engine) -> int:
 
 
 def sync_production_batch_orm_columns(engine: Engine) -> int:
-    """
-    Dialect-agnostic production batch schema sync (PostgreSQL + SQLite).
+    """Legacy entry — delegates to production schema evolution sync layer."""
+    from .production_schema import sync_production_registered_models
 
-    Uses SQLAlchemy ``CreateColumn`` compilation — never raw ``DATETIME`` on PostgreSQL.
-    Each missing column is added in its own transaction so a failure elsewhere cannot roll back.
-    """
-    from ..models.product_composition import ProductionBatch, ProductionBatchLine
-
-    dialect = engine.dialect.name
-    for model in (ProductionBatch, ProductionBatchLine):
-        audit = audit_orm_table_columns(engine, model)
-        logger.info(
-            "[schema.production_batch] column_audit table=%s dialect=%s missing=%s db_count=%s orm_count=%s",
-            audit["table"],
-            dialect,
-            audit.get("missing_in_db"),
-            len(audit.get("db_columns") or []),
-            len(audit.get("orm_columns") or []),
-        )
-
-    added = ensure_production_batches_orm_columns(engine)
-    added += ensure_production_batch_lines_orm_columns(engine)
-
-    for model in (ProductionBatch, ProductionBatchLine):
-        audit = audit_orm_table_columns(engine, model)
-        if audit.get("missing_in_db"):
-            logger.error(
-                "[schema.production_batch] column_sync_incomplete table=%s still_missing=%s dialect=%s",
-                audit["table"],
-                audit["missing_in_db"],
-                dialect,
-            )
-        else:
-            logger.info(
-                "[schema.production_batch] column_sync_ok table=%s dialect=%s",
-                audit["table"],
-                dialect,
-            )
-    return added
+    return sync_production_registered_models(engine)
 
 
 def ensure_stock_document_items_orm_columns(engine: Engine) -> int:

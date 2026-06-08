@@ -84,6 +84,7 @@ from .db.schema_upgrade import (
     ensure_production_tables,
     ensure_product_compositions_and_batches,
     ensure_production_batch_schema_sync,
+    ensure_production_schema_evolution,
     ensure_bundles_tables_and_order_item_bundle_columns,
     ensure_manufacturers_table_and_product_manufacturer_id,
     ensure_suppliers_and_inbound_deliveries_tables,
@@ -340,6 +341,19 @@ def healthz() -> dict[str, bool]:
     return {"ok": True}
 
 
+@app.get("/health/schema")
+def health_schema() -> dict:
+    """Production schema integrity — Railway probes, CI validation, support diagnostics."""
+    from .db.production_schema import get_production_schema_health
+    from .platform_state import get_production_schema_health_snapshot, is_production_schema_valid
+
+    if is_production_schema_valid():
+        snap = get_production_schema_health_snapshot()
+        if snap is not None:
+            return snap
+    return get_production_schema_health(engine)
+
+
 @app.get("/readyz")
 def readyz() -> dict:
     """Readiness — Tier 0 schema validated. Railway liveness stays on /healthz."""
@@ -530,9 +544,18 @@ def _is_sqlite_engine() -> bool:
 
 
 def _sqlite_only_schema_helper(fn):
+    import functools
+
+    @functools.wraps(fn)
     def _wrapped(*args, **kwargs):
         bind = args[0] if args else engine
-        if getattr(getattr(bind, "dialect", None), "name", None) != "sqlite":
+        dialect = getattr(getattr(bind, "dialect", None), "name", None)
+        if dialect != "sqlite":
+            logging.getLogger(__name__).debug(
+                "[schema.platform] SCHEMA_HELPER_SKIPPED_POSTGRES name=%s dialect=%s",
+                fn.__name__,
+                dialect,
+            )
             return None
         return fn(*args, **kwargs)
 
@@ -540,13 +563,18 @@ def _sqlite_only_schema_helper(fn):
 
 
 # Legacy schema helpers in backend.db.schema_upgrade use PRAGMA / SQLite ALTER-workarounds.
-# PostgreSQL schema is managed via ORM metadata; most helpers are no-ops outside SQLite.
-# Exceptions: dialect-agnostic runtime patches (see schema_introspection).
+# PostgreSQL: explicit allowlist only — never silently disable production schema evolution.
 _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_order_issue_tasks_archive_columns",
     "ensure_order_issue_tasks_lifecycle_columns",
     "ensure_order_issue_task_items_table",
+    # Production module — MUST run on PostgreSQL (not SQLite-only legacy helpers).
+    "ensure_production_tables",
+    "ensure_product_compositions_and_batches",
+    "ensure_production_batch_schema_sync",
+    "ensure_production_schema_evolution",
 })
+_POSTGRES_SQLITE_ONLY_HELPERS: list[str] = []
 if not _is_sqlite_engine():
     for _name, _fn in list(globals().items()):
         if _name in _POSTGRES_SAFE_SCHEMA_FUNCS:
@@ -557,6 +585,14 @@ if not _is_sqlite_engine():
             and (_name.startswith("ensure_") or _name.startswith("migrate_"))
         ):
             globals()[_name] = _sqlite_only_schema_helper(_fn)
+            _POSTGRES_SQLITE_ONLY_HELPERS.append(_name)
+    if _POSTGRES_SQLITE_ONLY_HELPERS:
+        logging.getLogger(__name__).warning(
+            "[schema.platform] %d legacy ensure_/migrate_ helpers are SQLite-only on PostgreSQL "
+            "(allowlist=%s). Unsupported ops log SCHEMA_HELPER_SKIPPED_POSTGRES at DEBUG.",
+            len(_POSTGRES_SQLITE_ONLY_HELPERS),
+            sorted(_POSTGRES_SAFE_SCHEMA_FUNCS),
+        )
 
 # Ensure new columns exist on existing SQLite DBs (create_all does not alter tables)
 def _ensure_order_columns():
@@ -802,16 +838,17 @@ except Exception:
     logging.getLogger(__name__).exception("ensure_bundles_tables_and_order_item_bundle_columns failed at import")
 try:
     ensure_production_tables(engine)
-except Exception:
-    logging.getLogger(__name__).exception("ensure_production_tables failed at import")
-try:
     ensure_product_compositions_and_batches(engine)
 except Exception:
-    logging.getLogger(__name__).exception("ensure_product_compositions_and_batches failed at import")
+    logging.getLogger(__name__).exception("ensure_production base tables failed at import")
+    raise
 try:
-    ensure_production_batch_schema_sync(engine)
+    from .db.production_schema import run_production_schema_startup_gate
+
+    run_production_schema_startup_gate(engine, phase="import")
 except Exception:
-    logging.getLogger(__name__).exception("ensure_production_batch_schema_sync failed at import")
+    logging.getLogger(__name__).exception("run_production_schema_startup_gate failed at import")
+    raise
 try:
     ensure_manufacturers_table_and_product_manufacturer_id(engine)
 except Exception:
@@ -1077,9 +1114,15 @@ def _upgrade_schema_background() -> None:
     except Exception:
         pass
     try:
-        ensure_production_batch_schema_sync(engine)
+        from .db.production_schema import run_production_schema_startup_gate
+
+        run_production_schema_startup_gate(engine, phase="background_upgrade")
     except Exception:
-        pass
+        logging.getLogger(__name__).exception(
+            "run_production_schema_startup_gate failed in background_upgrade — workers blocked"
+        )
+        print("[startup] upgrade_schema_background: aborted (production schema invalid)", flush=True)
+        return
     try:
         ensure_manufacturers_table_and_product_manufacturer_id(engine)
     except Exception:
@@ -1284,9 +1327,15 @@ def _upgrade_schema_background() -> None:
         logging.getLogger(__name__).exception("install_replenishment_listeners failed")
     try:
         from .database import SessionLocal
+        from .platform_state import is_production_schema_valid
         from .workers.document_generation_worker import process_pending_document_jobs
         from .workers.replenishment_scan_worker import run_replenishment_scan_worker
         from .workers.reservation_expiration_worker import run_reservation_lifecycle_worker
+        from .workers.schema_guard import require_production_schema_valid
+
+        require_production_schema_valid(context="background_worker_startup", engine=engine)
+        if not is_production_schema_valid():
+            raise RuntimeError("production schema gate not passed — workers blocked")
 
         _ops_db = SessionLocal()
         try:
@@ -1369,10 +1418,13 @@ def _bootstrap_tier0_platform_schema(*, phase: str) -> None:
         mark_tier0_ready,
     )
 
+    from .db.production_schema import run_production_schema_startup_gate
+
     recycle_connection_pool()
     t0 = time.perf_counter()
     ensure_sqlite_tables(announce=(phase == "import"))
     tier0, validation = bootstrap_tier0_platform_schema(engine)
+    run_production_schema_startup_gate(engine, phase=phase)
     duration_ms = round((time.perf_counter() - t0) * 1000, 2)
     log_startup_schema(
         phase,

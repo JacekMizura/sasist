@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-04 — Production schema platform integrity
+- Fail-fast `run_production_schema_startup_gate` (import + tier0); blocks on missing tables/columns/types + required batch columns
+- `GET /health/schema` — dialect, generation `12`, drift fields (Railway/CI/support)
+- Startup logs: `PRODUCTION_SCHEMA_VERSION=12`, `[production.schema.audit.summary]`
+- Workers guarded via `schema_guard.require_production_schema_valid`; background upgrade aborts workers on gate failure
+- PostgreSQL no-op wrapper logs `SCHEMA_HELPER_SKIPPED_POSTGRES` + allowlist warning (production helpers exempt)
+- Tests: `test_production_schema_platform.py` (27 production schema tests passing)
+
 ## 2026-06-04 — Composition Engine + Batch/Wave Production
 - `product_compositions` + `product_composition_lines` (bundle | manufacturing modes, no product_type)
 - `production_batches` + `production_batch_lines`; aggregated component demand + shortages

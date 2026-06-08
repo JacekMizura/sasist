@@ -1,6 +1,15 @@
 # Current context
 
 ## Active goal
+Production schema integrity as core platform infrastructure — fail-fast startup, `/health/schema`, worker guards.
+
+## Production schema platform (latest)
+- `run_production_schema_startup_gate` blocks boot on structural drift + required `production_batches` columns
+- `GET /health/schema` — generation `12`, drift diagnostics; bypasses readiness middleware
+- Workers (`document_generation`, `replenishment_scan`, `reservation_expiration`) require valid schema
+- PostgreSQL legacy helpers: explicit allowlist; skipped helpers log `SCHEMA_HELPER_SKIPPED_POSTGRES`
+
+## Prior goal
 Retail/POS workflow for Direct Sales — document-first checkout, default retail customer, backend-canonical discounts.
 
 ## Implemented (2026-06-04)

@@ -185,6 +185,9 @@ def process_document_job(db: Session, job: DocumentGenerationJob) -> DocumentGen
 
 
 def process_pending_document_jobs(db: Session, *, limit: int = 10) -> int:
+    from .schema_guard import require_production_schema_valid
+
+    require_production_schema_valid(context="process_pending_document_jobs")
     now = datetime.utcnow()
     q = (
         db.query(DocumentGenerationJob)

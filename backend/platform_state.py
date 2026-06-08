@@ -14,6 +14,8 @@ from typing import Any
 _tier0_ready: bool = False
 _tier0_validation: dict[str, Any] | None = None
 _operational_force_disabled: bool = False
+_production_schema_valid: bool = False
+_production_schema_health: dict[str, Any] | None = None
 
 
 def _env_truthy(name: str) -> bool:
@@ -41,6 +43,27 @@ def is_platform_ready() -> bool:
 
 def get_tier0_validation_snapshot() -> dict[str, Any] | None:
     return _tier0_validation
+
+
+def mark_production_schema_valid(*, health: dict[str, Any]) -> None:
+    """Set after ``run_production_schema_startup_gate`` succeeds."""
+    global _production_schema_valid, _production_schema_health
+    _production_schema_valid = health.get("status") == "ok"
+    _production_schema_health = health
+
+
+def is_production_schema_valid() -> bool:
+    return _production_schema_valid
+
+
+def get_production_schema_health_snapshot() -> dict[str, Any] | None:
+    return _production_schema_health
+
+
+def clear_production_schema_valid() -> None:
+    global _production_schema_valid, _production_schema_health
+    _production_schema_valid = False
+    _production_schema_health = None
 
 
 def activate_operational_safety_latch(*, reason: str) -> None:

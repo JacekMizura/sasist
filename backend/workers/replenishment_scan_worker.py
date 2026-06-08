@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 def run_replenishment_scan_worker(db: Session, *, tenant_id: int = 1, limit_warehouses: int = 5) -> int:
     """Scan warehouses for low shelf stock. Returns count of tasks created."""
+    from .schema_guard import require_production_schema_valid
+
+    require_production_schema_valid(context="run_replenishment_scan_worker")
     wh_ids = list_tenant_warehouse_ids(db, int(tenant_id))[: int(limit_warehouses)]
     total_created = 0
     for wh_id in wh_ids:

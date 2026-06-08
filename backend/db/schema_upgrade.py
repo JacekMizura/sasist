@@ -7449,7 +7449,6 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
                     "REFERENCES production_batch_lines(id) ON DELETE SET NULL"
                 )
             )
-        ensure_production_batch_schema_sync(engine)
         _migrate_recipes_to_compositions(engine)
         return
     with engine.connect() as conn:
@@ -7544,7 +7543,6 @@ def ensure_product_compositions_and_batches(engine: Engine) -> None:
         if sd_cols and "production_batch_line_id" not in sd_cols:
             conn.execute(text("ALTER TABLE stock_documents ADD COLUMN production_batch_line_id INTEGER REFERENCES production_batch_lines(id)"))
         conn.commit()
-    ensure_production_batch_schema_sync(engine)
     _migrate_recipes_to_compositions(engine)
 
 
@@ -7554,16 +7552,25 @@ def ensure_production_batch_schema_sync(engine: Engine) -> int:
 
     Runs outside the bulk PostgreSQL transaction so workflow columns are not lost
     when an unrelated ALTER in the same block rolls back.
-    """
-    from .schema_introspection import sync_production_batch_orm_columns
 
-    added = sync_production_batch_orm_columns(engine)
+    Prefer ``ensure_production_schema_evolution`` for full versioned audit pipeline.
+    """
+    from .production_schema import sync_production_registered_models
+
+    added = sync_production_registered_models(engine)
     logger.info(
         "[schema.production_batch] ensure_production_batch_schema_sync dialect=%s columns_added=%s",
         engine.dialect.name,
         added,
     )
     return added
+
+
+def ensure_production_schema_evolution(engine: Engine) -> dict:
+    """Production module schema evolution — versioning, isolated sync, startup audit."""
+    from .production_schema import ensure_production_schema_evolution as _evolve
+
+    return _evolve(engine)
 
 
 def _migrate_recipes_to_compositions(engine: Engine) -> None:

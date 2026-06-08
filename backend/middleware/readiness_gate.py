@@ -11,7 +11,7 @@ from ..platform_state import is_platform_ready
 
 CallNext = Callable[[Request], Awaitable[Response]]
 
-_READY_PATHS = frozenset({"/", "/healthz", "/readyz", "/docs", "/openapi.json", "/redoc"})
+_READY_PATHS = frozenset({"/", "/healthz", "/health/schema", "/readyz", "/docs", "/openapi.json", "/redoc"})
 
 
 async def platform_readiness_gate_middleware(request: Request, call_next: CallNext) -> Response:
