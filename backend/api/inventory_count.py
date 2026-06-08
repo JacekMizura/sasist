@@ -281,6 +281,7 @@ def inventory_count_document_lines(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
     supervisor: bool = Query(True),
+    focus: str = Query("operational", pattern="^(operational|all|differences|uncounted)$"),
     offset: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=2000),
     db: Session = Depends(get_db),
@@ -292,6 +293,7 @@ def inventory_count_document_lines(
             tenant_id=tenant_id,
             document_id=document_id,
             include_supervisor_fields=supervisor,
+            focus=focus,
             offset=offset,
             limit=limit,
         )

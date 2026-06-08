@@ -207,6 +207,8 @@ import InventoryCountDocumentsPage from "./pages/inventory-count/InventoryCountD
 import InventoryCountWizardPage from "./pages/inventory-count/InventoryCountWizardPage"
 import InventoryCountReportsPage from "./pages/inventory-count/InventoryCountReportsPage"
 import InventoryCountDocumentDetailPage from "./pages/inventory-count/InventoryCountDocumentDetailPage"
+import ErpPanelRouteErrorPage from "./pages/errors/ErpPanelRouteErrorPage"
+import RouteNotFoundThrow from "./pages/errors/RouteNotFoundThrow"
 import WmsInventoryCountLayout from "./pages/wms/inventory-count/WmsInventoryCountLayout"
 import WmsInventoryCountTerminalPage from "./pages/wms/inventory-count/WmsInventoryCountTerminalPage"
 import CustomersListPage from "./pages/customers/CustomersListPage"
@@ -553,7 +555,7 @@ export const router = createBrowserRouter(
                 <Route path="import" element={<Navigate to="/settings/import" replace />} />
                 <Route path="import/history" element={<Navigate to="/settings/import?panel=history" replace />} />
       </Route>
-      <Route element={<MainPanelLayout />}>
+      <Route element={<MainPanelLayout />} errorElement={<ErpPanelRouteErrorPage />}>
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="complaints" element={<ComplaintsLayout />}>
                   <Route index element={<ComplaintsPanelPage />} />
@@ -589,6 +591,7 @@ export const router = createBrowserRouter(
                       <InventoryCountErpLayout />
                     </ErrorBoundary>
                   }
+                  errorElement={<ErpPanelRouteErrorPage />}
                 >
                   <Route index element={<Navigate to="dashboard" replace />} />
                   <Route path="dashboard" element={<InventoryCountDashboardPage />} />
@@ -789,6 +792,7 @@ export const router = createBrowserRouter(
                 <Route path="system-etykiet/*" element={<LabelSystem />} />
                 <Route path="planning/deliveries" element={<PlanningPlaceholder />} />
                 <Route path="planning/list" element={<PlanningPlaceholder />} />
+                <Route path="*" element={<RouteNotFoundThrow />} />
       </Route>
     </Route>
   ),

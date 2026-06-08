@@ -1,17 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Download, FileSpreadsheet, ShieldCheck } from "lucide-react";
+import { Download, FileSpreadsheet, Loader2, ShieldCheck } from "lucide-react";
+import toast from "react-hot-toast";
 
-import api from "../../api/axios";
 import {
+  downloadInventoryAuditPackageBlob,
+  downloadInventoryReportBlob,
+  fetchInventoryAuditLog,
   fetchInventoryDocument,
+  fetchInventoryDocumentTimelines,
   getDocumentDifferenceAnalysis,
   listDocumentLines,
   type InventoryDocumentRead,
+  type InventoryLineFocus,
   type InventoryLineRead,
 } from "../../api/inventoryCountApi";
-import { useWarehouse } from "../../context/WarehouseContext";
+import InventoryAuditPanel from "../../modules/inventoryCount/erp/components/InventoryAuditPanel";
+import InventoryLineTable from "../../modules/inventoryCount/erp/components/InventoryLineTable";
+import { triggerBrowserDownload } from "../../modules/inventoryCount/erp/downloadHelpers";
+import { ERP_INV } from "../../modules/inventoryCount/erp/erpInventoryTheme";
 import { erpInventoryCountPaths } from "../../modules/inventoryCount/inventoryCountPaths";
+import { useWarehouse } from "../../context/WarehouseContext";
+import api from "../../api/axios";
 
 const STATUS_PL: Record<string, string> = {
   draft: "Szkic",
@@ -22,184 +32,250 @@ const STATUS_PL: Record<string, string> = {
   posted: "Zaksięgowana",
 };
 
+type DocTab = "progress" | "differences" | "audit";
+
 export default function InventoryCountDocumentDetailPage() {
   const { documentId } = useParams();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? 1;
   const id = Number(documentId);
+
+  const [tab, setTab] = useState<DocTab>("progress");
+  const [showUncounted, setShowUncounted] = useState(false);
   const [doc, setDoc] = useState<InventoryDocumentRead | null>(null);
   const [lines, setLines] = useState<InventoryLineRead[]>([]);
   const [analysis, setAnalysis] = useState<Awaited<ReturnType<typeof getDocumentDifferenceAnalysis>> | null>(null);
+  const [auditLog, setAuditLog] = useState<Awaited<ReturnType<typeof fetchInventoryAuditLog>> | null>(null);
+  const [timelines, setTimelines] = useState<Awaited<ReturnType<typeof fetchInventoryDocumentTimelines>> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
+  const [linesLoading, setLinesLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const lineFocus: InventoryLineFocus =
+    tab === "differences" ? "differences" : showUncounted ? "all" : "operational";
+
+  const loadDoc = useCallback(async () => {
     if (!Number.isFinite(id)) return;
     setErr(null);
     try {
-      const [d, ln, diff] = await Promise.all([
+      const [d, diff] = await Promise.all([
         fetchInventoryDocument(tenantId, id),
-        listDocumentLines(tenantId, id),
         getDocumentDifferenceAnalysis(tenantId, id),
       ]);
       setDoc(d);
-      setLines(ln);
       setAnalysis(diff);
     } catch {
       setErr("Nie udało się wczytać dokumentu inwentaryzacji.");
     }
   }, [tenantId, id]);
 
+  const loadLines = useCallback(async () => {
+    if (!Number.isFinite(id)) return;
+    setLinesLoading(true);
+    try {
+      const ln = await listDocumentLines(tenantId, id, { focus: lineFocus });
+      setLines(ln);
+    } finally {
+      setLinesLoading(false);
+    }
+  }, [tenantId, id, lineFocus]);
+
+  const loadAudit = useCallback(async () => {
+    if (!Number.isFinite(id)) return;
+    const [log, tl] = await Promise.all([
+      fetchInventoryAuditLog(tenantId, id),
+      fetchInventoryDocumentTimelines(tenantId, id),
+    ]);
+    setAuditLog(log);
+    setTimelines(tl);
+  }, [tenantId, id]);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadDoc();
+  }, [loadDoc]);
+
+  useEffect(() => {
+    if (tab === "audit") {
+      void loadAudit();
+    } else {
+      void loadLines();
+    }
+  }, [tab, loadLines, loadAudit]);
 
   const action = async (path: string) => {
     setBusy(true);
     try {
       await api.post(`/inventory-count/documents/${id}/${path}`, { notes: null }, { params: { tenant_id: tenantId } });
-      await load();
+      await loadDoc();
+      toast.success("Zapisano.");
+    } catch {
+      toast.error("Operacja nie powiodła się.");
     } finally {
       setBusy(false);
     }
   };
 
-  const downloadReport = (kind: string, format: "xlsx" | "pdf" = "xlsx") => {
-    window.open(`/api/inventory-count/documents/${id}/reports/${kind}?tenant_id=${tenantId}&format=${format}`, "_blank");
-  };
-
-  const downloadAuditPackage = () => {
-    window.open(`/api/inventory-count/documents/${id}/audit-package?tenant_id=${tenantId}`, "_blank");
+  const runDownload = async (key: string, fn: () => Promise<{ blob: Blob; fileName: string }>) => {
+    setDownloadBusy(key);
+    try {
+      const { blob, fileName } = await fn();
+      triggerBrowserDownload(blob, fileName);
+      toast.success(`Pobrano: ${fileName}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Pobieranie nie powiodło się.");
+    } finally {
+      setDownloadBusy(null);
+    }
   };
 
   if (err) return <p className="text-sm text-rose-600">{err}</p>;
   if (!doc) return <p className="text-sm text-slate-500">Wczytywanie…</p>;
 
+  const tabBtn = (key: DocTab, label: string) => (
+    <button
+      type="button"
+      onClick={() => setTab(key)}
+      className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+        tab === key ? "bg-teal-600 text-white" : "text-slate-600 hover:bg-slate-100"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-wide text-teal-600">Dokument inwentaryzacji</p>
-          <h2 className="text-xl font-semibold text-slate-900">{doc.number}</h2>
-          <p className="text-sm text-slate-500">
-            {doc.inventory_type} · {STATUS_PL[doc.status] ?? doc.status} · pokrycie {doc.coverage_percent}%
+          <p className="text-[10px] font-bold uppercase tracking-wide text-teal-600">Dokument inwentaryzacji</p>
+          <h2 className="text-lg font-semibold text-slate-900">{doc.number}</h2>
+          <p className="text-xs text-slate-500">
+            {doc.inventory_type} · {STATUS_PL[doc.status] ?? doc.status} · pokrycie {doc.coverage_percent}% ·{" "}
+            {doc.counted_lines}/{doc.total_lines} poz.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {doc.status === "in_progress" ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void action("submit-approval")}
-              className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white"
-            >
+            <button type="button" disabled={busy} onClick={() => void action("submit-approval")} className="rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white">
               Wyślij do zatwierdzenia
             </button>
           ) : null}
           {doc.status === "awaiting_approval" ? (
             <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void action("approve")}
-                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white"
-              >
+              <button type="button" disabled={busy} onClick={() => void action("approve")} className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white">
                 Zatwierdź
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void action("reject")}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium"
-              >
+              <button type="button" disabled={busy} onClick={() => void action("reject")} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium">
                 Odrzuć
               </button>
             </>
           ) : null}
           {doc.status === "approved" ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void action("post")}
-              className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white"
-            >
-              Księguj korekty RW/PW
+            <button type="button" disabled={busy} onClick={() => void action("post")} className="rounded-md bg-teal-700 px-2.5 py-1.5 text-xs font-semibold text-white">
+              Księguj RW/PW
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={downloadAuditPackage}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          >
-            <Download className="h-4 w-4" /> Pakiet audytu
-          </button>
         </div>
       </div>
 
       {analysis ? (
-        <div className="grid gap-4 sm:grid-cols-4">
-          <div className="rounded-xl border bg-white p-4 shadow-sm">
-            <p className="text-xs text-slate-500">Różnice</p>
-            <p className="text-2xl font-semibold">{doc.difference_lines}</p>
+        <div className="grid gap-2 sm:grid-cols-4">
+          <div className={ERP_INV.kpi}>
+            <p className="text-[10px] uppercase text-slate-500">Różnice</p>
+            <p className="text-xl font-semibold tabular-nums">{doc.difference_lines}</p>
           </div>
-          <div className="rounded-xl border bg-white p-4 shadow-sm">
-            <p className="text-xs text-slate-500">Wpływ netto</p>
-            <p className="text-2xl font-semibold tabular-nums">{analysis.total_value_impact_net.toFixed(2)}</p>
+          <div className={ERP_INV.kpi}>
+            <p className="text-[10px] uppercase text-slate-500">Wpływ netto</p>
+            <p className="text-xl font-semibold tabular-nums">{analysis.total_value_impact_net.toFixed(2)}</p>
           </div>
-          <div className="rounded-xl border bg-white p-4 shadow-sm">
-            <p className="text-xs text-slate-500">Do recount</p>
-            <p className="text-2xl font-semibold">{analysis.summary.mandatory_recount ?? analysis.summary["mandatory_recount"] ?? 0}</p>
+          <div className={ERP_INV.kpi}>
+            <p className="text-[10px] uppercase text-slate-500">Recount</p>
+            <p className="text-xl font-semibold tabular-nums">{analysis.summary.mandatory_recount ?? 0}</p>
           </div>
-          <div className="rounded-xl border bg-white p-4 shadow-sm">
-            <p className="text-xs text-slate-500">Pozycje</p>
-            <p className="text-2xl font-semibold">
+          <div className={ERP_INV.kpi}>
+            <p className="text-[10px] uppercase text-slate-500">Policzone</p>
+            <p className="text-xl font-semibold tabular-nums">
               {doc.counted_lines}/{doc.total_lines}
             </p>
           </div>
         </div>
       ) : null}
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900">Protokół różnic</h3>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => downloadReport("differences")} className="inline-flex items-center gap-1 text-sm text-teal-700">
-              <FileSpreadsheet className="h-4 w-4" /> XLSX
-            </button>
-            <button type="button" onClick={() => downloadReport("counting_sheet")} className="inline-flex items-center gap-1 text-sm text-teal-700">
-              <ShieldCheck className="h-4 w-4" /> Spis z natury
-            </button>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+        <div className="inline-flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          {tabBtn("progress", "Przebieg")}
+          {tabBtn("differences", "Różnice")}
+          {tabBtn("audit", "Audyt")}
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Lokalizacja</th>
-                <th className="px-3 py-2">SKU</th>
-                <th className="px-3 py-2">Oczekiwana</th>
-                <th className="px-3 py-2">Policzona</th>
-                <th className="px-3 py-2">Różnica</th>
-                <th className="px-3 py-2">Klasa</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((ln) => (
-                <tr key={ln.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">{ln.location_name ?? ln.location_id}</td>
-                  <td className="px-3 py-2">{ln.sku}</td>
-                  <td className="px-3 py-2 tabular-nums">{ln.expected_quantity ?? "—"}</td>
-                  <td className="px-3 py-2 tabular-nums">{ln.counted_quantity ?? "—"}</td>
-                  <td className="px-3 py-2 tabular-nums">{ln.difference_quantity ?? "—"}</td>
-                  <td className="px-3 py-2 text-xs uppercase text-slate-500">{ln.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            disabled={downloadBusy != null}
+            onClick={() =>
+              void runDownload("xlsx-diff", () => downloadInventoryReportBlob(tenantId, id, "differences", "xlsx"))
+            }
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-50"
+          >
+            {downloadBusy === "xlsx-diff" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+            Raport różnic XLSX
+          </button>
+          <button
+            type="button"
+            disabled={downloadBusy != null}
+            onClick={() =>
+              void runDownload("pdf-sheet", () => downloadInventoryReportBlob(tenantId, id, "counting_sheet", "pdf"))
+            }
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-50"
+          >
+            {downloadBusy === "pdf-sheet" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+            Spis z natury PDF
+          </button>
+          <button
+            type="button"
+            disabled={downloadBusy != null}
+            onClick={() => void runDownload("audit-zip", () => downloadInventoryAuditPackageBlob(tenantId, id))}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-50"
+          >
+            {downloadBusy === "audit-zip" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Pakiet audytu ZIP
+          </button>
         </div>
-      </section>
+      </div>
 
-      <Link to={erpInventoryCountPaths.documents} className="text-sm text-teal-700 hover:underline">
+      {tab === "audit" ? (
+        <InventoryAuditPanel auditLog={auditLog?.items ?? []} timelines={timelines} />
+      ) : (
+        <div className={ERP_INV.section}>
+          <div className={`${ERP_INV.sectionHead} flex flex-wrap items-center justify-between gap-2`}>
+            <h3 className="text-sm font-semibold text-slate-900">
+              {tab === "differences" ? "Pozycje z różnicą / recount" : "Przebieg liczenia"}
+            </h3>
+            {tab === "progress" ? (
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={showUncounted}
+                  onChange={(e) => setShowUncounted(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                Pokaż niepoliczone
+              </label>
+            ) : null}
+          </div>
+          <InventoryLineTable
+            lines={lines}
+            loading={linesLoading}
+            emptyMessage={
+              tab === "differences"
+                ? "Brak różnic w tym dokumencie."
+                : "Brak policzonych pozycji — włącz „Pokaż niepoliczone” lub przejdź do terminala WMS."
+            }
+          />
+        </div>
+      )}
+
+      <Link to={erpInventoryCountPaths.documents} className="text-xs text-teal-700 hover:underline">
         ← Lista dokumentów
       </Link>
     </div>

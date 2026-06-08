@@ -232,20 +232,70 @@ export type InventoryLineRead = {
   sku: string | null;
   ean: string | null;
   product_name: string | null;
+  product_image_url?: string | null;
   expected_quantity: number | null;
   counted_quantity: number | null;
   difference_quantity: number | null;
+  difference_class?: string | null;
   status: string;
   batch_number: string | null;
   serial_number: string | null;
   recount_count: number;
+  carrier_id?: number | null;
+  carrier_code?: string | null;
+  last_counted_at?: string | null;
+  last_counted_by_user_id?: number | null;
+  last_counted_by_name?: string | null;
 };
 
-export async function listDocumentLines(tenantId: number, documentId: number): Promise<InventoryLineRead[]> {
+export type InventoryLineFocus = "operational" | "all" | "differences" | "uncounted";
+
+export type InventoryAuditEventRead = {
+  id: number;
+  action: string;
+  user_id: number | null;
+  user_name?: string | null;
+  session_id?: number | null;
+  device_id?: string | null;
+  detail?: unknown;
+  created_at: string | null;
+};
+
+export type InventoryDocumentTimelines = {
+  document_id: number;
+  approval_timeline: Array<{
+    id: number;
+    action: string;
+    user_id: number | null;
+    notes: string | null;
+    created_at: string | null;
+  }>;
+  recount_timeline: Array<{
+    id: number;
+    status: string;
+    line_id: number;
+    assigned_user_id: number | null;
+    reason: string | null;
+    created_at: string | null;
+    completed_at: string | null;
+  }>;
+  posting_timeline: InventoryAuditEventRead[];
+};
+
+export async function listDocumentLines(
+  tenantId: number,
+  documentId: number,
+  opts?: { focus?: InventoryLineFocus; limit?: number },
+): Promise<InventoryLineRead[]> {
   const { data } = await api.get<{ items: InventoryLineRead[]; total: number }>(
     `/inventory-count/documents/${documentId}/lines`,
     {
-      params: { tenant_id: tenantId, supervisor: true },
+      params: {
+        tenant_id: tenantId,
+        supervisor: true,
+        focus: opts?.focus ?? "operational",
+        limit: opts?.limit ?? 2000,
+      },
     },
   );
   return data.items ?? [];
@@ -456,4 +506,67 @@ export async function fetchInventoryReportsCatalog() {
     "/inventory-count/reports/catalog",
   );
   return data;
+}
+
+export async function fetchInventoryAuditLog(tenantId: number, documentId: number, limit = 200) {
+  const { data } = await api.get<{ items: InventoryAuditEventRead[]; total: number }>(
+    `/inventory-count/documents/${documentId}/audit-log`,
+    { params: { tenant_id: tenantId, limit } },
+  );
+  return data;
+}
+
+export async function fetchInventoryDocumentTimelines(tenantId: number, documentId: number) {
+  const { data } = await api.get<InventoryDocumentTimelines>(`/inventory-count/documents/${documentId}/timelines`, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function downloadInventoryReportBlob(
+  tenantId: number,
+  documentId: number,
+  reportKind: string,
+  format: "xlsx" | "pdf" = "xlsx",
+): Promise<{ blob: Blob; fileName: string }> {
+  const { parseBlobErrorMessage, resolveDownloadFilename } = await import(
+    "../modules/inventoryCount/erp/downloadHelpers"
+  );
+  const response = await api.get<Blob>(`/inventory-count/documents/${documentId}/reports/${reportKind}`, {
+    params: { tenant_id: tenantId, format },
+    responseType: "blob",
+  });
+  const blob = response.data;
+  const ct = (blob.type || "").toLowerCase();
+  if (ct.includes("json") || ct.includes("text/html")) {
+    throw new Error(await parseBlobErrorMessage(blob));
+  }
+  const fileName = resolveDownloadFilename(
+    response.headers as Record<string, string | undefined>,
+    `inv_${documentId}_${reportKind}.${format}`,
+  );
+  return { blob, fileName };
+}
+
+export async function downloadInventoryAuditPackageBlob(
+  tenantId: number,
+  documentId: number,
+): Promise<{ blob: Blob; fileName: string }> {
+  const { parseBlobErrorMessage, resolveDownloadFilename } = await import(
+    "../modules/inventoryCount/erp/downloadHelpers"
+  );
+  const response = await api.get<Blob>(`/inventory-count/documents/${documentId}/audit-package`, {
+    params: { tenant_id: tenantId },
+    responseType: "blob",
+  });
+  const blob = response.data;
+  const ct = (blob.type || "").toLowerCase();
+  if (ct.includes("json")) {
+    throw new Error(await parseBlobErrorMessage(blob));
+  }
+  const fileName = resolveDownloadFilename(
+    response.headers as Record<string, string | undefined>,
+    `inv_${documentId}_audit.zip`,
+  );
+  return { blob, fileName };
 }
