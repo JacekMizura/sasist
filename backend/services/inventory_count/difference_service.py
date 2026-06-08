@@ -11,8 +11,8 @@ from ...models.inventory_count.constants import (
     DEFAULT_DIFF_THRESHOLDS,
     DIFF_CLASS_AUTO,
     DIFF_CLASS_NONE,
-    DIFF_CLASS_RECOUNT,
     DIFF_CLASS_REVIEW,
+    DIFF_CLASS_VARIANCE,
 )
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
@@ -47,16 +47,13 @@ def classify_line_difference(
     counted: float | None,
     thresholds: dict[str, float],
 ) -> str:
+    """Classify inventory variance for supervisor review — never triggers mandatory recount."""
     if counted is None:
         return DIFF_CLASS_NONE
     diff_pct = difference_percent(expected, counted)
     if diff_pct <= thresholds["auto_approve_percent"]:
         return DIFF_CLASS_AUTO
-    if diff_pct <= thresholds["supervisor_review_percent"]:
-        return DIFF_CLASS_REVIEW
-    if diff_pct <= thresholds["mandatory_recount_percent"]:
-        return DIFF_CLASS_REVIEW
-    return DIFF_CLASS_RECOUNT
+    return DIFF_CLASS_REVIEW
 
 
 def analyze_document_differences(
@@ -72,7 +69,7 @@ def analyze_document_differences(
         .all()
     )
     rows: list[dict[str, Any]] = []
-    counts = {DIFF_CLASS_NONE: 0, DIFF_CLASS_AUTO: 0, DIFF_CLASS_REVIEW: 0, DIFF_CLASS_RECOUNT: 0}
+    counts = {DIFF_CLASS_NONE: 0, DIFF_CLASS_AUTO: 0, DIFF_CLASS_REVIEW: 0, DIFF_CLASS_VARIANCE: 0}
     total_value_impact = 0.0
 
     for line, product in lines:

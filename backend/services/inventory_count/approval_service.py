@@ -17,7 +17,7 @@ from ...models.inventory_count.constants import (
     AUDIT_APPROVAL,
     AUDIT_REJECT,
     AUDIT_SUBMIT_APPROVAL,
-    DIFF_CLASS_RECOUNT,
+    DIFF_CLASS_REVIEW,
     INV_STATUS_APPROVED,
     INV_STATUS_AWAITING_APPROVAL,
     INV_STATUS_IN_PROGRESS,
@@ -49,6 +49,7 @@ from .errors import (
     InventoryPendingRecountsError,
 )
 from .kpi_service import recompute_document_kpis
+from .recount_conflict_service import lines_with_unresolved_operator_conflicts
 from .recount_service import create_recounts_for_document
 
 logger = logging.getLogger(__name__)
@@ -155,16 +156,11 @@ def _pending_recount_count(db: Session, document_id: int) -> int:
 
 
 def _projected_recount_blockers(db: Session, doc: InventoryDocument) -> tuple[int, int]:
-    """Return (active_pending_recounts, lines_still_needing_recount)."""
+    """Return (active_pending_recounts, unresolved_operator_conflicts_without_task)."""
     active = _pending_recount_count(db, int(doc.id))
-    needs_recount = 0
-    if not bool(doc.recount_required):
-        return active, 0
-
-    analysis = analyze_document_differences(db, document=doc)
-    for row in analysis.get("lines") or []:
-        if row.get("difference_class") != DIFF_CLASS_RECOUNT:
-            continue
+    unresolved = lines_with_unresolved_operator_conflicts(db, document_id=int(doc.id))
+    needs_task = 0
+    for row in unresolved:
         line_id = int(row["line_id"])
         existing = (
             db.query(InventoryRecount)
@@ -175,8 +171,8 @@ def _projected_recount_blockers(db: Session, doc: InventoryDocument) -> tuple[in
             .first()
         )
         if existing is None:
-            needs_recount += 1
-    return active, needs_recount
+            needs_task += 1
+    return active, needs_task
 
 
 def _blocking_task_count(db: Session, doc: InventoryDocument) -> int:
@@ -343,7 +339,7 @@ def submit_for_approval(
 
     analysis = analyze_document_differences(db, document=doc)
     recounts_created = 0
-    if auto_create_recounts and bool(doc.recount_required):
+    if auto_create_recounts:
         result = create_recounts_for_document(db, tenant_id=tenant_id, document_id=document_id, user_id=user_id)
         recounts_created = int(result.get("recounts_created") or 0)
 

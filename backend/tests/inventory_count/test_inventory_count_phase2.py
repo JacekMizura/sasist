@@ -12,7 +12,6 @@ from backend.db.inventory_count_schema import ensure_inventory_count_schema
 from backend.models.inventory import Inventory
 from backend.models.inventory_count.constants import (
     COUNT_MODE_BLIND,
-    DIFF_CLASS_RECOUNT,
     INV_STATUS_APPROVED,
     INV_STATUS_AWAITING_APPROVAL,
     INV_STATUS_IN_PROGRESS,
@@ -41,7 +40,7 @@ class TestDifferenceEngine(unittest.TestCase):
         th = {"auto_approve_percent": 1.0, "supervisor_review_percent": 5.0, "mandatory_recount_percent": 10.0}
         self.assertEqual(classify_line_difference(expected=100, counted=99.5, thresholds=th), "auto_approve")
         self.assertEqual(classify_line_difference(expected=100, counted=94, thresholds=th), "supervisor_review")
-        self.assertEqual(classify_line_difference(expected=100, counted=80, thresholds=th), "mandatory_recount")
+        self.assertEqual(classify_line_difference(expected=100, counted=80, thresholds=th), "supervisor_review")
 
 
 class TestSnapshotAndLines(unittest.TestCase):

@@ -52,7 +52,14 @@ const DIFF_CLASS: Record<string, string> = {
   none: "Zgodne",
   auto_approve: "Zgodne",
   supervisor_review: "Do weryfikacji",
-  mandatory_recount: "Wymaga ponownego liczenia",
+  variance: "Różnica",
+  mandatory_recount: "Do weryfikacji",
+};
+
+const RECOUNT_STATE: Record<string, string> = {
+  none: "",
+  required: "Wymaga ponownego liczenia",
+  resolved: "Zweryfikowano",
 };
 
 const REPORT_STATUS: Record<string, string> = {
@@ -103,8 +110,14 @@ export function inventoryLineStatusLabel(status: unknown): string {
 
 export function inventoryDifferenceClassLabel(diffClass: unknown): string {
   const k = String(diffClass ?? "").trim();
+  if (!k || k === "none" || k === "auto_approve") return "";
+  return safeLookup(DIFF_CLASS, k, "");
+}
+
+export function inventoryRecountStateLabel(state: unknown): string {
+  const k = String(state ?? "").trim().toLowerCase();
   if (!k || k === "none") return "";
-  return safeLookup(DIFF_CLASS, k, k);
+  return safeLookup(RECOUNT_STATE, k, "");
 }
 
 export function inventoryReportStatusLabel(status: unknown): string {
@@ -129,10 +142,14 @@ export function inventoryDocumentStatusBadgeClass(status: unknown): string {
 export function inventoryLineStatusBadgeClass(
   status: unknown,
   diffQty: number | null | undefined,
+  recountState?: unknown,
 ): string {
+  const rs = String(recountState ?? "").toLowerCase();
+  if (rs === "required") return operationalBadgeWarningClass;
+  if (rs === "resolved") return operationalBadgeSuccessClass;
   const s = String(status ?? "").toLowerCase();
   if (s === "recount") return operationalBadgeWarningClass;
-  if (diffQty != null && Math.abs(diffQty) > 1e-9) return operationalBadgeDangerClass;
+  if (diffQty != null && Math.abs(diffQty) > 1e-9) return operationalBadgeWarningClass;
   if (s === "counted" || s === "approved") return operationalBadgeSuccessClass;
   if (s === "in_progress") return operationalBadgeInfoClass;
   return operationalBadgeNeutralClass;
@@ -140,9 +157,15 @@ export function inventoryLineStatusBadgeClass(
 
 export function inventoryDifferenceClassBadgeClass(diffClass: unknown): string {
   const k = String(diffClass ?? "").toLowerCase();
-  if (k === "mandatory_recount") return operationalBadgeWarningClass;
-  if (k === "supervisor_review") return operationalBadgeDangerClass;
+  if (k === "supervisor_review" || k === "variance" || k === "mandatory_recount") return operationalBadgeWarningClass;
   if (k === "auto_approve") return operationalBadgeSuccessClass;
+  return operationalBadgeNeutralClass;
+}
+
+export function inventoryRecountStateBadgeClass(state: unknown): string {
+  const k = String(state ?? "").toLowerCase();
+  if (k === "required") return operationalBadgeWarningClass;
+  if (k === "resolved") return operationalBadgeSuccessClass;
   return operationalBadgeNeutralClass;
 }
 
@@ -154,13 +177,18 @@ export function inventoryReportStatusBadgeClass(status: unknown): string {
   return operationalBadgeNeutralClass;
 }
 
-/** Etykieta wiersza pozycji — bez angielskich skrótów OK/RECOUNT. */
-export function inventoryLineRowStatusLabel(
-  line: { status: string; difference_quantity?: number | null; counted_quantity?: number | null },
-): string {
+/** Etykieta wiersza pozycji — różnica vs konflikt operatorów vs zweryfikowano. */
+export function inventoryLineRowStatusLabel(line: {
+  status: string;
+  difference_quantity?: number | null;
+  counted_quantity?: number | null;
+  recount_state?: string | null;
+}): string {
+  const recountState = String(line.recount_state ?? "").toLowerCase();
+  if (recountState === "required") return "Wymaga ponownego liczenia";
+  if (recountState === "resolved") return "Zweryfikowano";
   const diff = line.difference_quantity;
   const hasDiff = diff != null && Math.abs(diff) > 1e-9;
-  if (line.status === "recount") return "Ponowne liczenie";
   if (hasDiff) return "Różnica";
   if (line.counted_quantity != null) return "Policzono";
   return inventoryLineStatusLabel(line.status);

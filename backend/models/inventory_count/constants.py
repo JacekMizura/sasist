@@ -134,7 +134,14 @@ DISC_UNKNOWN_PRODUCT = "UNKNOWN_PRODUCT"
 DIFF_CLASS_NONE = "none"
 DIFF_CLASS_AUTO = "auto_approve"
 DIFF_CLASS_REVIEW = "supervisor_review"
+DIFF_CLASS_VARIANCE = "variance"
+# Legacy alias — do NOT assign from expected-vs-counted thresholds (operator conflict only).
 DIFF_CLASS_RECOUNT = "mandatory_recount"
+
+# Recount lifecycle (operator conflict workflow)
+RECOUNT_STATE_NONE = "none"
+RECOUNT_STATE_REQUIRED = "required"
+RECOUNT_STATE_RESOLVED = "resolved"
 
 DEFAULT_DIFF_THRESHOLDS = {
     "auto_approve_percent": 1.0,

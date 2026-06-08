@@ -18,6 +18,7 @@ from ...models.location import Location
 from ...models.product import Product
 from ...models.warehouse_carrier import WarehouseCarrier
 from .difference_service import classify_line_difference, _thresholds
+from .recount_conflict_service import build_document_count_conflicts, resolve_line_recount_state
 from .errors import InventoryDocumentNotFoundError
 
 
@@ -79,6 +80,7 @@ def list_document_lines(
 
     blind = doc.count_mode == "blind" and not include_supervisor_fields
     thresholds = _thresholds(doc)
+    document_conflicts = build_document_count_conflicts(db, document_id=int(document_id))
     Counter = aliased(AppUser)
 
     base_q = (
@@ -125,6 +127,9 @@ def list_document_lines(
             "confidence_score": line.confidence_score,
             "version": line.version,
             "difference_class": diff_class,
+            "recount_state": resolve_line_recount_state(
+                db, line=line, document_conflicts=document_conflicts
+            ),
             "carrier_id": line.carrier_id,
             "carrier_code": getattr(carrier, "code", None) if carrier else None,
             "last_counted_at": line.last_counted_at.isoformat() if line.last_counted_at else None,

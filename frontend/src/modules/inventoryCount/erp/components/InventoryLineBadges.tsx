@@ -19,7 +19,7 @@ export function InventoryLocationBadge({ code, type = "PICK" }: LocationProps) {
 
 export function InventoryLineStatusBadge({ line }: { line: InventoryLineRead }) {
   return (
-    <span className={inventoryLineStatusBadgeClass(line.status, line.difference_quantity)}>
+    <span className={inventoryLineStatusBadgeClass(line.status, line.difference_quantity, line.recount_state)}>
       {inventoryLineRowStatusLabel(line)}
     </span>
   );

@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Recount vs inventory variance (domain fix)
+- Różnice expected≠counted → supervisor_review, NIE mandatory recount
+- `recount_conflict_service`: recount tylko przy konflikcie operatorów (ten sam produkt/lokalizacja, różne ilości)
+- `recount_state`: none | required | resolved na liniach; approval blokuje tylko nierozwiązane konflikty
+- UI: „Różnica” vs „Wymaga ponownego liczenia” vs „Zweryfikowano”
+
 ## 2026-06-08 — WMS inwentaryzacja: location → carrier → product
 - `wmsInventoryExecutionContext.ts` — locationContext, carrierContext, grouping, PAL-/BOX- detection
 - Hook: auto-aktywacja lokalizacji po załadowaniu taska; carrier przez API; scan z carrier_id

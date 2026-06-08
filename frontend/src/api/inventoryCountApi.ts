@@ -263,6 +263,7 @@ export type InventoryLineRead = {
   counted_quantity: number | null;
   difference_quantity: number | null;
   difference_class?: string | null;
+  recount_state?: string | null;
   status: string;
   batch_number: string | null;
   serial_number: string | null;

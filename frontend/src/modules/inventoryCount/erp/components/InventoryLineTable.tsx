@@ -6,7 +6,6 @@ import {
   InventoryLineStatusBadge,
   InventoryLocationBadge,
   InventoryProductThumb,
-  InventoryVarianceClassBadge,
 } from "./InventoryLineBadges";
 
 function fmtTime(iso: string | null | undefined): string {
@@ -78,8 +77,7 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
               <td className={ERP_INV.td}>
                 <div className="flex flex-wrap gap-1">
                   <InventoryLineStatusBadge line={ln} />
-                  <InventoryVarianceClassBadge diffClass={ln.difference_class} />
-                  {ln.recount_count > 0 ? (
+                  {ln.recount_count > 0 && ln.recount_state !== "required" ? (
                     <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
                       ×{ln.recount_count} ponowne
                     </span>
