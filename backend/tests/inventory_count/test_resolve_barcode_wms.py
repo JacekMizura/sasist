@@ -1,4 +1,4 @@
-"""WMS resolve-barcode endpoint and service."""
+"""WMS resolve-barcode endpoint and service — reality-first counting."""
 
 from __future__ import annotations
 
@@ -8,7 +8,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from backend.db.inventory_count_schema import ensure_inventory_count_schema
-from backend.models.inventory_count.constants import INV_STATUS_IN_PROGRESS, TASK_STATUS_OPEN
+from backend.models.inventory_count.constants import (
+    DISC_EXPECTED,
+    DISC_UNPLANNED_PRODUCT,
+    DISC_WRONG_LOCATION,
+    INV_STATUS_IN_PROGRESS,
+    TASK_STATUS_OPEN,
+)
 from backend.models.inventory_count.document import InventoryDocument
 from backend.models.inventory_count.document_line import InventoryDocumentLine
 from backend.models.inventory_count.task import InventoryTask
@@ -17,7 +23,6 @@ from backend.models.product import Product
 from backend.services.inventory_count.count_entry_service import resolve_barcode_to_line
 from backend.services.inventory_count.errors import (
     InventoryBarcodeAmbiguousError,
-    InventoryBarcodeLineNotFoundError,
     InventoryBarcodeNotFoundError,
     InventoryTaskNotFoundError,
 )
@@ -38,6 +43,7 @@ class TestResolveBarcodeService(unittest.TestCase):
         cls.Session = sessionmaker(bind=cls.engine)
         with cls.Session() as db:
             db.add(Location(id=1, warehouse_id=1, name="A1-01", is_active=True))
+            db.add(Location(id=2, warehouse_id=1, name="B2-02", is_active=True))
             db.add(
                 Product(
                     id=10,
@@ -52,10 +58,20 @@ class TestResolveBarcodeService(unittest.TestCase):
                 Product(
                     id=11,
                     tenant_id=1,
-                    name="Product C no line",
+                    name="Product C wrong loc",
                     sku="SKU-C",
                     ean="5905450181209",
                     symbol="SKU-C",
+                )
+            )
+            db.add(
+                Product(
+                    id=12,
+                    tenant_id=1,
+                    name="Product unplanned",
+                    sku="SKU-U",
+                    ean="5905450181210",
+                    symbol="SKU-U",
                 )
             )
             db.add(
@@ -97,6 +113,16 @@ class TestResolveBarcodeService(unittest.TestCase):
                     status="open",
                 )
             )
+            db.add(
+                InventoryDocumentLine(
+                    id=2,
+                    inventory_document_id=1,
+                    location_id=2,
+                    product_id=11,
+                    expected_quantity=3,
+                    status="open",
+                )
+            )
             db.commit()
 
     def test_existing_barcode(self):
@@ -110,6 +136,7 @@ class TestResolveBarcodeService(unittest.TestCase):
             )
             self.assertEqual(out["line_id"], 1)
             self.assertEqual(out["product_id"], 10)
+            self.assertEqual(out["discrepancy_class"], DISC_EXPECTED)
         finally:
             db.close()
 
@@ -130,11 +157,30 @@ class TestResolveBarcodeService(unittest.TestCase):
         finally:
             db.close()
 
-    def test_barcode_without_inventory_line(self):
+    def test_unplanned_product_auto_creates_line(self):
         db = self.Session()
         try:
-            with self.assertRaises(InventoryBarcodeLineNotFoundError):
-                resolve_barcode_to_line(db, tenant_id=1, task_id=1, barcode_value="5905450181209")
+            out = resolve_barcode_to_line(db, tenant_id=1, task_id=1, barcode_value="5905450181210")
+            self.assertTrue(out["line_created"])
+            self.assertEqual(out["discrepancy_class"], DISC_UNPLANNED_PRODUCT)
+            self.assertGreater(out["line_id"], 1)
+            line = db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == out["line_id"]).first()
+            self.assertIsNotNone(line)
+            self.assertEqual(int(line.product_id), 12)
+            self.assertEqual(float(line.expected_quantity or 0), 0.0)
+        finally:
+            db.close()
+
+    def test_wrong_location_product_still_accepted(self):
+        db = self.Session()
+        try:
+            out = resolve_barcode_to_line(db, tenant_id=1, task_id=1, barcode_value="5905450181209")
+            self.assertEqual(out["discrepancy_class"], DISC_WRONG_LOCATION)
+            self.assertTrue(out["line_created"])
+            line = db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == out["line_id"]).first()
+            self.assertIsNotNone(line)
+            self.assertEqual(int(line.location_id), 1)
+            self.assertEqual(int(line.product_id), 11)
         finally:
             db.close()
 
@@ -188,7 +234,21 @@ class TestResolveBarcodeApi(unittest.TestCase):
             body = r.json()
             detail = body.get("detail") or body
             if isinstance(detail, dict):
-                self.assertIn(detail.get("error") or detail.get("code"), ("barcode_not_found", "task_not_found", "line_not_found_for_barcode"))
+                self.assertIn(detail.get("error") or detail.get("code"), ("barcode_not_found", "task_not_found"))
+
+
+class TestWarehouseLocationsApi(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+
+        from backend.main import app
+
+        cls.client = TestClient(app)
+
+    def test_locations_route_does_not_500(self):
+        r = self.client.get("/api/warehouses/1/locations")
+        self.assertNotEqual(r.status_code, 500, r.text[:500])
 
 
 if __name__ == "__main__":

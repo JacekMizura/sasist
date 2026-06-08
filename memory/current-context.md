@@ -14,6 +14,13 @@ Enterprise **Inventory / Stock Count** module — ERP planning + WMS blind count
   - Background jobs (`inventory_jobs`) for reports/audit ZIP
   - Paginated line queries, audit log + timelines API, metrics endpoint
   - Valuation-safe posting via snapshot unit cost metadata
+- **WMS reality-first execution (2026-06-08)**:
+  - `resolve_barcode_to_line`: global product lookup; auto-creates count line (expected=0) for unplanned/extra/wrong-location scans
+  - Discrepancy classes: `EXPECTED`, `EXTRA_PRODUCT`, `UNPLANNED_PRODUCT`, `WRONG_LOCATION`
+  - Only unknown catalog barcodes → 404 `barcode_not_found`
+  - Carrier optional: location → product; nośnik via optional button
+  - Terminal UI: scanned product card (photo, EAN, SKU, qty, badges), recent scans, session summary
+  - Fix: `GET /warehouses/{id}/locations` 500 (`round(None,4)` when `max_weight_kg` unset)
 - Full design: `memory/inventory-count-module.md`
 
 ## Prior goal

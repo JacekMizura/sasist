@@ -9,10 +9,11 @@ import {
   recordInventoryScan,
   resolveWmsInventoryBarcode,
   resolveWmsInventoryLocationScan,
-  searchWmsTaskProducts,
   WmsBarcodeResolveError,
   type InventoryExecutionSummary,
   type InventoryTaskRead,
+  type WmsBarcodeResolveResult,
+  type WmsRecentScanEntry,
 } from "../../../api/inventoryCountApi";
 import { useScanFeedback } from "../../../components/wms/execution/useScanFeedback";
 import { useWmsPageScanHandler } from "../../../components/wms/execution/useWmsPageScanHandler";
@@ -21,9 +22,34 @@ import { wmsInventoryCountPaths } from "../inventoryCountPaths";
 import { cacheTaskSnapshot, inventoryCountSyncQueue } from "../offline/inventoryCountSyncQueue";
 import { useInventoryCountOfflineStatus } from "../offline/useInventoryCountOfflineStatus";
 
-export type WmsTerminalStep = "location" | "carrier" | "product";
+export type WmsTerminalStep = "location" | "product";
 
 const SCAN_DEBOUNCE_MS = 120;
+const RECENT_SCAN_LIMIT = 5;
+
+function feedbackForDiscrepancy(
+  scanFeedback: ReturnType<typeof useScanFeedback>,
+  disc: WmsBarcodeResolveResult["discrepancy_class"],
+  name?: string | null,
+) {
+  if (disc === "EXPECTED") {
+    scanFeedback.success(name ?? "OK");
+    return;
+  }
+  if (disc === "WRONG_LOCATION") {
+    scanFeedback.warning(name ?? "Produkt z innej lokalizacji — zapisano");
+    return;
+  }
+  if (disc === "UNPLANNED_PRODUCT") {
+    scanFeedback.warning("Produkt spoza planowanej inwentaryzacji");
+    return;
+  }
+  if (disc === "EXTRA_PRODUCT") {
+    scanFeedback.warning(name ?? "Nadwyżka — zapisano");
+    return;
+  }
+  scanFeedback.success(name ?? "Zapisano");
+}
 
 export function useWmsInventoryCountTerminal(
   taskId: number | undefined,
@@ -44,11 +70,14 @@ export function useWmsInventoryCountTerminal(
   const [sessionId, setSessionId] = useState<number | null>(navSessionId);
   const [step, setStep] = useState<WmsTerminalStep>("location");
   const [carrierCode, setCarrierCode] = useState<string | null>(null);
+  const [carrierScanMode, setCarrierScanMode] = useState(false);
   const [scanMode, setScanMode] = useState<"increment" | "manual">("increment");
   const [autoConfirm, setAutoConfirm] = useState(true);
   const [pendingQty, setPendingQty] = useState(1);
   const [activeLineId, setActiveLineId] = useState<number | null>(null);
-  const [activeProductLabel, setActiveProductLabel] = useState<string | null>(null);
+  const [activeScan, setActiveScan] = useState<WmsBarcodeResolveResult | null>(null);
+  const [recentScans, setRecentScans] = useState<WmsRecentScanEntry[]>([]);
+  const [cardPulse, setCardPulse] = useState<"success" | "warning" | "error" | null>(null);
   const [unknownOpen, setUnknownOpen] = useState(false);
   const [lastScanCode, setLastScanCode] = useState<string | null>(null);
   const [documentLabel, setDocumentLabel] = useState<string>("—");
@@ -82,8 +111,10 @@ export function useWmsInventoryCountTerminal(
         setDocumentLabel(`INV #${t.inventory_document_id}`);
         setStep("location");
         setCarrierCode(null);
+        setCarrierScanMode(false);
         setActiveLineId(null);
-        setActiveProductLabel(null);
+        setActiveScan(null);
+        setRecentScans([]);
         cacheTaskSnapshot({
           taskId: t.id,
           locationCode: t.location_code ?? t.location_name ?? `#${t.location_id}`,
@@ -120,10 +151,24 @@ export function useWmsInventoryCountTerminal(
   const scanHint = useMemo(() => {
     if (!task) return "Zeskanuj lokalizację aby rozpocząć";
     if (step === "location") return `Zeskanuj lokalizację: ${locationLabel}`;
-    if (step === "carrier") return carrierCode ? `Nośnik: ${carrierCode}` : "Zeskanuj nośnik (opcjonalnie) lub pomiń";
+    if (carrierScanMode) return carrierCode ? `Nośnik: ${carrierCode}` : "Zeskanuj nośnik (opcjonalnie)";
     if (activeLineId && scanMode === "manual" && !autoConfirm) return "Potwierdź ilość";
-    return "Zeskanuj produkt — auto +1";
-  }, [activeLineId, autoConfirm, carrierCode, locationLabel, scanMode, step, task]);
+    return "Zeskanuj produkt — każdy kod z katalogu jest akceptowany";
+  }, [activeLineId, autoConfirm, carrierCode, carrierScanMode, locationLabel, scanMode, step, task]);
+
+  const pushRecentScan = useCallback((scan: WmsBarcodeResolveResult, delta?: number) => {
+    const entry: WmsRecentScanEntry = {
+      ...scan,
+      scanned_at: new Date().toISOString(),
+      scan_delta: delta,
+    };
+    setRecentScans((prev) => [entry, ...prev].slice(0, RECENT_SCAN_LIMIT));
+  }, []);
+
+  const flashCard = useCallback((kind: "success" | "warning" | "error") => {
+    setCardPulse(kind);
+    window.setTimeout(() => setCardPulse(null), 600);
+  }, []);
 
   const progressPercent = summary?.progress_percent ?? task?.progress_percent ?? 0;
   const progressLabel = summary
@@ -168,11 +213,6 @@ export function useWmsInventoryCountTerminal(
     [reloadSummary, refreshOffline, sessionId, task, tenantId],
   );
 
-  const beginCounting = useCallback(() => {
-    setStep("product");
-    scanFeedback.success("Gotowe do liczenia produktów");
-  }, [scanFeedback]);
-
   const resolveLocationScan = useCallback(
     async (code: string) => {
       if (!warehouseId) return false;
@@ -191,8 +231,8 @@ export function useWmsInventoryCountTerminal(
             return false;
           }
         }
-        setStep("carrier");
-        scanFeedback.success("Lokalizacja OK");
+        setStep("product");
+        scanFeedback.success("Lokalizacja OK — skanuj produkty");
         return true;
       }
 
@@ -207,7 +247,7 @@ export function useWmsInventoryCountTerminal(
           return false;
         }
         await loadTask(resolved.task_id);
-        setStep("carrier");
+        setStep("product");
         scanFeedback.success(resolved.location_code ?? "Lokalizacja OK");
         return true;
       } catch {
@@ -223,58 +263,85 @@ export function useWmsInventoryCountTerminal(
       if (!task) return;
       try {
         const resolved = await resolveWmsInventoryBarcode(tenantId, task.id, code);
+        setActiveScan(resolved);
+        setActiveLineId(resolved.line_id);
+
+        const pulseKind =
+          resolved.discrepancy_class === "EXPECTED"
+            ? "success"
+            : resolved.discrepancy_class === "UNKNOWN_PRODUCT"
+              ? "error"
+              : "warning";
+        flashCard(pulseKind);
+
         if (scanMode === "increment" && autoConfirm) {
           await recordScan(resolved.line_id, { delta: 1, barcode: code });
-          scanFeedback.success(resolved.product_name ?? "+1");
+          const nextCounted = (resolved.counted_quantity ?? 0) + 1;
+          const nextDiff = nextCounted - (resolved.expected_quantity ?? 0);
+          const updated = {
+            ...resolved,
+            counted_quantity: nextCounted,
+            difference_quantity: nextDiff,
+          };
+          setActiveScan(updated);
+          pushRecentScan(updated, 1);
+          feedbackForDiscrepancy(scanFeedback, resolved.discrepancy_class, resolved.product_name);
           setActiveLineId(null);
-          setActiveProductLabel(null);
           return;
         }
-        setActiveLineId(resolved.line_id);
-        setActiveProductLabel(resolved.product_name ?? resolved.sku ?? code);
+
         if (scanMode === "increment") {
           await recordScan(resolved.line_id, { delta: 1, barcode: code });
-          scanFeedback.success(resolved.product_name ?? "+1");
+          const nextCounted = (resolved.counted_quantity ?? 0) + 1;
+          const updated = {
+            ...resolved,
+            counted_quantity: nextCounted,
+            difference_quantity: nextCounted - (resolved.expected_quantity ?? 0),
+          };
+          setActiveScan(updated);
+          pushRecentScan(updated, 1);
+          feedbackForDiscrepancy(scanFeedback, resolved.discrepancy_class, resolved.product_name);
         } else {
           setPendingQty(1);
-          scanFeedback.success(resolved.product_name ?? "Produkt rozpoznany");
+          feedbackForDiscrepancy(scanFeedback, resolved.discrepancy_class, resolved.product_name);
         }
       } catch (err) {
         if (err instanceof WmsBarcodeResolveError) {
+          flashCard("error");
           if (err.code === "task_not_found") {
             scanFeedback.error("Zadanie nie istnieje");
-          } else if (err.code === "line_not_found_for_barcode") {
-            scanFeedback.error("Produkt rozpoznany, brak w tej lokalizacji");
           } else if (err.code === "barcode_ambiguous") {
             scanFeedback.warning("Kod pasuje do wielu produktów — wyszukiwanie awaryjne");
+          } else if (err.code === "barcode_not_found") {
+            scanFeedback.error("Nieznany produkt");
+            setUnknownOpen(true);
           } else {
             scanFeedback.error("Nie znaleziono produktu dla kodu");
           }
           setLastScanCode(code);
           return;
         }
-        const matches = await searchWmsTaskProducts(tenantId, task.id, code).catch(() => []);
-        if (matches.length === 1) {
-          const m = matches[0];
-          setActiveLineId(m.line_id);
-          setActiveProductLabel(m.product_name ?? m.sku ?? code);
-          scanFeedback.warning("Dopasowano — potwierdź ilość");
-          return;
-        }
-        scanFeedback.error("Nie rozpoznano — wyszukiwanie awaryjne");
+        scanFeedback.error("Błąd skanowania — spróbuj ponownie");
         setLastScanCode(code);
       }
     },
-    [autoConfirm, recordScan, scanFeedback, scanMode, task, tenantId],
+    [autoConfirm, flashCard, pushRecentScan, recordScan, scanFeedback, scanMode, task, tenantId],
   );
 
   const confirmManualQty = useCallback(async () => {
-    if (!activeLineId) return;
+    if (!activeLineId || !activeScan) return;
     try {
       await recordScan(activeLineId, { quantity: pendingQty });
+      const updated = {
+        ...activeScan,
+        counted_quantity: pendingQty,
+        difference_quantity: pendingQty - (activeScan.expected_quantity ?? 0),
+      };
+      setActiveScan(updated);
+      pushRecentScan(updated);
+      flashCard("success");
       scanFeedback.success(`Zapisano: ${pendingQty}`);
       setActiveLineId(null);
-      setActiveProductLabel(null);
       setPendingQty(1);
     } catch (e) {
       if ((e as Error).message !== "offline_queue") {
@@ -283,7 +350,7 @@ export function useWmsInventoryCountTerminal(
         scanFeedback.warning("Kolejka offline");
       }
     }
-  }, [activeLineId, pendingQty, recordScan, scanFeedback]);
+  }, [activeLineId, activeScan, flashCard, pendingQty, pushRecentScan, recordScan, scanFeedback]);
 
   const handleScan = useCallback(
     async (raw: string) => {
@@ -297,9 +364,9 @@ export function useWmsInventoryCountTerminal(
         await resolveLocationScan(code);
         return;
       }
-      if (step === "carrier") {
+      if (carrierScanMode) {
         setCarrierCode(code);
-        beginCounting();
+        setCarrierScanMode(false);
         scanFeedback.success(`Nośnik: ${code}`);
         return;
       }
@@ -308,17 +375,29 @@ export function useWmsInventoryCountTerminal(
       if (activeLineId && scanMode === "manual" && Number.isFinite(asQty) && asQty >= 0) {
         setPendingQty(asQty);
         await recordScan(activeLineId, { quantity: asQty });
+        if (activeScan) {
+          const updated = {
+            ...activeScan,
+            counted_quantity: asQty,
+            difference_quantity: asQty - (activeScan.expected_quantity ?? 0),
+          };
+          setActiveScan(updated);
+          pushRecentScan(updated);
+        }
+        flashCard("success");
         scanFeedback.success(`Ilość: ${asQty}`);
         setActiveLineId(null);
-        setActiveProductLabel(null);
         return;
       }
       await handleProductScan(code);
     },
     [
       activeLineId,
-      beginCounting,
+      activeScan,
+      carrierScanMode,
+      flashCard,
       handleProductScan,
+      pushRecentScan,
       recordScan,
       resolveLocationScan,
       scanFeedback,
@@ -333,15 +412,24 @@ export function useWmsInventoryCountTerminal(
     !loading && !error,
   );
 
-  const skipCarrier = useCallback(() => beginCounting(), [beginCounting]);
+  const enterCarrierScan = useCallback(() => {
+    setCarrierScanMode(true);
+    scanFeedback.success("Tryb nośnika — zeskanuj lub anuluj");
+  }, [scanFeedback]);
+
+  const cancelCarrierScan = useCallback(() => {
+    setCarrierScanMode(false);
+  }, []);
 
   const finishLocation = useCallback(() => {
     setTask(null);
     setSummary(null);
     setStep("location");
     setCarrierCode(null);
+    setCarrierScanMode(false);
     setActiveLineId(null);
-    setActiveProductLabel(null);
+    setActiveScan(null);
+    setRecentScans([]);
     navigate(wmsInventoryCountPaths.tasks, { replace: true });
     scanFeedback.success("Lokalizacja zakończona — skanuj następną");
   }, [navigate, scanFeedback]);
@@ -350,13 +438,13 @@ export function useWmsInventoryCountTerminal(
     async (pick: EmergencySearchPick) => {
       if (pick.kind === "task") {
         await loadTask(pick.taskId);
-        setStep("carrier");
+        setStep("product");
         return;
       }
       if (pick.kind === "location") {
         if (pick.taskId) {
           await loadTask(pick.taskId);
-          setStep("carrier");
+          setStep("product");
         } else {
           await resolveLocationScan(pick.locationCode);
         }
@@ -378,11 +466,14 @@ export function useWmsInventoryCountTerminal(
     sessionId,
     step,
     carrierCode,
+    carrierScanMode,
     locationLabel,
     documentLabel,
     scanHint,
     activeLineId,
-    activeProductLabel,
+    activeScan,
+    recentScans,
+    cardPulse,
     pendingQty,
     scanMode,
     autoConfirm,
@@ -396,7 +487,8 @@ export function useWmsInventoryCountTerminal(
     setAutoConfirm,
     setUnknownOpen,
     confirmManualQty,
-    skipCarrier,
+    enterCarrierScan,
+    cancelCarrierScan,
     finishLocation,
     loadTask,
     handleEmergencyPick,

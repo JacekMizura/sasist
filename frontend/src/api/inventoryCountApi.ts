@@ -333,6 +333,36 @@ export async function confirmWmsInventoryLocation(
   return data;
 }
 
+export type WmsDiscrepancyClass =
+  | "EXPECTED"
+  | "EXTRA_PRODUCT"
+  | "UNPLANNED_PRODUCT"
+  | "WRONG_LOCATION"
+  | "UNKNOWN_PRODUCT";
+
+export type WmsBarcodeResolveResult = {
+  line_id: number;
+  product_id: number;
+  product_name: string | null;
+  sku: string | null;
+  ean: string | null;
+  barcode: string;
+  image_url?: string | null;
+  expected_quantity: number;
+  counted_quantity: number;
+  difference_quantity?: number | null;
+  discrepancy_class: WmsDiscrepancyClass;
+  discrepancy_label: string;
+  location_id: number;
+  location_code?: string | null;
+  line_created?: boolean;
+};
+
+export type WmsRecentScanEntry = WmsBarcodeResolveResult & {
+  scanned_at: string;
+  scan_delta?: number;
+};
+
 export type WmsBarcodeResolveErrorCode =
   | "barcode_not_found"
   | "line_not_found_for_barcode"
@@ -382,17 +412,19 @@ function parseWmsBarcodeResolveError(err: unknown, fallbackBarcode?: string): Wm
   return new WmsBarcodeResolveError("unknown", getApiErrorMessage(err) || "Nie rozpoznano kodu", fallbackBarcode);
 }
 
-export async function resolveWmsInventoryBarcode(tenantId: number, taskId: number, barcodeValue: string) {
+export async function resolveWmsInventoryBarcode(
+  tenantId: number,
+  taskId: number,
+  barcodeValue: string,
+): Promise<WmsBarcodeResolveResult> {
   try {
-    const { data } = await api.post<{
-      line_id: number;
-      product_id: number;
-      product_name: string | null;
-      sku: string | null;
-      ean: string | null;
-    }>(`/wms/inventory-count/tasks/${taskId}/resolve-barcode`, null, {
-      params: { tenant_id: tenantId, barcode_value: barcodeValue },
-    });
+    const { data } = await api.post<WmsBarcodeResolveResult>(
+      `/wms/inventory-count/tasks/${taskId}/resolve-barcode`,
+      null,
+      {
+        params: { tenant_id: tenantId, barcode_value: barcodeValue },
+      },
+    );
     return data;
   } catch (err) {
     throw parseWmsBarcodeResolveError(err, barcodeValue);

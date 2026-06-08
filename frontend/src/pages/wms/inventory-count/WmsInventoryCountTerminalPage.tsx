@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CheckCircle2, HelpCircle, MapPin, ScanLine, SkipForward } from "lucide-react";
+import { CheckCircle2, HelpCircle, MapPin, Package, ScanLine, X } from "lucide-react";
 
 import { fetchWmsInventoryTaskQueue, type InventoryTaskCompact } from "../../../api/inventoryCountApi";
 import WmsInventoryEmergencySearch from "../../../modules/inventoryCount/components/WmsInventoryEmergencySearch";
 import WmsInventoryMinimalQueue from "../../../modules/inventoryCount/components/WmsInventoryMinimalQueue";
-import WmsInventoryProductChipList from "../../../modules/inventoryCount/components/WmsInventoryProductChipList";
+import WmsInventoryRecentScans from "../../../modules/inventoryCount/components/WmsInventoryRecentScans";
+import WmsInventoryScannedProductCard from "../../../modules/inventoryCount/components/WmsInventoryScannedProductCard";
+import WmsInventorySessionSummary from "../../../modules/inventoryCount/components/WmsInventorySessionSummary";
 import WmsInventoryUnknownProductModal from "../../../modules/inventoryCount/components/WmsInventoryUnknownProductModal";
 import { useWmsInventoryCountTerminal } from "../../../modules/inventoryCount/hooks/useWmsInventoryCountTerminal";
 import { WMS_INV } from "../../../modules/inventoryCount/wmsIndustrialTheme";
@@ -34,7 +36,11 @@ export default function WmsInventoryCountTerminalPage() {
     locationLabel,
     documentLabel,
     scanHint,
-    activeProductLabel,
+    activeScan,
+    recentScans,
+    cardPulse,
+    carrierCode,
+    carrierScanMode,
     pendingQty,
     scanMode,
     autoConfirm,
@@ -48,7 +54,8 @@ export default function WmsInventoryCountTerminalPage() {
     setAutoConfirm,
     setUnknownOpen,
     confirmManualQty,
-    skipCarrier,
+    enterCarrierScan,
+    cancelCarrierScan,
     finishLocation,
     loadTask,
     handleEmergencyPick,
@@ -74,7 +81,7 @@ export default function WmsInventoryCountTerminalPage() {
 
   useEffect(() => {
     scanInputRef.current?.focus();
-  }, [step, task]);
+  }, [step, task, carrierScanMode]);
 
   const onManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,10 +112,10 @@ export default function WmsInventoryCountTerminalPage() {
   }
 
   const showQueue = !task && step === "location";
+  const counting = task && step === "product";
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-3">
-      {/* Header */}
       <header className={`rounded-lg border ${WMS_INV.border} ${WMS_INV.surface} px-4 py-3 shadow-sm`}>
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold uppercase tracking-wide text-[#5a6b7d]">
           <span>{documentLabel}</span>
@@ -117,9 +124,7 @@ export default function WmsInventoryCountTerminalPage() {
         </div>
         <div className="mt-1 flex items-center gap-2">
           <MapPin className="h-5 w-5 shrink-0 text-[#1e4d8c]" />
-          <span className="text-2xl font-black tracking-tight text-[#1a2b3c]">
-            {task ? locationLabel : "—"}
-          </span>
+          <span className="text-2xl font-black tracking-tight text-[#1a2b3c]">{task ? locationLabel : "—"}</span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e8edf3]">
           <div
@@ -129,21 +134,19 @@ export default function WmsInventoryCountTerminalPage() {
         </div>
       </header>
 
-      {/* Scan zone */}
+      {counting ? (
+        <WmsInventoryScannedProductCard scan={activeScan} carrierCode={carrierCode} pulse={cardPulse} />
+      ) : null}
+
       <section className={`rounded-xl ${WMS_INV.scanZone} p-4`}>
         <p className="text-center text-xs font-black uppercase tracking-widest text-[#1e4d8c]">
-          {step === "location" && "Krok 1 — lokalizacja"}
-          {step === "carrier" && "Krok 2 — nośnik (opcj.)"}
-          {step === "product" && "Krok 3 — produkt"}
+          {step === "location" ? "Krok 1 — lokalizacja" : carrierScanMode ? "Nośnik (opcjonalnie)" : "Krok 2 — produkty"}
         </p>
         <p className="mt-2 text-center text-lg font-bold text-[#1a2b3c]">{scanHint}</p>
-        {activeProductLabel ? (
-          <p className="mt-1 text-center text-base font-black text-[#1e4d8c]">{activeProductLabel}</p>
-        ) : null}
 
         <form onSubmit={onManualSubmit} className="mt-4">
           <label className="sr-only" htmlFor="wms-inv-scan">
-            {step === "location" ? "Skanuj lokalizację" : step === "carrier" ? "Skanuj nośnik" : "Skanuj produkt"}
+            Skan
           </label>
           <div className="relative">
             <ScanLine className="pointer-events-none absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-[#1e4d8c]" />
@@ -156,7 +159,7 @@ export default function WmsInventoryCountTerminalPage() {
               placeholder={
                 step === "location"
                   ? "Skanuj lokalizację…"
-                  : step === "carrier"
+                  : carrierScanMode
                     ? "Skanuj nośnik…"
                     : "Skanuj produkt…"
               }
@@ -165,91 +168,89 @@ export default function WmsInventoryCountTerminalPage() {
           </div>
         </form>
 
-        {step === "carrier" ? (
-          <button type="button" onClick={skipCarrier} className={`${WMS_INV.btnGhost} mt-3 w-full`}>
-            <SkipForward className="mr-2 h-4 w-4" />
-            Pomiń nośnik
-          </button>
+        {counting ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={enterCarrierScan} className={`${WMS_INV.btnGhost} flex-1 text-xs`}>
+              <Package className="mr-1 inline h-4 w-4" />
+              {carrierCode ? `Nośnik: ${carrierCode}` : "Przypisz nośnik"}
+            </button>
+            {carrierScanMode ? (
+              <button type="button" onClick={cancelCarrierScan} className={`${WMS_INV.btnGhost} px-3`}>
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </section>
 
-      {/* Qty controls — only when counting products */}
-      {step === "product" ? (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setScanMode("increment")}
-            className={`min-h-[44px] flex-1 rounded-lg border-2 px-2 py-2 text-xs font-black uppercase ${
-              scanMode === "increment" ? "border-[#1e4d8c] bg-[#1e4d8c] text-white" : `${WMS_INV.border} bg-white text-[#5a6b7d]`
-            }`}
-          >
-            Skan +1
-          </button>
-          <button
-            type="button"
-            onClick={() => setScanMode("manual")}
-            className={`min-h-[44px] flex-1 rounded-lg border-2 px-2 py-2 text-xs font-black uppercase ${
-              scanMode === "manual" ? "border-[#1e4d8c] bg-[#1e4d8c] text-white" : `${WMS_INV.border} bg-white text-[#5a6b7d]`
-            }`}
-          >
-            Ilość ręczna
-          </button>
-          <label
-            className={`flex min-h-[44px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 ${WMS_INV.border} bg-white px-2 text-xs font-black uppercase`}
-          >
-            <input
-              type="checkbox"
-              checked={autoConfirm}
-              onChange={(e) => setAutoConfirm(e.target.checked)}
-              className="h-4 w-4 accent-[#1e4d8c]"
-            />
-            Auto
-          </label>
-        </div>
-      ) : null}
-
-      {step === "product" && scanMode === "manual" && activeProductLabel ? (
-        <div className="space-y-2">
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-            {[1, 2, 5, 10, 25, 50].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setManualQty(n)}
-                className={`min-h-[48px] rounded-lg border-2 ${WMS_INV.border} bg-white text-lg font-black tabular-nums hover:border-[#1e4d8c]`}
-              >
-                {n}
-              </button>
-            ))}
+      {counting ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setScanMode("increment")}
+              className={`min-h-[44px] flex-1 rounded-lg border-2 px-2 py-2 text-xs font-black uppercase ${
+                scanMode === "increment"
+                  ? "border-[#1e4d8c] bg-[#1e4d8c] text-white"
+                  : `${WMS_INV.border} bg-white text-[#5a6b7d]`
+              }`}
+            >
+              Skan +1
+            </button>
+            <button
+              type="button"
+              onClick={() => setScanMode("manual")}
+              className={`min-h-[44px] flex-1 rounded-lg border-2 px-2 py-2 text-xs font-black uppercase ${
+                scanMode === "manual"
+                  ? "border-[#1e4d8c] bg-[#1e4d8c] text-white"
+                  : `${WMS_INV.border} bg-white text-[#5a6b7d]`
+              }`}
+            >
+              Ilość ręczna
+            </button>
+            <label
+              className={`flex min-h-[44px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 ${WMS_INV.border} bg-white px-2 text-xs font-black uppercase`}
+            >
+              <input
+                type="checkbox"
+                checked={autoConfirm}
+                onChange={(e) => setAutoConfirm(e.target.checked)}
+                className="h-4 w-4 accent-[#1e4d8c]"
+              />
+              Auto
+            </label>
           </div>
-          <p className="text-center text-3xl font-black tabular-nums text-[#1e4d8c]">{pendingQty}</p>
-          <button type="button" className={`${WMS_INV.btnPrimary} w-full`} onClick={() => void confirmManualQty()}>
-            Potwierdź {pendingQty} szt.
-          </button>
-        </div>
-      ) : null}
 
-      {/* Scanned products in location */}
-      {summary && step === "product" ? (
-        <section className={`rounded-lg border ${WMS_INV.border} ${WMS_INV.surface} p-3`}>
-          <WmsInventoryProductChipList
-            pending={summary.pending}
-            counted={summary.counted}
-            variance={summary.variance}
-            unexpected={summary.unexpected}
-          />
-        </section>
+          {scanMode === "manual" && activeScan ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                {[1, 2, 5, 10, 25, 50].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setManualQty(n)}
+                    className={`min-h-[48px] rounded-lg border-2 ${WMS_INV.border} bg-white text-lg font-black tabular-nums hover:border-[#1e4d8c]`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <p className="text-center text-3xl font-black tabular-nums text-[#1e4d8c]">{pendingQty}</p>
+              <button type="button" className={`${WMS_INV.btnPrimary} w-full`} onClick={() => void confirmManualQty()}>
+                Potwierdź {pendingQty} szt.
+              </button>
+            </div>
+          ) : null}
+
+          <WmsInventoryRecentScans items={recentScans} />
+          <WmsInventorySessionSummary summary={summary} />
+        </>
       ) : null}
 
       {showQueue ? (
-        <WmsInventoryMinimalQueue
-          items={queueItems}
-          loading={queueLoading}
-          onSelect={(t) => void loadTask(t.id)}
-        />
+        <WmsInventoryMinimalQueue items={queueItems} loading={queueLoading} onSelect={(t) => void loadTask(t.id)} />
       ) : null}
 
-      {/* Bottom actions */}
       <WmsInventoryEmergencySearch
         tenantId={tenantId}
         warehouseId={warehouseId}
@@ -266,9 +267,9 @@ export default function WmsInventoryCountTerminalPage() {
           onClick={() => setUnknownOpen(true)}
         >
           <HelpCircle className="mr-2 h-4 w-4" />
-          Produkt spoza systemu
+          Nieznany produkt
         </button>
-        {task && step === "product" ? (
+        {counting ? (
           <button type="button" className={`${WMS_INV.btnPrimary} flex-1`} onClick={finishLocation}>
             <CheckCircle2 className="mr-2 h-4 w-4" />
             Zakończ lokalizację

@@ -97,59 +97,82 @@ def get_warehouse_inventory_value(warehouse_id: int, db: Session = Depends(get_d
     return {"warehouse_id": warehouse_id, "inventory_value": round(value, 2)}
 
 
+def _remaining_weight_kg(loc: Location) -> float | None:
+    max_w = getattr(loc, "max_weight_kg", None)
+    if max_w is None:
+        return None
+    try:
+        return round(
+            max(
+                0.0,
+                float(max_w or 0) - float(getattr(loc, "occupied_weight_kg", 0) or 0),
+            ),
+            4,
+        )
+    except (TypeError, ValueError):
+        logger.warning(
+            "[warehouses.locations] invalid weight fields location_id=%s max_weight_kg=%r occupied_weight_kg=%r",
+            getattr(loc, "id", None),
+            max_w,
+            getattr(loc, "occupied_weight_kg", None),
+        )
+        return None
+
+
 @router.get("/{warehouse_id}/locations")
 def get_warehouse_locations(warehouse_id: int, db: Session = Depends(get_db)):
     """List locations: WMS `type` (badge kind), `storage_type` (layout bin chrome), optional zone / capacity_type."""
-    wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
-    if not wh:
-        raise HTTPException(status_code=404, detail="Warehouse not found")
-    rows = (
-        db.query(Location)
-        .filter(Location.warehouse_id == warehouse_id)
-        .order_by(Location.id)
-        .all()
-    )
-    st_by_lid = batch_location_storage_types(db, warehouse_id, rows)
-    out = []
-    for loc in rows:
-        code = (loc.name or "").strip() or f"#{loc.id}"
-        lid = int(loc.id)
-        zn = (getattr(loc, "rack_name", None) or "").strip() or None
-        ct = (getattr(loc, "type", None) or "").strip().lower() or None
-        out.append(
-            {
-                "id": loc.id,
-                "name": code,
-                "code": code,
-                "type": wms_location_badge_kind(loc),
-                "storage_type": st_by_lid.get(lid, "unknown"),
-                "zone": zn,
-                "capacity_type": ct,
-                "x": loc.x,
-                "y": loc.y,
-                "occupied_volume_dm3": round(float(getattr(loc, "occupied_volume_dm3", 0) or 0), 4),
-                "occupied_weight_kg": round(float(getattr(loc, "occupied_weight_kg", 0) or 0), 4),
-                "capacity_utilization_percent": round(float(getattr(loc, "capacity_utilization_percent", 0) or 0), 2),
-                "remaining_volume_dm3": round(
-                    max(
-                        0.0,
-                        float(getattr(loc, "width", 0) or 0)
-                        * float(getattr(loc, "depth", 0) or 0)
-                        * float(getattr(loc, "height", 0) or 0)
-                        / 1000.0
-                        - float(getattr(loc, "occupied_volume_dm3", 0) or 0),
-                    ),
-                    4,
-                ),
-                "remaining_weight_kg": round(
-                    max(
-                        0.0,
-                        float(getattr(loc, "max_weight_kg", 0) or 0)
-                        - float(getattr(loc, "occupied_weight_kg", 0) or 0),
-                    )
-                    if getattr(loc, "max_weight_kg", None)
-                    else None,
-                ),
-            }
+    try:
+        wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+        if not wh:
+            raise HTTPException(status_code=404, detail="Warehouse not found")
+        rows = (
+            db.query(Location)
+            .filter(Location.warehouse_id == warehouse_id)
+            .order_by(Location.id)
+            .all()
         )
-    return out
+        st_by_lid = batch_location_storage_types(db, warehouse_id, rows)
+        out = []
+        for loc in rows:
+            code = (loc.name or "").strip() or f"#{loc.id}"
+            lid = int(loc.id)
+            zn = (getattr(loc, "rack_name", None) or "").strip() or None
+            ct = (getattr(loc, "type", None) or "").strip().lower() or None
+            out.append(
+                {
+                    "id": loc.id,
+                    "name": code,
+                    "code": code,
+                    "type": wms_location_badge_kind(loc),
+                    "storage_type": st_by_lid.get(lid, "unknown"),
+                    "zone": zn,
+                    "capacity_type": ct,
+                    "x": loc.x,
+                    "y": loc.y,
+                    "occupied_volume_dm3": round(float(getattr(loc, "occupied_volume_dm3", 0) or 0), 4),
+                    "occupied_weight_kg": round(float(getattr(loc, "occupied_weight_kg", 0) or 0), 4),
+                    "capacity_utilization_percent": round(
+                        float(getattr(loc, "capacity_utilization_percent", 0) or 0), 2
+                    ),
+                    "remaining_volume_dm3": round(
+                        max(
+                            0.0,
+                            float(getattr(loc, "width", 0) or 0)
+                            * float(getattr(loc, "depth", 0) or 0)
+                            * float(getattr(loc, "height", 0) or 0)
+                            / 1000.0
+                            - float(getattr(loc, "occupied_volume_dm3", 0) or 0),
+                        ),
+                        4,
+                    ),
+                    "remaining_weight_kg": _remaining_weight_kg(loc),
+                }
+            )
+        logger.info("[warehouses.locations] warehouse_id=%s count=%s", warehouse_id, len(out))
+        return out
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("[warehouses.locations] failed warehouse_id=%s", warehouse_id)
+        raise HTTPException(status_code=500, detail="Failed to list warehouse locations") from exc

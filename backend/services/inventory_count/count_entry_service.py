@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import json
 import logging
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import or_
@@ -13,18 +14,23 @@ from ...models.inventory_count.constants import (
     AUDIT_QTY_CHANGED,
     AUDIT_SCAN,
     COUNT_MODE_BLIND,
+    DISC_EXPECTED,
+    DISC_EXTRA_PRODUCT,
+    DISC_UNPLANNED_PRODUCT,
+    DISC_WRONG_LOCATION,
     ENTRY_SOURCE_SCANNER,
     LINE_STATUS_COUNTED,
     LINE_STATUS_IN_PROGRESS,
+    LINE_STATUS_OPEN,
 )
 from ...models.inventory_count.count_entry import InventoryCountEntry
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
+from ...models.inventory_count.task import InventoryTask
 from ...models.product import Product
 from .audit_service import log_inventory_audit
 from .errors import (
     InventoryBarcodeAmbiguousError,
-    InventoryBarcodeLineNotFoundError,
     InventoryBarcodeNotFoundError,
     InventoryBlindCountViolationError,
     InventoryDocumentNotFoundError,
@@ -32,6 +38,13 @@ from .errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+_DISCREPANCY_LABELS = {
+    DISC_EXPECTED: "Zgodnie z planem",
+    DISC_EXTRA_PRODUCT: "Nadwyżka / produkt spoza snapshotu",
+    DISC_UNPLANNED_PRODUCT: "Produkt spoza planowanej inwentaryzacji",
+    DISC_WRONG_LOCATION: "Produkt przypisany do innej lokalizacji",
+}
 
 
 def record_count_scan(
@@ -131,7 +144,6 @@ def record_count_scan(
     )
     from .kpi_service import recompute_document_kpis
     from .task_generation_service import update_task_progress
-    from ...models.inventory_count.task import InventoryTask
 
     recompute_document_kpis(db, doc)
     tasks = (
@@ -224,6 +236,140 @@ def _product_match_clauses(code: str):
     return or_(*clauses)
 
 
+def _is_operator_created_line(line: InventoryDocumentLine) -> bool:
+    raw = getattr(line, "metadata_json", None)
+    if not raw:
+        return False
+    try:
+        meta = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return False
+    return bool(meta.get("operator_scan") or meta.get("unplanned"))
+
+
+def _find_products_by_barcode(db: Session, *, tenant_id: int, code: str) -> list[Product]:
+    return (
+        db.query(Product)
+        .filter(Product.tenant_id == int(tenant_id), _product_match_clauses(code))
+        .order_by(Product.id.asc())
+        .all()
+    )
+
+
+def _pick_product_for_task(
+    db: Session,
+    *,
+    products: list[Product],
+    document_id: int,
+    location_id: int,
+    barcode: str,
+) -> Product:
+    if len(products) == 1:
+        return products[0]
+
+    product_ids = [int(p.id) for p in products]
+    lines = (
+        db.query(InventoryDocumentLine)
+        .filter(
+            InventoryDocumentLine.inventory_document_id == int(document_id),
+            InventoryDocumentLine.location_id == int(location_id),
+            InventoryDocumentLine.product_id.in_(product_ids),
+        )
+        .all()
+    )
+    planned_at_loc = {
+        int(ln.product_id)
+        for ln in lines
+        if float(ln.expected_quantity or 0) > 1e-9 and not _is_operator_created_line(ln)
+    }
+    if len(planned_at_loc) == 1:
+        pid = next(iter(planned_at_loc))
+        return next(p for p in products if int(p.id) == pid)
+
+    any_at_loc = {int(ln.product_id) for ln in lines}
+    if len(any_at_loc) == 1:
+        pid = next(iter(any_at_loc))
+        return next(p for p in products if int(p.id) == pid)
+
+    logger.warning(
+        "[inventory_count.resolve_barcode] ambiguous barcode=%s product_ids=%s",
+        barcode,
+        product_ids,
+    )
+    raise InventoryBarcodeAmbiguousError(
+        f"Barcode matches multiple products: {product_ids}",
+        barcode=barcode,
+        product_ids=product_ids,
+    )
+
+
+def _ensure_count_line_at_location(
+    db: Session,
+    *,
+    document_id: int,
+    location_id: int,
+    product_id: int,
+) -> tuple[InventoryDocumentLine, bool]:
+    line = (
+        db.query(InventoryDocumentLine)
+        .filter(
+            InventoryDocumentLine.inventory_document_id == int(document_id),
+            InventoryDocumentLine.location_id == int(location_id),
+            InventoryDocumentLine.product_id == int(product_id),
+        )
+        .first()
+    )
+    if line is not None:
+        return line, False
+
+    line = InventoryDocumentLine(
+        inventory_document_id=int(document_id),
+        location_id=int(location_id),
+        product_id=int(product_id),
+        expected_quantity=0.0,
+        status=LINE_STATUS_OPEN,
+        metadata_json=json.dumps({"operator_scan": True, "unplanned": True}),
+    )
+    line.recompute_difference()
+    db.add(line)
+    db.flush()
+    return line, True
+
+
+def _classify_discrepancy(
+    db: Session,
+    *,
+    document_id: int,
+    task_location_id: int,
+    product_id: int,
+    line: InventoryDocumentLine,
+    line_created: bool,
+) -> str:
+    planned_lines = [
+        ln
+        for ln in db.query(InventoryDocumentLine)
+        .filter(
+            InventoryDocumentLine.inventory_document_id == int(document_id),
+            InventoryDocumentLine.product_id == int(product_id),
+        )
+        .all()
+        if float(ln.expected_quantity or 0) > 1e-9 and not _is_operator_created_line(ln)
+    ]
+
+    if not planned_lines:
+        return DISC_UNPLANNED_PRODUCT
+
+    at_this_location = [ln for ln in planned_lines if int(ln.location_id) == int(task_location_id)]
+    if at_this_location and not line_created:
+        return DISC_EXPECTED
+
+    at_other_locations = [ln for ln in planned_lines if int(ln.location_id) != int(task_location_id)]
+    if at_other_locations:
+        return DISC_WRONG_LOCATION
+
+    return DISC_EXTRA_PRODUCT
+
+
 def resolve_barcode_to_line(
     db: Session,
     *,
@@ -231,7 +377,8 @@ def resolve_barcode_to_line(
     task_id: int,
     barcode_value: str,
 ) -> dict[str, Any]:
-    """Resolve EAN/SKU/barcode to document line within task location."""
+    """Resolve barcode globally, ensure a count line exists, classify discrepancy."""
+    from .task_generation_service import update_task_progress
     from .task_service import get_task
 
     code = str(barcode_value or "").strip()
@@ -245,13 +392,10 @@ def resolve_barcode_to_line(
         raise InventoryBarcodeNotFoundError("Empty barcode", barcode=code)
 
     task = get_task(db, tenant_id=tenant_id, task_id=task_id)
+    document_id = int(task["inventory_document_id"])
+    location_id = int(task["location_id"])
 
-    products = (
-        db.query(Product)
-        .filter(Product.tenant_id == int(tenant_id), _product_match_clauses(code))
-        .order_by(Product.id.asc())
-        .all()
-    )
+    products = _find_products_by_barcode(db, tenant_id=tenant_id, code=code)
     if not products:
         logger.info(
             "[inventory_count.resolve_barcode] barcode_not_found tenant_id=%s task_id=%s barcode=%s",
@@ -260,52 +404,60 @@ def resolve_barcode_to_line(
             code,
         )
         raise InventoryBarcodeNotFoundError(f"Product not found for barcode: {code}", barcode=code)
-    if len(products) > 1:
-        product_ids = [int(p.id) for p in products]
-        logger.warning(
-            "[inventory_count.resolve_barcode] ambiguous barcode=%s product_ids=%s",
-            code,
-            product_ids,
-        )
-        raise InventoryBarcodeAmbiguousError(
-            f"Barcode matches multiple products: {product_ids}",
-            barcode=code,
-            product_ids=product_ids,
-        )
 
-    product = products[0]
-    line = (
-        db.query(InventoryDocumentLine)
-        .filter(
-            InventoryDocumentLine.inventory_document_id == int(task["inventory_document_id"]),
-            InventoryDocumentLine.location_id == int(task["location_id"]),
-            InventoryDocumentLine.product_id == int(product.id),
-        )
-        .first()
+    product = _pick_product_for_task(
+        db,
+        products=products,
+        document_id=document_id,
+        location_id=location_id,
+        barcode=code,
     )
-    if line is None:
-        logger.info(
-            "[inventory_count.resolve_barcode] line_not_found task_id=%s product_id=%s location_id=%s barcode=%s",
-            task_id,
-            product.id,
-            task["location_id"],
-            code,
-        )
-        raise InventoryBarcodeLineNotFoundError(
-            "No inventory line for product at this location",
-            barcode=code,
-            product_id=int(product.id),
-            task_id=int(task_id),
-        )
+
+    line, line_created = _ensure_count_line_at_location(
+        db,
+        document_id=document_id,
+        location_id=location_id,
+        product_id=int(product.id),
+    )
+    discrepancy_class = _classify_discrepancy(
+        db,
+        document_id=document_id,
+        task_location_id=location_id,
+        product_id=int(product.id),
+        line=line,
+        line_created=line_created,
+    )
+
+    if line_created:
+        task_row = db.query(InventoryTask).filter(InventoryTask.id == int(task_id)).first()
+        if task_row is not None:
+            update_task_progress(db, task_row)
+        doc = db.query(InventoryDocument).filter(InventoryDocument.id == document_id).first()
+        if doc is not None:
+            doc.total_lines = (
+                db.query(InventoryDocumentLine)
+                .filter(InventoryDocumentLine.inventory_document_id == document_id)
+                .count()
+            )
+        db.commit()
+        db.refresh(line)
+
+    expected_qty = float(line.expected_quantity or 0)
+    counted_qty = float(line.counted_quantity or 0)
+    diff_qty = float(line.difference_quantity or 0) if line.counted_quantity is not None else None
 
     logger.info(
-        "[inventory_count.resolve_barcode] matched task_id=%s line_id=%s product_id=%s sku=%s barcode=%s",
+        "[inventory_count.resolve_barcode] matched task_id=%s line_id=%s product_id=%s sku=%s "
+        "barcode=%s discrepancy=%s line_created=%s",
         task_id,
         line.id,
         product.id,
         product.sku,
         code,
+        discrepancy_class,
+        line_created,
     )
+
     return {
         "line_id": int(line.id),
         "product_id": int(product.id),
@@ -313,4 +465,13 @@ def resolve_barcode_to_line(
         "sku": product.sku,
         "ean": product.ean,
         "barcode": code,
+        "image_url": getattr(product, "image_url", None),
+        "expected_quantity": expected_qty,
+        "counted_quantity": counted_qty,
+        "difference_quantity": diff_qty,
+        "discrepancy_class": discrepancy_class,
+        "discrepancy_label": _DISCREPANCY_LABELS.get(discrepancy_class, discrepancy_class),
+        "location_id": location_id,
+        "location_code": task.get("location_code") or task.get("location_name"),
+        "line_created": line_created,
     }
