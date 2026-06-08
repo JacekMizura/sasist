@@ -22,6 +22,7 @@ from ..schemas.inventory_count import (
     InventoryScopePreviewBody,
     InventoryScopePreviewRead,
     InventoryReportKindRead,
+    InventoryReportsCatalogRead,
     InventoryConflictsRead,
     InventoryDifferenceAnalysisRead,
     InventoryUnknownProductMapBody,
