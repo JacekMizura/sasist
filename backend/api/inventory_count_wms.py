@@ -12,12 +12,18 @@ from ..auth.deps import get_optional_current_user
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.inventory_count import (
+    InventoryAuditQueuesRead,
     InventoryCountLineRead,
     InventoryCountScanBody,
     InventoryLocationConfirmBody,
+    InventoryLocationExecutionSummaryRead,
     InventorySessionOpenBody,
     InventorySessionRead,
+    InventoryTaskPageRead,
     InventoryTaskRead,
+    InventoryUniversalSearchRead,
+    InventoryUnknownProductCreateBody,
+    InventoryUnknownProductRead,
 )
 from ..services.inventory_count import (
     InventoryCountError,
@@ -29,6 +35,16 @@ from ..services.inventory_count import (
     open_session,
     record_count_scan,
 )
+from ..services.inventory_count.unknown_product_service import (
+    create_unknown_product_draft,
+    list_unknown_products,
+)
+from ..services.inventory_count.wms_search_service import (
+    resolve_product_for_task_location,
+    search_inventory_execution,
+)
+from ..services.inventory_count.wms_task_queue_service import list_tasks_paginated
+from ..services.inventory_count.wms_variance_service import get_audit_queues, get_location_execution_summary
 from ..api.inventory_count_deps import require_inventory_permission_optional
 from ..services.inventory_count.permissions import PERM_EXECUTE
 from ..services.inventory_count.count_entry_service import resolve_barcode_to_line
@@ -51,7 +67,7 @@ def _map_error(exc: InventoryCountError) -> HTTPException:
 
 
 @router.get("/tasks", response_model=List[InventoryTaskRead])
-def wms_inventory_tasks(
+def wms_inventory_tasks_legacy(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Query(..., ge=1),
     document_id: Optional[int] = Query(None, ge=1),
@@ -64,6 +80,153 @@ def wms_inventory_tasks(
         warehouse_id=warehouse_id,
         document_id=document_id,
         user_id=user.id if user else None,
+        limit=50,
+    )
+
+
+@router.get("/tasks/queue", response_model=InventoryTaskPageRead)
+def wms_inventory_task_queue(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    document_id: Optional[int] = Query(None, ge=1),
+    zone: Optional[str] = Query(None),
+    assigned_user_id: Optional[int] = Query(None, ge=1),
+    status: Optional[str] = Query(None),
+    recount_only: bool = Query(False),
+    unresolved_only: bool = Query(False),
+    variance_only: bool = Query(False),
+    completed_only: bool = Query(False),
+    search: Optional[str] = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    return list_tasks_paginated(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        document_id=document_id,
+        user_id=user.id if user else None,
+        zone=zone,
+        assigned_user_id=assigned_user_id,
+        status=status,
+        recount_only=recount_only,
+        unresolved_only=unresolved_only,
+        variance_only=variance_only,
+        completed_only=completed_only,
+        search=search,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get("/search", response_model=InventoryUniversalSearchRead)
+def wms_inventory_universal_search(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    q: str = Query(..., min_length=1),
+    document_id: Optional[int] = Query(None, ge=1),
+    limit: int = Query(25, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    return search_inventory_execution(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        query=q,
+        document_id=document_id,
+        limit=limit,
+    )
+
+
+@router.get("/tasks/{task_id}/search-products")
+def wms_inventory_task_product_search(
+    task_id: int,
+    tenant_id: int = Query(..., ge=1),
+    q: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return resolve_product_for_task_location(db, tenant_id=tenant_id, task_id=task_id, query=q)
+    except InventoryCountError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.get("/tasks/{task_id}/execution-summary", response_model=InventoryLocationExecutionSummaryRead)
+def wms_inventory_execution_summary(
+    task_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_location_execution_summary(db, tenant_id=tenant_id, task_id=task_id)
+    except InventoryCountError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.get("/audit-queues", response_model=InventoryAuditQueuesRead)
+def wms_inventory_audit_queues(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    document_id: Optional[int] = Query(None, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    return get_audit_queues(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        document_id=document_id,
+        limit=limit,
+    )
+
+
+@router.post("/unknown-products", response_model=InventoryUnknownProductRead)
+def wms_inventory_create_unknown_product(
+    body: InventoryUnknownProductCreateBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Query(..., ge=1),
+    session_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(require_inventory_permission_optional(PERM_EXECUTE)),
+):
+    try:
+        return create_unknown_product_draft(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            document_id=body.document_id,
+            task_id=body.task_id,
+            location_id=body.location_id,
+            temporary_name=body.temporary_name,
+            quantity=body.quantity,
+            barcode_value=body.barcode_value,
+            notes=body.notes,
+            photo_url=body.photo_url,
+            user_id=user.id if user else None,
+            session_id=session_id,
+        )
+    except InventoryCountError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.get("/unknown-products", response_model=List[InventoryUnknownProductRead])
+def wms_inventory_list_unknown_products(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    document_id: Optional[int] = Query(None, ge=1),
+    status: str = Query("draft"),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    return list_unknown_products(
+        db,
+        tenant_id=tenant_id,
+        document_id=document_id,
+        warehouse_id=warehouse_id,
+        status=status,
+        limit=limit,
     )
 
 

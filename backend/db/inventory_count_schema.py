@@ -17,7 +17,7 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-INVENTORY_COUNT_SCHEMA_VERSION = "2026.06.08.3"
+INVENTORY_COUNT_SCHEMA_VERSION = "2026.06.08.4"
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,7 @@ def _inventory_count_entity_registry() -> list[InventoryCountEntitySpec]:
         InventorySnapshotSerialLine,
         InventorySnapshotStockLine,
         InventoryTask,
+        InventoryUnknownProduct,
     )
 
     return [
@@ -70,6 +71,7 @@ def _inventory_count_entity_registry() -> list[InventoryCountEntitySpec]:
         InventoryCountEntitySpec("inventory_approvals", InventoryApproval, "approval"),
         InventoryCountEntitySpec("inventory_reports", InventoryReport, "report"),
         InventoryCountEntitySpec("inventory_jobs", InventoryJob, "job"),
+        InventoryCountEntitySpec("inventory_unknown_products", InventoryUnknownProduct, "unknown_product"),
     ]
 
 

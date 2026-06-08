@@ -243,3 +243,92 @@ class InventoryApprovalNotesBody(BaseModel):
 
 class InventoryRecountCompleteBody(BaseModel):
     counted_quantity: float
+
+
+class InventoryTaskCompactRead(BaseModel):
+    id: int
+    inventory_document_id: int
+    warehouse_id: int
+    location_id: int
+    location_code: str | None = None
+    location_name: str | None = None
+    task_number: str
+    status: str
+    priority: int = 0
+    assigned_user_id: int | None = None
+    assigned_operator_name: str | None = None
+    line_count: int = 0
+    counted_line_count: int = 0
+    progress_percent: int = 0
+    sequence_no: int = 0
+    zone_code: str | None = None
+    aisle_code: str | None = None
+    has_variance: bool = False
+    recount_flag: bool = False
+    unresolved: bool = False
+    last_activity_at: str | None = None
+
+
+class InventoryTaskPageRead(BaseModel):
+    items: list[InventoryTaskCompactRead]
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+
+
+class InventoryUniversalSearchRead(BaseModel):
+    query: str
+    locations: list[dict[str, Any]] = Field(default_factory=list)
+    products: list[dict[str, Any]] = Field(default_factory=list)
+    tasks: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class InventoryUnknownProductCreateBody(BaseModel):
+    document_id: int
+    task_id: int | None = None
+    location_id: int
+    temporary_name: str = Field(..., min_length=1, max_length=256)
+    quantity: float = Field(default=1.0, gt=0)
+    barcode_value: str | None = None
+    notes: str | None = None
+    photo_url: str | None = None
+
+
+class InventoryUnknownProductRead(BaseModel):
+    id: int
+    inventory_document_id: int
+    inventory_task_id: int | None = None
+    warehouse_id: int
+    location_id: int
+    temporary_name: str
+    barcode_value: str | None = None
+    quantity: float
+    notes: str | None = None
+    photo_url: str | None = None
+    status: str
+    mapped_product_id: int | None = None
+    reported_by_user_id: int | None = None
+    created_at: str | None = None
+
+
+class InventoryLocationExecutionSummaryRead(BaseModel):
+    task_id: int
+    location_id: int
+    location_code: str | None = None
+    blind_mode: bool = True
+    progress_percent: int = 0
+    line_count: int = 0
+    counted_line_count: int = 0
+    pending: list[dict[str, Any]] = Field(default_factory=list)
+    counted: list[dict[str, Any]] = Field(default_factory=list)
+    variance: list[dict[str, Any]] = Field(default_factory=list)
+    unexpected: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class InventoryAuditQueuesRead(BaseModel):
+    unresolved_anomalies: list[dict[str, Any]] = Field(default_factory=list)
+    suspicious_variance: list[dict[str, Any]] = Field(default_factory=list)
+    unknown_products: list[dict[str, Any]] = Field(default_factory=list)
+    operator_productivity: list[dict[str, Any]] = Field(default_factory=list)
+    recount_lines_count: int = 0

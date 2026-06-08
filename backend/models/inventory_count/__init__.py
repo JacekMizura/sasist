@@ -78,6 +78,7 @@ from .snapshot import (
     InventorySnapshotStockLine,
 )
 from .task import InventoryTask
+from .unknown_product import InventoryUnknownProduct
 
 __all__ = [
     "InventoryAdjustment",
@@ -97,4 +98,5 @@ __all__ = [
     "InventorySnapshotSerialLine",
     "InventorySnapshotStockLine",
     "InventoryTask",
+    "InventoryUnknownProduct",
 ]

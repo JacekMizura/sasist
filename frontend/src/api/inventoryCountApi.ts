@@ -61,6 +61,92 @@ export type InventoryTaskRead = {
   priority: number;
   progress_percent: number;
   sequence_no: number;
+  zone_code?: string | null;
+  line_count?: number;
+  counted_line_count?: number;
+};
+
+export type InventoryTaskCompact = InventoryTaskRead & {
+  assigned_user_id?: number | null;
+  assigned_operator_name?: string | null;
+  has_variance?: boolean;
+  recount_flag?: boolean;
+  unresolved?: boolean;
+  last_activity_at?: string | null;
+  aisle_code?: string | null;
+};
+
+export type InventoryTaskPage = {
+  items: InventoryTaskCompact[];
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+};
+
+export type InventoryUniversalSearchResult = {
+  query: string;
+  locations: Array<{ location_id: number; location_code: string; zone?: string | null }>;
+  products: Array<{
+    product_id: number;
+    sku?: string | null;
+    ean?: string | null;
+    name?: string | null;
+    catalog_number?: string | null;
+  }>;
+  tasks: Array<{
+    task_id: number;
+    task_number: string;
+    location_id: number;
+    location_code?: string | null;
+    status: string;
+    progress_percent: number;
+  }>;
+};
+
+export type InventoryExecutionLine = {
+  line_id?: number;
+  product_id?: number;
+  unknown_id?: number;
+  sku?: string | null;
+  ean?: string | null;
+  product_name?: string | null;
+  temporary_name?: string;
+  counted_quantity?: number | null;
+  expected_quantity?: number | null;
+  difference_quantity?: number | null;
+  quantity?: number;
+  status?: string;
+  category?: string;
+  variance_severity?: string;
+  variance_message?: string;
+};
+
+export type InventoryExecutionSummary = {
+  task_id: number;
+  location_id: number;
+  location_code: string | null;
+  blind_mode: boolean;
+  progress_percent: number;
+  line_count: number;
+  counted_line_count: number;
+  pending: InventoryExecutionLine[];
+  counted: InventoryExecutionLine[];
+  variance: InventoryExecutionLine[];
+  unexpected: InventoryExecutionLine[];
+};
+
+export type TaskQueueQuery = {
+  documentId?: number;
+  zone?: string;
+  status?: string;
+  recountOnly?: boolean;
+  unresolvedOnly?: boolean;
+  varianceOnly?: boolean;
+  completedOnly?: boolean;
+  search?: string;
+  offset?: number;
+  limit?: number;
 };
 
 const tenantParams = (tenantId: number, warehouseId?: number | null) => ({
@@ -224,6 +310,88 @@ export async function listWmsInventoryTasks(
       tenant_id: tenantId,
       warehouse_id: warehouseId,
       ...(documentId != null ? { document_id: documentId } : {}),
+    },
+  });
+  return data;
+}
+
+export async function fetchWmsInventoryTaskQueue(
+  tenantId: number,
+  warehouseId: number,
+  query: TaskQueueQuery = {},
+): Promise<InventoryTaskPage> {
+  const { data } = await api.get<InventoryTaskPage>("/wms/inventory-count/tasks/queue", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      ...(query.documentId != null ? { document_id: query.documentId } : {}),
+      ...(query.zone ? { zone: query.zone } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.recountOnly ? { recount_only: true } : {}),
+      ...(query.unresolvedOnly ? { unresolved_only: true } : {}),
+      ...(query.varianceOnly ? { variance_only: true } : {}),
+      ...(query.completedOnly ? { completed_only: true } : {}),
+      ...(query.search ? { search: query.search } : {}),
+      offset: query.offset ?? 0,
+      limit: query.limit ?? 50,
+    },
+  });
+  return data;
+}
+
+export async function searchWmsInventory(
+  tenantId: number,
+  warehouseId: number,
+  q: string,
+  documentId?: number,
+): Promise<InventoryUniversalSearchResult> {
+  const { data } = await api.get<InventoryUniversalSearchResult>("/wms/inventory-count/search", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      q,
+      ...(documentId != null ? { document_id: documentId } : {}),
+    },
+  });
+  return data;
+}
+
+export async function fetchWmsExecutionSummary(tenantId: number, taskId: number): Promise<InventoryExecutionSummary> {
+  const { data } = await api.get<InventoryExecutionSummary>(
+    `/wms/inventory-count/tasks/${taskId}/execution-summary`,
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function searchWmsTaskProducts(tenantId: number, taskId: number, q: string) {
+  const { data } = await api.get<{ matches: Array<{ line_id: number; product_id: number; product_name: string | null; sku: string | null; ean: string | null; counted_quantity: number | null; status: string }> }>(
+    `/wms/inventory-count/tasks/${taskId}/search-products`,
+    { params: { tenant_id: tenantId, q } },
+  );
+  return data.matches ?? [];
+}
+
+export async function createWmsUnknownProduct(
+  tenantId: number,
+  warehouseId: number,
+  body: {
+    document_id: number;
+    task_id?: number;
+    location_id: number;
+    temporary_name: string;
+    quantity?: number;
+    barcode_value?: string;
+    notes?: string;
+    photo_url?: string;
+  },
+  sessionId?: number,
+) {
+  const { data } = await api.post("/wms/inventory-count/unknown-products", body, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      ...(sessionId != null ? { session_id: sessionId } : {}),
     },
   });
   return data;
