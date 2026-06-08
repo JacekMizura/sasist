@@ -62,6 +62,9 @@ export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił bł�
         }
         return msg;
       }
+      if (typeof detail === "number" || typeof detail === "boolean") {
+        return String(detail);
+      }
       if (detail && typeof detail === "object" && !Array.isArray(detail)) {
         const d = detail as { message?: unknown; error?: unknown; step?: unknown };
         const rawMsg = d.message ?? d.error;

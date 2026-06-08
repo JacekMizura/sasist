@@ -168,20 +168,64 @@ class TestBatchCreateValidation(unittest.TestCase):
         comp.composition_mode = "manufacturing"
         comp.product_id = 10
         comp.is_active = False
+        comp.lines = [MagicMock()]
         db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = MagicMock()
+        wh = MagicMock()
+        wh.tenant_id = 1
+        wh.name = "Main"
+        db.query.return_value.filter.return_value.first.return_value = wh
         with (
+            patch(
+                "backend.services.production_batch_service.list_tenant_warehouse_ids",
+                return_value=[1],
+            ),
             patch(
                 "backend.services.production_batch_service.resolve_composition_entity",
                 return_value=comp,
-            ),
-            patch(
-                "backend.services.production_batch_service.Product",
             ),
             self.assertRaises(ProductionBatchError) as ctx,
         ):
             _validate_batch_create_body(db, tenant_id=1, warehouse_id=1, lines=[ln])
         self.assertEqual(ctx.exception.code, "recipe_inactive")
+
+    def test_warehouse_accepts_tenant_warehouses_link(self):
+        from unittest.mock import MagicMock, patch
+
+        from backend.services.production_batch_service import _assert_batch_warehouse_for_tenant
+
+        wh = MagicMock()
+        wh.id = 1
+        wh.tenant_id = None
+        wh.name = "Hall A"
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = wh
+        with patch(
+            "backend.services.production_batch_service.list_tenant_warehouse_ids",
+            return_value=[1],
+        ):
+            resolved = _assert_batch_warehouse_for_tenant(db, tenant_id=1, warehouse_id=1)
+        self.assertIs(resolved, wh)
+
+    def test_warehouse_rejects_when_not_linked_to_tenant(self):
+        from unittest.mock import MagicMock, patch
+
+        from backend.services.production_batch_service import ProductionBatchError, _assert_batch_warehouse_for_tenant
+
+        wh = MagicMock()
+        wh.id = 1
+        wh.tenant_id = None
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = wh
+        with (
+            patch(
+                "backend.services.production_batch_service.list_tenant_warehouse_ids",
+                return_value=[2],
+            ),
+            self.assertRaises(ProductionBatchError) as ctx,
+        ):
+            _assert_batch_warehouse_for_tenant(db, tenant_id=1, warehouse_id=1)
+        self.assertEqual(ctx.exception.code, "warehouse_invalid")
+        self.assertIn("not linked", ctx.exception.message)
 
 
 class TestProductionBatches(unittest.TestCase):

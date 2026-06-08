@@ -6,6 +6,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_optional_current_user
@@ -388,19 +389,18 @@ def api_list_recipe_cards(
 
 
 def _batch_err(exc: ProductionBatchError) -> HTTPException:
+    """Propagate exact business error text to the client (Network tab reads detail string)."""
+    message = str(exc.message or exc).strip() or "Production batch error"
     if exc.code == "not_found":
-        return HTTPException(status_code=404, detail={"message": exc.message, "code": exc.code})
+        return HTTPException(status_code=404, detail=message)
     if exc.code == "insufficient_stock":
         return HTTPException(
             status_code=409,
-            detail={"message": exc.message, "code": exc.code, "shortages": exc.shortages},
+            detail={"message": message, "code": exc.code, "shortages": exc.shortages},
         )
     if exc.code == "schema_unavailable":
-        return HTTPException(
-            status_code=503,
-            detail={"message": exc.message, "code": exc.code},
-        )
-    return HTTPException(status_code=400, detail={"message": exc.message, "code": exc.code})
+        return HTTPException(status_code=503, detail=message)
+    return HTTPException(status_code=400, detail=message)
 
 
 @router.get("/batches", response_model=List[ProductionBatchRead])
@@ -500,53 +500,81 @@ def api_create_batch(
 ):
     import json
 
+    raw_body_dump = body.model_dump()
     line_summary = [
-        {"product_id": ln.product_id, "composition_id": ln.composition_id, "planned_quantity": ln.planned_quantity}
+        {
+            "product_id": ln.product_id,
+            "composition_id": ln.composition_id,
+            "planned_quantity": ln.planned_quantity,
+        }
         for ln in (body.lines or [])
     ]
-    body_dump = body.model_dump()
     logger.info(
-        "CREATE_BATCH_BODY tenant_id=%s payload=%s",
+        "CREATE_BATCH_BODY tenant_id=%s warehouse_id=%s status=%s lines=%s payload=%s",
         tenant_id,
-        json.dumps(body_dump, default=str),
+        body.warehouse_id,
+        body.status,
+        line_summary,
+        json.dumps(raw_body_dump, default=str),
     )
-    print(f"CREATE_BATCH_BODY {json.dumps(body_dump, default=str)}", flush=True)
+    print(
+        f"CREATE_BATCH_BODY tenant_id={tenant_id} {json.dumps(raw_body_dump, default=str)}",
+        flush=True,
+    )
+    logger.info(
+        "CREATE_BATCH_DTO tenant_id=%s validated=%s",
+        tenant_id,
+        json.dumps(
+            {
+                "warehouse_id": body.warehouse_id,
+                "status": body.status,
+                "notes": body.notes,
+                "lines": line_summary,
+            },
+            default=str,
+        ),
+    )
+    logger.info(
+        "CREATE_BATCH_WAREHOUSE tenant_id=%s warehouse_id=%s",
+        tenant_id,
+        body.warehouse_id,
+    )
+    logger.info("CREATE_BATCH_LINES tenant_id=%s lines=%s", tenant_id, json.dumps(line_summary, default=str))
+
     try:
-        logger.info(
-            "POST /production/batches tenant_id=%s warehouse_id=%s status=%s lines=%s",
-            tenant_id,
-            body.warehouse_id,
-            body.status,
-            line_summary,
-        )
         uid = int(user.id) if user is not None else None
         row = create_batch(db, tenant_id=tenant_id, body=body, created_by_user_id=uid)
+        logger.info("CREATE_BATCH_COMMIT batch_id=%s tenant_id=%s", row.id, tenant_id)
         db.commit()
+        logger.info("CREATE_BATCH_OK batch_id=%s number=%s", row.id, row.number)
         return row
+    except HTTPException:
+        db.rollback()
+        raise
     except ProductionBatchError as exc:
         db.rollback()
         logger.warning(
-            "batch create rejected tenant_id=%s warehouse_id=%s code=%s message=%s",
+            "CREATE_BATCH_REJECTED tenant_id=%s warehouse_id=%s code=%s reason=%s",
             tenant_id,
             body.warehouse_id,
             exc.code,
             exc.message,
         )
         raise _batch_err(exc) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        detail = str(getattr(exc, "orig", None) or exc)
+        logger.exception("CREATE_BATCH_FATAL step=commit_integrity tenant_id=%s detail=%s", tenant_id, detail)
+        raise HTTPException(status_code=400, detail=detail) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        detail = str(exc)
+        logger.exception("CREATE_BATCH_FATAL step=commit_sql tenant_id=%s detail=%s", tenant_id, detail)
+        raise HTTPException(status_code=400, detail=detail) from exc
     except Exception as exc:
         db.rollback()
-        logger.exception(
-            "POST /production/batches unexpected error tenant_id=%s warehouse_id=%s lines=%s err=%s",
-            tenant_id,
-            body.warehouse_id,
-            line_summary,
-            exc,
-        )
-        detail_msg = str(exc).strip() or "Nie udało się utworzyć partii produkcyjnej."
-        raise HTTPException(
-            status_code=400,
-            detail={"message": detail_msg, "code": "create_failed"},
-        ) from exc
+        logger.exception("CREATE_BATCH_FATAL tenant_id=%s warehouse_id=%s", tenant_id, body.warehouse_id)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/batches/{batch_id}/start", response_model=ProductionBatchRead)

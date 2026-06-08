@@ -51,6 +51,7 @@ from .production_order_service import _auto_allocate_locations
 from .stock_disposition import STOCK_DISPOSITION_SALEABLE
 from .stock_operation_issue_service import append_issue_operation
 from .stock_operation_receipt_service import append_receipt_operation
+from .tenant_default_warehouse import list_tenant_warehouse_ids
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +242,38 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
     )
 
 
+def _assert_batch_warehouse_for_tenant(db: Session, *, tenant_id: int, warehouse_id: int) -> Warehouse:
+    """Warehouse must exist and be linked via tenant_warehouses (or legacy warehouses.tenant_id)."""
+    tid = int(tenant_id)
+    wid = int(warehouse_id)
+    logger.info(
+        "CREATE_BATCH_WAREHOUSE tenant_id=%s warehouse_id=%s",
+        tid,
+        wid,
+    )
+    wh = db.query(Warehouse).filter(Warehouse.id == wid).first()
+    if wh is None:
+        msg = f"warehouse_id {wid} not found"
+        logger.warning("CREATE_BATCH_WAREHOUSE_FAIL reason=%s", msg)
+        raise ProductionBatchError(msg, code="warehouse_not_found")
+    allowed = set(list_tenant_warehouse_ids(db, tid))
+    legacy_tid = int(getattr(wh, "tenant_id", 0) or 0)
+    if wid not in allowed and legacy_tid != tid:
+        msg = (
+            f"warehouse_id {wid} is not linked to tenant {tid} "
+            f"(tenant_warehouses={sorted(allowed)}, legacy_tenant_id={legacy_tid or None})"
+        )
+        logger.warning("CREATE_BATCH_WAREHOUSE_FAIL reason=%s", msg)
+        raise ProductionBatchError(msg, code="warehouse_invalid")
+    logger.info(
+        "CREATE_BATCH_WAREHOUSE_OK warehouse_id=%s warehouse_name=%s access=%s",
+        wid,
+        getattr(wh, "name", None),
+        "tenant_warehouses" if wid in allowed else "legacy_tenant_id",
+    )
+    return wh
+
+
 def _validate_batch_create_body(
     db: Session,
     *,
@@ -252,43 +285,94 @@ def _validate_batch_create_body(
     """Shared validation for preview and create — rejects invalid/orphan/inactive recipes."""
     tid = int(tenant_id)
     wid = int(warehouse_id)
+    logger.info(
+        "CREATE_BATCH_VALIDATE_START tenant_id=%s warehouse_id=%s line_count=%s",
+        tid,
+        wid,
+        len(lines or []),
+    )
     if wid < 1:
-        raise ProductionBatchError("warehouse_id is required", code="warehouse_required")
-    wh = db.query(Warehouse).filter(Warehouse.id == wid, Warehouse.tenant_id == tid).first()
-    if wh is None:
-        raise ProductionBatchError("warehouse_id is invalid for tenant", code="warehouse_invalid")
+        msg = "warehouse_id is required"
+        logger.warning("CREATE_BATCH_VALIDATE_FAIL step=warehouse_id reason=%s", msg)
+        raise ProductionBatchError(msg, code="warehouse_required")
     if not lines:
-        raise ProductionBatchError("At least one batch line is required", code="empty_batch")
+        msg = "At least one batch line is required"
+        logger.warning("CREATE_BATCH_VALIDATE_FAIL step=lines reason=%s", msg)
+        raise ProductionBatchError(msg, code="empty_batch")
+
+    _assert_batch_warehouse_for_tenant(db, tenant_id=tid, warehouse_id=wid)
+
+    line_dump = [
+        {
+            "composition_id": getattr(ln, "composition_id", None),
+            "product_id": getattr(ln, "product_id", None),
+            "planned_quantity": getattr(ln, "planned_quantity", None),
+        }
+        for ln in lines
+    ]
+    logger.info("CREATE_BATCH_LINES payload=%s", json.dumps(line_dump, default=str))
+
     for idx, ln in enumerate(lines):
         comp_id = int(getattr(ln, "composition_id", 0) or 0)
         prod_id = int(getattr(ln, "product_id", 0) or 0)
         qty = float(getattr(ln, "planned_quantity", 0) or 0)
+        logger.info(
+            "CREATE_BATCH_VALIDATE_LINE idx=%s composition_id=%s product_id=%s planned_quantity=%s",
+            idx,
+            comp_id,
+            prod_id,
+            qty,
+        )
         if comp_id < 1:
-            raise ProductionBatchError(f"lines[{idx}].composition_id is required", code="composition_required")
+            msg = f"lines[{idx}].composition_id is required"
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=line_%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="composition_required")
         if prod_id < 1:
-            raise ProductionBatchError(f"lines[{idx}].product_id is required", code="product_required")
+            msg = f"lines[{idx}].product_id is required"
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=line_%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="product_required")
         if qty <= 0:
-            raise ProductionBatchError(f"lines[{idx}].planned_quantity must be > 0", code="invalid_quantity")
+            msg = f"lines[{idx}].planned_quantity must be > 0"
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=line_%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="invalid_quantity")
         comp = resolve_composition_entity(db, tenant_id=tid, composition_id=comp_id)
         if comp is None:
-            logger.warning(
-                "batch validation — composition not found tenant=%s composition_id=%s",
-                tid,
-                comp_id,
-            )
-            raise ProductionBatchError(f"composition_id {comp_id} not found", code="invalid_composition")
+            msg = f"composition_id {comp_id} not found for tenant {tid}"
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=composition idx=%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="invalid_composition")
         if str(comp.composition_mode) != "manufacturing":
-            raise ProductionBatchError(
-                f"composition_id {comp_id} is not a manufacturing recipe",
-                code="invalid_composition",
-            )
+            msg = f"composition_id {comp_id} is not a manufacturing recipe (mode={comp.composition_mode})"
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=composition_mode idx=%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="invalid_composition")
         if require_active_composition and not bool(comp.is_active):
-            raise ProductionBatchError(f"Recipe (composition #{comp_id}) is inactive", code="recipe_inactive")
+            msg = f"Recipe (composition #{comp_id}) is inactive"
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=composition_active idx=%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="recipe_inactive")
         if int(comp.product_id) != prod_id:
-            raise ProductionBatchError("product_id does not match composition", code="product_mismatch")
+            msg = (
+                f"product_id {prod_id} does not match composition #{comp_id} "
+                f"(expected product_id={comp.product_id})"
+            )
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=product_match idx=%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="product_mismatch")
+        if not (comp.lines or []):
+            msg = f"composition_id {comp_id} has no material lines"
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=materials idx=%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="no_materials")
         product = db.query(Product).filter(Product.id == prod_id, Product.tenant_id == tid).first()
         if product is None or getattr(product, "deleted_at", None) is not None:
-            raise ProductionBatchError(f"product_id {prod_id} is deleted or missing", code="product_invalid")
+            msg = f"product_id {prod_id} is deleted or missing for tenant {tid}"
+            logger.warning("CREATE_BATCH_VALIDATE_FAIL step=product idx=%s reason=%s", idx, msg)
+            raise ProductionBatchError(msg, code="product_invalid")
+        logger.info(
+            "CREATE_BATCH_VALIDATE_LINE_OK idx=%s composition_id=%s product_id=%s material_lines=%s",
+            idx,
+            comp_id,
+            prod_id,
+            len(comp.lines or []),
+        )
+
+    logger.info("CREATE_BATCH_VALIDATE_OK tenant_id=%s warehouse_id=%s lines=%s", tid, wid, len(lines))
 
 
 def preview_batch_demand(
@@ -454,7 +538,7 @@ def create_batch(
 ) -> ProductionBatchRead:
     _require_batch_schema(db)
     logger.info(
-        "create_batch tenant=%s warehouse=%s line_count=%s status=%s",
+        "CREATE_BATCH_STEP schema_ok tenant=%s warehouse=%s line_count=%s status=%s",
         tenant_id,
         body.warehouse_id,
         len(body.lines or []),
@@ -466,20 +550,37 @@ def create_batch(
         warehouse_id=int(body.warehouse_id),
         lines=body.lines,
     )
+    status = str(body.status or "planned")
+    if status not in _VALID_BATCH_STATUSES:
+        msg = f"status '{status}' is not allowed (allowed={sorted(_VALID_BATCH_STATUSES)})"
+        logger.warning("CREATE_BATCH_STEP_FAIL step=status reason=%s", msg)
+        raise ProductionBatchError(msg, code="invalid_status")
     try:
+        batch_number = _next_batch_number(db, tenant_id=tenant_id)
+        logger.info("CREATE_BATCH_STEP insert_batch number=%s status=%s", batch_number, status)
         batch = ProductionBatch(
             tenant_id=int(tenant_id),
-            number=_next_batch_number(db, tenant_id=tenant_id),
+            number=batch_number,
             warehouse_id=int(body.warehouse_id),
-            status=str(body.status or "planned"),
+            status=status,
             notes=(body.notes or "").strip() or None,
             created_by_user_id=int(created_by_user_id) if created_by_user_id else None,
         )
         db.add(batch)
         db.flush()
-        for ln in body.lines:
+        logger.info("CREATE_BATCH_STEP insert_batch_ok batch_id=%s", batch.id)
+
+        for idx, ln in enumerate(body.lines):
             comp = resolve_composition_entity(db, tenant_id=tenant_id, composition_id=int(ln.composition_id))
             assert comp is not None
+            logger.info(
+                "CREATE_BATCH_STEP insert_line idx=%s batch_id=%s composition_id=%s product_id=%s qty=%s",
+                idx,
+                batch.id,
+                comp.id,
+                ln.product_id,
+                ln.planned_quantity,
+            )
             batch.lines.append(
                 ProductionBatchLine(
                     product_id=int(ln.product_id),
@@ -490,30 +591,39 @@ def create_batch(
                 )
             )
         db.flush()
-        return serialize_batch(db, batch)
+        logger.info("CREATE_BATCH_STEP insert_lines_ok batch_id=%s line_count=%s", batch.id, len(batch.lines))
+
+        logger.info("CREATE_BATCH_STEP serialize_batch batch_id=%s", batch.id)
+        result = serialize_batch(db, batch)
+        logger.info("CREATE_BATCH_STEP serialize_batch_ok batch_id=%s number=%s", batch.id, batch.number)
+        return result
     except ProductionBatchError:
         raise
     except IntegrityError as exc:
-        logger.warning(
-            "create_batch integrity error tenant=%s warehouse=%s: %s",
-            tenant_id,
-            body.warehouse_id,
-            exc,
-        )
-        raise ProductionBatchError(
-            "Nie udało się zapisać partii — magazyn, produkt lub receptura są nieprawidłowe.",
-            code="db_integrity",
-        ) from exc
-    except SQLAlchemyError as exc:
+        detail = str(getattr(exc, "orig", None) or exc)
         logger.exception(
-            "create_batch SQL error tenant=%s warehouse=%s",
+            "CREATE_BATCH_STEP_FAIL step=db_integrity tenant=%s warehouse=%s detail=%s",
+            tenant_id,
+            body.warehouse_id,
+            detail,
+        )
+        raise ProductionBatchError(f"DB integrity error: {detail}", code="db_integrity") from exc
+    except SQLAlchemyError as exc:
+        detail = str(exc)
+        logger.exception(
+            "CREATE_BATCH_STEP_FAIL step=db_sql tenant=%s warehouse=%s detail=%s",
+            tenant_id,
+            body.warehouse_id,
+            detail,
+        )
+        raise ProductionBatchError(f"DB error: {detail}", code="db_error") from exc
+    except Exception as exc:
+        logger.exception(
+            "CREATE_BATCH_STEP_FAIL step=unexpected tenant=%s warehouse=%s",
             tenant_id,
             body.warehouse_id,
         )
-        raise ProductionBatchError(
-            "Błąd bazy danych podczas tworzenia partii.",
-            code="db_error",
-        ) from exc
+        raise ProductionBatchError(str(exc), code="create_failed") from exc
 
 
 def list_batches(
