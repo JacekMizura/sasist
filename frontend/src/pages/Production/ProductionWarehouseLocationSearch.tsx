@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MapPin, Search } from "lucide-react";
 import { searchProductionLocations, type WarehouseLocationSearchRow } from "../../api/productionApi";
 
-type Props = {
+export type ProductionWarehouseLocationSearchProps = {
   tenantId: number;
   warehouseId: number;
   value: number | null;
@@ -13,6 +13,8 @@ type Props = {
   placeholder?: string;
   disabled?: boolean;
 };
+
+type Props = ProductionWarehouseLocationSearchProps;
 
 export function ProductionWarehouseLocationSearch({
   tenantId,
@@ -30,6 +32,15 @@ export function ProductionWarehouseLocationSearch({
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<WarehouseLocationSearchRow[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (import.meta.env.DEV && typeof onChange !== "function") {
+      console.error(
+        "ProductionWarehouseLocationSearch: onChange must be a function (use value + onChange, not valueId/onSelect)",
+        { tenantId, warehouseId, value, valueLabel },
+      );
+    }
+  }, [onChange, tenantId, warehouseId, value, valueLabel]);
 
   useEffect(() => {
     if (valueLabel) setQuery(valueLabel);
@@ -64,6 +75,12 @@ export function ProductionWarehouseLocationSearch({
   }, []);
 
   const pick = (row: WarehouseLocationSearchRow) => {
+    if (typeof onChange !== "function") {
+      if (import.meta.env.DEV) {
+        console.error("ProductionWarehouseLocationSearch: onChange is not a function — pick ignored", row);
+      }
+      return;
+    }
     onChange(row.id, row.code);
     setQuery(row.code);
     setOpen(false);

@@ -242,10 +242,10 @@ export function ProductionBatchExecutionPanel({ tenantId, batch, onBatchUpdated,
                   <ProductionWarehouseLocationSearch
                     tenantId={tenantId}
                     warehouseId={batch.warehouse_id}
-                    valueId={lineTargets[ln.id]?.id ?? null}
-                    valueCode={lineTargets[ln.id]?.code ?? null}
+                    value={lineTargets[ln.id]?.id ?? null}
+                    valueLabel={lineTargets[ln.id]?.code ?? null}
                     recentLocationIds={recentIds}
-                    onSelect={(id, code) =>
+                    onChange={(id, code) =>
                       setLineTargets((prev) => ({ ...prev, [ln.id]: { id, code } }))
                     }
                   />

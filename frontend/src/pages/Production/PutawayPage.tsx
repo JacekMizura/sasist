@@ -129,10 +129,10 @@ export default function PutawayPage() {
                       <ProductionWarehouseLocationSearch
                         tenantId={tenantId}
                         warehouseId={batch.warehouse_id}
-                        valueId={targets[ln.id]?.id ?? null}
-                        valueCode={targets[ln.id]?.code ?? null}
+                        value={targets[ln.id]?.id ?? null}
+                        valueLabel={targets[ln.id]?.code ?? null}
                         recentLocationIds={recentIds}
-                        onSelect={(id, code) => setTargets((prev) => ({ ...prev, [ln.id]: { id, code } }))}
+                        onChange={(id, code) => setTargets((prev) => ({ ...prev, [ln.id]: { id, code } }))}
                       />
                     </div>
                   </div>
