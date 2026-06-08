@@ -137,6 +137,16 @@ class TestProductionSchema(unittest.TestCase):
         self.assertIn("production_order_id", cols)
 
 
+class TestRecipeCardListing(unittest.TestCase):
+    def test_product_listable_excludes_deleted(self):
+        from backend.services.production_recipe_card_service import _product_is_listable
+        from types import SimpleNamespace
+
+        self.assertTrue(_product_is_listable(SimpleNamespace(deleted_at=None)))
+        self.assertFalse(_product_is_listable(None))
+        self.assertFalse(_product_is_listable(SimpleNamespace(deleted_at="2024-01-01")))
+
+
 class TestProductionBatches(unittest.TestCase):
     def test_list_batches_returns_empty_when_schema_missing(self):
         from sqlalchemy.orm import sessionmaker

@@ -736,7 +736,7 @@ export async function getRecipeDetail(
   compositionId: number,
   warehouseId?: number,
 ): Promise<RecipeDetailRead> {
-  const res = await api.get<RecipeDetailRead>(`/production/recipes/${compositionId}`, {
+  const res = await api.get<RecipeDetailRead>(`/production/recipes/composition/${compositionId}`, {
     params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
   return res.data;

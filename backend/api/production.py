@@ -113,6 +113,34 @@ def api_list_recipes_for_product(
     return list_recipes_for_product(db, tenant_id=tenant_id, product_id=product_id)
 
 
+@router.get("/recipes/composition/{composition_id}", response_model=RecipeDetailRead)
+def api_recipe_detail_by_composition(
+    composition_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    """ERP recipe detail by product_compositions.id (not legacy production_recipes.id)."""
+    row = get_recipe_detail(
+        db,
+        tenant_id=tenant_id,
+        composition_id=composition_id,
+        warehouse_id=warehouse_id,
+    )
+    if row is None:
+        logger.warning(
+            "recipe composition detail not found tenant_id=%s composition_id=%s warehouse_id=%s",
+            tenant_id,
+            composition_id,
+            warehouse_id,
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Receptura nie istnieje lub została usunięta.",
+        )
+    return row
+
+
 @router.get("/recipes/{recipe_id}", response_model=ProductionRecipeRead)
 def api_get_recipe(
     recipe_id: int,
@@ -351,19 +379,6 @@ def api_list_recipe_cards(
     db: Session = Depends(get_db),
 ):
     return list_recipe_cards(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-
-
-@router.get("/recipes/{composition_id}", response_model=RecipeDetailRead)
-def api_recipe_detail(
-    composition_id: int,
-    tenant_id: int = Query(..., ge=1),
-    warehouse_id: Optional[int] = Query(None, ge=1),
-    db: Session = Depends(get_db),
-):
-    row = get_recipe_detail(db, tenant_id=tenant_id, composition_id=composition_id, warehouse_id=warehouse_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Receptura nie istnieje.")
-    return row
 
 
 def _batch_err(exc: ProductionBatchError) -> HTTPException:

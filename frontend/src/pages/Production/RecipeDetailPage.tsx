@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus } from "lucide-react";
+import axios from "axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   createProductionBatch,
@@ -8,6 +9,7 @@ import {
   type RecipeDetailRead,
 } from "../../api/productionApi";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "./productionUi";
+import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 
 const DEFAULT_TENANT = 1;
@@ -19,15 +21,24 @@ export default function RecipeDetailPage() {
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
   const [recipe, setRecipe] = useState<RecipeDetailRead | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [qty, setQty] = useState(10);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!compositionId) return;
+    setLoading(true);
+    setNotFound(false);
     try {
       setRecipe(await getRecipeDetail(tenantId, Number(compositionId), warehouseId));
-    } catch {
+    } catch (err) {
       setRecipe(null);
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        setNotFound(true);
+      }
+    } finally {
+      setLoading(false);
     }
   }, [tenantId, warehouseId, compositionId]);
 
@@ -44,19 +55,39 @@ export default function RecipeDetailPage() {
         status: "planned",
         lines: [{ product_id: recipe.product_id, composition_id: recipe.composition_id, planned_quantity: qty }],
       });
-      navigate(`/production/batches/${batch.id}`);
+      navigate(erpProductionPaths.batch(batch.id));
     } finally {
       setBusy(false);
     }
   };
 
-  if (!recipe) {
+  if (loading) {
     return <p className="px-4 py-6 text-sm text-slate-500">Wczytywanie receptury…</p>;
+  }
+
+  if (notFound || !recipe) {
+    return (
+      <div className="px-4 py-10 lg:px-6 max-w-lg">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+          <h2 className="text-lg font-semibold text-slate-900">Receptura nie istnieje lub została usunięta</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Rekord mógł zostać usunięty lub nie jest już dostępny w tym magazynie.
+          </p>
+          <Link
+            to={erpProductionPaths.recipes}
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Wróć do listy receptur
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="px-4 py-6 lg:px-6 space-y-8 max-w-5xl">
-      <Link to="/production/recipes" className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline">
+      <Link to={erpProductionPaths.recipes} className="inline-flex items-center gap-2 text-sm text-slate-700 hover:underline">
         <ArrowLeft className="h-4 w-4" aria-hidden />
         Receptury
       </Link>
@@ -68,6 +99,9 @@ export default function RecipeDetailPage() {
             <h1 className="text-2xl font-bold text-slate-900">{recipe.product_name}</h1>
             <p className="text-sm text-slate-500">
               {recipe.recipe_name} · v{recipe.version} · wydajność {recipe.yield_quantity}
+              {!recipe.is_active ? (
+                <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Archiwum</span>
+              ) : null}
             </p>
             <div className="mt-4 flex flex-wrap gap-4 text-sm">
               <span>
@@ -80,7 +114,7 @@ export default function RecipeDetailPage() {
                 Stan: <strong>{recipe.current_stock}</strong>
               </span>
               <span>
-                Można wyprodukować: <strong className="text-violet-700">{Math.floor(recipe.max_producible)}</strong>
+                Można wyprodukować: <strong className="text-slate-800">{Math.floor(recipe.max_producible)}</strong>
               </span>
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -98,7 +132,7 @@ export default function RecipeDetailPage() {
                 type="button"
                 disabled={busy || !warehouseId}
                 onClick={() => void createBatch()}
-                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" aria-hidden />
                 Utwórz batch

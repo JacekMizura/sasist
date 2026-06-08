@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -22,6 +24,14 @@ from .product_cost_service import get_product_current_cost
 from .location_priority_service import suggest_picking_locations
 from .location_stock_service import build_location_stock
 from .production_batch_service import build_batch_pick_plan, serialize_batch
+
+logger = logging.getLogger(__name__)
+
+
+def _product_is_listable(product: Product | None) -> bool:
+    if product is None:
+        return False
+    return getattr(product, "deleted_at", None) is None
 
 
 def _warehouse_stock(db: Session, *, tenant_id: int, warehouse_id: int, product_id: int) -> float:
@@ -66,10 +76,12 @@ def list_recipe_cards(
 ) -> list[RecipeCardRead]:
     rows = (
         db.query(ProductComposition)
+        .join(Product, Product.id == ProductComposition.product_id)
         .options(joinedload(ProductComposition.lines))
         .filter(
             ProductComposition.tenant_id == int(tenant_id),
             ProductComposition.composition_mode == "manufacturing",
+            Product.deleted_at.is_(None),
         )
         .order_by(ProductComposition.is_active.desc(), ProductComposition.updated_at.desc())
         .all()
@@ -80,7 +92,24 @@ def list_recipe_cards(
     wh_id = int(warehouse_id) if warehouse_id else None
     for comp in rows:
         p = products.get(int(comp.product_id))
-        cost = estimate_composition_cost(db, tenant_id=tenant_id, composition_id=int(comp.id))
+        if not _product_is_listable(p):
+            logger.info(
+                "skip recipe card — missing or deleted product tenant=%s composition_id=%s product_id=%s",
+                tenant_id,
+                comp.id,
+                comp.product_id,
+            )
+            continue
+        try:
+            cost = estimate_composition_cost(db, tenant_id=tenant_id, composition_id=int(comp.id))
+        except Exception as exc:
+            logger.warning(
+                "skip recipe card — cost estimate failed tenant=%s composition_id=%s: %s",
+                tenant_id,
+                comp.id,
+                exc,
+            )
+            continue
         max_prod = _max_producible(db, tenant_id=tenant_id, warehouse_id=wh_id, composition=comp) if wh_id else 0.0
         stock = _warehouse_stock(db, tenant_id=tenant_id, warehouse_id=wh_id, product_id=int(comp.product_id)) if wh_id else 0.0
         has_low = max_prod < 1.0 and bool(comp.lines)
@@ -126,8 +155,21 @@ def get_recipe_detail(
         .first()
     )
     if comp is None:
+        logger.info(
+            "get_recipe_detail miss tenant=%s composition_id=%s (not found or not manufacturing)",
+            tenant_id,
+            composition_id,
+        )
         return None
     p = db.query(Product).filter(Product.id == int(comp.product_id)).first()
+    if not _product_is_listable(p):
+        logger.info(
+            "get_recipe_detail miss tenant=%s composition_id=%s product_id=%s (product deleted or missing)",
+            tenant_id,
+            composition_id,
+            comp.product_id,
+        )
+        return None
     wh_id = int(warehouse_id) if warehouse_id else None
     cost = estimate_composition_cost(db, tenant_id=tenant_id, composition_id=int(comp.id))
     yld = float(comp.yield_quantity or 1) or 1.0
