@@ -16,23 +16,16 @@ import {
   type InventoryLineRead,
 } from "../../api/inventoryCountApi";
 import InventoryAuditPanel from "../../modules/inventoryCount/erp/components/InventoryAuditPanel";
+import { InventoryDocumentStatusBadge } from "../../modules/inventoryCount/erp/components/InventoryDocumentStatusBadge";
 import InventoryLineTable from "../../modules/inventoryCount/erp/components/InventoryLineTable";
+import { InventoryKpiTile, InventorySection } from "../../modules/inventoryCount/erp/components/InventoryPageShell";
 import { triggerBrowserDownload } from "../../modules/inventoryCount/erp/downloadHelpers";
-import { ERP_INV } from "../../modules/inventoryCount/erp/erpInventoryTheme";
+import { inventoryTypeLabel } from "../../modules/inventoryCount/inventoryCountUiLabels";
 import { erpInventoryCountPaths } from "../../modules/inventoryCount/inventoryCountPaths";
 import { useWarehouse } from "../../context/WarehouseContext";
 import api from "../../api/axios";
 
-const STATUS_PL: Record<string, string> = {
-  draft: "Szkic",
-  planned: "Zaplanowana",
-  in_progress: "W trakcie",
-  awaiting_approval: "Do zatwierdzenia",
-  approved: "Zatwierdzona",
-  posted: "Zaksięgowana",
-};
-
-type DocTab = "progress" | "differences" | "audit";
+type DocTab = "progress" | "differences" | "control";
 
 export default function InventoryCountDocumentDetailPage() {
   const { documentId } = useParams();
@@ -96,7 +89,7 @@ export default function InventoryCountDocumentDetailPage() {
   }, [loadDoc]);
 
   useEffect(() => {
-    if (tab === "audit") {
+    if (tab === "control") {
       void loadAudit();
     } else {
       void loadLines();
@@ -129,15 +122,15 @@ export default function InventoryCountDocumentDetailPage() {
     }
   };
 
-  if (err) return <p className="text-sm text-rose-600">{err}</p>;
-  if (!doc) return <p className="text-sm text-slate-500">Wczytywanie…</p>;
+  if (err) return <p className="text-xs text-rose-600">{err}</p>;
+  if (!doc) return <p className="text-xs text-slate-500">Wczytywanie…</p>;
 
   const tabBtn = (key: DocTab, label: string) => (
     <button
       type="button"
       onClick={() => setTab(key)}
-      className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
-        tab === key ? "bg-teal-600 text-white" : "text-slate-600 hover:bg-slate-100"
+      className={`rounded px-2.5 py-1 text-[11px] font-semibold ${
+        tab === key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
       }`}
     >
       {label}
@@ -146,33 +139,36 @@ export default function InventoryCountDocumentDetailPage() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-teal-600">Dokument inwentaryzacji</p>
-          <h2 className="text-lg font-semibold text-slate-900">{doc.number}</h2>
-          <p className="text-xs text-slate-500">
-            {doc.inventory_type} · {STATUS_PL[doc.status] ?? doc.status} · pokrycie {doc.coverage_percent}% ·{" "}
-            {doc.counted_lines}/{doc.total_lines} poz.
-          </p>
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Dokument inwentaryzacji</p>
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900">{doc.number}</h2>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            <span>{inventoryTypeLabel(doc.inventory_type)}</span>
+            <InventoryDocumentStatusBadge status={doc.status} />
+            <span className="tabular-nums">
+              Pokrycie {doc.coverage_percent}% · {doc.counted_lines}/{doc.total_lines} poz.
+            </span>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {doc.status === "in_progress" ? (
-            <button type="button" disabled={busy} onClick={() => void action("submit-approval")} className="rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white">
+            <button type="button" disabled={busy} onClick={() => void action("submit-approval")} className="rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white">
               Wyślij do zatwierdzenia
             </button>
           ) : null}
           {doc.status === "awaiting_approval" ? (
             <>
-              <button type="button" disabled={busy} onClick={() => void action("approve")} className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white">
+              <button type="button" disabled={busy} onClick={() => void action("approve")} className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white">
                 Zatwierdź
               </button>
-              <button type="button" disabled={busy} onClick={() => void action("reject")} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium">
+              <button type="button" disabled={busy} onClick={() => void action("reject")} className="rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-semibold">
                 Odrzuć
               </button>
             </>
           ) : null}
           {doc.status === "approved" ? (
-            <button type="button" disabled={busy} onClick={() => void action("post")} className="rounded-md bg-teal-700 px-2.5 py-1.5 text-xs font-semibold text-white">
+            <button type="button" disabled={busy} onClick={() => void action("post")} className="rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
               Księguj RW/PW
             </button>
           ) : null}
@@ -181,78 +177,58 @@ export default function InventoryCountDocumentDetailPage() {
 
       {analysis ? (
         <div className="grid gap-2 sm:grid-cols-4">
-          <div className={ERP_INV.kpi}>
-            <p className="text-[10px] uppercase text-slate-500">Różnice</p>
-            <p className="text-xl font-semibold tabular-nums">{doc.difference_lines}</p>
-          </div>
-          <div className={ERP_INV.kpi}>
-            <p className="text-[10px] uppercase text-slate-500">Wpływ netto</p>
-            <p className="text-xl font-semibold tabular-nums">{analysis.total_value_impact_net.toFixed(2)}</p>
-          </div>
-          <div className={ERP_INV.kpi}>
-            <p className="text-[10px] uppercase text-slate-500">Recount</p>
-            <p className="text-xl font-semibold tabular-nums">{analysis.summary.mandatory_recount ?? 0}</p>
-          </div>
-          <div className={ERP_INV.kpi}>
-            <p className="text-[10px] uppercase text-slate-500">Policzone</p>
-            <p className="text-xl font-semibold tabular-nums">
-              {doc.counted_lines}/{doc.total_lines}
-            </p>
-          </div>
+          <InventoryKpiTile label="Pozycje z różnicą" value={doc.difference_lines} />
+          <InventoryKpiTile label="Wpływ netto" value={analysis.total_value_impact_net.toFixed(2)} />
+          <InventoryKpiTile label="Ponowne liczenie" value={analysis.summary.mandatory_recount ?? 0} />
+          <InventoryKpiTile label="Policzone" value={`${doc.counted_lines}/${doc.total_lines}`} />
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
-        <div className="inline-flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex gap-0.5 rounded border border-slate-200 bg-slate-50 p-0.5">
           {tabBtn("progress", "Przebieg")}
           {tabBtn("differences", "Różnice")}
-          {tabBtn("audit", "Audyt")}
+          {tabBtn("control", "Kontrola")}
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           <button
             type="button"
             disabled={downloadBusy != null}
-            onClick={() =>
-              void runDownload("xlsx-diff", () => downloadInventoryReportBlob(tenantId, id, "differences", "xlsx"))
-            }
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-50"
+            onClick={() => void runDownload("xlsx-diff", () => downloadInventoryReportBlob(tenantId, id, "differences", "xlsx"))}
+            className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-0.5 text-[11px] font-semibold hover:bg-slate-50"
           >
             {downloadBusy === "xlsx-diff" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
-            Raport różnic XLSX
+            Różnice XLSX
           </button>
           <button
             type="button"
             disabled={downloadBusy != null}
-            onClick={() =>
-              void runDownload("pdf-sheet", () => downloadInventoryReportBlob(tenantId, id, "counting_sheet", "pdf"))
-            }
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-50"
+            onClick={() => void runDownload("pdf-sheet", () => downloadInventoryReportBlob(tenantId, id, "counting_sheet", "pdf"))}
+            className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-0.5 text-[11px] font-semibold hover:bg-slate-50"
           >
             {downloadBusy === "pdf-sheet" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-            Spis z natury PDF
+            Spis PDF
           </button>
           <button
             type="button"
             disabled={downloadBusy != null}
             onClick={() => void runDownload("audit-zip", () => downloadInventoryAuditPackageBlob(tenantId, id))}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-0.5 text-[11px] font-semibold hover:bg-slate-50"
           >
             {downloadBusy === "audit-zip" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            Pakiet audytu ZIP
+            Pakiet kontroli ZIP
           </button>
         </div>
       </div>
 
-      {tab === "audit" ? (
+      {tab === "control" ? (
         <InventoryAuditPanel auditLog={auditLog?.items ?? []} timelines={timelines} />
       ) : (
-        <div className={ERP_INV.section}>
-          <div className={`${ERP_INV.sectionHead} flex flex-wrap items-center justify-between gap-2`}>
-            <h3 className="text-sm font-semibold text-slate-900">
-              {tab === "differences" ? "Pozycje z różnicą / recount" : "Przebieg liczenia"}
-            </h3>
-            {tab === "progress" ? (
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+        <InventorySection
+          title={tab === "differences" ? "Pozycje z różnicą" : "Przebieg liczenia"}
+          actions={
+            tab === "progress" ? (
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-600">
                 <input
                   type="checkbox"
                   checked={showUncounted}
@@ -261,8 +237,9 @@ export default function InventoryCountDocumentDetailPage() {
                 />
                 Pokaż niepoliczone
               </label>
-            ) : null}
-          </div>
+            ) : undefined
+          }
+        >
           <InventoryLineTable
             lines={lines}
             loading={linesLoading}
@@ -272,10 +249,10 @@ export default function InventoryCountDocumentDetailPage() {
                 : "Brak policzonych pozycji — włącz „Pokaż niepoliczone” lub przejdź do terminala WMS."
             }
           />
-        </div>
+        </InventorySection>
       )}
 
-      <Link to={erpInventoryCountPaths.documents} className="text-xs text-teal-700 hover:underline">
+      <Link to={erpInventoryCountPaths.documents} className="text-xs font-semibold text-slate-600 hover:underline">
         ← Lista dokumentów
       </Link>
     </div>

@@ -80,7 +80,9 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
                   <InventoryLineStatusBadge line={ln} />
                   <InventoryVarianceClassBadge diffClass={ln.difference_class} />
                   {ln.recount_count > 0 ? (
-                    <span className={`${ERP_INV.badge} bg-orange-50 text-orange-800`}>×{ln.recount_count}</span>
+                    <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                      ×{ln.recount_count} ponowne
+                    </span>
                   ) : null}
                 </div>
               </td>

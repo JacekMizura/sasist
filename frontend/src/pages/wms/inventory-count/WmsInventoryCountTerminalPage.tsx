@@ -16,6 +16,7 @@ import WmsInventoryUnknownProductModal from "../../../modules/inventoryCount/com
 import { useInventoryScanInput } from "../../../modules/inventoryCount/hooks/useInventoryScanInput";
 import { useWmsInventoryCountTerminal } from "../../../modules/inventoryCount/hooks/useWmsInventoryCountTerminal";
 import { wmsInventoryCountPaths } from "../../../modules/inventoryCount/inventoryCountPaths";
+import { LocationBadge } from "../../../components/warehouse/LocationBadge";
 import { WMS_INV } from "../../../modules/inventoryCount/wmsIndustrialTheme";
 import { useWarehouse } from "../../../context/WarehouseContext";
 
@@ -164,8 +165,10 @@ export default function WmsInventoryCountTerminalPage() {
   return (
     <div className={WMS_INV.shell}>
       <header>
-        <p className={WMS_INV.locationCode}>{locationLabel}</p>
-        {locationSubline ? <p className={WMS_INV.locationSub}>{locationSubline}</p> : null}
+        <LocationBadge code={locationLabel} type="PICK" />
+        {locationSubline ? (
+          <p className={`${WMS_INV.locationSub} mt-0.5`}>{locationSubline}</p>
+        ) : null}
       </header>
 
       <WmsInventoryScanField
