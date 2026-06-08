@@ -4,7 +4,7 @@ import {
   searchWmsInventory,
   searchWmsTaskProducts,
   type InventoryUniversalSearchResult,
-} from "../../../api/inventoryCountApi";
+} from "@/api/inventoryCountApi";
 
 export type LiveSearchPick =
   | { kind: "product"; scanCode: string }

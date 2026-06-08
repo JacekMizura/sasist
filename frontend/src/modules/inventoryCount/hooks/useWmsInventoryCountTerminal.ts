@@ -12,8 +12,8 @@ import {
   type InventoryTaskRead,
   type WmsBarcodeResolveResult,
   type WmsTaskLineRead,
-} from "../../../api/inventoryCountApi";
-import { useScanFeedback } from "../../../components/wms/execution/useScanFeedback";
+} from "@/api/inventoryCountApi";
+import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
 import { wmsInventoryCountPaths } from "../inventoryCountPaths";
 import { cacheTaskSnapshot, inventoryCountSyncQueue } from "../offline/inventoryCountSyncQueue";
 import { useInventoryCountOfflineStatus } from "../offline/useInventoryCountOfflineStatus";

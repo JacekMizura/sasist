@@ -12,9 +12,9 @@ import {
   WmsBarcodeResolveError,
   type InventoryExecutionSummary,
   type InventoryTaskRead,
-} from "../../../api/inventoryCountApi";
-import { useScanFeedback } from "../../../components/wms/execution/useScanFeedback";
-import { useWmsPageScanHandler } from "../../../components/wms/execution/useWmsPageScanHandler";
+} from "@/api/inventoryCountApi";
+import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
+import { useWmsPageScanHandler } from "@/components/wms/execution/useWmsPageScanHandler";
 import { cacheTaskSnapshot, inventoryCountSyncQueue } from "../offline/inventoryCountSyncQueue";
 import { useInventoryCountOfflineStatus } from "../offline/useInventoryCountOfflineStatus";
 

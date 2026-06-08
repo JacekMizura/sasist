@@ -5,7 +5,7 @@ import {
   searchWmsInventory,
   searchWmsTaskProducts,
   type InventoryUniversalSearchResult,
-} from "../../../api/inventoryCountApi";
+} from "@/api/inventoryCountApi";
 
 type Props = {
   open: boolean;

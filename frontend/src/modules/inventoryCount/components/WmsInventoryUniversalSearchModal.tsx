@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, MapPin, Package, Search, X } from "lucide-react";
 
-import { searchWmsInventory, type InventoryUniversalSearchResult } from "../../../api/inventoryCountApi";
+import { searchWmsInventory, type InventoryUniversalSearchResult } from "@/api/inventoryCountApi";
 import { WMS_INV } from "../wmsIndustrialTheme";
 
 type Props = {

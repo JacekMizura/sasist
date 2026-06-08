@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
-import type { InventoryTaskCompact } from "../../../api/inventoryCountApi";
+import type { InventoryTaskCompact } from "@/api/inventoryCountApi";
 import { TASK_ROW_HEIGHT, WMS_INV } from "../wmsIndustrialTheme";
 
 type TaskRowProps = {

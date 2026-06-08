@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertCircle, X } from "lucide-react";
 
-import { createWmsUnknownProduct } from "../../../api/inventoryCountApi";
+import { createWmsUnknownProduct } from "@/api/inventoryCountApi";
 import { WMS_INV } from "../wmsIndustrialTheme";
 
 type Props = {

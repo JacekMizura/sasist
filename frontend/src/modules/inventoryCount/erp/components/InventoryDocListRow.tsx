@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import type { InventoryDocumentRead } from "../../../../api/inventoryCountApi";
+import type { InventoryDocumentRead } from "@/api/inventoryCountApi";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
 import { inventoryDocumentStatusLabel, inventoryTypeLabel } from "../../inventoryCountUiLabels";
 import { InventoryDocumentStatusBadge } from "./InventoryDocumentStatusBadge";

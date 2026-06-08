@@ -1,4 +1,4 @@
-import type { InventoryExecutionLine } from "../../../api/inventoryCountApi";
+import type { InventoryExecutionLine } from "@/api/inventoryCountApi";
 import { WMS_INV } from "../wmsIndustrialTheme";
 
 type Props = {

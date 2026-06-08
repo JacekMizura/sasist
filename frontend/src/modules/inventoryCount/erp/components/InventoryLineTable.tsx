@@ -1,6 +1,6 @@
 import { User } from "lucide-react";
 
-import type { InventoryLineRead } from "../../../api/inventoryCountApi";
+import type { InventoryLineRead } from "@/api/inventoryCountApi";
 import { ERP_INV } from "../erpInventoryTheme";
 import {
   InventoryLineStatusBadge,
@@ -66,7 +66,7 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
                 </div>
               </td>
               <td className={ERP_INV.td}>
-                <InventoryLocationBadge code={ln.location_name ?? `#${ln.location_id}`} line={ln} />
+                <InventoryLocationBadge code={ln.location_name ?? `#${ln.location_id}`} />
               </td>
               <td className={`${ERP_INV.td} text-right tabular-nums`}>{ln.expected_quantity ?? "—"}</td>
               <td className={`${ERP_INV.td} text-right tabular-nums font-semibold text-slate-900`}>

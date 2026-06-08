@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import type { InventoryAuditEventRead, InventoryDocumentTimelines } from "../../../../api/inventoryCountApi";
+import type { InventoryAuditEventRead, InventoryDocumentTimelines } from "@/api/inventoryCountApi";
 import { inventoryAuditActionLabel, inventoryLineStatusLabel } from "../../inventoryCountUiLabels";
 import { InventorySection } from "./InventoryPageShell";
 

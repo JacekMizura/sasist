@@ -1,4 +1,4 @@
-import { PageModuleHeader } from "../../../../components/layout/PageModuleHeader";
+import { PageModuleHeader } from "@/components/layout/PageModuleHeader";
 
 type Props = {
   title: string;

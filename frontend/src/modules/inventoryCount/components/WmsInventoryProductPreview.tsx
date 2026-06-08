@@ -1,6 +1,6 @@
 import { Package } from "lucide-react";
 
-import type { WmsBarcodeResolveResult } from "../../../api/inventoryCountApi";
+import type { WmsBarcodeResolveResult } from "@/api/inventoryCountApi";
 
 type Props = {
   scan: WmsBarcodeResolveResult | null;

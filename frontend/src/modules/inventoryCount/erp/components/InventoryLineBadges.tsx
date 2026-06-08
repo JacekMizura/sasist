@@ -1,5 +1,5 @@
-import { LocationBadge } from "../../../../components/warehouse/LocationBadge";
-import type { InventoryLineRead } from "../../../../api/inventoryCountApi";
+import type { InventoryLineRead } from "@/api/inventoryCountApi";
+import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import {
   inventoryDifferenceClassBadgeClass,
   inventoryDifferenceClassLabel,

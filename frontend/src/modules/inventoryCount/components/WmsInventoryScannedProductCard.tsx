@@ -1,6 +1,6 @@
 import { MapPin, Package } from "lucide-react";
 
-import type { WmsBarcodeResolveResult } from "../../../api/inventoryCountApi";
+import type { WmsBarcodeResolveResult } from "@/api/inventoryCountApi";
 import { WMS_INV } from "../wmsIndustrialTheme";
 
 const DISC_BADGE: Record<string, { label: string; className: string }> = {

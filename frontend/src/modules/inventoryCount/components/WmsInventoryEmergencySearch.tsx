@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Loader2, MapPin, Package, Search } from "lucide-react";
 
-import { searchWmsInventory, type InventoryUniversalSearchResult } from "../../../api/inventoryCountApi";
+import { searchWmsInventory, type InventoryUniversalSearchResult } from "@/api/inventoryCountApi";
 import { WMS_INV } from "../wmsIndustrialTheme";
 
 export type EmergencySearchPick =

@@ -8,7 +8,7 @@ import {
   operationalBadgeNeutralClass,
   operationalBadgeSuccessClass,
   operationalBadgeWarningClass,
-} from "../../../components/operational/operationalSemanticBadges";
+} from "@/components/operational/operationalSemanticBadges";
 
 const DOC_STATUS: Record<string, string> = {
   draft: "Wersja robocza",

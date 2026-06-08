@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 
-import type { InventoryTaskCompact } from "../../../api/inventoryCountApi";
+import type { InventoryTaskCompact } from "@/api/inventoryCountApi";
 import { useVirtualList } from "../hooks/useVirtualList";
 import { TaskQueueHeader, TaskRow } from "./WmsInventoryTaskRow";
 import { TASK_ROW_HEIGHT, WMS_INV } from "../wmsIndustrialTheme";

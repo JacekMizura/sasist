@@ -1,6 +1,6 @@
 import { AlertTriangle, Loader2 } from "lucide-react";
 
-import type { InventoryTaskCompact } from "../../../api/inventoryCountApi";
+import type { InventoryTaskCompact } from "@/api/inventoryCountApi";
 import { WMS_INV } from "../wmsIndustrialTheme";
 
 type Props = {

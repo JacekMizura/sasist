@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { getWmsProductView, type WmsProductViewLocationApi } from "../../../api/wmsProductViewApi";
-import { LocationBadge } from "../../../components/warehouse/LocationBadge";
-import { formatWarehouseLocationTypeLabel } from "../../../utils/warehouseLocationTypeLabels";
+import { getWmsProductView, type WmsProductViewLocationApi } from "@/api/wmsProductViewApi";
+import { LocationBadge } from "@/components/warehouse/LocationBadge";
+import { formatWarehouseLocationTypeLabel } from "@/utils/warehouseLocationTypeLabels";
 import { WMS_INV } from "../wmsIndustrialTheme";
 
 type Props = {

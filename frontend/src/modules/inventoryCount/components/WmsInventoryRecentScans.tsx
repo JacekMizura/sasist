@@ -1,4 +1,4 @@
-import type { WmsRecentScanEntry } from "../../../api/inventoryCountApi";
+import type { WmsRecentScanEntry } from "@/api/inventoryCountApi";
 import { WMS_INV } from "../wmsIndustrialTheme";
 
 type Props = {
