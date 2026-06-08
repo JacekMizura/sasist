@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Inventory frontend UI architecture cleanup
+- `docs/inventory-architecture.md` — flow maps, routes, persistence, risk files, orphaned legacy
+- New `modules/inventoryCount/ui/erp/` + `ui/wms/` presentation layer (themes separated)
+- God page split: `useInventoryDocumentDetail` + `InventoryDocumentDetailView`; `useWmsInventoryTerminalPage` + `WmsInventoryTerminalView`
+- API split: `inventoryDocumentsApi`, `inventoryApprovalApi`, `inventoryConflictsApi`, `inventoryReportsApi`, `inventoryWmsApi`; barrel `inventoryCountApi.ts`
+- Legacy WMS execution files archived to `frontend/_archive/inventory-count-legacy/`
+- Deprecated shims at old `erp/components/` and `components/` paths for incremental import migration
+
 ## 2026-06-08 — WMS inventory document-scoped entry flow
 - WMS `/wms/inventory-count` landing: active docs only (`in_progress`, `awaiting_approval`); drafts/approved/cancelled hidden
 - Document cards: number, title, type, scope, progress, operators, conflicts, movement policy, last activity
