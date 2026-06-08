@@ -19,8 +19,9 @@ import {
   parseIdList,
 } from "../../inventoryStrategyConfig";
 
-const fieldClass = "mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs";
-const labelClass = "text-[10px] font-bold uppercase tracking-wide text-slate-500";
+const fieldClass =
+  "mt-1 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-slate-900";
+const labelClass = "text-xs font-semibold uppercase tracking-wider text-slate-500";
 
 function SelectionTag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
@@ -56,14 +57,12 @@ function OptionCard({ selected, title, hint, onSelect }: OptionCardProps) {
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full border p-2.5 text-left transition ${
-        selected
-          ? "border-slate-900 bg-slate-50 ring-1 ring-slate-900"
-          : "border-slate-200 bg-white hover:border-slate-300"
+      className={`w-full rounded-lg border-2 p-4 text-left transition-all ${
+        selected ? "border-slate-900 bg-slate-50/50" : "border-slate-200 hover:border-slate-300"
       }`}
     >
-      <p className="text-xs font-semibold text-slate-900">{title}</p>
-      <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>
+      <p className="font-semibold text-slate-900">{title}</p>
+      <p className="mt-1 text-sm text-slate-500">{hint}</p>
     </button>
   );
 }

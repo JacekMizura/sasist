@@ -2,7 +2,6 @@ import { User } from "lucide-react";
 
 import type { InventoryLineRead } from "@/api/inventoryCountApi";
 import { inventoryStockSourceLabel } from "../../inventoryStockSourceLabel";
-import { ERP_INV } from "./theme";
 import {
   InventoryLineStatusBadge,
   InventoryLocationBadge,
@@ -35,24 +34,24 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
 
   return (
     <div className="overflow-x-auto">
-      <table className={ERP_INV.table}>
+      <table className="w-full whitespace-nowrap text-left text-sm">
         <thead>
-          <tr>
-            <th className={ERP_INV.th}>Produkt</th>
-            <th className={ERP_INV.th}>Lokalizacja</th>
-            <th className={ERP_INV.th}>Źródło stanu</th>
-            <th className={`${ERP_INV.th} text-right`}>Oczek.</th>
-            <th className={`${ERP_INV.th} text-right`}>Policz.</th>
-            <th className={`${ERP_INV.th} text-right`}>Różn.</th>
-            <th className={ERP_INV.th}>Status</th>
-            <th className={ERP_INV.th}>Operator</th>
-            <th className={ERP_INV.th}>Czas</th>
+          <tr className="border-b border-slate-200 bg-slate-50">
+            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Produkt</th>
+            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Lokalizacja</th>
+            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Źródło stanu</th>
+            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Oczek.</th>
+            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Policz.</th>
+            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Różn.</th>
+            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Operator</th>
+            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Czas</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-100">
           {lines.map((ln) => (
-            <tr key={ln.id} className={ERP_INV.row}>
-              <td className={ERP_INV.td}>
+            <tr key={ln.id} className="transition-colors hover:bg-slate-50/50">
+              <td className="px-6 py-4">
                 <div className="flex min-w-[200px] items-start gap-2">
                   <InventoryProductThumb url={ln.product_image_url} name={ln.product_name} />
                   <div className="min-w-0">
@@ -66,10 +65,10 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
                   </div>
                 </div>
               </td>
-              <td className={ERP_INV.td}>
+              <td className="px-6 py-4">
                 <InventoryLocationBadge code={ln.location_name ?? `#${ln.location_id}`} />
               </td>
-              <td className={ERP_INV.td}>
+              <td className="px-6 py-4">
                 {(() => {
                   const src = inventoryStockSourceLabel(ln);
                   return (
@@ -80,14 +79,20 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
                   );
                 })()}
               </td>
-              <td className={`${ERP_INV.td} text-right tabular-nums`}>{ln.expected_quantity ?? "—"}</td>
-              <td className={`${ERP_INV.td} text-right tabular-nums font-semibold text-slate-900`}>
+              <td className="px-6 py-4 text-right tabular-nums text-slate-600">{ln.expected_quantity ?? "—"}</td>
+              <td className="px-6 py-4 text-right tabular-nums font-semibold text-slate-900">
                 {ln.counted_quantity ?? "—"}
               </td>
-              <td className={`${ERP_INV.td} text-right tabular-nums ${ln.difference_quantity && Math.abs(ln.difference_quantity) > 1e-9 ? "font-bold text-red-700" : ""}`}>
+              <td
+                className={`px-6 py-4 text-right tabular-nums ${
+                  ln.difference_quantity && Math.abs(ln.difference_quantity) > 1e-9
+                    ? "font-bold text-red-700"
+                    : "text-slate-600"
+                }`}
+              >
                 {ln.difference_quantity ?? "—"}
               </td>
-              <td className={ERP_INV.td}>
+              <td className="px-6 py-4">
                 <div className="flex flex-wrap gap-1">
                   <InventoryLineStatusBadge line={ln} />
                   {ln.recount_count > 0 && ln.recount_state !== "required" ? (
@@ -97,9 +102,9 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
                   ) : null}
                 </div>
               </td>
-              <td className={ERP_INV.td}>
+              <td className="px-6 py-4">
                 {ln.last_counted_by_name ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700">
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-700">
                     <User className="h-3 w-3 shrink-0 text-slate-400" />
                     {ln.last_counted_by_name}
                   </span>
@@ -107,7 +112,7 @@ export default function InventoryLineTable({ lines, loading, emptyMessage = "Bra
                   <span className="text-slate-400">—</span>
                 )}
               </td>
-              <td className={`${ERP_INV.td} whitespace-nowrap text-[11px] tabular-nums text-slate-600`}>
+              <td className="whitespace-nowrap px-6 py-4 text-xs tabular-nums text-slate-600">
                 {fmtTime(ln.last_counted_at)}
               </td>
             </tr>

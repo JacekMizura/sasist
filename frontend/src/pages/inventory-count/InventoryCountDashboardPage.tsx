@@ -1,18 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 
-import {
-  fetchInventoryCountDashboard,
-  type InventoryDashboardPayload,
-} from "../../api/inventoryCountApi";
-import { InventoryDocListRow } from "../../modules/inventoryCount/erp/components/InventoryDocListRow";
-import {
-  InventoryKpiTile,
-  InventoryPageHeader,
-  InventorySection,
-} from "../../modules/inventoryCount/erp/components/InventoryPageShell";
-import { erpInventoryCountPaths } from "../../modules/inventoryCount/inventoryCountPaths";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { fetchInventoryCountDashboard, type InventoryDashboardPayload } from "@/api/inventoryCountApi";
+import { erpInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
+import InventoryDashboardView from "@/modules/inventoryCount/ui/erp/InventoryDashboardView";
+import { useWarehouse } from "@/context/WarehouseContext";
 
 export default function InventoryCountDashboardPage() {
   const { warehouse } = useWarehouse();
@@ -26,8 +17,7 @@ export default function InventoryCountDashboardPage() {
     setLoading(true);
     setErr(null);
     try {
-      const payload = await fetchInventoryCountDashboard(tenantId, warehouseId);
-      setData(payload);
+      setData(await fetchInventoryCountDashboard(tenantId, warehouseId));
     } catch {
       setErr("Nie udało się wczytać pulpitu inwentaryzacji.");
       setData(null);
@@ -40,63 +30,9 @@ export default function InventoryCountDashboardPage() {
     void load();
   }, [load]);
 
-  if (loading) return <p className="text-xs text-slate-500">Wczytywanie…</p>;
-  if (err) return <p className="text-xs text-rose-600">{err}</p>;
+  if (loading) return <p className="text-sm text-slate-500">Wczytywanie…</p>;
+  if (err) return <p className="text-sm text-rose-600">{err}</p>;
   if (!data) return null;
 
-  return (
-    <div className="space-y-3">
-      <InventoryPageHeader
-        title="Pulpit inwentaryzacji"
-        subtitle="Aktywne liczenia, różnice i zatwierdzenia — liczenie w terminalu WMS."
-        actions={
-          <Link
-            to={erpInventoryCountPaths.wizard}
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-          >
-            Nowa inwentaryzacja
-          </Link>
-        }
-      />
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <InventoryKpiTile label="Aktywne" value={data.kpis.active_inventories} />
-        <InventoryKpiTile label="Do zatwierdzenia" value={data.kpis.awaiting_approval} />
-        <InventoryKpiTile label="Otwarte różnice" value={data.kpis.open_differences} />
-        <InventoryKpiTile label="Pokrycie magazynu" value={`${data.kpis.warehouse_coverage_percent}%`} />
-        <InventoryKpiTile label="Zakończone (7 dni)" value={data.kpis.completed_last_7_days} />
-        <InventoryKpiTile label="Sesje operatorów" value={data.kpis.active_operator_sessions} />
-      </div>
-
-      <div className="grid gap-2 lg:grid-cols-3">
-        <InventorySection title="Aktywne inwentaryzacje">
-          <div>
-            {data.active_inventories.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-slate-500">Brak aktywnych.</p>
-            ) : (
-              data.active_inventories.map((d) => <InventoryDocListRow key={d.id} doc={d} />)
-            )}
-          </div>
-        </InventorySection>
-        <InventorySection title="Do zatwierdzenia">
-          <div>
-            {data.awaiting_approval.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-slate-500">Brak oczekujących.</p>
-            ) : (
-              data.awaiting_approval.map((d) => <InventoryDocListRow key={d.id} doc={d} />)
-            )}
-          </div>
-        </InventorySection>
-        <InventorySection title="Ostatnio zakończone">
-          <div>
-            {data.recent_completed.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-slate-500">Brak w ostatnich 7 dniach.</p>
-            ) : (
-              data.recent_completed.map((d) => <InventoryDocListRow key={d.id} doc={d} />)
-            )}
-          </div>
-        </InventorySection>
-      </div>
-    </div>
-  );
+  return <InventoryDashboardView data={data} onNewInventory={erpInventoryCountPaths.wizard} />;
 }

@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — ERP inventory mockup UI (1:1)
+- Replaced ERP inventory JSX with uploaded mockup: `InventoryLayout`, `InventoryDashboardView`, `InventoryDocumentsView`, `InventoryWizardView`, `InventoryReportsView`, `InventoryStatusBadge`
+- Thin page containers keep hooks/API; presentation in `modules/inventoryCount/ui/erp/`
+- Document detail + line table restyled to mockup tokens (slate cards, orange tabs, table spacing)
+- Wizard steps 1–3: mockup field/card styling; WMS terminal unchanged (operational theme)
+
 ## 2026-06-08 — Inventory frontend UI architecture cleanup
 - `docs/inventory-architecture.md` — flow maps, routes, persistence, risk files, orphaned legacy
 - New `modules/inventoryCount/ui/erp/` + `ui/wms/` presentation layer (themes separated)
