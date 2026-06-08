@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-04 — WMS production execution UI shell alignment
+- `/wms/production/*` renders inside shared `WmsOperationalLayout` + `WmsTopBar` (removed hideProductionTopBar)
+- Removed duplicate header from `WmsProductionExecutionLayout` (icon, TERMINAL WMS, mode title, Menu WMS)
+- Removed extra amber „Prod. WMS” button from topbar — single „Produkcja — wykonanie” in module nav
+- Workflow tabs only (Zbieranie / Wykonanie / Odłożenie) + `WMS_OPERATIONAL_CONTAINER` spacing
+- Centered empty states via `WmsProductionTerminalEmptyState`
+
 ## 2026-06-04 — Production schema platform integrity
 - Fail-fast `run_production_schema_startup_gate` (import + tier0); blocks on missing tables/columns/types + required batch columns
 - `GET /health/schema` — dialect, generation `12`, drift fields (Railway/CI/support)

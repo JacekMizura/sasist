@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { MapPin } from "lucide-react";
+import { MapPin, PackageCheck } from "lucide-react";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   finishPutawayBatch,
@@ -13,6 +13,7 @@ import { ProductThumb } from "./components/ProductThumb";
 import { ProductionWarehouseLocationSearch } from "./ProductionWarehouseLocationSearch";
 import { loadRecentTargetLocations, rememberTargetLocation } from "./productionUi";
 import { wmsProductionPaths } from "./productionPaths";
+import { WmsProductionTerminalEmptyState } from "./WmsProductionTerminalEmptyState";
 
 const DEFAULT_TENANT = 1;
 
@@ -72,14 +73,16 @@ export default function PutawayPage() {
   const recentIds = batch ? loadRecentTargetLocations(batch.warehouse_id) : [];
 
   return (
-    <div className="space-y-6 px-4 py-6 lg:px-6">
+    <div className="space-y-6">
       {!activeId ? (
         <div className="space-y-4">
-          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-500">Odkładanie wyrobów</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Odkładanie wyrobów</p>
           {queue.length === 0 ? (
-            <p className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center text-base text-slate-500">
-              Brak partii do odłożenia.
-            </p>
+            <WmsProductionTerminalEmptyState
+              title="Brak partii do odłożenia"
+              description="Po zakończeniu produkcji partie oczekujące na odkładanie wyrobów gotowych pojawią się tutaj."
+              icon={<PackageCheck size={40} strokeWidth={1.5} />}
+            />
           ) : (
             queue.map((b) => (
               <button

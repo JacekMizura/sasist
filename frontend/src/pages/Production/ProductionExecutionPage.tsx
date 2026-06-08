@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { Factory } from "lucide-react";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   finishProductionPhase,
@@ -12,6 +13,7 @@ import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
 import { wmsProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProgressBar } from "./components/ProgressBar";
+import { WmsProductionTerminalEmptyState } from "./WmsProductionTerminalEmptyState";
 
 const DEFAULT_TENANT = 1;
 
@@ -67,14 +69,16 @@ export default function ProductionExecutionPage() {
   const allDone = batch?.lines.every((l) => l.completed_quantity >= l.planned_quantity - 1e-6);
 
   return (
-    <div className="space-y-6 px-4 py-6 lg:px-6">
+    <div className="space-y-6">
       {!activeId ? (
         <div className="space-y-4">
-          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-500">W produkcji</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">W produkcji</p>
           {queue.length === 0 ? (
-            <p className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center text-base text-slate-500">
-              Brak partii w produkcji.
-            </p>
+            <WmsProductionTerminalEmptyState
+              title="Brak partii w produkcji"
+              description="Partie ze statusem „w produkcji” pojawią się tutaj do rejestracji postępu."
+              icon={<Factory size={40} strokeWidth={1.5} />}
+            />
           ) : (
             queue.map((b) => (
               <button

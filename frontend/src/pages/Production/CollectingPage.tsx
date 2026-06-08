@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Check, MapPin, ScanLine } from "lucide-react";
+import { Check, ClipboardList, MapPin, ScanLine } from "lucide-react";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   fetchCollectionState,
@@ -16,6 +16,7 @@ import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
 import { wmsProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProgressBar } from "./components/ProgressBar";
+import { WmsProductionTerminalEmptyState } from "./WmsProductionTerminalEmptyState";
 
 const DEFAULT_TENANT = 1;
 
@@ -94,14 +95,16 @@ export default function CollectingPage() {
   const batchQty = batch?.total_planned_units ?? 0;
 
   return (
-    <div className="space-y-6 px-4 py-6 lg:px-6">
+    <div className="space-y-6">
       {!activeBatchId ? (
         <div className="space-y-4">
-          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-500">Kolejka zbierania</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Kolejka zbierania</p>
           {queue.length === 0 ? (
-            <p className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center text-base text-slate-500">
-              Brak partii do zbierania.
-            </p>
+            <WmsProductionTerminalEmptyState
+              title="Brak partii do zbierania"
+              description="Gdy partia przejdzie do zbierania surowców, pojawi się tutaj na liście."
+              icon={<ClipboardList size={40} strokeWidth={1.5} />}
+            />
           ) : (
             queue.map((b) => (
               <button
