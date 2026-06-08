@@ -54,3 +54,37 @@ class InventoryPostingInProgressError(InventoryCountError):
 
 class InventoryPermissionDeniedError(InventoryCountError):
     code = "permission_denied"
+
+
+class InventoryBarcodeNotFoundError(InventoryCountError):
+    code = "barcode_not_found"
+
+    def __init__(self, message: str, *, barcode: str | None = None) -> None:
+        super().__init__(message, code=self.code)
+        self.barcode = barcode
+
+
+class InventoryBarcodeLineNotFoundError(InventoryCountError):
+    code = "line_not_found_for_barcode"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        barcode: str | None = None,
+        product_id: int | None = None,
+        task_id: int | None = None,
+    ) -> None:
+        super().__init__(message, code=self.code)
+        self.barcode = barcode
+        self.product_id = product_id
+        self.task_id = task_id
+
+
+class InventoryBarcodeAmbiguousError(InventoryCountError):
+    code = "barcode_ambiguous"
+
+    def __init__(self, message: str, *, barcode: str | None = None, product_ids: list[int] | None = None) -> None:
+        super().__init__(message, code=self.code)
+        self.barcode = barcode
+        self.product_ids = product_ids or []

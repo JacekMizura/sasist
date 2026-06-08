@@ -10,6 +10,7 @@ import {
   resolveWmsInventoryBarcode,
   resolveWmsInventoryLocationScan,
   searchWmsTaskProducts,
+  WmsBarcodeResolveError,
   type InventoryExecutionSummary,
   type InventoryTaskRead,
 } from "../../../api/inventoryCountApi";
@@ -238,7 +239,20 @@ export function useWmsInventoryCountTerminal(
           setPendingQty(1);
           scanFeedback.success(resolved.product_name ?? "Produkt rozpoznany");
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof WmsBarcodeResolveError) {
+          if (err.code === "task_not_found") {
+            scanFeedback.error("Zadanie nie istnieje");
+          } else if (err.code === "line_not_found_for_barcode") {
+            scanFeedback.error("Produkt rozpoznany, brak w tej lokalizacji");
+          } else if (err.code === "barcode_ambiguous") {
+            scanFeedback.warning("Kod pasuje do wielu produktów — wyszukiwanie awaryjne");
+          } else {
+            scanFeedback.error("Nie znaleziono produktu dla kodu");
+          }
+          setLastScanCode(code);
+          return;
+        }
         const matches = await searchWmsTaskProducts(tenantId, task.id, code).catch(() => []);
         if (matches.length === 1) {
           const m = matches[0];

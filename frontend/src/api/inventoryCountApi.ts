@@ -1,4 +1,5 @@
 import api from "./axios";
+import { getApiErrorMessage } from "../utils/apiError";
 
 export type InventoryDocumentRead = {
   id: number;
@@ -332,17 +333,70 @@ export async function confirmWmsInventoryLocation(
   return data;
 }
 
+export type WmsBarcodeResolveErrorCode =
+  | "barcode_not_found"
+  | "line_not_found_for_barcode"
+  | "barcode_ambiguous"
+  | "task_not_found"
+  | "unknown";
+
+export class WmsBarcodeResolveError extends Error {
+  code: WmsBarcodeResolveErrorCode;
+  barcode?: string;
+
+  constructor(code: WmsBarcodeResolveErrorCode, message: string, barcode?: string) {
+    super(message);
+    this.name = "WmsBarcodeResolveError";
+    this.code = code;
+    this.barcode = barcode;
+  }
+}
+
+function parseWmsBarcodeResolveError(err: unknown, fallbackBarcode?: string): WmsBarcodeResolveError {
+  const axiosErr = err as { response?: { status?: number; data?: { detail?: Record<string, unknown> } } };
+  const detail = axiosErr.response?.data?.detail;
+  if (detail && typeof detail === "object") {
+    const codeRaw = (detail.error ?? detail.code) as string | undefined;
+    const barcode = (detail.barcode as string | undefined) ?? fallbackBarcode;
+    const message = (detail.message as string | undefined) ?? getApiErrorMessage(err);
+    if (codeRaw === "barcode_not_found") {
+      return new WmsBarcodeResolveError("barcode_not_found", "Nie znaleziono produktu dla kodu", barcode);
+    }
+    if (codeRaw === "line_not_found_for_barcode") {
+      return new WmsBarcodeResolveError(
+        "line_not_found_for_barcode",
+        "Produkt rozpoznany, brak pozycji w tej lokalizacji",
+        barcode,
+      );
+    }
+    if (codeRaw === "barcode_ambiguous") {
+      return new WmsBarcodeResolveError("barcode_ambiguous", "Kod pasuje do wielu produktów — użyj wyszukiwania awaryjnego", barcode);
+    }
+    if (codeRaw === "task_not_found") {
+      return new WmsBarcodeResolveError("task_not_found", "Zadanie nie istnieje", barcode);
+    }
+  }
+  if (axiosErr.response?.status === 404) {
+    return new WmsBarcodeResolveError("barcode_not_found", "Nie znaleziono produktu dla kodu", fallbackBarcode);
+  }
+  return new WmsBarcodeResolveError("unknown", getApiErrorMessage(err) || "Nie rozpoznano kodu", fallbackBarcode);
+}
+
 export async function resolveWmsInventoryBarcode(tenantId: number, taskId: number, barcodeValue: string) {
-  const { data } = await api.post<{
-    line_id: number;
-    product_id: number;
-    product_name: string | null;
-    sku: string | null;
-    ean: string | null;
-  }>(`/wms/inventory-count/tasks/${taskId}/resolve-barcode`, null, {
-    params: { tenant_id: tenantId, barcode_value: barcodeValue },
-  });
-  return data;
+  try {
+    const { data } = await api.post<{
+      line_id: number;
+      product_id: number;
+      product_name: string | null;
+      sku: string | null;
+      ean: string | null;
+    }>(`/wms/inventory-count/tasks/${taskId}/resolve-barcode`, null, {
+      params: { tenant_id: tenantId, barcode_value: barcodeValue },
+    });
+    return data;
+  } catch (err) {
+    throw parseWmsBarcodeResolveError(err, barcodeValue);
+  }
 }
 
 export async function fetchWmsTaskLines(tenantId: number, taskId: number) {

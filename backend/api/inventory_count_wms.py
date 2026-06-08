@@ -62,6 +62,46 @@ def _map_error(exc: InventoryCountError) -> HTTPException:
         return HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)})
     if exc.code == "line_locked":
         return HTTPException(status_code=423, detail={"code": exc.code, "message": str(exc)})
+
+    if exc.code == "barcode_not_found":
+        return HTTPException(
+            status_code=404,
+            detail={
+                "error": exc.code,
+                "code": exc.code,
+                "barcode": getattr(exc, "barcode", None),
+                "message": str(exc),
+            },
+        )
+    if exc.code == "line_not_found_for_barcode":
+        return HTTPException(
+            status_code=404,
+            detail={
+                "error": exc.code,
+                "code": exc.code,
+                "barcode": getattr(exc, "barcode", None),
+                "product_id": getattr(exc, "product_id", None),
+                "task_id": getattr(exc, "task_id", None),
+                "message": str(exc),
+            },
+        )
+    if exc.code == "barcode_ambiguous":
+        return HTTPException(
+            status_code=409,
+            detail={
+                "error": exc.code,
+                "code": exc.code,
+                "barcode": getattr(exc, "barcode", None),
+                "product_ids": getattr(exc, "product_ids", []),
+                "message": str(exc),
+            },
+        )
+    if exc.code == "task_not_found":
+        return HTTPException(
+            status_code=404,
+            detail={"error": exc.code, "code": exc.code, "message": str(exc)},
+        )
+
     status = 404 if "not_found" in exc.code else 400
     return HTTPException(status_code=status, detail={"code": exc.code, "message": str(exc)})
 
@@ -282,13 +322,19 @@ def wms_inventory_task_lines(
         raise _map_error(exc) from exc
 
 
-@router.post("/tasks/{task_id}/resolve-barcode")
+@router.post("/tasks/{task_id}/resolve-barcode", summary="Resolve scanned barcode to inventory line")
 def wms_inventory_resolve_barcode(
     task_id: int,
     barcode_value: str = Query(..., min_length=1),
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
+    logger.info(
+        "[inventory_count.api] resolve_barcode POST task_id=%s tenant_id=%s barcode=%s",
+        task_id,
+        tenant_id,
+        barcode_value[:64],
+    )
     try:
         return resolve_barcode_to_line(
             db,
@@ -297,6 +343,12 @@ def wms_inventory_resolve_barcode(
             barcode_value=barcode_value,
         )
     except InventoryCountError as exc:
+        logger.info(
+            "[inventory_count.api] resolve_barcode failed task_id=%s code=%s barcode=%s",
+            task_id,
+            exc.code,
+            barcode_value[:64],
+        )
         raise _map_error(exc) from exc
 
 

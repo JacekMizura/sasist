@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ...models.inventory_count.constants import (
@@ -21,10 +23,15 @@ from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.product import Product
 from .audit_service import log_inventory_audit
 from .errors import (
+    InventoryBarcodeAmbiguousError,
+    InventoryBarcodeLineNotFoundError,
+    InventoryBarcodeNotFoundError,
     InventoryBlindCountViolationError,
     InventoryDocumentNotFoundError,
     InventoryLocationMismatchError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def record_count_scan(
@@ -204,6 +211,19 @@ def confirm_location_scan(
     return {"ok": True, "location_id": location_id, "scanned_code": scanned_code}
 
 
+def _product_match_clauses(code: str):
+    clauses = [
+        Product.ean == code,
+        Product.sku == code,
+        Product.symbol == code,
+    ]
+    if hasattr(Product, "barcode"):
+        clauses.append(Product.barcode == code)
+    if hasattr(Product, "catalog_number"):
+        clauses.append(Product.catalog_number == code)
+    return or_(*clauses)
+
+
 def resolve_barcode_to_line(
     db: Session,
     *,
@@ -211,25 +231,49 @@ def resolve_barcode_to_line(
     task_id: int,
     barcode_value: str,
 ) -> dict[str, Any]:
-    """Resolve EAN/SKU barcode to document line within task location."""
+    """Resolve EAN/SKU/barcode to document line within task location."""
     from .task_service import get_task
 
-    task = get_task(db, tenant_id=tenant_id, task_id=task_id)
     code = str(barcode_value or "").strip()
-    if not code:
-        raise InventoryDocumentNotFoundError("Empty barcode")
-
-    product = (
-        db.query(Product)
-        .filter(
-            Product.tenant_id == int(tenant_id),
-            (Product.ean == code) | (Product.sku == code) | (Product.symbol == code),
-        )
-        .first()
+    logger.info(
+        "[inventory_count.resolve_barcode] start tenant_id=%s task_id=%s barcode=%s",
+        tenant_id,
+        task_id,
+        code[:64],
     )
-    if product is None:
-        raise InventoryDocumentNotFoundError(f"Product not found for barcode: {code}")
+    if not code:
+        raise InventoryBarcodeNotFoundError("Empty barcode", barcode=code)
 
+    task = get_task(db, tenant_id=tenant_id, task_id=task_id)
+
+    products = (
+        db.query(Product)
+        .filter(Product.tenant_id == int(tenant_id), _product_match_clauses(code))
+        .order_by(Product.id.asc())
+        .all()
+    )
+    if not products:
+        logger.info(
+            "[inventory_count.resolve_barcode] barcode_not_found tenant_id=%s task_id=%s barcode=%s",
+            tenant_id,
+            task_id,
+            code,
+        )
+        raise InventoryBarcodeNotFoundError(f"Product not found for barcode: {code}", barcode=code)
+    if len(products) > 1:
+        product_ids = [int(p.id) for p in products]
+        logger.warning(
+            "[inventory_count.resolve_barcode] ambiguous barcode=%s product_ids=%s",
+            code,
+            product_ids,
+        )
+        raise InventoryBarcodeAmbiguousError(
+            f"Barcode matches multiple products: {product_ids}",
+            barcode=code,
+            product_ids=product_ids,
+        )
+
+    product = products[0]
     line = (
         db.query(InventoryDocumentLine)
         .filter(
@@ -240,11 +284,33 @@ def resolve_barcode_to_line(
         .first()
     )
     if line is None:
-        raise InventoryDocumentNotFoundError("No inventory line for product at this location")
+        logger.info(
+            "[inventory_count.resolve_barcode] line_not_found task_id=%s product_id=%s location_id=%s barcode=%s",
+            task_id,
+            product.id,
+            task["location_id"],
+            code,
+        )
+        raise InventoryBarcodeLineNotFoundError(
+            "No inventory line for product at this location",
+            barcode=code,
+            product_id=int(product.id),
+            task_id=int(task_id),
+        )
+
+    logger.info(
+        "[inventory_count.resolve_barcode] matched task_id=%s line_id=%s product_id=%s sku=%s barcode=%s",
+        task_id,
+        line.id,
+        product.id,
+        product.sku,
+        code,
+    )
     return {
-        "line_id": line.id,
-        "product_id": product.id,
+        "line_id": int(line.id),
+        "product_id": int(product.id),
         "product_name": product.name,
         "sku": product.sku,
         "ean": product.ean,
+        "barcode": code,
     }

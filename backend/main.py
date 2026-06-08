@@ -1710,6 +1710,11 @@ async def _log_backend_startup() -> None:
         _ensure_wms_returns_router_mounted()
     except Exception as exc:
         log_unhandled_exception("startup _ensure_wms_returns_router_mounted", exc)
+    for r in app.routes:
+        path = getattr(r, "path", None)
+        if path and "/wms/inventory-count/" in str(path):
+            methods = sorted(getattr(r, "methods", None) or [])
+            print(f"[ROUTE] {path} {methods}", flush=True)
     print("Backend started OK", flush=True)
 
 
