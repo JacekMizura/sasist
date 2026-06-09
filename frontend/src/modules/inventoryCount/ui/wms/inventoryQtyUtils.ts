@@ -1,5 +1,6 @@
 import type { WmsQtyInputMode } from "../../wmsInventoryExecutionContext";
 
+/** UI-only counters — backend stores final piece total only. */
 export type InventoryQtyEditState = {
   cartonsCount: number;
   unitsCount: number;
@@ -14,6 +15,13 @@ export const EMPTY_INVENTORY_QTY: InventoryQtyEditState = {
   draft: null,
 };
 
+const MAX_COUNTER = 999_999;
+
+export function safePackSize(pack: number | null | undefined): number | null {
+  if (pack == null || !Number.isFinite(pack) || pack < 1) return null;
+  return Math.floor(pack);
+}
+
 export function parsedUInt(text: string): number {
   const t = text.trim();
   if (t === "") return 0;
@@ -21,15 +29,21 @@ export function parsedUInt(text: string): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+export function clampCounter(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(MAX_COUNTER, Math.max(0, Math.floor(n)));
+}
+
 export function piecesToCartonUnit(pieces: number, pack: number): { cartons: number; units: number } {
   const p = Math.max(1, Math.floor(pack));
-  const safe = Math.max(0, Math.round(pieces));
+  const safe = clampCounter(Math.round(pieces));
   return { cartons: Math.floor(safe / p), units: safe % p };
 }
 
+/** SSOT total — computed only from cartons + pieces, never stored as editable state. */
 export function inventoryTotalPieces(state: InventoryQtyEditState, pack: number): number {
   const p = Math.max(1, Math.floor(pack));
-  return Math.max(0, state.cartonsCount) * p + Math.max(0, state.unitsCount);
+  return clampCounter(state.cartonsCount) * p + clampCounter(state.unitsCount);
 }
 
 export function inventoryQtyFromPieces(
@@ -41,15 +55,23 @@ export function inventoryQtyFromPieces(
   return { cartonsCount: cartons, unitsCount: units, inputMode: mode, draft: null };
 }
 
+export function clampInventoryQtyState(state: InventoryQtyEditState): InventoryQtyEditState {
+  return {
+    ...state,
+    cartonsCount: clampCounter(state.cartonsCount),
+    unitsCount: clampCounter(state.unitsCount),
+  };
+}
+
 export function commitInventoryQtyDraft(state: InventoryQtyEditState): InventoryQtyEditState {
-  if (state.draft === null) return state;
+  if (state.draft === null) return clampInventoryQtyState(state);
   const mode = state.inputMode;
   const raw = state.draft !== "" ? state.draft : String(mode === "carton" ? state.cartonsCount : state.unitsCount);
   const v = parsedUInt(raw);
   if (mode === "carton") {
-    return { ...state, draft: null, cartonsCount: v };
+    return clampInventoryQtyState({ ...state, draft: null, cartonsCount: v });
   }
-  return { ...state, draft: null, unitsCount: v };
+  return clampInventoryQtyState({ ...state, draft: null, unitsCount: v });
 }
 
 export function normalizeInventoryQty(state: InventoryQtyEditState, pack: number): InventoryQtyEditState {
@@ -57,10 +79,21 @@ export function normalizeInventoryQty(state: InventoryQtyEditState, pack: number
   return inventoryQtyFromPieces(total, pack, state.inputMode);
 }
 
-/** Secondary helper — np. „5 kartonów × 5 szt.” (tylko podpowiedź, nie input). */
+/** Re-sync cartons/pieces from authoritative piece total when pack size is known. */
+export function inventoryQtyFromTotalPieces(
+  totalPieces: number | null | undefined,
+  pack: number | null | undefined,
+  mode: WmsQtyInputMode = "unit",
+): InventoryQtyEditState | null {
+  if (totalPieces == null || !Number.isFinite(totalPieces)) return null;
+  const p = safePackSize(pack);
+  if (p == null) return null;
+  return inventoryQtyFromPieces(totalPieces, p, mode);
+}
+
 export function formatPackagingHelper(pieces: number, pack: number): string | null {
   if (pack <= 1) return null;
-  const safe = Math.max(0, Math.round(pieces));
+  const safe = clampCounter(Math.round(pieces));
   if (safe === 0) return null;
   const { cartons, units } = piecesToCartonUnit(safe, pack);
   if (cartons > 0 && units === 0) {
@@ -73,7 +106,7 @@ export function formatPackagingHelper(pieces: number, pack: number): string | nu
   return null;
 }
 
-/** @deprecated use formatPackagingHelper — kept for list row micro-hints */
+/** @deprecated use formatPackagingHelper */
 export function formatCartonUnitSummary(pieces: number, pack: number): string | null {
   return formatPackagingHelper(pieces, pack);
 }

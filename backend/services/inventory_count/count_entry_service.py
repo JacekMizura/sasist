@@ -160,6 +160,10 @@ def record_count_scan(
     else:
         new_qty = float(quantity)
 
+    if not (new_qty == new_qty):  # NaN guard
+        new_qty = prev_qty
+    new_qty = max(0.0, min(new_qty, 1_000_000.0))
+
     entry = InventoryCountEntry(
         inventory_document_line_id=line.id,
         inventory_document_id=doc.id,

@@ -33,6 +33,8 @@ export type WmsQtyInputMode = "unit" | "carton";
 export type WmsInventoryPackaging = {
   unitsPerCarton: number;
   cartonEan: string | null;
+  /** False until product packaging fetched — prevents wrong carton decomposition. */
+  loaded: boolean;
 };
 
 export const CARRIER_BARCODE_PREFIXES = ["PAL-", "BOX-", "BIN-", "CRT-", "MIX-"] as const;

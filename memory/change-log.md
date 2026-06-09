@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Fix: eksplozja ilości kartonów (WMS inwentaryzacja)
+- Przyczyna: total w szt. dekomponowany przy pack=1, potem ponownie mnożony po załadowaniu unitsPerCarton
+- SSOT: cartons + pieces w UI; total tylko computed; API wysyła wyłącznie `quantity` (absolute pieces)
+- Resync stanu po załadowaniu opakowania; refs zamiast stale closures
+- Backend conflicts: skip lines bez product_id, NaN guard na quantity
+
 ## 2026-06-08 — Nowoczesny ekran logowania Sasist (SaaS)
 - Split layout: ciemny branding + jasny formularz (`LoginBrandingPanel`, `LoginFormPanel`)
 - `ProtectedRoute` — globalna ochrona tras; public: `/login`, `/wms-upload/*`

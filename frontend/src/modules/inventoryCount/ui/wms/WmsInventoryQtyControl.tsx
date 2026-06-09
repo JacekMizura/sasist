@@ -7,6 +7,7 @@ import type { WmsQtyInputMode } from "@/modules/inventoryCount/wmsInventoryExecu
 type Props = {
   qtyState: InventoryQtyEditState;
   unitsPerCarton: number;
+  packagingLoaded?: boolean;
   disabled?: boolean;
   onAdjust: (field: WmsQtyInputMode, delta: number) => void;
   onSetInputMode: (mode: WmsQtyInputMode) => void;
@@ -47,7 +48,7 @@ function QtyCell({
       <div className="flex items-center justify-center gap-2">
         <button
           type="button"
-          disabled={disabled}
+          disabled={controlsDisabled}
           onClick={() => onAdjust(field, -1)}
           className="flex h-10 w-10 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
           aria-label={`Zmniejsz ${label.toLowerCase()}`}
@@ -57,7 +58,7 @@ function QtyCell({
         <input
           type="text"
           inputMode="numeric"
-          disabled={disabled}
+          disabled={controlsDisabled}
           value={display}
           onFocus={() => onSetInputMode(field)}
           onChange={(e) => onSetDraft(e.target.value.replace(/\D/g, ""))}
@@ -73,7 +74,7 @@ function QtyCell({
         />
         <button
           type="button"
-          disabled={disabled}
+          disabled={controlsDisabled}
           onClick={() => onAdjust(field, 1)}
           className="flex h-10 w-10 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
           aria-label={`Zwiększ ${label.toLowerCase()}`}
@@ -89,6 +90,7 @@ function QtyCell({
 export default function WmsInventoryQtyControl({
   qtyState,
   unitsPerCarton,
+  packagingLoaded = true,
   disabled,
   onAdjust,
   onSetInputMode,
@@ -98,6 +100,15 @@ export default function WmsInventoryQtyControl({
   const pack = Math.max(1, unitsPerCarton);
   const total = inventoryTotalPieces(qtyState, pack);
   const showCartons = pack > 1;
+  const controlsDisabled = disabled || !packagingLoaded;
+
+  if (!packagingLoaded) {
+    return (
+      <div className="rounded-xl bg-slate-50/80 px-2 py-4 text-center text-xs font-bold text-slate-400">
+        Wczytywanie opakowania…
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2 rounded-xl bg-slate-50/80 px-2 py-3">
@@ -109,7 +120,7 @@ export default function WmsInventoryQtyControl({
               field="carton"
               value={qtyState.cartonsCount}
               draft={qtyState.inputMode === "carton" ? qtyState.draft : null}
-              disabled={disabled}
+              disabled={controlsDisabled}
               onAdjust={onAdjust}
               onSetInputMode={onSetInputMode}
               onSetDraft={onSetDraft}
@@ -120,7 +131,7 @@ export default function WmsInventoryQtyControl({
               field="unit"
               value={qtyState.unitsCount}
               draft={qtyState.inputMode === "unit" ? qtyState.draft : null}
-              disabled={disabled}
+              disabled={controlsDisabled}
               onAdjust={onAdjust}
               onSetInputMode={onSetInputMode}
               onSetDraft={onSetDraft}
@@ -133,7 +144,7 @@ export default function WmsInventoryQtyControl({
             field="unit"
             value={qtyState.unitsCount}
             draft={qtyState.inputMode === "unit" ? qtyState.draft : null}
-            disabled={disabled}
+            disabled={controlsDisabled}
             onAdjust={onAdjust}
             onSetInputMode={(mode) => {
               onSetInputMode(mode);

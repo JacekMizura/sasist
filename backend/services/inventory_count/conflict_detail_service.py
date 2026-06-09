@@ -74,7 +74,7 @@ def list_document_conflicts(
     for info in conflicts_map.values():
         line_id = min(info["line_ids"])
         line = db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == int(line_id)).first()
-        if line is None:
+        if line is None or line.product_id is None:
             continue
         product = db.query(Product).filter(Product.id == int(line.product_id)).first()
         loc = db.query(Location).filter(Location.id == int(line.location_id)).first()
@@ -90,6 +90,9 @@ def list_document_conflicts(
         )
         recount_state = resolve_line_recount_state(db, line=line, document_conflicts=conflicts_map)
         operators = _operator_counts_for_lines(db, info["line_ids"])
+        counted_qty = line.counted_quantity
+        if counted_qty is not None and counted_qty != counted_qty:
+            counted_qty = None
 
         items.append(
             {
@@ -97,13 +100,13 @@ def list_document_conflicts(
                 "location_id": int(line.location_id),
                 "location_name": loc.name if loc else None,
                 "product_id": int(line.product_id),
-                "sku": getattr(product, "sku", None),
-                "product_name": getattr(product, "name", None),
+                "sku": getattr(product, "sku", None) if product else None,
+                "product_name": getattr(product, "name", None) if product else None,
                 "carrier_id": line.carrier_id,
                 "carrier_code": getattr(carrier, "code", None) if carrier else None,
                 "stock_source": "carrier" if line.carrier_id else "location",
                 "expected_quantity": line.expected_quantity,
-                "counted_quantity": line.counted_quantity,
+                "counted_quantity": counted_qty,
                 "operators": operators,
                 "recount_state": recount_state,
                 "recount_id": int(recount.id) if recount else None,

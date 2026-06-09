@@ -136,6 +136,7 @@ export default function WmsInventoryProductDetailPanel({
       <WmsInventoryQtyControl
         qtyState={qtyState}
         unitsPerCarton={pack}
+        packagingLoaded={packaging.loaded}
         onAdjust={onAdjust}
         onSetInputMode={onSetInputMode}
         onSetDraft={onSetDraft}
