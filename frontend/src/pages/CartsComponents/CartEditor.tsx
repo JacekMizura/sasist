@@ -1,24 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Grid3X3, Layers, Link2, Package } from "lucide-react";
+import { Grid3X3 } from "lucide-react";
 
 import { ProductLikePageLayout } from "../../components/catalog/ProductLikePageLayout";
-import { ProductLikeSection } from "../../components/catalog/ProductLikeSection";
-import {
-  productLikeFieldLabelClass,
-  productLikeInputClass,
-} from "../../components/catalog/productLikeTokens";
-import { CapacityModeFields } from "../../modules/warehouse-structure/CapacityModeFields";
-import { WarehouseEntityColumns } from "../../modules/warehouse-structure/WarehouseEntityColumns";
-import {
-  capacityModeLabel,
-  formatScanCodeLabel,
-  type CapacityMode,
-} from "../../modules/warehouse-structure/labels";
 import { log } from "../../utils/logger";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
-import CartImageUrlField from "./ui/CartImageUrlField";
+import type { CapacityMode } from "../../modules/warehouse-structure/labels";
+import { CartEditorMetaBar } from "./CartEditorMetaBar";
+import { CartRowAddToolbar } from "./CartRowAddToolbar";
 import { CartSectionGrid, basketVolume } from "./CartSectionGrid";
 
 type Basket = {
@@ -32,14 +22,7 @@ type Row = { baskets: Basket[] };
 
 type CartGroup = { id: number; name: string };
 
-type MultiCartTab = "basic" | "sections" | "capacity" | "relations";
-
-const MULTI_TABS = [
-  { id: "basic" as const, label: "Podstawowe", icon: Package },
-  { id: "sections" as const, label: "Sekcje", icon: Grid3X3 },
-  { id: "capacity" as const, label: "Pojemność", icon: Layers },
-  { id: "relations" as const, label: "Powiązania", icon: Link2 },
-];
+const SECTIONS_TAB = [{ id: "sections" as const, label: "Sekcje", icon: Grid3X3 }];
 
 function totalVolume(rows: Row[]): number {
   return rows.reduce((acc, r) => acc + r.baskets.reduce((s, b) => s + basketVolume(b), 0), 0);
@@ -49,7 +32,6 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
   const t = useTranslation();
   const { warehouse, setWarehouse } = useWarehouse();
 
-  const [activeTab, setActiveTab] = useState<MultiCartTab>("basic");
   const [cartName, setCartName] = useState("");
   const [cartCode, setCartCode] = useState("");
   const [cartScanCode, setCartScanCode] = useState<string | null>(null);
@@ -57,7 +39,6 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
   const [groupId, setGroupId] = useState<number | null>(null);
   const [rows, setRows] = useState<Row[]>([{ baskets: [] }]);
   const [availableGroups, setAvailableGroups] = useState<CartGroup[]>([]);
-  const [selectedBasket, setSelectedBasket] = useState<{ r: number; b: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [initLoading, setInitLoading] = useState(Boolean(cartId));
 
@@ -164,13 +145,10 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
     const next = [...rows];
     next[rIdx].baskets.push({ name: "", length: 0, width: 0, height: 0 });
     setRows(next);
-    setSelectedBasket({ r: rIdx, b: next[rIdx].baskets.length - 1 });
   };
 
   const handleAddLevel = () => {
-    const next = [...rows, { baskets: [{ name: "", length: 0, width: 0, height: 0 }] }];
-    setRows(next);
-    setSelectedBasket({ r: next.length - 1, b: 0 });
+    setRows([...rows, { baskets: [{ name: "", length: 0, width: 0, height: 0 }] }]);
   };
 
   const handleAddRow = () => {
@@ -190,7 +168,6 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
     }));
     next[rowIdx].baskets.push(...newBaskets);
     setRows(next);
-    setSelectedBasket({ r: rowIdx, b: next[rowIdx].baskets.length - 1 });
   };
 
   const updateBasket = (r: number, b: number, patch: Partial<Basket>) => {
@@ -209,7 +186,6 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
         ri === r ? { ...row, baskets: row.baskets.filter((_, bi) => bi !== b) } : row
       )
     );
-    setSelectedBasket(null);
   };
 
   const handleSave = async (e?: FormEvent) => {
@@ -276,223 +252,12 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
   const sectionCount = rows.reduce((n, r) => n + r.baskets.length, 0);
   const title = cartName.trim() || (cartId ? t.editMultiCart ?? "Edycja wózka" : t.newMultiCart ?? "Nowy wózek");
 
-  const tabContent = (() => {
-    if (initLoading) return <p className="py-12 text-center text-slate-500">Ładowanie wózka…</p>;
-
-    switch (activeTab) {
-      case "basic":
-        return (
-          <WarehouseEntityColumns
-            main={
-              <ProductLikeSection title="Informacje podstawowe">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {cartId ? (
-                    <div>
-                      <label className={productLikeFieldLabelClass}>Identyfikator</label>
-                      <p className="font-mono text-sm tabular-nums text-slate-700">{cartId}</p>
-                    </div>
-                  ) : null}
-                  <div className={cartId ? "sm:col-span-2" : "sm:col-span-2"}>
-                    <label className={productLikeFieldLabelClass} htmlFor="multi-cart-code">
-                      Kod{cartId ? "" : " (opcjonalnie)"}
-                    </label>
-                    <input
-                      id="multi-cart-code"
-                      className={`${productLikeInputClass} font-mono`}
-                      value={cartCode}
-                      onChange={(e) => setCartCode(e.target.value)}
-                      placeholder={cartId ? "" : "Puste = wygeneruj kod"}
-                    />
-                  </div>
-                  {cartId && cartScanCode ? (
-                    <div className="sm:col-span-2">
-                      <label className={productLikeFieldLabelClass}>Kod skanowania WMS</label>
-                      <p className="font-mono text-sm text-slate-700">{formatScanCodeLabel(cartScanCode)}</p>
-                    </div>
-                  ) : null}
-                  <div className="sm:col-span-2">
-                    <label className={productLikeFieldLabelClass}>{t.name}</label>
-                    <input
-                      className={`${productLikeInputClass} ${!cartName.trim() ? "border-red-300" : ""}`}
-                      value={cartName}
-                      onChange={(e) => setCartName(e.target.value)}
-                      placeholder={t.cartNamePlaceholder}
-                    />
-                  </div>
-                </div>
-              </ProductLikeSection>
-            }
-            side={
-              <>
-                <ProductLikeSection title="Zdjęcie">
-                  <CartImageUrlField value={imageUrl} onChange={setImageUrl} />
-                </ProductLikeSection>
-                <ProductLikeSection title="Grupa">
-                  <label className={productLikeFieldLabelClass}>Przypisanie do grupy</label>
-                  <select
-                    className={productLikeInputClass}
-                    value={groupId === null ? "" : String(groupId)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "") setGroupId(null);
-                      else {
-                        const n = Number(v);
-                        setGroupId(Number.isNaN(n) ? null : n);
-                      }
-                    }}
-                  >
-                    <option value="">{t.unassigned}</option>
-                    {availableGroups.map((g) => (
-                      <option key={g.id} value={String(g.id)}>
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
-                </ProductLikeSection>
-                <ProductLikeSection title="Podsumowanie">
-                  <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <dt className="text-slate-500">Sekcje</dt>
-                      <dd className="font-semibold tabular-nums">{sectionCount}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-slate-500">Pojemność</dt>
-                      <dd className="font-semibold tabular-nums">{vol.toFixed(1)} dm³</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-slate-500">Tryb</dt>
-                      <dd className="font-semibold">{capacityModeLabel(capacityMode)}</dd>
-                    </div>
-                  </dl>
-                </ProductLikeSection>
-              </>
-            }
-          />
-        );
-
-      case "sections":
-        return (
-          <div className="space-y-8">
-            <ProductLikeSection title="Tworzenie całego rzędu">
-              <div className="grid gap-4 sm:grid-cols-5">
-                <div>
-                  <label className={productLikeFieldLabelClass}>{t.rowNumber}</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className={productLikeInputClass}
-                    value={addRowRow}
-                    onChange={(e) => setAddRowRow(Math.max(1, Number(e.target.value) || 1))}
-                  />
-                </div>
-                <div>
-                  <label className={productLikeFieldLabelClass}>{t.basketsInRow}</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    className={productLikeInputClass}
-                    value={addRowCount}
-                    onChange={(e) => setAddRowCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-                  />
-                </div>
-                <div>
-                  <label className={productLikeFieldLabelClass}>{t.length} (cm)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className={productLikeInputClass}
-                    value={addRowLength}
-                    onChange={(e) => setAddRowLength(Math.max(1, Number(e.target.value) || 0))}
-                  />
-                </div>
-                <div>
-                  <label className={productLikeFieldLabelClass}>{t.width} (cm)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className={productLikeInputClass}
-                    value={addRowWidth}
-                    onChange={(e) => setAddRowWidth(Math.max(1, Number(e.target.value) || 0))}
-                  />
-                </div>
-                <div>
-                  <label className={productLikeFieldLabelClass}>{t.height} (cm)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className={productLikeInputClass}
-                    value={addRowHeight}
-                    onChange={(e) => setAddRowHeight(Math.max(1, Number(e.target.value) || 0))}
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleAddRow}
-                className="mt-4 rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
-              >
-                {t.addRowFullButton}
-              </button>
-            </ProductLikeSection>
-
-            <CartSectionGrid
-              rows={rows}
-              selectedBasket={selectedBasket}
-              onSelectBasket={setSelectedBasket}
-              onAddBasket={handleAddBasket}
-              onAddLevel={handleAddLevel}
-              onUpdateBasket={updateBasket}
-              onRemoveBasket={removeBasket}
-              levelLabel={(n) => `${t.level} ${n}`}
-              noNameLabel={t.noName}
-              sectionNameLabel={t.sectionName}
-              sectionNamePlaceholder={t.sectionNamePlaceholder}
-              widthLabel={t.widthX?.replace(" (X)", "") ?? t.width}
-              lengthLabel={t.lengthY?.replace(" (Y)", "") ?? t.length}
-              heightLabel={t.heightZ?.replace(" (Z)", "") ?? t.height}
-              removeSectionLabel={t.removeSection}
-              selectHint={t.selectElementToEdit}
-              addLevelLabel={t.addNewLevel}
-            />
-          </div>
-        );
-
-      case "capacity":
-        return (
-          <ProductLikeSection title="Konfiguracja pojemności">
-            <CapacityModeFields
-              mode={capacityMode}
-              onModeChange={setCapacityMode}
-              maxVolumeDm3={maxVolumeDm3}
-              onMaxVolumeChange={setMaxVolumeDm3}
-              maxOrders={maxOrders}
-              onMaxOrdersChange={setMaxOrders}
-              volumePlaceholder={vol.toFixed(1)}
-              namePrefix="multiCapacityMode"
-            />
-          </ProductLikeSection>
-        );
-
-      case "relations":
-        return (
-          <ProductLikeSection title="Powiązane zamówienia">
-            <p className="text-sm text-slate-600">
-              Przypisania zamówień do sekcji są widoczne na liście wózków — użyj „Pokaż zawartość”, aby zobaczyć
-              bieżące obciążenie i przejść do szczegółów zamówienia.
-            </p>
-          </ProductLikeSection>
-        );
-
-      default:
-        return null;
-    }
-  })();
-
   return (
     <ProductLikePageLayout
       variant="page"
-      modeLabel={cartId ? "Wózek sekcyjny" : "Nowy wózek sekcyjny"}
+      hideTabs
+      hideModeLabel
+      modeLabel=""
       title={title}
       imageUrl={imageUrl}
       imageAlt={cartName}
@@ -500,7 +265,6 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
         ...(cartCode ? [{ label: "Kod", value: cartCode }] : []),
         { label: "Sekcje", value: String(sectionCount), variant: "blue" as const },
         { label: "Pojemność", value: `${vol.toFixed(1)} dm³`, variant: "emerald" as const },
-        { label: "Tryb", value: capacityModeLabel(capacityMode) },
       ]}
       headerActions={
         <button
@@ -511,17 +275,76 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
           {t.close}
         </button>
       }
-      tabs={MULTI_TABS}
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
+      headerPrefix={
+        <CartEditorMetaBar
+          cartId={cartId}
+          cartName={cartName}
+          cartCode={cartCode}
+          cartScanCode={cartScanCode}
+          imageUrl={imageUrl}
+          groupId={groupId}
+          availableGroups={availableGroups}
+          sectionCount={sectionCount}
+          totalVolumeDm3={vol}
+          onNameChange={setCartName}
+          onCodeChange={setCartCode}
+          onImageChange={setImageUrl}
+          onGroupChange={setGroupId}
+          nameLabel={t.name}
+          namePlaceholder={t.cartNamePlaceholder}
+          unassignedLabel={t.unassigned}
+        />
+      }
+      tabs={SECTIONS_TAB}
+      activeTab="sections"
+      onTabChange={() => {}}
       onSubmit={handleSave}
       saving={loading}
       saveDisabled={!isFormValid()}
-      saveLabel={
-        loading ? t.saving : !isFormValid() ? t.completeData : t.saveProject
-      }
+      saveLabel={loading ? t.saving : !isFormValid() ? t.completeData : t.saveProject}
     >
-      {tabContent}
+      {initLoading ? (
+        <p className="py-12 text-center text-slate-500">Ładowanie wózka…</p>
+      ) : (
+        <div className="space-y-6">
+          <CartRowAddToolbar
+            rowNumber={addRowRow}
+            basketCount={addRowCount}
+            length={addRowLength}
+            width={addRowWidth}
+            height={addRowHeight}
+            onRowNumberChange={setAddRowRow}
+            onBasketCountChange={setAddRowCount}
+            onLengthChange={setAddRowLength}
+            onWidthChange={setAddRowWidth}
+            onHeightChange={setAddRowHeight}
+            onAddRow={handleAddRow}
+            rowNumberLabel={t.rowNumber}
+            basketsInRowLabel={t.basketsInRow}
+            lengthLabel={t.length}
+            widthLabel={t.width}
+            heightLabel={t.height}
+            addRowButtonLabel={t.addRowFullButton}
+          />
+
+          <CartSectionGrid
+            rows={rows}
+            onAddBasket={handleAddBasket}
+            onAddLevel={handleAddLevel}
+            onUpdateBasket={updateBasket}
+            onRemoveBasket={removeBasket}
+            levelLabel={(n) => `${t.level} ${n}`}
+            noNameLabel={t.noName}
+            sectionNameLabel={t.sectionName}
+            sectionNamePlaceholder={t.sectionNamePlaceholder}
+            widthLabel={t.widthX?.replace(" (X)", "") ?? t.width}
+            lengthLabel={t.lengthY?.replace(" (Y)", "") ?? t.length}
+            heightLabel={t.heightZ?.replace(" (Z)", "") ?? t.height}
+            removeSectionLabel={t.removeSection}
+            addLevelLabel={t.addNewLevel}
+          />
+        </div>
+      )}
     </ProductLikePageLayout>
   );
 }

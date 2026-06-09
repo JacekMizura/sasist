@@ -45,6 +45,10 @@ export type ProductLikePageLayoutProps<T extends string = string> = {
   saveDisabled?: boolean;
   /** When false, footer omits primary save button (read-only entity views). */
   showSaveButton?: boolean;
+  /** Hide horizontal tab bar and vertical icon rail (single-view layouts). */
+  hideTabs?: boolean;
+  /** Hide the small uppercase mode label above the title. */
+  hideModeLabel?: boolean;
   loadError?: ReactNode;
   footerExtra?: ReactNode;
   trailing?: ReactNode;
@@ -70,6 +74,8 @@ export function ProductLikePageLayout<T extends string>({
   saveLabel = "Zapisz",
   saveDisabled = false,
   showSaveButton = true,
+  hideTabs = false,
+  hideModeLabel = false,
   loadError,
   footerExtra,
   trailing,
@@ -112,7 +118,9 @@ export function ProductLikePageLayout<T extends string>({
               )}
             </div>
             <div className="min-w-0 flex-1 py-1">
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{modeLabel}</p>
+              {!hideModeLabel && modeLabel ? (
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{modeLabel}</p>
+              ) : null}
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
                 {titleBadge}
@@ -139,20 +147,22 @@ export function ProductLikePageLayout<T extends string>({
           ) : null}
         </div>
 
-        <div className="flex gap-8 overflow-x-auto border-t border-slate-100 px-4 sm:px-6 lg:px-8 [-webkit-overflow-scrolling:touch]">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              className={productLikeTabBtnClass(activeTab === tab.id)}
-              onClick={() => onTabChange(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {!hideTabs ? (
+          <div className="flex gap-8 overflow-x-auto border-t border-slate-100 px-4 sm:px-6 lg:px-8 [-webkit-overflow-scrolling:touch]">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                className={productLikeTabBtnClass(activeTab === tab.id)}
+                onClick={() => onTabChange(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {loadError ? (
@@ -167,24 +177,26 @@ export function ProductLikePageLayout<T extends string>({
                 {children}
               </div>
             </div>
-            <aside className={asideClass} aria-label="Szybki dostęp">
-              <nav className="flex flex-col items-center gap-2" role="group">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      title={tab.label}
-                      className={productLikeRailBtnClass(activeTab === tab.id)}
-                      onClick={() => onTabChange(tab.id)}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" strokeWidth={1.5} aria-hidden />
-                    </button>
-                  );
-                })}
-              </nav>
-            </aside>
+            {!hideTabs ? (
+              <aside className={asideClass} aria-label="Szybki dostęp">
+                <nav className="flex flex-col items-center gap-2" role="group">
+                  {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        title={tab.label}
+                        className={productLikeRailBtnClass(activeTab === tab.id)}
+                        onClick={() => onTabChange(tab.id)}
+                      >
+                        <Icon className="h-5 w-5 shrink-0" strokeWidth={1.5} aria-hidden />
+                      </button>
+                    );
+                  })}
+                </nav>
+              </aside>
+            ) : null}
           </div>
         </div>
 

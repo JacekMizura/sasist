@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Wózki z koszykami: uproszczony UX edytora
+- CartEditor: usunięto taby Podstawowe/Pojemność/Powiązania; meta w headerze + zwijane info techniczne
+- CartSectionGrid: karty koszyków bez szarych teł; edycja w drawerze bocznym
+- CartRowAddToolbar: kompaktowy pasek dodawania całego rzędu
+- ProductLikePageLayout: `hideTabs`, `hideModeLabel` dla widoków jednoekranowych
+- Logika API/zapisu bez zmian (capacity_mode nadal z payloadu istniejącego wózka)
+
 ## 2026-06-08 — Dokumenty magazynowe: nowy widok szczegółu (PZ/PW/RW/WZ/ZW/ZD)
 - Wydzielono `WarehouseDocumentLinesSection`, `warehouseDocumentLineUi`, `WarehouseDocumentDetailFooter`
 - Tabela pozycji: lekkie miniatury, skróty typu (LP/KART/MAT), badge statusów i LocationBadge

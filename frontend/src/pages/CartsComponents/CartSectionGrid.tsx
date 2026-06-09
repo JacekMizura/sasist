@@ -1,10 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
-import { ProductLikeSection } from "../../components/catalog/ProductLikeSection";
-import {
-  productLikeFieldLabelClass,
-  productLikeInputClass,
-} from "../../components/catalog/productLikeTokens";
+import { CartBasketEditDrawer } from "./CartBasketEditDrawer";
 
 export type BasketModel = {
   name: string;
@@ -23,8 +20,6 @@ function basketVolume(b: BasketModel): number {
 
 type CartSectionGridProps = {
   rows: RowModel[];
-  selectedBasket: SelectedBasket;
-  onSelectBasket: (sel: SelectedBasket) => void;
   onAddBasket: (rowIdx: number) => void;
   onAddLevel: () => void;
   onUpdateBasket: (r: number, b: number, patch: Partial<BasketModel>) => void;
@@ -37,14 +32,11 @@ type CartSectionGridProps = {
   lengthLabel: string;
   heightLabel: string;
   removeSectionLabel: string;
-  selectHint: string;
   addLevelLabel: string;
 };
 
 export function CartSectionGrid({
   rows,
-  selectedBasket,
-  onSelectBasket,
   onAddBasket,
   onAddLevel,
   onUpdateBasket,
@@ -57,11 +49,11 @@ export function CartSectionGrid({
   lengthLabel,
   heightLabel,
   removeSectionLabel,
-  selectHint,
   addLevelLabel,
 }: CartSectionGridProps) {
   const rowContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidthPx, setContainerWidthPx] = useState(900);
+  const [selectedBasket, setSelectedBasket] = useState<SelectedBasket>(null);
 
   useLayoutEffect(() => {
     const el = rowContainerRef.current;
@@ -73,36 +65,24 @@ export function CartSectionGrid({
     return () => ro.disconnect();
   }, []);
 
-  const totalSections = rows.reduce((n, r) => n + r.baskets.length, 0);
-  const totalVol = rows.reduce(
-    (acc, r) => acc + r.baskets.reduce((s, b) => s + basketVolume(b), 0),
-    0
-  );
+  const drawerBasket =
+    selectedBasket != null ? rows[selectedBasket.r]?.baskets[selectedBasket.b] ?? null : null;
+
+  const handleRemove = () => {
+    if (!selectedBasket) return;
+    onRemoveBasket(selectedBasket.r, selectedBasket.b);
+    setSelectedBasket(null);
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-4 rounded-lg border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm">
-        <div>
-          <span className="text-slate-500">Sekcje: </span>
-          <span className="font-semibold tabular-nums text-slate-900">{totalSections}</span>
-        </div>
-        <div>
-          <span className="text-slate-500">Poziomy: </span>
-          <span className="font-semibold tabular-nums text-slate-900">{rows.length}</span>
-        </div>
-        <div>
-          <span className="text-slate-500">Łączna pojemność: </span>
-          <span className="font-semibold tabular-nums text-slate-900">{totalVol.toFixed(1)} dm³</span>
-        </div>
-      </div>
-
-      <div ref={rowContainerRef} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+    <>
+      <div ref={rowContainerRef} className="space-y-5">
         {rows.map((row, rIdx) => {
-          const gapPx = 12;
-          const rowPaddingPx = 24;
-          const buttonAreaPx = 48;
-          const MIN_WIDTH = 88;
-          const BASKET_HEIGHT = 88;
+          const gapPx = 10;
+          const rowPaddingPx = 0;
+          const buttonAreaPx = 44;
+          const MIN_WIDTH = 120;
+          const BASKET_HEIGHT = 108;
           const rowTotalWidthCm = row.baskets.reduce((sum, b) => sum + (Number(b.width) || 0), 0);
           const availableWidthPx = Math.max(
             100,
@@ -113,52 +93,74 @@ export function CartSectionGrid({
           const scale = rowTotalWidthCm > 0 ? availableWidthPx / rowTotalWidthCm : 1;
 
           return (
-            <div key={rIdx} className="rounded-lg border border-slate-200/90 bg-slate-50/30 p-3">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <div key={rIdx} className="rounded-lg border border-slate-200/90 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {levelLabel(rIdx + 1)}
                 </span>
-                <span className="text-xs text-slate-500">{row.baskets.length} sekcji</span>
+                <span className="text-xs tabular-nums text-slate-400">{row.baskets.length} kosz.</span>
               </div>
-              <div className="flex items-end gap-3 overflow-x-auto pb-1">
+
+              <div className="flex items-stretch gap-2.5 overflow-x-auto pb-1">
                 {row.baskets.map((b, bIdx) => {
-                  const isSelected = selectedBasket?.r === rIdx && selectedBasket?.b === bIdx;
                   const isInvalid = !b.name || b.length <= 0 || b.width <= 0 || b.height <= 0;
                   const widthPx = (Number(b.width) || 0) * scale;
                   const finalWidth = Math.max(widthPx, MIN_WIDTH);
                   const vol = basketVolume(b);
 
                   return (
-                    <button
+                    <div
                       key={bIdx}
-                      type="button"
-                      onClick={() => onSelectBasket(isSelected ? null : { r: rIdx, b: bIdx })}
-                      className={`flex shrink-0 flex-col items-stretch rounded-lg border-2 p-2 text-left transition-all ${
-                        isSelected
-                          ? "border-amber-500 bg-amber-50 shadow-sm ring-2 ring-amber-200/60"
-                          : isInvalid
-                            ? "border-red-300 bg-red-50/80"
-                            : "border-slate-300 bg-white hover:border-slate-400 hover:shadow-sm"
+                      className={`flex shrink-0 flex-col rounded-lg border p-3 transition-shadow ${
+                        isInvalid
+                          ? "border-red-200 bg-white ring-1 ring-red-100"
+                          : "border-slate-200/90 bg-white hover:shadow-sm"
                       }`}
                       style={{ width: `${finalWidth}px`, minHeight: `${BASKET_HEIGHT}px` }}
                     >
-                      <span className="truncate text-xs font-bold text-slate-900">{b.name || noNameLabel}</span>
-                      <span className="mt-1 text-[10px] tabular-nums text-slate-500">
-                        {b.width}×{b.length}×{b.height} cm
-                      </span>
-                      <span className="mt-auto pt-2 text-[11px] font-semibold tabular-nums text-slate-700">
-                        {vol.toFixed(1)} dm³
-                      </span>
-                    </button>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-900">{b.name || noNameLabel}</p>
+                        <p className="mt-1 text-[11px] tabular-nums text-slate-500">
+                          {b.length} × {b.width} × {b.height} cm
+                        </p>
+                        <p className="mt-1 text-xs font-semibold tabular-nums text-slate-700">{vol.toFixed(1)} dm³</p>
+                      </div>
+
+                      <div className="mt-2 flex items-center gap-1 border-t border-slate-100 pt-2">
+                        <button
+                          type="button"
+                          title="Edytuj"
+                          onClick={() => setSelectedBasket({ r: rIdx, b: bIdx })}
+                          className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-md border border-slate-200 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
+                          Edytuj
+                        </button>
+                        <button
+                          type="button"
+                          title="Usuń"
+                          onClick={() => onRemoveBasket(rIdx, bIdx)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
+
                 <button
                   type="button"
-                  onClick={() => onAddBasket(rIdx)}
-                  className="flex h-[88px] w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-xl text-slate-400 hover:border-slate-400 hover:text-slate-700"
-                  aria-label="Dodaj sekcję"
+                  onClick={() => {
+                    const colIdx = row.baskets.length;
+                    onAddBasket(rIdx);
+                    setSelectedBasket({ r: rIdx, b: colIdx });
+                  }}
+                  className="flex h-[108px] w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-slate-300 bg-white text-[10px] font-medium text-slate-500 hover:border-slate-400 hover:text-slate-800"
+                  aria-label="Dodaj koszyk obok"
                 >
-                  +
+                  <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+                  Obok
                 </button>
               </div>
             </div>
@@ -168,60 +170,30 @@ export function CartSectionGrid({
         <button
           type="button"
           onClick={onAddLevel}
-          className="w-full rounded-lg border border-dashed border-slate-300 py-3 text-sm font-medium text-slate-600 transition hover:border-slate-400 hover:bg-slate-50"
+          className="w-full rounded-lg border border-dashed border-slate-300 bg-white py-3 text-sm font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
         >
           + {addLevelLabel}
         </button>
       </div>
 
-      <ProductLikeSection title="Edycja sekcji">
-        {selectedBasket ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="sm:col-span-2">
-              <label className={productLikeFieldLabelClass}>{sectionNameLabel}</label>
-              <input
-                className={`${productLikeInputClass} uppercase ${!rows[selectedBasket.r].baskets[selectedBasket.b].name ? "border-red-400" : ""}`}
-                value={rows[selectedBasket.r].baskets[selectedBasket.b].name}
-                onChange={(e) => onUpdateBasket(selectedBasket.r, selectedBasket.b, { name: e.target.value })}
-                placeholder={sectionNamePlaceholder}
-              />
-            </div>
-            {(
-              [
-                ["width", widthLabel],
-                ["length", lengthLabel],
-                ["height", heightLabel],
-              ] as const
-            ).map(([field, label]) => (
-              <div key={field}>
-                <label className={productLikeFieldLabelClass}>{label} (cm)</label>
-                <input
-                  type="number"
-                  className={`${productLikeInputClass} tabular-nums ${Number(rows[selectedBasket.r].baskets[selectedBasket.b][field]) <= 0 ? "border-red-400" : ""}`}
-                  value={rows[selectedBasket.r].baskets[selectedBasket.b][field] || ""}
-                  onChange={(e) =>
-                    onUpdateBasket(selectedBasket.r, selectedBasket.b, {
-                      [field]: Number(e.target.value),
-                    })
-                  }
-                />
-              </div>
-            ))}
-            <div className="sm:col-span-2 lg:col-span-4">
-              <button
-                type="button"
-                onClick={() => onRemoveBasket(selectedBasket.r, selectedBasket.b)}
-                className="rounded border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-              >
-                {removeSectionLabel}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <p className="py-6 text-center text-sm text-slate-500">{selectHint}</p>
-        )}
-      </ProductLikeSection>
-    </div>
+      <CartBasketEditDrawer
+        open={selectedBasket != null}
+        basket={drawerBasket}
+        levelLabel={selectedBasket != null ? levelLabel(selectedBasket.r + 1) : ""}
+        onClose={() => setSelectedBasket(null)}
+        onChange={(patch) => {
+          if (!selectedBasket) return;
+          onUpdateBasket(selectedBasket.r, selectedBasket.b, patch);
+        }}
+        onRemove={handleRemove}
+        sectionNameLabel={sectionNameLabel}
+        sectionNamePlaceholder={sectionNamePlaceholder}
+        widthLabel={widthLabel}
+        lengthLabel={lengthLabel}
+        heightLabel={heightLabel}
+        removeSectionLabel={removeSectionLabel}
+      />
+    </>
   );
 }
 
