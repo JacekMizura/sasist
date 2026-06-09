@@ -12,19 +12,19 @@ import {
   patchStockDocumentItems,
   patchStockDocumentMetadata,
   stockDocumentPdfUrl,
-  type StockDocumentItemRead,
   type StockDocumentListRow,
   type StockDocumentRead,
 } from "../../api/stockDocumentsApi";
 import { scanWmsCarrierByBarcode } from "../../api/wmsCarrierApi";
 import { CarrierAssignProductsModal } from "../../components/warehouse/carriers/CarrierAssignProductsModal";
-import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 import { CarrierCreateModal } from "../../components/warehouse/carriers/CarrierCreateModal";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
 import WarehouseDocumentsTable from "./WarehouseDocumentsTable";
+import { WarehouseDocumentDetailFooter } from "./WarehouseDocumentDetailFooter";
+import { WarehouseDocumentLinesSection } from "./WarehouseDocumentLinesSection";
 import { getWarehouseDocumentConfig } from "./warehouseDocumentConfigs";
 import {
   documentSourceLabelDetail,
@@ -36,7 +36,6 @@ import {
   shouldShowSupplierCard,
 } from "./warehouseDocumentHelpers";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
-import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
 import {
   businessDocStatus,
   logReceivingStatusDebug,
@@ -65,10 +64,6 @@ function formatDt(iso: string) {
   }
 }
 
-function fmtQty(n: number) {
-  return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 6 }).format(n);
-}
-
 function fmtMoney(n: number) {
   return formatMoneyPl(n);
 }
@@ -78,76 +73,6 @@ function fmtMoneyCur(n: number | null | undefined, currency: string | undefined)
   if (n == null || !Number.isFinite(n)) return "—";
   if (c === "PLN" || c === "zł") return formatMoneyPl(n);
   return formatMoneyPl(n, { currency: c });
-}
-
-function diffToneClass(diff: number) {
-  if (Math.abs(diff) < 1e-9) return "text-slate-500";
-  if (diff < 0) return "text-red-600 font-semibold";
-  return "text-green-600 font-semibold";
-}
-
-function receiptTypeLabel(t: string | null | undefined): string {
-  if (t === "carton") return "Karton";
-  if (t === "packaging_material") return "Materiał pakowy";
-  if (t === "product") return "Produkt";
-  return "—";
-}
-
-function receiptLineDisplayName(it: StockDocumentItemRead): string {
-  const n = (it.product_name || "").trim();
-  if (n) return n;
-  if (it.product_id != null) return `Produkt #${it.product_id}`;
-  return "Pozycja";
-}
-
-function receiptLineLocation(it: StockDocumentItemRead): string {
-  const a = it.putaway_allocations ?? [];
-  const last = (it.putaway_last_location_name || "").trim();
-  if (last) return last;
-  const first = (a[0]?.location_code || a[0]?.location_name || "").trim();
-  if (first) return first;
-  return "—";
-}
-
-function receiptLineStatus(it: StockDocumentItemRead): string {
-  const o = Number(it.ordered_quantity) || 0;
-  const r = Number(it.received_quantity) || 0;
-  if (o <= 1e-9) return "—";
-  if (r + 1e-6 >= o) return "Dostarczono";
-  if (r > 1e-6) return "W realizacji";
-  return "Oczekuje";
-}
-
-function wzLineLocation(it: StockDocumentItemRead): string {
-  const mm = (it.mm_line_from_location_name || "").trim();
-  if (mm) return mm;
-  return receiptLineLocation(it);
-}
-
-function wzLineStatus(it: StockDocumentItemRead): string {
-  const q = Number(it.quantity) || Number(it.ordered_quantity) || 0;
-  if (q > 1e-6) return "Wydano";
-  return "—";
-}
-
-function ProductThumb({ url, plain }: { url?: string | null; plain?: boolean }) {
-  const [bad, setBad] = useState(false);
-  const src = url && !bad ? url : null;
-  const wrapCls = plain
-    ? "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden"
-    : "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50";
-  const imgCls = plain
-    ? "max-h-10 max-w-10 object-contain object-center"
-    : "h-full w-full object-contain object-center";
-  return (
-    <div className={wrapCls}>
-      {src ? (
-        <img src={src} alt="" className={imgCls} onError={() => setBad(true)} />
-      ) : (
-        <span className="text-[10px] font-medium text-slate-400">—</span>
-      )}
-    </div>
-  );
 }
 
 function parseQty(s: string): number | null {
@@ -613,24 +538,38 @@ export default function DocumentsWarehousePage() {
     if (!detail?.items.length) return null;
     let sumOrdered = 0;
     let sumReceived = 0;
-    let sumValue = 0;
+    let sumValueNet = 0;
+    let sumValueGross = 0;
     for (const it of detail.items) {
       sumOrdered += it.ordered_quantity;
       const raw = receivedByLineId[it.id] ?? String(it.received_quantity);
       const rec = parseQty(raw) ?? it.received_quantity;
       sumReceived += rec;
-      if (it.purchase_price_net != null && Number.isFinite(rec)) {
-        sumValue += rec * it.purchase_price_net;
+      const qtyForVal = isWzDetail
+        ? Number(it.quantity) || Number(it.ordered_quantity) || 0
+        : rec;
+      if (it.purchase_price_net != null && Number.isFinite(qtyForVal)) {
+        sumValueNet += qtyForVal * it.purchase_price_net;
+      } else if (it.value_net != null && Number.isFinite(it.value_net)) {
+        sumValueNet += it.value_net;
+      }
+      if (it.value_gross != null && Number.isFinite(it.value_gross)) {
+        sumValueGross += it.value_gross;
+      } else if (it.unit_price_gross != null && Number.isFinite(qtyForVal)) {
+        sumValueGross += qtyForVal * it.unit_price_gross;
       }
     }
+    const sumVat = Math.max(0, sumValueGross - sumValueNet);
     return {
       lineCount: detail.items.length,
       sumOrdered,
       sumReceived,
       sumDiff: sumReceived - sumOrdered,
-      sumValue,
+      sumValueNet,
+      sumValueGross,
+      sumVat,
     };
-  }, [detail, receivedByLineId]);
+  }, [detail, receivedByLineId, isWzDetail]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const pagedRows = useMemo(() => {
@@ -819,7 +758,7 @@ export default function DocumentsWarehousePage() {
           onClick={() => !detailBusy && closeDetail()}
         >
           <div
-            className="flex max-h-[min(92vh,calc(100dvh-2rem))] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-2xl"
+            className="flex max-h-[min(92vh,calc(100dvh-2rem))] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <header className="shrink-0 border-b border-slate-200 bg-white px-6 pb-5 pt-6">
@@ -827,7 +766,10 @@ export default function DocumentsWarehousePage() {
                 {detail ? `Dokument magazynowy · ${normalizeWarehouseDocType(detail.document_type)}` : "Dokument magazynowy"}
               </p>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0 space-y-1">
+                <div className="min-w-0 space-y-2">
+                  {detail ? (
+                    <DocumentTypeBadge code={detail.document_type} />
+                  ) : null}
                   <h2 className="text-3xl font-bold tracking-tight text-slate-900">
                     {detailId != null && detail
                       ? `${normalizeWarehouseDocType(detail.document_type)} ${(detail.document_number || "").trim() || detailId}`
@@ -898,7 +840,9 @@ export default function DocumentsWarehousePage() {
                       <dl className="space-y-3 text-sm">
                         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
                           <dt className="text-slate-500">Typ</dt>
-                          <dd className="font-semibold text-slate-900">{detail.document_type}</dd>
+                          <dd>
+                            <DocumentTypeBadge code={detail.document_type} />
+                          </dd>
                         </div>
                         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
                           <dt className="text-slate-500">Seria</dt>
@@ -1094,407 +1038,61 @@ export default function DocumentsWarehousePage() {
                   </div>
                   ) : null}
 
-                  <div ref={docLinesRef} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Pozycje</h3>
-                    {detail.items.length > 0 ? (
-                      <>
-                        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                          <table className="w-full min-w-[1200px] text-sm">
-                            <thead>
-                              <tr className="border-b border-slate-200 bg-slate-50/90 text-left">
-                                <th className="px-3 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Typ
-                                </th>
-                                <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Nazwa
-                                </th>
-                                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  {isWzDetail ? "Ilość" : "Zamówiono"}
-                                </th>
-                                {isWzDetail ? null : (
-                                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Przyjęto
-                                </th>
-                                )}
-                                {lineEditEnabled ? (
-                                  <th className="px-3 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
-                                    Nośnik <span className="font-normal normal-case text-slate-400">(sugestia)</span>
-                                  </th>
-                                ) : null}
-                                <th className="px-3 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Jednostka
-                                </th>
-                                <th className="px-3 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Lokalizacja
-                                </th>
-                                <th className="px-3 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Status
-                                </th>
-                                {isWzDetail ? null : (
-                                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Różnica
-                                </th>
-                                )}
-                                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Cena netto
-                                </th>
-                                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Wartość netto
-                                </th>
-                                {isWzDetail ? (
-                                  <>
-                                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                      Cena brutto
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                                      Wartość brutto
-                                    </th>
-                                  </>
-                                ) : null}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {detail.items.map((it) => {
-                                const raw = receivedByLineId[it.id] ?? String(it.received_quantity);
-                                const recParsed = parseQty(raw);
-                                const rec = recParsed ?? it.received_quantity;
-                                const qty = isWzDetail
-                                  ? Number(it.quantity) || Number(it.ordered_quantity) || 0
-                                  : it.ordered_quantity;
-                                const diff = rec - it.ordered_quantity;
-                                const price = it.purchase_price_net;
-                                const val =
-                                  it.value_net ??
-                                  (price != null && Number.isFinite(isWzDetail ? qty : rec)
-                                    ? (isWzDetail ? qty : rec) * price
-                                    : null);
-                                const priceGross = it.unit_price_gross ?? null;
-                                const valGross = it.value_gross ?? null;
-                                const ean = (it.product_ean || "").trim();
-                                const sku = (it.product_sku || "").trim();
-                                return (
-                                  <tr key={it.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
-                                    <td className="px-3 py-4 align-middle">
-                                      <span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                                        {receiptTypeLabel(it.receipt_line_type)}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-4">
-                                      <div className="flex items-start gap-3">
-                                        <ProductThumb url={wmsReceiptLineImageUrl(it)} plain={isWzDetail} />
-                                        <div className="min-w-0 flex-1">
-                                          <div className="font-semibold leading-snug text-slate-900">
-                                            {receiptLineDisplayName(it)}
-                                          </div>
-                                          <div className="mt-1 text-xs text-slate-500">
-                                            EAN {ean || "—"} · SKU {sku || "—"}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-4 text-right align-middle tabular-nums text-slate-800">
-                                      {fmtQty(qty)}
-                                    </td>
-                                    {isWzDetail ? null : (
-                                    <td className="px-4 py-4 text-right align-middle tabular-nums">
-                                      {lineEditEnabled ? (
-                                        <input
-                                          type="text"
-                                          inputMode="decimal"
-                                          className={`${inputClass} inline-block w-[6.5rem]`}
-                                          value={receivedByLineId[it.id] ?? ""}
-                                          onChange={(e) =>
-                                            setReceivedByLineId((prev) => ({ ...prev, [it.id]: e.target.value }))
-                                          }
-                                          aria-label={`Przyjęto dla pozycji ${it.id}`}
-                                        />
-                                      ) : (
-                                        <span className="text-slate-900">{fmtQty(it.received_quantity)}</span>
-                                      )}
-                                    </td>
-                                    )}
-                                    {lineEditEnabled ? (
-                                      <td className="px-3 py-4 align-middle">
-                                        <div className="flex min-w-[10rem] flex-col gap-2">
-                                          {(suggestedCarrierBarcodeByLineId[it.id] ?? "").trim() ? (
-                                            <CarrierBadge code={(suggestedCarrierBarcodeByLineId[it.id] ?? "").trim()} />
-                                          ) : (
-                                            <span className="text-[11px] font-medium text-slate-400">Brak nośnika</span>
-                                          )}
-                                          <div className="flex flex-wrap gap-1">
-                                            <button
-                                              type="button"
-                                              onClick={() => setAssignPickerLineId(it.id)}
-                                              className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase text-amber-950 hover:bg-amber-100"
-                                            >
-                                              Wybierz
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => setCreateCarrierLineId(it.id)}
-                                              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-50"
-                                            >
-                                              + Nowy
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                setSuggestedCarrierBarcodeByLineId((prev) => ({
-                                                  ...prev,
-                                                  [it.id]: "",
-                                                }))
-                                              }
-                                              className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase text-slate-500 hover:bg-slate-50"
-                                            >
-                                              Wyczyść
-                                            </button>
-                                          </div>
-                                          <input
-                                            type="text"
-                                            className="w-full rounded-lg border border-amber-200 bg-amber-50/40 px-2 py-1.5 font-mono text-[11px] text-amber-950 placeholder:text-amber-700/50 focus:border-amber-400 focus:ring-2 focus:ring-amber-400"
-                                            placeholder="Ręcznie: PAL-…"
-                                            value={suggestedCarrierBarcodeByLineId[it.id] ?? ""}
-                                            onChange={(e) =>
-                                              setSuggestedCarrierBarcodeByLineId((prev) => ({
-                                                ...prev,
-                                                [it.id]: e.target.value,
-                                              }))
-                                            }
-                                            aria-label={`Kod nośnika sugerowanego dla pozycji ${it.id}`}
-                                          />
-                                        </div>
-                                      </td>
-                                    ) : null}
-                                    <td className="px-3 py-4 text-right align-middle text-slate-700">
-                                      {(it.line_unit || "").trim() || "—"}
-                                    </td>
-                                    <td className="px-3 py-4 align-middle text-xs text-slate-700">
-                                      {isWzDetail ? wzLineLocation(it) : receiptLineLocation(it)}
-                                    </td>
-                                    <td className="px-3 py-4 align-middle text-xs font-medium text-slate-800">
-                                      {isWzDetail ? wzLineStatus(it) : receiptLineStatus(it)}
-                                    </td>
-                                    {isWzDetail ? null : (
-                                    <td
-                                      className={`px-4 py-4 text-right align-middle tabular-nums ${diffToneClass(diff)}`}
-                                    >
-                                      {fmtQty(diff)}
-                                    </td>
-                                    )}
-                                    <td className="px-4 py-4 text-right align-middle tabular-nums text-slate-700">
-                                      {price != null ? fmtMoney(price) : "—"}
-                                    </td>
-                                    <td className="px-4 py-4 text-right align-middle tabular-nums font-medium text-slate-900">
-                                      {val != null ? fmtMoney(val) : "—"}
-                                    </td>
-                                    {isWzDetail ? (
-                                      <>
-                                        <td className="px-4 py-4 text-right align-middle tabular-nums text-slate-700">
-                                          {priceGross != null ? fmtMoney(priceGross) : "—"}
-                                        </td>
-                                        <td className="px-4 py-4 text-right align-middle tabular-nums font-medium text-slate-900">
-                                          {valGross != null ? fmtMoney(valGross) : "—"}
-                                        </td>
-                                      </>
-                                    ) : null}
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        {isWzDetail ? (
-                          <div className="mt-4 rounded-lg bg-gray-50 p-4">
-                            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Podsumowanie</p>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                              <div>
-                                <p className="text-xs text-slate-500">Suma netto</p>
-                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                                  {fmtMoneyCur(detail.total_net, detail.currency)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-500">VAT</p>
-                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                                  {fmtMoneyCur(detail.total_vat, detail.currency)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-500">Suma brutto</p>
-                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                                  {fmtMoneyCur(detail.total_gross, detail.currency)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : lineSummary ? (
-                          <div className="mt-4 rounded-lg bg-gray-50 p-4">
-                            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Podsumowanie</p>
-                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                              <div>
-                                <p className="text-xs text-slate-500">Pozycji</p>
-                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">{lineSummary.lineCount}</p>
-                              </div>
-                              <div className="text-right sm:text-left">
-                                <p className="text-xs text-slate-500">Suma zamówiono</p>
-                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                                  {fmtQty(lineSummary.sumOrdered)}
-                                </p>
-                              </div>
-                              <div className="text-right sm:text-left">
-                                <p className="text-xs text-slate-500">Suma przyjęto</p>
-                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                                  {fmtQty(lineSummary.sumReceived)}
-                                </p>
-                              </div>
-                              <div className="text-right sm:text-left">
-                                <p className="text-xs text-slate-500">Różnica łącznie</p>
-                                <p className={`mt-1 text-lg font-bold tabular-nums ${diffToneClass(lineSummary.sumDiff)}`}>
-                                  {fmtQty(lineSummary.sumDiff)}
-                                </p>
-                              </div>
-                              <div className="col-span-2 text-right sm:col-span-1 sm:text-left lg:col-span-1">
-                                <p className="text-xs text-slate-500">Wartość netto łącznie</p>
-                                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                                  {fmtMoney(lineSummary.sumValue)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                      </>
-                    ) : (
-                      <p className="text-sm text-slate-600">Brak pozycji na dokumencie.</p>
-                    )}
+                  <div ref={docLinesRef}>
+                    <WarehouseDocumentLinesSection
+                      detail={detail}
+                      isWzDetail={isWzDetail}
+                      lineEditEnabled={lineEditEnabled}
+                      inputClass={inputClass}
+                      receivedByLineId={receivedByLineId}
+                      suggestedCarrierBarcodeByLineId={suggestedCarrierBarcodeByLineId}
+                      onReceivedChange={(lineId, value) =>
+                        setReceivedByLineId((prev) => ({ ...prev, [lineId]: value }))
+                      }
+                      onSuggestedCarrierChange={(lineId, value) =>
+                        setSuggestedCarrierBarcodeByLineId((prev) => ({ ...prev, [lineId]: value }))
+                      }
+                      onAssignCarrier={setAssignPickerLineId}
+                      onCreateCarrier={setCreateCarrierLineId}
+                      onClearCarrier={(lineId) =>
+                        setSuggestedCarrierBarcodeByLineId((prev) => ({ ...prev, [lineId]: "" }))
+                      }
+                      lineSummary={lineSummary}
+                    />
                   </div>
                 </div>
               ) : null}
             </div>
 
-            <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4 sm:gap-3">
-              <button
-                type="button"
-                onClick={closeDetail}
-                disabled={detailBusy}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Zamknij
-              </button>
-              {detailId != null && detail ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-1" data-print-menu-root>
-                    <button
-                      type="button"
-                      aria-label="Edytuj pozycje"
-                      title="Edytuj pozycje"
-                      disabled={detailBusy}
-                      onClick={() => docLinesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Usuń dokument"
-                      title="Usuń dokument"
-                      disabled={detailBusy}
-                      onClick={() => setDeleteConfirmId(detailId)}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-lg leading-none text-rose-900 hover:bg-rose-100 disabled:opacity-50"
-                    >
-                      🗑
-                    </button>
-                    <div className="relative inline-flex">
-                      <button
-                        type="button"
-                        aria-label="Drukuj"
-                        title="Drukuj / PDF"
-                        disabled={detailBusy}
-                        onClick={() => setDetailPrintMenuOpen((v) => !v)}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        🖨
-                      </button>
-                      {detailPrintMenuOpen ? (
-                        <div className="absolute bottom-full right-0 z-[320] mb-1 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                            onClick={() => {
-                              printDocumentPdf(detailId);
-                              setDetailPrintMenuOpen(false);
-                            }}
-                          >
-                            Drukuj
-                          </button>
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                            onClick={() => {
-                              openDocumentPdf(detailId);
-                              setDetailPrintMenuOpen(false);
-                            }}
-                          >
-                            Pobierz PDF
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleDuplicateDocument()}
-                    disabled={detailBusy}
-                    className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-900 hover:bg-violet-100 disabled:opacity-50"
-                  >
-                    Duplikuj dokument
-                  </button>
-                </>
-              ) : null}
-              {canEditMetadata ? (
-                <button
-                  type="button"
-                  onClick={() => void handleSaveMetadata()}
-                  disabled={detailBusy || !detail}
-                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
-                >
-                  {detailBusy ? "Zapisywanie…" : "Zapisz wartości dokumentu"}
-                </button>
-              ) : null}
-              {(isDraft || isWmsCompleteDraft) && isPzDetail ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={receiveAll}
-                    disabled={detailBusy || !detail || !lineEditEnabled}
-                    className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                  >
-                    Przyjmij wszystko
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveDraft()}
-                    disabled={detailBusy || !detail || !lineEditEnabled}
-                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    {detailBusy ? "Zapisywanie…" : "Zapisz ilości"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleAccept()}
-                    disabled={detailBusy || !detail || !canPostAccept}
-                    title={
-                      !canPostAccept && detail
-                        ? "Najpierw ustaw magazyn (WMS → Przyjęcie). Lokalizacja przyjęcia zostanie uzupełniona automatycznie, jeśli jest dostępna w magazynie."
-                        : undefined
-                    }
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {detailBusy ? "Przetwarzanie…" : isWmsCompleteDraft ? "Zaksięguj (WMS zakończone)" : "Zatwierdź przyjęcie"}
-                  </button>
-                </>
-              ) : null}
-            </footer>
+            <WarehouseDocumentDetailFooter
+              detailBusy={detailBusy}
+              detailId={detailId}
+              detail={detail}
+              detailPrintMenuOpen={detailPrintMenuOpen}
+              onTogglePrintMenu={() => setDetailPrintMenuOpen((v) => !v)}
+              onClose={closeDetail}
+              onScrollToLines={() => docLinesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              onDelete={() => detailId != null && setDeleteConfirmId(detailId)}
+              onDuplicate={() => void handleDuplicateDocument()}
+              onPrint={() => {
+                if (detailId != null) printDocumentPdf(detailId);
+                setDetailPrintMenuOpen(false);
+              }}
+              onDownloadPdf={() => {
+                if (detailId != null) openDocumentPdf(detailId);
+                setDetailPrintMenuOpen(false);
+              }}
+              canEditMetadata={canEditMetadata}
+              onSaveMetadata={() => void handleSaveMetadata()}
+              isDraft={isDraft}
+              isWmsCompleteDraft={isWmsCompleteDraft}
+              isPzDetail={isPzDetail}
+              lineEditEnabled={lineEditEnabled}
+              canPostAccept={canPostAccept}
+              onReceiveAll={receiveAll}
+              onSaveDraft={() => void handleSaveDraft()}
+              onAccept={() => void handleAccept()}
+            />
           </div>
         </div>
       ) : null}

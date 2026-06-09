@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Dokumenty magazynowe: nowy widok szczegółu (PZ/PW/RW/WZ/ZW/ZD)
+- Wydzielono `WarehouseDocumentLinesSection`, `warehouseDocumentLineUi`, `WarehouseDocumentDetailFooter`
+- Tabela pozycji: lekkie miniatury, skróty typu (LP/KART/MAT), badge statusów i LocationBadge
+- Kolumny VAT %, cena/wartość brutto dla wszystkich typów dokumentów
+- Podsumowanie: siatka AppStatCard (pozycje, ilości, różnica, netto/VAT/brutto)
+- Footer: hierarchy z primary „Zaksięguj”, secondary akcje po lewej
+- DocumentTypeBadge w nagłówku i karcie dokumentu (PW/ZD/ZW w palecie)
+
 ## 2026-06-08 — Struktura magazynu: layout jak karta produktu
 - `modules/warehouse-structure/`: etykiety PL, CapacityModeFields, WarehouseEntityPageShell
 - BulkCartEditor + CartEditor → ProductLikePageLayout (taby: Podstawowe, Pojemność/Sekcje, Operacje, Powiązania)

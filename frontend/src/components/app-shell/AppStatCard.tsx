@@ -1,8 +1,9 @@
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 export type AppStatCardProps = {
   label: string;
-  value: string;
+  value: ReactNode;
   hint?: string;
   icon?: LucideIcon;
 };
