@@ -1,9 +1,9 @@
 import type { InventoryConflictCount, InventoryConflictItem } from "@/api/inventoryCountApi";
 import {
-  listSellasistTableBodyCellGrid,
-  listSellasistTableHeaderCellGrid,
-} from "@/components/listPage/listSellasistTokens";
-import { InventoryConflictStatusBadge, InventoryLocationStack } from "./InventoryLineBadges";
+  InventoryConflictProductMini,
+  InventoryConflictStatusBadge,
+  InventoryLocationStack,
+} from "./InventoryLineBadges";
 import { InventorySection } from "./InventoryPageShell";
 
 type Props = {
@@ -17,10 +17,10 @@ type Props = {
   onRequestRecount?: (conflict: InventoryConflictItem) => void;
 };
 
-function fmtTime(iso: string | null | undefined): string {
+function fmtOperatorTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
+    return new Date(iso).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return iso;
   }
@@ -43,13 +43,154 @@ function conflictCounts(item: InventoryConflictItem): InventoryConflictCount[] {
 }
 
 function isUnresolved(conflict: InventoryConflictItem): boolean {
-  const status = conflict.conflict_status;
+  const status = String(conflict.conflict_status ?? "").toLowerCase();
   return status === "conflict_open" || status === "recount_requested" || status === "required";
 }
 
-const thClass = `${listSellasistTableHeaderCellGrid} bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-500`;
-const tdClass = `${listSellasistTableBodyCellGrid} align-top !py-3.5`;
-const rowClass = "group transition-colors hover:bg-slate-50/90";
+/** Recount action only while conflict is open — not after recount already requested. */
+function canRequestRecount(conflict: InventoryConflictItem): boolean {
+  const status = String(conflict.conflict_status ?? "").toLowerCase();
+  return status === "conflict_open" || status === "required";
+}
+
+function ConflictCard({
+  conflict,
+  busy,
+  onAcceptCount,
+  onRejectCount,
+  onRequestRecount,
+}: {
+  conflict: InventoryConflictItem;
+  busy?: boolean;
+  onAcceptCount?: (conflict: InventoryConflictItem, countId: number) => void;
+  onRejectCount?: (conflict: InventoryConflictItem, countId: number) => void;
+  onRequestRecount?: (conflict: InventoryConflictItem) => void;
+}) {
+  const counts = conflictCounts(conflict);
+  const unresolved = isUnresolved(conflict);
+  const showRecount = canRequestRecount(conflict);
+  const name = conflict.product_name ?? conflict.sku ?? `#${conflict.product_id}`;
+  const ean = conflict.ean?.trim();
+  const sku = conflict.sku?.trim();
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-start gap-4 border-b border-slate-100 p-5">
+        <InventoryConflictProductMini url={conflict.product_image_url} name={conflict.product_name} />
+        <div className="min-w-0 flex-1 space-y-1">
+          <h3 className="text-base font-bold leading-snug text-slate-900">{name}</h3>
+          {ean ? <p className="font-mono text-sm text-slate-600">EAN {ean}</p> : null}
+          {sku ? (
+            <p className="font-mono text-xs text-slate-500" title={sku}>
+              SKU {sku}
+            </p>
+          ) : null}
+          {conflict.quantity_diff_label ? (
+            <span className="mt-2 inline-flex rounded-md bg-amber-50 px-2 py-0.5 text-xs font-bold tabular-nums text-amber-900">
+              {conflict.quantity_diff_label}
+            </span>
+          ) : null}
+        </div>
+        <InventoryLocationStack
+          locationCode={conflict.location_name ?? `#${conflict.location_id}`}
+          carrierCode={conflict.carrier_code}
+        />
+      </div>
+
+      <div className="px-5">
+        <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(5rem,auto)_minmax(4rem,auto)_auto] gap-4 border-b border-slate-100 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:grid">
+          <span>Operator</span>
+          <span>Ilość</span>
+          <span>Czas</span>
+          <span className="text-right">Akcje</span>
+        </div>
+
+        <ul className="divide-y divide-slate-100">
+          {counts.map((entry) => {
+            const rejected = Boolean(entry.rejected);
+            const showActions = unresolved && !rejected;
+
+            return (
+              <li
+                key={`${conflict.line_id}-${entry.count_id}`}
+                className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(5rem,auto)_minmax(4rem,auto)_auto] sm:items-center sm:gap-4"
+              >
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:hidden">
+                    Operator
+                  </p>
+                  <p
+                    className={`text-sm font-semibold ${rejected ? "text-slate-400 line-through" : "text-slate-900"}`}
+                  >
+                    {entry.operator_name}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:hidden">Ilość</p>
+                  <p
+                    className={`text-2xl font-black tabular-nums ${rejected ? "text-slate-400 line-through" : "text-slate-900"}`}
+                  >
+                    {fmtQty(entry.counted_qty)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:hidden">Czas</p>
+                  <p className="text-xs tabular-nums text-slate-400">{fmtOperatorTime(entry.created_at)}</p>
+                </div>
+
+                <div className="sm:text-right">
+                  {showActions ? (
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onAcceptCount?.(conflict, entry.count_id)}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        Uznaj wynik
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onRejectCount?.(conflict, entry.count_id)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        Odrzuć
+                      </button>
+                    </div>
+                  ) : rejected ? (
+                    <span className="text-xs font-medium text-slate-400">Odrzucono</span>
+                  ) : (
+                    <span className="text-xs text-slate-300">—</span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500">Status:</span>
+          <InventoryConflictStatusBadge status={conflict.conflict_status} />
+        </div>
+        {showRecount ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onRequestRecount?.(conflict)}
+            className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            Zleć ponowne liczenie
+          </button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
 
 export default function InventoryConflictPanel({
   items,
@@ -93,116 +234,19 @@ export default function InventoryConflictPanel({
   return (
     <InventorySection title={`Konflikty liczenia (${items.length})`}>
       <p className="border-b border-slate-100 px-4 pb-3 text-sm text-slate-600">
-        Panel decyzji supervisora — uznaj wynik operatora, odrzuć błędne liczenie lub wymuś ponowne liczenie.
+        Panel decyzji supervisora — uznaj wynik operatora, odrzuć błędne liczenie lub zleć ponowne liczenie.
       </p>
-      <div className="min-w-0 overflow-x-auto overscroll-x-contain">
-        <table className="w-full min-w-[980px] border-collapse text-left">
-          <thead>
-            <tr>
-              <th className={`${thClass} min-w-[14rem] text-left`}>Produkt</th>
-              <th className={`${thClass} text-left`}>Lokalizacja</th>
-              <th className={`${thClass} text-left`}>Operator</th>
-              <th className={`${thClass} text-right`}>Policzone</th>
-              <th className={`${thClass} text-left`}>Czas</th>
-              <th className={`${thClass} text-left`}>Akcje</th>
-              <th className={`${thClass} text-left`}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((c) => {
-              const counts = conflictCounts(c);
-              const unresolved = isUnresolved(c);
-              const rowSpan = Math.max(counts.length, 1);
-
-              return counts.map((entry, index) => (
-                <tr key={`${c.line_id}-${entry.count_id}`} className={rowClass}>
-                  {index === 0 ? (
-                    <>
-                      <td className={tdClass} rowSpan={rowSpan}>
-                        <div className="min-w-0 space-y-1">
-                          <p className="text-base font-semibold text-slate-900">
-                            {c.product_name ?? c.sku ?? `#${c.product_id}`}
-                          </p>
-                          {c.quantity_diff_label ? (
-                            <span className="inline-flex rounded-full border border-amber-200/90 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-900">
-                              {c.quantity_diff_label}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className={tdClass} rowSpan={rowSpan}>
-                        <InventoryLocationStack
-                          locationCode={c.location_name ?? `#${c.location_id}`}
-                          carrierCode={c.carrier_code}
-                        />
-                      </td>
-                    </>
-                  ) : null}
-                  <td className={tdClass}>
-                    <span
-                      className={`text-sm font-medium ${entry.rejected ? "text-slate-400 line-through" : "text-slate-800"}`}
-                    >
-                      {entry.operator_name}
-                    </span>
-                  </td>
-                  <td className={`${tdClass} text-right`}>
-                    <span
-                      className={`text-lg font-bold tabular-nums ${entry.rejected ? "text-slate-400 line-through" : "text-slate-900"}`}
-                    >
-                      {fmtQty(entry.counted_qty)}
-                    </span>
-                  </td>
-                  <td className={tdClass}>
-                    <span className="text-xs tabular-nums text-slate-500">{fmtTime(entry.created_at)}</span>
-                  </td>
-                  <td className={tdClass}>
-                    {unresolved && !entry.rejected ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => onAcceptCount?.(c, entry.count_id)}
-                          className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
-                        >
-                          Uznaj wynik
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => onRejectCount?.(c, entry.count_id)}
-                          className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                        >
-                          Odrzuć
-                        </button>
-                      </div>
-                    ) : entry.rejected ? (
-                      <span className="text-xs text-slate-400">Odrzucono</span>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </td>
-                  {index === 0 ? (
-                    <td className={tdClass} rowSpan={rowSpan}>
-                      <div className="flex flex-col gap-2">
-                        <InventoryConflictStatusBadge status={c.conflict_status} />
-                        {unresolved ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => onRequestRecount?.(c)}
-                            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                          >
-                            Wymuś ponowne liczenie
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  ) : null}
-                </tr>
-              ));
-            })}
-          </tbody>
-        </table>
+      <div className="space-y-4 p-4">
+        {items.map((c) => (
+          <ConflictCard
+            key={c.line_id}
+            conflict={c}
+            busy={busy}
+            onAcceptCount={onAcceptCount}
+            onRejectCount={onRejectCount}
+            onRequestRecount={onRequestRecount}
+          />
+        ))}
       </div>
     </InventorySection>
   );

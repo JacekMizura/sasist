@@ -1,6 +1,10 @@
 # Change log
 
-## 2026-06-08 — Braki + Produkcja wykonanie: terminal WMS layout
+## 2026-06-08 — Konflikty inwentaryzacji: card UI + identyfikacja produktu
+- Backend conflicts API: `ean`, `product_image_url` w `_build_conflict_item`
+- Panel: karty zamiast tabeli ERP; miniatura 56×56, EAN, SKU; operator/ilość/akcje z hierarchią
+- Status vs akcja: badge „Oczekuje ponownego liczenia”; button „Zleć ponowne liczenie” (1× na konflikt, tylko gdy `conflict_open`)
+
 - `wmsLayoutTokens`: `WMS_TERMINAL_SHELL`, `WMS_TERMINAL_INNER`, `WMS_TASK_GRID`, `WMS_TASK_CARD`
 - Braki: `WmsOrderIssuesHub` — left-aligned, grid 1/2/3, `BrakiOrderIssueCard` (accent strip, badges, CTA)
 - Produkcja: layout + Collecting/Execute/Putaway — grid kolejki, kompaktowy `WmsTerminalEmptyState`, `WmsProductionActiveBatchBar`

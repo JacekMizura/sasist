@@ -108,7 +108,9 @@ export type InventoryConflictItem = {
   location_name: string | null;
   product_id: number;
   sku: string | null;
+  ean?: string | null;
   product_name: string | null;
+  product_image_url?: string | null;
   carrier_id: number | null;
   carrier_code: string | null;
   stock_source: string;

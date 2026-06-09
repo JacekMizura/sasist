@@ -51,23 +51,38 @@ export function InventoryConflictStatusBadge({ status }: { status?: string | nul
     key === "conflict_resolved_manual" || key === "resolved"
       ? "Rozwiązany ręcznie"
       : key === "recount_requested" || key === "required"
-        ? "Ponowne liczenie"
+        ? "Oczekuje ponownego liczenia"
         : key === "recount_completed"
-          ? "Recount zakończony"
+          ? "Ponownie przeliczone"
           : "Konflikt otwarty";
   const cls =
     key === "conflict_resolved_manual" || key === "resolved"
       ? "border-emerald-200 bg-emerald-50 text-emerald-900"
       : key === "recount_requested" || key === "required"
-        ? "border-amber-200 bg-amber-50 text-amber-900"
+        ? "border-sky-200 bg-sky-50 text-sky-900"
         : key === "recount_completed"
-          ? "border-sky-200 bg-sky-50 text-sky-900"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
           : "border-amber-200 bg-amber-50 text-amber-900";
 
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>
       {label}
     </span>
+  );
+}
+
+/** 56×56 conflict panel thumbnail — rounded, object-cover. */
+export function InventoryConflictProductMini({ url, name }: { url?: string | null; name?: string | null }) {
+  const src = firstProductImageUrl(url ?? null);
+  return (
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+      {src ? (
+        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+      ) : (
+        <ImageIcon className="h-6 w-6 text-slate-300" strokeWidth={1.5} aria-hidden />
+      )}
+      <span className="sr-only">{name ?? "Produkt"}</span>
+    </div>
   );
 }
 
