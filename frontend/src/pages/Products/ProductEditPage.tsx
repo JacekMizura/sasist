@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import api from "../../api/axios";
-import PageLayout from "../../components/layout/PageLayout";
+import { CatalogEntityPageShell } from "../../components/catalog";
 import { ProductEditModal, type ProductEditTabId } from "./ProductEditModal";
 import { mapProductListRow } from "./productListMapper";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -144,50 +144,34 @@ export default function ProductEditPage() {
 
   if (loading) {
     return (
-      <PageLayout omitCard fullBleed>
-        <div className="w-full bg-slate-100 pb-8 pt-2 font-sans text-base antialiased">
-          <div className="w-full max-w-none px-2 sm:px-3 lg:px-4">
-            <div className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_12px_40px_-12px_rgba(15,23,42,0.07)]">
-              <div className="flex min-h-[40vh] items-center justify-center gap-2 px-4 py-16 text-slate-500">
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
-                Ładowanie…
-              </div>
-            </div>
-          </div>
-        </div>
-      </PageLayout>
+      <CatalogEntityPageShell loading loadingLabel="Ładowanie…" />
     );
   }
 
   if (error != null || productRow == null) {
     return (
-      <PageLayout omitCard fullBleed>
-        <div className="w-full bg-slate-100 pb-8 pt-2 font-sans text-base antialiased">
-          <div className="w-full max-w-none px-2 sm:px-3 lg:px-4">
-            <div className="overflow-hidden rounded-xl border border-slate-200/90 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_12px_40px_-12px_rgba(15,23,42,0.07)] sm:p-6">
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error ?? "Brak danych."}</div>
-              <button
-                type="button"
-                onClick={goProducts}
-                className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                Wróć do listy
-              </button>
-            </div>
-          </div>
-        </div>
-      </PageLayout>
+      <CatalogEntityPageShell
+        error={
+          <>
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error ?? "Brak danych."}</div>
+            <button
+              type="button"
+              onClick={goProducts}
+              className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Wróć do listy
+            </button>
+          </>
+        }
+      />
     );
   }
 
   const p = productRow;
 
   return (
-    <PageLayout omitCard fullBleed>
-      <div className="w-full bg-slate-100 pb-8 pt-2 font-sans text-base antialiased">
-        <div className="w-full max-w-none px-2 sm:px-3 lg:px-4">
-          <div className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_12px_40px_-12px_rgba(15,23,42,0.07)]">
-            <ProductEditModal
+    <CatalogEntityPageShell>
+      <ProductEditModal
               variant="page"
               tenants={tenants}
               focusPlanLocations={false}
@@ -262,9 +246,6 @@ export default function ProductEditPage() {
               onSave={() => {}}
               onClose={() => {}}
             />
-          </div>
-        </div>
-      </div>
-    </PageLayout>
+    </CatalogEntityPageShell>
   );
 }

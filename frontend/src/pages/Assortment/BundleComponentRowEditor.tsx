@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import api from "../../api/axios";
-import { appFieldLabelClass, appInputClass } from "../../components/app-shell";
+import {
+  productLikeFieldLabelClass,
+  productLikeInputClass,
+} from "../../components/catalog";
 import type { BundleComponentRow, CatalogProduct } from "./bundleEditTypes";
 import { parseProductsResponse } from "./bundleEditTypes";
 
@@ -88,7 +91,7 @@ export function BundleComponentRowEditor({
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className={appFieldLabelClass}>
+            <label className={productLikeFieldLabelClass}>
               <span className="mr-1">Ilość</span>
               <input
                 type="number"
@@ -126,11 +129,11 @@ export function BundleComponentRowEditor({
     <div ref={wrapRef} className="relative rounded-lg border border-dashed border-slate-300 bg-white p-2.5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
         <div className="min-w-0 flex-1">
-          <label className={appFieldLabelClass}>Wyszukaj produkt</label>
+          <label className={productLikeFieldLabelClass}>Wyszukaj produkt</label>
           <input
             type="search"
             autoComplete="off"
-            className={appInputClass}
+            className={productLikeInputClass}
             placeholder="Nazwa lub SKU…"
             value={row.searchText}
             onChange={(e) => onSearchText(e.target.value)}

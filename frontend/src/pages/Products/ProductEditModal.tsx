@@ -49,6 +49,12 @@ import { ProductReceivingRequirementsSection } from "../../components/wms/receiv
 import { SUPPLIER_COUNTRIES } from "../../constants/supplierTaxonomy";
 import type { ProductImageEntry, ProductLabelData } from "../../types/productLabel";
 import {
+  ProductLikePageLayout,
+  productLikeFieldLabelClass,
+  productLikeInputClass,
+  type ProductLikeMetaChip,
+} from "../../components/catalog";
+import {
   buildProductMetadataJson,
   ensureSingleMainImage,
   manufacturerLabelBlock,
@@ -1591,19 +1597,6 @@ export function ProductEditModal({
     }
   };
 
-  // Ustawienia stylów dla czystego, płaskiego UI "od krawędzi do krawędzi" bez szarych pudełek
-  const tabClass = (id: TabId) =>
-    `shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors -mb-px first:pl-2 sm:px-4 ${
-      activeTab === id
-        ? "border-slate-800 text-slate-900"
-        : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
-    }`;
-
-  const railBtnClass = (id: TabId) =>
-    `relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors duration-200 focus-visible:outline focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 ${
-      activeTab === id ? "border-slate-700 bg-slate-50 text-slate-900 ring-1 ring-slate-200/80 shadow-sm" : "border-transparent bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-    }`;
-
   useEffect(() => {
     if (isNew || tenantId == null || tenantId < 1 || product?.id == null) {
       setProductionTabVisible(false);
@@ -1622,7 +1615,6 @@ export function ProductEditModal({
     };
   }, [isNew, tenantId, product?.id]);
 
-  // Zaktualizowana kolejność zakładek
   const railTabOrder = useMemo((): TabId[] => {
     const base: TabId[] = ["basic", "prices", "warehouse", "images", "offers", "labelSheet"];
     if (!isNew) return [...base.slice(0, 3), "production", ...base.slice(3)];
@@ -1661,128 +1653,59 @@ export function ProductEditModal({
 
   const tenantDisplay =
     tenantId != null ? (tenants.find((t) => t.id === tenantId)?.name ?? "").trim() || `#${tenantId}` : "—";
-  const fieldLabel = "mb-1.5 block text-sm font-medium text-slate-700";
-  const inputClass =
-    "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm leading-tight text-slate-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const fieldLabel = productLikeFieldLabelClass;
+  const inputClass = productLikeInputClass;
 
-  const tabPanelPaddingClass = "py-8 px-4 sm:px-6 lg:px-8 w-full";
-
-  const formNumberReset =
-    "[&_input[type=number]]:appearance-[textfield] [&_input[type=number]]:[&::-webkit-inner-spin-button]:appearance-none [&_input[type=number]]:[&::-webkit-outer-spin-button]:appearance-none";
-
-  const formShellClass = isPage
-    ? `flex flex-col bg-white ${formNumberReset}`
-    : `flex flex-col min-h-0 flex-1 overflow-hidden bg-white ${formNumberReset}`;
-
-  const bodyRowClass = isPage
-    ? "flex w-full flex-col lg:flex-row lg:items-stretch"
-    : "flex w-full flex-col min-h-0 flex-1 lg:flex-row lg:items-stretch overflow-hidden";
-
-  const bodyInnerClass = "contents";
-
-  const mainColClass = isPage
-    ? "flex min-w-0 flex-1 flex-col pb-8" // Dodatkowy margines, żeby pasek nie zasłaniał treści na samym końcu
-    : "flex min-w-0 flex-1 flex-col overflow-hidden";
-
-  const asideClass = isPage
-    ? "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-2 border-l border-slate-200 bg-white px-1 py-4 lg:sticky lg:top-[120px] lg:self-start lg:h-[calc(100vh-120px)] lg:overflow-y-auto"
-    : "z-30 flex w-[3.25rem] shrink-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain border-l border-slate-200 bg-white px-1 py-4 lg:sticky lg:top-0 lg:self-start lg:h-full";
-
-  const footerClass = isPage
-    ? "sticky bottom-0 z-50 flex items-center justify-end border-t border-slate-200 bg-white px-6 py-4 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.08)]"
-    : "flex shrink-0 items-center justify-end border-t border-slate-200 bg-white px-6 py-4 mt-auto";
+  const productMetaChips = useMemo((): ProductLikeMetaChip[] => {
+    const chips: ProductLikeMetaChip[] = [
+      { label: "Podmiot", value: tenantDisplay, title: tenantDisplay !== "—" ? tenantDisplay : undefined },
+    ];
+    if (!isNew && product?.id != null) {
+      chips.push({ label: "ID", value: product.id });
+    }
+    chips.push(
+      { label: "SKU", value: (symbol ?? "").trim() || "—" },
+      { label: "EAN", value: (ean ?? "").trim() || "—" },
+      { label: "Stan", value: physicalStockDisplay ?? "—", variant: "blue" },
+      { label: "Netto", value: formatMoneyZlDisplay(pricingDisplay.saleNet, "brak ceny"), variant: "emerald" },
+      { label: "Brutto", value: formatMoneyZlDisplay(pricingDisplay.saleGross, "brak danych"), variant: "emerald" },
+      { label: "VAT", value: pricingDisplay.vatLabel },
+      { label: "Marża", value: pricingDisplay.marginLabel },
+    );
+    return chips;
+  }, [tenantDisplay, isNew, product?.id, symbol, ean, physicalStockDisplay, pricingDisplay]);
 
   const shell = (
     <>
-      <div className="sticky top-0 z-40 shrink-0 border-b border-slate-200 bg-white">
-        <input
-          ref={headerGalleryInputRef}
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          onChange={onGalleryFileSelected}
-          disabled={galleryUploadBusy}
-        />
-        <div className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8">
-          <div className="flex min-w-0 flex-1 gap-6">
-            <div className="flex h-20 w-20 sm:h-24 sm:w-24 shrink-0 items-center justify-center overflow-hidden bg-white">
-              {sidebarPreviewUrl.trim() ? (
-                <img src={sidebarPreviewUrl.trim()} alt="" className="max-h-full max-w-full object-contain" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50">
-                  <span className="text-[10px] font-medium text-slate-400">Brak zdjęcia</span>
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1 py-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                {isNew ? "Dodawanie produktu" : "Edycja produktu"}
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900">
-                  {name.trim() || (isNew ? "Nowy produkt" : "—")}
-                </h1>
-                {!isNew && productCreatedInWms(product?.metadata_json ?? null) ? (
-                  <span
-                    className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900"
-                    title="Produkt utworzony w WMS — uzupełnij dane w asortymencie"
-                  >
-                    Z WMS
-                  </span>
-                ) : null}
-              </div>
-              
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5">Podmiot:</span>
-                  <span className="font-semibold text-slate-800" title={tenantDisplay !== "—" ? tenantDisplay : undefined}>
-                    {tenantDisplay}
-                  </span>
-                </div>
-                {!isNew && product?.id != null && (
-                  <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                    <span className="text-slate-500 mr-1.5">ID:</span>
-                    <span className="font-semibold text-slate-800">{product.id}</span>
-                  </div>
-                )}
-                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5">SKU:</span>
-                  <span className="font-semibold text-slate-800">{(symbol ?? "").trim() || "—"}</span>
-                </div>
-                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5">EAN:</span>
-                  <span className="font-semibold text-slate-800 tabular-nums">{(ean ?? "").trim() || "—"}</span>
-                </div>
-                <div className="flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-1">
-                  <span className="text-blue-600 mr-1.5">Stan:</span>
-                  <span className="font-bold text-blue-900 tabular-nums">{physicalStockDisplay ?? "—"}</span>
-                </div>
-                <div className="flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-1">
-                  <span className="text-emerald-600 mr-1.5">Netto:</span>
-                  <span className="font-bold text-emerald-900 tabular-nums">
-                    {formatMoneyZlDisplay(pricingDisplay.saleNet, "brak ceny")}
-                  </span>
-                </div>
-                <div className="flex items-center rounded border border-emerald-200/80 bg-emerald-50/80 px-2 py-1">
-                  <span className="text-emerald-600 mr-1.5">Brutto:</span>
-                  <span className="font-bold text-emerald-900 tabular-nums">
-                    {formatMoneyZlDisplay(pricingDisplay.saleGross, "brak danych")}
-                  </span>
-                </div>
-                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5">VAT:</span>
-                  <span className="font-bold text-slate-800 tabular-nums">{pricingDisplay.vatLabel}</span>
-                </div>
-                <div className="flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                  <span className="text-slate-500 mr-1.5">Marża:</span>
-                  <span className={`font-bold tabular-nums ${marginToneClass(pricingDisplay.marginPercent)}`}>
-                    {pricingDisplay.marginLabel}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 pt-4 lg:border-t-0 lg:pt-0">
+      <ProductLikePageLayout
+        variant={isPage ? "page" : "modal"}
+        onModalClose={onClose}
+        headerPrefix={
+          <input
+            ref={headerGalleryInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={onGalleryFileSelected}
+            disabled={galleryUploadBusy}
+          />
+        }
+        modeLabel={isNew ? "Dodawanie produktu" : "Edycja produktu"}
+        title={name.trim() || (isNew ? "Nowy produkt" : "—")}
+        titleBadge={
+          !isNew && productCreatedInWms(product?.metadata_json ?? null) ? (
+            <span
+              className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900"
+              title="Produkt utworzony w WMS — uzupełnij dane w asortymencie"
+            >
+              Z WMS
+            </span>
+          ) : undefined
+        }
+        imageUrl={sidebarPreviewUrl}
+        metaChips={productMetaChips}
+        headerActions={
+          <>
             <button
               type="button"
               title="Duplikuj produkt"
@@ -1831,35 +1754,14 @@ export function ProductEditModal({
                 </Link>
               </div>
             </details>
-          </div>
-        </div>
-
-        <div className="flex gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 [-webkit-overflow-scrolling:touch]">
-          {railTabOrder.map((tabId) => (
-            <button
-              key={tabId}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tabId}
-              className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors -mb-px ${
-                activeTab === tabId
-                  ? "border-slate-800 text-slate-900"
-                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
-              }`}
-              onClick={() => setActiveTab(tabId)}
-            >
-              {railLabel[tabId]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className={formShellClass}>
-        <div className={bodyRowClass}>
-          <div className={bodyInnerClass}>
-            <div className={mainColClass}>
-              <div className={isPage ? tabPanelPaddingClass : `overflow-y-auto ${tabPanelPaddingClass}`}>
-                
+          </>
+        }
+        tabs={railTabOrder.map((tabId) => ({ id: tabId, label: railLabel[tabId], icon: railIcon[tabId] }))}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onSubmit={handleSubmit}
+        saving={saving}
+      >
                 {activeTab === "basic" && (
                   <div className="flex flex-col 2xl:flex-row items-start gap-10 lg:gap-12">
                     {/* Lewa kolumna: Informacje ogólne, Producent, Walidacja */}
@@ -3081,39 +2983,8 @@ export function ProductEditModal({
                   </div>
                 )}
 
-              </div>
-            </div>
+      </ProductLikePageLayout>
 
-            <aside className={asideClass} aria-label="Szybki dostęp">
-              <nav className="flex flex-col items-center gap-2" role="group">
-                {railTabOrder.map((tabId) => {
-                  const Icon = railIcon[tabId];
-                  const label = railLabel[tabId];
-                  return (
-                    <button
-                      key={tabId}
-                      type="button"
-                      title={label}
-                      className={railBtnClass(tabId)}
-                      onClick={() => setActiveTab(tabId)}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" strokeWidth={1.5} aria-hidden />
-                    </button>
-                  );
-                })}
-              </nav>
-            </aside>
-          </div>
-        </div>
-
-        {/* Czysty przycisk zapisz po prawej */}
-        <div className={footerClass}>
-          <button type="submit" disabled={saving} className="rounded bg-slate-900 px-8 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 transition-colors disabled:opacity-50">
-            {saving ? "Zapisywanie…" : "Zapisz"}
-          </button>
-        </div>
-      </form>
-      
       <EditInventoryTraceabilityModal
         open={traceEditRow != null && !isNew && product?.id != null && tenantId != null}
         tenantId={tenantId ?? 1}
@@ -3128,15 +2999,7 @@ export function ProductEditModal({
     </>
   );
 
-  return isPage ? (
-    <div className="w-full min-w-0 bg-white">{shell}</div>
-  ) : (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        {shell}
-      </div>
-    </div>
-  );
+  return shell;
 }
 
 function ProductSupplierLinkRowEditor({ row, busy, inputTableMini, isDefault, onSelectDefault, onPatchPrice, onRemove }: any) {

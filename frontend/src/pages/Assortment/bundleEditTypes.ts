@@ -1,14 +1,17 @@
+import type { LucideIcon } from "lucide-react";
+import { History, LayoutList, Link2, Package, ScrollText, Warehouse } from "lucide-react";
+
 import type { BundleItemWrite } from "../../api/bundlesApi";
 
 export type BundleEditTabId = "basic" | "products" | "warehouse" | "history" | "logs" | "relations";
 
-export const BUNDLE_EDIT_TABS: { id: BundleEditTabId; label: string }[] = [
-  { id: "basic", label: "Podstawowe" },
-  { id: "products", label: "Produkty" },
-  { id: "warehouse", label: "Magazyn" },
-  { id: "history", label: "Historia" },
-  { id: "logs", label: "Logi" },
-  { id: "relations", label: "Powiązania" },
+export const BUNDLE_EDIT_TABS: { id: BundleEditTabId; label: string; icon: LucideIcon }[] = [
+  { id: "basic", label: "Podstawowe", icon: LayoutList },
+  { id: "products", label: "Produkty", icon: Package },
+  { id: "warehouse", label: "Magazyn", icon: Warehouse },
+  { id: "history", label: "Historia", icon: History },
+  { id: "logs", label: "Logi", icon: ScrollText },
+  { id: "relations", label: "Powiązania", icon: Link2 },
 ];
 
 export type CatalogProduct = {

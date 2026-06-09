@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-08 — ProductLikePageLayout: wspólny shell produkt + zestaw
+- `components/catalog/`: ProductLikePageLayout, CatalogEntityPageShell, ProductLikeSection, tokens
+- ProductEditModal + BundleEditModal na tym samym layoutcie (header, taby, rail, footer)
+- ProductNewPage/EditPage + BundleNewPage/EditPage → CatalogEntityPageShell
+
 ## 2026-06-08 — Zestawy: pełna strona edycji + design system app-shell
 - Trasy: `/bundles/new`, `/bundles/:id/edit` (bez modala tworzenia/edycji)
 - `BundleEditModal variant="page"`: taby Podstawowe/Produkty/Magazyn/Historia/Logi/Powiązania
