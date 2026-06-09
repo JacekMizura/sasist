@@ -22,6 +22,10 @@ export const WMS_INV = {
   chipActive: "border-[#5a45d0] text-[#5a45d0]",
   btnAction:
     "flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-40",
+  btnActionWarning:
+    "flex-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-[11px] font-black uppercase tracking-wider text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-40",
+  btnActionDanger:
+    "flex-1 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-[11px] font-black uppercase tracking-wider text-red-800 transition-colors hover:bg-red-100 disabled:opacity-40",
   btnActionPrimary:
     "flex-1 rounded-lg bg-[#23438e] px-3 py-2.5 text-[11px] font-black uppercase tracking-wider text-white transition-colors hover:bg-[#1a326b] disabled:opacity-40",
   btnCta:

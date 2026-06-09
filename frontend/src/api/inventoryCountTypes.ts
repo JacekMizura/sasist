@@ -179,6 +179,7 @@ export type WmsTaskLineRead = {
   product_name: string | null;
   image_url?: string | null;
   counted_quantity: number | null;
+  my_counted_quantity?: number | null;
   status: string;
   carrier_id?: number | null;
   carrier_code?: string | null;

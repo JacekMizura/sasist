@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { WMS_OPERATIONAL_CONTAINER } from "@/components/wms/execution/wmsLayoutTokens";
+import { useAuth } from "@/context/AuthContext";
 import type { WmsInventoryTerminalPageState } from "@/modules/inventoryCount/hooks/useWmsInventoryTerminalPage";
+import { canResolveInventoryCountConflict } from "@/modules/inventoryCount/inventorySupervisorAccess";
 import { wmsInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
 import WmsInventoryActiveContextBar from "@/modules/inventoryCount/ui/wms/WmsInventoryActiveContextBar";
 import WmsInventoryDamageModal from "@/modules/inventoryCount/ui/wms/WmsInventoryDamageModal";
@@ -22,6 +24,8 @@ type Props = {
 export default function WmsInventoryTerminalView({ state, documentId }: Props) {
   const scanAnchorRef = useRef<HTMLDivElement>(null);
   const [damageOpen, setDamageOpen] = useState(false);
+  const { hasPermission, user } = useAuth();
+  const showCountConflict = canResolveInventoryCountConflict(hasPermission, user?.role);
   const {
     inputRef,
     terminal,
@@ -77,8 +81,10 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
   const activeQty = activeScan?.counted_quantity ?? 0;
 
   return (
-    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-3 pb-24`}>
-      <WmsInventoryActiveContextBar location={locationContext} locationSubline={locationSubline} />
+    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-3 py-2 pb-24`}>
+      {!activeScan ? (
+        <WmsInventoryActiveContextBar location={locationContext} locationSubline={locationSubline} />
+      ) : null}
 
       {counting ? (
         <>
@@ -119,7 +125,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
               qtyState={qtyEditState}
               lastScanKind={lastScanKind}
               carrierScanMode={carrierScanMode}
-              countConflict={countConflict}
+              showCountConflict={showCountConflict && countConflict}
               onEnterCarrierScan={enterCarrierScan}
               onClearCarrier={clearCarrier}
               onSkipCarrier={skipCarrier}
@@ -153,12 +159,12 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
       {counting ? (
         <div className={WMS_INV.bottomBar}>
           <div className={`${WMS_OPERATIONAL_CONTAINER} flex gap-2`}>
-            <button type="button" className={WMS_INV.btnAction} onClick={() => setUnknownOpen(true)}>
+            <button type="button" className={WMS_INV.btnActionWarning} onClick={() => setUnknownOpen(true)}>
               Nieznany produkt
             </button>
             <button
               type="button"
-              className={WMS_INV.btnAction}
+              className={WMS_INV.btnActionDanger}
               disabled={!activeScan?.product_id}
               onClick={() => setDamageOpen(true)}
             >

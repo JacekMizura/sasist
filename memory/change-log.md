@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Inventory counting UX: terminal + ERP progress
+- WMS: optymistyczny licznik po skanie (`applyScanQty` przed API); baza qty z `my_counted_quantity`, nie globalnej sumy
+- WMS: header produktu — większe zdjęcie, badge lokalizacji/nośnika (bez duplikatu w belce); konflikt tylko dla kierownika/superadmin
+- WMS: kompaktowe liczniki; dolny pasek: Nieznany (warning), Wada (danger), Zakończ (primary)
+- ERP tab „Przebieg liczenia”: osobny wiersz per operator przy konflikcie (`expandOperatorRows`)
+
 ## 2026-06-08 — ERP inventory: uproszczony przebieg liczenia (UI only)
 - Usunięto kolumnę „Źródło stanu”; nośnik pod lokalizacją (`InventoryLocationStack`)
 - Produkt: większe zdjęcie, nazwa/EAN/SKU; bez nośnika pod produktem

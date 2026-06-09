@@ -387,6 +387,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               conflicts={conflicts?.items ?? []}
               loading={linesLoading}
               conflictBusy={conflictBusy}
+              expandOperatorRows={tab === "progress"}
               onAcceptQuantity={(c, qty) => void resolveConflictQuantity(c, qty)}
               onRequestRecount={(c) => void requestConflictRecount(c)}
               emptyMessage={

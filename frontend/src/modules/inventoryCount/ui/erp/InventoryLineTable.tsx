@@ -1,6 +1,10 @@
 import { Clock, User } from "lucide-react";
 
-import type { InventoryConflictItem, InventoryLineRead } from "@/api/inventoryCountApi";
+import type {
+  InventoryConflictItem,
+  InventoryConflictOperator,
+  InventoryLineRead,
+} from "@/api/inventoryCountApi";
 import {
   listSellasistTableBodyCellGrid,
   listSellasistTableHeaderCellGrid,
@@ -21,8 +25,61 @@ function fmtTime(iso: string | null | undefined): string {
   }
 }
 
+function hasOperatorQuantityConflict(conflict?: InventoryConflictItem): boolean {
+  const operators = conflict?.operators ?? [];
+  return operators.length >= 2 && new Set(operators.map((o) => o.quantity)).size > 1;
+}
+
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
+}
+
+type TableRow = {
+  key: string;
+  line: InventoryLineRead;
+  conflict?: InventoryConflictItem;
+  operator?: InventoryConflictOperator;
+  operatorSlice: boolean;
+};
+
+function buildTableRows(
+  lines: InventoryLineRead[],
+  conflicts: InventoryConflictItem[],
+  expandOperatorRows: boolean,
+): TableRow[] {
+  const conflictByLineId = new Map(conflicts.map((c) => [c.line_id, c]));
+  const rows: TableRow[] = [];
+
+  for (const ln of lines) {
+    const conflict = conflictByLineId.get(ln.id);
+    const operators = conflict?.operators ?? [];
+    const split = expandOperatorRows && hasOperatorQuantityConflict(conflict);
+
+    if (split) {
+      for (const op of operators) {
+        const expected = ln.expected_quantity;
+        rows.push({
+          key: `${ln.id}-op-${op.user_id ?? op.operator_name}`,
+          line: {
+            ...ln,
+            counted_quantity: op.quantity,
+            last_counted_by_name: op.operator_name,
+            last_counted_at: op.counted_at ?? ln.last_counted_at,
+            difference_quantity:
+              expected != null ? op.quantity - expected : ln.difference_quantity,
+          },
+          conflict,
+          operator: op,
+          operatorSlice: true,
+        });
+      }
+      continue;
+    }
+
+    rows.push({ key: String(ln.id), line: ln, conflict, operatorSlice: false });
+  }
+
+  return rows;
 }
 
 const thClass = `${listSellasistTableHeaderCellGrid} bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-500`;
@@ -78,19 +135,41 @@ function CountedCell({
   ln,
   conflict,
   conflictBusy,
+  operatorSlice,
+  operator,
   onAcceptQuantity,
   onRequestRecount,
 }: {
   ln: InventoryLineRead;
   conflict?: InventoryConflictItem;
   conflictBusy?: boolean;
+  operatorSlice?: boolean;
+  operator?: InventoryConflictOperator;
   onAcceptQuantity?: (conflict: InventoryConflictItem, quantity: number) => void;
   onRequestRecount?: (conflict: InventoryConflictItem) => void;
 }) {
-  const operators = conflict?.operators ?? [];
-  const hasConflict = operators.length >= 2 && new Set(operators.map((o) => o.quantity)).size > 1;
+  if (operatorSlice && operator) {
+    return (
+      <div className="inline-flex min-w-[4rem] flex-col items-end gap-1">
+        <QtyCell label="Policz." value={fmtQty(operator.quantity)} emphasis="strong" />
+        {conflict?.recount_state === "required" && conflict ? (
+          <button
+            type="button"
+            disabled={conflictBusy}
+            onClick={() => onAcceptQuantity?.(conflict, operator.quantity)}
+            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Zatwierdź {fmtQty(operator.quantity)}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  const hasConflict = hasOperatorQuantityConflict(conflict);
 
   if (hasConflict) {
+    const operators = conflict?.operators ?? [];
     return (
       <div className="inline-flex min-w-[8rem] flex-col items-end gap-1.5 text-right">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Policz.</span>
@@ -119,7 +198,7 @@ function CountedCell({
               onClick={() => onRequestRecount?.(conflict)}
               className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
             >
-              Recount
+              Ponowne liczenie
             </button>
           </div>
         ) : null}
@@ -148,23 +227,7 @@ function DifferenceCell({ ln }: { ln: InventoryLineRead }) {
   );
 }
 
-function OperatorCell({ ln, conflict }: { ln: InventoryLineRead; conflict?: InventoryConflictItem }) {
-  const operators = conflict?.operators ?? [];
-  const hasConflict = operators.length >= 2 && new Set(operators.map((o) => o.quantity)).size > 1;
-
-  if (hasConflict) {
-    return (
-      <div className="space-y-1 text-xs text-slate-600">
-        {operators.map((op) => (
-          <div key={`${op.user_id}-${op.operator_name}`} className="flex items-center gap-1.5">
-            <User className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-            <span className="font-medium text-slate-700">{op.operator_name}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
+function OperatorCell({ ln }: { ln: InventoryLineRead }) {
   if (ln.last_counted_by_name) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs leading-snug text-slate-600">
@@ -177,12 +240,51 @@ function OperatorCell({ ln, conflict }: { ln: InventoryLineRead; conflict?: Inve
   return <span className="text-xs text-slate-400">—</span>;
 }
 
+function StatusCell({
+  ln,
+  conflict,
+  operatorSlice,
+  conflictBusy,
+  onRequestRecount,
+}: {
+  ln: InventoryLineRead;
+  conflict?: InventoryConflictItem;
+  operatorSlice?: boolean;
+  conflictBusy?: boolean;
+  onRequestRecount?: (conflict: InventoryConflictItem) => void;
+}) {
+  const hasConflict = hasOperatorQuantityConflict(conflict);
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {hasConflict ? <InventoryConflictStatusBadge /> : <InventoryLineStatusBadge line={ln} />}
+      {operatorSlice && hasConflict && conflict?.recount_state === "required" ? (
+        <button
+          type="button"
+          disabled={conflictBusy}
+          onClick={() => onRequestRecount?.(conflict)}
+          className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+        >
+          Ponowne liczenie
+        </button>
+      ) : null}
+      {!operatorSlice && ln.recount_count > 0 && ln.recount_state !== "required" ? (
+        <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+          ×{ln.recount_count} ponowne
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 type Props = {
   lines: InventoryLineRead[];
   conflicts?: InventoryConflictItem[];
   loading?: boolean;
   conflictBusy?: boolean;
   emptyMessage?: string;
+  /** Progress tab — one row per operator when counts disagree. */
+  expandOperatorRows?: boolean;
   onAcceptQuantity?: (conflict: InventoryConflictItem, quantity: number) => void;
   onRequestRecount?: (conflict: InventoryConflictItem) => void;
 };
@@ -194,17 +296,18 @@ export default function InventoryLineTable({
   loading,
   conflictBusy,
   emptyMessage = "Brak pozycji.",
+  expandOperatorRows = false,
   onAcceptQuantity,
   onRequestRecount,
 }: Props) {
-  const conflictByLineId = new Map(conflicts.map((c) => [c.line_id, c]));
-
   if (loading) {
     return <p className="py-10 text-center text-sm text-slate-500">Wczytywanie pozycji…</p>;
   }
   if (lines.length === 0) {
     return <p className="py-10 text-center text-sm text-slate-500">{emptyMessage}</p>;
   }
+
+  const tableRows = buildTableRows(lines, conflicts, expandOperatorRows);
 
   return (
     <div className="min-w-0 overflow-x-auto overscroll-x-contain">
@@ -222,13 +325,8 @@ export default function InventoryLineTable({
           </tr>
         </thead>
         <tbody>
-          {lines.map((ln) => {
-            const conflict = conflictByLineId.get(ln.id);
-            const operators = conflict?.operators ?? [];
-            const hasConflict = operators.length >= 2 && new Set(operators.map((o) => o.quantity)).size > 1;
-
-            return (
-              <tr key={ln.id} className={rowClass}>
+          {tableRows.map(({ key, line: ln, conflict, operator, operatorSlice }) => (
+              <tr key={key} className={rowClass}>
                 <td className={tdClass}>
                   <ProductCell ln={ln} />
                 </td>
@@ -246,6 +344,8 @@ export default function InventoryLineTable({
                     ln={ln}
                     conflict={conflict}
                     conflictBusy={conflictBusy}
+                    operatorSlice={operatorSlice}
+                    operator={operator}
                     onAcceptQuantity={onAcceptQuantity}
                     onRequestRecount={onRequestRecount}
                   />
@@ -254,17 +354,16 @@ export default function InventoryLineTable({
                   <DifferenceCell ln={ln} />
                 </td>
                 <td className={tdClass}>
-                  <div className="flex flex-wrap gap-1.5">
-                    {hasConflict ? <InventoryConflictStatusBadge /> : <InventoryLineStatusBadge line={ln} />}
-                    {ln.recount_count > 0 && ln.recount_state !== "required" ? (
-                      <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
-                        ×{ln.recount_count} ponowne
-                      </span>
-                    ) : null}
-                  </div>
+                  <StatusCell
+                    ln={ln}
+                    conflict={conflict}
+                    operatorSlice={operatorSlice}
+                    conflictBusy={conflictBusy}
+                    onRequestRecount={onRequestRecount}
+                  />
                 </td>
                 <td className={tdClass}>
-                  <OperatorCell ln={ln} conflict={conflict} />
+                  <OperatorCell ln={ln} />
                 </td>
                 <td className={tdClass}>
                   <span className="inline-flex items-center gap-1.5 text-xs tabular-nums text-slate-500">
@@ -273,8 +372,7 @@ export default function InventoryLineTable({
                   </span>
                 </td>
               </tr>
-            );
-          })}
+            ))}
         </tbody>
       </table>
     </div>

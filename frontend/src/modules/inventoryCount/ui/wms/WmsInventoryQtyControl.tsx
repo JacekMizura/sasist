@@ -1,4 +1,4 @@
-import { Minus, Package, Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 
 import type { InventoryQtyEditState } from "@/modules/inventoryCount/ui/wms/inventoryQtyUtils";
 import { inventoryTotalPieces } from "@/modules/inventoryCount/ui/wms/inventoryQtyUtils";
@@ -43,16 +43,16 @@ function QtyCell({
 
   return (
     <div className="flex-1 text-center">
-      <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
-      <div className="flex items-center justify-center gap-3">
+      <p className="mb-0.5 text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+      <div className="flex items-center justify-center gap-2">
         <button
           type="button"
           disabled={disabled}
           onClick={() => onAdjust(field, -1)}
-          className="flex h-11 w-11 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
+          className="flex h-10 w-10 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
           aria-label={`Zmniejsz ${label.toLowerCase()}`}
         >
-          <Minus size={22} strokeWidth={2.5} />
+          <Minus size={20} strokeWidth={2.5} />
         </button>
         <input
           type="text"
@@ -68,24 +68,24 @@ function QtyCell({
               onCommitDraft();
             }
           }}
-          className="w-16 border-0 bg-transparent text-center text-3xl font-black tabular-nums text-slate-900 focus:outline-none disabled:opacity-40"
+          className="w-14 border-0 bg-transparent text-center text-2xl font-black tabular-nums text-slate-900 focus:outline-none disabled:opacity-40"
           aria-label={label}
         />
         <button
           type="button"
           disabled={disabled}
           onClick={() => onAdjust(field, 1)}
-          className="flex h-11 w-11 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
+          className="flex h-10 w-10 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
           aria-label={`Zwiększ ${label.toLowerCase()}`}
         >
-          <Plus size={22} strokeWidth={2.5} />
+          <Plus size={20} strokeWidth={2.5} />
         </button>
       </div>
     </div>
   );
 }
 
-/** Collector qty row — kartony + sztuki + suma, large touch targets. */
+/** Compact collector qty — kartony + sztuki + suma. */
 export default function WmsInventoryQtyControl({
   qtyState,
   unitsPerCarton,
@@ -100,8 +100,8 @@ export default function WmsInventoryQtyControl({
   const showCartons = pack > 1;
 
   return (
-    <div className="space-y-4">
-      <div className={`flex ${showCartons ? "gap-4" : ""}`}>
+    <div className="space-y-2 rounded-xl bg-slate-50/80 px-2 py-3">
+      <div className={`flex ${showCartons ? "gap-2" : ""}`}>
         {showCartons ? (
           <>
             <QtyCell
@@ -144,10 +144,10 @@ export default function WmsInventoryQtyControl({
         )}
       </div>
 
-      <div className="flex items-baseline justify-between border-t border-slate-200 pt-3">
-        <span className="text-xs font-black uppercase tracking-widest text-slate-500">Suma</span>
-        <span className="text-2xl font-black tabular-nums text-slate-900">
-          {fmtQty(total)} <span className="text-sm font-bold text-slate-500">szt.</span>
+      <div className="flex items-baseline justify-center gap-2 pt-1">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Suma</span>
+        <span className="text-xl font-black tabular-nums text-slate-900">
+          {fmtQty(total)} <span className="text-xs font-bold text-slate-500">szt.</span>
         </span>
       </div>
     </div>

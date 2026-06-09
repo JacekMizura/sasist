@@ -21,7 +21,7 @@ type Props = {
   qtyState: InventoryQtyEditState;
   lastScanKind: WmsLastScanKind;
   carrierScanMode?: boolean;
-  countConflict?: boolean;
+  showCountConflict?: boolean;
   onEnterCarrierScan: () => void;
   onClearCarrier: () => void;
   onSkipCarrier?: () => void;
@@ -38,7 +38,7 @@ function carrierLabel(counted: WmsCountedProduct | null | undefined, scan: WmsBa
   return null;
 }
 
-/** Collector product hero — photo first, then meta, carrier, qty. */
+/** Collector product hero — photo first, badges, qty directly below. */
 export default function WmsInventoryProductDetailPanel({
   scan,
   counted,
@@ -51,7 +51,7 @@ export default function WmsInventoryProductDetailPanel({
   qtyState,
   lastScanKind,
   carrierScanMode,
-  countConflict,
+  showCountConflict,
   onEnterCarrierScan,
   onClearCarrier,
   onSkipCarrier,
@@ -64,9 +64,9 @@ export default function WmsInventoryProductDetailPanel({
   const carrierCode = carrierLabel(counted, scan);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex flex-col items-center text-center">
-        <div className="mb-4 flex h-44 w-44 items-center justify-center sm:h-52 sm:w-52">
+        <div className="mb-2 flex h-52 w-52 items-center justify-center sm:h-60 sm:w-60">
           {scan.image_url ? (
             <img
               src={scan.image_url}
@@ -74,72 +74,64 @@ export default function WmsInventoryProductDetailPanel({
               className="max-h-full max-w-full object-contain mix-blend-multiply"
             />
           ) : (
-            <ImageIcon size={64} className="text-slate-200" strokeWidth={1.5} />
+            <ImageIcon size={72} className="text-slate-200" strokeWidth={1.5} />
           )}
         </div>
-        <h2 className="max-w-full px-2 text-xl font-black leading-tight text-slate-900 sm:text-2xl">
+        <h2 className="max-w-full px-1 text-xl font-black leading-tight text-slate-900 sm:text-2xl">
           {scan.product_name ?? scan.sku ?? "—"}
         </h2>
         {scan.ean ? (
-          <p className="mt-2 font-mono text-sm font-bold text-slate-600 sm:text-base">EAN: {scan.ean}</p>
+          <p className="mt-1 font-mono text-sm font-bold text-slate-600">EAN: {scan.ean}</p>
         ) : null}
       </div>
 
-      {countConflict ? (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-center text-sm font-bold text-amber-800">
-          Konflikt liczenia — kierownik musi zatwierdzić wynik
+      <div className="flex flex-col items-center gap-2">
+        {locationCode ? <LocationBadge code={locationCode} type="PICK" layoutSpread className="max-w-full" /> : null}
+
+        {carrierScanMode ? (
+          <div className="flex items-center gap-2 text-sm font-bold text-indigo-700">
+            <span>Skanuj nośnik…</span>
+            {onSkipCarrier ? (
+              <button type="button" onClick={onSkipCarrier} className="text-xs font-bold text-slate-500 underline">
+                Anuluj
+              </button>
+            ) : null}
+          </div>
+        ) : carrierCode ? (
+          <div className="flex items-center gap-2">
+            <CarrierBadge code={carrierCode} />
+            <button
+              type="button"
+              onClick={onClearCarrier}
+              className="rounded-full p-1 text-slate-400 active:bg-slate-100"
+              aria-label="Usuń nośnik"
+            >
+              <X className="h-4 w-4" strokeWidth={2.5} />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onEnterCarrierScan}
+            className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-slate-600 active:text-slate-900"
+          >
+            <Package className="h-3.5 w-3.5" /> Przypisz nośnik
+          </button>
+        )}
+      </div>
+
+      {showCountConflict ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-center text-xs font-bold text-amber-800">
+          Konflikt liczenia — wybierz wynik operatora
         </p>
       ) : null}
 
-      <div className="space-y-3">
-        {locationCode ? (
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Lokalizacja</span>
-            <LocationBadge code={locationCode} type="PICK" />
-          </div>
-        ) : null}
-
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nośnik</span>
-          {carrierScanMode ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-indigo-700">Skanuj nośnik…</span>
-              {onSkipCarrier ? (
-                <button type="button" onClick={onSkipCarrier} className="text-xs font-bold text-slate-500 underline">
-                  Anuluj
-                </button>
-              ) : null}
-            </div>
-          ) : carrierCode ? (
-            <div className="flex items-center gap-2">
-              <CarrierBadge code={carrierCode} />
-              <button
-                type="button"
-                onClick={onClearCarrier}
-                className="rounded-full p-1 text-slate-400 active:bg-slate-100"
-                aria-label="Usuń nośnik"
-              >
-                <X className="h-4 w-4" strokeWidth={2.5} />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onEnterCarrierScan}
-              className="inline-flex items-center gap-1.5 text-sm font-black uppercase tracking-wide text-slate-600 active:text-slate-900"
-            >
-              <Package className="h-4 w-4" /> Przypisz nośnik
-            </button>
-          )}
-        </div>
-
-        {pack > 1 ? (
-          <p className="text-center text-[11px] font-bold text-slate-500">
-            Karton zbiorczy: {pack} szt.
-            {packaging.cartonEan ? ` · EAN ${packaging.cartonEan}` : ""}
-          </p>
-        ) : null}
-      </div>
+      {pack > 1 ? (
+        <p className="text-center text-[11px] font-bold text-slate-500">
+          Karton zbiorczy: {pack} szt.
+          {packaging.cartonEan ? ` · EAN ${packaging.cartonEan}` : ""}
+        </p>
+      ) : null}
 
       <WmsInventoryQtyControl
         qtyState={qtyState}
@@ -151,9 +143,9 @@ export default function WmsInventoryProductDetailPanel({
       />
 
       {lastScanKind === "carton" && pack > 1 ? (
-        <p className="text-center text-sm font-bold text-emerald-700">+1 karton (+{pack} szt.)</p>
+        <p className="text-center text-xs font-bold text-emerald-700">+1 karton (+{pack} szt.)</p>
       ) : lastScanKind === "unit" ? (
-        <p className="text-center text-sm font-bold text-emerald-700">+1 szt.</p>
+        <p className="text-center text-xs font-bold text-emerald-700">+1 szt.</p>
       ) : null}
 
       {isPartialInventory && warehouseId && scan.product_id ? (
