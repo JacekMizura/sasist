@@ -17,6 +17,8 @@ type Props = {
   onChange: (value: number | "") => void;
   placeholder?: string;
   className?: string;
+  id?: string;
+  triggerClassName?: string;
 };
 
 /** Anchored select — menu renders in a portal above sticky ERP chrome. */
@@ -26,6 +28,8 @@ export default function InventoryDocumentPicker({
   onChange,
   placeholder = "— wybierz dokument —",
   className = "max-w-md",
+  id,
+  triggerClassName,
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -117,11 +121,15 @@ export default function InventoryDocumentPicker({
       <div ref={rootRef} className={className}>
         <button
           ref={triggerRef}
+          id={id}
           type="button"
           aria-haspopup="listbox"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className={`${filterInputClass} flex w-full items-center justify-between text-left`}
+          className={
+            triggerClassName ??
+            `${filterInputClass} flex w-full items-center justify-between text-left`
+          }
         >
           <span className={selected?.label ? "font-medium text-slate-900" : "text-slate-500"}>
             {selected?.label || placeholder}

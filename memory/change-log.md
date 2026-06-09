@@ -22,11 +22,13 @@
 - Module header: breadcrumbs, title, `TopTabsNavigation`, primary action in header
 - Views use `moduleListPageShellClass`, `erpSurfaceCard`, `panelListDense*` table tokens
 
-## 2026-06-08 — ERP inventory mockup UI (1:1)
-- Replaced ERP inventory JSX with uploaded mockup: `InventoryLayout`, `InventoryDashboardView`, `InventoryDocumentsView`, `InventoryWizardView`, `InventoryReportsView`, `InventoryStatusBadge`
-- Thin page containers keep hooks/API; presentation in `modules/inventoryCount/ui/erp/`
-- Document detail + line table restyled to mockup tokens (slate cards, orange tabs, table spacing)
-- Wizard steps 1–3: mockup field/card styling; WMS terminal unchanged (operational theme)
+## 2026-06-08 — ERP inventory admin UI (mockup-aligned, presentation only)
+- `ui/erp/theme.ts` — shared tokens: KPI cards, tables, indigo tabs, wizard steps, selection cards, scope box
+- `InventoryLayout` — `PageLayout` + indigo tab nav (Pulpit / Dokumenty / Kreator / Raporty)
+- Dashboard, documents list, wizard, reports — mockup layout on existing hooks/API
+- `InventoryDocumentDetailView` — KPI grid, indigo detail tabs, table shell; approval/conflict/unknown panels unchanged logically
+- `InventoryDocumentPicker` — optional `id` + `triggerClassName` for reports selector styling
+- WMS inventory terminal untouched; no backend/API/hook changes
 
 ## 2026-06-08 — Inventory frontend UI architecture cleanup
 - `docs/inventory-architecture.md` — flow maps, routes, persistence, risk files, orphaned legacy

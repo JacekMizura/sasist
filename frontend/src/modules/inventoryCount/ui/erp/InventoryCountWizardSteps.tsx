@@ -19,9 +19,17 @@ import {
   parseIdList,
 } from "../../inventoryStrategyConfig";
 
-const fieldClass =
-  "mt-1 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-slate-900";
-const labelClass = "text-xs font-semibold uppercase tracking-wider text-slate-500";
+import {
+  erpFieldInput,
+  erpFieldLabel,
+  erpScopeBox,
+  erpSelectCard,
+  erpSelectCardHint,
+  erpSelectCardTitle,
+} from "./theme";
+
+const fieldClass = erpFieldInput;
+const labelClass = `${erpFieldLabel} mb-0`;
 
 function SelectionTag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
@@ -54,15 +62,9 @@ type OptionCardProps = {
 
 function OptionCard({ selected, title, hint, onSelect }: OptionCardProps) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`w-full rounded-lg border-2 p-4 text-left transition-all ${
-        selected ? "border-slate-900 bg-slate-50/50" : "border-slate-200 hover:border-slate-300"
-      }`}
-    >
-      <p className="font-semibold text-slate-900">{title}</p>
-      <p className="mt-1 text-sm text-slate-500">{hint}</p>
+    <button type="button" onClick={onSelect} className={`w-full text-left ${erpSelectCard(selected)}`}>
+      <p className={erpSelectCardTitle(selected)}>{title}</p>
+      <p className={erpSelectCardHint(selected)}>{hint}</p>
     </button>
   );
 }
@@ -436,9 +438,9 @@ export function InventoryWizardScopeStep({
       ) : null}
 
       {preview ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-          <p className="font-bold">Zakres obejmuje (szacunek na podstawie bieżących stanów):</p>
-          <ul className="mt-1 list-inside list-disc">
+        <div className={erpScopeBox}>
+          <p className="text-sm font-semibold text-emerald-800">Zakres obejmuje (szacunek na podstawie bieżących stanów):</p>
+          <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-emerald-700">
             <li>{preview.location_count} lokalizacji</li>
             <li>{preview.product_count} produktów</li>
             <li>{preview.line_count} pozycji magazynowych</li>
@@ -483,10 +485,10 @@ export function InventoryWizardStrategyStep({
   onResultPolicyChange,
 }: StrategyStepProps) {
   return (
-    <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-3 text-sm">
+    <div className="space-y-8 text-sm">
       <section>
-        <p className={labelClass}>Tryb liczenia</p>
-        <div className="mt-1 space-y-1">
+        <p className={`${erpFieldLabel} mb-3`}>Tryb liczenia</p>
+        <div className="flex flex-col gap-3">
           {COUNT_MODE_OPTIONS.map((opt) => (
             <OptionCard
               key={opt.id}
@@ -503,8 +505,8 @@ export function InventoryWizardStrategyStep({
       </section>
 
       <section>
-        <p className={labelClass}>Polityka ruchów magazynowych</p>
-        <div className="mt-1 space-y-1">
+        <p className={`${erpFieldLabel} mb-3`}>Polityka ruchów magazynowych</p>
+        <div className="flex flex-col gap-3">
           {MOVEMENT_POLICY_OPTIONS.map((opt) => (
             <OptionCard
               key={opt.id}
@@ -518,8 +520,8 @@ export function InventoryWizardStrategyStep({
       </section>
 
       <section>
-        <p className={labelClass}>Wynik po zatwierdzeniu</p>
-        <div className="mt-1 space-y-1">
+        <p className={`${erpFieldLabel} mb-3`}>Wynik po zatwierdzeniu</p>
+        <div className="flex flex-col gap-3">
           {RESULT_POLICY_OPTIONS.map((opt) => (
             <OptionCard
               key={opt.id}

@@ -4,27 +4,24 @@ import { Link } from "react-router-dom";
 
 import type { InventoryDocumentRead } from "@/api/inventoryCountApi";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import {
-  moduleListDataCardClass,
-  moduleListPageShellClass,
-  moduleListTableInteriorClass,
-} from "@/components/listPage/moduleListLayoutTokens";
-import {
-  OperationalActionButton,
-  OperationalActionColumn,
-  panelListDenseActionsOnlyCellClass,
-  panelListDenseActionsOnlyHeaderClass,
-  panelListDenseRowClass,
-  panelListDenseTableClass,
-  panelListDenseTableScrollWrapClass,
-  panelListDenseTdBase,
-  panelListDenseThBase,
-  panelListDenseTheadClass,
-} from "@/components/operational";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
 import { inventoryTypeLabel } from "../../inventoryCountUiLabels";
 import { isInventoryDraftDeletable } from "../../inventoryDraftDelete";
 import InventoryStatusBadge from "./InventoryStatusBadge";
+import {
+  erpDocLink,
+  erpPageShell,
+  erpTable,
+  erpTableScroll,
+  erpTableWrap,
+  erpTbody,
+  erpTd,
+  erpTdActions,
+  erpTh,
+  erpThActions,
+  erpThead,
+  erpTr,
+} from "./theme";
 
 type Props = {
   documents: InventoryDocumentRead[];
@@ -33,7 +30,7 @@ type Props = {
   onDeleteDraft?: (doc: InventoryDocumentRead) => void | Promise<void>;
 };
 
-/** Documents list — standard ERP dense table (shell in {@link InventoryLayout}). */
+/** Documents list — mockup-aligned table (presentation only). */
 export default function InventoryDocumentsView({
   documents,
   loading,
@@ -55,7 +52,7 @@ export default function InventoryDocumentsView({
   };
 
   return (
-    <div className={moduleListPageShellClass}>
+    <div className={erpPageShell}>
       {confirmDoc ? (
         <ConfirmModal
           title="Usunąć wersję roboczą?"
@@ -83,79 +80,61 @@ export default function InventoryDocumentsView({
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : documents.length === 0 ? (
-        <div className="py-10 text-center text-sm text-slate-600">
+        <div className={`${erpTableWrap} py-10 text-center text-sm text-slate-600`}>
           <p>Brak dokumentów inwentaryzacji.</p>
           <p className="mt-2 text-xs text-slate-500">Utwórz inwentaryzację w zakładce „Nowa inwentaryzacja”.</p>
         </div>
       ) : (
-        <div className={moduleListDataCardClass}>
-          <div className={moduleListTableInteriorClass}>
-            <div className={panelListDenseTableScrollWrapClass}>
-              <table className={panelListDenseTableClass}>
-                <thead className={panelListDenseTheadClass}>
-                  <tr>
-                    {showActions ? (
-                      <th className={panelListDenseActionsOnlyHeaderClass}>Akcje</th>
-                    ) : null}
-                    <th className={`${panelListDenseThBase} text-left`}>Numer</th>
-                    <th className={`${panelListDenseThBase} text-left`}>Typ</th>
-                    <th className={`${panelListDenseThBase} text-left`}>Status</th>
-                    <th className={`${panelListDenseThBase} text-right`}>Pokrycie</th>
-                    <th className={`${panelListDenseThBase} text-right`}>Różnice</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((doc) => {
-                    const deletable = isInventoryDraftDeletable(doc);
-                    return (
-                      <tr key={doc.id} className={panelListDenseRowClass}>
-                        {showActions ? (
-                          <td className={panelListDenseActionsOnlyCellClass}>
-                            {deletable ? (
-                              <OperationalActionColumn
-                                aria-label="Akcje dokumentu"
-                                slots={[
-                                  <OperationalActionButton
-                                    key="delete"
-                                    variant="danger"
-                                    disabled={deleteBusyId === doc.id}
-                                    onClick={() => setConfirmDoc(doc)}
-                                    title="Usuń wersję roboczą"
-                                    aria-label="Usuń wersję roboczą"
-                                  >
-                                    <Trash2 strokeWidth={2} aria-hidden />
-                                  </OperationalActionButton>,
-                                ]}
-                              />
-                            ) : null}
-                          </td>
-                        ) : null}
-                        <td className={`${panelListDenseTdBase} font-semibold text-slate-900`}>
-                          <Link
-                            to={erpInventoryCountPaths.document(doc.id)}
-                            className="text-violet-700 underline decoration-violet-300 underline-offset-2 hover:text-violet-900"
-                          >
-                            {doc.number}
-                          </Link>
+        <div className={erpTableWrap}>
+          <div className={erpTableScroll}>
+            <table className={erpTable}>
+              <thead className={erpThead}>
+                <tr>
+                  {showActions ? <th className={erpThActions}>Akcje</th> : null}
+                  <th className={erpTh}>Numer</th>
+                  <th className={erpTh}>Typ</th>
+                  <th className={erpTh}>Status</th>
+                  <th className={`${erpTh} text-right`}>Pokrycie</th>
+                  <th className={`${erpTh} text-right`}>Różnice</th>
+                </tr>
+              </thead>
+              <tbody className={erpTbody}>
+                {sorted.map((doc) => {
+                  const deletable = isInventoryDraftDeletable(doc);
+                  return (
+                    <tr key={doc.id} className={`${erpTr} group`}>
+                      {showActions ? (
+                        <td className={erpTdActions}>
+                          {deletable ? (
+                            <button
+                              type="button"
+                              disabled={deleteBusyId === doc.id}
+                              onClick={() => setConfirmDoc(doc)}
+                              className="rounded-md p-1.5 text-red-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                              title="Usuń wersję roboczą"
+                              aria-label="Usuń wersję roboczą"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          ) : null}
                         </td>
-                        <td className={`${panelListDenseTdBase} text-slate-700`}>
-                          {inventoryTypeLabel(doc.inventory_type)}
-                        </td>
-                        <td className={panelListDenseTdBase}>
-                          <InventoryStatusBadge status={doc.status} />
-                        </td>
-                        <td className={`${panelListDenseTdBase} text-right tabular-nums text-slate-800`}>
-                          {doc.coverage_percent}%
-                        </td>
-                        <td className={`${panelListDenseTdBase} text-right tabular-nums text-slate-800`}>
-                          {doc.difference_lines}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      ) : null}
+                      <td className={erpTd}>
+                        <Link to={erpInventoryCountPaths.document(doc.id)} className={erpDocLink}>
+                          {doc.number}
+                        </Link>
+                      </td>
+                      <td className={`${erpTd} text-slate-700`}>{inventoryTypeLabel(doc.inventory_type)}</td>
+                      <td className={erpTd}>
+                        <InventoryStatusBadge status={doc.status} />
+                      </td>
+                      <td className={`${erpTd} text-right font-medium`}>{doc.coverage_percent}%</td>
+                      <td className={`${erpTd} text-right font-medium`}>{doc.difference_lines}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

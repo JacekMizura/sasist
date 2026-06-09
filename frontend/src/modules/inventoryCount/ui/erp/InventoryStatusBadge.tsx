@@ -14,7 +14,7 @@ export default function InventoryStatusBadge({ status, variant = "document" }: P
 
   if (label === "W trakcie" || status === "in_progress") {
     return (
-      <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+      <span className="mb-1 inline-flex items-center rounded border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
         W trakcie
       </span>
     );
@@ -46,7 +46,7 @@ export default function InventoryStatusBadge({ status, variant = "document" }: P
   }
 
   return (
-    <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600">
+    <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
       {label}
     </span>
   );

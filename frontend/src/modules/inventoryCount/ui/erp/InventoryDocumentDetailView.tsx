@@ -2,15 +2,6 @@ import { Download, FileSpreadsheet, Loader2, Pencil, ShieldCheck } from "lucide-
 
 import { downloadInventoryAuditPackageBlob, downloadInventoryReportBlob } from "@/api/inventoryCountApi";
 import { filterInputClass } from "@/components/filters";
-import { tabsNavItemClassName } from "@/components/layout/TabsNav";
-import {
-  moduleListDataCardClass,
-  moduleListHeaderActionsClass,
-  moduleListHeaderRowClass,
-  moduleListPageShellClass,
-  moduleListTableInteriorClass,
-  moduleListTitleClass,
-} from "@/components/listPage/moduleListLayoutTokens";
 import type { InventoryDocumentDetailState } from "@/modules/inventoryCount/hooks/useInventoryDocumentDetail";
 import type { InventoryDocTab } from "@/modules/inventoryCount/hooks/useInventoryDocumentDetail";
 import { VALUATION_HELP_TEXT } from "@/modules/inventoryCount/inventoryScopePresets";
@@ -28,7 +19,18 @@ import InventoryLineTable from "./InventoryLineTable";
 import InventoryTableFilterBar from "./InventoryTableFilterBar";
 import InventoryUnknownProductsPanel from "./InventoryUnknownProductsPanel";
 import InventoryStatusBadge from "./InventoryStatusBadge";
-import { erpSurfaceCard } from "./theme";
+import {
+  erpKpiCard,
+  erpKpiLabel,
+  erpKpiValue,
+  erpPageShell,
+  erpSectionHeader,
+  erpSurfaceCard,
+  erpTabIndicator,
+  erpTabLink,
+  erpTableScroll,
+  erpTableWrap,
+} from "./theme";
 
 type Props = {
   state: InventoryDocumentDetailState;
@@ -102,7 +104,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
   } = derived;
 
   return (
-    <div className={moduleListPageShellClass}>
+    <div className={erpPageShell}>
       <InventoryApprovalSummaryModal
         open={approvalOpen}
         mode={approvalMode}
@@ -113,9 +115,9 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
         onCancel={() => setApprovalOpen(false)}
       />
 
-      <div className={moduleListHeaderRowClass}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dokument inwentaryzacji</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Dokument inwentaryzacji</p>
           {editingTitle ? (
             <div className="mt-2 max-w-lg space-y-3">
               <input
@@ -152,7 +154,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
           ) : (
             <div className="mt-1 flex items-start gap-2">
               <div>
-                <h2 className={moduleListTitleClass}>{doc.title?.trim() || doc.number}</h2>
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{doc.title?.trim() || doc.number}</h2>
                 <p className="font-mono text-xs text-slate-500">Nr systemowy: {doc.number}</p>
                 {doc.notes ? <p className="mt-1 text-sm text-slate-600">{doc.notes}</p> : null}
               </div>
@@ -177,7 +179,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
           </div>
         </div>
 
-        <div className={moduleListHeaderActionsClass}>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {doc.status === "in_progress" ? (
             <button
               type="button"
@@ -241,30 +243,30 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
       </div>
 
       {analysis ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          <div className={`${erpSurfaceCard} p-4`}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pozycje z różnicą</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{doc.difference_lines}</p>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+          <div className={erpKpiCard}>
+            <p className={erpKpiLabel}>Pozycje z różnicą</p>
+            <p className={erpKpiValue}>{doc.difference_lines}</p>
           </div>
-          <div className={`${erpSurfaceCard} p-4`}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Konflikty liczenia</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{conflictCount}</p>
+          <div className={erpKpiCard}>
+            <p className={erpKpiLabel}>Konflikty liczenia</p>
+            <p className={erpKpiValue}>{conflictCount}</p>
           </div>
           {hasValueBreakdown ? (
             <>
-              <div className={`${erpSurfaceCard} p-4`} title={VALUATION_HELP_TEXT}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Wartość nadwyżek</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">+{surplus.toLocaleString("pl-PL")} PLN</p>
+              <div className={erpKpiCard} title={VALUATION_HELP_TEXT}>
+                <p className={erpKpiLabel}>Wartość nadwyżek</p>
+                <p className={erpKpiValue}>+{surplus.toLocaleString("pl-PL")} PLN</p>
               </div>
-              <div className={`${erpSurfaceCard} p-4`} title={VALUATION_HELP_TEXT}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Wartość braków</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">−{shortage.toLocaleString("pl-PL")} PLN</p>
+              <div className={erpKpiCard} title={VALUATION_HELP_TEXT}>
+                <p className={erpKpiLabel}>Wartość braków</p>
+                <p className={erpKpiValue}>−{shortage.toLocaleString("pl-PL")} PLN</p>
               </div>
             </>
           ) : (
-            <div className={`${erpSurfaceCard} p-4`}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Policzone</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+            <div className={erpKpiCard}>
+              <p className={erpKpiLabel}>Policzone</p>
+              <p className={erpKpiValue}>
                 {doc.counted_lines}/{doc.total_lines}
               </p>
             </div>
@@ -296,13 +298,14 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               key={t.key}
               type="button"
               onClick={() => changeTab(t.key)}
-              className={tabsNavItemClassName(tab === t.key)}
+              className={erpTabLink(tab === t.key)}
             >
               {t.label}
+              {tab === t.key ? <span className={erpTabIndicator} aria-hidden /> : null}
             </button>
           ))}
         </nav>
-        <div className={`${moduleListHeaderActionsClass} lg:pb-1`}>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:pb-1">
           <button
             type="button"
             disabled={downloadBusy != null}
@@ -334,7 +337,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
       </div>
 
       {tab === "control" ? (
-        <div className={moduleListDataCardClass}>
+        <div className={erpTableWrap}>
           <InventoryAuditPanel
             auditLog={auditLog?.items ?? []}
             timelines={timelines}
@@ -343,13 +346,13 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
           />
         </div>
       ) : (
-        <div className={moduleListDataCardClass}>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/80 px-4 py-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className={erpTableWrap}>
+          <div className={`${erpSectionHeader} flex flex-wrap items-center justify-between gap-2`}>
+            <span>
               {tab === "differences" ? "Pozycje z różnicą" : "Przebieg liczenia"}
-            </h3>
+            </span>
             {tab === "progress" ? (
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+              <label className="flex cursor-pointer items-center gap-2 text-xs normal-case tracking-normal text-slate-600">
                 <input
                   type="checkbox"
                   checked={showUncounted}
@@ -369,7 +372,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               showUnknownToggle={tab === "progress"}
             />
           </div>
-          <div className={moduleListTableInteriorClass}>
+          <div className={erpTableScroll}>
             <InventoryLineTable
               lines={filteredLines}
               loading={linesLoading}
