@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Printer } from "lucide-react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { ClipboardList, Package, Printer } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+
+import { ProductLikePageLayout } from "../../components/catalog/ProductLikePageLayout";
+import { ProductLikeSection } from "../../components/catalog/ProductLikeSection";
+import { catalogEntityCardShellClass } from "../../components/catalog/CatalogEntityPageShell";
 import {
   emptyWmsCarrier,
   getWmsCarrier,
@@ -11,13 +15,22 @@ import {
 import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 import { CarrierItemsTable } from "../../components/warehouse/carriers/CarrierItemsTable";
 import { CarrierStatusBadge } from "../../components/warehouse/carriers/CarrierStatusBadge";
+import { carrierOperationLabel } from "../../components/warehouse/carriers/carrierOperationLabels";
+import { carrierStatusLabel } from "../../modules/warehouse-structure/labels";
 import {
   useWarehouseCarriersPaths,
   useWarehouseCarriersSurface,
   useWarehouseCarriersTenant,
 } from "./warehouseCarriersTenant";
 import { openCarrierLabelPrint } from "../../utils/carrierLabelPrint";
-import { carrierOperationLabel } from "../../components/warehouse/carriers/carrierOperationLabels";
+
+type CarrierTab = "basic" | "content" | "history";
+
+const CARRIER_TABS = [
+  { id: "basic" as const, label: "Podstawowe", icon: Package },
+  { id: "content" as const, label: "Zawartość", icon: ClipboardList },
+  { id: "history" as const, label: "Historia", icon: ClipboardList },
+];
 
 export default function WarehouseCarrierDetailPage() {
   const { id: idParam } = useParams();
@@ -27,6 +40,7 @@ export default function WarehouseCarrierDetailPage() {
   const paths = useWarehouseCarriersPaths(surface);
   const { tenantId, setTenantId, tenants, tenantSelectVisible } = useWarehouseCarriersTenant(surface);
 
+  const [activeTab, setActiveTab] = useState<CarrierTab>("basic");
   const [detail, setDetail] = useState<WarehouseCarrierDetailRead | null>(null);
   const [logs, setLogs] = useState<WarehouseCarrierLogRead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,135 +87,175 @@ export default function WarehouseCarrierDetailPage() {
     }
   };
 
-  const listLinkState = { tenantId };
+  const noopSubmit = (e: FormEvent) => e.preventDefault();
+
+  if (loading) {
+    return (
+      <div className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
+        <div className={`${catalogEntityCardShellClass} flex min-h-[40vh] items-center justify-center text-slate-500`}>
+          Wczytywanie nośnika…
+        </div>
+      </div>
+    );
+  }
+
+  if (err || !detail) {
+    return (
+      <div className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
+        <div className={`${catalogEntityCardShellClass} p-8 text-center text-red-600`}>{err || "Brak danych"}</div>
+      </div>
+    );
+  }
+
+  const tabContent = (() => {
+    switch (activeTab) {
+      case "basic":
+        return (
+          <ProductLikeSection title="Informacje podstawowe">
+            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-lg border border-slate-200 p-4">
+                <dt className="text-xs font-medium text-slate-500">Status</dt>
+                <dd className="mt-2">
+                  <CarrierStatusBadge status={detail.status} />
+                </dd>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <dt className="text-xs font-medium text-slate-500">Lokalizacja</dt>
+                <dd className="mt-2 font-mono text-lg font-semibold text-slate-900">
+                  {(detail.current_location_code || "").trim() || "—"}
+                </dd>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <dt className="text-xs font-medium text-slate-500">Typ (grupa)</dt>
+                <dd className="mt-2 text-lg font-semibold text-slate-900">
+                  {(detail.carrier_group_code || "—").trim()}
+                </dd>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <dt className="text-xs font-medium text-slate-500">Kod kreskowy</dt>
+                <dd className="mt-2 font-mono text-sm text-slate-800">{detail.barcode}</dd>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <dt className="text-xs font-medium text-slate-500">Mieszanka (mix)</dt>
+                <dd className="mt-2 text-lg font-semibold text-slate-900">{detail.is_mixed ? "Tak" : "Nie"}</dd>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <dt className="text-xs font-medium text-slate-500">Pozycje / SKU</dt>
+                <dd className="mt-2 text-lg font-semibold tabular-nums text-slate-900">
+                  {detail.items?.length ?? 0} / {detail.sku_count ?? 0}
+                </dd>
+              </div>
+            </dl>
+          </ProductLikeSection>
+        );
+      case "content":
+        return (
+          <ProductLikeSection title="Produkty na nośniku">
+            <CarrierItemsTable items={detail.items} />
+          </ProductLikeSection>
+        );
+      case "history":
+        return (
+          <ProductLikeSection title="Dziennik operacji">
+            {logs.length === 0 ? (
+              <p className="text-sm text-slate-600">Brak wpisów.</p>
+            ) : (
+              <ul className="max-h-[480px] space-y-2 overflow-y-auto">
+                {logs.map((lg) => (
+                  <li key={lg.id} className="rounded-lg border border-slate-200 px-3 py-2.5">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-sm font-semibold text-slate-900">
+                        {carrierOperationLabel(lg.operation_type, lg.operation_type_label)}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {lg.created_at ? new Date(lg.created_at).toLocaleString("pl-PL") : ""}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600">{lg.performed_by_name || "—"}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ProductLikeSection>
+        );
+      default:
+        return null;
+    }
+  })();
 
   return (
-    <div className="p-4 sm:p-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <Link
-            to={paths.list}
-            state={listLinkState}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50"
-          >
-            <ArrowLeft size={22} />
-          </Link>
-          <button type="button" onClick={() => navigate(-1)} className="text-sm font-bold text-indigo-700 hover:underline">
-            Wstecz
-          </button>
-          {tenantSelectVisible ? (
-            <label className="ml-auto flex items-center gap-2 text-sm font-bold text-slate-700">
-              <span className="text-xs font-bold uppercase text-slate-500">Podmiot</span>
-              <select
-                value={tenantId}
-                onChange={(e) => setTenantId(Number(e.target.value) || 1)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold shadow-sm"
-              >
-                {tenants.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name || `Tenant #${t.id}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-        </div>
-
-        {loading ? (
-          <p className="py-12 text-center text-slate-500">Wczytywanie…</p>
-        ) : err || !detail ? (
-          <p className="py-12 text-center font-bold text-red-600">{err || "Brak danych"}</p>
-        ) : (
-          <>
-            <header className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h1 className="text-2xl font-black text-slate-900">{detail.code}</h1>
-                  <p className="mt-1 font-mono text-sm text-slate-600">{detail.barcode}</p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <CarrierBadge code={detail.code} showMix={detail.is_mixed} />
-                    <CarrierStatusBadge status={detail.status} />
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openCarrierLabelPrint(detail)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-950 hover:bg-amber-100"
-                  >
-                    <Printer size={18} />
-                    Drukuj etykietę
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void onEmpty()}
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-900 hover:bg-rose-100 disabled:opacity-50"
-                  >
-                    Opróżnij
-                  </button>
-                </div>
-              </div>
-              <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs font-bold uppercase text-slate-500">Status</dt>
-                  <dd className="mt-1">
-                    <CarrierStatusBadge status={detail.status} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-bold uppercase text-slate-500">Lokalizacja</dt>
-                  <dd className="mt-1 font-mono text-lg font-semibold text-slate-900">
-                    {(detail.current_location_code || "").trim() || "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-bold uppercase text-slate-500">Typ (grupa)</dt>
-                  <dd className="mt-1 text-lg font-semibold text-slate-900">{(detail.carrier_group_code || "—").trim()}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-bold uppercase text-slate-500">Mix</dt>
-                  <dd className="mt-1 text-lg font-semibold text-slate-900">{detail.is_mixed ? "Tak" : "Nie"}</dd>
-                </div>
-              </dl>
-              <p className="mt-4 text-xs text-slate-500">
-                Przesunięcie, rozlokowanie z poziomu WMS (PZ / putaway) oraz rozbicie / scalenie — w kolejnych
-                iteracjach API.
-              </p>
-            </header>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-sm font-black uppercase tracking-wide text-slate-500">Produkty na nośniku</h2>
-              <CarrierItemsTable items={detail.items} />
-            </section>
-
-            <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-sm font-black uppercase tracking-wide text-slate-500">Dziennik</h2>
-              {logs.length === 0 ? (
-                <p className="text-sm text-slate-600">Brak wpisów.</p>
-              ) : (
-                <ul className="max-h-80 space-y-3 overflow-y-auto text-sm">
-                  {logs.map((lg) => (
-                    <li key={lg.id} className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="font-bold text-slate-900">
-                          {carrierOperationLabel(lg.operation_type, lg.operation_type_label)}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {lg.created_at ? new Date(lg.created_at).toLocaleString("pl-PL") : ""}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-600">
-                        <span className="font-semibold text-slate-800">{lg.performed_by_name || "—"}</span>
-                        {lg.performed_by_user_id != null ? ` · user #${lg.performed_by_user_id}` : ""}
-                      </p>
-                    </li>
+    <div className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
+      <div className={`${catalogEntityCardShellClass} overflow-hidden`}>
+        <ProductLikePageLayout
+          variant="page"
+          modeLabel="Nośnik magazynowy"
+          title={detail.code}
+          titleBadge={<CarrierBadge code={detail.code} showMix={detail.is_mixed} />}
+          metaChips={[
+            { label: "Status", value: carrierStatusLabel(detail.status), variant: "emerald" },
+            {
+              label: "Lokalizacja",
+              value: (detail.current_location_code || "").trim() || "—",
+            },
+            { label: "Grupa", value: (detail.carrier_group_code || "—").trim() },
+          ]}
+          headerActions={
+            <div className="flex flex-wrap items-center gap-2">
+              {tenantSelectVisible ? (
+                <select
+                  value={tenantId}
+                  onChange={(e) => setTenantId(Number(e.target.value) || 1)}
+                  className="rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name || `Podmiot #${t.id}`}
+                    </option>
                   ))}
-                </ul>
-              )}
-            </section>
-          </>
-        )}
+                </select>
+              ) : null}
+              <Link
+                to={paths.list}
+                state={{ tenantId }}
+                className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Lista nośników
+              </Link>
+              <button
+                type="button"
+                onClick={() => openCarrierLabelPrint(detail)}
+                className="inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+              >
+                <Printer className="h-4 w-4" />
+                Drukuj etykietę
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onEmpty()}
+                className="rounded border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                Opróżnij
+              </button>
+            </div>
+          }
+          tabs={CARRIER_TABS}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onSubmit={noopSubmit}
+          showSaveButton={false}
+          footerExtra={
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Wstecz
+            </button>
+          }
+        >
+          {tabContent}
+        </ProductLikePageLayout>
       </div>
     </div>
   );

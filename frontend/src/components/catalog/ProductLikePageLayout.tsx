@@ -43,6 +43,8 @@ export type ProductLikePageLayoutProps<T extends string = string> = {
   saving?: boolean;
   saveLabel?: string;
   saveDisabled?: boolean;
+  /** When false, footer omits primary save button (read-only entity views). */
+  showSaveButton?: boolean;
   loadError?: ReactNode;
   footerExtra?: ReactNode;
   trailing?: ReactNode;
@@ -67,6 +69,7 @@ export function ProductLikePageLayout<T extends string>({
   saving = false,
   saveLabel = "Zapisz",
   saveDisabled = false,
+  showSaveButton = true,
   loadError,
   footerExtra,
   trailing,
@@ -187,13 +190,15 @@ export function ProductLikePageLayout<T extends string>({
 
         <div className={footerClass}>
           {footerExtra}
-          <button
-            type="submit"
-            disabled={saving || saveDisabled}
-            className="rounded bg-slate-900 px-8 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-50"
-          >
-            {saving ? "Zapisywanie…" : saveLabel}
-          </button>
+          {showSaveButton ? (
+            <button
+              type="submit"
+              disabled={saving || saveDisabled}
+              className="rounded bg-slate-900 px-8 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-50"
+            >
+              {saving ? "Zapisywanie…" : saveLabel}
+            </button>
+          ) : null}
         </div>
       </form>
 

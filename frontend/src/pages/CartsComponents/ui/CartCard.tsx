@@ -528,7 +528,7 @@ export default function CartCard(props: CartCardProps) {
                           Zamówienia: {cardStats.total_orders} / {maxOrd != null ? maxOrd : "—"}
                         </span>
                         <span className="text-xs font-medium text-slate-500">
-                          Volume: {usedVol.toFixed(1)} / {maxVol > 0 ? maxVol.toFixed(1) : "0"} dm³
+                          Objętość: {usedVol.toFixed(1)} / {maxVol > 0 ? maxVol.toFixed(1) : "0"} dm³
                         </span>
                       </>
                     )}

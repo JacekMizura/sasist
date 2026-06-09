@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useCartsRefresh } from "../context/CartsRefreshContext";
+import { catalogEntityCardShellClass } from "../components/catalog/CatalogEntityPageShell";
 import BulkCartList from "./CartsComponents/BulkCartList";
 import BulkCartEditor from "./CartsComponents/BulkCartEditor";
 
@@ -24,8 +25,10 @@ export default function CartsBulk() {
 
   if (view === "editor") {
     return (
-      <div className="animate-in fade-in duration-300">
-        <BulkCartEditor cartId={selectedCartId} onClose={handleClose} />
+      <div className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
+        <div className={`${catalogEntityCardShellClass} overflow-hidden`}>
+          <BulkCartEditor cartId={selectedCartId} onClose={handleClose} />
+        </div>
       </div>
     );
   }

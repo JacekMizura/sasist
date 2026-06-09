@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Struktura magazynu: layout jak karta produktu
+- `modules/warehouse-structure/`: etykiety PL, CapacityModeFields, WarehouseEntityPageShell
+- BulkCartEditor + CartEditor → ProductLikePageLayout (taby: Podstawowe, Pojemność/Sekcje, Operacje, Powiązania)
+- CartSectionGrid: wizualny układ sekcji modułowych
+- OrderProductPreviewModal: biały panel, linki do zamówienia/produktu
+- WarehouseCarrierDetailPage → ProductLikePageLayout (Podstawowe, Zawartość, Historia)
+- CarrierStatusBadge: polskie statusy (Aktywny zamiast ACTIVE)
+
 ## 2026-06-08 — Wózki / Regały / Strefy / Nośniki: UI spójne z ERP
 - `CartsModuleLayout`: jedna biała powierzchnia + systemowe taby (jak Dokumenty)
 - `modules/carts/cartsModuleTokens.ts`: dense inputs/buttons/tables
