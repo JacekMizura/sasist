@@ -62,6 +62,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     sortOrder: 10,
     dashboard: true,
     operationalMode: "returns",
+    shortDescription: "Przyjmowanie zwrotów, reklamacje i decyzje magazynowe",
   },
   {
     id: "receiving",
@@ -89,6 +90,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: ArrowLeftRight,
     sortOrder: 40,
     dashboard: true,
+    shortDescription: "Przesunięcia między lokalizacjami i strefami magazynu",
   },
   {
     id: "picking",
@@ -116,7 +118,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: ListChecks,
     sortOrder: 56,
     dashboard: true,
-    shortDescription: "Liczenie magazynu — tryb blind, skaner",
+    shortDescription: "Liczenie stanów magazynowych i kontrola różnic",
   },
   {
     id: "packing",
@@ -135,6 +137,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: AlertTriangle,
     sortOrder: 70,
     dashboard: true,
+    shortDescription: "Braki, odzyski i rozlokowanie nośników",
   },
   {
     id: "product_preview",
@@ -143,6 +146,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: ScanSearch,
     sortOrder: 80,
     dashboard: true,
+    shortDescription: "Szybki podgląd produktu, stanów i lokalizacji",
   },
   {
     id: "operations",
@@ -160,6 +164,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: ShoppingCart,
     sortOrder: 100,
     dashboard: true,
+    shortDescription: "Sprzedaż bezpośrednia i wydanie z magazynu",
   },
 ];
 

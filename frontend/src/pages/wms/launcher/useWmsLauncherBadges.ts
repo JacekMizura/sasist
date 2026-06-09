@@ -5,29 +5,33 @@ import { getWarehouseOperationsSnapshot } from "@/api/warehouseOperationsApi";
 import { listWmsOrderIssueTasks } from "@/api/wmsOrderIssueTasksApi";
 import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 import type { WmsTabId } from "../wmsTabConfig";
-import type { WmsLauncherBadgeMap, WmsModuleBadge } from "./wmsLauncherTypes";
+import type { WmsLauncherMetricsMap, WmsModuleStatChip, WmsModuleTileMetrics } from "./wmsLauncherTypes";
 
-function countBadge(n: number, tone: WmsModuleBadge["tone"] = "active"): WmsModuleBadge | undefined {
-  if (!Number.isFinite(n) || n <= 0) return undefined;
-  return { label: String(Math.min(999, Math.floor(n))), tone };
+function stat(label: string, tone: WmsModuleStatChip["tone"] = "neutral"): WmsModuleStatChip {
+  return { label, tone };
 }
 
-function alertBadge(label: string): WmsModuleBadge {
-  return { label, tone: "critical" };
+function setMetrics(
+  map: WmsLauncherMetricsMap,
+  id: WmsTabId,
+  stats: WmsModuleStatChip[],
+): void {
+  if (stats.length === 0) return;
+  map[id] = { stats };
 }
 
 export function useWmsLauncherBadges(warehouseId: number | null) {
-  const [badges, setBadges] = useState<WmsLauncherBadgeMap>({});
+  const [metrics, setMetricsState] = useState<WmsLauncherMetricsMap>({});
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     if (warehouseId == null || warehouseId <= 0) {
-      setBadges({});
+      setMetricsState({});
       return;
     }
     setLoading(true);
     try {
-      const next: WmsLauncherBadgeMap = {};
+      const next: WmsLauncherMetricsMap = {};
       const [issues, snapshot, inventoryDocs] = await Promise.all([
         listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId).catch(() => ({ tasks: [] as unknown[] })),
         getWarehouseOperationsSnapshot({ tenantId: DAMAGE_TENANT_ID, warehouseId }).catch(() => null),
@@ -36,26 +40,46 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
 
       const issueCount = issues.tasks?.length ?? 0;
       if (issueCount > 0) {
-        next.issues = issueCount >= 10 ? alertBadge("!") : countBadge(issueCount, "critical");
+        setMetrics(next, "issues", [stat(`${issueCount} ${issueCount === 1 ? "zadanie" : "zadań"}`, "critical")]);
       }
 
       const summary = snapshot?.summary;
       if (summary) {
-        next.picking = countBadge(summary.picking);
-        next.packing = countBadge(summary.packing);
-        next.receiving = countBadge(summary.inbound_deliveries_waiting, "warning");
-        next.putaway = countBadge(summary.products_waiting_putaway, "warning");
-        if (summary.blocked_orders > 0) {
-          next.operations = countBadge(summary.blocked_orders, "warning");
+        const picking = summary.picking ?? 0;
+        const packing = summary.packing ?? 0;
+        const inbound = summary.inbound_deliveries_waiting ?? 0;
+        const putaway = summary.products_waiting_putaway ?? 0;
+        const blocked = summary.blocked_orders ?? 0;
+
+        if (picking > 0) {
+          setMetrics(next, "picking", [stat(`${picking} aktywnych`, "info")]);
+        }
+        if (packing > 0) {
+          setMetrics(next, "packing", [stat(`${packing} aktywnych`, "info")]);
+        }
+        if (inbound > 0) {
+          setMetrics(next, "receiving", [stat(`${inbound} oczekujących`, "warning")]);
+        }
+        if (putaway > 0) {
+          setMetrics(next, "putaway", [stat(`${putaway} do rozlokowania`, "warning")]);
+        }
+        if (blocked > 0) {
+          setMetrics(next, "operations", [stat(`${blocked} zablokowanych`, "warning")]);
         }
       }
 
       const invCount = inventoryDocs.length;
-      if (invCount > 0) {
-        next.inventory_count = countBadge(invCount);
+      const conflictSum = inventoryDocs.reduce((sum, doc) => sum + (doc.conflict_count ?? 0), 0);
+      const invStats: WmsModuleStatChip[] = [];
+      if (conflictSum > 0) {
+        invStats.push(stat(`${conflictSum} ${conflictSum === 1 ? "konflikt" : "konflikty"}`, "warning"));
       }
+      if (invCount > 0) {
+        invStats.push(stat(`${invCount} aktywnych`, "info"));
+      }
+      setMetrics(next, "inventory_count", invStats);
 
-      setBadges(next);
+      setMetricsState(next);
     } finally {
       setLoading(false);
     }
@@ -67,7 +91,7 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  return { badges, loading, refresh };
+  return { metrics, loading, refresh };
 }
 
-export type { WmsTabId };
+export type { WmsTabId, WmsModuleTileMetrics };

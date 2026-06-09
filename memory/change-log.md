@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — WMS launcher: enterprise module grid (rebuild)
+- Usunięty terminal shell (`WmsHeader`, footer CE); launcher używa standardowego `WmsTopBar` jak reszta WMS
+- Duże kafle (min ~185px): ikona, tytuł, opis, chipy statystyk (konflikty, aktywne, oczekujące)
+- Grid 1/2/3/4 kolumn, max-width 1600px, slate-50 + white cards, hover elevation
+- `useWmsLauncherBadges` → `metrics` per moduł (inwentaryzacja: konflikty + aktywne docs)
+
 ## 2026-06-08 — WMS inwentaryzacja: lista dokumentów jak PZ / Rozlokowanie
 - `WmsInventoryDocumentList`: usunięty hero; pełna szerokość; scanner + grid jak Przyjęcie/Rozlokowanie PZ
 - Karta: lewa (ikona, nr, status, operatorzy, konflikty, data), prawa (pokrycie, policzone), dół (progress bar)
