@@ -173,6 +173,8 @@ import WmsReturnsEntryPage from "./pages/wms/WmsReturnsEntryPage"
 import OfficeDamagesPage from "./pages/damage/OfficeDamagesPage"
 import OfficeDamageReportsPage from "./pages/damage/OfficeDamageReportsPage"
 import BundlesPage from "./pages/Assortment/BundlesPage"
+import BundleNewPage from "./pages/Assortment/BundleNewPage"
+import BundleEditPage from "./pages/Assortment/BundleEditPage"
 import ProductionErpModuleLayout from "./pages/Production/ProductionErpModuleLayout"
 import WmsProductionExecutionLayout from "./pages/Production/WmsProductionExecutionLayout"
 import ProductionDashboardPage from "./pages/Production/ProductionDashboardPage"
@@ -572,7 +574,8 @@ export const router = createBrowserRouter(
                 <Route path="customers/new" element={<CustomerEditPage />} />
                 <Route path="customers/:id" element={<CustomerEditPage />} />
                 <Route path="bundles" element={<BundlesPage />} />
-                <Route path="bundles/new" element={<BundlesPage defaultCreateOpen={true} />} />
+                <Route path="bundles/new" element={<BundleNewPage />} />
+                <Route path="bundles/:id/edit" element={<BundleEditPage />} />
                 <Route
                   path="production"
                   element={

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, Pencil, Printer, Trash2 } from "lucide-react";
+import { Eye, Package, Pencil, Printer, Trash2 } from "lucide-react";
+import { AppEmptyState } from "../../components/app-shell";
 import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import { moduleListTableInteriorClass } from "../../components/listPage/moduleListLayoutTokens";
 import { ModuleListFiltersCard } from "../../components/listPage/ModuleListFiltersCard";
@@ -8,7 +9,6 @@ import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/P
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { deleteBundle, listBundles, postBundlesBulkDelete, type BundleRead } from "../../api/bundlesApi";
 import { summarizeEntityBulkDeleteToast } from "../../types/entityBulkDelete";
-import { BundleEditModal } from "./BundleEditModal";
 import { BundleLabelPrintModal } from "./BundleLabelPrintModal";
 import ExportModal from "../../components/exports/ExportModal";
 import {
@@ -18,8 +18,6 @@ import {
   FilterVisibilityModal,
   filterInputClass,
   filterSelectClass,
-  filterToolbarBtnApply,
-  filterToolbarBtnSecondary,
   useFilterFieldOrder,
   type FilterFieldCatalogItem,
 } from "../../components/filters";
@@ -104,14 +102,8 @@ function bundleStockBreakdownTooltip(b: BundleRead): string {
   return `Możliwe zestawy: ${b.calculated_stock ?? 0}\n\n${lines.join("\n")}`;
 }
 
-type Props = {
-  defaultCreateOpen?: boolean;
-};
-
-export default function BundlesPage({ defaultCreateOpen = false }: Props) {
+export default function BundlesPage() {
   const navigate = useNavigate();
-  const [modalOpen, setModalOpen] = useState(defaultCreateOpen);
-  const [editId, setEditId] = useState<number | null>(null);
   const [bundles, setBundles] = useState<BundleRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -190,26 +182,7 @@ export default function BundlesPage({ defaultCreateOpen = false }: Props) {
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  useEffect(() => {
-    setModalOpen(defaultCreateOpen);
-    if (defaultCreateOpen) setEditId(null);
-  }, [defaultCreateOpen]);
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditId(null);
-    if (defaultCreateOpen) navigate("/bundles", { replace: true });
-  };
-
-  const openCreate = () => {
-    setEditId(null);
-    setModalOpen(true);
-  };
-
-  const openEdit = (id: number) => {
-    setEditId(id);
-    setModalOpen(true);
-  };
+  const openEdit = (id: number) => navigate(`/bundles/${id}/edit`);
 
   const applyFilters = () => {
     setPage(1);
@@ -361,10 +334,6 @@ export default function BundlesPage({ defaultCreateOpen = false }: Props) {
         } else {
           setDeleteConfirm(null);
           setSelectedIds(new Set());
-          if (editId != null && ids.includes(editId)) {
-            setModalOpen(false);
-            setEditId(null);
-          }
           await load();
           setToast(summarizeEntityBulkDeleteToast(res));
         }
@@ -379,10 +348,6 @@ export default function BundlesPage({ defaultCreateOpen = false }: Props) {
             n.delete(deleteConfirm.id);
             return n;
           });
-          if (editId === deleteConfirm.id) {
-            setModalOpen(false);
-            setEditId(null);
-          }
           await load();
           setToast(summarizeEntityBulkDeleteToast(res));
         }
@@ -431,14 +396,6 @@ export default function BundlesPage({ defaultCreateOpen = false }: Props) {
                 <FilterGrid>
                   {bundleVisibleFields.map((id) => renderBundleFilterField(id, filters, setFilters)).filter(Boolean)}
                 </FilterGrid>
-                <div className="flex justify-end gap-2 border-t border-slate-100 pt-2.5 sm:hidden">
-                  <button type="button" onClick={clearFilters} className={filterToolbarBtnSecondary}>
-                    Wyczyść filtry
-                  </button>
-                  <button type="button" onClick={applyFilters} className={filterToolbarBtnApply}>
-                    Filtruj
-                  </button>
-                </div>
             <FilterVisibilityModal
               open={bundleVisibilityOpen}
               onClose={() => setBundleVisibilityOpen(false)}
@@ -477,15 +434,19 @@ export default function BundlesPage({ defaultCreateOpen = false }: Props) {
       {loading ? (
         <p className="text-slate-500">Ładowanie…</p>
       ) : bundles.length === 0 ? (
-        <div className="py-10 text-center text-sm text-slate-600">
-          <p>Brak zestawów — zmień filtry lub utwórz pierwszy.</p>
-          <Link
-            to="/bundles/new"
-            className="mt-4 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
-          >
-            {UI_STRINGS.navigation.addBundle}
-          </Link>
-        </div>
+        <AppEmptyState
+          icon={Package}
+          title="Brak zestawów"
+          description="Zmień filtry lub utwórz pierwszy zestaw produktów."
+          action={
+            <Link
+              to="/bundles/new"
+              className="inline-flex items-center justify-center rounded-md bg-slate-900 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-slate-800"
+            >
+              {UI_STRINGS.navigation.addBundle}
+            </Link>
+          }
+        />
       ) : (
         <div className={`${moduleListTableInteriorClass} min-w-0`}>
           <div className="flex items-center justify-between gap-4 py-3">
@@ -600,7 +561,12 @@ export default function BundlesPage({ defaultCreateOpen = false }: Props) {
                       </td>
                       <td className={`${panelListDenseTdBase} min-w-[8rem] align-top`}>
                         <div className="flex flex-col gap-1">
-                          <span className="text-sm font-medium text-slate-900">{b.name}</span>
+                          <Link
+                            to={`/bundles/${b.id}/edit`}
+                            className="text-[13px] font-medium text-slate-900 hover:text-slate-700 hover:underline"
+                          >
+                            {b.name}
+                          </Link>
                           {!b.active ? (
                             <span className="inline-flex w-fit max-w-full items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
                               Nieaktywny
@@ -670,14 +636,6 @@ export default function BundlesPage({ defaultCreateOpen = false }: Props) {
         </div>
       )}
       </PageLayout>
-
-      <BundleEditModal
-        open={modalOpen}
-        tenantId={DEFAULT_TENANT_ID}
-        bundleId={editId}
-        onClose={closeModal}
-        onSaved={() => void load()}
-      />
 
       <BundleLabelPrintModal bundleId={printBundleId} tenantId={DEFAULT_TENANT_ID} onClose={() => setPrintBundleId(null)} />
 

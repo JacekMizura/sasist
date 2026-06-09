@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Zestawy: pełna strona edycji + design system app-shell
+- Trasy: `/bundles/new`, `/bundles/:id/edit` (bez modala tworzenia/edycji)
+- `BundleEditModal variant="page"`: taby Podstawowe/Produkty/Magazyn/Historia/Logi/Powiązania
+- `components/app-shell/`: AppFilterPanel, AppPageHeader, AppEmptyState, AppSection, AppStatCard, AppToolbar
+- Filtry: akcje Filtruj/Wyczyść zawsze na dole panelu (ModuleListFiltersCard → AppFilterPanel)
+
 ## 2026-06-08 — Czas pracy: telemetria operacyjna całego systemu
 - `track_user_activity()` + `session_id` / `warehouse_id` na `user_activity_logs` (gap 15 min)
 - Middleware API: automatyczne logowanie mutacji + sensownych GET (mapowanie modułów)

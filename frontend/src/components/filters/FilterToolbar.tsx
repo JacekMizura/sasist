@@ -35,6 +35,8 @@ export type FilterToolbarProps = {
   fieldPickerIconOnly?: boolean;
   /** Extra trailing controls before field picker (e.g. settings icon). */
   trailingExtras?: ReactNode;
+  /** When false, Filtruj / Wyczyść live only in panel footer ({@link FilterPanelBodyWithActions}). */
+  showHeaderActions?: boolean;
   className?: string;
 };
 
@@ -55,10 +57,11 @@ export function FilterToolbar({
   collapsedToggleLabel,
   fieldPickerIconOnly,
   trailingExtras,
+  showHeaderActions = true,
   className = "",
 }: FilterToolbarProps) {
   const collapsible = onToggleExpanded != null;
-  const showActions = !collapsible || expanded;
+  const showActions = showHeaderActions && (!collapsible || expanded);
 
   return (
     <div
