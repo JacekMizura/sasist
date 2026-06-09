@@ -28,6 +28,7 @@ from ..schemas.stock_document import (
     PatchStockDocumentMetadataBody,
     PatchStockDocumentReceivingTargetBody,
     StockDocumentHardDeleteResult,
+    DocumentSeriesBriefRead,
     StockDocumentListRow,
     StockDocumentRead,
 )
@@ -40,11 +41,13 @@ from ..services.stock_document_service import (
     compute_document_edit_mode_for_list_row,
     compute_is_fully_putaway_for_items,
     compute_is_fully_received_for_items,
-    compute_pz_line_financial_totals,
     duplicate_stock_document,
     get_stock_document_read,
     patch_stock_document_items,
     patch_stock_document_metadata,
+    persist_stock_document_financial_totals,
+    resolve_document_financial_totals,
+    resolve_document_series_brief,
     set_stock_document_receiving_target,
 )
 from ..services.document_series_seed_service import ensure_default_document_series
@@ -108,11 +111,28 @@ def list_stock_documents(
             for c in db.query(Customer).filter(Customer.id.in_(cids)).all():
                 customer_names[int(c.id)] = (c.name or "").strip()
     series_prefix_by_id: dict[str, str] = {}
+    series_rows_by_id: dict[str, DocumentSeries] = {}
     if series_ids:
         for s in db.query(DocumentSeries).filter(DocumentSeries.id.in_(series_ids)).all():
+            series_rows_by_id[str(s.id)] = s
             label = (s.prefix or "").strip() or (s.code or "").strip()
             if label:
                 series_prefix_by_id[str(s.id)] = label
+    mm_from_ids = {
+        int(d.mm_from_location_id)
+        for d in docs
+        if getattr(d, "mm_from_location_id", None) is not None
+    }
+    mm_to_ids = {
+        int(d.mm_to_location_id)
+        for d in docs
+        if getattr(d, "mm_to_location_id", None) is not None
+    }
+    mm_loc_ids = mm_from_ids | mm_to_ids
+    mm_loc_names: dict[int, str] = {}
+    if mm_loc_ids:
+        for loc in db.query(Location).filter(Location.id.in_(mm_loc_ids)).all():
+            mm_loc_names[int(loc.id)] = (loc.name or "").strip()
     wh_names = (
         {r.id: (r.name or "").strip() for r in db.query(Warehouse).filter(Warehouse.id.in_(wids)).all()} if wids else {}
     )
@@ -189,14 +209,9 @@ def list_stock_documents(
         st_l = str(getattr(d, "status", "") or "").lower()
         can_cancel = st_l == "draft" and d.id not in docs_blocked
         cur = str(getattr(d, "currency", None) or "PLN").strip() or "PLN"
-        tn = getattr(d, "total_net", None)
-        tg = getattr(d, "total_gross", None)
-        tv: Optional[float] = None
         doc_lines = by_doc_lines.get(d.id, [])
-        dt_u = str(getattr(d, "document_type", "") or "").strip().upper()
-        if dt_u in ("PZ", "WZ") and doc_lines:
-            cn, cv, cg = compute_pz_line_financial_totals(doc_lines)
-            tn, tg, tv = cn, cg, cv
+        net, gross, vat = resolve_document_financial_totals(d, doc_lines)
+        tn, tg, tv = net, gross, vat
         oid = int(d.order_id) if getattr(d, "order_id", None) is not None else None
         order_row = order_by_id.get(oid) if oid is not None else None
         order_number = (order_row.number or "").strip() if order_row is not None else None
@@ -204,7 +219,24 @@ def list_stock_documents(
         if order_row is not None and order_row.customer_id is not None:
             cust_name = customer_names.get(int(order_row.customer_id), "")
         series_id = str(getattr(d, "document_series_id", None) or "").strip() or None
-        series_label = series_prefix_by_id.get(series_id, "") if series_id else ""
+        series_brief_raw = resolve_document_series_brief(
+            db,
+            d,
+            series_by_id=series_rows_by_id if series_id else None,
+        )
+        series_label = ""
+        series_brief: DocumentSeriesBriefRead | None = None
+        if series_brief_raw is not None:
+            series_label = (series_brief_raw.get("prefix") or series_brief_raw.get("code") or "").strip()
+            series_brief = DocumentSeriesBriefRead(
+                id=series_brief_raw.get("id"),
+                code=str(series_brief_raw.get("code") or ""),
+                name=series_brief_raw.get("name"),
+                prefix=series_brief_raw.get("prefix"),
+            )
+        elif series_id:
+            series_label = series_prefix_by_id.get(series_id, "")
+        dt_u = str(getattr(d, "document_type", "") or "").strip().upper()
         doc_number = str(getattr(d, "document_number", None) or "").strip() or None
         supplier_label = (
             sup_names.get(int(d.supplier_id), f"#{int(d.supplier_id)}")
@@ -219,6 +251,7 @@ def list_stock_documents(
                 document_type=d.document_type,
                 document_number=doc_number,
                 document_series_prefix=series_label or None,
+                series=series_brief,
                 order_id=oid,
                 order_number=order_number or None,
                 customer_name=display_customer or None,
@@ -237,6 +270,17 @@ def list_stock_documents(
                 warehouse_name=wh_names.get(d.warehouse_id, "") if d.warehouse_id is not None else "",
                 location_id=d.location_id,
                 location_name=loc_names.get(d.location_id, "") if d.location_id is not None else "",
+                mm_from_location_name=(
+                    mm_loc_names.get(int(d.mm_from_location_id), "")
+                    if getattr(d, "mm_from_location_id", None) is not None
+                    else ""
+                ),
+                mm_to_location_name=(
+                    mm_loc_names.get(int(d.mm_to_location_id), "")
+                    if getattr(d, "mm_to_location_id", None) is not None
+                    else ""
+                ),
+                creation_source=str(getattr(d, "creation_source", None) or "PANEL").strip().upper() or "PANEL",
                 status=d.status,
                 created_at=d.created_at,
                 created_by=created_by_read_for_document(d, users_by_id),

@@ -17,10 +17,10 @@ import {
 
 function sideLinkCls(active: boolean) {
   return [
-    "flex min-h-[40px] items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-all [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:shrink-0",
+    "flex min-h-[34px] items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold transition-all [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0",
     active
-      ? "bg-cyan-50 text-cyan-950 ring-1 ring-cyan-200/80 shadow-sm"
-      : "text-slate-700 hover:bg-slate-50 hover:ring-1 hover:ring-slate-200/60",
+      ? "bg-cyan-50/90 text-cyan-950 ring-1 ring-cyan-200/70"
+      : "text-slate-600 hover:bg-white/80 hover:text-slate-900 hover:ring-1 hover:ring-slate-200/50",
   ].join(" ");
 }
 
@@ -67,19 +67,19 @@ function DocumentsLayoutInner() {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex min-h-0 min-w-0 flex-1">
             <aside
-              className="hidden w-[238px] shrink-0 border-r border-slate-200 bg-slate-50/40 sm:block"
+              className="hidden w-[210px] shrink-0 border-r border-slate-200/90 bg-slate-50/30 sm:block"
               aria-label="Dokumenty — nawigacja"
             >
-              <div className="sticky top-0 max-h-[calc(100dvh-6rem)] overflow-y-auto p-3">
-                <nav className="flex flex-col gap-4">
+              <div className="sticky top-0 max-h-[calc(100dvh-6rem)] overflow-y-auto p-2">
+                <nav className="flex flex-col gap-3">
                   {sidebarSections.map((section, si) => (
                     <div key={`${section.title ?? "sec"}-${si}`}>
                       {section.title ? (
-                        <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <div className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           {section.title}
                         </div>
                       ) : null}
-                      <ul className="flex flex-col gap-1">
+                      <ul className="flex flex-col gap-0.5">
                         {section.items.map((item) => {
                           const Icon = item.Icon;
                           const active = isNavPathActive(pathname, item.path);

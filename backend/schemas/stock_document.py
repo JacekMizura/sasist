@@ -277,6 +277,13 @@ class PatchStockDocumentMetadataBody(BaseModel):
         return v
 
 
+class DocumentSeriesBriefRead(BaseModel):
+    id: Optional[str] = None
+    code: str
+    name: Optional[str] = None
+    prefix: Optional[str] = None
+
+
 class StockDocumentLinkedSaleDocumentRead(BaseModel):
     id: str
     document_number: str = ""
@@ -290,6 +297,7 @@ class StockDocumentRead(BaseModel):
     document_type: str
     document_number: Optional[str] = Field(None, description="Numer z serii dokumentu (np. WZ/1/2026).")
     document_series_prefix: Optional[str] = Field(None, description="Prefiks serii (np. WZ).")
+    series: Optional[DocumentSeriesBriefRead] = Field(None, description="Seria dokumentu (code/name).")
     order_id: Optional[int] = Field(None, description="Powiązane zamówienie OMS.")
     order_number: Optional[str] = Field(None, description="Numer zamówienia OMS.")
     customer_name: Optional[str] = Field(None, description="Klient z powiązanego zamówienia (WZ).")
@@ -355,6 +363,7 @@ class StockDocumentListRow(BaseModel):
     document_type: str
     document_number: Optional[str] = None
     document_series_prefix: Optional[str] = None
+    series: Optional[DocumentSeriesBriefRead] = None
     order_id: Optional[int] = None
     order_number: Optional[str] = None
     customer_name: Optional[str] = None
@@ -369,6 +378,9 @@ class StockDocumentListRow(BaseModel):
     warehouse_name: str = ""
     location_id: Optional[int] = None
     location_name: str = ""
+    mm_from_location_name: str = ""
+    mm_to_location_name: str = ""
+    creation_source: str = "PANEL"
     status: str
     created_at: datetime
     created_by: DocumentCreatedByRead = Field(default_factory=DocumentCreatedByRead)

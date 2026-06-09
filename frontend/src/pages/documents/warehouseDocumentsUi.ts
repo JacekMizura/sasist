@@ -1,76 +1,78 @@
 /**
- * Unified warehouse documents list (PZ, WZ, MM, RW, INV) — labels, badges, status, actions.
+ * Unified warehouse documents list — labels, badges, status, actions.
+ * Type configs live in warehouseDocumentConfigs.ts.
  */
 
-export const WAREHOUSE_DOCUMENT_TYPES = ["PZ", "WZ", "MM", "RW", "INV"] as const;
-export type WarehouseDocumentType = (typeof WAREHOUSE_DOCUMENT_TYPES)[number];
+export {
+  normalizeWarehouseDocType,
+  WAREHOUSE_DOC_TYPES as WAREHOUSE_DOCUMENT_TYPES,
+  type WarehouseDocType as WarehouseDocumentType,
+} from "./warehouseDocumentConfigs";
 
-export type DocumentTypeFilterTab = "ALL" | WarehouseDocumentType;
+export type DocumentTypeFilterTab = import("./warehouseDocumentConfigs").WarehouseDocType;
 
-/** Operator-facing badge for MM internal transfers (API type remains MM). */
-export function warehouseDocTypeBadgeLabel(t: WarehouseDocumentType): string {
+export function warehouseDocTypeBadgeLabel(t: import("./warehouseDocumentConfigs").WarehouseDocType): string {
   return t === "MM" ? "PM" : t;
-}
-
-export function normalizeWarehouseDocType(raw: string | undefined | null): WarehouseDocumentType {
-  const u = String(raw ?? "PZ")
-    .trim()
-    .toUpperCase();
-  if (WAREHOUSE_DOCUMENT_TYPES.includes(u as WarehouseDocumentType)) return u as WarehouseDocumentType;
-  return "PZ";
 }
 
 export function normalizeReceivingStatusKey(status: string | undefined): string {
   return (status || "pending").toLowerCase().trim().replace(/-/g, "_");
 }
 
-/** Progress column: short Polish label per document type (values still current/target from API). */
-export function progressLabelForType(t: WarehouseDocumentType): string {
+export function progressLabelForType(t: import("./warehouseDocumentConfigs").WarehouseDocType): string {
   switch (t) {
     case "PZ":
+    case "PW":
       return "Przyjęto";
     case "WZ":
       return "Wydano";
     case "MM":
       return "Przesunięto";
     case "RW":
+    case "ZW":
       return "Wydano wewn.";
-    case "INV":
-      return "Policzono";
+    case "ZD":
+      return "Przyjęcie plan.";
     default:
       return "Postęp";
   }
 }
 
-export function actionLabelForType(t: WarehouseDocumentType): string {
+export function actionLabelForType(t: import("./warehouseDocumentConfigs").WarehouseDocType): string {
   switch (t) {
     case "PZ":
+    case "PW":
       return "Przyjmij";
     case "WZ":
       return "Wydaj";
     case "MM":
       return "Przenieś";
     case "RW":
+    case "ZW":
       return "Zaksięguj";
-    case "INV":
-      return "Sprawdź";
+    case "ZD":
+      return "Przyjmij";
     default:
       return "Otwórz";
   }
 }
 
-export function typeBadgeClass(t: WarehouseDocumentType): string {
+export function typeBadgeClass(t: import("./warehouseDocumentConfigs").WarehouseDocType): string {
   switch (t) {
     case "PZ":
       return "bg-sky-100 text-sky-900 ring-sky-200/90";
+    case "PW":
+      return "bg-emerald-100 text-emerald-900 ring-emerald-200/90";
     case "WZ":
       return "bg-violet-100 text-violet-900 ring-violet-200/90";
     case "MM":
       return "bg-cyan-100 text-cyan-900 ring-cyan-200/90";
     case "RW":
       return "bg-orange-100 text-orange-900 ring-orange-200/90";
-    case "INV":
-      return "bg-indigo-100 text-indigo-900 ring-indigo-200/90";
+    case "ZD":
+      return "bg-blue-100 text-blue-900 ring-blue-200/90";
+    case "ZW":
+      return "bg-amber-100 text-amber-900 ring-amber-200/90";
     default:
       return "bg-slate-100 text-slate-800 ring-slate-200/90";
   }

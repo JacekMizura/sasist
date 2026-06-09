@@ -31,6 +31,7 @@ from .tenant_default_warehouse import (
 )
 from ..models.warehouse import Warehouse
 from ..schemas.stock_document import (
+    DocumentSeriesBriefRead,
     PatchStockDocumentItemsBody,
     PatchStockDocumentMetadataBody,
     PutawayAllocationRead,
@@ -233,6 +234,67 @@ def compute_pz_line_financial_totals(rows: List[StockDocumentItem]) -> Tuple[flo
         vat += ln_vat
         gross += ln_net + ln_vat
     return (round(net, 2), round(vat, 2), round(gross, 2))
+
+
+def resolve_document_financial_totals(
+    doc: StockDocument,
+    rows: List[StockDocumentItem],
+) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    """Header totals — compute from lines for warehouse docs when stored values missing."""
+    dt_u = str(getattr(doc, "document_type", "") or "").strip().upper()
+    if dt_u in ("PZ", "WZ", "RW", "PW") and rows:
+        net, vat, gross = compute_pz_line_financial_totals(rows)
+        return float(net), float(gross), float(vat)
+    tn = getattr(doc, "total_net", None)
+    tg = getattr(doc, "total_gross", None)
+    return (
+        float(tn) if tn is not None else None,
+        float(tg) if tg is not None else None,
+        None,
+    )
+
+
+def persist_stock_document_financial_totals(doc: StockDocument, rows: List[StockDocumentItem]) -> None:
+    """Persist net/gross on document header from line valuation."""
+    net, gross, _vat = resolve_document_financial_totals(doc, rows)
+    if net is not None:
+        doc.total_net = net
+    if gross is not None:
+        doc.total_gross = gross
+    doc.updated_at = datetime.utcnow()
+
+
+def resolve_document_series_brief(
+    db: Session,
+    doc: StockDocument,
+    *,
+    series_by_id: dict[str, Any] | None = None,
+) -> Optional[dict[str, Any]]:
+    """Series for list/detail — assigned series or document type fallback."""
+    from ..models.document_series import DocumentSeries
+
+    series_id = str(getattr(doc, "document_series_id", None) or "").strip() or None
+    row = None
+    if series_id:
+        if series_by_id and series_id in series_by_id:
+            row = series_by_id[series_id]
+        else:
+            row = db.query(DocumentSeries).filter(DocumentSeries.id == series_id).first()
+    if row is not None:
+        code = (getattr(row, "code", None) or "").strip() or (getattr(row, "prefix", None) or "").strip()
+        prefix = (getattr(row, "prefix", None) or "").strip() or code
+        if not code:
+            code = str(getattr(doc, "document_type", "") or "").strip().upper()
+        return {
+            "id": str(getattr(row, "id", "") or series_id or ""),
+            "code": code,
+            "name": (getattr(row, "name", None) or "").strip() or None,
+            "prefix": prefix or None,
+        }
+    dt = str(getattr(doc, "document_type", "") or "").strip().upper()
+    if dt:
+        return {"id": None, "code": dt, "name": dt, "prefix": dt}
+    return None
 
 
 def is_stock_document_item_wm_material(row: StockDocumentItem) -> bool:
@@ -1297,9 +1359,9 @@ def build_stock_document_read(
     tg: Optional[float] = float(getattr(doc, "total_gross")) if getattr(doc, "total_gross", None) is not None else None
     tv: Optional[float] = None
     dt_fin = str(getattr(doc, "document_type", "") or "").strip().upper()
-    if dt_fin in ("PZ", "WZ") and visible_rows:
-        cn, cv, cg = compute_pz_line_financial_totals(visible_rows)
-        tn, tg, tv = float(cn), float(cg), float(cv)
+    if visible_rows:
+        net, gross, vat = resolve_document_financial_totals(doc, visible_rows)
+        tn, tg, tv = net, gross, vat
 
     order_number: Optional[str] = None
     customer_name: Optional[str] = None
@@ -1317,13 +1379,9 @@ def build_stock_document_read(
                     customer_name = (cust.name or "").strip() or None
 
     series_prefix: Optional[str] = None
-    series_id = str(getattr(doc, "document_series_id", None) or "").strip() or None
-    if series_id:
-        from ..models.document_series import DocumentSeries
-
-        series_row = db.query(DocumentSeries).filter(DocumentSeries.id == series_id).first()
-        if series_row is not None:
-            series_prefix = (series_row.prefix or "").strip() or (series_row.code or "").strip() or None
+    series_brief = resolve_document_series_brief(db, doc)
+    if series_brief is not None:
+        series_prefix = (series_brief.get("prefix") or series_brief.get("code") or "").strip() or None
 
     doc_number = str(getattr(doc, "document_number", None) or "").strip() or None
 
@@ -1371,12 +1429,22 @@ def build_stock_document_read(
             prod_batch_number = str(bat.number or "").strip() or None
             prod_batch_path = f"/wms/production/batch/{int(bat.id)}"
 
+    series_model: DocumentSeriesBriefRead | None = None
+    if series_brief is not None:
+        series_model = DocumentSeriesBriefRead(
+            id=series_brief.get("id"),
+            code=str(series_brief.get("code") or ""),
+            name=series_brief.get("name"),
+            prefix=series_brief.get("prefix"),
+        )
+
     return StockDocumentRead(
         id=doc.id,
         tenant_id=doc.tenant_id,
         document_type=doc.document_type,
         document_number=doc_number,
         document_series_prefix=series_prefix,
+        series=series_model,
         order_id=int(doc.order_id) if getattr(doc, "order_id", None) else None,
         order_number=order_number,
         customer_name=customer_name,

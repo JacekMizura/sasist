@@ -23,7 +23,18 @@ import { CarrierCreateModal } from "../../components/warehouse/carriers/CarrierC
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
-import { DocumentTypeBadge, ExternalStatusBadge, PaymentNotApplicableBadge } from "./documentsBadges";
+import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
+import WarehouseDocumentsTable from "./WarehouseDocumentsTable";
+import { getWarehouseDocumentConfig } from "./warehouseDocumentConfigs";
+import {
+  documentSourceLabelDetail,
+  listValueGross,
+  listValueNet,
+  seriesCode,
+  shouldShowCustomerCard,
+  shouldShowDocumentSourceCard,
+  shouldShowSupplierCard,
+} from "./warehouseDocumentHelpers";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
 import {
@@ -40,7 +51,6 @@ import {
   DocumentsKpiRow,
   DocumentsTableCard,
   documentsTableSelectCls,
-  documentsTableTheadCls,
 } from "./documentsDashboardPrimitives";
 import { useOperationalDocumentSeries } from "./OperationalDocumentSeriesContext";
 
@@ -50,15 +60,6 @@ const WAREHOUSE_DOCS_PAGE_SIZE_KEY = "warehouse_docs.pageSize";
 function formatDt(iso: string) {
   try {
     return new Date(iso).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
-  } catch {
-    return iso;
-  }
-}
-
-/** Short date for list rows (business panel). */
-function formatDateShort(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" });
   } catch {
     return iso;
   }
@@ -234,7 +235,7 @@ export default function DocumentsWarehousePage() {
     try {
       setRows(
         await listStockDocuments(tenantId, {
-          document_type: docTab === "ALL" ? undefined : (docTab as WarehouseDocumentType),
+          document_type: docTab,
           warehouse_id: warehouseId ?? undefined,
         }),
       );
@@ -565,7 +566,8 @@ export default function DocumentsWarehousePage() {
   const isWmsCompleteDraft = docStatusLower === "zakonczone";
   const isPzDetail = detail ? normalizeWarehouseDocType(detail.document_type) === "PZ" : false;
   const isWzDetail = detail ? normalizeWarehouseDocType(detail.document_type) === "WZ" : false;
-  const hidePaymentCols = docTab === "WZ";
+  const detailDocType = detail ? normalizeWarehouseDocType(detail.document_type) : docTab;
+  const detailListConfig = getWarehouseDocumentConfig(detailDocType);
   const editMode = detail?.edit_mode ?? "none";
   const lineEditEnabled = Boolean(isDraft && isPzDetail && editMode === "full");
   const canPostAccept =
@@ -636,21 +638,27 @@ export default function DocumentsWarehousePage() {
     return rows.slice(start, start + pageSize);
   }, [rows, page, pageSize]);
 
+  const listConfig = useMemo(() => getWarehouseDocumentConfig(docTab), [docTab]);
+
   const warehouseKpi = useMemo(() => {
     const total = rows.length;
     const drafts = rows.filter((r) => r.status === "draft").length;
-    const posted = rows.filter((r) => r.status === "posted").length;
-    let gross = 0;
+    const posted = rows.filter((r) => ["posted", "completed", "done"].includes(String(r.status).toLowerCase())).length;
+    let valueSum = 0;
     for (const r of rows) {
-      if (r.total_gross != null && Number.isFinite(Number(r.total_gross))) gross += Number(r.total_gross);
+      const v =
+        listConfig.valueField === "gross"
+          ? listValueGross(r) ?? listValueNet(r, listConfig.type)
+          : listValueNet(r, listConfig.type);
+      if (v != null && Number.isFinite(v)) valueSum += v;
     }
     return [
-      { label: "Dokumenty na liście", value: total },
+      { label: "Dokumenty", value: total },
       { label: "Szkice", value: drafts, tone: "amber" as const },
       { label: "Zaksięgowane", value: posted, tone: "emerald" as const },
-      { label: "Suma brutto", value: fmtMoney(gross), tone: "slate" as const },
+      { label: "Wartość", value: fmtMoney(valueSum), tone: "slate" as const },
     ];
-  }, [rows]);
+  }, [rows, listConfig]);
 
   if (seriesLoading) {
     return (
@@ -705,14 +713,10 @@ export default function DocumentsWarehousePage() {
 
       <DocumentsSectionShell
         title={`Dokumenty magazynowe — ${docTab}`}
-        subtitle="Przyjęcia, wydania i przesunięcia międzymagazynowe powiązane z operacjami WMS. Typ dokumentu wybierasz w menu po lewej."
         kpi={<DocumentsKpiRow items={warehouseKpi} />}
         toolbar={
           <DocumentsFiltersToolbar>
-            <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <p className="text-sm text-slate-600">
-                Organizacja i filtry listy — spójnie z operacjami magazynowymi.
-              </p>
+            <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <select
                 aria-label="Wybór organizacji"
                 value={tenantId}
@@ -758,234 +762,29 @@ export default function DocumentsWarehousePage() {
               />
             </div>
             <DocumentsTableCard>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1200px] text-left text-base">
-            <thead className={`text-left ${documentsTableTheadCls}`}>
-              <tr>
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Nr dokumentu
-                </th>
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Nr zamówienia
-                </th>
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Klient
-                </th>
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Seria
-                </th>
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Typ
-                </th>
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Data
-                </th>
-                <th className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Netto
-                </th>
-                <th className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  VAT
-                </th>
-                <th className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Brutto
-                </th>
-                {hidePaymentCols ? null : (
-                  <>
-                    <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                      Metoda płatności
-                    </th>
-                    <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                      Status płatności
-                    </th>
-                  </>
-                )}
-                <th className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  {hidePaymentCols ? "Status" : "Status zewnętrzny"}
-                </th>
-                <th className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm">
-                  Akcje
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedRows.map((r) => {
-                const st = businessDocStatus({
-                  status: r.status,
-                  document_type: r.document_type,
-                  total_received: r.total_received,
-                  receiving_status: r.receiving_status,
-                  putaway_status: r.putaway_status,
-                  relocation_status: r.relocation_status,
-                  is_fully_received: r.is_fully_received,
-                  is_fully_putaway: r.is_fully_putaway,
-                });
-                const dt = normalizeWarehouseDocType(r.document_type);
-                return (
-                  <tr
-                    key={r.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => void openDetail(r.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        void openDetail(r.id);
-                      }
-                    }}
-                    className="cursor-pointer border-t border-slate-100 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/80"
-                  >
-                    <td className="px-4 py-4 font-mono text-lg font-bold tabular-nums text-slate-900 sm:px-5 sm:py-5">
-                      {(r.document_number || "").trim() || `#${r.id}`}
-                    </td>
-                    <td className="px-4 py-4 sm:px-5 sm:py-5">
-                      {r.order_id != null ? (
-                        <Link
-                          to={`/orders/${r.order_id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
-                        >
-                          #{(r.order_number || "").trim() || r.order_id}
-                        </Link>
-                      ) : r.delivery_id != null ? (
-                        <Link
-                          to={`/goods-orders?edit=${r.delivery_id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
-                        >
-                          #{r.delivery_id}
-                        </Link>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td
-                      className="max-w-[14rem] truncate px-4 py-4 text-slate-800 sm:px-5 sm:py-5"
-                      title={(r.customer_name || r.supplier_name || "").trim()}
-                    >
-                      {(r.customer_name || r.supplier_name || "").trim() || "—"}
-                    </td>
-                    <td className="px-4 py-4 text-slate-800 sm:px-5 sm:py-5">
-                      {(r.document_series_prefix || "").trim() || "—"}
-                    </td>
-                    <td className="px-4 py-4 sm:px-5 sm:py-5">
-                      <DocumentTypeBadge code={dt} />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-4 tabular-nums text-slate-600 sm:px-5 sm:py-5">
-                      {formatDateShort(r.created_at)}
-                    </td>
-                    <td className="px-4 py-4 text-right tabular-nums text-slate-800 sm:px-5 sm:py-5">
-                      {fmtMoneyCur(r.total_net, r.currency)}
-                    </td>
-                    <td className="px-4 py-4 text-right tabular-nums text-slate-800 sm:px-5 sm:py-5">
-                      {fmtMoneyCur(r.total_vat, r.currency)}
-                    </td>
-                    <td className="px-4 py-4 text-right tabular-nums text-slate-800 sm:px-5 sm:py-5">
-                      {fmtMoneyCur(r.total_gross, r.currency)}
-                    </td>
-                    {hidePaymentCols ? null : (
-                      <>
-                        <td className="px-4 py-4 text-slate-500 sm:px-5 sm:py-5">—</td>
-                        <td className="px-4 py-4 sm:px-5 sm:py-5">
-                          <PaymentNotApplicableBadge />
-                        </td>
-                      </>
-                    )}
-                    <td className="px-4 py-4 sm:px-5 sm:py-5">
-                      <ExternalStatusBadge status={st} />
-                    </td>
-                    <td className="px-4 py-4 text-right sm:px-5 sm:py-5" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex flex-wrap items-center justify-end gap-1" data-print-menu-root>
-                        <button
-                          type="button"
-                          aria-label="Edytuj"
-                          title="Edytuj"
-                          onClick={() => void openDetail(r.id)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Usuń"
-                          title="Usuń"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteConfirmId(r.id);
-                          }}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-lg leading-none text-rose-900 hover:bg-rose-100"
-                        >
-                          🗑
-                        </button>
-                        <div className="relative inline-flex">
-                          <button
-                            type="button"
-                            aria-label="Drukuj"
-                            title="Drukuj / PDF"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPrintMenuOpenId(printMenuOpenId === r.id ? null : r.id);
-                            }}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50"
-                          >
-                            🖨
-                          </button>
-                          {printMenuOpenId === r.id ? (
-                            <div className="absolute right-0 z-[320] mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  printDocumentPdf(r.id);
-                                  setPrintMenuOpenId(null);
-                                }}
-                              >
-                                Drukuj
-                              </button>
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openDocumentPdf(r.id);
-                                  setPrintMenuOpenId(null);
-                                }}
-                              >
-                                Pobierz PDF
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          aria-label="Duplikuj"
-                          title="Duplikuj"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              const d = await duplicateStockDocument(tenantId, r.id);
-                              void openDetail(d.id);
-                              void load();
-                            } catch (err: unknown) {
-                              const msg =
-                                err && typeof err === "object" && "response" in err
-                                  ? (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
-                                  : null;
-                              window.alert(msg != null ? String(msg) : "Nie udało się utworzyć kopii.");
-                            }
-                          }}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50"
-                        >
-                          📋
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-                </table>
-              </div>
+              <WarehouseDocumentsTable
+                rows={pagedRows}
+                docType={docTab}
+                printMenuOpenId={printMenuOpenId}
+                onOpenDetail={(id) => void openDetail(id)}
+                onDelete={setDeleteConfirmId}
+                onPrintMenuToggle={setPrintMenuOpenId}
+                onPrint={printDocumentPdf}
+                onDownloadPdf={openDocumentPdf}
+                onDuplicate={async (id) => {
+                  try {
+                    const d = await duplicateStockDocument(tenantId, id);
+                    void openDetail(d.id);
+                    void load();
+                  } catch (err: unknown) {
+                    const msg =
+                      err && typeof err === "object" && "response" in err
+                        ? (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+                        : null;
+                    window.alert(msg != null ? String(msg) : "Nie udało się utworzyć kopii.");
+                  }
+                }}
+              />
             </DocumentsTableCard>
           <div className="flex items-center justify-between text-sm text-slate-600">
             <span>
@@ -1075,19 +874,25 @@ export default function DocumentsWarehousePage() {
               ) : detail ? (
                 <div className="flex flex-col gap-6">
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">
-                        {isWzDetail ? "Klient" : "Dostawca"}
-                      </h3>
-                      <p className="text-lg font-semibold text-slate-900">
-                        {isWzDetail
-                          ? (detail.customer_name || "").trim() || "—"
-                          : (detail.supplier_name || "").trim() || `Dostawca #${detail.supplier_id}`}
-                      </p>
-                      {!isWzDetail ? (
+                    {detail && shouldShowSupplierCard(detailDocType, detail) ? (
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Dostawca</h3>
+                        <p className="text-lg font-semibold text-slate-900">{(detail.supplier_name || "").trim()}</p>
                         <p className="mt-2 text-sm text-slate-500">Identyfikator w systemie · #{detail.supplier_id}</p>
-                      ) : null}
-                    </div>
+                      </div>
+                    ) : null}
+                    {detail && shouldShowCustomerCard(detailDocType) ? (
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Klient</h3>
+                        <p className="text-lg font-semibold text-slate-900">{(detail.customer_name || "").trim() || "—"}</p>
+                      </div>
+                    ) : null}
+                    {detail && shouldShowDocumentSourceCard(detailDocType) ? (
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Źródło dokumentu</h3>
+                        <p className="text-lg font-semibold text-slate-900">{documentSourceLabelDetail(detail)}</p>
+                      </div>
+                    ) : null}
                     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                       <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Dokument</h3>
                       <dl className="space-y-3 text-sm">
@@ -1095,12 +900,10 @@ export default function DocumentsWarehousePage() {
                           <dt className="text-slate-500">Typ</dt>
                           <dd className="font-semibold text-slate-900">{detail.document_type}</dd>
                         </div>
-                        {(detail.document_series_prefix || "").trim() ? (
-                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                            <dt className="text-slate-500">Seria</dt>
-                            <dd className="font-semibold text-slate-900">{detail.document_series_prefix}</dd>
-                          </div>
-                        ) : null}
+                        <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                          <dt className="text-slate-500">Seria</dt>
+                          <dd className="font-semibold text-slate-900">{seriesCode(detail)}</dd>
+                        </div>
                         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
                           <dt className="text-slate-500">Utworzył</dt>
                           <dd className="text-right font-medium text-slate-900">
@@ -1201,8 +1004,11 @@ export default function DocumentsWarehousePage() {
                     </div>
                   </div>
 
+                  {detailListConfig.financialDetail !== "none" ? (
                   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Finanse dokumentu</h3>
+                    <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+                      {detailListConfig.financialDetail === "netOnly" ? "Wartość dokumentu" : "Finanse dokumentu"}
+                    </h3>
                     {canEditMetadata ? (
                       <div>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -1240,6 +1046,25 @@ export default function DocumentsWarehousePage() {
                           VAT z pozycji (wyliczone): {fmtMoneyCur(detail.total_vat, detail.currency)}
                         </p>
                       </div>
+                    ) : detailListConfig.financialDetail === "netOnly" ? (
+                      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
+                        <div>
+                          <dt className="text-xs text-slate-500">Wartość netto</dt>
+                          <dd className="mt-1 font-semibold tabular-nums text-slate-900">
+                            {fmtMoneyCur(
+                              listValueNet(
+                                {
+                                  total_net: detail.total_net,
+                                  total_gross: detail.total_gross,
+                                  currency: detail.currency,
+                                } as StockDocumentListRow,
+                                detailDocType,
+                              ),
+                              detail.currency,
+                            )}
+                          </dd>
+                        </div>
+                      </dl>
                     ) : (
                       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
                         <div>
@@ -1267,6 +1092,7 @@ export default function DocumentsWarehousePage() {
                       </dl>
                     )}
                   </div>
+                  ) : null}
 
                   <div ref={docLinesRef} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Pozycje</h3>

@@ -1,6 +1,13 @@
 import api from "./axios";
 import type { DocumentCreatedByRead } from "../utils/documentCreatedBy";
 
+export type DocumentSeriesBrief = {
+  id?: string | null;
+  code: string;
+  name?: string | null;
+  prefix?: string | null;
+};
+
 export type DocumentEditMode = "full" | "metadata" | "none";
 
 export type StockDocumentListRow = {
@@ -9,6 +16,7 @@ export type StockDocumentListRow = {
   document_type: string;
   document_number?: string | null;
   document_series_prefix?: string | null;
+  series?: DocumentSeriesBrief | null;
   order_id?: number | null;
   order_number?: string | null;
   customer_name?: string | null;
@@ -21,6 +29,9 @@ export type StockDocumentListRow = {
   warehouse_name?: string;
   location_id?: number | null;
   location_name?: string;
+  mm_from_location_name?: string;
+  mm_to_location_name?: string;
+  creation_source?: string;
   status: string;
   created_at: string;
   created_by?: DocumentCreatedByRead;
@@ -142,6 +153,7 @@ export type StockDocumentRead = {
   document_type: string;
   document_number?: string | null;
   document_series_prefix?: string | null;
+  series?: DocumentSeriesBrief | null;
   order_id?: number | null;
   order_number?: string | null;
   customer_name?: string | null;

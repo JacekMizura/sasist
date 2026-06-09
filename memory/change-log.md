@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-09 — Dokumenty magazynowe: config-driven kolumny + RW/PW wartości
+- Frontend: `warehouseDocumentConfigs.ts`, `WarehouseDocumentsTable.tsx` — osobne kolumny per PZ/PW/RW/WZ/MM/ZD/ZW; usunięte kolumny płatności
+- Backend: `series` object, `resolve_document_financial_totals` dla RW/PW; persist totals przy posting inwentaryzacji
+- Detail: ukryty dostawca gdy brak; sekcja „Źródło dokumentu” dla RW/PW; kompaktowe menu boczne
+
 ## 2026-06-09 — Konflikty inwentaryzacji: grouped API + accept bez recount
 - Backend: `counts[]` z `count_id`, `conflict_status`, `quantity_diff_label`; `POST .../conflicts/accept` (supervisor wybiera istniejący wpis)
 - `conflict_resolution_service`: metadata `operator_conflict_resolution` — konflikt znika bez tworzenia recount

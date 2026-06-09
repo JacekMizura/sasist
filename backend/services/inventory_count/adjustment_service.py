@@ -29,6 +29,7 @@ from ...services.inventory_lot_keys import NO_EXPIRY_SENTINEL
 from ...services.order_item_pick_allocation_service import consume_inventory_fifo_slices
 from ...services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 from ...services.stock_document_factory import create_stock_document
+from ...services.stock_document_service import persist_stock_document_financial_totals
 from ...services.stock_operation_issue_service import append_issue_operation
 from ...services.stock_operation_receipt_service import append_receipt_operation
 from .audit_service import log_inventory_audit
@@ -508,6 +509,15 @@ def post_inventory_adjustments(
                 rw_lines=rw_lines,
                 pw_lines=pw_lines,
             )
+            for posted_doc in (rw_doc, pw_doc):
+                if posted_doc is None:
+                    continue
+                posted_items = (
+                    db.query(StockDocumentItem)
+                    .filter(StockDocumentItem.document_id == int(posted_doc.id))
+                    .all()
+                )
+                persist_stock_document_financial_totals(posted_doc, posted_items)
             db.commit()
             lock_acquired = False
             db.refresh(doc)
