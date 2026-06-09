@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — WMS launcher: terminal operacyjny (kafelki modułów)
+- Nowy widok `/wms/menu`: `WmsLauncherPage`, `WmsModuleTile`, `WmsHeader`
+- Industrial UI: granatowy header, duże kafelki (≥140px), bez pinów/hover SaaS
+- Badge z API: Braki, Zbieranie, Pakowanie, Przyjęcie, Rozlokowanie, Inwentaryzacja
+- Nawigacja klawiaturą (strzałki, Enter), focus dla skanerów/kolektorów
+
 ## 2026-06-08 — Fix: eksplozja ilości WMS (multi-browser / stale state)
 - Przyczyna: optimistic update + frontend liczył `quantity` (absolute) z lokalnej bazy; stale `packaging.loaded` w closure; effect re-dekomponował total przy każdej zmianie `counted_quantity`
 - Skany: backend SSOT przez `delta` (+1 szt / +pack karton); UI aktualizuje się dopiero z `my_counted_quantity` z API
