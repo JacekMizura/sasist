@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-08 — WMS inwentaryzacja: lista dokumentów jak PZ / Rozlokowanie
+- `WmsInventoryDocumentList`: usunięty hero; pełna szerokość; scanner + grid jak Przyjęcie/Rozlokowanie PZ
+- Karta: lewa (ikona, nr, status, operatorzy, konflikty, data), prawa (pokrycie, policzone), dół (progress bar)
+- Skan/filtr dokumentu; integracja `useWmsScanner` + `useWmsPageScanHandler`
+
 ## 2026-06-08 — Fix: HTTP 500 przy księgowaniu RW/PW inwentaryzacji
 - `posting_validation_service.py`: walidacja przed postem — reconcile operatorów (nigdy suma), snapshot linii `[POST INVENTORY] line snapshot` (cartons/carton_capacity/pieces/computed_total/delta), blokada absurdalnych qty, preflight stock RW
 - `adjustment_service.py`: per-line try/except → `InventoryPostingFailedError` (FIFO ValueError zamiast surowego 500)
