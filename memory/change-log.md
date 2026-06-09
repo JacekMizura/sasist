@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-09 — Konflikty inwentaryzacji: grouped API + accept bez recount
+- Backend: `counts[]` z `count_id`, `conflict_status`, `quantity_diff_label`; `POST .../conflicts/accept` (supervisor wybiera istniejący wpis)
+- `conflict_resolution_service`: metadata `operator_conflict_resolution` — konflikt znika bez tworzenia recount
+- Frontend: tabela 1 wiersz = produkt+lokalizacja; operatorzy/ilości/czasy stacked; approve po `count_id`; recount tylko „Wymuś ponowne liczenie”
+- Testy: `test_conflict_accept.py`, rozszerzenie `test_conflicts_endpoint.py`
+
 ## 2026-06-09 — Fix: pełna inwentaryzacja zeruje niepoliczone stany (FULL + update_stock)
 - `full_inventory_posting_service.py`: plan księgowania target − live stock; zero dla uncounted/orphan scope
 - PARTIAL/CYCLE/CONTROL bez zmian — tylko policzone linie

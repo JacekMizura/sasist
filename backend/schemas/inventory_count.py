@@ -375,6 +375,14 @@ class InventoryPostingPreviewRead(BaseModel):
     summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class InventoryConflictCountRead(BaseModel):
+    count_id: int
+    user_id: int | None = None
+    operator_name: str
+    counted_qty: float
+    created_at: str | None = None
+
+
 class InventoryConflictItemRead(BaseModel):
     line_id: int
     location_id: int
@@ -388,9 +396,17 @@ class InventoryConflictItemRead(BaseModel):
     expected_quantity: float | None = None
     counted_quantity: float | None = None
     operators: list[dict[str, Any]] = Field(default_factory=list)
+    counts: list[InventoryConflictCountRead] = Field(default_factory=list)
+    conflict_status: str
+    quantity_diff_label: str | None = None
     recount_state: str
     recount_id: int | None = None
     recount_status: str | None = None
+
+
+class InventoryConflictAcceptBody(BaseModel):
+    line_id: int
+    count_id: int
 
 
 class InventoryConflictsRead(BaseModel):

@@ -84,6 +84,14 @@ export type InventoryConflictOperator = {
   counted_at: string | null;
 };
 
+export type InventoryConflictCount = {
+  count_id: number;
+  user_id: number | null;
+  operator_name: string;
+  counted_qty: number;
+  created_at: string | null;
+};
+
 export type InventoryConflictItem = {
   line_id: number;
   location_id: number;
@@ -97,6 +105,9 @@ export type InventoryConflictItem = {
   expected_quantity: number | null;
   counted_quantity: number | null;
   operators: InventoryConflictOperator[];
+  counts: InventoryConflictCount[];
+  conflict_status: string;
+  quantity_diff_label: string | null;
   recount_state: string;
   recount_id: number | null;
   recount_status: string | null;

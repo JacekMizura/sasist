@@ -76,12 +76,14 @@ def _batch_operator_counts(db: Session, line_ids: list[int]) -> dict[int, list[d
             qty = 0.0
         if uid not in line_ops:
             line_ops[uid] = {
+                "count_id": int(entry.id),
                 "user_id": uid or None,
                 "operator_name": _operator_name(user),
                 "quantity": qty,
                 "counted_at": _safe_iso(entry.created_at),
             }
         else:
+            line_ops[uid]["count_id"] = int(entry.id)
             line_ops[uid]["quantity"] = qty
             counted_at = _safe_iso(entry.created_at)
             if counted_at:
@@ -116,6 +118,40 @@ def _latest_recounts_by_line(db: Session, line_ids: list[int]) -> dict[int, Inve
     return out
 
 
+def _fmt_qty_label(value: float) -> str:
+    rounded = round(float(value), 6)
+    if abs(rounded - round(rounded)) < 1e-9:
+        return str(int(round(rounded)))
+    return str(rounded).rstrip("0").rstrip(".")
+
+
+def _operators_to_counts(operators: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: list[dict[str, Any]] = []
+    for op in operators:
+        count_id = op.get("count_id")
+        if count_id is None:
+            continue
+        counts.append(
+            {
+                "count_id": int(count_id),
+                "user_id": op.get("user_id"),
+                "operator_name": str(op.get("operator_name") or "Operator"),
+                "counted_qty": _safe_float(op.get("quantity")) or 0.0,
+                "created_at": op.get("counted_at"),
+            }
+        )
+    return counts
+
+
+def _quantity_diff_label(operators: list[dict[str, Any]]) -> str | None:
+    quantities = sorted({round(float(op.get("quantity") or 0), 6) for op in operators})
+    if len(quantities) == 2:
+        return f"{_fmt_qty_label(quantities[0])} ↔ {_fmt_qty_label(quantities[1])}"
+    if len(quantities) > 2:
+        return f"{len(quantities)} wyniki"
+    return None
+
+
 def _build_conflict_item(
     *,
     line: InventoryDocumentLine,
@@ -137,6 +173,7 @@ def _build_conflict_item(
     recount = recounts_by_line.get(int(line_id))
     recount_state = resolve_line_recount_state(db, line=line, document_conflicts=conflicts_map)
     operators = _merge_operator_counts(line_ids, operators_by_line)
+    counts = _operators_to_counts(operators)
 
     return {
         "line_id": int(line_id),
@@ -151,6 +188,9 @@ def _build_conflict_item(
         "expected_quantity": _safe_float(line.expected_quantity),
         "counted_quantity": _safe_float(line.counted_quantity),
         "operators": operators,
+        "counts": counts,
+        "conflict_status": recount_state,
+        "quantity_diff_label": _quantity_diff_label(operators),
         "recount_state": recount_state,
         "recount_id": int(recount.id) if recount else None,
         "recount_status": str(recount.status) if recount else None,

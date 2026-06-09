@@ -61,7 +61,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
     conflictsError,
     reloadConflicts,
     conflictBusy,
-    resolveConflictQuantity,
+    acceptConflictCount,
     requestConflictRecount,
     unknownProducts,
     unknownLoading,
@@ -287,7 +287,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
             error={conflictsError}
             onRetry={() => void reloadConflicts()}
             busy={conflictBusy}
-            onAcceptQuantity={(c, qty) => void resolveConflictQuantity(c, qty)}
+            onAcceptCount={(c, countId) => void acceptConflictCount(c, countId)}
             onRequestRecount={(c) => void requestConflictRecount(c)}
           />
         </div>
@@ -391,8 +391,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               conflicts={conflicts?.items ?? []}
               loading={linesLoading}
               conflictBusy={conflictBusy}
-              expandOperatorRows={tab === "progress"}
-              onAcceptQuantity={(c, qty) => void resolveConflictQuantity(c, qty)}
+              onAcceptCount={(c, countId) => void acceptConflictCount(c, countId)}
               onRequestRecount={(c) => void requestConflictRecount(c)}
               emptyMessage={
                 tab === "differences" ? "Brak różnic pasujących do filtrów." : "Brak pozycji pasujących do filtrów."

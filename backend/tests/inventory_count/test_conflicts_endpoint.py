@@ -87,6 +87,9 @@ class TestConflictsEndpointResilience(unittest.TestCase):
             self.assertEqual(item["line_id"], line.id)
             self.assertEqual(item["recount_state"], RECOUNT_STATE_REQUIRED)
             self.assertEqual(len(item["operators"]), 2)
+            self.assertEqual(len(item["counts"]), 2)
+            self.assertEqual(item["quantity_diff_label"], "10 ↔ 12")
+            self.assertEqual(item["conflict_status"], RECOUNT_STATE_REQUIRED)
 
     def test_missing_operator_user_still_returns_item(self):
         with self.Session() as db:

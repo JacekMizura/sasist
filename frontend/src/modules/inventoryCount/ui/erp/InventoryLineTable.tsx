@@ -1,8 +1,8 @@
 import { Clock, User } from "lucide-react";
 
 import type {
+  InventoryConflictCount,
   InventoryConflictItem,
-  InventoryConflictOperator,
   InventoryLineRead,
 } from "@/api/inventoryCountApi";
 import {
@@ -25,61 +25,25 @@ function fmtTime(iso: string | null | undefined): string {
   }
 }
 
+function conflictCounts(conflict?: InventoryConflictItem): InventoryConflictCount[] {
+  if (!conflict) return [];
+  if (conflict.counts?.length) return conflict.counts;
+  return (conflict.operators ?? []).map((op, index) => ({
+    count_id: index,
+    user_id: op.user_id,
+    operator_name: op.operator_name,
+    counted_qty: op.quantity,
+    created_at: op.counted_at,
+  }));
+}
+
 function hasOperatorQuantityConflict(conflict?: InventoryConflictItem): boolean {
-  const operators = conflict?.operators ?? [];
-  return operators.length >= 2 && new Set(operators.map((o) => o.quantity)).size > 1;
+  const counts = conflictCounts(conflict);
+  return counts.length >= 2 && new Set(counts.map((c) => c.counted_qty)).size > 1;
 }
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
-}
-
-type TableRow = {
-  key: string;
-  line: InventoryLineRead;
-  conflict?: InventoryConflictItem;
-  operator?: InventoryConflictOperator;
-  operatorSlice: boolean;
-};
-
-function buildTableRows(
-  lines: InventoryLineRead[],
-  conflicts: InventoryConflictItem[],
-  expandOperatorRows: boolean,
-): TableRow[] {
-  const conflictByLineId = new Map(conflicts.map((c) => [c.line_id, c]));
-  const rows: TableRow[] = [];
-
-  for (const ln of lines) {
-    const conflict = conflictByLineId.get(ln.id);
-    const operators = conflict?.operators ?? [];
-    const split = expandOperatorRows && hasOperatorQuantityConflict(conflict);
-
-    if (split) {
-      for (const op of operators) {
-        const expected = ln.expected_quantity;
-        rows.push({
-          key: `${ln.id}-op-${op.user_id ?? op.operator_name}`,
-          line: {
-            ...ln,
-            counted_quantity: op.quantity,
-            last_counted_by_name: op.operator_name,
-            last_counted_at: op.counted_at ?? ln.last_counted_at,
-            difference_quantity:
-              expected != null ? op.quantity - expected : ln.difference_quantity,
-          },
-          conflict,
-          operator: op,
-          operatorSlice: true,
-        });
-      }
-      continue;
-    }
-
-    rows.push({ key: String(ln.id), line: ln, conflict, operatorSlice: false });
-  }
-
-  return rows;
 }
 
 const thClass = `${listSellasistTableHeaderCellGrid} bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-500`;
@@ -135,67 +99,47 @@ function CountedCell({
   ln,
   conflict,
   conflictBusy,
-  operatorSlice,
-  operator,
-  onAcceptQuantity,
+  onAcceptCount,
   onRequestRecount,
 }: {
   ln: InventoryLineRead;
   conflict?: InventoryConflictItem;
   conflictBusy?: boolean;
-  operatorSlice?: boolean;
-  operator?: InventoryConflictOperator;
-  onAcceptQuantity?: (conflict: InventoryConflictItem, quantity: number) => void;
+  onAcceptCount?: (conflict: InventoryConflictItem, countId: number) => void;
   onRequestRecount?: (conflict: InventoryConflictItem) => void;
 }) {
-  if (operatorSlice && operator) {
-    return (
-      <div className="inline-flex min-w-[4rem] flex-col items-end gap-1">
-        <QtyCell label="Policz." value={fmtQty(operator.quantity)} emphasis="strong" />
-        {conflict?.recount_state === "required" && conflict ? (
-          <button
-            type="button"
-            disabled={conflictBusy}
-            onClick={() => onAcceptQuantity?.(conflict, operator.quantity)}
-            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Zatwierdź {fmtQty(operator.quantity)}
-          </button>
-        ) : null}
-      </div>
-    );
-  }
-
   const hasConflict = hasOperatorQuantityConflict(conflict);
 
   if (hasConflict) {
-    const operators = conflict?.operators ?? [];
+    const counts = conflictCounts(conflict);
+    const unresolved = conflict?.conflict_status === "required" || conflict?.recount_state === "required";
+
     return (
       <div className="inline-flex min-w-[8rem] flex-col items-end gap-1.5 text-right">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Policz.</span>
-        {operators.map((op) => (
-          <div key={`${op.user_id}-${op.operator_name}`} className="leading-tight">
-            <span className="text-[11px] font-semibold uppercase text-slate-500">{op.operator_name}</span>
-            <span className="ml-2 text-lg font-bold tabular-nums text-slate-900">{fmtQty(op.quantity)}</span>
+        {counts.map((entry) => (
+          <div key={entry.count_id} className="leading-tight">
+            <span className="text-[11px] font-semibold uppercase text-slate-500">{entry.operator_name}</span>
+            <span className="ml-2 text-lg font-bold tabular-nums text-slate-900">{fmtQty(entry.counted_qty)}</span>
           </div>
         ))}
-        {conflict?.recount_state === "required" ? (
+        {unresolved ? (
           <div className="mt-1 flex flex-wrap justify-end gap-1">
-            {operators.map((op) => (
+            {counts.map((entry) => (
               <button
-                key={`accept-${op.user_id}`}
+                key={`accept-${entry.count_id}`}
                 type="button"
                 disabled={conflictBusy}
-                onClick={() => onAcceptQuantity?.(conflict, op.quantity)}
+                onClick={() => onAcceptCount?.(conflict!, entry.count_id)}
                 className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
               >
-                Zatwierdź {fmtQty(op.quantity)}
+                Zatwierdź {fmtQty(entry.counted_qty)}
               </button>
             ))}
             <button
               type="button"
               disabled={conflictBusy}
-              onClick={() => onRequestRecount?.(conflict)}
+              onClick={() => onRequestRecount?.(conflict!)}
               className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
             >
               Ponowne liczenie
@@ -227,48 +171,83 @@ function DifferenceCell({ ln }: { ln: InventoryLineRead }) {
   );
 }
 
-function OperatorCell({ ln }: { ln: InventoryLineRead }) {
-  if (ln.last_counted_by_name) {
+function OperatorTimeCell({ ln, conflict }: { ln: InventoryLineRead; conflict?: InventoryConflictItem }) {
+  const hasConflict = hasOperatorQuantityConflict(conflict);
+
+  if (hasConflict) {
+    const counts = conflictCounts(conflict);
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs leading-snug text-slate-600">
-        <User className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-        <span className="font-medium text-slate-700">{ln.last_counted_by_name}</span>
-      </span>
+      <div className="flex flex-col gap-2">
+        <StackedLabels
+          items={counts.map((entry) => ({
+            key: entry.count_id,
+            primary: entry.operator_name,
+            secondary: fmtTime(entry.created_at),
+          }))}
+        />
+      </div>
     );
   }
 
-  return <span className="text-xs text-slate-400">—</span>;
+  return (
+    <div className="flex flex-col gap-1">
+      {ln.last_counted_by_name ? (
+        <span className="inline-flex items-center gap-1.5 text-xs leading-snug text-slate-600">
+          <User className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+          <span className="font-medium text-slate-700">{ln.last_counted_by_name}</span>
+        </span>
+      ) : (
+        <span className="text-xs text-slate-400">—</span>
+      )}
+      <span className="inline-flex items-center gap-1.5 text-xs tabular-nums text-slate-500">
+        <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+        {fmtTime(ln.last_counted_at)}
+      </span>
+    </div>
+  );
 }
 
-function StatusCell({
-  ln,
-  conflict,
-  operatorSlice,
-  conflictBusy,
-  onRequestRecount,
+function StackedLabels({
+  items,
 }: {
-  ln: InventoryLineRead;
-  conflict?: InventoryConflictItem;
-  operatorSlice?: boolean;
-  conflictBusy?: boolean;
-  onRequestRecount?: (conflict: InventoryConflictItem) => void;
+  items: Array<{ key: number; primary: string; secondary: string }>;
 }) {
+  return (
+    <>
+      {items.map((item) => (
+        <div key={item.key} className="flex flex-col gap-0.5">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+            <User className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+            {item.primary}
+          </span>
+          <span className="inline-flex items-center gap-1.5 pl-5 text-xs tabular-nums text-slate-500">
+            <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+            {item.secondary}
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function StatusCell({ ln, conflict }: { ln: InventoryLineRead; conflict?: InventoryConflictItem }) {
   const hasConflict = hasOperatorQuantityConflict(conflict);
 
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {hasConflict ? <InventoryConflictStatusBadge /> : <InventoryLineStatusBadge line={ln} />}
-      {operatorSlice && hasConflict && conflict?.recount_state === "required" ? (
-        <button
-          type="button"
-          disabled={conflictBusy}
-          onClick={() => onRequestRecount?.(conflict)}
-          className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-        >
-          Ponowne liczenie
-        </button>
-      ) : null}
-      {!operatorSlice && ln.recount_count > 0 && ln.recount_state !== "required" ? (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {hasConflict ? (
+        <>
+          <InventoryConflictStatusBadge />
+          {conflict?.quantity_diff_label ? (
+            <span className="inline-flex rounded-full border border-amber-200/90 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-amber-900">
+              {conflict.quantity_diff_label}
+            </span>
+          ) : null}
+        </>
+      ) : (
+        <InventoryLineStatusBadge line={ln} />
+      )}
+      {ln.recount_count > 0 && ln.recount_state !== "required" ? (
         <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
           ×{ln.recount_count} ponowne
         </span>
@@ -283,9 +262,7 @@ type Props = {
   loading?: boolean;
   conflictBusy?: boolean;
   emptyMessage?: string;
-  /** Progress tab — one row per operator when counts disagree. */
-  expandOperatorRows?: boolean;
-  onAcceptQuantity?: (conflict: InventoryConflictItem, quantity: number) => void;
+  onAcceptCount?: (conflict: InventoryConflictItem, countId: number) => void;
   onRequestRecount?: (conflict: InventoryConflictItem) => void;
 };
 
@@ -296,8 +273,7 @@ export default function InventoryLineTable({
   loading,
   conflictBusy,
   emptyMessage = "Brak pozycji.",
-  expandOperatorRows = false,
-  onAcceptQuantity,
+  onAcceptCount,
   onRequestRecount,
 }: Props) {
   if (loading) {
@@ -307,7 +283,7 @@ export default function InventoryLineTable({
     return <p className="py-10 text-center text-sm text-slate-500">{emptyMessage}</p>;
   }
 
-  const tableRows = buildTableRows(lines, conflicts, expandOperatorRows);
+  const conflictByLineId = new Map(conflicts.map((c) => [c.line_id, c]));
 
   return (
     <div className="min-w-0 overflow-x-auto overscroll-x-contain">
@@ -320,13 +296,14 @@ export default function InventoryLineTable({
             <th className={`${thClass} text-right`}>Policz.</th>
             <th className={`${thClass} text-right`}>Różn.</th>
             <th className={`${thClass} text-left`}>Status</th>
-            <th className={`${thClass} text-left`}>Operator</th>
-            <th className={`${thClass} text-left`}>Czas</th>
+            <th className={`${thClass} text-left`}>Operator / czas</th>
           </tr>
         </thead>
         <tbody>
-          {tableRows.map(({ key, line: ln, conflict, operator, operatorSlice }) => (
-              <tr key={key} className={rowClass}>
+          {lines.map((ln) => {
+            const conflict = conflictByLineId.get(ln.id);
+            return (
+              <tr key={ln.id} className={rowClass}>
                 <td className={tdClass}>
                   <ProductCell ln={ln} />
                 </td>
@@ -344,9 +321,7 @@ export default function InventoryLineTable({
                     ln={ln}
                     conflict={conflict}
                     conflictBusy={conflictBusy}
-                    operatorSlice={operatorSlice}
-                    operator={operator}
-                    onAcceptQuantity={onAcceptQuantity}
+                    onAcceptCount={onAcceptCount}
                     onRequestRecount={onRequestRecount}
                   />
                 </td>
@@ -354,25 +329,14 @@ export default function InventoryLineTable({
                   <DifferenceCell ln={ln} />
                 </td>
                 <td className={tdClass}>
-                  <StatusCell
-                    ln={ln}
-                    conflict={conflict}
-                    operatorSlice={operatorSlice}
-                    conflictBusy={conflictBusy}
-                    onRequestRecount={onRequestRecount}
-                  />
+                  <StatusCell ln={ln} conflict={conflict} />
                 </td>
                 <td className={tdClass}>
-                  <OperatorCell ln={ln} />
-                </td>
-                <td className={tdClass}>
-                  <span className="inline-flex items-center gap-1.5 text-xs tabular-nums text-slate-500">
-                    <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-                    {fmtTime(ln.last_counted_at)}
-                  </span>
+                  <OperatorTimeCell ln={ln} conflict={conflict} />
                 </td>
               </tr>
-            ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -7,11 +7,11 @@ import {
   downloadInventoryReportBlob,
   fetchInventoryAuditLog,
   fetchInventoryConflicts,
+  acceptInventoryConflictCount,
   fetchInventoryDocument,
   fetchInventoryDocumentTimelines,
   fetchInventoryPostingPreview,
   fetchInventoryUnknownProducts,
-  completeInventoryRecount,
   generateInventoryRecounts,
   getDocumentDifferenceAnalysis,
   listDocumentLines,
@@ -316,24 +316,14 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
     await Promise.all([loadDoc(), loadLines(), loadConflicts()]);
   }, [loadConflicts, loadDoc, loadLines]);
 
-  const resolveConflictQuantity = useCallback(
-    async (conflict: InventoryConflictItem, quantity: number) => {
+  const acceptConflictCount = useCallback(
+    async (conflict: InventoryConflictItem, countId: number) => {
       if (!Number.isFinite(id)) return;
       setConflictBusy(true);
       try {
-        let recountId = conflict.recount_id;
-        if (!recountId) {
-          await generateInventoryRecounts(tenantId, id);
-          const refreshed = await fetchInventoryConflicts(tenantId, id);
-          recountId = refreshed.items.find((item) => item.line_id === conflict.line_id)?.recount_id ?? null;
-        }
-        if (!recountId) {
-          toast.error("Nie udało się utworzyć zadania recount.");
-          return;
-        }
-        await completeInventoryRecount(tenantId, recountId, quantity);
+        const result = await acceptInventoryConflictCount(tenantId, id, conflict.line_id, countId);
         await refreshAfterConflictAction();
-        toast.success(`Zatwierdzono ${quantity} szt.`);
+        toast.success(`Zatwierdzono ${result.counted_quantity} szt.`);
       } catch (actionErr) {
         toast.error(formatInventoryRequestError(actionErr));
       } finally {
@@ -413,7 +403,7 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
     conflictsError,
     reloadConflicts: loadConflicts,
     conflictBusy,
-    resolveConflictQuantity,
+    acceptConflictCount,
     requestConflictRecount,
     unknownProducts,
     unknownLoading,

@@ -50,6 +50,20 @@ export async function rejectInventoryUnknownProduct(
   return data;
 }
 
+export async function acceptInventoryConflictCount(
+  tenantId: number,
+  documentId: number,
+  lineId: number,
+  countId: number,
+): Promise<{ line_id: number; count_entry_id: number; counted_quantity: number; operator_conflict_resolved: boolean }> {
+  const { data } = await api.post<{ line_id: number; count_entry_id: number; counted_quantity: number; operator_conflict_resolved: boolean }>(
+    `/inventory-count/documents/${documentId}/conflicts/accept`,
+    { line_id: lineId, count_id: countId },
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
 export async function generateInventoryRecounts(tenantId: number, documentId: number): Promise<{ recounts_created: number }> {
   const { data } = await api.post<{ recounts_created: number }>(
     `/inventory-count/documents/${documentId}/recounts/generate`,

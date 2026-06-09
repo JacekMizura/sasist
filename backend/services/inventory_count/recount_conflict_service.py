@@ -16,6 +16,7 @@ from ...models.inventory_count.constants import (
 from ...models.inventory_count.count_entry import InventoryCountEntry
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.inventory_count.recount import InventoryRecount
+from .conflict_resolution_service import line_operator_conflict_is_resolved
 
 
 def _qty_key(value: float | None) -> float:
@@ -92,6 +93,10 @@ def build_document_count_conflicts(
             for uid, qty in operator_quantities_for_line(db, lid).items():
                 merged[uid] = qty
         if has_operator_count_conflict(merged):
+            primary_line_id = min(line_ids)
+            line = db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == primary_line_id).first()
+            if line is not None and line_operator_conflict_is_resolved(line):
+                continue
             conflicts[key] = {
                 "location_id": key[0],
                 "product_id": key[1],
@@ -117,6 +122,9 @@ def resolve_line_recount_state(
     document_conflicts: dict[tuple[int, int], dict[str, Any]] | None = None,
 ) -> str:
     """Canonical recount state: none | required | resolved — NOT derived from expected vs counted."""
+    if line_operator_conflict_is_resolved(line):
+        return RECOUNT_STATE_RESOLVED
+
     recount = _recount_for_line(db, int(line.id))
     if recount is not None:
         if str(recount.status) == RECOUNT_STATUS_DONE:
@@ -152,6 +160,8 @@ def lines_with_unresolved_operator_conflicts(
             continue
         line = db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == primary_line_id).first()
         if line is None:
+            continue
+        if line_operator_conflict_is_resolved(line):
             continue
         seen_line_ids.add(primary_line_id)
         out.append(
