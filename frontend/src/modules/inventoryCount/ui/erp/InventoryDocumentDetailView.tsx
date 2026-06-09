@@ -58,6 +58,8 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
     linesLoading,
     conflicts,
     conflictsLoading,
+    conflictsError,
+    reloadConflicts,
     conflictBusy,
     resolveConflictQuantity,
     requestConflictRecount,
@@ -277,11 +279,13 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
         </div>
       ) : null}
 
-      {(conflicts?.items.length ?? 0) > 0 ? (
+      {(conflicts?.items.length ?? 0) > 0 || conflictsLoading || conflictsError ? (
         <div className={`${erpSurfaceCard} overflow-hidden`}>
           <InventoryConflictPanel
             items={conflicts?.items ?? []}
             loading={conflictsLoading}
+            error={conflictsError}
+            onRetry={() => void reloadConflicts()}
             busy={conflictBusy}
             onAcceptQuantity={(c, qty) => void resolveConflictQuantity(c, qty)}
             onRequestRecount={(c) => void requestConflictRecount(c)}

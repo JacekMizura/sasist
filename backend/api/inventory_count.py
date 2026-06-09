@@ -41,6 +41,7 @@ from ..services.inventory_count.approval_service import (
 )
 from ..services.inventory_count.adjustment_service import post_inventory_adjustments
 from ..services.inventory_count.audit_package_service import build_audit_package
+from ..services.inventory_count.conflict_detail_service import list_document_conflicts
 from ..services.inventory_count.line_service import get_document_difference_analysis, list_document_lines
 from ..services.inventory_count.recount_service import complete_recount, create_recounts_for_document
 from ..services.inventory_count.scope_preview_service import preview_document_scope, preview_inventory_scope
@@ -458,6 +459,21 @@ def inventory_count_conflicts(
         return list_document_conflicts(db, tenant_id=tenant_id, document_id=document_id)
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
+    except Exception:
+        logger.exception(
+            "INVENTORY_CONFLICTS_FATAL document_id=%s tenant_id=%s",
+            document_id,
+            tenant_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "conflicts_load_failed",
+                "message": "Nie udało się pobrać konfliktów liczenia.",
+                "document_id": document_id,
+                "tenant_id": tenant_id,
+            },
+        ) from None
 
 
 @router.get("/documents/{document_id}/unknown-products", response_model=list[InventoryUnknownProductRead])

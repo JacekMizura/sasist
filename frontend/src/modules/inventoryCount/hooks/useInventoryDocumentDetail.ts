@@ -68,6 +68,7 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
   const [timelines, setTimelines] = useState<Awaited<ReturnType<typeof fetchInventoryDocumentTimelines>> | null>(null);
   const [conflicts, setConflicts] = useState<InventoryConflictsRead | null>(null);
   const [conflictsLoading, setConflictsLoading] = useState(false);
+  const [conflictsError, setConflictsError] = useState<string | null>(null);
   const [unknownProducts, setUnknownProducts] = useState<InventoryUnknownProductRead[]>([]);
   const [unknownLoading, setUnknownLoading] = useState(false);
   const [opsPreview, setOpsPreview] = useState<InventoryPostingPreview | null>(null);
@@ -145,11 +146,13 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
   const loadConflicts = useCallback(async () => {
     if (!Number.isFinite(id)) return;
     setConflictsLoading(true);
+    setConflictsError(null);
     try {
       const data = await fetchInventoryConflicts(tenantId, id);
       setConflicts(data);
     } catch {
       setConflicts(null);
+      setConflictsError("Nie udało się pobrać konfliktów");
     } finally {
       setConflictsLoading(false);
     }
@@ -407,6 +410,8 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
     linesLoading,
     conflicts,
     conflictsLoading,
+    conflictsError,
+    reloadConflicts: loadConflicts,
     conflictBusy,
     resolveConflictQuantity,
     requestConflictRecount,

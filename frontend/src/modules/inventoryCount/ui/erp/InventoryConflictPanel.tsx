@@ -5,6 +5,8 @@ import { InventorySection } from "./InventoryPageShell";
 type Props = {
   items: InventoryConflictItem[];
   loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   busy?: boolean;
   onAcceptQuantity?: (conflict: InventoryConflictItem, quantity: number) => void;
   onRequestRecount?: (conflict: InventoryConflictItem) => void;
@@ -26,11 +28,32 @@ function fmtQty(n: number): string {
 export default function InventoryConflictPanel({
   items,
   loading,
+  error,
+  onRetry,
   busy,
   onAcceptQuantity,
   onRequestRecount,
 }: Props) {
   if (loading) return <p className="px-4 py-4 text-sm text-slate-500">Wczytywanie konfliktów…</p>;
+
+  if (error) {
+    return (
+      <InventorySection title="Konflikty liczenia">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+          <p className="text-sm text-amber-800">{error}</p>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+            >
+              Spróbuj ponownie
+            </button>
+          ) : null}
+        </div>
+      </InventorySection>
+    );
+  }
 
   if (items.length === 0) {
     return (

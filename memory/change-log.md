@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-09 — Fix: GET /inventory-count/documents/{id}/conflicts → 500
+- Przyczyna: brak importu `list_document_conflicts` w `inventory_count.py` → NameError
+- `conflict_detail_service`: batch load (lines/products/locations/carriers/recounts/operators), `_safe_float`, per-item try/except, logi skip/partial
+- API: `logger.exception` + structured 500 detail; testy `test_conflicts_endpoint.py`
+- Frontend: `conflictsError` + retry w panelu konfliktów (nie blokuje widoku dokumentu)
+
 ## 2026-06-09 — WMS launcher + topbar: przypinanie, biały UI
 - Launcher: bez hero, bg-white, kafel z pinezką (pin/unpin), reorder ←/→ dla przypiętych
 - Topbar: h-11, white, pills przypiętych modułów (środek), grid menu + magazyn (lewo)
