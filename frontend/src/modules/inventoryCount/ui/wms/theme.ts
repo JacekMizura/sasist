@@ -1,27 +1,47 @@
-/** WMS inventory — dense operational terminal + legacy ERP/queue tokens. */
+/** WMS inventory — modern operational terminal tokens (mockup-aligned). */
 
 export const WMS_INV = {
+  pageBg: "bg-[#fafbfc]",
   bg: "bg-white",
-  shell: "w-full space-y-2",
-  text: "text-slate-900",
+  shell: "mx-auto w-full max-w-4xl space-y-6 px-4 sm:px-6 pb-32",
+  shellWide: "mx-auto w-full max-w-5xl space-y-6 px-4 sm:px-6 pb-12",
+  text: "text-slate-800",
   textMuted: "text-slate-500",
-  textLabel: "text-[10px] font-black uppercase tracking-widest text-slate-400",
-  locationCode: "text-xl font-black tracking-tight text-slate-900 leading-none",
-  locationSub: "text-[10px] font-bold uppercase tracking-widest text-slate-400",
-  inputOperational:
-    "w-full border-2 border-slate-200 bg-slate-50/80 py-2 pl-10 pr-3 text-sm font-bold text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:bg-slate-100 focus:border-[#5a4fcf] focus:bg-white focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50",
-  chip: "inline-flex items-center border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600",
-  chipActive: "border-[#1e4d8c] text-[#1e4d8c]",
+  textLabel: "text-[11px] font-bold uppercase tracking-widest text-slate-400",
+  textSub: "text-sm font-medium text-slate-500",
+  locationCode:
+    "bg-[#eff2fe] border border-[#d6defc] text-[#5a45d0] px-5 py-3.5 rounded-xl font-bold text-lg flex items-center",
+  locationSub: "text-[11px] font-bold uppercase tracking-widest text-slate-400",
+  card: "bg-white border border-slate-200 rounded-[1.5rem] shadow-sm",
+  cardPad: "p-5 sm:p-6",
+  scanHero:
+    "block w-full pl-20 pr-8 py-6 border border-slate-200 rounded-[2rem] focus:ring-4 focus:ring-indigo-50 focus:border-[#5a45d0] focus:outline-none text-xl font-semibold text-slate-700 placeholder-slate-400 transition-all bg-white shadow-sm disabled:opacity-50",
+  scanDefault:
+    "block w-full pl-16 pr-6 py-5 border border-slate-200 rounded-[1.5rem] focus:ring-4 focus:ring-indigo-50 focus:border-[#5a45d0] focus:outline-none text-lg font-medium text-slate-700 placeholder-slate-400 transition-shadow bg-white shadow-sm disabled:opacity-50",
+  scanIconHero: "pointer-events-none absolute left-8 top-1/2 h-7 w-7 -translate-y-1/2 text-[#5a45d0]",
+  scanIconDefault: "pointer-events-none absolute left-6 top-1/2 h-6 w-6 -translate-y-1/2 text-[#5a45d0]",
+  chip: "inline-flex items-center border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 rounded-lg",
+  chipActive: "border-[#5a45d0] text-[#5a45d0]",
   btnAction:
-    "h-9 w-full max-w-xs border border-slate-200 bg-white px-3 text-left text-xs font-black uppercase tracking-wide text-slate-700 active:bg-slate-50 disabled:opacity-40",
+    "flex-1 bg-white border-2 border-slate-200 text-slate-700 text-xs font-bold py-4 px-4 rounded-xl hover:bg-slate-50 transition-colors uppercase tracking-widest disabled:opacity-40",
   btnActionPrimary:
-    "h-9 w-full max-w-xs border border-[#1e4d8c] bg-[#1e4d8c] px-3 text-left text-xs font-black uppercase tracking-wide text-white active:bg-[#163a6b]",
+    "flex-1 bg-[#23438e] hover:bg-[#1a326b] text-white text-xs font-bold py-4 px-4 rounded-xl transition-colors uppercase tracking-widest shadow-md disabled:opacity-40",
+  btnCta:
+    "w-full md:w-auto bg-[#23438e] hover:bg-[#1a326b] text-white text-sm px-8 py-3 rounded-xl font-semibold transition-colors shadow-sm disabled:bg-slate-300",
+  bottomBar:
+    "fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 flex justify-center z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]",
+  bottomBarInner: "max-w-4xl w-full flex gap-4",
+  docSwitcherBar: "px-4 sm:px-6 py-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm",
+  docSwitcherBtn:
+    "flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-slate-800 transition-colors bg-slate-50 px-3 py-2 rounded-lg border border-slate-100",
   divider: "border-t border-slate-100",
+  accentPurple: "text-[#5a45d0]",
+  accentBlue: "text-[#23438e]",
   /** Legacy — modals / supervisor queue */
   surface: "bg-white",
   border: "border-[#e8edf3]",
   borderStrong: "border-[#d0d7e2]",
-  primary: "bg-[#1e4d8c]",
+  primary: "bg-[#23438e]",
   primaryText: "text-white",
   accent: "bg-[#e87722]",
   accentText: "text-white",
@@ -31,14 +51,16 @@ export const WMS_INV = {
   rowHover: "hover:bg-[#f8f9fb]",
   rowActive: "bg-[#eef3fa]",
   header: "bg-[#1e3a5f] text-white",
+  inputOperational:
+    "block w-full pl-16 pr-6 py-5 border border-slate-200 rounded-[1.5rem] focus:ring-4 focus:ring-indigo-50 focus:border-[#5a45d0] focus:outline-none text-lg font-medium text-slate-700 placeholder-slate-400 transition-shadow bg-white shadow-sm disabled:opacity-50",
   input:
-    "w-full rounded-lg border border-[#c8ced8] bg-white px-3 py-2.5 text-base font-semibold text-[#1a2b3c] placeholder:text-[#a0aec0] focus:border-[#1e4d8c] focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]/20",
+    "w-full rounded-lg border border-[#c8ced8] bg-white px-3 py-2.5 text-base font-semibold text-[#1a2b3c] placeholder:text-[#a0aec0] focus:border-[#23438e] focus:outline-none focus:ring-2 focus:ring-[#23438e]/20",
   btnPrimary:
-    "inline-flex min-h-[44px] w-full items-center justify-center bg-[#1e4d8c] px-4 text-sm font-bold text-white active:bg-[#163a6b] disabled:opacity-40",
+    "inline-flex min-h-[44px] w-full items-center justify-center bg-[#23438e] px-4 text-sm font-bold text-white active:bg-[#1a326b] disabled:opacity-40 rounded-xl",
   btnGhost:
-    "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#d0d7e2] bg-white px-4 py-2 text-sm font-bold text-[#1a2b3c] active:scale-[0.98]",
+    "inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[#d0d7e2] bg-white px-4 py-2 text-sm font-bold text-[#1a2b3c] active:scale-[0.98]",
   btnAccent:
-    "inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[#e87722] px-4 py-2 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40",
+    "inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#e87722] px-4 py-2 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40",
 } as const;
 
 export const TASK_ROW_HEIGHT = 40;

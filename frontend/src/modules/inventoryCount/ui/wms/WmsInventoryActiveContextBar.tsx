@@ -1,7 +1,7 @@
-import { Boxes, MapPin, Package2, X } from "lucide-react";
+import { MapPin, Package, X } from "lucide-react";
 
 import type { WmsCarrierContext, WmsLocationContext } from "../../wmsInventoryExecutionContext";
-import { LocationBadge } from "@/components/warehouse/LocationBadge";
+import { WMS_INV } from "./theme";
 
 type ActiveProduct = {
   product_name?: string | null;
@@ -17,115 +17,75 @@ type Props = {
   onClearCarrier: () => void;
   carrierScanMode?: boolean;
   onSkipCarrier?: () => void;
+  locationSubline?: string | null;
 };
 
 export default function WmsInventoryActiveContextBar({
   location,
   carrier,
-  activeProduct,
   onEnterCarrierScan,
   onClearCarrier,
   carrierScanMode,
   onSkipCarrier,
+  locationSubline,
 }: Props) {
   if (!location?.confirmed) {
     return (
-      <div className="sticky top-0 z-20 rounded-lg border-2 border-amber-300 bg-amber-50 px-3 py-2 shadow-sm">
-        <p className="text-sm font-black text-amber-900">Zeskanuj lokalizację, aby rozpocząć liczenie</p>
+      <div className={`${WMS_INV.card} ${WMS_INV.cardPad} border-amber-200 bg-amber-50`}>
+        <p className="text-sm font-bold text-amber-900">Zeskanuj lokalizację, aby rozpocząć liczenie</p>
       </div>
     );
   }
 
   return (
-    <div className="sticky top-0 z-20 space-y-1 rounded-lg border border-slate-300 bg-white p-2 shadow-md">
-      <ContextRow icon={MapPin} label="LOKALIZACJA" tone="location">
-        <LocationBadge code={location.locationCode} type="PICK" />
-      </ContextRow>
+    <div className={`${WMS_INV.card} ${WMS_INV.cardPad}`}>
+      <div className="mb-4 flex items-center justify-between">
+        <div className={WMS_INV.textLabel}>Lokalizacja</div>
+        {locationSubline ? <span className={WMS_INV.locationSub}>{locationSubline}</span> : null}
+      </div>
+
+      <div className={`${WMS_INV.locationCode} mb-4 w-full`}>
+        <MapPin className="mr-3 h-5 w-5 shrink-0" />
+        {location.locationCode}
+      </div>
 
       {carrier ? (
-        <ContextRow icon={Boxes} label="NOŚNIK" tone="carrier">
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-            <p className="truncate font-mono text-base font-black text-[#1e4d8c]">{carrier.code}</p>
-            <button
-              type="button"
-              onClick={onClearCarrier}
-              className="shrink-0 rounded-md border border-[#1e4d8c]/30 bg-white p-1 text-slate-600 hover:bg-slate-50"
-              aria-label="Usuń nośnik"
-            >
-              <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </button>
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-[#d6defc] bg-[#eff2fe] px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <Package className="h-4 w-4 shrink-0 text-[#5a45d0]" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Nośnik</p>
+              <p className="truncate font-mono text-sm font-bold text-[#5a45d0]">{carrier.code}</p>
+            </div>
           </div>
-        </ContextRow>
+          <button
+            type="button"
+            onClick={onClearCarrier}
+            className="shrink-0 rounded-full p-2 text-slate-400 hover:bg-white hover:text-slate-600"
+            aria-label="Usuń nośnik"
+          >
+            <X className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        </div>
       ) : carrierScanMode ? (
-        <ContextRow icon={Boxes} label="NOŚNIK" tone="scan">
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-            <span className="text-sm font-bold text-[#1e4d8c]">Skanuj kod nośnika…</span>
-            {onSkipCarrier ? (
-              <button type="button" onClick={onSkipCarrier} className="text-[11px] font-bold text-slate-500 underline">
-                Anuluj
-              </button>
-            ) : null}
-          </div>
-        </ContextRow>
+        <div className="mb-4 flex items-center justify-between rounded-xl border-2 border-dashed border-[#5a45d0]/40 bg-[#eff2fe]/50 px-4 py-4">
+          <span className="text-sm font-bold text-[#5a45d0]">Skanuj kod nośnika…</span>
+          {onSkipCarrier ? (
+            <button type="button" onClick={onSkipCarrier} className="text-xs font-bold text-slate-500 underline">
+              Anuluj
+            </button>
+          ) : null}
+        </div>
       ) : (
         <button
           type="button"
           onClick={onEnterCarrierScan}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-slate-200 bg-slate-50/80 px-2 py-1.5 text-[11px] font-bold text-slate-600 hover:border-[#1e4d8c]/40"
+          className="flex w-full items-center justify-center rounded-xl border-2 border-dashed border-slate-200 py-4 text-xs font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
         >
-          <Boxes className="h-3.5 w-3.5 text-[#1e4d8c]" />
+          <Package className="mr-2 h-4 w-4 text-slate-400" />
           Przypisz nośnik (paleta / kontener)
         </button>
       )}
-
-      {activeProduct ? (
-        <ContextRow icon={Package2} label="PRODUKT" tone="product">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-black text-slate-900">
-              {activeProduct.product_name ?? activeProduct.sku ?? "—"}
-            </p>
-            {activeProduct.ean ? (
-              <p className="truncate text-[10px] text-slate-500">EAN {activeProduct.ean}</p>
-            ) : null}
-          </div>
-        </ContextRow>
-      ) : (
-        <p className="px-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Zeskanuj produkt</p>
-      )}
-    </div>
-  );
-}
-
-function ContextRow({
-  icon: Icon,
-  label,
-  tone,
-  children,
-}: {
-  icon: typeof MapPin;
-  label: string;
-  tone: "location" | "carrier" | "product" | "scan";
-  children: React.ReactNode;
-}) {
-  const bg =
-    tone === "carrier"
-      ? "bg-[#1e4d8c]/10 border-[#1e4d8c]/25"
-      : tone === "product"
-        ? "bg-emerald-50 border-emerald-200"
-        : tone === "scan"
-          ? "border-dashed border-[#1e4d8c]/40 bg-[#eef3fa]"
-          : "bg-slate-50 border-slate-200";
-
-  return (
-    <div className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${bg}`}>
-      <Icon
-        className={`h-4 w-4 shrink-0 ${tone === "carrier" || tone === "scan" ? "text-[#1e4d8c]" : "text-slate-500"}`}
-        strokeWidth={2.5}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-black tracking-widest text-slate-400">{label}</p>
-        {children}
-      </div>
     </div>
   );
 }

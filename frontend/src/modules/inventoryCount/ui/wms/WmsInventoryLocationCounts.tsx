@@ -1,8 +1,7 @@
-import { Boxes, MapPin, Package2 } from "lucide-react";
+import { Package } from "lucide-react";
 
 import type { WmsCountedCarrierGroup } from "../../wmsInventoryExecutionContext";
 import type { WmsCountedProduct } from "../../wmsInventoryExecutionContext";
-import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { WMS_INV } from "./theme";
 
 type Props = {
@@ -27,42 +26,41 @@ function ProductRow({
   const isActive = item.line_id === activeLineId;
   const pulse = item.line_id === pulseLineId;
   const ring = pulse
-    ? "ring-2 ring-emerald-400/70"
+    ? "ring-2 ring-emerald-400/60"
     : isActive
-      ? "ring-1 ring-[#1e4d8c]/50 bg-white"
-      : "bg-white/80";
+      ? "ring-2 ring-[#5a45d0]/30 border-[#5a45d0]/40"
+      : "border-slate-200";
 
   return (
     <button
       type="button"
       onClick={() => onSelect?.(item)}
-      className={`flex w-full items-center gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-left transition-all ${ring}`}
+      className={`${WMS_INV.card} flex w-full items-center justify-between p-5 text-left transition-all ${ring}`}
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-slate-50">
-        {item.image_url ? (
-          <img src={item.image_url} alt="" className="max-h-full max-w-full object-contain" />
-        ) : (
-          <Package2 className="h-4 w-4 text-slate-300" strokeWidth={1.5} />
-        )}
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex h-10 w-16 shrink-0 items-center justify-center overflow-hidden rounded border border-slate-100 bg-white">
+          {item.image_url ? (
+            <img src={item.image_url} alt="" className="max-h-full max-w-full object-contain" />
+          ) : (
+            <Package className="h-4 w-4 text-slate-300" strokeWidth={1.5} />
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-slate-800">{item.product_name ?? item.sku ?? "—"}</p>
+          {item.ean ? (
+            <p className="mt-0.5 text-[11px] text-slate-500">EAN {item.ean}</p>
+          ) : item.sku ? (
+            <p className="mt-0.5 text-[11px] text-slate-500">{item.sku}</p>
+          ) : null}
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-bold leading-tight text-slate-900">
-          {item.product_name ?? item.sku ?? "—"}
-        </p>
-        {item.ean ? (
-          <p className="truncate font-mono text-[10px] text-slate-500">EAN {item.ean}</p>
-        ) : item.sku ? (
-          <p className="truncate font-mono text-[10px] text-slate-500">{item.sku}</p>
-        ) : null}
-      </div>
-      <p className="shrink-0 text-xl font-black tabular-nums leading-none text-[#1e4d8c]">{item.counted_quantity}</p>
+      <p className="shrink-0 text-3xl font-bold tabular-nums leading-none text-[#23438e]">{item.counted_quantity}</p>
     </button>
   );
 }
 
 export default function WmsInventoryLocationCounts({
   groups,
-  locationCode,
   activeLineId,
   pulseLineId,
   onSelect,
@@ -72,58 +70,36 @@ export default function WmsInventoryLocationCounts({
   const hasCarriers = groups.some((g) => g.carrierId != null);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-slate-50/50 p-2">
-      <div className="mb-2 flex items-center gap-2 border-b border-slate-200/80 pb-2">
-        <MapPin className="h-4 w-4 text-slate-500" strokeWidth={2} />
-        <div>
-          <p className={WMS_INV.textLabel}>Lokalizacja</p>
-          {locationCode ? (
-            <LocationBadge code={locationCode} type="PICK" />
-          ) : (
-            <span className="text-xs font-bold text-slate-700">—</span>
-          )}
-        </div>
-      </div>
+    <section className="space-y-3">
+      {groups.map((group) => (
+        <div key={group.key} className="space-y-3">
+          {hasCarriers ? (
+            <div
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest ${
+                group.carrierId != null
+                  ? "border border-[#d6defc] bg-[#eff2fe] text-[#5a45d0]"
+                  : "border border-dashed border-slate-200 text-slate-400"
+              }`}
+            >
+              <Package className="h-3.5 w-3.5" />
+              {group.carrierCode ?? (group.carrierId != null ? `#${group.carrierId}` : "Bez nośnika")}
+            </div>
+          ) : null}
 
-      <div className="space-y-2">
-        {groups.map((group) => (
-          <div key={group.key}>
-            {hasCarriers ? (
-              <div
-                className={`mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 ${
-                  group.carrierId != null
-                    ? "border border-[#1e4d8c]/25 bg-[#1e4d8c]/10"
-                    : "border border-dashed border-slate-300 bg-white"
-                }`}
-              >
-                <Boxes
-                  className={`h-5 w-5 shrink-0 ${group.carrierId != null ? "text-[#1e4d8c]" : "text-slate-400"}`}
-                  strokeWidth={2}
+          <ul className="space-y-3">
+            {group.items.map((item) => (
+              <li key={item.line_id}>
+                <ProductRow
+                  item={item}
+                  activeLineId={activeLineId}
+                  pulseLineId={pulseLineId}
+                  onSelect={onSelect}
                 />
-                <div className="min-w-0">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Nośnik</p>
-                  <p className="font-mono text-sm font-black text-[#1e4d8c]">
-                    {group.carrierCode ?? (group.carrierId != null ? `#${group.carrierId}` : "Bez nośnika")}
-                  </p>
-                </div>
-              </div>
-            ) : null}
-
-            <ul className={`space-y-1 ${hasCarriers ? "ml-3 border-l-2 border-[#1e4d8c]/20 pl-2" : ""}`}>
-              {group.items.map((item) => (
-                <li key={item.line_id}>
-                  <ProductRow
-                    item={item}
-                    activeLineId={activeLineId}
-                    pulseLineId={pulseLineId}
-                    onSelect={onSelect}
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

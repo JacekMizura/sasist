@@ -9,6 +9,7 @@ import {
 import { wmsInventoryCountPaths } from "../../inventoryCountPaths";
 import { setActiveInventoryDocumentId } from "../../wmsActiveDocumentStorage";
 import { useWarehouse } from "@/context/WarehouseContext";
+import { WMS_INV } from "./theme";
 
 const TENANT_ID = 1;
 
@@ -57,17 +58,17 @@ export default function WmsInventoryDocumentSwitcher() {
 
   if (loading && docs.length === 0) {
     return (
-      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white py-1.5 text-[11px] text-slate-400">
-        Inwentaryzacja…
+      <div className={`${WMS_INV.docSwitcherBar} z-10`}>
+        <span className="text-xs text-slate-400">Inwentaryzacja…</span>
       </div>
     );
   }
 
   if (docs.length === 0) {
     return (
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white py-1.5">
-        <span className="text-[11px] font-bold text-slate-500">Inwentaryzacja</span>
-        <Link to={wmsInventoryCountPaths.root} className="text-[10px] font-semibold text-[#1e4d8c] underline">
+      <div className={`${WMS_INV.docSwitcherBar} z-10`}>
+        <span className="text-xs font-bold text-slate-500">Inwentaryzacja</span>
+        <Link to={wmsInventoryCountPaths.root} className="text-xs font-semibold text-[#23438e] underline">
           Lista
         </Link>
       </div>
@@ -85,35 +86,36 @@ export default function WmsInventoryDocumentSwitcher() {
   };
 
   return (
-    <div ref={rootRef} className="relative sticky top-0 z-30 border-b border-slate-200 bg-white py-1.5">
-      <div className="flex items-center gap-2">
-        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">Inwentaryzacja</span>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-left text-[11px] font-semibold text-slate-800 hover:bg-slate-100"
-        >
-          <span className="truncate">{label}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-        </button>
-        <Link to={wmsInventoryCountPaths.root} className="shrink-0 text-[10px] font-semibold text-slate-500 underline">
-          Lista
-        </Link>
-      </div>
+    <div ref={rootRef} className={`relative ${WMS_INV.docSwitcherBar} z-10`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={WMS_INV.docSwitcherBtn}
+      >
+        <ChevronDown className="h-4 w-4 rotate-90 text-slate-400" />
+        <span className="truncate max-w-[min(100vw-8rem,32rem)]">{label}</span>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      <Link
+        to={wmsInventoryCountPaths.root}
+        className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600"
+      >
+        Lista
+      </Link>
       {open ? (
-        <ul className="absolute left-0 right-0 z-40 mt-0.5 max-h-48 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
+        <ul className="absolute left-4 right-4 top-full z-40 mt-1 max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg sm:left-6 sm:right-auto sm:min-w-[20rem]">
           {docs.map((d) => (
             <li key={d.id}>
               <button
                 type="button"
                 onClick={() => switchDoc(d)}
-                className={`w-full px-3 py-2 text-left text-[11px] hover:bg-slate-50 ${
-                  d.id === activeId ? "bg-slate-100 font-bold" : ""
+                className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-50 ${
+                  d.id === activeId ? "bg-slate-50 font-bold" : ""
                 }`}
               >
-                <span className="font-mono">{d.number}</span>
+                <span className="font-mono text-slate-800">{d.number}</span>
                 {d.title?.trim() ? <span className="text-slate-600"> · {d.title.trim()}</span> : null}
-                <span className="block text-[10px] text-slate-400">
+                <span className="mt-0.5 block text-xs text-slate-400">
                   {d.coverage_percent}% · {d.status === "in_progress" ? "Liczenie" : "Do zatwierdzenia"}
                 </span>
               </button>

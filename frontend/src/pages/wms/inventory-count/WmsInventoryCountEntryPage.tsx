@@ -17,7 +17,7 @@ import {
   type RecentLocationSession,
 } from "@/modules/inventoryCount/recentLocationsStorage";
 import { setActiveInventoryDocumentId } from "@/modules/inventoryCount/wmsActiveDocumentStorage";
-import { WMS_INV } from "@/modules/inventoryCount/wmsIndustrialTheme";
+import { WMS_INV } from "@/modules/inventoryCount/ui/wms/theme";
 import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
 import { useWarehouse } from "@/context/WarehouseContext";
 
@@ -145,23 +145,29 @@ export default function WmsInventoryCountEntryPage() {
   });
 
   if (!warehouseId) {
-    return <p className={`py-4 text-sm font-bold ${WMS_INV.textMuted}`}>Wybierz magazyn.</p>;
+    return (
+      <div className={WMS_INV.shellWide}>
+        <p className={`py-4 text-sm font-bold ${WMS_INV.textMuted}`}>Wybierz magazyn.</p>
+      </div>
+    );
   }
 
   if (!Number.isFinite(documentId)) {
     return (
-      <p className="text-sm text-rose-700">
-        Brak dokumentu.{" "}
-        <Link to={wmsInventoryCountPaths.root} className="underline">
-          Wróć do listy
-        </Link>
-      </p>
+      <div className={WMS_INV.shellWide}>
+        <p className="text-sm text-rose-700">
+          Brak dokumentu.{" "}
+          <Link to={wmsInventoryCountPaths.root} className="underline">
+            Wróć do listy
+          </Link>
+        </p>
+      </div>
     );
   }
 
   if (docBlocked) {
     return (
-      <div className={WMS_INV.shell}>
+      <div className={WMS_INV.shellWide}>
         <p className="text-sm text-rose-700">{docBlocked}</p>
         <Link to={wmsInventoryCountPaths.root} className="mt-2 inline-block text-xs font-bold underline">
           Wróć do listy inwentaryzacji
@@ -171,20 +177,24 @@ export default function WmsInventoryCountEntryPage() {
   }
 
   return (
-    <div className={WMS_INV.shell}>
-      {docTitle ? <p className="mb-1 text-[11px] font-semibold text-slate-600">{docTitle}</p> : null}
-      <h1 className={WMS_INV.textLabel}>Zeskanuj lokalizację</h1>
+    <div className={`${WMS_INV.shell} mt-12 flex flex-col items-center`}>
+      {docTitle ? <p className="mb-2 w-full text-sm font-semibold text-slate-600">{docTitle}</p> : null}
 
-      <WmsInventoryScanField
-        inputRef={inputRef}
-        value={query}
-        onChange={onChange}
-        onSubmit={() => void submitScanOnce(query)}
-        placeholder="Kod lokalizacji"
-        disabled={busy}
-      />
+      <div className="relative mb-16 w-full max-w-2xl">
+        <WmsInventoryScanField
+          inputRef={inputRef}
+          value={query}
+          onChange={onChange}
+          onSubmit={() => void submitScanOnce(query)}
+          placeholder="Zeskanuj lokalizację..."
+          disabled={busy}
+          size="hero"
+        />
+      </div>
 
-      <WmsInventoryRecentLocationContext items={recent} disabled={busy} onSelect={openRecent} />
+      <div className="w-full">
+        <WmsInventoryRecentLocationContext items={recent} disabled={busy} onSelect={openRecent} />
+      </div>
     </div>
   );
 }

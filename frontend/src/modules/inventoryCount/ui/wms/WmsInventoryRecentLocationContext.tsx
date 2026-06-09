@@ -1,6 +1,4 @@
-import { Package } from "lucide-react";
-
-import { LocationBadge } from "@/components/warehouse/LocationBadge";
+import { Box, Package } from "lucide-react";
 
 import {
   formatRelativeTimePl,
@@ -16,7 +14,7 @@ type Props = {
 
 function ProductThumb({ url, name }: { url?: string | null; name?: string | null }) {
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center">
+    <div className="flex h-10 w-16 shrink-0 items-center justify-center overflow-hidden rounded border border-slate-100 bg-white">
       {url ? (
         <img src={url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
       ) : (
@@ -27,55 +25,78 @@ function ProductThumb({ url, name }: { url?: string | null; name?: string | null
   );
 }
 
+function LocationChip({ code }: { code: string }) {
+  return (
+    <div className="flex shrink-0 items-center rounded-xl border border-[#d6defc] bg-[#eff2fe] px-4 py-2 text-sm font-bold text-[#5a45d0]">
+      <Box className="mr-2 h-4 w-4" />
+      {code}
+    </div>
+  );
+}
+
 export default function WmsInventoryRecentLocationContext({ items, disabled, onSelect }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <section>
-      <p className={WMS_INV.textLabel}>Ostatnie lokalizacje</p>
-      <ul className="mt-0.5 divide-y divide-slate-100">
-        {items.map((item) => {
-          const rel = formatRelativeTimePl(item.at);
-          const hasProduct = Boolean(item.lastProductName && item.lastProductQty > 0);
-          const ean = item.lastProductEan?.trim();
+    <section className="w-full">
+      <p className={`${WMS_INV.textLabel} mb-4`}>Ostatnie lokalizacje</p>
+      <div className={`${WMS_INV.card} overflow-hidden`}>
+        <ul>
+          {items.map((item, index) => {
+            const rel = formatRelativeTimePl(item.at);
+            const hasProduct = Boolean(item.lastProductName && item.lastProductQty > 0);
+            const ean = item.lastProductEan?.trim();
+            const isLast = index === items.length - 1;
 
-          return (
-            <li key={item.taskId}>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => onSelect(item)}
-                className="flex w-full items-start gap-1.5 py-1 text-left active:bg-slate-50/80 disabled:opacity-40"
-              >
-                <LocationBadge code={item.code} type="PICK" className="shrink-0 !py-0.5 !text-xs !font-black" />
-
-                {hasProduct ? (
-                  <div className="min-w-0 flex-1 leading-tight">
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      <ProductThumb url={item.lastProductImageUrl} name={item.lastProductName} />
-                      <p className="min-w-0 flex-1 truncate text-[11px] font-black text-slate-900">
-                        {item.lastProductName}
-                      </p>
+            return (
+              <li key={item.taskId} className={isLast ? "" : "border-b border-slate-100"}>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onSelect(item)}
+                  className="flex w-full items-center justify-between gap-4 p-5 text-left transition-colors hover:bg-slate-50/80 disabled:opacity-40"
+                >
+                  {hasProduct ? (
+                    <>
+                      <div className="flex min-w-0 flex-1 items-center gap-6">
+                        <LocationChip code={item.code} />
+                        <div className="flex min-w-0 items-center gap-4">
+                          <ProductThumb url={item.lastProductImageUrl} name={item.lastProductName} />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-bold text-slate-800">{item.lastProductName}</div>
+                            {ean ? (
+                              <div className="mt-1 text-[11px] text-slate-500">
+                                EAN: <span className="font-medium">{ean}</span>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="block text-lg font-bold text-slate-800">{item.lastProductQty} szt.</span>
+                        {rel ? <span className="text-xs text-slate-400">{rel}</span> : null}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-6">
+                      <LocationChip code={item.code} />
+                      <div className="text-sm font-medium text-slate-400">
+                        Brak policzonych produktów
+                        {rel ? (
+                          <>
+                            <span className="mx-2 text-slate-200">·</span>
+                            {rel}
+                          </>
+                        ) : null}
+                      </div>
                     </div>
-                    {ean ? (
-                      <p className="truncate pl-[42px] font-mono text-[10px] text-slate-500">EAN: {ean}</p>
-                    ) : null}
-                    <p className="truncate pl-[42px] text-[10px] font-bold text-slate-600">
-                      <span className="font-black tabular-nums text-[#1e4d8c]">{item.lastProductQty} szt.</span>
-                      {rel ? <span className="font-semibold text-slate-400"> · {rel}</span> : null}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="min-w-0 flex-1 self-center truncate py-0.5 text-[11px] font-semibold text-slate-400">
-                    Brak policzonych produktów
-                    {rel ? <span className="text-slate-300"> · {rel}</span> : null}
-                  </p>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }

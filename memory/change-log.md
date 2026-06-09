@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-08 — WMS inventory terminal UI (mockup-aligned)
+- Presentation-only restyle of operator flow: document cards, location scan, product scan, qty modal
+- New/updated `ui/wms/` components: `WmsInventoryLandingView`, `WmsInventoryProductDetailPanel`, mockup theme tokens
+- Hooks, API, scan handlers, counting logic unchanged; ERP admin inventory untouched
+
 ## 2026-06-08 — Inventory UX: portal dropdown + draft delete
 - Reports document picker renders via portal (`z-index: 10050`) — no clipping under sticky ERP chrome
 - Draft documents deletable from list (trash action + confirm modal); `DELETE /inventory-count/documents/{id}` with status/session validation
