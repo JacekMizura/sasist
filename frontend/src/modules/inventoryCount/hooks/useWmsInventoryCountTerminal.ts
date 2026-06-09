@@ -165,8 +165,8 @@ function resetCountingUi(setters: {
   setters.setQtyEditState(EMPTY_INVENTORY_QTY);
   setters.setPackaging({ unitsPerCarton: 1, cartonEan: null });
   setters.setLastScanKind(null);
-  setOperatorRecent([]);
-  setCountConflict(false);
+  setters.setOperatorRecent([]);
+  setters.setCountConflict(false);
 }
 
 /**
