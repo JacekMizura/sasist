@@ -1,20 +1,35 @@
 import api from "./axios";
 
+export type WorkforceActionBuckets = {
+  picking_events: number;
+  packing_events: number;
+  scan_events: number;
+  receiving_events?: number;
+  putaway_events?: number;
+  movement_events?: number;
+  document_events?: number;
+  inventory_events?: number;
+  admin_events?: number;
+};
+
+export type WorkforceModuleCount = { module: string; count: number };
+export type WorkforceHourlyBucket = { hour: number; count: number };
+export type WorkforceDailyBucket = { date: string; count: number };
+
 export type WorkforceDashboardResponse = {
   dashboard: {
     range: { from: string; to: string };
+    session_gap_minutes?: number;
     total_events: number;
     distinct_users: number;
     approx_sessions_computed: number;
-    action_buckets: {
-      picking_events: number;
-      packing_events: number;
-      scan_events: number;
-      receiving_events?: number;
-      putaway_events?: number;
-      movement_events?: number;
-    };
-    per_user: Array<{ user_id: number; events: number; active_minutes_approx: number }>;
+    total_active_minutes_approx?: number;
+    total_active_hours_approx?: number;
+    action_buckets: WorkforceActionBuckets;
+    top_modules?: WorkforceModuleCount[];
+    hourly_heatmap?: WorkforceHourlyBucket[];
+    daily_breakdown?: WorkforceDailyBucket[];
+    per_user: Array<{ user_id: number; events: number; active_minutes_approx: number; sessions_count?: number }>;
   };
   costs: {
     total_estimated_cost_pln: number;
@@ -30,11 +45,40 @@ export type WorkforceDashboardResponse = {
   };
 };
 
+export type WorkforceAnalyticsResponse = WorkforceDashboardResponse["dashboard"] & {
+  user_id?: number | null;
+  sessions: Array<{
+    index: number;
+    session_id: string | null;
+    started_at: string | null;
+    last_at: string | null;
+    events: number;
+    active_minutes_approx: number;
+    top_modules: WorkforceModuleCount[];
+  }>;
+  recent_timeline: Array<{
+    id: number;
+    user_id: number | null;
+    login: string | null;
+    module: string;
+    action_type: string;
+    warehouse_id: number | null;
+    session_id: string | null;
+    created_at: string | null;
+  }>;
+  throughput: {
+    events_per_active_hour: number;
+    events_per_user: number;
+  };
+};
+
 export type WorkforceActivityRow = {
   id: number;
   user_id: number | null;
   login: string | null;
   tenant_id: number | null;
+  warehouse_id?: number | null;
+  session_id?: string | null;
   action_type: string;
   module: string;
   entity_type: string | null;
@@ -68,6 +112,16 @@ export async function fetchWorkforceDashboard(params?: {
   return res.data;
 }
 
+export async function fetchWorkforceAnalytics(params?: {
+  tenant_id?: number;
+  user_id?: number;
+  date_from?: string;
+  date_to?: string;
+}): Promise<WorkforceAnalyticsResponse> {
+  const res = await api.get<WorkforceAnalyticsResponse>("/workforce/analytics", { params });
+  return res.data;
+}
+
 export async function fetchWorkforceActivityLogs(params?: {
   tenant_id?: number;
   user_id?: number;
@@ -82,6 +136,7 @@ export async function postWorkforceActivity(body: {
   action_type: string;
   module: string;
   tenant_id?: number;
+  warehouse_id?: number;
   entity_type?: string;
   entity_id?: number;
   metadata?: Record<string, unknown>;

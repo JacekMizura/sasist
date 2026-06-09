@@ -5983,6 +5983,18 @@ def ensure_workforce_operational_tables(engine: Engine) -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_module_created ON user_activity_logs(module, created_at)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_action ON user_activity_logs(action_type)"))
 
+        ual_cols = _table_column_names(conn, "user_activity_logs")
+        if "warehouse_id" not in ual_cols:
+            conn.execute(text("ALTER TABLE user_activity_logs ADD COLUMN warehouse_id INTEGER"))
+        if "session_id" not in ual_cols:
+            conn.execute(text("ALTER TABLE user_activity_logs ADD COLUMN session_id VARCHAR(64)"))
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_session ON user_activity_logs(session_id, created_at)")
+        )
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_warehouse ON user_activity_logs(warehouse_id, created_at)")
+        )
+
         conn.execute(
             text(
                 """

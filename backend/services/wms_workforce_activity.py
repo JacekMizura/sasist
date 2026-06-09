@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..models.app_user import AppUser
 from .audit_service import log_audit_entry
-from .user_activity_service import log_user_activity
+from .user_activity_service import track_user_activity
 
 MODULE_RECEIVING = "WMS_RECEIVING"
 MODULE_PUTAWAY = "WMS_PUTAWAY"
@@ -37,10 +37,10 @@ def log_wms_workforce_activity(
     act = (action_type or "").strip()[:96] or "operation"
     meta = metadata or {}
 
-    log_user_activity(
+    track_user_activity(
         db,
         user_id=uid,
-        action_type=act,
+        action=act,
         module=mod,
         tenant_id=tenant_id,
         entity_type=entity_type,

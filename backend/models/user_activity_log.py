@@ -24,6 +24,8 @@ class UserActivityLog(Base):
     module = Column(String(64), nullable=False, index=True)
     entity_type = Column(String(80), nullable=True, index=True)
     entity_id = Column(Integer, nullable=True, index=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
+    session_id = Column(String(64), nullable=True, index=True)
     metadata_json = Column(Text, nullable=True)
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

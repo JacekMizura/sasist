@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Czas pracy: telemetria operacyjna całego systemu
+- `track_user_activity()` + `session_id` / `warehouse_id` na `user_activity_logs` (gap 15 min)
+- Middleware API: automatyczne logowanie mutacji + sensownych GET (mapowanie modułów)
+- Analytics: heatmapa godzin, top moduły, aktywność dzienna, sesje, timeline, throughput
+- API: `GET /workforce/analytics`; UI: przebudowany dashboard + strona aktywności
+- Testy: `test_workforce_activity.py`
+
 ## 2026-06-08 — Inwentaryzacja ERP: WMS shell polish
 - Layout: breadcrumb Magazyn/Inwentaryzacja, + zamiast dużego CTA, bez subtitle
 - Tabela przebiegu: bez duplikatów Oczek./Policz./Różn., kolumny Operator/Czas, dense rows

@@ -12,6 +12,7 @@ class UserActivityLogCreate(BaseModel):
     action_type: str = Field(..., max_length=96)
     module: str = Field(..., max_length=64)
     tenant_id: Optional[int] = None
+    warehouse_id: Optional[int] = None
     entity_type: Optional[str] = Field(None, max_length=80)
     entity_id: Optional[int] = None
     metadata: Optional[dict[str, Any]] = None
@@ -22,6 +23,8 @@ class UserActivityLogRead(BaseModel):
     user_id: Optional[int]
     login: Optional[str] = None
     tenant_id: Optional[int]
+    warehouse_id: Optional[int] = None
+    session_id: Optional[str] = None
     action_type: str
     module: str
     entity_type: Optional[str]

@@ -1681,6 +1681,10 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 app.middleware("http")(platform_readiness_gate_middleware)
 app.middleware("http")(outer_request_logger_middleware)
 
+from .middleware.activity_tracking_middleware import activity_tracking_middleware
+
+app.middleware("http")(activity_tracking_middleware)
+
 
 @app.on_event("startup")
 async def _log_backend_startup() -> None:

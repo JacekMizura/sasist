@@ -27,8 +27,13 @@ from ..schemas.workforce import (
     WorkforceUserStatusSaveBody,
 )
 from ..services.employer_cost_calculator import DISCLAIMER_PL, compute_operational_costs
-from ..services.user_activity_service import log_user_activity
-from ..services.workforce_analytics_service import dashboard_summary, list_recent_logs, operational_cost_estimates
+from ..services.user_activity_service import track_user_activity
+from ..services.workforce_analytics_service import (
+    build_workforce_analytics,
+    dashboard_summary,
+    list_recent_logs,
+    operational_cost_estimates,
+)
 from ..services.workforce_user_status_effective_service import (
     list_effective_status_access_for_user,
     save_user_status_overrides,
@@ -58,12 +63,13 @@ def post_activity(
     user: AppUser = Depends(require_permission("workforce.activity.write")),
 ):
     """Client-side operational signal (barcode, UI step, etc.). User is always the caller."""
-    log_user_activity(
+    track_user_activity(
         db,
         user_id=user.id,
-        action_type=body.action_type,
+        action=body.action_type,
         module=body.module,
         tenant_id=body.tenant_id,
+        warehouse_id=body.warehouse_id,
         entity_type=body.entity_type,
         entity_id=body.entity_id,
         metadata=body.metadata,
@@ -103,6 +109,26 @@ def get_dashboard(
     dash = dashboard_summary(db, tenant_id=tenant_id, user_ids=None, date_from=start, date_to=end)
     costs = operational_cost_estimates(db, tenant_id=tenant_id, dashboard=dash)
     return {"dashboard": dash, "costs": costs}
+
+
+@router.get("/analytics")
+def get_analytics(
+    tenant_id: int | None = Query(None),
+    user_id: int | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(require_any_permission("workforce.dashboard", "workforce.activity.read", "settings.users")),
+):
+    """Operational telemetry — sessions, heatmap, timeline (not HR / payroll)."""
+    start, end = _range_or_default(date_from, date_to)
+    return build_workforce_analytics(
+        db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        date_from=start,
+        date_to=end,
+    )
 
 
 def _cost_profile_read_from_row(row: EmployeeCostProfile) -> EmployeeCostProfileRead:

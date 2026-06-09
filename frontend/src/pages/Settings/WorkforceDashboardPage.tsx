@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, Clock, MoreHorizontal, Package, TrendingUp, Users } from "lucide-react";
+import { Activity, BarChart3, Clock, MoreHorizontal, TrendingUp, Users, Zap } from "lucide-react";
 
 import { fetchUsers, type AppUserListItem } from "../../api/authApi";
-import { fetchWorkforceDashboard } from "../../api/workforceApi";
+import { fetchWorkforceAnalytics, fetchWorkforceDashboard, type WorkforceAnalyticsResponse } from "../../api/workforceApi";
 import { isSuperRole } from "../../auth/isSuperRole";
 import { useAuth } from "../../context/AuthContext";
+import {
+  WorkforceActivityTimeline,
+  WorkforceDailyActivity,
+  WorkforceHourlyHeatmap,
+  WorkforceTopModules,
+} from "./WorkforceAnalyticsPanels";
 
 const DEFAULT_TENANT = 1;
 
@@ -36,12 +42,8 @@ function KpiCard({
     <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col">
-          <span className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            {title}
-          </span>
-          <span className="text-3xl font-bold tabular-nums text-slate-900">
-            {value}
-          </span>
+          <span className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">{title}</span>
+          <span className="text-3xl font-bold tabular-nums text-slate-900">{value}</span>
         </div>
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 text-slate-600 shadow-sm">
           <Icon className="h-6 w-6" strokeWidth={1.5} aria-hidden />
@@ -62,7 +64,17 @@ export default function WorkforceDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchWorkforceDashboard>> | null>(null);
+  const [analytics, setAnalytics] = useState<WorkforceAnalyticsResponse | null>(null);
   const [users, setUsers] = useState<AppUserListItem[]>([]);
+
+  const loadData = () =>
+    Promise.all([
+      fetchWorkforceDashboard({ tenant_id: DEFAULT_TENANT }),
+      fetchWorkforceAnalytics({ tenant_id: DEFAULT_TENANT }),
+    ]).then(([dash, an]) => {
+      setData(dash);
+      setAnalytics(an);
+    });
 
   useEffect(() => {
     if (!canView) {
@@ -79,10 +91,7 @@ export default function WorkforceDashboardPage() {
       .catch(() => {
         if (!cancelled) setUsers([]);
       });
-    fetchWorkforceDashboard({ tenant_id: DEFAULT_TENANT })
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
+    loadData()
       .catch(() => {
         if (!cancelled) setErr("Nie udało się wczytać danych o czasie pracy i aktywności.");
       })
@@ -97,19 +106,23 @@ export default function WorkforceDashboardPage() {
   useEffect(() => {
     if (!canView) return;
     const t = window.setInterval(() => {
-      void fetchWorkforceDashboard({ tenant_id: DEFAULT_TENANT })
-        .then(setData)
-        .catch(() => {});
+      void loadData().catch(() => {});
     }, 30_000);
     return () => window.clearInterval(t);
   }, [canView]);
 
-  // Zoptymalizowana mapa przechowująca całe obiekty użytkowników
   const userMap = useMemo(() => {
     const m = new Map<number, AppUserListItem>();
     for (const u of users) m.set(u.id, u);
     return m;
   }, [users]);
+
+  const userLabel = useMemo(() => {
+    return (id: number | null | undefined, login: string | null | undefined) => {
+      if (id != null && userMap.has(id)) return rosterName(userMap.get(id)!);
+      return login?.trim() || "Pracownik";
+    };
+  }, [userMap]);
 
   if (!canView) {
     return (
@@ -129,52 +142,89 @@ export default function WorkforceDashboardPage() {
           Ładowanie danych…
         </div>
       ) : null}
-      
+
       {err ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">
-          {err}
-        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">{err}</div>
       ) : null}
 
       {!loading && !err && dash ? (
         <>
-          {/* Karty KPI (Góra) */}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              title="Aktywności (Raport)"
+              title="Aktywności"
               value={String(dash.total_events)}
-              hint={`${dash.range.from.slice(0, 10)} → ${dash.range.to.slice(0, 10)}`}
+              hint={`${dash.range.from.slice(0, 10)} → ${dash.range.to.slice(0, 10)} · cały system`}
               icon={Activity}
             />
             <KpiCard
-              title="Aktywni pracownicy"
-              value={String(dash.distinct_users)}
-              hint="Liczba osób z zapisanymi zdarzeniami"
-              icon={Users}
-            />
-            <KpiCard
-              title="Sesje terminalowe"
-              value={String(dash.approx_sessions_computed)}
-              hint="Służące do zliczania czasu pracy"
+              title="Aktywny czas operacyjny"
+              value={`${(dash.total_active_hours_approx ?? 0).toFixed(1)} h`}
+              hint={`Sesje z przerwą ≤ ${dash.session_gap_minutes ?? 15} min`}
               icon={Clock}
             />
             <KpiCard
-              title="Suma ruchów (K/P/Z)"
-              value={`${dash.action_buckets.receiving_events ?? 0} / ${dash.action_buckets.putaway_events ?? 0} / ${dash.action_buckets.movement_events ?? 0}`}
-              hint={`Kompletacja / pakowanie / zmiana strefy: ${dash.action_buckets.picking_events} / ${dash.action_buckets.packing_events} / ${dash.action_buckets.scan_events}`}
-              icon={Package}
+              title="Aktywni operatorzy"
+              value={String(dash.distinct_users)}
+              hint={`${dash.approx_sessions_computed} sesji pracy w okresie`}
+              icon={Users}
+            />
+            <KpiCard
+              title="Throughput"
+              value={`${analytics?.throughput.events_per_active_hour ?? 0}/h`}
+              hint={`Średnio ${analytics?.throughput.events_per_user ?? 0} zdarzeń / osobę`}
+              icon={Zap}
             />
           </div>
 
-          {/* Tabela szczegółów (Dół) */}
+          <div className="grid gap-4 xl:grid-cols-2">
+            <WorkforceHourlyHeatmap buckets={analytics?.hourly_heatmap ?? dash.hourly_heatmap} />
+            <WorkforceTopModules modules={analytics?.top_modules ?? dash.top_modules} />
+          </div>
+
+          <WorkforceDailyActivity days={analytics?.daily_breakdown ?? dash.daily_breakdown} />
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <WorkforceActivityTimeline timeline={analytics?.recent_timeline ?? []} userLabel={userLabel} />
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Ruchy magazynowe</h3>
+              <ul className="mt-4 space-y-2 text-sm text-slate-700">
+                <li className="flex justify-between">
+                  <span>Kompletacja / pakowanie / skany</span>
+                  <span className="tabular-nums font-medium">
+                    {dash.action_buckets.picking_events} / {dash.action_buckets.packing_events} /{" "}
+                    {dash.action_buckets.scan_events}
+                  </span>
+                </li>
+                <li className="flex justify-between">
+                  <span>Przyjęcia / rozlokowanie / przesunięcia</span>
+                  <span className="tabular-nums font-medium">
+                    {dash.action_buckets.receiving_events ?? 0} / {dash.action_buckets.putaway_events ?? 0} /{" "}
+                    {dash.action_buckets.movement_events ?? 0}
+                  </span>
+                </li>
+                <li className="flex justify-between">
+                  <span>Dokumenty / inwentaryzacja / admin</span>
+                  <span className="tabular-nums font-medium">
+                    {dash.action_buckets.document_events ?? 0} / {dash.action_buckets.inventory_events ?? 0} /{" "}
+                    {dash.action_buckets.admin_events ?? 0}
+                  </span>
+                </li>
+              </ul>
+              <p className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+                <BarChart3 className="h-4 w-4" aria-hidden />
+                Telemetria operacyjna WMS/ERP — nie system RCP ani payroll.
+              </p>
+            </div>
+          </div>
+
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 bg-white p-5 lg:p-6">
+            <div className="flex flex-col justify-between gap-4 border-b border-slate-200 bg-white p-5 sm:flex-row sm:items-center lg:p-6">
               <div>
-                <h2 className="text-base font-semibold text-slate-900 uppercase tracking-wide">
+                <h2 className="text-base font-semibold uppercase tracking-wide text-slate-900">
                   Szacunkowy koszt operacyjny
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {costs?.disclaimer || "Szacunki oparte na: (koszt pracodawcy) × (czas aktywności)"}
+                  {costs?.disclaimer || "Szacunki oparte na: (koszt pracodawcy) × (aktywny czas operacyjny)"}
                 </p>
               </div>
               <div className="shrink-0">
@@ -190,9 +240,11 @@ export default function WorkforceDashboardPage() {
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
                   <tr>
                     <th className="px-6 py-4">Pracownik</th>
-                    <th className="px-6 py-4">Suma Godzin (SZAC.)</th>
-                    <th className="px-6 py-4">Stawka Godz. (SZAC.)</th>
-                    <th className="px-6 py-4">Koszt w Okresie</th>
+                    <th className="px-6 py-4">Zdarzenia</th>
+                    <th className="px-6 py-4">Sesje</th>
+                    <th className="px-6 py-4">Aktywny czas (szac.)</th>
+                    <th className="px-6 py-4">Stawka (szac.)</th>
+                    <th className="px-6 py-4">Koszt okresu</th>
                     <th className="px-6 py-4 text-right">Akcje</th>
                   </tr>
                 </thead>
@@ -201,6 +253,7 @@ export default function WorkforceDashboardPage() {
                     const u = userMap.get(row.user_id);
                     const displayName = u ? rosterName(u) : `Pracownik (${row.user_id})`;
                     const init = initials(u);
+                    const perUser = dash.per_user.find((p) => p.user_id === row.user_id);
 
                     return (
                       <tr key={row.user_id} className="group transition-colors hover:bg-slate-50/60">
@@ -215,13 +268,13 @@ export default function WorkforceDashboardPage() {
                             <span className="font-semibold text-slate-900">{displayName}</span>
                           </div>
                         </td>
+                        <td className="px-6 py-4 tabular-nums font-medium text-slate-900">{perUser?.events ?? 0}</td>
+                        <td className="px-6 py-4 tabular-nums text-slate-700">{perUser?.sessions_count ?? 0}</td>
                         <td className="px-6 py-4 font-medium tabular-nums text-slate-900">
                           {row.active_hours_approx.toFixed(2)} h
                         </td>
                         <td className="px-6 py-4 font-medium tabular-nums text-slate-600">
-                          {row.employer_hourly_pln != null
-                            ? `${row.employer_hourly_pln.toFixed(2)} PLN/h`
-                            : "—"}
+                          {row.employer_hourly_pln != null ? `${row.employer_hourly_pln.toFixed(2)} PLN/h` : "—"}
                         </td>
                         <td className="px-6 py-4 font-bold tabular-nums text-emerald-700">
                           {row.estimated_cost_pln.toFixed(2)} PLN
@@ -241,12 +294,12 @@ export default function WorkforceDashboardPage() {
                 </tbody>
               </table>
             </div>
-            
-            {/* Footer / Disclaimer */}
+
             <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
               <p className="text-xs leading-relaxed text-slate-500">
-                Dane oparte na logach operacji w WMS. Dokładność zależy od tego, jak często urządzenia wysyłają
-                informację o pracy — służą do orientacji kierowniczej, nie do rozliczeń płacowych.
+                Czas pracy liczony z aktywności w całym systemie (ERP, WMS, admin, dokumenty, produkcja itd.).
+                Przerwa powyżej 15 minut bez aktywności zamyka sesję. Dane służą do orientacji operacyjnej, nie do
+                rozliczeń płacowych.
               </p>
             </div>
           </div>
