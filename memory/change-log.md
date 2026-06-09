@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-08 — ERP inventory layout unified with panel shell
+- Replaced custom inventory shell (`max-w-[1600px]`, white full-page) with standard `PageLayout` + `SettingsModuleStack` (same as Producenci / Administratorzy)
+- Module header: breadcrumbs, title, `TopTabsNavigation`, primary action in header
+- Views use `moduleListPageShellClass`, `erpSurfaceCard`, `panelListDense*` table tokens
+
 ## 2026-06-08 — ERP inventory mockup UI (1:1)
 - Replaced ERP inventory JSX with uploaded mockup: `InventoryLayout`, `InventoryDashboardView`, `InventoryDocumentsView`, `InventoryWizardView`, `InventoryReportsView`, `InventoryStatusBadge`
 - Thin page containers keep hooks/API; presentation in `modules/inventoryCount/ui/erp/`

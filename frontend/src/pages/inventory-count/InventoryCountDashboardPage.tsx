@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchInventoryCountDashboard, type InventoryDashboardPayload } from "@/api/inventoryCountApi";
-import { erpInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
 import InventoryDashboardView from "@/modules/inventoryCount/ui/erp/InventoryDashboardView";
 import { useWarehouse } from "@/context/WarehouseContext";
 
@@ -34,5 +33,5 @@ export default function InventoryCountDashboardPage() {
   if (err) return <p className="text-sm text-rose-600">{err}</p>;
   if (!data) return null;
 
-  return <InventoryDashboardView data={data} onNewInventory={erpInventoryCountPaths.wizard} />;
+  return <InventoryDashboardView data={data} />;
 }

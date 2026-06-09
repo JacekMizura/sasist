@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { listInventoryDocuments, type InventoryDocumentRead } from "@/api/inventoryCountApi";
-import { erpInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
 import InventoryDocumentsView from "@/modules/inventoryCount/ui/erp/InventoryDocumentsView";
 import { useWarehouse } from "@/context/WarehouseContext";
 
@@ -24,11 +23,5 @@ export default function InventoryCountDocumentsPage() {
     void load();
   }, [load]);
 
-  return (
-    <InventoryDocumentsView
-      documents={rows}
-      loading={loading}
-      newInventoryPath={erpInventoryCountPaths.wizard}
-    />
-  );
+  return <InventoryDocumentsView documents={rows} loading={loading} />;
 }

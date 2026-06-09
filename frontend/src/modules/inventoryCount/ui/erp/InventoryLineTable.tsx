@@ -1,6 +1,14 @@
 import { User } from "lucide-react";
 
 import type { InventoryLineRead } from "@/api/inventoryCountApi";
+import {
+  panelListDenseRowClass,
+  panelListDenseTableClass,
+  panelListDenseTableScrollWrapClass,
+  panelListDenseTdBase,
+  panelListDenseThBase,
+  panelListDenseTheadClass,
+} from "@/components/operational";
 import { inventoryStockSourceLabel } from "../../inventoryStockSourceLabel";
 import {
   InventoryLineStatusBadge,
@@ -23,96 +31,98 @@ type Props = {
   emptyMessage?: string;
 };
 
-/** Dense enterprise inventory line table. */
+/** Inventory lines — standard ERP dense table tokens. */
 export default function InventoryLineTable({ lines, loading, emptyMessage = "Brak pozycji." }: Props) {
   if (loading) {
-    return <p className="px-3 py-6 text-center text-xs text-slate-500">Wczytywanie pozycji…</p>;
+    return <p className="py-6 text-center text-sm text-slate-500">Wczytywanie pozycji…</p>;
   }
   if (lines.length === 0) {
-    return <p className="px-3 py-6 text-center text-xs text-slate-500">{emptyMessage}</p>;
+    return <p className="py-6 text-center text-sm text-slate-500">{emptyMessage}</p>;
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full whitespace-nowrap text-left text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 bg-slate-50">
-            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Produkt</th>
-            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Lokalizacja</th>
-            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Źródło stanu</th>
-            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Oczek.</th>
-            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Policz.</th>
-            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Różn.</th>
-            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
-            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Operator</th>
-            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Czas</th>
+    <div className={panelListDenseTableScrollWrapClass}>
+      <table className={panelListDenseTableClass}>
+        <thead className={panelListDenseTheadClass}>
+          <tr>
+            <th className={`${panelListDenseThBase} text-left`}>Produkt</th>
+            <th className={`${panelListDenseThBase} text-left`}>Lokalizacja</th>
+            <th className={`${panelListDenseThBase} text-left`}>Źródło stanu</th>
+            <th className={`${panelListDenseThBase} text-right`}>Oczek.</th>
+            <th className={`${panelListDenseThBase} text-right`}>Policz.</th>
+            <th className={`${panelListDenseThBase} text-right`}>Różn.</th>
+            <th className={`${panelListDenseThBase} text-left`}>Status</th>
+            <th className={`${panelListDenseThBase} text-left`}>Operator</th>
+            <th className={`${panelListDenseThBase} text-left`}>Czas</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody>
           {lines.map((ln) => (
-            <tr key={ln.id} className="transition-colors hover:bg-slate-50/50">
-              <td className="px-6 py-4">
+            <tr key={ln.id} className={panelListDenseRowClass}>
+              <td className={panelListDenseTdBase}>
                 <div className="flex min-w-[200px] items-start gap-2">
                   <InventoryProductThumb url={ln.product_image_url} name={ln.product_name} />
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-slate-900">{ln.product_name ?? ln.sku ?? `#${ln.product_id}`}</p>
-                    <p className="truncate text-[10px] text-slate-500">
-                      {[ln.ean, ln.sku].filter(Boolean).join(" · ")}
+                    <p className="truncate font-semibold text-slate-900">
+                      {ln.product_name ?? ln.sku ?? `#${ln.product_id}`}
                     </p>
+                    <p className="truncate text-xs text-slate-500">{[ln.ean, ln.sku].filter(Boolean).join(" · ")}</p>
                     {ln.carrier_code ? (
-                      <p className="mt-0.5 text-[10px] font-medium text-slate-600">Nośnik: {ln.carrier_code}</p>
+                      <p className="mt-0.5 text-xs font-medium text-slate-600">Nośnik: {ln.carrier_code}</p>
                     ) : null}
                   </div>
                 </div>
               </td>
-              <td className="px-6 py-4">
+              <td className={panelListDenseTdBase}>
                 <InventoryLocationBadge code={ln.location_name ?? `#${ln.location_id}`} />
               </td>
-              <td className="px-6 py-4">
+              <td className={panelListDenseTdBase}>
                 {(() => {
                   const src = inventoryStockSourceLabel(ln);
                   return (
                     <div>
                       <p className="font-semibold text-slate-800">{src.label}</p>
-                      <p className="text-[10px] text-slate-500">{src.detail}</p>
+                      <p className="text-xs text-slate-500">{src.detail}</p>
                     </div>
                   );
                 })()}
               </td>
-              <td className="px-6 py-4 text-right tabular-nums text-slate-600">{ln.expected_quantity ?? "—"}</td>
-              <td className="px-6 py-4 text-right tabular-nums font-semibold text-slate-900">
+              <td className={`${panelListDenseTdBase} text-right tabular-nums text-slate-700`}>
+                {ln.expected_quantity ?? "—"}
+              </td>
+              <td className={`${panelListDenseTdBase} text-right tabular-nums font-semibold text-slate-900`}>
                 {ln.counted_quantity ?? "—"}
               </td>
               <td
-                className={`px-6 py-4 text-right tabular-nums ${
+                className={`${panelListDenseTdBase} text-right tabular-nums ${
                   ln.difference_quantity && Math.abs(ln.difference_quantity) > 1e-9
                     ? "font-bold text-red-700"
-                    : "text-slate-600"
+                    : "text-slate-700"
                 }`}
               >
                 {ln.difference_quantity ?? "—"}
               </td>
-              <td className="px-6 py-4">
+              <td className={panelListDenseTdBase}>
                 <div className="flex flex-wrap gap-1">
                   <InventoryLineStatusBadge line={ln} />
                   {ln.recount_count > 0 && ln.recount_state !== "required" ? (
-                    <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                    <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900">
                       ×{ln.recount_count} ponowne
                     </span>
                   ) : null}
                 </div>
               </td>
-              <td className="px-6 py-4">
+              <td className={panelListDenseTdBase}>
                 {ln.last_counted_by_name ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-700">
-                    <User className="h-3 w-3 shrink-0 text-slate-400" />
+                  <span className="inline-flex items-center gap-1 text-sm text-slate-700">
+                    <User className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                     {ln.last_counted_by_name}
                   </span>
                 ) : (
                   <span className="text-slate-400">—</span>
                 )}
               </td>
-              <td className="whitespace-nowrap px-6 py-4 text-xs tabular-nums text-slate-600">
+              <td className={`${panelListDenseTdBase} whitespace-nowrap tabular-nums text-slate-700`}>
                 {fmtTime(ln.last_counted_at)}
               </td>
             </tr>
