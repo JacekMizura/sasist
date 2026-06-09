@@ -1,24 +1,38 @@
 import { useEffect, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 
+import type { WmsQtyInputMode } from "@/modules/inventoryCount/wmsInventoryExecutionContext";
+
 type Props = {
-  quantity: number;
+  quantityPieces: number;
+  mode: WmsQtyInputMode;
+  unitsPerCarton: number;
   disabled?: boolean;
   onAdjust: (delta: number) => void;
   onSetQuantity: (qty: number) => void;
 };
 
-export default function WmsInventoryQtyControl({ quantity, disabled, onAdjust, onSetQuantity }: Props) {
-  const [draft, setDraft] = useState(String(quantity));
+export default function WmsInventoryQtyControl({
+  quantityPieces,
+  mode,
+  unitsPerCarton,
+  disabled,
+  onAdjust,
+  onSetQuantity,
+}: Props) {
+  const pack = Math.max(1, unitsPerCarton);
+  const displayQty = mode === "carton" ? quantityPieces / pack : quantityPieces;
+  const unitLabel = mode === "carton" ? "krt." : "szt.";
+  const [draft, setDraft] = useState(String(displayQty));
 
   useEffect(() => {
-    setDraft(String(quantity));
-  }, [quantity]);
+    setDraft(Number.isInteger(displayQty) ? String(displayQty) : displayQty.toFixed(2).replace(/\.?0+$/, ""));
+  }, [displayQty]);
 
   const commitDraft = () => {
-    const parsed = Number.parseInt(draft, 10);
+    const parsed = Number.parseFloat(draft.replace(",", "."));
     if (!Number.isFinite(parsed)) {
-      setDraft(String(quantity));
+      setDraft(String(displayQty));
       return;
     }
     onSetQuantity(Math.max(0, parsed));
@@ -40,10 +54,10 @@ export default function WmsInventoryQtyControl({ quantity, disabled, onAdjust, o
         <div className="flex min-w-[120px] items-baseline justify-center gap-2 border-r border-slate-100 pr-6">
           <input
             type="text"
-            inputMode="numeric"
+            inputMode="decimal"
             disabled={disabled}
             value={draft}
-            onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ""))}
+            onChange={(e) => setDraft(e.target.value.replace(/[^\d.,]/g, ""))}
             onBlur={commitDraft}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -55,7 +69,7 @@ export default function WmsInventoryQtyControl({ quantity, disabled, onAdjust, o
             aria-label="Ilość"
           />
         </div>
-        <div className="pl-2 text-2xl font-bold text-slate-300">szt.</div>
+        <div className="pl-2 text-2xl font-bold text-slate-300">{unitLabel}</div>
 
         <button
           type="button"
@@ -68,9 +82,17 @@ export default function WmsInventoryQtyControl({ quantity, disabled, onAdjust, o
         </button>
       </div>
 
-      <div className="flex items-center justify-center gap-2 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-        <span className="rounded bg-slate-100 px-2 py-1 text-slate-500">ENTER</span>
-        ZATWIERDZA • SKAN EAN DODAJE +1 SZT.
+      <div className="space-y-1 text-center">
+        <div className="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          <span className="rounded bg-slate-100 px-2 py-1 text-slate-500">ENTER</span>
+          ZATWIERDZA • SKAN EAN DODAJE +1 {mode === "carton" ? "KARTON" : "SZT."}
+        </div>
+        {pack > 1 ? (
+          <p className="text-[11px] font-medium text-slate-500">
+            {quantityPieces} szt.
+            {mode === "carton" ? ` · ${pack} szt./karton` : ` · ${Math.floor(quantityPieces / pack)} krt. + ${quantityPieces % pack} szt.`}
+          </p>
+        ) : null}
       </div>
     </div>
   );

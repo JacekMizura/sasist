@@ -5,7 +5,7 @@
 /** Aggregated counted product — one row per line_id (location × carrier × product). */
 export type WmsCountedProduct = {
   line_id: number;
-  product_id: number;
+  product_id: number | null;
   product_name: string | null;
   sku?: string | null;
   ean?: string | null;
@@ -15,6 +15,24 @@ export type WmsCountedProduct = {
   counted_quantity: number;
   updatedAt: number;
   scan: import("@/api/inventoryCountApi").WmsBarcodeResolveResult;
+  defectReported?: boolean;
+  defectNote?: string | null;
+};
+
+/** Unknown product draft at location — from execution summary. */
+export type WmsUnexpectedProduct = {
+  unknown_id: number;
+  temporary_name: string;
+  barcode_value?: string | null;
+  quantity: number;
+  updatedAt: number;
+};
+
+export type WmsQtyInputMode = "unit" | "carton";
+
+export type WmsInventoryPackaging = {
+  unitsPerCarton: number;
+  cartonEan: string | null;
 };
 
 export const CARRIER_BARCODE_PREFIXES = ["PAL-", "BOX-", "BIN-", "CRT-", "MIX-"] as const;

@@ -1,12 +1,12 @@
-import { Package } from "lucide-react";
+import { AlertTriangle, Package } from "lucide-react";
 
-import type { WmsCountedCarrierGroup } from "../../wmsInventoryExecutionContext";
-import type { WmsCountedProduct } from "../../wmsInventoryExecutionContext";
+import type { WmsCountedCarrierGroup, WmsCountedProduct, WmsUnexpectedProduct } from "../../wmsInventoryExecutionContext";
+import WmsInventoryProductThumb from "./WmsInventoryProductThumb";
 import { WMS_INV } from "./theme";
 
 type Props = {
   groups: WmsCountedCarrierGroup[];
-  locationCode: string | null;
+  unexpectedItems: WmsUnexpectedProduct[];
   activeLineId: number | null;
   pulseLineId: number | null;
   onSelect?: (item: WmsCountedProduct) => void;
@@ -29,28 +29,29 @@ function ProductRow({
     ? "ring-2 ring-emerald-400/60"
     : isActive
       ? "ring-2 ring-[#5a45d0]/30 border-[#5a45d0]/40"
-      : "border-slate-200";
+      : item.defectReported
+        ? "ring-2 ring-amber-300/80 border-amber-200"
+        : "border-slate-200";
 
   return (
     <button
       type="button"
       onClick={() => onSelect?.(item)}
-      className={`${WMS_INV.card} flex w-full items-center justify-between p-5 text-left transition-all ${ring}`}
+      className={`${WMS_INV.card} flex w-full items-center justify-between gap-4 p-4 text-left transition-all ${ring}`}
     >
       <div className="flex min-w-0 items-center gap-4">
-        <div className="flex h-10 w-16 shrink-0 items-center justify-center overflow-hidden rounded border border-slate-100 bg-white">
-          {item.image_url ? (
-            <img src={item.image_url} alt="" className="max-h-full max-w-full object-contain" />
-          ) : (
-            <Package className="h-4 w-4 text-slate-300" strokeWidth={1.5} />
-          )}
-        </div>
+        <WmsInventoryProductThumb url={item.image_url} name={item.product_name} size="md" />
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-slate-800">{item.product_name ?? item.sku ?? "—"}</p>
           {item.ean ? (
             <p className="mt-0.5 text-[11px] text-slate-500">EAN {item.ean}</p>
           ) : item.sku ? (
             <p className="mt-0.5 text-[11px] text-slate-500">{item.sku}</p>
+          ) : null}
+          {item.defectReported ? (
+            <p className="mt-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+              <AlertTriangle className="h-3 w-3" /> Wada zgłoszona
+            </p>
           ) : null}
         </div>
       </div>
@@ -59,13 +60,32 @@ function ProductRow({
   );
 }
 
+function UnexpectedRow({ item }: { item: WmsUnexpectedProduct }) {
+  return (
+    <div className={`${WMS_INV.card} flex w-full items-center justify-between gap-4 border-dashed p-4`}>
+      <div className="flex min-w-0 items-center gap-4">
+        <WmsInventoryProductThumb url={null} name={item.temporary_name} size="md" />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-slate-800">{item.temporary_name}</p>
+          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Produkt spoza systemu</p>
+          {item.barcode_value ? (
+            <p className="mt-0.5 text-[11px] text-slate-500">Kod: {item.barcode_value}</p>
+          ) : null}
+        </div>
+      </div>
+      <p className="shrink-0 text-3xl font-bold tabular-nums leading-none text-amber-700">{item.quantity}</p>
+    </div>
+  );
+}
+
 export default function WmsInventoryLocationCounts({
   groups,
+  unexpectedItems,
   activeLineId,
   pulseLineId,
   onSelect,
 }: Props) {
-  if (groups.length === 0) return null;
+  if (groups.length === 0 && unexpectedItems.length === 0) return null;
 
   const hasCarriers = groups.some((g) => g.carrierId != null);
 
@@ -77,12 +97,12 @@ export default function WmsInventoryLocationCounts({
             <div
               className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest ${
                 group.carrierId != null
-                  ? "border border-[#d6defc] bg-[#eff2fe] text-[#5a45d0]"
+                  ? "border border-slate-200 bg-white text-[#23438e]"
                   : "border border-dashed border-slate-200 text-slate-400"
               }`}
             >
               <Package className="h-3.5 w-3.5" />
-              {group.carrierCode ?? (group.carrierId != null ? `#${group.carrierId}` : "Bez nośnika")}
+              {group.carrierCode ?? (group.carrierId != null ? `NOŚNIK #${group.carrierId}` : "Luzem (bez nośnika)")}
             </div>
           ) : null}
 
@@ -100,6 +120,19 @@ export default function WmsInventoryLocationCounts({
           </ul>
         </div>
       ))}
+
+      {unexpectedItems.length > 0 ? (
+        <div className="space-y-3">
+          <p className={WMS_INV.textLabel}>Nieznane produkty</p>
+          <ul className="space-y-3">
+            {unexpectedItems.map((item) => (
+              <li key={item.unknown_id}>
+                <UnexpectedRow item={item} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }

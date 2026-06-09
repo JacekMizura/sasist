@@ -1,18 +1,16 @@
-/** WMS inventory — modern operational terminal tokens (mockup-aligned). */
+/** WMS inventory — modern operational terminal tokens (aligned with putaway/picking). */
 
 export const WMS_INV = {
-  pageBg: "bg-[#fafbfc]",
+  pageBg: "bg-white",
   bg: "bg-white",
   shell: "mx-auto w-full max-w-4xl space-y-6 px-4 sm:px-6 pb-32",
   shellWide: "mx-auto w-full max-w-5xl space-y-6 px-4 sm:px-6 pb-12",
+  splitMain: "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-white px-4 py-6 sm:px-6",
   text: "text-slate-800",
   textMuted: "text-slate-500",
   textLabel: "text-[11px] font-bold uppercase tracking-widest text-slate-400",
   textSub: "text-sm font-medium text-slate-500",
-  locationCode:
-    "bg-[#eff2fe] border border-[#d6defc] text-[#5a45d0] px-5 py-3.5 rounded-xl font-bold text-lg flex items-center",
-  locationSub: "text-[11px] font-bold uppercase tracking-widest text-slate-400",
-  card: "bg-white border border-slate-200 rounded-[1.5rem] shadow-sm",
+  card: "bg-white border border-slate-200 rounded-2xl shadow-sm",
   cardPad: "p-5 sm:p-6",
   scanHero:
     "block w-full pl-20 pr-8 py-6 border border-slate-200 rounded-[2rem] focus:ring-4 focus:ring-indigo-50 focus:border-[#5a45d0] focus:outline-none text-xl font-semibold text-slate-700 placeholder-slate-400 transition-all bg-white shadow-sm disabled:opacity-50",
@@ -27,13 +25,16 @@ export const WMS_INV = {
   btnActionPrimary:
     "flex-1 bg-[#23438e] hover:bg-[#1a326b] text-white text-xs font-bold py-4 px-4 rounded-xl transition-colors uppercase tracking-widest shadow-md disabled:opacity-40",
   btnCta:
-    "w-full md:w-auto bg-[#23438e] hover:bg-[#1a326b] text-white text-sm px-8 py-3 rounded-xl font-semibold transition-colors shadow-sm disabled:bg-slate-300",
+    "shrink-0 rounded-xl bg-[#23438e] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#1a326b] disabled:bg-slate-300",
   bottomBar:
     "fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 flex justify-center z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]",
   bottomBarInner: "max-w-4xl w-full flex gap-4",
-  docSwitcherBar: "px-4 sm:px-6 py-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm",
-  docSwitcherBtn:
-    "flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-slate-800 transition-colors bg-slate-50 px-3 py-2 rounded-lg border border-slate-100",
+  sidebar:
+    "flex w-full shrink-0 flex-col border-slate-200/80 bg-white lg:h-full lg:min-h-0 lg:w-[320px] lg:min-w-[320px] lg:max-w-[320px] lg:overflow-y-auto lg:border-r",
+  sidebarHeader: "shrink-0 border-b border-slate-100 px-4 py-4",
+  listRow:
+    "flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition-colors hover:bg-slate-50/80",
+  listRowActive: "bg-indigo-50/60 hover:bg-indigo-50/80",
   divider: "border-t border-slate-100",
   accentPurple: "text-[#5a45d0]",
   accentBlue: "text-[#23438e]",
@@ -61,6 +62,15 @@ export const WMS_INV = {
     "inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[#d0d7e2] bg-white px-4 py-2 text-sm font-bold text-[#1a2b3c] active:scale-[0.98]",
   btnAccent:
     "inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#e87722] px-4 py-2 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40",
+  /** @deprecated use pageBg */
+  pageBgLegacy: "bg-[#fafbfc]",
+  textLabelLegacy: "text-[10px] font-black uppercase tracking-widest text-slate-400",
+  locationCodeLegacy:
+    "bg-[#eff2fe] border border-[#d6defc] text-[#5a45d0] px-5 py-3.5 rounded-xl font-bold text-lg flex items-center",
+  locationSub: "text-[11px] font-bold uppercase tracking-widest text-slate-400",
+  docSwitcherBar: "px-4 sm:px-6 py-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm",
+  docSwitcherBtn:
+    "flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-slate-800 transition-colors bg-slate-50 px-3 py-2 rounded-lg border border-slate-100",
 } as const;
 
 export const TASK_ROW_HEIGHT = 40;

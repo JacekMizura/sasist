@@ -10,12 +10,13 @@ type Props = {
   placeholder: string;
   disabled?: boolean;
   inputRef?: React.RefObject<HTMLInputElement | null>;
+  anchorRef?: React.RefObject<HTMLDivElement | null>;
   dropdown?: React.ReactNode;
   "aria-expanded"?: boolean;
   size?: "hero" | "default";
 };
 
-/** Unified scan + search field — mockup-aligned terminal styling. */
+/** Unified scan + search field — portal-friendly anchor for autocomplete. */
 export default function WmsInventoryScanField({
   value,
   onChange,
@@ -24,6 +25,7 @@ export default function WmsInventoryScanField({
   placeholder,
   disabled,
   inputRef,
+  anchorRef,
   dropdown,
   "aria-expanded": ariaExpanded,
   size = "default",
@@ -40,7 +42,7 @@ export default function WmsInventoryScanField({
         onSubmit();
       }}
     >
-      <div className="relative">
+      <div ref={anchorRef} className="relative">
         <ScanLine className={iconClass} strokeWidth={2.25} />
         <input
           ref={inputRef}
@@ -56,8 +58,8 @@ export default function WmsInventoryScanField({
           aria-expanded={ariaExpanded}
           className={inputClass}
         />
-        {dropdown}
       </div>
+      {dropdown}
     </form>
   );
 }

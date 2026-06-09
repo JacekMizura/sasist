@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — WMS inventory terminal UX fixes (operator flow)
+- White terminal shell; left sidebar operational document list (putaway/picking density)
+- LocationBadge SSOT; product thumbnails via WmsProductCard pattern
+- Live search portal (z-index 10060) — no dropdown clipping
+- Cartons: unit/carton mode, bulk EAN scan delta via existing product view API + scan API
+- Damage reporting via existing createDamageEntry; unknown products refresh after create
+- Carrier grouping/labels from line carrier_code; unexpected products on list
+
 ## 2026-06-08 — WMS inventory terminal UI (mockup-aligned)
 - Presentation-only restyle of operator flow: document cards, location scan, product scan, qty modal
 - New/updated `ui/wms/` components: `WmsInventoryLandingView`, `WmsInventoryProductDetailPanel`, mockup theme tokens

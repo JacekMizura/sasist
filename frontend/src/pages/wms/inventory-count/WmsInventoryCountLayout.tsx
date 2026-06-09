@@ -1,16 +1,14 @@
-import { Outlet, useMatch } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 
-import WmsInventoryDocumentSwitcher from "../../../modules/inventoryCount/components/WmsInventoryDocumentSwitcher";
-import { WMS_INV } from "../../../modules/inventoryCount/ui/wms/theme";
+import WmsInventoryDocumentSidebar from "@/modules/inventoryCount/ui/wms/WmsInventoryDocumentSidebar";
+import { WMS_INV } from "@/modules/inventoryCount/ui/wms/theme";
 
-/** WMS inventory — document-scoped operational shell. */
+/** WMS inventory — split shell: document list (left) + execution (right). */
 export default function WmsInventoryCountLayout() {
-  const onDocumentRoute = Boolean(useMatch("/wms/inventory-count/d/:documentId/*"));
-
   return (
-    <div className={`min-h-full ${WMS_INV.pageBg} font-sans ${WMS_INV.text}`}>
-      {onDocumentRoute ? <WmsInventoryDocumentSwitcher /> : null}
-      <main className="flex-1 overflow-y-auto">
+    <div className={`flex min-h-full w-full flex-col ${WMS_INV.pageBg} font-sans ${WMS_INV.text} lg:flex-row lg:overflow-hidden`}>
+      <WmsInventoryDocumentSidebar />
+      <main className={WMS_INV.splitMain}>
         <Outlet />
       </main>
     </div>

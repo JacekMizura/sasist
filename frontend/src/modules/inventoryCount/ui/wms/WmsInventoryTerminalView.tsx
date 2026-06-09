@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 
 import type { WmsInventoryTerminalPageState } from "@/modules/inventoryCount/hooks/useWmsInventoryTerminalPage";
@@ -17,6 +18,7 @@ type Props = {
 
 /** WMS counting terminal — presentation only. */
 export default function WmsInventoryTerminalView({ state, documentId }: Props) {
+  const scanAnchorRef = useRef<HTMLDivElement>(null);
   const {
     inputRef,
     terminal,
@@ -43,12 +45,17 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     locationSubline,
     activeScan,
     activeLineId,
+    activeCountedProduct,
     countedProductGroups,
+    unexpectedItems,
     pulseLineId,
     isPartialInventory,
     qtyPulse,
     invalidPulse,
     carrierScanMode,
+    qtyInputMode,
+    setQtyInputMode,
+    packaging,
     unknownOpen,
     lastScanCode,
     setUnknownOpen,
@@ -59,6 +66,8 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     skipCarrier,
     clearCarrier,
     finishLocation,
+    reloadFromServer,
+    markActiveDefect,
   } = terminal;
 
   const focusScan = () => {
@@ -66,7 +75,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
   };
 
   return (
-    <div className={`${WMS_INV.shell} relative`}>
+    <div className={`${WMS_INV.shell} relative overflow-visible`}>
       <WmsInventoryActiveContextBar
         location={locationContext}
         carrier={carrierContext}
@@ -79,12 +88,13 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
 
       {counting ? (
         <>
-          <div>
+          <div className="overflow-visible">
             <p className={`${WMS_INV.textLabel} mb-3`}>
               Zeskanuj produkt{locationSubline ? ` • ${locationSubline}` : ""}
             </p>
             <WmsInventoryScanField
               inputRef={inputRef}
+              anchorRef={scanAnchorRef}
               value={query}
               onChange={onChange}
               onSubmit={submitField}
@@ -94,6 +104,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
               dropdown={
                 !carrierScanMode ? (
                   <WmsInventoryLiveSearchPanel
+                    anchorRef={scanAnchorRef}
                     query={query}
                     open={searchActive}
                     loading={searchLoading}
@@ -109,7 +120,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
 
           <WmsInventoryLocationCounts
             groups={countedProductGroups}
-            locationCode={locationContext?.locationCode ?? null}
+            unexpectedItems={unexpectedItems}
             activeLineId={activeLineId}
             pulseLineId={pulseLineId}
             onSelect={selectCountedProduct}
@@ -118,6 +129,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
       ) : (
         <WmsInventoryScanField
           inputRef={inputRef}
+          anchorRef={scanAnchorRef}
           value={query}
           onChange={onChange}
           onSubmit={submitField}
@@ -130,16 +142,21 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
       {counting && activeScan ? (
         <WmsInventoryProductDetailPanel
           scan={activeScan}
+          counted={activeCountedProduct}
           pulse={qtyPulse}
           invalid={invalidPulse}
           isPartialInventory={isPartialInventory}
           tenantId={tenantId}
           warehouseId={warehouseId}
           currentLocationId={task?.location_id}
+          qtyInputMode={qtyInputMode}
+          packaging={packaging}
+          onQtyModeChange={setQtyInputMode}
           onAdjust={(d) => void adjustQty(d)}
           onSetQuantity={(q) => void setQty(q)}
           onClose={focusScan}
           onConfirm={focusScan}
+          onDefectSaved={(note) => markActiveDefect(note)}
         />
       ) : null}
 
@@ -168,7 +185,10 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
           locationCode={locationContext?.locationCode ?? ""}
           sessionId={sessionId}
           initialBarcode={lastScanCode ?? undefined}
-          onCreated={() => setUnknownOpen(false)}
+          onCreated={() => {
+            setUnknownOpen(false);
+            void reloadFromServer();
+          }}
         />
       ) : null}
 
@@ -191,7 +211,7 @@ type ErrorProps = {
 
 export function WmsInventoryTerminalErrorState({ message, backHref }: ErrorProps) {
   return (
-    <div className={WMS_INV.shellWide}>
+    <div className={WMS_INV.shell}>
       <p className="text-sm font-bold text-red-700">{message}</p>
       <Link to={backHref} className={`mt-2 inline-block text-xs font-bold ${WMS_INV.textMuted}`}>
         Wróć
@@ -202,7 +222,7 @@ export function WmsInventoryTerminalErrorState({ message, backHref }: ErrorProps
 
 export function WmsInventoryTerminalLoadingState({ label = "…" }: { label?: string }) {
   return (
-    <div className={WMS_INV.shellWide}>
+    <div className={WMS_INV.shell}>
       <p className={`py-2 text-sm font-bold ${WMS_INV.textMuted}`}>{label}</p>
     </div>
   );

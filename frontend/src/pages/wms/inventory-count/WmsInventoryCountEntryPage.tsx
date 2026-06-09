@@ -177,7 +177,7 @@ export default function WmsInventoryCountEntryPage() {
   }
 
   return (
-    <div className={`${WMS_INV.shell} mt-12 flex flex-col items-center`}>
+    <div className={`${WMS_INV.shell} mt-4 flex flex-col items-stretch`}>
       {docTitle ? <p className="mb-2 w-full text-sm font-semibold text-slate-600">{docTitle}</p> : null}
 
       <div className="relative mb-16 w-full max-w-2xl">

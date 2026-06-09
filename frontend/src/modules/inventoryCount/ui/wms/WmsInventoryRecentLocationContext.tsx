@@ -1,9 +1,12 @@
-import { Box, Package } from "lucide-react";
+import { Package } from "lucide-react";
+
+import { LocationBadge } from "@/components/warehouse/LocationBadge";
 
 import {
   formatRelativeTimePl,
   type RecentLocationSession,
 } from "../../recentLocationsStorage";
+import WmsInventoryProductThumb from "./WmsInventoryProductThumb";
 import { WMS_INV } from "./theme";
 
 type Props = {
@@ -11,28 +14,6 @@ type Props = {
   disabled?: boolean;
   onSelect: (item: RecentLocationSession) => void;
 };
-
-function ProductThumb({ url, name }: { url?: string | null; name?: string | null }) {
-  return (
-    <div className="flex h-10 w-16 shrink-0 items-center justify-center overflow-hidden rounded border border-slate-100 bg-white">
-      {url ? (
-        <img src={url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-      ) : (
-        <Package className="h-4 w-4 text-slate-300" strokeWidth={1.5} />
-      )}
-      <span className="sr-only">{name ?? "Produkt"}</span>
-    </div>
-  );
-}
-
-function LocationChip({ code }: { code: string }) {
-  return (
-    <div className="flex shrink-0 items-center rounded-xl border border-[#d6defc] bg-[#eff2fe] px-4 py-2 text-sm font-bold text-[#5a45d0]">
-      <Box className="mr-2 h-4 w-4" />
-      {code}
-    </div>
-  );
-}
 
 export default function WmsInventoryRecentLocationContext({ items, disabled, onSelect }: Props) {
   if (items.length === 0) return null;
@@ -58,10 +39,14 @@ export default function WmsInventoryRecentLocationContext({ items, disabled, onS
                 >
                   {hasProduct ? (
                     <>
-                      <div className="flex min-w-0 flex-1 items-center gap-6">
-                        <LocationChip code={item.code} />
+                      <div className="flex min-w-0 flex-1 items-center gap-4">
+                        <LocationBadge code={item.code} type="PICK" className="shrink-0" />
                         <div className="flex min-w-0 items-center gap-4">
-                          <ProductThumb url={item.lastProductImageUrl} name={item.lastProductName} />
+                          <WmsInventoryProductThumb
+                            url={item.lastProductImageUrl}
+                            name={item.lastProductName}
+                            size="sm"
+                          />
                           <div className="min-w-0">
                             <div className="truncate text-sm font-bold text-slate-800">{item.lastProductName}</div>
                             {ean ? (
@@ -78,13 +63,14 @@ export default function WmsInventoryRecentLocationContext({ items, disabled, onS
                       </div>
                     </>
                   ) : (
-                    <div className="flex items-center gap-6">
-                      <LocationChip code={item.code} />
-                      <div className="text-sm font-medium text-slate-400">
+                    <div className="flex items-center gap-4">
+                      <LocationBadge code={item.code} type="PICK" className="shrink-0" />
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-400">
+                        <Package className="h-4 w-4" />
                         Brak policzonych produktów
                         {rel ? (
                           <>
-                            <span className="mx-2 text-slate-200">·</span>
+                            <span className="text-slate-200">·</span>
                             {rel}
                           </>
                         ) : null}
