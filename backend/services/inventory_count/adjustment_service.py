@@ -35,7 +35,9 @@ from .errors import (
     InventoryDocumentNotFoundError,
     InventoryDuplicatePostError,
     InventoryInvalidTransitionError,
+    InventoryPostingFailedError,
 )
+from .posting_validation_service import validate_and_prepare_document_for_posting
 from .kpi_service import recompute_document_kpis
 from .location_lock_service import release_location_locks_for_document
 from .observability import log_inventory_structured, observe_duration
@@ -289,11 +291,7 @@ def post_inventory_adjustments(
             lock_acquired = True
             _log_post_inventory("acquire lock", document_id=document_id_int, version=int(doc.version or 0))
 
-            lines = (
-                db.query(InventoryDocumentLine)
-                .filter(InventoryDocumentLine.inventory_document_id == int(doc.id))
-                .all()
-            )
+            lines = validate_and_prepare_document_for_posting(db, doc=doc)
             rw_doc: StockDocument | None = None
             pw_doc: StockDocument | None = None
             rw_lines = 0
@@ -313,118 +311,160 @@ def post_inventory_adjustments(
                 product = db.query(Product).filter(Product.id == int(line.product_id)).first()
                 unit_cost = resolve_line_unit_cost_net(db, document=doc, line=line, product=product)
 
-                if diff < 0:
-                    if rw_doc is None:
-                        rw_doc = _create_inventory_stock_document(db, doc=doc, document_type="RW", user_id=user_id)
-                        doc.rw_stock_document_id = int(rw_doc.id)
-                        _log_post_inventory(
-                            "rw creation",
-                            document_id=document_id_int,
-                            rw_stock_document_id=int(rw_doc.id),
+                try:
+                    if diff < 0:
+                        if rw_doc is None:
+                            rw_doc = _create_inventory_stock_document(db, doc=doc, document_type="RW", user_id=user_id)
+                            doc.rw_stock_document_id = int(rw_doc.id)
+                            _log_post_inventory(
+                                "rw creation",
+                                document_id=document_id_int,
+                                rw_stock_document_id=int(rw_doc.id),
+                            )
+                        qty = abs(diff)
+                        sd_line = StockDocumentItem(
+                            document_id=int(rw_doc.id),
+                            product_id=int(line.product_id),
+                            ordered_quantity=qty,
+                            received_quantity=qty,
+                            quantity=qty,
+                            purchase_price_net=unit_cost,
+                            batch_number=line.batch_number or "",
+                            expiry_date=date(9999, 12, 31),
                         )
-                    qty = abs(diff)
-                    sd_line = StockDocumentItem(
-                        document_id=int(rw_doc.id),
-                        product_id=int(line.product_id),
-                        ordered_quantity=qty,
-                        received_quantity=qty,
-                        quantity=qty,
-                        purchase_price_net=unit_cost,
-                        batch_number=line.batch_number or "",
-                        expiry_date=date(9999, 12, 31),
-                    )
-                    db.add(sd_line)
-                    db.flush()
-                    slices = consume_inventory_fifo_slices(
-                        db,
-                        tenant_id=int(doc.tenant_id),
-                        warehouse_id=int(doc.warehouse_id),
-                        product_id=int(line.product_id),
-                        location_id=int(line.location_id),
-                        quantity=qty,
-                    )
-                    for sl in slices:
-                        append_issue_operation(
+                        db.add(sd_line)
+                        db.flush()
+                        _log_post_inventory(
+                            "rw line",
+                            document_id=document_id_int,
+                            line_id=int(line.id),
+                            product_id=int(line.product_id),
+                            quantity=qty,
+                        )
+                        slices = consume_inventory_fifo_slices(
                             db,
-                            rw_doc,
-                            sd_line,
-                            float(sl.quantity),
-                            from_location_id=int(line.location_id),
-                            batch_number=sl.batch_number or "",
-                            expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
-                            operator_admin_id=user_id,
-                            metadata={
-                                "inventory_document_id": int(doc.id),
-                                "source_document_type": "RW",
-                                "valuation_net": unit_cost,
-                            },
+                            tenant_id=int(doc.tenant_id),
+                            warehouse_id=int(doc.warehouse_id),
+                            product_id=int(line.product_id),
+                            location_id=int(line.location_id),
+                            quantity=qty,
                         )
-                    rw_lines += 1
-                    direction = "RW"
-                    stock_doc_id = int(rw_doc.id)
-                else:
-                    if pw_doc is None:
-                        pw_doc = _create_inventory_stock_document(db, doc=doc, document_type="PW", user_id=user_id)
-                        doc.pw_stock_document_id = int(pw_doc.id)
+                        for sl in slices:
+                            append_issue_operation(
+                                db,
+                                rw_doc,
+                                sd_line,
+                                float(sl.quantity),
+                                from_location_id=int(line.location_id),
+                                batch_number=sl.batch_number or "",
+                                expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
+                                operator_admin_id=user_id,
+                                metadata={
+                                    "inventory_document_id": int(doc.id),
+                                    "source_document_type": "RW",
+                                    "valuation_net": unit_cost,
+                                },
+                            )
+                        rw_lines += 1
+                        direction = "RW"
+                        stock_doc_id = int(rw_doc.id)
+                    else:
+                        if pw_doc is None:
+                            pw_doc = _create_inventory_stock_document(db, doc=doc, document_type="PW", user_id=user_id)
+                            doc.pw_stock_document_id = int(pw_doc.id)
+                            _log_post_inventory(
+                                "pw creation",
+                                document_id=document_id_int,
+                                pw_stock_document_id=int(pw_doc.id),
+                            )
+                        qty = diff
+                        sd_line = StockDocumentItem(
+                            document_id=int(pw_doc.id),
+                            product_id=int(line.product_id),
+                            ordered_quantity=qty,
+                            received_quantity=qty,
+                            quantity=qty,
+                            purchase_price_net=unit_cost,
+                            batch_number=line.batch_number or "",
+                            expiry_date=date(9999, 12, 31),
+                        )
+                        db.add(sd_line)
+                        db.flush()
                         _log_post_inventory(
-                            "pw creation",
+                            "pw line",
                             document_id=document_id_int,
-                            pw_stock_document_id=int(pw_doc.id),
+                            line_id=int(line.id),
+                            product_id=int(line.product_id),
+                            quantity=qty,
                         )
-                    qty = diff
-                    sd_line = StockDocumentItem(
-                        document_id=int(pw_doc.id),
-                        product_id=int(line.product_id),
-                        ordered_quantity=qty,
-                        received_quantity=qty,
-                        quantity=qty,
-                        purchase_price_net=unit_cost,
-                        batch_number=line.batch_number or "",
-                        expiry_date=date(9999, 12, 31),
-                    )
-                    db.add(sd_line)
-                    db.flush()
-                    upsert_dock_inventory_for_loose_receipt(
-                        db,
+                        upsert_dock_inventory_for_loose_receipt(
+                            db,
+                            tenant_id=int(doc.tenant_id),
+                            warehouse_id=int(doc.warehouse_id),
+                            location_id=int(line.location_id),
+                            product_id=int(line.product_id),
+                            add_qty=float(qty),
+                            batch_number=line.batch_number or "",
+                            expiry_date=NO_EXPIRY_SENTINEL,
+                            stock_disposition=STOCK_DISPOSITION_SALEABLE,
+                        )
+                        append_receipt_operation(db, pw_doc, sd_line, float(qty))
+                        pw_lines += 1
+                        direction = "PW"
+                        stock_doc_id = int(pw_doc.id)
+
+                    adj = InventoryAdjustment(
+                        inventory_document_id=int(doc.id),
+                        inventory_document_line_id=int(line.id),
                         tenant_id=int(doc.tenant_id),
                         warehouse_id=int(doc.warehouse_id),
-                        location_id=int(line.location_id),
                         product_id=int(line.product_id),
-                        add_qty=float(qty),
-                        batch_number=line.batch_number or "",
-                        expiry_date=NO_EXPIRY_SENTINEL,
-                        stock_disposition=STOCK_DISPOSITION_SALEABLE,
+                        location_id=int(line.location_id),
+                        adjustment_quantity=diff,
+                        direction=direction,
+                        stock_document_id=stock_doc_id,
+                        status=ADJ_STATUS_POSTED,
                     )
-                    append_receipt_operation(db, pw_doc, sd_line, float(qty))
-                    pw_lines += 1
-                    direction = "PW"
-                    stock_doc_id = int(pw_doc.id)
-
-                adj = InventoryAdjustment(
-                    inventory_document_id=int(doc.id),
-                    inventory_document_line_id=int(line.id),
-                    tenant_id=int(doc.tenant_id),
-                    warehouse_id=int(doc.warehouse_id),
-                    product_id=int(line.product_id),
-                    location_id=int(line.location_id),
-                    adjustment_quantity=diff,
-                    direction=direction,
-                    stock_document_id=stock_doc_id,
-                    status=ADJ_STATUS_POSTED,
-                )
-                db.add(adj)
-                adjustments_created += 1
-                log_inventory_audit(
-                    db,
-                    tenant_id=int(tenant_id),
-                    inventory_document_id=int(doc.id),
-                    inventory_document_line_id=int(line.id),
-                    user_id=user_id,
-                    action=AUDIT_ADJUSTMENT,
-                    previous_state={"difference": diff},
-                    next_state={"direction": direction, "stock_document_id": stock_doc_id, "unit_cost_net": unit_cost},
-                    detail={"direction": direction, "quantity": diff, "stock_document_id": stock_doc_id},
-                )
+                    db.add(adj)
+                    adjustments_created += 1
+                    log_inventory_audit(
+                        db,
+                        tenant_id=int(tenant_id),
+                        inventory_document_id=int(doc.id),
+                        inventory_document_line_id=int(line.id),
+                        user_id=user_id,
+                        action=AUDIT_ADJUSTMENT,
+                        previous_state={"difference": diff},
+                        next_state={"direction": direction, "stock_document_id": stock_doc_id, "unit_cost_net": unit_cost},
+                        detail={"direction": direction, "quantity": diff, "stock_document_id": stock_doc_id},
+                    )
+                except ValueError as exc:
+                    raise InventoryPostingFailedError(
+                        str(exc),
+                        details={
+                            "line_id": int(line.id),
+                            "product_id": int(line.product_id),
+                            "location_id": int(line.location_id),
+                            "difference_quantity": diff,
+                            "phase": "rw_stock_consume",
+                        },
+                    ) from exc
+                except Exception as exc:
+                    logger.exception(
+                        "[POST INVENTORY] line failed document_id=%s line_id=%s diff=%s",
+                        document_id_int,
+                        line.id,
+                        diff,
+                    )
+                    raise InventoryPostingFailedError(
+                        f"Posting failed on line {line.id}: {type(exc).__name__}: {exc}",
+                        details={
+                            "line_id": int(line.id),
+                            "product_id": int(line.product_id),
+                            "difference_quantity": diff,
+                            "error_type": type(exc).__name__,
+                        },
+                    ) from exc
 
             if idempotency_key:
                 doc.post_idempotency_key = str(idempotency_key)

@@ -77,6 +77,10 @@ class InventoryPostingInProgressError(InventoryCountError):
     code = "posting_in_progress"
 
 
+class InventoryPostingFailedError(InventoryCountError):
+    code = "posting_failed"
+
+
 class InventoryPermissionDeniedError(InventoryCountError):
     code = "permission_denied"
 

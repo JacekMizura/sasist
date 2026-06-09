@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Fix: HTTP 500 przy księgowaniu RW/PW inwentaryzacji
+- `posting_validation_service.py`: walidacja przed postem — reconcile operatorów (nigdy suma), snapshot linii `[POST INVENTORY] line snapshot` (cartons/carton_capacity/pieces/computed_total/delta), blokada absurdalnych qty, preflight stock RW
+- `adjustment_service.py`: per-line try/except → `InventoryPostingFailedError` (FIFO ValueError zamiast surowego 500)
+- API `POST .../post`: `posting_failed` → HTTP 422 ze szczegółami; nieoczekiwane błędy → traceback w `detail`
+- Testy: `test_posting_validation.py`
+
 ## 2026-06-08 — WMS launcher: terminal operacyjny (kafelki modułów)
 - Nowy widok `/wms/menu`: `WmsLauncherPage`, `WmsModuleTile`, `WmsHeader`
 - Industrial UI: granatowy header, duże kafelki (≥140px), bez pinów/hover SaaS

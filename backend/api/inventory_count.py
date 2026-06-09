@@ -104,12 +104,14 @@ def _map_inventory_error(exc: InventoryCountError) -> HTTPException:
         status = 403
     elif exc.code in ("scope_not_configured", "scope_not_materialized", "inventory_start_failed"):
         status = 400
+    elif exc.code == "posting_failed":
+        status = 422
     elif exc.code == "location_inventory_locked":
         status = 423
     else:
         status = 400
 
-    if status in (400, 409):
+    if status in (400, 409, 422):
         logger.warning(
             "inventory_api_rejected code=%s status=%s message=%s details=%s",
             exc.code,
@@ -578,6 +580,8 @@ def inventory_count_post(
     db: Session = Depends(get_db),
     user: AppUser = Depends(require_inventory_permission(PERM_POST)),
 ):
+    import traceback as tb
+
     try:
         return post_inventory_adjustments(
             db,
@@ -589,6 +593,23 @@ def inventory_count_post(
         )
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
+    except Exception as exc:
+        logger.exception(
+            "inventory_post_fatal document_id=%s tenant_id=%s error=%s",
+            document_id,
+            tenant_id,
+            exc,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "internal_posting_error",
+                "message": str(exc),
+                "error_type": type(exc).__name__,
+                "document_id": document_id,
+                "traceback": tb.format_exc(),
+            },
+        ) from exc
 
 
 @router.post("/documents/{document_id}/recounts/generate")
