@@ -206,6 +206,14 @@ export function commitLocationSessionToRecent(taskId: number) {
   writeSessionStore(store);
 }
 
+/** Drop in-progress session bucket when leaving counting (prevents stale local qty). */
+export function clearLocationSessionForTask(taskId: number) {
+  const store = readSessionStore();
+  if (!store[String(taskId)]) return;
+  delete store[String(taskId)];
+  writeSessionStore(store);
+}
+
 export function formatRelativeTimePl(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const ts = new Date(iso).getTime();

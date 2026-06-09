@@ -29,6 +29,7 @@ type Props = {
   onSetInputMode: (mode: WmsQtyInputMode) => void;
   onSetDraft: (draft: string | null) => void;
   onCommitDraft: () => void;
+  qtySaving?: boolean;
 };
 
 function carrierLabel(counted: WmsCountedProduct | null | undefined, scan: WmsBarcodeResolveResult): string | null {
@@ -59,6 +60,7 @@ export default function WmsInventoryProductDetailPanel({
   onSetInputMode,
   onSetDraft,
   onCommitDraft,
+  qtySaving,
 }: Props) {
   const pack = Math.max(1, packaging.unitsPerCarton);
   const carrierCode = carrierLabel(counted, scan);
@@ -137,6 +139,7 @@ export default function WmsInventoryProductDetailPanel({
         qtyState={qtyState}
         unitsPerCarton={pack}
         packagingLoaded={packaging.loaded}
+        disabled={qtySaving}
         onAdjust={onAdjust}
         onSetInputMode={onSetInputMode}
         onSetDraft={onSetDraft}

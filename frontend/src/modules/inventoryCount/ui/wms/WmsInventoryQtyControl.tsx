@@ -48,7 +48,7 @@ function QtyCell({
       <div className="flex items-center justify-center gap-2">
         <button
           type="button"
-          disabled={controlsDisabled}
+          disabled={disabled}
           onClick={() => onAdjust(field, -1)}
           className="flex h-10 w-10 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
           aria-label={`Zmniejsz ${label.toLowerCase()}`}
@@ -58,7 +58,7 @@ function QtyCell({
         <input
           type="text"
           inputMode="numeric"
-          disabled={controlsDisabled}
+          disabled={disabled}
           value={display}
           onFocus={() => onSetInputMode(field)}
           onChange={(e) => onSetDraft(e.target.value.replace(/\D/g, ""))}
@@ -74,7 +74,7 @@ function QtyCell({
         />
         <button
           type="button"
-          disabled={controlsDisabled}
+          disabled={disabled}
           onClick={() => onAdjust(field, 1)}
           className="flex h-10 w-10 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
           aria-label={`Zwiększ ${label.toLowerCase()}`}

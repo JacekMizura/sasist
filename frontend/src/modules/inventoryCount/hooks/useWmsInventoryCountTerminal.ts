@@ -21,6 +21,7 @@ import { normalizeScanEan } from "@/utils/wmsScanNormalize";
 import { wmsInventoryCountPaths } from "../inventoryCountPaths";
 import { setActiveInventoryDocumentId } from "../wmsActiveDocumentStorage";
 import {
+  clearLocationSessionForTask,
   commitLocationSessionToRecent,
   syncLocationSessionProduct,
   touchRecentLocation,
@@ -32,7 +33,6 @@ import {
   commitInventoryQtyDraft,
   EMPTY_INVENTORY_QTY,
   inventoryQtyFromPieces,
-  inventoryQtyFromTotalPieces,
   inventoryTotalPieces,
   type InventoryQtyEditState,
 } from "../ui/wms/inventoryQtyUtils";
@@ -191,7 +191,12 @@ export function useWmsInventoryCountTerminal(
   const qtyEditStateRef = useRef<InventoryQtyEditState>(EMPTY_INVENTORY_QTY);
   const activeLineIdRef = useRef<number | null>(null);
   const activeScanRef = useRef<WmsBarcodeResolveResult | null>(null);
-  const lastSyncedPackRef = useRef<number | null>(null);
+  const packagingRef = useRef<WmsInventoryPackaging>({
+    unitsPerCarton: 1,
+    cartonEan: null,
+    loaded: false,
+  });
+  const savingQtyRef = useRef(false);
 
   const [loading, setLoading] = useState(Boolean(taskId));
   const [error, setError] = useState<string | null>(null);
@@ -217,6 +222,7 @@ export function useWmsInventoryCountTerminal(
   const [lastScanCode, setLastScanCode] = useState<string | null>(null);
   const [operatorRecent, setOperatorRecent] = useState<WmsCountedProduct[]>([]);
   const [countConflict, setCountConflict] = useState(false);
+  const [savingQty, setSavingQty] = useState(false);
 
   const uiResetters = useMemo(
     () => ({
@@ -406,6 +412,157 @@ export function useWmsInventoryCountTerminal(
 
   const operatorRecentList = useMemo(() => operatorRecent, [operatorRecent]);
 
+  useEffect(() => {
+    qtyEditStateRef.current = qtyEditState;
+  }, [qtyEditState]);
+
+  useEffect(() => {
+    activeLineIdRef.current = activeLineId;
+  }, [activeLineId]);
+
+  useEffect(() => {
+    activeScanRef.current = activeScan;
+  }, [activeScan]);
+
+  useEffect(() => {
+    packagingRef.current = packaging;
+  }, [packaging]);
+
+  useEffect(() => {
+    if (!activeScan?.product_id || !warehouseId) {
+      setPackaging({ unitsPerCarton: 1, cartonEan: null, loaded: false });
+      return;
+    }
+    let cancelled = false;
+    void loadPackagingForProduct(tenantId, warehouseId, activeScan.product_id).then((pack) => {
+      if (!cancelled) setPackaging(pack);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeScan?.product_id, tenantId, warehouseId]);
+
+  /** Re-decompose when pack size is known — SSOT piece total lives on activeScan from backend. */
+  useEffect(() => {
+    if (!packaging.loaded || activeLineId == null) return;
+    const total = activeScanRef.current?.counted_quantity;
+    if (total == null || !Number.isFinite(total)) return;
+    setQtyEditState(inventoryQtyFromPieces(total, packaging.unitsPerCarton));
+  }, [packaging.loaded, packaging.unitsPerCarton, activeLineId]);
+
+  const logCountDebug = useCallback(
+    (phase: string, extra: Record<string, unknown> = {}) => {
+      const pack = packagingRef.current;
+      const scan = activeScanRef.current;
+      const qty = qtyEditStateRef.current;
+      const packSize = pack.loaded ? pack.unitsPerCarton : null;
+      console.info("[COUNT DEBUG]", phase, {
+        document_id: task?.inventory_document_id,
+        line_id: scan?.line_id ?? activeLineIdRef.current,
+        cartons: qty.cartonsCount,
+        pieces: qty.unitsCount,
+        carton_size: packSize,
+        computed_total: packSize != null ? inventoryTotalPieces(qty, packSize) : null,
+        browser_session: sessionId,
+        ...extra,
+      });
+    },
+    [sessionId, task?.inventory_document_id],
+  );
+
+  const pulseLine = useCallback((lineId: number) => {
+    setPulseLineId(lineId);
+    if (pulseTimerRef.current != null) window.clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = window.setTimeout(() => setPulseLineId(null), PULSE_MS);
+  }, []);
+
+  const pulseBad = useCallback(() => {
+    setInvalidPulse(true);
+    window.setTimeout(() => setInvalidPulse(false), 400);
+  }, []);
+
+  const applyServerQuantity = useCallback(
+    (
+      scan: WmsBarcodeResolveResult,
+      serverPieces: number,
+      pack: number,
+      opts?: { inputMode?: WmsQtyInputMode; carrier?: WmsCarrierContext; debug?: Record<string, unknown> },
+    ) => {
+      const safeQty = Math.max(0, Math.round(serverPieces));
+      const p = Math.max(1, Math.floor(pack));
+      const qtyState = inventoryQtyFromPieces(
+        safeQty,
+        p,
+        opts?.inputMode ?? qtyEditStateRef.current.inputMode,
+      );
+      const carrierId = scan.carrier_id ?? opts?.carrier?.carrierId ?? activeCarrierId;
+      const snapshot: WmsBarcodeResolveResult = { ...scan, counted_quantity: safeQty, carrier_id: carrierId };
+
+      setActiveScan(snapshot);
+      setActiveLineId(scan.line_id);
+      setQtyEditState(qtyState);
+
+      setCountedProducts((prev) => {
+        const existing = prev[scan.line_id];
+        const carrierCode =
+          opts?.carrier?.code ??
+          (carrierId != null && carrierContext?.carrierId === carrierId ? carrierContext.code : null) ??
+          existing?.carrier_code ??
+          null;
+        const row: WmsCountedProduct = {
+          line_id: scan.line_id,
+          product_id: scan.product_id,
+          product_name: scan.product_name,
+          sku: scan.sku,
+          ean: scan.ean,
+          image_url: scan.image_url,
+          carrier_id: carrierId,
+          carrier_code: carrierCode,
+          counted_quantity: safeQty,
+          updatedAt: Date.now(),
+          scan: snapshot,
+          defectReported: existing?.defectReported,
+          defectNote: existing?.defectNote,
+        };
+        setOperatorRecent((recent) => [row, ...recent.filter((item) => item.line_id !== scan.line_id)].slice(0, 2));
+        return { ...prev, [scan.line_id]: row };
+      });
+
+      if (task) {
+        syncLocationSessionProduct({
+          taskId: task.id,
+          locationId: task.location_id,
+          locationCode: task.location_code ?? task.location_name ?? `#${task.location_id}`,
+          productId: scan.product_id,
+          productName: scan.product_name,
+          sku: scan.sku ?? undefined,
+          ean: scan.ean ?? undefined,
+          imageUrl: scan.image_url ?? undefined,
+          countedQuantity: safeQty,
+        });
+      }
+      pulseLine(scan.line_id);
+      logCountDebug("after hydration", {
+        saved_total: safeQty,
+        aggregated_total: safeQty,
+        ...opts?.debug,
+      });
+    },
+    [activeCarrierId, carrierContext, logCountDebug, pulseLine, task],
+  );
+
+  const beginQtySave = useCallback(() => {
+    if (savingQtyRef.current) return false;
+    savingQtyRef.current = true;
+    setSavingQty(true);
+    return true;
+  }, []);
+
+  const endQtySave = useCallback(() => {
+    savingQtyRef.current = false;
+    setSavingQty(false);
+  }, []);
+
   const reloadFromServer = useCallback(async () => {
     if (!task) return;
     try {
@@ -434,128 +591,25 @@ export function useWmsInventoryCountTerminal(
           .slice(0, 2),
       );
       setUnexpectedItems(unexpectedFromSummary(summary.unexpected ?? []));
+
+      const activeId = activeLineIdRef.current;
+      const scan = activeScanRef.current;
+      if (activeId != null && scan) {
+        const line = lines.find((row) => row.id === activeId);
+        const serverQty = line?.my_counted_quantity ?? line?.counted_quantity;
+        if (line && serverQty != null && packagingRef.current.loaded) {
+          logCountDebug("after reload", {
+            line_id: activeId,
+            saved_total: serverQty,
+            aggregated_total: serverQty,
+          });
+          applyServerQuantity({ ...scan, line_id: line.id }, serverQty, packagingRef.current.unitsPerCarton);
+        }
+      }
     } catch {
       scanFeedback.error("Nie udało się odświeżyć listy");
     }
-  }, [scanFeedback, task, tenantId]);
-
-  useEffect(() => {
-    qtyEditStateRef.current = qtyEditState;
-  }, [qtyEditState]);
-
-  useEffect(() => {
-    activeLineIdRef.current = activeLineId;
-  }, [activeLineId]);
-
-  useEffect(() => {
-    activeScanRef.current = activeScan;
-  }, [activeScan]);
-
-  useEffect(() => {
-    if (!activeScan?.product_id || !warehouseId) {
-      setPackaging({ unitsPerCarton: 1, cartonEan: null, loaded: false });
-      lastSyncedPackRef.current = null;
-      return;
-    }
-    let cancelled = false;
-    lastSyncedPackRef.current = null;
-    void loadPackagingForProduct(tenantId, warehouseId, activeScan.product_id).then((pack) => {
-      if (!cancelled) setPackaging(pack);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeScan?.product_id, tenantId, warehouseId]);
-
-  /** Re-decompose when pack size is known — prevents treating piece total as carton count. */
-  useEffect(() => {
-    if (!packaging.loaded) return;
-    const pack = packaging.unitsPerCarton;
-    if (lastSyncedPackRef.current === pack) return;
-    lastSyncedPackRef.current = pack;
-    const total = activeScan?.counted_quantity;
-    if (total == null || activeLineId == null) return;
-    const next = inventoryQtyFromTotalPieces(total, pack);
-    if (next) setQtyEditState(next);
-  }, [packaging.loaded, packaging.unitsPerCarton, activeScan?.counted_quantity, activeLineId]);
-
-  const pulseLine = useCallback((lineId: number) => {
-    setPulseLineId(lineId);
-    if (pulseTimerRef.current != null) window.clearTimeout(pulseTimerRef.current);
-    pulseTimerRef.current = window.setTimeout(() => setPulseLineId(null), PULSE_MS);
-  }, []);
-
-  const pulseBad = useCallback(() => {
-    setInvalidPulse(true);
-    window.setTimeout(() => setInvalidPulse(false), 400);
-  }, []);
-
-  const upsertCountedProduct = useCallback(
-    (scan: WmsBarcodeResolveResult, qty: number, carrier?: WmsCarrierContext) => {
-      const carrierId = scan.carrier_id ?? carrier?.carrierId ?? activeCarrierId;
-      const snapshot: WmsBarcodeResolveResult = { ...scan, counted_quantity: qty, carrier_id: carrierId };
-      setCountedProducts((prev) => {
-        const existing = prev[scan.line_id];
-        const carrierCode =
-          carrier?.code ??
-          (carrierId != null && carrierContext?.carrierId === carrierId ? carrierContext.code : null) ??
-          existing?.carrier_code ??
-          null;
-        const row: WmsCountedProduct = {
-          line_id: scan.line_id,
-          product_id: scan.product_id,
-          product_name: scan.product_name,
-          sku: scan.sku,
-          ean: scan.ean,
-          image_url: scan.image_url,
-          carrier_id: carrierId,
-          carrier_code: carrierCode,
-          counted_quantity: qty,
-          updatedAt: Date.now(),
-          scan: snapshot,
-          defectReported: existing?.defectReported,
-          defectNote: existing?.defectNote,
-        };
-        setOperatorRecent((recent) => [row, ...recent.filter((p) => p.line_id !== scan.line_id)].slice(0, 2));
-        return { ...prev, [scan.line_id]: row };
-      });
-      if (task) {
-        syncLocationSessionProduct({
-          taskId: task.id,
-          locationId: task.location_id,
-          locationCode: task.location_code ?? task.location_name ?? `#${task.location_id}`,
-          productId: scan.product_id,
-          productName: scan.product_name,
-          sku: scan.sku ?? undefined,
-          ean: scan.ean ?? undefined,
-          imageUrl: scan.image_url ?? undefined,
-          countedQuantity: qty,
-        });
-      }
-      pulseLine(scan.line_id);
-    },
-    [activeCarrierId, carrierContext, pulseLine, task],
-  );
-
-  const applyScanQty = useCallback(
-    (
-      scan: WmsBarcodeResolveResult,
-      nextQty: number,
-      pack: number,
-      qtyState?: InventoryQtyEditState,
-    ) => {
-      const safeQty = Math.max(0, Math.round(nextQty));
-      setActiveScan({ ...scan, counted_quantity: safeQty });
-      setActiveLineId(scan.line_id);
-      upsertCountedProduct(scan, safeQty);
-      if (qtyState) {
-        setQtyEditState(clampInventoryQtyState(qtyState));
-      } else {
-        setQtyEditState(inventoryQtyFromPieces(safeQty, pack));
-      }
-    },
-    [upsertCountedProduct],
-  );
+  }, [applyServerQuantity, logCountDebug, scanFeedback, task, tenantId]);
 
   const recordScan = useCallback(
     async (lineId: number, opts: { delta?: number; quantity?: number; barcode?: string; source?: string }) => {
@@ -669,49 +723,43 @@ export function useWmsInventoryCountTerminal(
       resolved: WmsBarcodeResolveResult,
       opts: { barcode?: string; source?: string; isCartonScan: boolean; unitsPerCarton: number },
     ) => {
+      if (!beginQtySave()) return false;
       const pack = Math.max(1, opts.unitsPerCarton);
-      const committed = clampInventoryQtyState(commitInventoryQtyDraft(qtyEditStateRef.current));
-      const sameLine = resolved.line_id === activeLineIdRef.current;
+      const pieceDelta = opts.isCartonScan ? pack : 1;
+      const inputMode: WmsQtyInputMode = opts.isCartonScan ? "carton" : "unit";
 
-      let baseState: InventoryQtyEditState;
-      if (sameLine && activeScanRef.current && packaging.loaded) {
-        baseState = committed;
-      } else {
-        const basePieces = resolved.my_counted_quantity ?? 0;
-        baseState = inventoryQtyFromPieces(basePieces, pack);
-      }
+      setActiveScan(resolved);
+      setActiveLineId(resolved.line_id);
 
-      const nextState = clampInventoryQtyState(
-        opts.isCartonScan
-          ? { ...baseState, cartonsCount: baseState.cartonsCount + 1, inputMode: "carton", draft: null }
-          : { ...baseState, unitsCount: baseState.unitsCount + 1, inputMode: "unit", draft: null },
-      );
-      const nextQty = inventoryTotalPieces(nextState, pack);
-
-      applyScanQty(resolved, nextQty, pack, nextState);
+      logCountDebug("before save", {
+        line_id: resolved.line_id,
+        payload_total: `delta:${pieceDelta}`,
+        saved_total: resolved.my_counted_quantity ?? resolved.counted_quantity ?? 0,
+      });
 
       try {
         const data = await recordScan(resolved.line_id, {
-          quantity: nextQty,
+          delta: pieceDelta,
           barcode: opts.barcode,
           source: opts.source ?? "scanner",
         });
-        const serverQty = data?.my_counted_quantity;
-        if (serverQty != null && Math.round(serverQty) !== nextQty) {
-          applyScanQty(
-            resolved,
-            serverQty,
-            pack,
-            inventoryQtyFromPieces(serverQty, pack, nextState.inputMode),
-          );
-        }
+        const serverQty = data?.my_counted_quantity ?? 0;
+        logCountDebug("after save", {
+          line_id: resolved.line_id,
+          payload_total: pieceDelta,
+          saved_total: serverQty,
+          aggregated_total: serverQty,
+        });
+        applyServerQuantity(resolved, serverQty, pack, { inputMode });
         return true;
       } catch {
         scanFeedback.error("Błąd zapisu — spróbuj ponownie");
         return false;
+      } finally {
+        endQtySave();
       }
     },
-    [applyScanQty, packaging.loaded, recordScan, scanFeedback],
+    [applyServerQuantity, beginQtySave, endQtySave, logCountDebug, recordScan, scanFeedback],
   );
 
   const handleProductScan = useCallback(
@@ -721,7 +769,7 @@ export function useWmsInventoryCountTerminal(
         const resolved = await resolveWmsInventoryBarcode(tenantId, task.id, code, activeCarrierId ?? undefined);
         const pack = await loadPackagingForProduct(tenantId, warehouseId, resolved.product_id);
         setPackaging(pack);
-        lastSyncedPackRef.current = null;
+        packagingRef.current = pack;
         setCountConflict(Boolean(resolved.operator_count_conflict));
         const isCartonScan = scanIsCartonCode(code, pack);
         setLastScanKind(isCartonScan ? "carton" : "unit");
@@ -752,61 +800,73 @@ export function useWmsInventoryCountTerminal(
   );
 
   const persistQtyPieces = useCallback(
-    async (pieces: number, pack: number) => {
+    async (pieces: number, pack: number, inputMode: WmsQtyInputMode = "unit") => {
       const base = activeScanRef.current;
       if (!base) {
         scanFeedback.warning("Zeskanuj produkt");
         return;
       }
+      if (!beginQtySave()) return;
       const nextQty = Math.max(0, Math.round(pieces));
       const current = base.counted_quantity ?? 0;
-      if (nextQty === current) return;
-      const nextState = inventoryQtyFromPieces(nextQty, pack);
-      applyScanQty(base, nextQty, pack, nextState);
+      if (nextQty === current) {
+        endQtySave();
+        return;
+      }
+
+      logCountDebug("before save", {
+        line_id: base.line_id,
+        payload_total: nextQty,
+        saved_total: current,
+      });
+
       try {
         const data = await recordScan(base.line_id, { quantity: nextQty, source: "manual" });
-        const serverQty = data?.my_counted_quantity;
-        if (serverQty != null && Math.round(serverQty) !== nextQty) {
-          applyScanQty(base, serverQty, pack, inventoryQtyFromPieces(serverQty, pack));
-        }
+        const serverQty = data?.my_counted_quantity ?? nextQty;
+        logCountDebug("after save", {
+          line_id: base.line_id,
+          payload_total: nextQty,
+          saved_total: serverQty,
+          aggregated_total: serverQty,
+        });
+        applyServerQuantity(base, serverQty, pack, { inputMode });
       } catch {
         scanFeedback.error("Błąd zapisu");
+      } finally {
+        endQtySave();
       }
     },
-    [applyScanQty, recordScan, scanFeedback],
+    [applyServerQuantity, beginQtySave, endQtySave, logCountDebug, recordScan, scanFeedback],
   );
 
   const adjustQty = useCallback(
     async (field: WmsQtyInputMode, delta: number) => {
-      const base = activeScanRef.current;
-      if (!base || !packaging.loaded) return;
-      const pack = Math.max(1, packaging.unitsPerCarton);
+      if (!activeScanRef.current || !packagingRef.current.loaded) return;
+      const pack = Math.max(1, packagingRef.current.unitsPerCarton);
       const committed = clampInventoryQtyState(commitInventoryQtyDraft(qtyEditStateRef.current));
       const nextState = clampInventoryQtyState(
         field === "carton"
           ? { ...committed, cartonsCount: Math.max(0, committed.cartonsCount + delta), inputMode: "carton", draft: null }
           : { ...committed, unitsCount: Math.max(0, committed.unitsCount + delta), inputMode: "unit", draft: null },
       );
-      setQtyEditState(nextState);
-      await persistQtyPieces(inventoryTotalPieces(nextState, pack), pack);
+      await persistQtyPieces(inventoryTotalPieces(nextState, pack), pack, nextState.inputMode);
     },
-    [packaging.loaded, packaging.unitsPerCarton, persistQtyPieces],
+    [persistQtyPieces],
   );
 
   const setQtyField = useCallback(
     async (field: WmsQtyInputMode, value: number) => {
-      if (!activeScanRef.current || !packaging.loaded) return;
-      const pack = Math.max(1, packaging.unitsPerCarton);
+      if (!activeScanRef.current || !packagingRef.current.loaded) return;
+      const pack = Math.max(1, packagingRef.current.unitsPerCarton);
       const committed = clampInventoryQtyState(commitInventoryQtyDraft(qtyEditStateRef.current));
       const nextState = clampInventoryQtyState(
         field === "carton"
           ? { ...committed, cartonsCount: Math.max(0, Math.round(value)), inputMode: "carton", draft: null }
           : { ...committed, unitsCount: Math.max(0, Math.round(value)), inputMode: "unit", draft: null },
       );
-      setQtyEditState(nextState);
-      await persistQtyPieces(inventoryTotalPieces(nextState, pack), pack);
+      await persistQtyPieces(inventoryTotalPieces(nextState, pack), pack, nextState.inputMode);
     },
-    [packaging.loaded, packaging.unitsPerCarton, persistQtyPieces],
+    [persistQtyPieces],
   );
 
   const setQtyInputMode = useCallback((mode: WmsQtyInputMode) => {
@@ -818,12 +878,11 @@ export function useWmsInventoryCountTerminal(
   }, []);
 
   const commitQtyDraft = useCallback(() => {
-    if (qtyEditState.draft === null || !packaging.loaded) return;
+    if (qtyEditState.draft === null || !packagingRef.current.loaded) return;
     const committed = clampInventoryQtyState(commitInventoryQtyDraft(qtyEditState));
-    const pack = Math.max(1, packaging.unitsPerCarton);
-    setQtyEditState({ ...committed, draft: null });
-    void persistQtyPieces(inventoryTotalPieces(committed, pack), pack);
-  }, [packaging.loaded, packaging.unitsPerCarton, persistQtyPieces, qtyEditState]);
+    const pack = Math.max(1, packagingRef.current.unitsPerCarton);
+    void persistQtyPieces(inventoryTotalPieces(committed, pack), pack, committed.inputMode);
+  }, [persistQtyPieces, qtyEditState]);
 
   const markActiveDefect = useCallback((note: string | null) => {
     if (activeLineId == null) return;
@@ -852,17 +911,17 @@ export function useWmsInventoryCountTerminal(
       setActiveScan(item.scan);
       setActiveLineId(item.line_id);
       setLastScanKind(null);
-      lastSyncedPackRef.current = null;
       if (warehouseId && item.product_id) {
         void loadPackagingForProduct(tenantId, warehouseId, item.product_id).then((pack) => {
+          packagingRef.current = pack;
           setPackaging(pack);
-          setQtyEditState(inventoryQtyFromPieces(item.counted_quantity, pack.unitsPerCarton));
+          applyServerQuantity(item.scan, item.counted_quantity, pack.unitsPerCarton);
         });
       } else {
         setQtyEditState(inventoryQtyFromPieces(item.counted_quantity, 1));
       }
     },
-    [tenantId, warehouseId],
+    [applyServerQuantity, tenantId, warehouseId],
   );
 
   const handleScan = useCallback(
@@ -948,7 +1007,10 @@ export function useWmsInventoryCountTerminal(
   }, [activeLineId]);
 
   const finishLocation = useCallback(() => {
-    if (task) commitLocationSessionToRecent(task.id);
+    if (task) {
+      commitLocationSessionToRecent(task.id);
+      clearLocationSessionForTask(task.id);
+    }
     hydratedTaskIdRef.current = null;
     const docId = task?.inventory_document_id;
     setTask(null);
@@ -989,6 +1051,7 @@ export function useWmsInventoryCountTerminal(
     carrierScanMode,
     unknownOpen,
     lastScanCode,
+    savingQty,
     setUnknownOpen,
     setQtyInputMode,
     setQtyDraft,

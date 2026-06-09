@@ -72,6 +72,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     reloadFromServer,
     markActiveDefect,
     carrierScanMode,
+    savingQty,
   } = terminal;
 
   const focusScan = () => {
@@ -133,6 +134,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
               onSetInputMode={setQtyInputMode}
               onSetDraft={setQtyDraft}
               onCommitDraft={commitQtyDraft}
+              qtySaving={savingQty}
             />
           ) : null}
 

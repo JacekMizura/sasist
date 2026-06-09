@@ -164,6 +164,18 @@ def record_count_scan(
         new_qty = prev_qty
     new_qty = max(0.0, min(new_qty, 1_000_000.0))
 
+    logger.info(
+        "[COUNT DEBUG] before save | document_id=%s line_id=%s operator_id=%s prev_qty=%s "
+        "payload_delta=%s payload_quantity=%s computed_new_qty=%s",
+        document_id,
+        line_id,
+        user_id,
+        prev_qty,
+        delta,
+        quantity if delta is None else None,
+        new_qty,
+    )
+
     entry = InventoryCountEntry(
         inventory_document_line_id=line.id,
         inventory_document_id=doc.id,
@@ -239,6 +251,18 @@ def record_count_scan(
     db.refresh(line)
     operator_qty = latest_operator_quantity_for_line(db, int(line.id), user_id)
     op_map = operator_quantities_for_line(db, int(line.id))
+    aggregated = operator_qty if operator_qty is not None else line.counted_quantity
+    logger.info(
+        "[COUNT DEBUG] after save | document_id=%s line_id=%s operator_id=%s saved_total=%s "
+        "aggregated_total=%s line_counted_quantity=%s operator_count=%s",
+        document_id,
+        line_id,
+        user_id,
+        operator_qty,
+        aggregated,
+        line.counted_quantity,
+        len(op_map),
+    )
     return {
         "line_id": line.id,
         "counted_quantity": operator_qty if operator_qty is not None else line.counted_quantity,
