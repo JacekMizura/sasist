@@ -57,13 +57,23 @@ export function normalizeInventoryQty(state: InventoryQtyEditState, pack: number
   return inventoryQtyFromPieces(total, pack, state.inputMode);
 }
 
-/** Small helper — e.g. „2 krt. + 3 szt.” — not for primary input. */
-export function formatCartonUnitSummary(pieces: number, pack: number): string | null {
+/** Secondary helper — np. „5 kartonów × 5 szt.” (tylko podpowiedź, nie input). */
+export function formatPackagingHelper(pieces: number, pack: number): string | null {
   if (pack <= 1) return null;
-  const { cartons, units } = piecesToCartonUnit(pieces, pack);
-  if (cartons === 0 && units === 0) return null;
-  const parts: string[] = [];
-  if (cartons > 0) parts.push(`${cartons} krt.`);
-  if (units > 0) parts.push(`${units} szt.`);
-  return parts.join(" + ");
+  const safe = Math.max(0, Math.round(pieces));
+  if (safe === 0) return null;
+  const { cartons, units } = piecesToCartonUnit(safe, pack);
+  if (cartons > 0 && units === 0) {
+    const label = cartons === 1 ? "karton" : cartons < 5 ? "kartony" : "kartonów";
+    return `${cartons} ${label} × ${pack} szt.`;
+  }
+  if (cartons > 0 && units > 0) {
+    return `${cartons} krt. × ${pack} szt. + ${units} szt.`;
+  }
+  return null;
+}
+
+/** @deprecated use formatPackagingHelper — kept for list row micro-hints */
+export function formatCartonUnitSummary(pieces: number, pack: number): string | null {
+  return formatPackagingHelper(pieces, pack);
 }

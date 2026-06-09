@@ -17,7 +17,7 @@ type Props = {
   documentId: number;
 };
 
-/** WMS counting terminal — fullscreen operational flow (putaway/picking density). */
+/** WMS counting terminal — product-first, scan-first operational flow. */
 export default function WmsInventoryTerminalView({ state, documentId }: Props) {
   const scanAnchorRef = useRef<HTMLDivElement>(null);
   const {
@@ -42,7 +42,6 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     sessionId,
     locationContext,
     carrierContext,
-    locationActive,
     locationSubline,
     activeScan,
     activeLineId,
@@ -51,34 +50,35 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     unexpectedItems,
     pulseLineId,
     isPartialInventory,
-    qtyPulse,
-    invalidPulse,
-    carrierScanMode,
-    qtyEditState,
-    setQtyInputMode,
-    setQtyDraft,
-    commitQtyDraft,
     packaging,
+    lastScanKind,
     unknownOpen,
     lastScanCode,
     setUnknownOpen,
     adjustQty,
-    setQtyField,
+    setQty,
     selectCountedProduct,
+    clearActiveProduct,
     enterCarrierScan,
     skipCarrier,
     clearCarrier,
     finishLocation,
     reloadFromServer,
     markActiveDefect,
+    carrierScanMode,
   } = terminal;
 
   const focusScan = () => {
     window.requestAnimationFrame(() => inputRef.current?.focus());
   };
 
+  const closeProductPanel = () => {
+    clearActiveProduct();
+    focusScan();
+  };
+
   return (
-    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-6 py-6 pb-32`}>
+    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-5 py-5 pb-24`}>
       <WmsInventoryActiveContextBar
         location={locationContext}
         carrier={carrierContext}
@@ -92,7 +92,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
       {counting ? (
         <>
           <div className="overflow-visible">
-            <p className={`${WMS_INV.textLabel} mb-3`}>
+            <p className={`${WMS_INV.textLabel} mb-2`}>
               Zeskanuj produkt{locationSubline ? ` • ${locationSubline}` : ""}
             </p>
             <WmsInventoryScanField
@@ -121,37 +121,32 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
             />
           </div>
 
+          <WmsInventoryLocationCounts
+            groups={countedProductGroups}
+            unexpectedItems={unexpectedItems}
+            activeLineId={activeLineId}
+            pulseLineId={pulseLineId}
+            unitsPerCarton={packaging.unitsPerCarton}
+            onSelect={selectCountedProduct}
+          />
+
           {activeScan ? (
             <WmsInventoryProductDetailPanel
               scan={activeScan}
               counted={activeCountedProduct}
-              pulse={qtyPulse}
-              invalid={invalidPulse}
               isPartialInventory={isPartialInventory}
               tenantId={tenantId}
               warehouseId={warehouseId}
               currentLocationId={task?.location_id}
-              qtyState={qtyEditState}
               packaging={packaging}
-              onQtyModeChange={setQtyInputMode}
-              onQtyDraftChange={setQtyDraft}
-              onCommitQtyDraft={commitQtyDraft}
-              onAdjust={(field, d) => void adjustQty(field, d)}
-              onSetField={(field, v) => void setQtyField(field, v)}
-              onClose={focusScan}
-              onConfirm={focusScan}
+              lastScanKind={lastScanKind}
+              onAdjust={(d) => void adjustQty(d)}
+              onSetQuantity={(q) => void setQty(q)}
+              onClose={closeProductPanel}
+              onConfirm={closeProductPanel}
               onDefectSaved={(note) => markActiveDefect(note)}
             />
-          ) : (
-            <WmsInventoryLocationCounts
-              groups={countedProductGroups}
-              unexpectedItems={unexpectedItems}
-              activeLineId={activeLineId}
-              pulseLineId={pulseLineId}
-              unitsPerCarton={packaging.unitsPerCarton}
-              onSelect={selectCountedProduct}
-            />
-          )}
+          ) : null}
         </>
       ) : (
         <WmsInventoryScanField
@@ -168,7 +163,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
 
       {counting ? (
         <div className={WMS_INV.bottomBar}>
-          <div className={`${WMS_OPERATIONAL_CONTAINER} flex gap-4`}>
+          <div className={`${WMS_OPERATIONAL_CONTAINER} flex gap-2`}>
             <button type="button" className={WMS_INV.btnAction} onClick={() => setUnknownOpen(true)}>
               Nieznany produkt
             </button>

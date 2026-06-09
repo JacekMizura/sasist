@@ -21,13 +21,13 @@ export const WMS_INV = {
   chip: "inline-flex items-center border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 rounded-lg",
   chipActive: "border-[#5a45d0] text-[#5a45d0]",
   btnAction:
-    "flex-1 bg-white border-2 border-slate-200 text-slate-700 text-xs font-bold py-4 px-4 rounded-xl hover:bg-slate-50 transition-colors uppercase tracking-widest disabled:opacity-40",
+    "flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-40",
   btnActionPrimary:
-    "flex-1 bg-[#23438e] hover:bg-[#1a326b] text-white text-xs font-bold py-4 px-4 rounded-xl transition-colors uppercase tracking-widest shadow-md disabled:opacity-40",
+    "flex-1 rounded-lg bg-[#23438e] px-3 py-2.5 text-[11px] font-black uppercase tracking-wider text-white transition-colors hover:bg-[#1a326b] disabled:opacity-40",
   btnCta:
     "shrink-0 rounded-xl bg-[#23438e] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#1a326b] disabled:bg-slate-300",
   bottomBar:
-    "fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 flex justify-center z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]",
+    "fixed bottom-0 left-0 z-20 w-full border-t border-slate-200 bg-white/95 py-2 backdrop-blur-sm",
   bottomBarInner: "mx-auto w-full max-w-5xl px-4 sm:px-6 flex gap-4",
   sidebar:
     "flex w-full shrink-0 flex-col border-slate-200/80 bg-white lg:h-full lg:min-h-0 lg:w-[320px] lg:min-w-[320px] lg:max-w-[320px] lg:overflow-y-auto lg:border-r",

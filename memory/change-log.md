@@ -1,6 +1,10 @@
 # Change log
 
-## 2026-06-08 — WMS inventory UX correction (operational flow)
+## 2026-06-08 — WMS inventory product-first qty UX
+- Removed dual carton/unit counting UI and mode switches — product always one line, qty always in szt.
+- Cartons: scan-only input (EAN kartonu +X szt.); secondary hints only („5 kartonów × 5 szt.”, „Ostatni skan: karton zbiorczy”)
+- Compact product sheet on row click; list stays visible; neutral rows (no blue rings)
+- Compact bottom action bar (py-2)
 - Removed persistent document sidebar; start screen = full-width document queue (putaway-style cards)
 - Removed „Utwórz dokument ERP” from WMS; execution-only flow
 - Carton qty: separate integer counters (kartony + sztuki resztowe), sum in pieces — no fractional cartons
