@@ -17,7 +17,10 @@ from backend.models.inventory_count.document import InventoryDocument
 from backend.models.inventory_count.document_line import InventoryDocumentLine
 from backend.models.inventory_count.recount import InventoryRecount
 from backend.services.inventory_count.conflict_detail_service import list_document_conflicts
-from backend.services.inventory_count.conflict_resolution_service import accept_operator_count_entry
+from backend.services.inventory_count.conflict_resolution_service import (
+    accept_operator_count_entry,
+    reject_operator_count_entry,
+)
 
 from backend.tests.inventory_count._conflicts_test_helpers import create_conflicts_test_engine
 
@@ -77,7 +80,7 @@ class TestConflictAccept(unittest.TestCase):
             doc, line, _entry_a, entry_b = self._conflict_setup(db)
             before = list_document_conflicts(db, tenant_id=1, document_id=doc.id)
             self.assertEqual(before["total_conflicts"], 1)
-            self.assertEqual(before["items"][0]["recount_state"], RECOUNT_STATE_REQUIRED)
+            self.assertEqual(before["items"][0]["conflict_status"], "conflict_open")
             self.assertEqual(len(before["items"][0]["counts"]), 2)
 
             result = accept_operator_count_entry(
@@ -91,7 +94,7 @@ class TestConflictAccept(unittest.TestCase):
             db.commit()
 
             self.assertEqual(result["counted_quantity"], 35.0)
-            self.assertTrue(result["operator_conflict_resolved"])
+            self.assertEqual(result["conflict_status"], "conflict_resolved_manual")
 
             db.refresh(line)
             self.assertEqual(float(line.counted_quantity), 35.0)
@@ -111,7 +114,7 @@ class TestConflictAccept(unittest.TestCase):
             self.assertEqual(len(item["counts"]), 2)
             count_ids = {c["count_id"] for c in item["counts"]}
             self.assertEqual(len(count_ids), 2)
-            self.assertEqual(item["conflict_status"], RECOUNT_STATE_REQUIRED)
+            self.assertEqual(item["conflict_status"], "conflict_open")
 
     def test_accept_marks_conflict_resolved_in_state(self):
         with self.Session() as db:
@@ -127,6 +130,26 @@ class TestConflictAccept(unittest.TestCase):
             db.commit()
             result = list_document_conflicts(db, tenant_id=1, document_id=doc.id)
             self.assertEqual(result["total_conflicts"], 0)
+
+
+    def test_reject_marks_count_rejected_keeps_conflict_open(self):
+        with self.Session() as db:
+            doc, line, entry_a, entry_b = self._conflict_setup(db)
+            reject_operator_count_entry(
+                db,
+                tenant_id=1,
+                document_id=doc.id,
+                line_id=line.id,
+                count_entry_id=entry_a.id,
+                user_id=1,
+            )
+            db.commit()
+            result = list_document_conflicts(db, tenant_id=1, document_id=doc.id)
+            self.assertEqual(result["total_conflicts"], 1)
+            item = result["items"][0]
+            self.assertEqual(item["conflict_status"], "conflict_open")
+            rejected = [c for c in item["counts"] if c["count_id"] == entry_a.id]
+            self.assertTrue(rejected[0]["rejected"])
 
 
 if __name__ == "__main__":

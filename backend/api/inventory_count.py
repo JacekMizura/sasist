@@ -25,6 +25,8 @@ from ..schemas.inventory_count import (
     InventoryReportsCatalogRead,
     InventoryConflictsRead,
     InventoryConflictAcceptBody,
+    InventoryConflictRejectBody,
+    InventoryConflictRecountBody,
     InventoryDifferenceAnalysisRead,
     InventoryUnknownProductMapBody,
     InventoryUnknownProductRead,
@@ -43,9 +45,12 @@ from ..services.inventory_count.approval_service import (
 from ..services.inventory_count.adjustment_service import post_inventory_adjustments
 from ..services.inventory_count.audit_package_service import build_audit_package
 from ..services.inventory_count.conflict_detail_service import list_document_conflicts
-from ..services.inventory_count.conflict_resolution_service import accept_operator_count_entry
+from ..services.inventory_count.conflict_resolution_service import (
+    accept_operator_count_entry,
+    reject_operator_count_entry,
+)
 from ..services.inventory_count.line_service import get_document_difference_analysis, list_document_lines
-from ..services.inventory_count.recount_service import complete_recount, create_recounts_for_document
+from ..services.inventory_count.recount_service import complete_recount, create_recount_for_line, create_recounts_for_document
 from ..services.inventory_count.scope_preview_service import preview_document_scope, preview_inventory_scope
 from ..services.inventory_count.posting_preview_service import build_posting_preview
 from ..services.inventory_count.unknown_product_service import (
@@ -487,7 +492,7 @@ def inventory_count_accept_conflict(
     user: AppUser | None = Depends(get_optional_current_user),
 ):
     try:
-        return accept_operator_count_entry(
+        result = accept_operator_count_entry(
             db,
             tenant_id=tenant_id,
             document_id=document_id,
@@ -495,7 +500,57 @@ def inventory_count_accept_conflict(
             count_entry_id=body.count_id,
             user_id=user.id if user else None,
         )
+        db.commit()
+        return result
     except InventoryCountError as exc:
+        db.rollback()
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/conflicts/reject")
+def inventory_count_reject_conflict(
+    document_id: int,
+    body: InventoryConflictRejectBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        result = reject_operator_count_entry(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            line_id=body.line_id,
+            count_entry_id=body.count_id,
+            user_id=user.id if user else None,
+        )
+        db.commit()
+        return result
+    except InventoryCountError as exc:
+        db.rollback()
+        raise _map_inventory_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/conflicts/recount")
+def inventory_count_conflict_recount(
+    document_id: int,
+    body: InventoryConflictRecountBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
+):
+    try:
+        result = create_recount_for_line(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            line_id=body.line_id,
+            user_id=user.id if user else None,
+        )
+        db.commit()
+        return result
+    except InventoryCountError as exc:
+        db.rollback()
         raise _map_inventory_error(exc) from exc
 
 

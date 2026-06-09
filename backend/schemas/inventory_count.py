@@ -381,6 +381,7 @@ class InventoryConflictCountRead(BaseModel):
     operator_name: str
     counted_qty: float
     created_at: str | None = None
+    rejected: bool = False
 
 
 class InventoryConflictItemRead(BaseModel):
@@ -407,6 +408,15 @@ class InventoryConflictItemRead(BaseModel):
 class InventoryConflictAcceptBody(BaseModel):
     line_id: int
     count_id: int
+
+
+class InventoryConflictRejectBody(BaseModel):
+    line_id: int
+    count_id: int
+
+
+class InventoryConflictRecountBody(BaseModel):
+    line_id: int
 
 
 class InventoryConflictsRead(BaseModel):

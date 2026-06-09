@@ -90,7 +90,17 @@ export type InventoryConflictCount = {
   operator_name: string;
   counted_qty: number;
   created_at: string | null;
+  rejected?: boolean;
 };
+
+export type InventoryConflictStatus =
+  | "conflict_open"
+  | "conflict_resolved_manual"
+  | "recount_requested"
+  | "recount_completed"
+  | "required"
+  | "resolved"
+  | "none";
 
 export type InventoryConflictItem = {
   line_id: number;
@@ -106,7 +116,7 @@ export type InventoryConflictItem = {
   counted_quantity: number | null;
   operators: InventoryConflictOperator[];
   counts: InventoryConflictCount[];
-  conflict_status: string;
+  conflict_status: InventoryConflictStatus | string;
   quantity_diff_label: string | null;
   recount_state: string;
   recount_id: number | null;

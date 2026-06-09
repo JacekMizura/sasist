@@ -17,6 +17,11 @@ from ...models.inventory_count.recount import InventoryRecount
 from ...models.location import Location
 from ...models.product import Product
 from ...models.warehouse_carrier import WarehouseCarrier
+from .conflict_resolution_service import (
+    conflict_status_is_unresolved,
+    get_rejected_count_entry_ids,
+    map_conflict_workflow_status,
+)
 from .errors import InventoryDocumentNotFoundError
 from .recount_conflict_service import (
     build_document_count_conflicts,
@@ -125,19 +130,26 @@ def _fmt_qty_label(value: float) -> str:
     return str(rounded).rstrip("0").rstrip(".")
 
 
-def _operators_to_counts(operators: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _operators_to_counts(
+    operators: list[dict[str, Any]],
+    *,
+    rejected_ids: set[int] | None = None,
+) -> list[dict[str, Any]]:
+    rejected = rejected_ids or set()
     counts: list[dict[str, Any]] = []
     for op in operators:
         count_id = op.get("count_id")
         if count_id is None:
             continue
+        cid = int(count_id)
         counts.append(
             {
-                "count_id": int(count_id),
+                "count_id": cid,
                 "user_id": op.get("user_id"),
                 "operator_name": str(op.get("operator_name") or "Operator"),
                 "counted_qty": _safe_float(op.get("quantity")) or 0.0,
                 "created_at": op.get("counted_at"),
+                "rejected": cid in rejected,
             }
         )
     return counts
@@ -173,7 +185,9 @@ def _build_conflict_item(
     recount = recounts_by_line.get(int(line_id))
     recount_state = resolve_line_recount_state(db, line=line, document_conflicts=conflicts_map)
     operators = _merge_operator_counts(line_ids, operators_by_line)
-    counts = _operators_to_counts(operators)
+    rejected_ids = get_rejected_count_entry_ids(line)
+    counts = _operators_to_counts(operators, rejected_ids=rejected_ids)
+    workflow_status = map_conflict_workflow_status(line, recount)
 
     return {
         "line_id": int(line_id),
@@ -189,7 +203,7 @@ def _build_conflict_item(
         "counted_quantity": _safe_float(line.counted_quantity),
         "operators": operators,
         "counts": counts,
-        "conflict_status": recount_state,
+        "conflict_status": workflow_status,
         "quantity_diff_label": _quantity_diff_label(operators),
         "recount_state": recount_state,
         "recount_id": int(recount.id) if recount else None,
@@ -313,7 +327,7 @@ def list_document_conflicts(
             skipped,
         )
 
-    unresolved = sum(1 for i in items if i.get("recount_state") == "required")
+    unresolved = sum(1 for i in items if conflict_status_is_unresolved(str(i.get("conflict_status") or "")))
     return {
         "document_id": int(doc.id),
         "total_conflicts": len(items),

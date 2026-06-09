@@ -62,6 +62,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
     reloadConflicts,
     conflictBusy,
     acceptConflictCount,
+    rejectConflictCount,
     requestConflictRecount,
     unknownProducts,
     unknownLoading,
@@ -288,6 +289,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
             onRetry={() => void reloadConflicts()}
             busy={conflictBusy}
             onAcceptCount={(c, countId) => void acceptConflictCount(c, countId)}
+            onRejectCount={(c, countId) => void rejectConflictCount(c, countId)}
             onRequestRecount={(c) => void requestConflictRecount(c)}
           />
         </div>
@@ -388,11 +390,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
           <div className={erpTableScroll}>
             <InventoryLineTable
               lines={filteredLines}
-              conflicts={conflicts?.items ?? []}
               loading={linesLoading}
-              conflictBusy={conflictBusy}
-              onAcceptCount={(c, countId) => void acceptConflictCount(c, countId)}
-              onRequestRecount={(c) => void requestConflictRecount(c)}
               emptyMessage={
                 tab === "differences" ? "Brak różnic pasujących do filtrów." : "Brak pozycji pasujących do filtrów."
               }

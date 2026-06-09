@@ -45,10 +45,28 @@ export function InventoryLineStatusBadge({ line }: { line: InventoryLineRead }) 
   );
 }
 
-export function InventoryConflictStatusBadge() {
+export function InventoryConflictStatusBadge({ status }: { status?: string | null }) {
+  const key = String(status ?? "conflict_open").toLowerCase();
+  const label =
+    key === "conflict_resolved_manual" || key === "resolved"
+      ? "Rozwiązany ręcznie"
+      : key === "recount_requested" || key === "required"
+        ? "Ponowne liczenie"
+        : key === "recount_completed"
+          ? "Recount zakończony"
+          : "Konflikt otwarty";
+  const cls =
+    key === "conflict_resolved_manual" || key === "resolved"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+      : key === "recount_requested" || key === "required"
+        ? "border-amber-200 bg-amber-50 text-amber-900"
+        : key === "recount_completed"
+          ? "border-sky-200 bg-sky-50 text-sky-900"
+          : "border-amber-200 bg-amber-50 text-amber-900";
+
   return (
-    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
-      Konflikt liczenia
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>
+      {label}
     </span>
   );
 }

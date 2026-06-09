@@ -8,11 +8,12 @@ import {
   fetchInventoryAuditLog,
   fetchInventoryConflicts,
   acceptInventoryConflictCount,
+  rejectInventoryConflictCount,
+  requestInventoryConflictRecount,
   fetchInventoryDocument,
   fetchInventoryDocumentTimelines,
   fetchInventoryPostingPreview,
   fetchInventoryUnknownProducts,
-  generateInventoryRecounts,
   getDocumentDifferenceAnalysis,
   listDocumentLines,
   postInventoryDocumentAdjustments,
@@ -323,7 +324,24 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
       try {
         const result = await acceptInventoryConflictCount(tenantId, id, conflict.line_id, countId);
         await refreshAfterConflictAction();
-        toast.success(`Zatwierdzono ${result.counted_quantity} szt.`);
+        toast.success(`Uznano wynik: ${result.counted_quantity} szt.`);
+      } catch (actionErr) {
+        toast.error(formatInventoryRequestError(actionErr));
+      } finally {
+        setConflictBusy(false);
+      }
+    },
+    [id, refreshAfterConflictAction, tenantId],
+  );
+
+  const rejectConflictCount = useCallback(
+    async (conflict: InventoryConflictItem, countId: number) => {
+      if (!Number.isFinite(id)) return;
+      setConflictBusy(true);
+      try {
+        await rejectInventoryConflictCount(tenantId, id, conflict.line_id, countId);
+        await refreshAfterConflictAction();
+        toast.success("Odrzucono wynik operatora.");
       } catch (actionErr) {
         toast.error(formatInventoryRequestError(actionErr));
       } finally {
@@ -338,12 +356,12 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
       if (!Number.isFinite(id)) return;
       setConflictBusy(true);
       try {
-        const result = await generateInventoryRecounts(tenantId, id);
+        const result = await requestInventoryConflictRecount(tenantId, id, conflict.line_id);
         await refreshAfterConflictAction();
         toast.success(
           result.recounts_created > 0
-            ? `Utworzono ${result.recounts_created} zadań recount.`
-            : "Recount już istnieje — odświeżono listę.",
+            ? "Utworzono zadanie ponownego liczenia."
+            : "Zadanie recount już istnieje.",
         );
       } catch (actionErr) {
         toast.error(formatInventoryRequestError(actionErr));
@@ -404,6 +422,7 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
     reloadConflicts: loadConflicts,
     conflictBusy,
     acceptConflictCount,
+    rejectConflictCount,
     requestConflictRecount,
     unknownProducts,
     unknownLoading,

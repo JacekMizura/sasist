@@ -22,8 +22,120 @@ from ...models.inventory_count.recount import InventoryRecount
 from ...models.inventory_count.task import InventoryTask
 from .audit_service import log_inventory_audit
 from .difference_service import difference_percent
-from .errors import InventoryDocumentNotFoundError
+from .errors import InventoryDocumentNotFoundError, InventoryInvalidTransitionError
 from .recount_conflict_service import lines_with_unresolved_operator_conflicts
+
+
+def _create_single_operator_recount(
+    db: Session,
+    *,
+    doc: InventoryDocument,
+    line: InventoryDocumentLine,
+    line_id: int,
+    operator_qty: dict[Any, Any],
+    tenant_id: int,
+    user_id: int | None,
+    assign_user_id: int | None = None,
+) -> InventoryRecount:
+    line.status = LINE_STATUS_RECOUNT
+    line.recount_count = int(line.recount_count or 0) + 1
+    recount = InventoryRecount(
+        inventory_document_id=int(doc.id),
+        inventory_document_line_id=line_id,
+        status=RECOUNT_STATUS_OPEN,
+        reason="operator_conflict",
+        difference_percent=None,
+        difference_quantity=float(line.difference_quantity or 0),
+        assigned_user_id=assign_user_id,
+        assigned_at=datetime.utcnow() if assign_user_id else None,
+        original_counted_quantity=line.counted_quantity,
+        notes=str(operator_qty),
+    )
+    db.add(recount)
+    db.flush()
+    task = InventoryTask(
+        inventory_document_id=int(doc.id),
+        tenant_id=int(doc.tenant_id),
+        warehouse_id=int(doc.warehouse_id),
+        location_id=int(line.location_id),
+        task_number=f"{doc.number}-RC{recount.id:04d}",
+        status=TASK_STATUS_OPEN,
+        priority=90,
+        sequence_no=9000 + recount.id,
+        metadata_json='{"recount":true,"reason":"operator_conflict"}',
+    )
+    db.add(task)
+    db.flush()
+    recount.inventory_task_id = int(task.id)
+    log_inventory_audit(
+        db,
+        tenant_id=int(tenant_id),
+        inventory_document_id=int(doc.id),
+        inventory_document_line_id=line_id,
+        inventory_task_id=int(task.id),
+        user_id=user_id,
+        action=AUDIT_RECOUNT,
+        detail={"reason": "operator_conflict", "operator_quantities": operator_qty},
+    )
+    return recount
+
+
+def create_recount_for_line(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    line_id: int,
+    user_id: int | None = None,
+    assign_user_id: int | None = None,
+) -> dict[str, Any]:
+    """Supervisor-requested recount for one conflict line — exceptional path."""
+    doc = (
+        db.query(InventoryDocument)
+        .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc is None:
+        raise InventoryDocumentNotFoundError(f"Document {document_id} not found")
+
+    target_id = int(line_id)
+    row = next(
+        (r for r in lines_with_unresolved_operator_conflicts(db, document_id=int(doc.id)) if int(r["line_id"]) == target_id),
+        None,
+    )
+    if row is None:
+        raise InventoryInvalidTransitionError(
+            f"Line {line_id} has no unresolved operator conflict",
+            details={"line_id": target_id},
+        )
+
+    existing = (
+        db.query(InventoryRecount)
+        .filter(
+            InventoryRecount.inventory_document_line_id == target_id,
+            InventoryRecount.status != RECOUNT_STATUS_DONE,
+        )
+        .first()
+    )
+    if existing is not None:
+        return {"recount_id": int(existing.id), "line_id": target_id, "recounts_created": 0}
+
+    line = row.get("line") or db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == target_id).first()
+    if line is None:
+        raise InventoryDocumentNotFoundError(f"Line {line_id} not found")
+
+    recount = _create_single_operator_recount(
+        db,
+        doc=doc,
+        line=line,
+        line_id=target_id,
+        operator_qty=row.get("operator_quantities") or {},
+        tenant_id=int(tenant_id),
+        user_id=user_id,
+        assign_user_id=assign_user_id,
+    )
+    db.flush()
+    return {"recount_id": int(recount.id), "line_id": target_id, "recounts_created": 1}
 
 
 def create_recounts_for_document(
@@ -58,46 +170,15 @@ def create_recounts_for_document(
         line = row.get("line") or db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == line_id).first()
         if line is None:
             continue
-        line.status = LINE_STATUS_RECOUNT
-        line.recount_count = int(line.recount_count or 0) + 1
-        operator_qty = row.get("operator_quantities") or {}
-        recount = InventoryRecount(
-            inventory_document_id=int(doc.id),
-            inventory_document_line_id=line_id,
-            status=RECOUNT_STATUS_OPEN,
-            reason="operator_conflict",
-            difference_percent=None,
-            difference_quantity=float(line.difference_quantity or 0),
-            assigned_user_id=assign_user_id,
-            assigned_at=datetime.utcnow() if assign_user_id else None,
-            original_counted_quantity=line.counted_quantity,
-            notes=str(operator_qty),
-        )
-        db.add(recount)
-        db.flush()
-        task = InventoryTask(
-            inventory_document_id=int(doc.id),
-            tenant_id=int(doc.tenant_id),
-            warehouse_id=int(doc.warehouse_id),
-            location_id=int(line.location_id),
-            task_number=f"{doc.number}-RC{recount.id:04d}",
-            status=TASK_STATUS_OPEN,
-            priority=90,
-            sequence_no=9000 + recount.id,
-            metadata_json='{"recount":true,"reason":"operator_conflict"}',
-        )
-        db.add(task)
-        db.flush()
-        recount.inventory_task_id = int(task.id)
-        log_inventory_audit(
+        _create_single_operator_recount(
             db,
+            doc=doc,
+            line=line,
+            line_id=line_id,
+            operator_qty=row.get("operator_quantities") or {},
             tenant_id=int(tenant_id),
-            inventory_document_id=int(doc.id),
-            inventory_document_line_id=line_id,
-            inventory_task_id=int(task.id),
             user_id=user_id,
-            action=AUDIT_RECOUNT,
-            detail={"reason": "operator_conflict", "operator_quantities": operator_qty},
+            assign_user_id=assign_user_id,
         )
         created += 1
     return {"recounts_created": created}
