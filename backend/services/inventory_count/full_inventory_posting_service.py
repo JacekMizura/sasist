@@ -16,6 +16,7 @@ from ...models.location import Location
 from ...models.product import Product
 from .line_materialization_service import line_matches_inventory_filters, parse_document_filters
 from .recount_conflict_service import has_operator_count_conflict, operator_quantities_for_line
+from .conflict_resolution_service import line_operator_conflict_is_resolved
 from .strategy_service import result_policy_updates_stock
 
 logger = logging.getLogger(__name__)
@@ -142,7 +143,12 @@ def _scoped_live_inventory_totals(db: Session, *, doc: InventoryDocument) -> dic
 
 
 def _line_target_quantity(db: Session, line: InventoryDocumentLine) -> tuple[float | None, str | None]:
-    """Return (target, reason) or (None, None) when line must be skipped (operator conflict)."""
+    """Return (target, reason) or (None, None) when line must be skipped (unresolved operator conflict)."""
+    if line_operator_conflict_is_resolved(line):
+        if line.counted_quantity is not None:
+            return float(line.counted_quantity), "counted"
+        return None, None
+
     op_map = operator_quantities_for_line(db, int(line.id))
     if has_operator_count_conflict(op_map):
         return None, None
@@ -156,6 +162,8 @@ def prepare_full_inventory_lines_for_posting(db: Session, lines: list[InventoryD
     updated = 0
     for line in lines:
         if line.counted_quantity is not None:
+            continue
+        if line_operator_conflict_is_resolved(line):
             continue
         if has_operator_count_conflict(operator_quantities_for_line(db, int(line.id))):
             continue

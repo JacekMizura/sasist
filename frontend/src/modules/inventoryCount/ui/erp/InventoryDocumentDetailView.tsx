@@ -194,7 +194,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               onClick={() => void openApprovalModal("submit")}
               className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
             >
-              Wyślij do zatwierdzenia
+              Zatwierdź
             </button>
           ) : null}
           {doc.status === "awaiting_approval" ? (

@@ -1,6 +1,12 @@
 # Change log
 
-## 2026-06-08 — Konflikty inwentaryzacji: card UI + identyfikacja produktu
+## 2026-06-08 — Fix: posting-preview 500 (orphan stock + konflikty ręczne)
+- `resolve_line_unit_cost_net`: obsługa `line=None` (orphan RW), fallback ceny z kartoteki
+- `_line_target_quantity`: używa zaakceptowanego wyniku supervisora zamiast pomijać linię
+- `reconcile_line_counted_from_operators`: nie zeruje qty po ręcznym rozwiązaniu konfliktu
+- Testy: `test_posting_preview.py` (6 scenariuszy)
+- UI: przycisk „Wyślij do zatwierdzenia” → „Zatwierdź”
+
 - Backend conflicts API: `ean`, `product_image_url` w `_build_conflict_item`
 - Panel: karty zamiast tabeli ERP; miniatura 56×56, EAN, SKU; operator/ilość/akcje z hierarchią
 - Status vs akcja: badge „Oczekuje ponownego liczenia”; button „Zleć ponowne liczenie” (1× na konflikt, tylko gdy `conflict_open`)

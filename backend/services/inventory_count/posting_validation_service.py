@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.product import Product
-from .errors import InventoryInvalidTransitionError, InventoryPendingRecountsError, InventoryPostingFailedError
+from .errors import InventoryDocumentNotFoundError, InventoryInvalidTransitionError, InventoryPendingRecountsError, InventoryPostingFailedError
+from .conflict_resolution_service import line_operator_conflict_is_resolved
 from .full_inventory_posting_service import (
     build_inventory_posting_plans,
     posting_plan_to_log_dict,
@@ -101,6 +102,8 @@ def reconcile_line_counted_from_operators(db: Session, line: InventoryDocumentLi
     if not op_map:
         return False
     if has_operator_count_conflict(op_map):
+        if line_operator_conflict_is_resolved(line):
+            return False
         if line.counted_quantity is not None:
             line.counted_quantity = None
             line.recompute_difference()

@@ -11,7 +11,7 @@ type Props = {
 };
 
 const MODE_TITLE = {
-  submit: "Wyślij do zatwierdzenia",
+  submit: "Zatwierdź inwentaryzację",
   approve: "Zatwierdź inwentaryzację",
   post: "Księguj korekty magazynowe",
 };

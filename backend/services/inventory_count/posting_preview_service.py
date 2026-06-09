@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -16,6 +17,8 @@ from .full_inventory_posting_service import build_inventory_posting_plans, requi
 from .strategy_service import get_result_policy, result_policy_updates_stock
 from .unknown_product_service import list_unknown_products
 from .valuation_service import resolve_line_unit_cost_net
+
+logger = logging.getLogger(__name__)
 
 
 def build_posting_preview(
@@ -71,8 +74,8 @@ def build_posting_preview(
         line = None
         if row.get("line_id"):
             line = db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == int(row["line_id"])).first()
-        product = db.query(Product).filter(Product.id == int(row.get("product_id") or 0)).first()
-        unit_cost = resolve_line_unit_cost_net(db, document=doc, line=line, product=product) if line or product else 0.0
+        product = db.query(Product).filter(Product.id == int(row.get("product_id") or 0)).first() if row.get("product_id") else None
+        unit_cost = resolve_line_unit_cost_net(db, document=doc, line=line, product=product)
         loc = db.query(Location).filter(Location.id == lid).first() if lid else None
         carrier_code = None
         if line and line.carrier_id:
@@ -84,7 +87,7 @@ def build_posting_preview(
         item = {
             "line_id": row.get("line_id"),
             "product_id": row.get("product_id"),
-            "sku": row.get("sku"),
+            "sku": row.get("sku") or (getattr(product, "sku", None) if product else None),
             "location_id": lid,
             "location_name": loc.name if loc else None,
             "carrier_code": carrier_code,
@@ -114,7 +117,16 @@ def build_posting_preview(
 
     from .conflict_detail_service import list_document_conflicts
 
-    conflict_data = list_document_conflicts(db, tenant_id=int(tenant_id), document_id=int(doc.id))
+    unresolved_conflicts = 0
+    try:
+        conflict_data = list_document_conflicts(db, tenant_id=int(tenant_id), document_id=int(doc.id))
+        unresolved_conflicts = int(conflict_data.get("unresolved_conflicts") or 0)
+    except Exception:
+        logger.exception(
+            "INVENTORY_POSTING_PREVIEW_CONFLICTS_FAILED document_id=%s tenant_id=%s",
+            document_id,
+            tenant_id,
+        )
 
     return {
         "document_id": int(doc.id),
@@ -136,6 +148,6 @@ def build_posting_preview(
         "rw_preview": rw_lines[:50],
         "pw_preview": pw_lines[:50],
         "operator_count": int(operator_count),
-        "unresolved_conflicts": int(conflict_data.get("unresolved_conflicts") or 0),
+        "unresolved_conflicts": unresolved_conflicts,
         "summary": analysis.get("summary") or {},
     }
