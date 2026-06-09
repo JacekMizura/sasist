@@ -17,6 +17,7 @@ import MainPanelLayout from "./layout/MainPanelLayout"
 import SettingsAdminLayout from "./layout/SettingsAdminLayout"
 import WmsOperationalLayout from "./layout/WmsOperationalLayout"
 import ErrorBoundary from "./components/ErrorBoundary"
+import ProtectedRoute from "./components/auth/ProtectedRoute"
 
 import Dashboard from "./pages/Dashboard"
 import ProductsLayout from "./pages/Products/ProductsLayout"
@@ -346,11 +347,12 @@ function LegacyAdministrationPrintTemplatesRedirect() {
 export const router = createBrowserRouter(
   createRoutesFromElements(
     <Route path="/" element={<AppRootLayout />}>
-      <Route index element={<Navigate to="/dashboard" replace />} />
       <Route path="login" element={<LoginPage />} />
+      <Route path="wms-upload/:sessionId" element={<WmsPhoneUploadPage />} />
+      <Route element={<ProtectedRoute />}>
+      <Route index element={<Navigate to="/dashboard" replace />} />
       <Route path="report/warehouse-structure" element={<WarehouseStructureReportPage />} />
       <Route path="report/product-locations" element={<ProductLocationReportPage />} />
-      <Route path="wms-upload/:sessionId" element={<WmsPhoneUploadPage />} />
       <Route path="wms" element={<WmsOperationalLayout />}>
         <Route index element={<Navigate to="menu" replace />} />
         <Route path="menu" element={<WmsMenuPage />} />
@@ -798,6 +800,7 @@ export const router = createBrowserRouter(
                 <Route path="planning/deliveries" element={<PlanningPlaceholder />} />
                 <Route path="planning/list" element={<PlanningPlaceholder />} />
                 <Route path="*" element={<RouteNotFoundThrow />} />
+      </Route>
       </Route>
     </Route>
   ),

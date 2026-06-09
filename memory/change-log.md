@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Nowoczesny ekran logowania Sasist (SaaS)
+- Split layout: ciemny branding + jasny formularz (`LoginBrandingPanel`, `LoginFormPanel`)
+- `ProtectedRoute` — globalna ochrona tras; public: `/login`, `/wms-upload/*`
+- Sesja: remember me (localStorage vs sessionStorage), last path redirect, auto refresh token, `auth:session-expired` event
+- UX: show/hide password, caps lock, last email, inline errors, API status footer
+
 ## 2026-06-08 — Inventory counting UX: terminal + ERP progress
 - WMS: optymistyczny licznik po skanie (`applyScanQty` przed API); baza qty z `my_counted_quantity`, nie globalnej sumy
 - WMS: header produktu — większe zdjęcie, badge lokalizacji/nośnika (bez duplikatu w belce); konflikt tylko dla kierownika/superadmin

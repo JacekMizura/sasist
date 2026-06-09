@@ -16,6 +16,8 @@ import {
   refreshRequest,
   type MeResponse,
 } from "../api/authApi";
+import { AUTH_SESSION_EXPIRED_EVENT } from "../auth/authEvents";
+import { setLoginNotice } from "../auth/authSessionPrefs";
 import { permissionGranted } from "../auth/permissionEffective";
 import { isSuperRole } from "../auth/isSuperRole";
 import { clearStoredTokens, getStoredAccessToken, getStoredRefreshToken, setStoredTokens } from "../auth/tokenStorage";
@@ -25,7 +27,7 @@ type AuthContextValue = {
   loading: boolean;
   /** True when bootstrap finished, session user is loaded, and an access token is present — safe for authenticated API calls. */
   sessionReady: boolean;
-  login: (login: string, password: string) => Promise<void>;
+  login: (login: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
   hasPermission: (key: string) => boolean;
@@ -47,6 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const me = await fetchMe();
+      if (!me.is_active) {
+        clearStoredTokens();
+        setUser(null);
+        setLoginNotice("account_inactive");
+        return;
+      }
       setUser(me);
     } catch {
       if (refresh) {
@@ -54,14 +62,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const t = await refreshRequest(refresh);
           setStoredTokens(t.access_token, t.refresh_token);
           const me = await fetchMe();
+          if (!me.is_active) {
+            clearStoredTokens();
+            setUser(null);
+            setLoginNotice("account_inactive");
+            return;
+          }
           setUser(me);
         } catch {
           clearStoredTokens();
           setUser(null);
+          setLoginNotice("session_expired");
         }
       } else {
         clearStoredTokens();
         setUser(null);
+        setLoginNotice("session_expired");
       }
     } finally {
       setLoading(false);
@@ -72,11 +88,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refreshSession();
   }, [refreshSession]);
 
-  const login = useCallback(async (loginStr: string, password: string) => {
+  useEffect(() => {
+    const onExpired = () => {
+      clearStoredTokens();
+      setUser(null);
+      setLoginNotice("session_expired");
+    };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
+
+  const login = useCallback(async (loginStr: string, password: string, rememberMe = true) => {
     clearPermissionCatalogCache();
     const t = await loginRequest(loginStr, password);
-    setStoredTokens(t.access_token, t.refresh_token);
+    setStoredTokens(t.access_token, t.refresh_token, rememberMe);
     const me = await fetchMe();
+    if (!me.is_active) {
+      clearStoredTokens();
+      setLoginNotice("account_inactive");
+      throw new Error("Konto jest nieaktywne.");
+    }
     setUser(me);
   }, []);
 
@@ -88,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearPermissionCatalogCache();
       clearStoredTokens();
       setUser(null);
+      setLoginNotice("logged_out");
     }
   }, []);
 

@@ -15,6 +15,7 @@ import {
   getStoredRefreshToken,
   setStoredTokens,
 } from "../auth/tokenStorage";
+import { emitAuthSessionExpired } from "../auth/authEvents";
 
 const resolvedBaseUrl = resolveAxiosBaseURL().replace(/\/+$/, "") || "/api";
 
@@ -70,6 +71,7 @@ async function refreshAccessToken(): Promise<string | null> {
     } catch (err) {
       console.error("[auth] refresh failed", err);
       clearStoredTokens();
+      emitAuthSessionExpired();
       return null;
     } finally {
       refreshInFlight = null;
@@ -187,6 +189,7 @@ api.interceptors.response.use(
     const nextAccess = await refreshAccessToken();
 
     if (!nextAccess) {
+      emitAuthSessionExpired();
       return Promise.reject(error);
     }
 
