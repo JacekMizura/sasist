@@ -28,7 +28,7 @@ export function InventoryLocationStack({
   carrierCode?: string | null;
 }) {
   return (
-    <div className="flex flex-col items-start gap-1.5">
+    <div className="flex flex-col items-start gap-1">
       <InventoryLocationBadge code={locationCode} />
       {carrierCode?.trim() ? <CarrierBadge code={carrierCode.trim()} /> : null}
     </div>
@@ -38,7 +38,7 @@ export function InventoryLocationStack({
 export function InventoryLineStatusBadge({ line }: { line: InventoryLineRead }) {
   return (
     <span
-      className={`${inventoryLineStatusBadgeClass(line.status, line.difference_quantity, line.recount_state)} !px-2.5 !py-1 !text-xs`}
+      className={`${inventoryLineStatusBadgeClass(line.status, line.difference_quantity, line.recount_state)} !px-2 !py-0.5 !text-[11px]`}
     >
       {inventoryLineRowStatusLabel(line)}
     </span>
@@ -94,15 +94,34 @@ export function InventoryVarianceClassBadge({ diffClass }: { diffClass?: string 
   );
 }
 
-/** Larger product photo — no card frame, warehouse readability. */
-export function InventoryProductThumb({ url, name }: { url?: string | null; name?: string | null }) {
+/** Product thumbnail — compact for dense tables, default for detail panels. */
+export function InventoryProductThumb({
+  url,
+  name,
+  size = "default",
+}: {
+  url?: string | null;
+  name?: string | null;
+  size?: "default" | "compact";
+}) {
   const src = firstProductImageUrl(url ?? null);
+  const box =
+    size === "compact"
+      ? "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200/90 bg-slate-50"
+      : "flex h-16 w-16 shrink-0 items-center justify-center sm:h-20 sm:w-20";
+  const iconSize = size === "compact" ? "h-5 w-5" : "h-8 w-8";
+
   return (
-    <div className="flex h-20 w-20 shrink-0 items-center justify-center sm:h-24 sm:w-24">
+    <div className={box}>
       {src ? (
-        <img src={src} alt="" className="max-h-full max-w-full object-contain mix-blend-multiply" loading="lazy" />
+        <img
+          src={src}
+          alt=""
+          className={size === "compact" ? "h-full w-full object-cover" : "max-h-full max-w-full object-contain mix-blend-multiply"}
+          loading="lazy"
+        />
       ) : (
-        <ImageIcon className="h-10 w-10 text-slate-200" strokeWidth={1.5} aria-hidden />
+        <ImageIcon className={`${iconSize} text-slate-300`} strokeWidth={1.5} aria-hidden />
       )}
       <span className="sr-only">{name ?? "Produkt"}</span>
     </div>

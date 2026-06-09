@@ -121,9 +121,8 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
         onCancel={() => setApprovalOpen(false)}
       />
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Dokument inwentaryzacji</p>
           {editingTitle ? (
             <div className="mt-2 max-w-lg space-y-3">
               <input
@@ -158,11 +157,11 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               </div>
             </div>
           ) : (
-            <div className="mt-1 flex items-start gap-2">
+            <div className="flex items-start gap-2">
               <div>
-                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{doc.title?.trim() || doc.number}</h2>
-                <p className="font-mono text-xs text-slate-500">Nr systemowy: {doc.number}</p>
-                {doc.notes ? <p className="mt-1 text-sm text-slate-600">{doc.notes}</p> : null}
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900">{doc.title?.trim() || doc.number}</h2>
+                <p className="font-mono text-[11px] text-slate-500">Nr systemowy: {doc.number}</p>
+                {doc.notes ? <p className="mt-0.5 text-sm text-slate-600">{doc.notes}</p> : null}
               </div>
               {["draft", "planned", "in_progress", "awaiting_approval"].includes(doc.status) ? (
                 <button
@@ -176,7 +175,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               ) : null}
             </div>
           )}
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-slate-600">
             <span>{inventoryTypeLabel(doc.inventory_type)}</span>
             <InventoryStatusBadge status={doc.status} />
             <span className="tabular-nums">
@@ -192,7 +191,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               disabled={busy || !submitReady}
               title={submitHint}
               onClick={() => void openApprovalModal("submit")}
-              className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
             >
               Zatwierdź
             </button>
@@ -203,7 +202,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
                 type="button"
                 disabled={busy}
                 onClick={() => void openApprovalModal("approve")}
-                className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
               >
                 Zatwierdź
               </button>
@@ -211,7 +210,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
                 type="button"
                 disabled={busy}
                 onClick={() => void actionReject()}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
               >
                 Odrzuć
               </button>
@@ -222,7 +221,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               type="button"
               disabled={busy}
               onClick={() => void openApprovalModal("post")}
-              className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
               {updatesStock ? "Księguj RW/PW" : "Zakończ bez korekt stanów"}
             </button>
@@ -230,8 +229,8 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
         </div>
       </div>
 
-      <div className={`${erpSurfaceCard} p-4`}>
-        <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className={`${erpSurfaceCard} p-3`}>
+        <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {[
             { label: "Magazyn", value: warehouseName ?? `#${doc.warehouse_id}` },
             { label: "Zakres", value: inventoryScopeModeLabel(scopeMode) },
@@ -241,7 +240,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
             { label: "Operatorzy", value: String(opsPreview?.operator_count ?? "—") },
           ].map((chip) => (
             <div key={chip.label}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{chip.label}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{chip.label}</p>
               <p className="font-medium text-slate-900">{chip.value}</p>
             </div>
           ))}
@@ -249,7 +248,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
       </div>
 
       {analysis ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           <div className={erpKpiCard}>
             <p className={erpKpiLabel}>Pozycje z różnicą</p>
             <p className={erpKpiValue}>{doc.difference_lines}</p>
@@ -378,7 +377,7 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
               </label>
             ) : null}
           </div>
-          <div className="border-b border-slate-100 px-4 py-2">
+          <div className="border-b border-slate-100 px-3 py-1.5">
             <InventoryTableFilterBar
               filters={tableFilters}
               onChange={updateFilters}

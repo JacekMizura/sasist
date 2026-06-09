@@ -1,12 +1,14 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Plus } from "lucide-react";
 
 import PageLayout from "@/components/layout/PageLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { listSellasistIconBtn } from "@/components/listPage/listSellasistTokens";
 import { ERP_INVENTORY_COUNT_TABS } from "../../erpInventoryCountTabs";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
 import { erpTabIndicator, erpTabLink } from "./theme";
 
-/** ERP inventory — admin module shell (mockup-aligned tabs + PageLayout). */
+/** ERP inventory — WMS-aligned module shell. */
 export default function InventoryLayout() {
   const { pathname } = useLocation();
   const onWizard = pathname.startsWith(erpInventoryCountPaths.wizard);
@@ -14,28 +16,29 @@ export default function InventoryLayout() {
   const primaryAction = !onWizard ? (
     <NavLink
       to={erpInventoryCountPaths.wizard}
-      className="inline-flex shrink-0 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+      className={listSellasistIconBtn}
+      title="Nowa inwentaryzacja"
+      aria-label="Nowa inwentaryzacja"
     >
-      Nowa inwentaryzacja
+      <Plus className="h-4 w-4" strokeWidth={2.25} aria-hidden />
     </NavLink>
   ) : null;
 
   return (
-    <PageLayout fullBleed cardClassName="relative min-h-[600px] w-full">
+    <PageLayout fullBleed cardClassName="relative min-h-0 w-full">
       <div className="min-w-0">
         <PageHeader
           title="Inwentaryzacja magazynowa"
-          subtitle="Planowanie, zatwierdzanie i raporty — liczenie w terminalu WMS."
           actions={primaryAction}
           breadcrumbs={[
             { label: "Magazyn", to: "/inventory" },
-            { label: "Inwentaryzacja magazynowa" },
+            { label: "Inwentaryzacja" },
           ]}
           className="space-y-2"
         />
 
         <nav
-          className="mt-3 flex gap-6 border-b border-slate-200 pt-2 text-sm"
+          className="mt-2 flex gap-5 border-b border-slate-200/90 text-sm"
           aria-label="Inwentaryzacja magazynowa"
         >
           {ERP_INVENTORY_COUNT_TABS.map((tab) => (
@@ -55,7 +58,7 @@ export default function InventoryLayout() {
           ))}
         </nav>
 
-        <div className="min-w-0 pt-6">
+        <div className="min-w-0 pt-4">
           <Outlet />
         </div>
       </div>

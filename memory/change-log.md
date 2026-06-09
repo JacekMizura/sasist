@@ -1,6 +1,10 @@
 # Change log
 
-## 2026-06-08 — Fix: posting-preview 500 (orphan stock + konflikty ręczne)
+## 2026-06-08 — Inwentaryzacja ERP: WMS shell polish
+- Layout: breadcrumb Magazyn/Inwentaryzacja, + zamiast dużego CTA, bez subtitle
+- Tabela przebiegu: bez duplikatów Oczek./Policz./Różn., kolumny Operator/Czas, dense rows
+- theme.ts: gęstsze paddingi, lżejsze bordery, slate tabs
+
 - `resolve_line_unit_cost_net`: obsługa `line=None` (orphan RW), fallback ceny z kartoteki
 - `_line_target_quantity`: używa zaakceptowanego wyniku supervisora zamiast pomijać linię
 - `reconcile_line_counted_from_operators`: nie zeruje qty po ręcznym rozwiązaniu konfliktu

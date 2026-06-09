@@ -80,9 +80,9 @@ export default function InventoryDocumentsView({
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : documents.length === 0 ? (
-        <div className={`${erpTableWrap} py-10 text-center text-sm text-slate-600`}>
+        <div className={`${erpTableWrap} py-8 text-center text-sm text-slate-600`}>
           <p>Brak dokumentów inwentaryzacji.</p>
-          <p className="mt-2 text-xs text-slate-500">Utwórz inwentaryzację w zakładce „Nowa inwentaryzacja”.</p>
+          <p className="mt-1 text-xs text-slate-500">Użyj przycisku + w nagłówku, aby utworzyć nową inwentaryzację.</p>
         </div>
       ) : (
         <div className={erpTableWrap}>
