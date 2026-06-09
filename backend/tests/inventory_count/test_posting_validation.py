@@ -12,6 +12,7 @@ from backend.models.inventory_count.constants import (
     COUNT_MODE_BLIND,
     INV_STATUS_APPROVED,
     INV_TYPE_FULL,
+    INV_TYPE_PARTIAL,
     LINE_STATUS_COUNTED,
 )
 from backend.models.inventory_count.count_entry import InventoryCountEntry
@@ -181,7 +182,9 @@ class TestPostingValidation(unittest.TestCase):
     def test_rw_preflight_insufficient_stock(self):
         with self.Session() as db:
             doc, line = self._approved_doc_with_line(db, expected=100.0, counted=50.0)
-            line.recompute_difference()
+            doc.inventory_type = INV_TYPE_PARTIAL
+            db.commit()
+            db.refresh(line)
             db.add(
                 InventoryCountEntry(
                     inventory_document_line_id=line.id,

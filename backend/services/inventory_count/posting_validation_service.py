@@ -8,11 +8,16 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ...models.inventory import Inventory
 from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.product import Product
 from .errors import InventoryInvalidTransitionError, InventoryPendingRecountsError, InventoryPostingFailedError
+from .full_inventory_posting_service import (
+    build_inventory_posting_plans,
+    posting_plan_to_log_dict,
+    requires_full_inventory_zeroing,
+    sum_live_stock_for_dimension,
+)
 from .recount_conflict_service import (
     has_operator_count_conflict,
     lines_with_unresolved_operator_conflicts,
@@ -124,21 +129,6 @@ def _is_suspicious_quantity(*, expected: float, counted: float, pack: int | None
     return counted > expected * SUSPICIOUS_COUNT_FACTOR
 
 
-def _available_stock(db: Session, *, tenant_id: int, warehouse_id: int, product_id: int, location_id: int) -> float:
-    rows = (
-        db.query(Inventory.quantity)
-        .filter(
-            Inventory.tenant_id == int(tenant_id),
-            Inventory.warehouse_id == int(warehouse_id),
-            Inventory.product_id == int(product_id),
-            Inventory.location_id == int(location_id),
-            Inventory.quantity > 0,
-        )
-        .all()
-    )
-    return sum(float(r[0] or 0) for r in rows)
-
-
 def validate_and_prepare_document_for_posting(
     db: Session,
     *,
@@ -192,27 +182,45 @@ def validate_and_prepare_document_for_posting(
         if abs(diff) > ABS_MAX_PIECES:
             suspicious.append({**snapshot, "reason": "difference_overflow"})
 
-        if diff < -1e-9:
-            need = abs(diff)
-            avail = _available_stock(
-                db,
-                tenant_id=int(doc.tenant_id),
-                warehouse_id=int(doc.warehouse_id),
-                product_id=int(line.product_id),
-                location_id=int(line.location_id),
+    posting_plans = build_inventory_posting_plans(db, doc=doc, lines=lines)
+    for plan in posting_plans:
+        if plan.difference_quantity >= -1e-9:
+            continue
+        need = abs(plan.difference_quantity)
+        avail = sum_live_stock_for_dimension(
+            db,
+            tenant_id=int(doc.tenant_id),
+            warehouse_id=int(doc.warehouse_id),
+            location_id=int(plan.location_id),
+            product_id=int(plan.product_id),
+            carrier_id=plan.carrier_id,
+            batch_number=plan.batch_number,
+        )
+        if avail + 1e-9 < need:
+            snapshot = posting_plan_to_log_dict(plan)
+            line_ref = plan.line
+            raise InventoryPostingFailedError(
+                f"Insufficient stock for RW on product {plan.product_id} @ location {plan.location_id}: "
+                f"need {need}, available {round(avail, 4)}",
+                details={
+                    "line_id": int(line_ref.id) if line_ref else None,
+                    "product_id": plan.product_id,
+                    "location_id": plan.location_id,
+                    "required_qty": need,
+                    "available_qty": round(avail, 4),
+                    "reason": plan.reason,
+                    **snapshot,
+                },
             )
-            if avail + 1e-9 < need:
-                raise InventoryPostingFailedError(
-                    f"Insufficient stock for RW on line {line.id}: need {need}, available {round(avail, 4)}",
-                    details={
-                        "line_id": int(line.id),
-                        "product_id": int(line.product_id),
-                        "location_id": int(line.location_id),
-                        "required_qty": need,
-                        "available_qty": round(avail, 4),
-                        **snapshot,
-                    },
-                )
+
+    if requires_full_inventory_zeroing(doc):
+        zero_plans = [p for p in posting_plans if p.reason in ("zero_uncounted", "zero_orphan_stock")]
+        logger.info(
+            "[POST INVENTORY] full zeroing validation | document_id=%s adjustments=%s zero_lines=%s",
+            doc.id,
+            len(posting_plans),
+            len(zero_plans),
+        )
 
     if suspicious:
         raise InventoryInvalidTransitionError(
@@ -227,9 +235,10 @@ def validate_and_prepare_document_for_posting(
 
     db.flush()
     logger.info(
-        "[POST INVENTORY] validation ok | document_id=%s lines=%s reconciled=%s",
+        "[POST INVENTORY] validation ok | document_id=%s lines=%s reconciled=%s plans=%s",
         doc.id,
         len(lines),
         reconciled,
+        len(posting_plans),
     )
     return lines

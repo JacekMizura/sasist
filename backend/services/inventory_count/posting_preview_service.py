@@ -12,6 +12,7 @@ from ...models.location import Location
 from ...models.product import Product
 from .difference_service import analyze_document_differences
 from .errors import InventoryDocumentNotFoundError
+from .full_inventory_posting_service import build_inventory_posting_plans, requires_full_inventory_zeroing
 from .strategy_service import get_result_policy, result_policy_updates_stock
 from .unknown_product_service import list_unknown_products
 from .valuation_service import resolve_line_unit_cost_net
@@ -35,20 +36,43 @@ def build_posting_preview(
     result_policy = get_result_policy(doc)
     updates_stock = result_policy_updates_stock(doc)
 
+    lines = (
+        db.query(InventoryDocumentLine)
+        .filter(InventoryDocumentLine.inventory_document_id == int(doc.id))
+        .all()
+    )
+
     rw_lines: list[dict[str, Any]] = []
     pw_lines: list[dict[str, Any]] = []
     location_ids: set[int] = set()
 
-    for row in analysis.get("lines") or []:
+    if updates_stock and requires_full_inventory_zeroing(doc):
+        posting_plans = build_inventory_posting_plans(db, doc=doc, lines=lines)
+        preview_rows = [
+            {
+                "line_id": int(p.line.id) if p.line else None,
+                "product_id": p.product_id,
+                "location_id": p.location_id,
+                "difference_quantity": p.difference_quantity,
+                "reason": p.reason,
+            }
+            for p in posting_plans
+        ]
+    else:
+        preview_rows = list(analysis.get("lines") or [])
+
+    for row in preview_rows:
         diff = float(row.get("difference_quantity") or 0)
         if abs(diff) < 1e-9:
             continue
         lid = int(row.get("location_id") or 0)
         if lid:
             location_ids.add(lid)
-        line = db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == int(row["line_id"])).first()
+        line = None
+        if row.get("line_id"):
+            line = db.query(InventoryDocumentLine).filter(InventoryDocumentLine.id == int(row["line_id"])).first()
         product = db.query(Product).filter(Product.id == int(row.get("product_id") or 0)).first()
-        unit_cost = resolve_line_unit_cost_net(db, document=doc, line=line, product=product) if line else 0.0
+        unit_cost = resolve_line_unit_cost_net(db, document=doc, line=line, product=product) if line or product else 0.0
         loc = db.query(Location).filter(Location.id == lid).first() if lid else None
         carrier_code = None
         if line and line.carrier_id:

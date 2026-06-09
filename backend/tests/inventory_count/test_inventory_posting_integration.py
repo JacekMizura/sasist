@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -55,6 +56,17 @@ class TestInventoryPostingIntegration(unittest.TestCase):
                 sku="SKU-1",
                 ean="5900000000001",
                 purchase_price=10.0,
+            )
+        )
+        db.add(
+            Inventory(
+                tenant_id=1,
+                warehouse_id=1,
+                location_id=1,
+                product_id=1,
+                quantity=10.0,
+                batch_number="",
+                expiry_date=date(9999, 12, 31),
             )
         )
         doc = InventoryDocument(
@@ -125,7 +137,7 @@ class TestInventoryPostingIntegration(unittest.TestCase):
                 .first()
             )
             self.assertIsNotNone(inv)
-            self.assertEqual(float(inv.quantity), 5.0)
+            self.assertEqual(float(inv.quantity), 15.0)
 
             repeat = post_inventory_adjustments(
                 db,

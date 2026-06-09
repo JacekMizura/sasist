@@ -38,6 +38,7 @@ from .errors import (
     InventoryInvalidTransitionError,
     InventoryPostingFailedError,
 )
+from .full_inventory_posting_service import build_inventory_posting_plans, posting_plan_to_log_dict
 from .posting_validation_service import validate_and_prepare_document_for_posting
 from .kpi_service import recompute_document_kpis
 from .location_lock_service import release_location_locks_for_document
@@ -292,6 +293,7 @@ def post_inventory_adjustments(
             _log_post_inventory("acquire lock", document_id=document_id_int, version=int(doc.version or 0))
 
             lines = validate_and_prepare_document_for_posting(db, doc=doc)
+            posting_plans = build_inventory_posting_plans(db, doc=doc, lines=lines)
             rw_doc: StockDocument | None = None
             pw_doc: StockDocument | None = None
             rw_lines = 0
@@ -302,14 +304,17 @@ def post_inventory_adjustments(
                 "transaction start",
                 document_id=document_id_int,
                 line_count=len(lines),
+                plan_count=len(posting_plans),
             )
 
-            for line in lines:
-                diff = float(line.difference_quantity or 0)
+            for plan in posting_plans:
+                diff = float(plan.difference_quantity)
                 if abs(diff) < 1e-9:
                     continue
-                product = db.query(Product).filter(Product.id == int(line.product_id)).first()
+                line = plan.line
+                product = db.query(Product).filter(Product.id == int(plan.product_id)).first()
                 unit_cost = resolve_line_unit_cost_net(db, document=doc, line=line, product=product)
+                batch_number = plan.batch_number or (line.batch_number if line else "") or ""
 
                 try:
                     if diff < 0:
@@ -324,12 +329,12 @@ def post_inventory_adjustments(
                         qty = abs(diff)
                         sd_line = StockDocumentItem(
                             document_id=int(rw_doc.id),
-                            product_id=int(line.product_id),
+                            product_id=int(plan.product_id),
                             ordered_quantity=qty,
                             received_quantity=qty,
                             quantity=qty,
                             purchase_price_net=unit_cost,
-                            batch_number=line.batch_number or "",
+                            batch_number=batch_number,
                             expiry_date=date(9999, 12, 31),
                         )
                         db.add(sd_line)
@@ -337,16 +342,14 @@ def post_inventory_adjustments(
                         _log_post_inventory(
                             "rw line",
                             document_id=document_id_int,
-                            line_id=int(line.id),
-                            product_id=int(line.product_id),
-                            quantity=qty,
+                            **posting_plan_to_log_dict(plan),
                         )
                         slices = consume_inventory_fifo_slices(
                             db,
                             tenant_id=int(doc.tenant_id),
                             warehouse_id=int(doc.warehouse_id),
-                            product_id=int(line.product_id),
-                            location_id=int(line.location_id),
+                            product_id=int(plan.product_id),
+                            location_id=int(plan.location_id),
                             quantity=qty,
                         )
                         for sl in slices:
@@ -355,7 +358,7 @@ def post_inventory_adjustments(
                                 rw_doc,
                                 sd_line,
                                 float(sl.quantity),
-                                from_location_id=int(line.location_id),
+                                from_location_id=int(plan.location_id),
                                 batch_number=sl.batch_number or "",
                                 expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
                                 operator_admin_id=user_id,
@@ -363,6 +366,7 @@ def post_inventory_adjustments(
                                     "inventory_document_id": int(doc.id),
                                     "source_document_type": "RW",
                                     "valuation_net": unit_cost,
+                                    "zeroing_reason": plan.reason,
                                 },
                             )
                         rw_lines += 1
@@ -380,12 +384,12 @@ def post_inventory_adjustments(
                         qty = diff
                         sd_line = StockDocumentItem(
                             document_id=int(pw_doc.id),
-                            product_id=int(line.product_id),
+                            product_id=int(plan.product_id),
                             ordered_quantity=qty,
                             received_quantity=qty,
                             quantity=qty,
                             purchase_price_net=unit_cost,
-                            batch_number=line.batch_number or "",
+                            batch_number=batch_number,
                             expiry_date=date(9999, 12, 31),
                         )
                         db.add(sd_line)
@@ -393,18 +397,16 @@ def post_inventory_adjustments(
                         _log_post_inventory(
                             "pw line",
                             document_id=document_id_int,
-                            line_id=int(line.id),
-                            product_id=int(line.product_id),
-                            quantity=qty,
+                            **posting_plan_to_log_dict(plan),
                         )
                         upsert_dock_inventory_for_loose_receipt(
                             db,
                             tenant_id=int(doc.tenant_id),
                             warehouse_id=int(doc.warehouse_id),
-                            location_id=int(line.location_id),
-                            product_id=int(line.product_id),
+                            location_id=int(plan.location_id),
+                            product_id=int(plan.product_id),
                             add_qty=float(qty),
-                            batch_number=line.batch_number or "",
+                            batch_number=batch_number,
                             expiry_date=NO_EXPIRY_SENTINEL,
                             stock_disposition=STOCK_DISPOSITION_SALEABLE,
                         )
@@ -415,11 +417,11 @@ def post_inventory_adjustments(
 
                     adj = InventoryAdjustment(
                         inventory_document_id=int(doc.id),
-                        inventory_document_line_id=int(line.id),
+                        inventory_document_line_id=int(line.id) if line else None,
                         tenant_id=int(doc.tenant_id),
                         warehouse_id=int(doc.warehouse_id),
-                        product_id=int(line.product_id),
-                        location_id=int(line.location_id),
+                        product_id=int(plan.product_id),
+                        location_id=int(plan.location_id),
                         adjustment_quantity=diff,
                         direction=direction,
                         stock_document_id=stock_doc_id,
@@ -431,38 +433,47 @@ def post_inventory_adjustments(
                         db,
                         tenant_id=int(tenant_id),
                         inventory_document_id=int(doc.id),
-                        inventory_document_line_id=int(line.id),
+                        inventory_document_line_id=int(line.id) if line else None,
                         user_id=user_id,
                         action=AUDIT_ADJUSTMENT,
-                        previous_state={"difference": diff},
+                        previous_state={"difference": diff, "reason": plan.reason},
                         next_state={"direction": direction, "stock_document_id": stock_doc_id, "unit_cost_net": unit_cost},
-                        detail={"direction": direction, "quantity": diff, "stock_document_id": stock_doc_id},
+                        detail={
+                            "direction": direction,
+                            "quantity": diff,
+                            "stock_document_id": stock_doc_id,
+                            "reason": plan.reason,
+                            **posting_plan_to_log_dict(plan),
+                        },
                     )
                 except ValueError as exc:
                     raise InventoryPostingFailedError(
                         str(exc),
                         details={
-                            "line_id": int(line.id),
-                            "product_id": int(line.product_id),
-                            "location_id": int(line.location_id),
+                            "line_id": int(line.id) if line else None,
+                            "product_id": int(plan.product_id),
+                            "location_id": int(plan.location_id),
                             "difference_quantity": diff,
                             "phase": "rw_stock_consume",
+                            "reason": plan.reason,
                         },
                     ) from exc
                 except Exception as exc:
                     logger.exception(
-                        "[POST INVENTORY] line failed document_id=%s line_id=%s diff=%s",
+                        "[POST INVENTORY] line failed document_id=%s line_id=%s diff=%s reason=%s",
                         document_id_int,
-                        line.id,
+                        line.id if line else None,
                         diff,
+                        plan.reason,
                     )
                     raise InventoryPostingFailedError(
-                        f"Posting failed on line {line.id}: {type(exc).__name__}: {exc}",
+                        f"Posting failed on product {plan.product_id}: {type(exc).__name__}: {exc}",
                         details={
-                            "line_id": int(line.id),
-                            "product_id": int(line.product_id),
+                            "line_id": int(line.id) if line else None,
+                            "product_id": int(plan.product_id),
                             "difference_quantity": diff,
                             "error_type": type(exc).__name__,
+                            "reason": plan.reason,
                         },
                     ) from exc
 

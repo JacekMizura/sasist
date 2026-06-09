@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-09 — Fix: pełna inwentaryzacja zeruje niepoliczone stany (FULL + update_stock)
+- `full_inventory_posting_service.py`: plan księgowania target − live stock; zero dla uncounted/orphan scope
+- PARTIAL/CYCLE/CONTROL bez zmian — tylko policzone linie
+- Testy: `test_full_inventory_zeroing.py` (CASE 1–3)
+
 ## 2026-06-09 — WMS shell polish: topbar tabs, launcher command center, DnD
 - Topbar: glass (`backdrop-blur`, `bg-white/90`), underline active tab (Linear-style), DnD reorder pinned
 - Launcher: search + `/` shortcut, keyboard nav, pinned tiles drag-reorder (mobile: strzałki)
