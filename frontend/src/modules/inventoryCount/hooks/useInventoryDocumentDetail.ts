@@ -11,6 +11,8 @@ import {
   fetchInventoryDocumentTimelines,
   fetchInventoryPostingPreview,
   fetchInventoryUnknownProducts,
+  completeInventoryRecount,
+  generateInventoryRecounts,
   getDocumentDifferenceAnalysis,
   listDocumentLines,
   postInventoryDocumentAdjustments,
@@ -18,6 +20,7 @@ import {
   submitInventoryDocumentForApproval,
   updateInventoryWizard,
   type InventoryConflictsRead,
+  type InventoryConflictItem,
   type InventoryDocumentRead,
   type InventoryLineFocus,
   type InventoryLineRead,
@@ -82,6 +85,7 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
   const [approvalMode, setApprovalMode] = useState<InventoryApprovalMode>("submit");
   const [approvalPreview, setApprovalPreview] = useState<InventoryPostingPreview | null>(null);
   const [approvalPreviewLoading, setApprovalPreviewLoading] = useState(false);
+  const [conflictBusy, setConflictBusy] = useState(false);
 
   const lineFocus: InventoryLineFocus =
     tab === "differences" ? "differences" : showUncounted ? "all" : "operational";
@@ -287,6 +291,58 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
     void loadLines();
   }, [loadUnknown, loadDoc, loadLines]);
 
+  const refreshAfterConflictAction = useCallback(async () => {
+    await Promise.all([loadDoc(), loadLines(), loadConflicts()]);
+  }, [loadConflicts, loadDoc, loadLines]);
+
+  const resolveConflictQuantity = useCallback(
+    async (conflict: InventoryConflictItem, quantity: number) => {
+      if (!Number.isFinite(id)) return;
+      setConflictBusy(true);
+      try {
+        let recountId = conflict.recount_id;
+        if (!recountId) {
+          await generateInventoryRecounts(tenantId, id);
+          const refreshed = await fetchInventoryConflicts(tenantId, id);
+          recountId = refreshed.items.find((item) => item.line_id === conflict.line_id)?.recount_id ?? null;
+        }
+        if (!recountId) {
+          toast.error("Nie udało się utworzyć zadania recount.");
+          return;
+        }
+        await completeInventoryRecount(tenantId, recountId, quantity);
+        await refreshAfterConflictAction();
+        toast.success(`Zatwierdzono ${quantity} szt.`);
+      } catch (actionErr) {
+        toast.error(formatInventoryRequestError(actionErr));
+      } finally {
+        setConflictBusy(false);
+      }
+    },
+    [id, refreshAfterConflictAction, tenantId],
+  );
+
+  const requestConflictRecount = useCallback(
+    async (conflict: InventoryConflictItem) => {
+      if (!Number.isFinite(id)) return;
+      setConflictBusy(true);
+      try {
+        const result = await generateInventoryRecounts(tenantId, id);
+        await refreshAfterConflictAction();
+        toast.success(
+          result.recounts_created > 0
+            ? `Utworzono ${result.recounts_created} zadań recount.`
+            : "Recount już istnieje — odświeżono listę.",
+        );
+      } catch (actionErr) {
+        toast.error(formatInventoryRequestError(actionErr));
+      } finally {
+        setConflictBusy(false);
+      }
+    },
+    [id, refreshAfterConflictAction, tenantId],
+  );
+
   const derived = useMemo(() => {
     if (!doc) {
       return {
@@ -333,6 +389,9 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
     linesLoading,
     conflicts,
     conflictsLoading,
+    conflictBusy,
+    resolveConflictQuantity,
+    requestConflictRecount,
     unknownProducts,
     unknownLoading,
     opsPreview,

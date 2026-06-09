@@ -50,4 +50,26 @@ export async function rejectInventoryUnknownProduct(
   return data;
 }
 
+export async function generateInventoryRecounts(tenantId: number, documentId: number): Promise<{ recounts_created: number }> {
+  const { data } = await api.post<{ recounts_created: number }>(
+    `/inventory-count/documents/${documentId}/recounts/generate`,
+    null,
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function completeInventoryRecount(
+  tenantId: number,
+  recountId: number,
+  countedQuantity: number,
+): Promise<{ recount_id: number; line_id: number; counted_quantity: number }> {
+  const { data } = await api.post<{ recount_id: number; line_id: number; counted_quantity: number }>(
+    `/inventory-count/recounts/${recountId}/complete`,
+    { counted_quantity: countedQuantity },
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
 export type { InventoryConflictsRead, InventoryUnknownProductRead };

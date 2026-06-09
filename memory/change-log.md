@@ -1,6 +1,9 @@
 # Change log
 
-## 2026-06-08 — WMS inventory collector UX + per-operator counting
+## 2026-06-08 — ERP inventory: uproszczony przebieg liczenia (UI only)
+- Usunięto kolumnę „Źródło stanu”; nośnik pod lokalizacją (`InventoryLocationStack`)
+- Produkt: większe zdjęcie, nazwa/EAN/SKU; bez nośnika pod produktem
+- Konflikty: POLICZ. pokazuje operatorów osobno (nie suma); badge „Konflikt liczenia”; akcje zatwierdź/recount (istniejące endpointy)
 - Usunięto listę „Policzone w lokalizacji” → **Ostatnio policzone przeze mnie** (max 2 pozycje)
 - Hero produktu: duże zdjęcie (bez ramek) → nazwa → EAN → lokalizacja → nośnik → kartony/sztuki/suma
 - Nośnik przypisywany w kontekście produktu (nie w belce lokalizacji)

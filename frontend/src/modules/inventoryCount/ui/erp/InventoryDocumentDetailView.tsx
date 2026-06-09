@@ -58,6 +58,9 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
     linesLoading,
     conflicts,
     conflictsLoading,
+    conflictBusy,
+    resolveConflictQuantity,
+    requestConflictRecount,
     unknownProducts,
     unknownLoading,
     opsPreview,
@@ -276,7 +279,13 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
 
       {(conflicts?.items.length ?? 0) > 0 ? (
         <div className={`${erpSurfaceCard} overflow-hidden`}>
-          <InventoryConflictPanel items={conflicts?.items ?? []} loading={conflictsLoading} />
+          <InventoryConflictPanel
+            items={conflicts?.items ?? []}
+            loading={conflictsLoading}
+            busy={conflictBusy}
+            onAcceptQuantity={(c, qty) => void resolveConflictQuantity(c, qty)}
+            onRequestRecount={(c) => void requestConflictRecount(c)}
+          />
         </div>
       ) : null}
 
@@ -375,7 +384,11 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
           <div className={erpTableScroll}>
             <InventoryLineTable
               lines={filteredLines}
+              conflicts={conflicts?.items ?? []}
               loading={linesLoading}
+              conflictBusy={conflictBusy}
+              onAcceptQuantity={(c, qty) => void resolveConflictQuantity(c, qty)}
+              onRequestRecount={(c) => void requestConflictRecount(c)}
               emptyMessage={
                 tab === "differences" ? "Brak różnic pasujących do filtrów." : "Brak pozycji pasujących do filtrów."
               }
