@@ -2,7 +2,7 @@ import { AlertTriangle, Image as ImageIcon } from "lucide-react";
 
 import { CarrierBadge } from "@/components/warehouse/carriers/CarrierBadge";
 import type { WmsCountedCarrierGroup, WmsCountedProduct, WmsUnexpectedProduct } from "../../wmsInventoryExecutionContext";
-import { formatPackagingHelper } from "./inventoryQtyUtils";
+import { piecesToCartonUnit } from "./inventoryQtyUtils";
 
 type Props = {
   groups: WmsCountedCarrierGroup[];
@@ -33,57 +33,51 @@ function ProductRow({
   const isActive = item.line_id === activeLineId;
   const pulse = item.line_id === pulseLineId;
   const pack = Math.max(1, unitsPerCarton ?? 1);
-  const hint = formatPackagingHelper(item.counted_quantity, pack);
+  const { cartons, units } = piecesToCartonUnit(item.counted_quantity, pack);
+  const showSplit = pack > 1 && (cartons > 0 || units > 0);
 
   return (
     <button
       type="button"
       onClick={() => onSelect?.(item)}
-      className={`group flex w-full flex-col items-center justify-between gap-4 border-b border-slate-200/60 p-4 transition-colors outline-none sm:flex-row sm:gap-6 ${
-        pulse ? "bg-emerald-50/60" : isActive ? "bg-slate-50" : "bg-white hover:bg-slate-50/80"
+      className={`group flex w-full items-center gap-3 border-b border-slate-200/60 px-3 py-2.5 text-left transition-colors outline-none sm:gap-4 ${
+        pulse ? "bg-emerald-50/70" : isActive ? "bg-slate-100/80" : "bg-white hover:bg-slate-50"
       }`}
     >
-      <div className="flex min-w-0 w-full flex-1 items-center gap-4 text-left sm:w-auto">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center sm:h-20 sm:w-20">
-          {item.image_url ? (
-            <img
-              src={item.image_url}
-              alt=""
-              className="max-h-full max-w-full object-contain mix-blend-multiply"
-              loading="lazy"
-            />
-          ) : (
-            <ImageIcon size={28} className="text-slate-200" strokeWidth={1.5} />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          {item.ean ? (
-            <p className="mb-1 font-mono text-lg font-black leading-none text-slate-900">EAN: {item.ean}</p>
-          ) : null}
-          <h3 className="line-clamp-2 text-xs font-semibold leading-tight text-slate-500 group-hover:text-[#5a4fcf]">
-            {item.product_name ?? item.sku ?? "—"}
-          </h3>
-          {item.carrier_code ? (
-            <div className="mt-2">
-              <CarrierBadge code={item.carrier_code} />
-            </div>
-          ) : null}
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center sm:h-14 sm:w-14">
+        {item.image_url ? (
+          <img
+            src={item.image_url}
+            alt=""
+            className="max-h-full max-w-full object-contain mix-blend-multiply"
+            loading="lazy"
+          />
+        ) : (
+          <ImageIcon size={22} className="text-slate-200" strokeWidth={1.5} />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="line-clamp-2 text-sm font-bold leading-snug text-slate-900">{item.product_name ?? item.sku ?? "—"}</h3>
+        {item.ean ? <p className="mt-0.5 font-mono text-[11px] font-bold text-slate-500">EAN {item.ean}</p> : null}
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          {item.carrier_code ? <CarrierBadge code={item.carrier_code} /> : null}
           {item.defectReported ? (
-            <p className="mt-1.5 flex items-center gap-1 text-[10px] font-black uppercase text-amber-700">
+            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-amber-700">
               <AlertTriangle className="h-3 w-3" /> Wada
-            </p>
+            </span>
           ) : null}
         </div>
       </div>
 
       <div className="shrink-0 text-right">
-        <div className="inline-flex flex-col items-end rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-2.5">
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#5a4fcf]">Ilość</span>
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black tabular-nums leading-none text-[#5a4fcf]">{fmtQty(item.counted_quantity)}</span>
-            <span className="text-[10px] font-bold text-[#5a4fcf]/80">szt.</span>
+        {showSplit ? (
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            <span className="tabular-nums text-slate-700">{fmtQty(cartons)}</span> krt ·{" "}
+            <span className="tabular-nums text-slate-700">{fmtQty(units)}</span> szt
           </div>
-          {hint ? <span className="mt-0.5 text-[10px] font-normal text-slate-400">{hint}</span> : null}
+        ) : null}
+        <div className="text-lg font-black tabular-nums text-slate-900">
+          {fmtQty(item.counted_quantity)} <span className="text-[10px] font-bold text-slate-500">szt.</span>
         </div>
       </div>
     </button>
@@ -92,27 +86,17 @@ function ProductRow({
 
 function UnexpectedRow({ item }: { item: WmsUnexpectedProduct }) {
   return (
-    <div className="flex w-full flex-col items-center justify-between gap-4 border-b border-slate-200/60 bg-white p-4 sm:flex-row sm:gap-6">
-      <div className="flex min-w-0 w-full flex-1 items-center gap-4 text-left sm:w-auto">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 sm:h-20 sm:w-20">
-          <ImageIcon size={28} className="text-slate-300" strokeWidth={1.5} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Nieznany produkt</p>
-          <h3 className="line-clamp-2 text-xs font-semibold text-slate-700">{item.temporary_name}</h3>
-          {item.barcode_value ? (
-            <p className="mt-1 font-mono text-[11px] text-slate-500">{item.barcode_value}</p>
-          ) : null}
-        </div>
+    <div className="flex w-full items-center gap-3 border-b border-slate-200/60 px-3 py-2.5 sm:gap-4">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-slate-100 bg-slate-50 sm:h-14 sm:w-14">
+        <ImageIcon size={22} className="text-slate-300" strokeWidth={1.5} />
       </div>
-      <div className="shrink-0 text-right">
-        <div className="inline-flex flex-col items-end rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-2.5">
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#5a4fcf]">Ilość</span>
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black tabular-nums leading-none text-[#5a4fcf]">{fmtQty(item.quantity)}</span>
-            <span className="text-[10px] font-bold text-[#5a4fcf]/80">szt.</span>
-          </div>
-        </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nieznany produkt</p>
+        <h3 className="line-clamp-2 text-sm font-bold text-slate-800">{item.temporary_name}</h3>
+        {item.barcode_value ? <p className="mt-0.5 font-mono text-[11px] text-slate-500">{item.barcode_value}</p> : null}
+      </div>
+      <div className="shrink-0 text-lg font-black tabular-nums text-slate-900">
+        {fmtQty(item.quantity)} <span className="text-[10px] font-bold text-slate-500">szt.</span>
       </div>
     </div>
   );
@@ -129,13 +113,18 @@ export default function WmsInventoryLocationCounts({
   if (groups.length === 0 && unexpectedItems.length === 0) return null;
 
   const hasCarriers = groups.some((g) => g.carrierId != null);
+  const pack = Math.max(1, unitsPerCarton ?? 1);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-100 px-3 py-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Policzone w lokalizacji</p>
+      </div>
+
       {groups.map((group) => (
         <div key={group.key}>
           {hasCarriers ? (
-            <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-2">
+            <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-3 py-1.5">
               {group.carrierId != null && group.carrierCode ? (
                 <CarrierBadge code={group.carrierCode} />
               ) : (
@@ -150,7 +139,7 @@ export default function WmsInventoryLocationCounts({
                   item={item}
                   activeLineId={activeLineId}
                   pulseLineId={pulseLineId}
-                  unitsPerCarton={unitsPerCarton}
+                  unitsPerCarton={pack}
                   onSelect={onSelect}
                 />
               </li>
@@ -161,7 +150,7 @@ export default function WmsInventoryLocationCounts({
 
       {unexpectedItems.length > 0 ? (
         <div>
-          <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-2">
+          <div className="border-b border-slate-100 bg-slate-50/80 px-3 py-1.5">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nieznane produkty</span>
           </div>
           <ul>

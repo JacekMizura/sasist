@@ -17,7 +17,7 @@ type Props = {
   documentId: number;
 };
 
-/** WMS counting terminal — product-first, scan-first operational flow. */
+/** WMS counting terminal — scan-first, product hero inline, list below. */
 export default function WmsInventoryTerminalView({ state, documentId }: Props) {
   const scanAnchorRef = useRef<HTMLDivElement>(null);
   const {
@@ -51,14 +51,17 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     pulseLineId,
     isPartialInventory,
     packaging,
+    qtyEditState,
     lastScanKind,
     unknownOpen,
     lastScanCode,
     setUnknownOpen,
+    setQtyInputMode,
+    setQtyDraft,
+    commitQtyDraft,
     adjustQty,
-    setQty,
+    setQtyField,
     selectCountedProduct,
-    clearActiveProduct,
     enterCarrierScan,
     skipCarrier,
     clearCarrier,
@@ -72,13 +75,8 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     window.requestAnimationFrame(() => inputRef.current?.focus());
   };
 
-  const closeProductPanel = () => {
-    clearActiveProduct();
-    focusScan();
-  };
-
   return (
-    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-5 py-5 pb-24`}>
+    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-4 pb-20`}>
       <WmsInventoryActiveContextBar
         location={locationContext}
         carrier={carrierContext}
@@ -121,15 +119,6 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
             />
           </div>
 
-          <WmsInventoryLocationCounts
-            groups={countedProductGroups}
-            unexpectedItems={unexpectedItems}
-            activeLineId={activeLineId}
-            pulseLineId={pulseLineId}
-            unitsPerCarton={packaging.unitsPerCarton}
-            onSelect={selectCountedProduct}
-          />
-
           {activeScan ? (
             <WmsInventoryProductDetailPanel
               scan={activeScan}
@@ -138,15 +127,30 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
               tenantId={tenantId}
               warehouseId={warehouseId}
               currentLocationId={task?.location_id}
+              locationCode={locationContext?.locationCode ?? task?.location_code ?? null}
               packaging={packaging}
+              qtyState={qtyEditState}
               lastScanKind={lastScanKind}
-              onAdjust={(d) => void adjustQty(d)}
-              onSetQuantity={(q) => void setQty(q)}
-              onClose={closeProductPanel}
-              onConfirm={closeProductPanel}
-              onDefectSaved={(note) => markActiveDefect(note)}
+              onAdjust={(field, delta) => void adjustQty(field, delta)}
+              onSetField={(field, value) => void setQtyField(field, value)}
+              onSetInputMode={setQtyInputMode}
+              onSetDraft={setQtyDraft}
+              onCommitDraft={commitQtyDraft}
+              onDefectSaved={(note) => {
+                markActiveDefect(note);
+                focusScan();
+              }}
             />
           ) : null}
+
+          <WmsInventoryLocationCounts
+            groups={countedProductGroups}
+            unexpectedItems={unexpectedItems}
+            activeLineId={activeLineId}
+            pulseLineId={pulseLineId}
+            unitsPerCarton={packaging.unitsPerCarton}
+            onSelect={selectCountedProduct}
+          />
         </>
       ) : (
         <WmsInventoryScanField
@@ -189,6 +193,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
           onCreated={() => {
             setUnknownOpen(false);
             void reloadFromServer();
+            focusScan();
           }}
         />
       ) : null}

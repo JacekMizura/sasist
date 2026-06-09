@@ -27,7 +27,6 @@ from backend.services.inventory_count.concurrency_service import acquire_line_co
 from backend.services.inventory_count.errors import (
     InventoryConcurrentUpdateError,
     InventoryDuplicatePostError,
-    InventoryLineLockedError,
 )
 from backend.services.inventory_count.permissions import INVENTORY_ROLE_PRESETS, PERM_POST, PERM_VIEW
 
@@ -97,7 +96,7 @@ class TestConcurrentCounting(unittest.TestCase):
             conn.execute(text("CREATE TABLE IF NOT EXISTS warehouses (id INTEGER PRIMARY KEY, code VARCHAR(16))"))
             conn.execute(text("INSERT INTO warehouses (id, code) VALUES (1, 'WH1')"))
 
-    def test_line_lock_conflict(self):
+    def test_parallel_operators_allowed_on_same_line(self):
         with self.Session() as db:
             doc = InventoryDocument(
                 tenant_id=1,
@@ -137,12 +136,12 @@ class TestConcurrentCounting(unittest.TestCase):
             db.refresh(s2)
 
             acquire_line_count_lock(db, line=line, session_id=s1.id, user_id=1)
-            line.count_lock_at = datetime.utcnow()
             db.commit()
             db.refresh(line)
 
-            with self.assertRaises(InventoryLineLockedError):
-                acquire_line_count_lock(db, line=line, session_id=s2.id, user_id=2)
+            # Inventory: second operator on same line must not raise (conflicts resolved later).
+            acquire_line_count_lock(db, line=line, session_id=s2.id, user_id=2)
+            self.assertEqual(int(line.count_lock_session_id), int(s2.id))
 
     def test_optimistic_version_mismatch(self):
         line = InventoryDocumentLine(

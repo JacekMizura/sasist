@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.inventory_count.session import InventorySession
-from .errors import InventoryConcurrentUpdateError, InventoryLineLockedError
+from .errors import InventoryConcurrentUpdateError
 from .observability import bump_metric, log_inventory_structured
 
 LINE_LOCK_TTL_SECONDS = 300
@@ -28,21 +28,9 @@ def acquire_line_count_lock(
     user_id: int | None,
     force: bool = False,
 ) -> None:
+    """Record last active session on a line — inventory allows parallel operators (no 423 block)."""
     if session_id is None:
         return
-    holder = line.count_lock_session_id
-    if holder is not None and int(holder) != int(session_id):
-        if not force and not _lock_stale(line.count_lock_at):
-            bump_metric("lock_conflicts", 1)
-            log_inventory_structured(
-                "line_lock_conflict",
-                line_id=int(line.id),
-                holder_session=int(holder),
-                requester_session=int(session_id),
-            )
-            raise InventoryLineLockedError(
-                f"Line {line.id} is being counted by another operator session"
-            )
     line.count_lock_session_id = int(session_id)
     line.count_lock_user_id = user_id
     line.count_lock_at = datetime.utcnow()

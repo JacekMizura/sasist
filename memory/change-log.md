@@ -1,21 +1,10 @@
 # Change log
 
-## 2026-06-08 — WMS inventory product-first qty UX
-- Removed dual carton/unit counting UI and mode switches — product always one line, qty always in szt.
-- Cartons: scan-only input (EAN kartonu +X szt.); secondary hints only („5 kartonów × 5 szt.”, „Ostatni skan: karton zbiorczy”)
-- Compact product sheet on row click; list stays visible; neutral rows (no blue rings)
-- Compact bottom action bar (py-2)
-- Removed persistent document sidebar; start screen = full-width document queue (putaway-style cards)
-- Removed „Utwórz dokument ERP” from WMS; execution-only flow
-- Carton qty: separate integer counters (kartony + sztuki resztowe), sum in pieces — no fractional cartons
-- Product rows, badges (LocationBadge, CarrierBadge), layout aligned with picking/putaway operational modules
-- Document switcher sticky header during execution; inline qty panel (no overlay modal)
-- White terminal shell; left sidebar operational document list (putaway/picking density)
-- LocationBadge SSOT; product thumbnails via WmsProductCard pattern
-- Live search portal (z-index 10060) — no dropdown clipping
-- Cartons: unit/carton mode, bulk EAN scan delta via existing product view API + scan API
-- Damage reporting via existing createDamageEntry; unknown products refresh after create
-- Carrier grouping/labels from line carrier_code; unexpected products on list
+## 2026-06-08 — WMS inventory scan-first terminal + parallel counting
+- Active product: inline hero (duże zdjęcie, nazwa, EAN, badge’y) — bez modala/backdropu blokującego skan
+- Kompaktowe liczniki **Kartony | Sztuki | Suma**; skan kartonu +1 krt., skan szt. +1 szt. (nie rozbicie matematyczne)
+- Lista produktów pod panelem; neutralne wiersze bez indigo ringów
+- Backend: usunięto 423 `line_locked` przy równoległym liczeniu tej samej linii — konflikty przez wpisy, nie blokada sesji
 
 ## 2026-06-08 — WMS inventory terminal UI (mockup-aligned)
 - Presentation-only restyle of operator flow: document cards, location scan, product scan, qty modal
