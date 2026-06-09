@@ -29,8 +29,22 @@ export default function InventoryApprovalSummaryModal({
 
   const updatesStock = preview?.updates_stock ?? true;
 
+  const confirmLabel =
+    busy && mode === "post"
+      ? updatesStock
+        ? "Księgowanie RW/PW…"
+        : "Zamykanie…"
+      : mode === "post"
+        ? updatesStock
+          ? "Księguj RW/PW"
+          : "Zakończ"
+        : "Potwierdź";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      aria-busy={busy}
+    >
       <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-lg border border-slate-200 bg-white shadow-xl">
         <div className="border-b border-slate-200 px-4 py-3">
           <h3 className="text-sm font-bold text-slate-900">{MODE_TITLE[mode]}</h3>
@@ -94,10 +108,11 @@ export default function InventoryApprovalSummaryModal({
           <button
             type="button"
             disabled={busy || loading || !preview}
+            aria-disabled={busy || loading || !preview}
             onClick={onConfirm}
-            className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {mode === "post" ? (updatesStock ? "Księguj RW/PW" : "Zakończ") : "Potwierdź"}
+            {confirmLabel}
           </button>
         </div>
       </div>

@@ -21,7 +21,10 @@ from backend.models.inventory_count.document import InventoryDocument
 from backend.models.inventory_count.document_line import InventoryDocumentLine
 from backend.models.inventory_count.session import InventorySession
 from backend.models.product import Product
-from backend.services.inventory_count.adjustment_service import post_inventory_adjustments
+from backend.services.inventory_count.adjustment_service import (
+    _resolve_posting_lock_conflict,
+    post_inventory_adjustments,
+)
 from backend.services.inventory_count.audit_service import forbid_audit_mutation, log_inventory_audit
 from backend.services.inventory_count.concurrency_service import acquire_line_count_lock, assert_line_version
 from backend.services.inventory_count.errors import (
@@ -83,6 +86,26 @@ class TestPostingSafety(unittest.TestCase):
             db.refresh(doc)
             with self.assertRaises(InventoryDuplicatePostError):
                 post_inventory_adjustments(db, tenant_id=1, document_id=doc.id)
+
+    def test_orphan_posting_lock_is_cleared(self):
+        with self.Session() as db:
+            doc = InventoryDocument(
+                tenant_id=1,
+                warehouse_id=1,
+                number="INV-POST-STALE",
+                inventory_type=INV_TYPE_FULL,
+                status=INV_STATUS_APPROVED,
+                count_mode=COUNT_MODE_BLIND,
+                posting_in_progress=1,
+                updated_at=datetime.utcnow(),
+            )
+            db.add(doc)
+            db.commit()
+            db.refresh(doc)
+            _resolve_posting_lock_conflict(doc)
+            db.commit()
+            db.refresh(doc)
+            self.assertEqual(int(doc.posting_in_progress or 0), 0)
 
 
 class TestConcurrentCounting(unittest.TestCase):

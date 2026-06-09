@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Fix: stale lock przy księgowaniu inwentaryzacji (409 posting_in_progress)
+- Lock w DB (`posting_in_progress`), nie Redis; brak cleanup po błędzie zostawiał dokument zablokowany
+- Backend: `SELECT FOR UPDATE`, auto-clear orphan lock (`posting_in_progress=1` w DB = failed cleanup), `finally` + force unlock w osobnej transakcji
+- Logi `[POST INVENTORY]`: start, acquire lock, transaction, rw/pw, commit, rollback, release lock
+- Idempotency key ustawiany dopiero przed commitem (nie przy acquire lock)
+- Frontend: ref guard double-submit, UUID idempotency key, loading na przycisku modala
+
 ## 2026-06-08 — Fix: eksplozja ilości kartonów (WMS inwentaryzacja)
 - Przyczyna: total w szt. dekomponowany przy pack=1, potem ponownie mnożony po załadowaniu unitsPerCarton
 - SSOT: cartons + pieces w UI; total tylko computed; API wysyła wyłącznie `quantity` (absolute pieces)

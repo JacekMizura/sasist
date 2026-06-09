@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 import {
@@ -86,6 +86,8 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
   const [approvalPreview, setApprovalPreview] = useState<InventoryPostingPreview | null>(null);
   const [approvalPreviewLoading, setApprovalPreviewLoading] = useState(false);
   const [conflictBusy, setConflictBusy] = useState(false);
+  const approvalActionInFlightRef = useRef(false);
+  const postIdempotencyKeyRef = useRef<string | null>(null);
 
   const lineFocus: InventoryLineFocus =
     tab === "differences" ? "differences" : showUncounted ? "all" : "operational";
@@ -216,12 +218,19 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
       setApprovalOpen(true);
       setApprovalPreview(null);
       setApprovalPreviewLoading(true);
+      postIdempotencyKeyRef.current =
+        mode === "post" && typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : mode === "post"
+            ? `post-${Date.now()}-${Math.random().toString(36).slice(2)}`
+            : null;
       try {
         const preview = await fetchInventoryPostingPreview(tenantId, id);
         setApprovalPreview(preview);
       } catch {
         toast.error("Nie udało się wczytać podsumowania.");
         setApprovalOpen(false);
+        postIdempotencyKeyRef.current = null;
       } finally {
         setApprovalPreviewLoading(false);
       }
@@ -230,12 +239,20 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
   );
 
   const confirmApprovalAction = useCallback(async () => {
+    if (approvalActionInFlightRef.current) return;
+    approvalActionInFlightRef.current = true;
     setBusy(true);
     try {
       if (approvalMode === "submit") await submitInventoryDocumentForApproval(tenantId, id);
       else if (approvalMode === "approve") await approveInventoryDocument(tenantId, id);
-      else await postInventoryDocumentAdjustments(tenantId, id);
+      else {
+        await postInventoryDocumentAdjustments(tenantId, id, {
+          idempotencyKey: postIdempotencyKeyRef.current ?? undefined,
+          expectedVersion: doc?.version,
+        });
+      }
       setApprovalOpen(false);
+      postIdempotencyKeyRef.current = null;
       await loadDoc();
       await loadConflicts();
       await loadUnknown();
@@ -245,9 +262,10 @@ export function useInventoryDocumentDetail(documentId: number, tenantId: number)
       toast.error(formatInventoryRequestError(actionErr));
       await loadDoc();
     } finally {
+      approvalActionInFlightRef.current = false;
       setBusy(false);
     }
-  }, [approvalMode, tenantId, id, loadDoc, loadConflicts, loadUnknown]);
+  }, [approvalMode, tenantId, id, doc?.version, loadDoc, loadConflicts, loadUnknown]);
 
   const actionReject = useCallback(async () => {
     setBusy(true);

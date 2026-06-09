@@ -43,11 +43,18 @@ export async function rejectInventoryDocument(
 export async function postInventoryDocumentAdjustments(
   tenantId: number,
   documentId: number,
+  options?: { idempotencyKey?: string; expectedVersion?: number },
 ): Promise<InventoryApprovalActionResult> {
   const { data } = await api.post<InventoryApprovalActionResult>(
     `/inventory-count/documents/${documentId}/post`,
     {},
-    { params: { tenant_id: tenantId } },
+    {
+      params: {
+        tenant_id: tenantId,
+        ...(options?.idempotencyKey ? { idempotency_key: options.idempotencyKey } : {}),
+        ...(options?.expectedVersion != null ? { expected_version: options.expectedVersion } : {}),
+      },
+    },
   );
   return data;
 }

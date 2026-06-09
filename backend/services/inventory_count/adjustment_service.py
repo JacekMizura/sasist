@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
-import secrets
 from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from ...database import SessionLocal
 from ...models.inventory_count.adjustment import InventoryAdjustment
 from ...models.inventory_count.constants import (
     ADJ_STATUS_POSTED,
@@ -34,7 +35,6 @@ from .errors import (
     InventoryDocumentNotFoundError,
     InventoryDuplicatePostError,
     InventoryInvalidTransitionError,
-    InventoryPostingInProgressError,
 )
 from .kpi_service import recompute_document_kpis
 from .location_lock_service import release_location_locks_for_document
@@ -43,6 +43,84 @@ from .strategy_service import get_result_policy, result_policy_updates_stock
 from .valuation_service import resolve_line_unit_cost_net
 
 logger = logging.getLogger(__name__)
+
+
+def _log_post_inventory(phase: str, **fields: Any) -> None:
+    logger.info("[POST INVENTORY] %s | %s", phase, json.dumps(fields, ensure_ascii=False, default=str))
+
+
+def _resolve_posting_lock_conflict(doc: InventoryDocument) -> None:
+    """Clear orphan posting locks.
+
+    ``posting_in_progress`` is only flushed inside the posting transaction and must
+    never be visible to other sessions while work is in flight. A committed value of
+    ``1`` therefore means a prior attempt failed without cleanup — never block forever.
+    """
+    if int(doc.posting_in_progress or 0) != 1:
+        return
+    _log_post_inventory(
+        "clear orphan lock",
+        document_id=int(doc.id),
+        status=doc.status,
+        updated_at=str(doc.updated_at),
+    )
+    doc.posting_in_progress = 0
+    doc.bump_version()
+
+
+def _force_release_posting_lock(
+    *,
+    tenant_id: int,
+    document_id: int,
+    reason: str,
+) -> None:
+    """Best-effort unlock in a fresh transaction — survives rollback / worker edge cases."""
+    unlock_db = SessionLocal()
+    try:
+        doc = (
+            unlock_db.query(InventoryDocument)
+            .filter(
+                InventoryDocument.id == int(document_id),
+                InventoryDocument.tenant_id == int(tenant_id),
+            )
+            .with_for_update()
+            .first()
+        )
+        if doc is None:
+            unlock_db.rollback()
+            return
+        if int(doc.posting_in_progress or 0) == 1 and doc.status != INV_STATUS_POSTED:
+            doc.posting_in_progress = 0
+            doc.bump_version()
+            unlock_db.commit()
+            _log_post_inventory("release lock", document_id=document_id, reason=reason)
+            return
+        unlock_db.rollback()
+    except Exception:
+        unlock_db.rollback()
+        logger.exception("[POST INVENTORY] release lock failed document_id=%s", document_id)
+    finally:
+        unlock_db.close()
+
+
+def _load_document_for_posting(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+) -> InventoryDocument:
+    doc = (
+        db.query(InventoryDocument)
+        .filter(
+            InventoryDocument.id == int(document_id),
+            InventoryDocument.tenant_id == int(tenant_id),
+        )
+        .with_for_update()
+        .first()
+    )
+    if doc is None:
+        raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
+    return doc
 
 
 def _create_inventory_stock_document(
@@ -152,26 +230,29 @@ def post_inventory_adjustments(
     Transactional posting — all RW/PW, movements, adjustments, audit, status in one commit.
     Idempotent when document already posted or idempotency_key matches prior successful post.
     """
-    with observe_duration(
-        "posting_duration_ms_total",
-        event="posting.start",
-        document_id=document_id,
-        tenant_id=tenant_id,
-    ):
-        try:
-            doc = (
-                db.query(InventoryDocument)
-                .filter(
-                    InventoryDocument.id == int(document_id),
-                    InventoryDocument.tenant_id == int(tenant_id),
-                )
-                .first()
-            )
-            if doc is None:
-                raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
+    document_id_int = int(document_id)
+    tenant_id_int = int(tenant_id)
+    lock_acquired = False
+
+    _log_post_inventory(
+        "start posting",
+        document_id=document_id_int,
+        tenant_id=tenant_id_int,
+        user_id=user_id,
+        idempotency_key=idempotency_key,
+    )
+
+    try:
+        with observe_duration(
+            "posting_duration_ms_total",
+            event="posting.start",
+            document_id=document_id_int,
+            tenant_id=tenant_id_int,
+        ):
+            doc = _load_document_for_posting(db, tenant_id=tenant_id_int, document_id=document_id_int)
 
             if doc.status == INV_STATUS_POSTED:
-                log_inventory_structured("posting.idempotent", document_id=document_id)
+                log_inventory_structured("posting.idempotent", document_id=document_id_int)
                 return _idempotent_post_response(doc, duplicate=True)
 
             if idempotency_key and doc.post_idempotency_key == str(idempotency_key):
@@ -184,7 +265,7 @@ def post_inventory_adjustments(
                 return finalize_inventory_without_stock_update(
                     db,
                     doc=doc,
-                    tenant_id=int(tenant_id),
+                    tenant_id=tenant_id_int,
                     user_id=user_id,
                     idempotency_key=idempotency_key,
                 )
@@ -194,8 +275,7 @@ def post_inventory_adjustments(
                     f"Document version mismatch (expected {expected_version}, got {doc.version})"
                 )
 
-            if int(doc.posting_in_progress or 0) == 1:
-                raise InventoryPostingInProgressError("Posting already in progress for this document")
+            _resolve_posting_lock_conflict(doc)
 
             if doc.rw_stock_document_id or doc.pw_stock_document_id:
                 raise InventoryDuplicatePostError(
@@ -204,10 +284,10 @@ def post_inventory_adjustments(
 
             prev_state = {"status": doc.status, "version": int(doc.version or 0)}
             doc.posting_in_progress = 1
-            if idempotency_key:
-                doc.post_idempotency_key = str(idempotency_key)
             doc.bump_version()
             db.flush()
+            lock_acquired = True
+            _log_post_inventory("acquire lock", document_id=document_id_int, version=int(doc.version or 0))
 
             lines = (
                 db.query(InventoryDocumentLine)
@@ -220,6 +300,12 @@ def post_inventory_adjustments(
             pw_lines = 0
             adjustments_created = 0
 
+            _log_post_inventory(
+                "transaction start",
+                document_id=document_id_int,
+                line_count=len(lines),
+            )
+
             for line in lines:
                 diff = float(line.difference_quantity or 0)
                 if abs(diff) < 1e-9:
@@ -231,6 +317,11 @@ def post_inventory_adjustments(
                     if rw_doc is None:
                         rw_doc = _create_inventory_stock_document(db, doc=doc, document_type="RW", user_id=user_id)
                         doc.rw_stock_document_id = int(rw_doc.id)
+                        _log_post_inventory(
+                            "rw creation",
+                            document_id=document_id_int,
+                            rw_stock_document_id=int(rw_doc.id),
+                        )
                     qty = abs(diff)
                     sd_line = StockDocumentItem(
                         document_id=int(rw_doc.id),
@@ -275,6 +366,11 @@ def post_inventory_adjustments(
                     if pw_doc is None:
                         pw_doc = _create_inventory_stock_document(db, doc=doc, document_type="PW", user_id=user_id)
                         doc.pw_stock_document_id = int(pw_doc.id)
+                        _log_post_inventory(
+                            "pw creation",
+                            document_id=document_id_int,
+                            pw_stock_document_id=int(pw_doc.id),
+                        )
                     qty = diff
                     sd_line = StockDocumentItem(
                         document_id=int(pw_doc.id),
@@ -330,6 +426,8 @@ def post_inventory_adjustments(
                     detail={"direction": direction, "quantity": diff, "stock_document_id": stock_doc_id},
                 )
 
+            if idempotency_key:
+                doc.post_idempotency_key = str(idempotency_key)
             doc.status = INV_STATUS_POSTED
             doc.posted_at = datetime.utcnow()
             doc.posted_by_user_id = user_id
@@ -352,11 +450,20 @@ def post_inventory_adjustments(
                 },
                 detail={"rw_lines": rw_lines, "pw_lines": pw_lines, "adjustments": adjustments_created},
             )
+            _log_post_inventory(
+                "commit",
+                document_id=document_id_int,
+                adjustments=adjustments_created,
+                rw_lines=rw_lines,
+                pw_lines=pw_lines,
+            )
             db.commit()
+            lock_acquired = False
             db.refresh(doc)
+            _log_post_inventory("release lock", document_id=document_id_int, reason="success")
             log_inventory_structured(
                 "posting.completed",
-                document_id=document_id,
+                document_id=document_id_int,
                 adjustments=adjustments_created,
                 rw_lines=rw_lines,
                 pw_lines=pw_lines,
@@ -368,7 +475,21 @@ def post_inventory_adjustments(
                 "adjustments_created": adjustments_created,
                 "idempotent": False,
             }
-        except Exception:
+    except Exception as exc:
+        _log_post_inventory(
+            "rollback",
+            document_id=document_id_int,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        try:
             db.rollback()
-            logger.exception("[inventory.posting] rollback document_id=%s", document_id)
-            raise
+        except Exception:
+            logger.exception("[POST INVENTORY] rollback failed document_id=%s", document_id_int)
+        raise
+    finally:
+        if lock_acquired:
+            _force_release_posting_lock(
+                tenant_id=tenant_id_int,
+                document_id=document_id_int,
+                reason="posting_failed_cleanup",
+            )
