@@ -389,6 +389,9 @@ export type WmsBarcodeResolveResult = {
   image_url?: string | null;
   expected_quantity: number;
   counted_quantity: number;
+  my_counted_quantity?: number | null;
+  operator_count_conflict?: boolean;
+  operator_quantities?: Record<number, number>;
   difference_quantity?: number | null;
   discrepancy_class: WmsDiscrepancyClass;
   discrepancy_label: string;

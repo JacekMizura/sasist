@@ -74,9 +74,12 @@ def get_task_lines(
     tenant_id: int,
     task_id: int,
     blind: bool = True,
+    user_id: int | None = None,
+    scope_mine: bool = False,
 ) -> list[dict[str, Any]]:
     from ...models.product import Product
     from ...models.warehouse_carrier import WarehouseCarrier
+    from .recount_conflict_service import latest_operator_quantity_for_line
 
     row = (
         db.query(InventoryTask, InventoryDocument)
@@ -103,6 +106,10 @@ def get_task_lines(
     )
     out: list[dict[str, Any]] = []
     for line, product, carrier in q.all():
+        my_qty = latest_operator_quantity_for_line(db, int(line.id), user_id) if user_id is not None else None
+        if scope_mine and user_id is not None and my_qty is None:
+            continue
+        display_qty = my_qty if user_id is not None else line.counted_quantity
         item = {
             "id": line.id,
             "product_id": line.product_id,
@@ -110,7 +117,8 @@ def get_task_lines(
             "ean": getattr(product, "ean", None) if product else None,
             "product_name": getattr(product, "name", None) if product else None,
             "image_url": getattr(product, "image_url", None) if product else None,
-            "counted_quantity": line.counted_quantity,
+            "counted_quantity": display_qty,
+            "my_counted_quantity": my_qty,
             "status": line.status,
             "batch_number": line.batch_number,
             "serial_number": line.serial_number,

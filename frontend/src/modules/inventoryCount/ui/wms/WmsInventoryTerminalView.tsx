@@ -1,12 +1,13 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { WMS_OPERATIONAL_CONTAINER } from "@/components/wms/execution/wmsLayoutTokens";
 import type { WmsInventoryTerminalPageState } from "@/modules/inventoryCount/hooks/useWmsInventoryTerminalPage";
 import { wmsInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
 import WmsInventoryActiveContextBar from "@/modules/inventoryCount/ui/wms/WmsInventoryActiveContextBar";
-import WmsInventoryLocationCounts from "@/modules/inventoryCount/ui/wms/WmsInventoryLocationCounts";
+import WmsInventoryDamageModal from "@/modules/inventoryCount/ui/wms/WmsInventoryDamageModal";
 import WmsInventoryLiveSearchPanel from "@/modules/inventoryCount/ui/wms/WmsInventoryLiveSearchPanel";
+import WmsInventoryOperatorRecent from "@/modules/inventoryCount/ui/wms/WmsInventoryOperatorRecent";
 import WmsInventoryProductDetailPanel from "@/modules/inventoryCount/ui/wms/WmsInventoryProductDetailPanel";
 import WmsInventoryScanField from "@/modules/inventoryCount/ui/wms/WmsInventoryScanField";
 import WmsInventoryUnknownProductModal from "@/modules/inventoryCount/ui/wms/WmsInventoryUnknownProductModal";
@@ -17,9 +18,10 @@ type Props = {
   documentId: number;
 };
 
-/** WMS counting terminal — scan-first, product hero inline, list below. */
+/** WMS collector terminal — scan-first, product hero, operator-scoped history. */
 export default function WmsInventoryTerminalView({ state, documentId }: Props) {
   const scanAnchorRef = useRef<HTMLDivElement>(null);
+  const [damageOpen, setDamageOpen] = useState(false);
   const {
     inputRef,
     terminal,
@@ -41,15 +43,12 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     task,
     sessionId,
     locationContext,
-    carrierContext,
     locationSubline,
     activeScan,
     activeLineId,
     activeCountedProduct,
-    countedProductGroups,
-    unexpectedItems,
-    pulseLineId,
-    isPartialInventory,
+    operatorRecentList,
+    countConflict,
     packaging,
     qtyEditState,
     lastScanKind,
@@ -75,55 +74,43 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     window.requestAnimationFrame(() => inputRef.current?.focus());
   };
 
+  const activeQty = activeScan?.counted_quantity ?? 0;
+
   return (
-    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-4 pb-20`}>
-      <WmsInventoryActiveContextBar
-        location={locationContext}
-        carrier={carrierContext}
-        carrierScanMode={carrierScanMode}
-        locationSubline={locationSubline}
-        onEnterCarrierScan={enterCarrierScan}
-        onClearCarrier={clearCarrier}
-        onSkipCarrier={skipCarrier}
-      />
+    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-3 pb-24`}>
+      <WmsInventoryActiveContextBar location={locationContext} locationSubline={locationSubline} />
 
       {counting ? (
         <>
-          <div className="overflow-visible">
-            <p className={`${WMS_INV.textLabel} mb-2`}>
-              Zeskanuj produkt{locationSubline ? ` • ${locationSubline}` : ""}
-            </p>
-            <WmsInventoryScanField
-              inputRef={inputRef}
-              anchorRef={scanAnchorRef}
-              value={query}
-              onChange={onChange}
-              onSubmit={submitField}
-              onKeyDown={onInputKeyDown}
-              placeholder={placeholder}
-              aria-expanded={searchActive}
-              dropdown={
-                !carrierScanMode ? (
-                  <WmsInventoryLiveSearchPanel
-                    anchorRef={scanAnchorRef}
-                    query={query}
-                    open={searchActive}
-                    loading={searchLoading}
-                    productRows={searchRows.products}
-                    locationRows={searchRows.locations}
-                    carrierRows={searchRows.carriers}
-                    onPick={(pick) => void applyLivePick(pick)}
-                  />
-                ) : null
-              }
-            />
-          </div>
+          <WmsInventoryScanField
+            inputRef={inputRef}
+            anchorRef={scanAnchorRef}
+            value={query}
+            onChange={onChange}
+            onSubmit={submitField}
+            onKeyDown={onInputKeyDown}
+            placeholder={placeholder}
+            aria-expanded={searchActive}
+            dropdown={
+              !carrierScanMode ? (
+                <WmsInventoryLiveSearchPanel
+                  anchorRef={scanAnchorRef}
+                  query={query}
+                  open={searchActive}
+                  loading={searchLoading}
+                  productRows={searchRows.products}
+                  locationRows={searchRows.locations}
+                  carrierRows={searchRows.carriers}
+                  onPick={(pick) => void applyLivePick(pick)}
+                />
+              ) : null
+            }
+          />
 
           {activeScan ? (
             <WmsInventoryProductDetailPanel
               scan={activeScan}
               counted={activeCountedProduct}
-              isPartialInventory={isPartialInventory}
               tenantId={tenantId}
               warehouseId={warehouseId}
               currentLocationId={task?.location_id}
@@ -131,23 +118,21 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
               packaging={packaging}
               qtyState={qtyEditState}
               lastScanKind={lastScanKind}
+              carrierScanMode={carrierScanMode}
+              countConflict={countConflict}
+              onEnterCarrierScan={enterCarrierScan}
+              onClearCarrier={clearCarrier}
+              onSkipCarrier={skipCarrier}
               onAdjust={(field, delta) => void adjustQty(field, delta)}
-              onSetField={(field, value) => void setQtyField(field, value)}
               onSetInputMode={setQtyInputMode}
               onSetDraft={setQtyDraft}
               onCommitDraft={commitQtyDraft}
-              onDefectSaved={(note) => {
-                markActiveDefect(note);
-                focusScan();
-              }}
             />
           ) : null}
 
-          <WmsInventoryLocationCounts
-            groups={countedProductGroups}
-            unexpectedItems={unexpectedItems}
+          <WmsInventoryOperatorRecent
+            items={operatorRecentList}
             activeLineId={activeLineId}
-            pulseLineId={pulseLineId}
             unitsPerCarton={packaging.unitsPerCarton}
             onSelect={selectCountedProduct}
           />
@@ -171,11 +156,36 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
             <button type="button" className={WMS_INV.btnAction} onClick={() => setUnknownOpen(true)}>
               Nieznany produkt
             </button>
+            <button
+              type="button"
+              className={WMS_INV.btnAction}
+              disabled={!activeScan?.product_id}
+              onClick={() => setDamageOpen(true)}
+            >
+              Wada
+            </button>
             <button type="button" className={WMS_INV.btnActionPrimary} onClick={finishLocation}>
-              Zakończ lokalizację
+              Zakończ
             </button>
           </div>
         </div>
+      ) : null}
+
+      {task && warehouseId && activeScan?.product_id ? (
+        <WmsInventoryDamageModal
+          open={damageOpen}
+          onClose={() => setDamageOpen(false)}
+          tenantId={tenantId}
+          warehouseId={warehouseId}
+          productId={activeScan.product_id}
+          productName={activeScan.product_name ?? activeScan.sku ?? "Produkt"}
+          maxQty={Math.max(1, activeQty || 1)}
+          onSaved={(note) => {
+            markActiveDefect(note);
+            setDamageOpen(false);
+            focusScan();
+          }}
+        />
       ) : null}
 
       {task && warehouseId ? (

@@ -109,9 +109,16 @@ export async function resolveWmsInventoryCarrier(
   return data;
 }
 
-export async function fetchWmsTaskLines(tenantId: number, taskId: number): Promise<WmsTaskLineRead[]> {
+export async function fetchWmsTaskLines(
+  tenantId: number,
+  taskId: number,
+  opts?: { scope?: "mine" },
+): Promise<WmsTaskLineRead[]> {
   const { data } = await api.get<WmsTaskLineRead[]>(`/wms/inventory-count/tasks/${taskId}/lines`, {
-    params: { tenant_id: tenantId },
+    params: {
+      tenant_id: tenantId,
+      ...(opts?.scope === "mine" ? { scope: "mine" } : {}),
+    },
   });
   return data;
 }

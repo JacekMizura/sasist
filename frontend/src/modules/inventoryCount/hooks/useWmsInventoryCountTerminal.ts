@@ -37,7 +37,6 @@ import {
 } from "../ui/wms/inventoryQtyUtils";
 import {
   buildLocationContextFromTask,
-  groupCountedProductsByCarrier,
   isCarrierBarcode,
   locationCodesMatch,
   type WmsCarrierContext,
@@ -152,6 +151,8 @@ function resetCountingUi(setters: {
   setQtyEditState: (v: InventoryQtyEditState) => void;
   setPackaging: (v: WmsInventoryPackaging) => void;
   setLastScanKind: (v: WmsLastScanKind) => void;
+  setOperatorRecent: (v: WmsCountedProduct[]) => void;
+  setCountConflict: (v: boolean) => void;
 }) {
   setters.setLocationContext(null);
   setters.setCarrierContext(null);
@@ -164,6 +165,8 @@ function resetCountingUi(setters: {
   setters.setQtyEditState(EMPTY_INVENTORY_QTY);
   setters.setPackaging({ unitsPerCarton: 1, cartonEan: null });
   setters.setLastScanKind(null);
+  setOperatorRecent([]);
+  setCountConflict(false);
 }
 
 /**
@@ -206,6 +209,8 @@ export function useWmsInventoryCountTerminal(
   const [invalidPulse, setInvalidPulse] = useState(false);
   const [unknownOpen, setUnknownOpen] = useState(false);
   const [lastScanCode, setLastScanCode] = useState<string | null>(null);
+  const [operatorRecent, setOperatorRecent] = useState<WmsCountedProduct[]>([]);
+  const [countConflict, setCountConflict] = useState(false);
 
   const uiResetters = useMemo(
     () => ({
@@ -220,13 +225,15 @@ export function useWmsInventoryCountTerminal(
       setQtyEditState,
       setPackaging,
       setLastScanKind,
+      setOperatorRecent,
+      setCountConflict,
     }),
     [],
   );
 
   const locationActive = Boolean(locationContext?.confirmed);
   const step: WmsTerminalStep = locationActive ? "product" : "location";
-  const activeCarrierId = carrierContext?.carrierId ?? null;
+  const activeCarrierId = activeScan?.carrier_id ?? carrierContext?.carrierId ?? null;
 
   const activateLocationContext = useCallback(
     (t: InventoryTaskRead, opts?: { fromScan?: boolean }) => {
@@ -296,7 +303,7 @@ export function useWmsInventoryCountTerminal(
         }
         if (cancelled) return;
 
-        const lines = await fetchWmsTaskLines(tenantId, t.id);
+        const lines = await fetchWmsTaskLines(tenantId, t.id, { scope: "mine" });
         if (cancelled) return;
 
         let unexpected: WmsUnexpectedProduct[] = [];
@@ -332,6 +339,11 @@ export function useWmsInventoryCountTerminal(
         setTask(t);
         setSessionId(sid);
         setCountedProducts(hydrated);
+        setOperatorRecent(
+          Object.values(hydrated)
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .slice(0, 2),
+        );
         setUnexpectedItems(unexpected);
         hydratedTaskIdRef.current = taskId;
 
@@ -382,24 +394,16 @@ export function useWmsInventoryCountTerminal(
   const inventoryType = (task?.inventory_type ?? "FULL").toUpperCase();
   const isPartialInventory = inventoryType === "PARTIAL";
 
-  const countedProductList = useMemo(
-    () => Object.values(countedProducts).sort((a, b) => b.updatedAt - a.updatedAt),
-    [countedProducts],
-  );
-
-  const countedProductGroups = useMemo(
-    () => groupCountedProductsByCarrier(countedProductList),
-    [countedProductList],
-  );
-
   const qtyPulse = pulseLineId != null && pulseLineId === activeLineId;
   const activeCountedProduct = activeLineId != null ? (countedProducts[activeLineId] ?? null) : null;
+
+  const operatorRecentList = useMemo(() => operatorRecent, [operatorRecent]);
 
   const reloadFromServer = useCallback(async () => {
     if (!task) return;
     try {
       const [lines, summary] = await Promise.all([
-        fetchWmsTaskLines(tenantId, task.id),
+        fetchWmsTaskLines(tenantId, task.id, { scope: "mine" }),
         fetchWmsExecutionSummary(tenantId, task.id),
       ]);
       const hydrated: Record<number, WmsCountedProduct> = {};
@@ -417,6 +421,11 @@ export function useWmsInventoryCountTerminal(
         }
         return merged;
       });
+      setOperatorRecent(
+        Object.values(hydrated)
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .slice(0, 2),
+      );
       setUnexpectedItems(unexpectedFromSummary(summary.unexpected ?? []));
     } catch {
       scanFeedback.error("Nie udało się odświeżyć listy");
@@ -459,24 +468,23 @@ export function useWmsInventoryCountTerminal(
           (carrierId != null && carrierContext?.carrierId === carrierId ? carrierContext.code : null) ??
           existing?.carrier_code ??
           null;
-        return {
-          ...prev,
-          [scan.line_id]: {
-            line_id: scan.line_id,
-            product_id: scan.product_id,
-            product_name: scan.product_name,
-            sku: scan.sku,
-            ean: scan.ean,
-            image_url: scan.image_url,
-            carrier_id: carrierId,
-            carrier_code: carrierCode,
-            counted_quantity: qty,
-            updatedAt: Date.now(),
-            scan: snapshot,
-            defectReported: existing?.defectReported,
-            defectNote: existing?.defectNote,
-          },
+        const row: WmsCountedProduct = {
+          line_id: scan.line_id,
+          product_id: scan.product_id,
+          product_name: scan.product_name,
+          sku: scan.sku,
+          ean: scan.ean,
+          image_url: scan.image_url,
+          carrier_id: carrierId,
+          carrier_code: carrierCode,
+          counted_quantity: qty,
+          updatedAt: Date.now(),
+          scan: snapshot,
+          defectReported: existing?.defectReported,
+          defectNote: existing?.defectNote,
         };
+        setOperatorRecent((recent) => [row, ...recent.filter((p) => p.line_id !== scan.line_id)].slice(0, 2));
+        return { ...prev, [scan.line_id]: row };
       });
       if (task) {
         syncLocationSessionProduct({
@@ -512,9 +520,9 @@ export function useWmsInventoryCountTerminal(
 
   const recordScan = useCallback(
     async (lineId: number, opts: { delta?: number; quantity?: number; barcode?: string; source?: string }) => {
-      if (!task) return;
+      if (!task) return null;
       try {
-        await recordInventoryScan(
+        const data = await recordInventoryScan(
           tenantId,
           task.inventory_document_id,
           {
@@ -523,11 +531,15 @@ export function useWmsInventoryCountTerminal(
             quantity: opts.quantity,
             barcode_value: opts.barcode,
             source: opts.source ?? "scanner",
-            carrier_id: activeCarrierId,
+            carrier_id: activeScan?.carrier_id ?? activeCarrierId,
           },
           sessionId ?? undefined,
         );
+        if (data?.operator_count_conflict != null) {
+          setCountConflict(Boolean(data.operator_count_conflict));
+        }
         refreshOffline();
+        return data;
       } catch {
         inventoryCountSyncQueue.enqueue({
           kind: "scan",
@@ -542,7 +554,7 @@ export function useWmsInventoryCountTerminal(
         throw new Error("offline_queue");
       }
     },
-    [activeCarrierId, refreshOffline, sessionId, task, tenantId],
+    [activeCarrierId, activeScan?.carrier_id, refreshOffline, sessionId, task, tenantId],
   );
 
   const resolveLocationScan = useCallback(
@@ -579,9 +591,28 @@ export function useWmsInventoryCountTerminal(
     async (code: string) => {
       const trimmed = code.trim();
       if (!trimmed) return false;
+      if (!activeScan || activeLineId == null) {
+        scanFeedback.warning("Najpierw zeskanuj produkt");
+        pulseBad();
+        return false;
+      }
       try {
         const resolved = await resolveWmsInventoryCarrier(tenantId, trimmed);
         setCarrierContext({ carrierId: resolved.carrier_id, code: resolved.code });
+        setActiveScan({ ...activeScan, carrier_id: resolved.carrier_id });
+        setCountedProducts((prev) => {
+          const row = prev[activeLineId];
+          if (!row) return prev;
+          return {
+            ...prev,
+            [activeLineId]: {
+              ...row,
+              carrier_id: resolved.carrier_id,
+              carrier_code: resolved.code,
+              scan: { ...row.scan, carrier_id: resolved.carrier_id },
+            },
+          };
+        });
         setCarrierScanMode(false);
         scanFeedback.success(undefined);
         return true;
@@ -591,7 +622,7 @@ export function useWmsInventoryCountTerminal(
         return false;
       }
     },
-    [pulseBad, scanFeedback, tenantId],
+    [activeLineId, activeScan, pulseBad, scanFeedback, tenantId],
   );
 
   const commitProductDelta = useCallback(
@@ -601,10 +632,11 @@ export function useWmsInventoryCountTerminal(
     ) => {
       const pack = Math.max(1, opts.unitsPerCarton);
       const committed = commitInventoryQtyDraft(qtyEditState);
+      const baseQty = resolved.my_counted_quantity ?? resolved.counted_quantity ?? 0;
       const baseState =
         resolved.line_id === activeLineId && activeScan
           ? committed
-          : inventoryQtyFromPieces(resolved.counted_quantity ?? 0, pack);
+          : inventoryQtyFromPieces(baseQty, pack);
       const nextState: InventoryQtyEditState = opts.isCartonScan
         ? { ...baseState, cartonsCount: baseState.cartonsCount + 1, inputMode: "carton", draft: null }
         : { ...baseState, unitsCount: baseState.unitsCount + 1, inputMode: "unit", draft: null };
@@ -619,9 +651,10 @@ export function useWmsInventoryCountTerminal(
     async (code: string, source = "scanner") => {
       if (!task || !locationActive || !warehouseId) return;
       try {
-        const resolved = await resolveWmsInventoryBarcode(tenantId, task.id, code, activeCarrierId);
+        const resolved = await resolveWmsInventoryBarcode(tenantId, task.id, code, activeCarrierId ?? undefined);
         const pack = await loadPackagingForProduct(tenantId, warehouseId, resolved.product_id);
         setPackaging(pack);
+        setCountConflict(Boolean(resolved.operator_count_conflict));
         const delta = scanDeltaForCode(code, pack);
         const isCartonScan = delta > 1 && delta === pack.unitsPerCarton;
         setLastScanKind(isCartonScan ? "carton" : "unit");
@@ -809,12 +842,33 @@ export function useWmsInventoryCountTerminal(
     [attachCarrier],
   );
 
-  const enterCarrierScan = useCallback(() => setCarrierScanMode(true), []);
+  const enterCarrierScan = useCallback(() => {
+    if (!activeScan) {
+      scanFeedback.warning("Najpierw zeskanuj produkt");
+      return;
+    }
+    setCarrierScanMode(true);
+  }, [activeScan, scanFeedback]);
   const skipCarrier = useCallback(() => setCarrierScanMode(false), []);
   const clearCarrier = useCallback(() => {
+    if (activeLineId == null) return;
     setCarrierContext(null);
     setCarrierScanMode(false);
-  }, []);
+    setActiveScan((prev) => (prev ? { ...prev, carrier_id: null } : prev));
+    setCountedProducts((prev) => {
+      const row = prev[activeLineId];
+      if (!row) return prev;
+      return {
+        ...prev,
+        [activeLineId]: {
+          ...row,
+          carrier_id: null,
+          carrier_code: null,
+          scan: { ...row.scan, carrier_id: null },
+        },
+      };
+    });
+  }, [activeLineId]);
 
   const finishLocation = useCallback(() => {
     if (task) commitLocationSessionToRecent(task.id);
@@ -846,8 +900,8 @@ export function useWmsInventoryCountTerminal(
     activeScan,
     activeLineId,
     activeCountedProduct,
-    countedProductList,
-    countedProductGroups,
+    operatorRecentList,
+    countConflict,
     unexpectedItems,
     packaging,
     qtyEditState,

@@ -139,6 +139,11 @@ def record_count_scan(
         raise InventoryLocationMismatchError("Line carrier does not match active carrier context")
 
     from .concurrency_service import acquire_line_count_lock, assert_line_version, touch_session_heartbeat
+    from .recount_conflict_service import (
+        has_operator_count_conflict,
+        latest_operator_quantity_for_line,
+        operator_quantities_for_line,
+    )
     from ...models.inventory_count.session import InventorySession
 
     assert_line_version(line, expected_line_version)
@@ -148,7 +153,8 @@ def record_count_scan(
         if session is not None:
             touch_session_heartbeat(db, session)
 
-    prev_qty = float(line.counted_quantity or 0)
+    operator_prev = latest_operator_quantity_for_line(db, int(line.id), user_id)
+    prev_qty = float(operator_prev or 0)
     if delta is not None:
         new_qty = prev_qty + float(delta)
     else:
@@ -160,14 +166,26 @@ def record_count_scan(
         user_id=user_id,
         scanner_session_id=session_id,
         counted_quantity=new_qty,
-        delta_quantity=new_qty - prev_qty if prev_qty else new_qty,
+        delta_quantity=new_qty - prev_qty if operator_prev is not None else new_qty,
         source=source,
         barcode_value=barcode_value,
     )
     db.add(entry)
+    db.flush()
 
-    line.counted_quantity = new_qty
-    line.status = LINE_STATUS_IN_PROGRESS if new_qty != float(line.expected_quantity or 0) else LINE_STATUS_COUNTED
+    by_user = operator_quantities_for_line(db, int(line.id))
+    if not by_user:
+        line.counted_quantity = None
+    elif has_operator_count_conflict(by_user):
+        line.counted_quantity = None
+        line.status = LINE_STATUS_IN_PROGRESS
+    else:
+        line.counted_quantity = next(iter(by_user.values()))
+        line.status = (
+            LINE_STATUS_IN_PROGRESS
+            if line.counted_quantity != float(line.expected_quantity or 0)
+            else LINE_STATUS_COUNTED
+        )
     line.last_counted_at = datetime.utcnow()
     line.last_counted_by_user_id = user_id
     line.recompute_difference()
@@ -215,9 +233,14 @@ def record_count_scan(
         update_task_progress(db, task)
     db.commit()
     db.refresh(line)
+    operator_qty = latest_operator_quantity_for_line(db, int(line.id), user_id)
+    op_map = operator_quantities_for_line(db, int(line.id))
     return {
         "line_id": line.id,
-        "counted_quantity": line.counted_quantity,
+        "counted_quantity": operator_qty if operator_qty is not None else line.counted_quantity,
+        "my_counted_quantity": operator_qty,
+        "operator_count_conflict": has_operator_count_conflict(op_map),
+        "operator_quantities": op_map,
         "difference_quantity": line.difference_quantity,
         "status": line.status,
         "version": line.version,
@@ -440,6 +463,7 @@ def resolve_barcode_to_line(
     task_id: int,
     barcode_value: str,
     carrier_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     """Resolve barcode globally, ensure a count line exists, classify discrepancy."""
     from .task_generation_service import update_task_progress
@@ -508,8 +532,16 @@ def resolve_barcode_to_line(
         db.commit()
         db.refresh(line)
 
+    from .recount_conflict_service import (
+        has_operator_count_conflict,
+        latest_operator_quantity_for_line,
+        operator_quantities_for_line,
+    )
+
     expected_qty = float(line.expected_quantity or 0)
-    counted_qty = float(line.counted_quantity or 0)
+    my_qty = latest_operator_quantity_for_line(db, int(line.id), user_id)
+    op_map = operator_quantities_for_line(db, int(line.id))
+    counted_qty = float(my_qty or 0)
     diff_qty = float(line.difference_quantity or 0) if line.counted_quantity is not None else None
 
     logger.info(
@@ -534,6 +566,9 @@ def resolve_barcode_to_line(
         "image_url": getattr(product, "image_url", None),
         "expected_quantity": expected_qty,
         "counted_quantity": counted_qty,
+        "my_counted_quantity": my_qty,
+        "operator_count_conflict": has_operator_count_conflict(op_map),
+        "operator_quantities": op_map,
         "difference_quantity": diff_qty,
         "discrepancy_class": discrepancy_class,
         "discrepancy_label": _DISCREPANCY_LABELS.get(discrepancy_class, discrepancy_class),

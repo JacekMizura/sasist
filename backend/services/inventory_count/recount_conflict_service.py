@@ -39,6 +39,24 @@ def operator_quantities_for_line(db: Session, line_id: int) -> dict[int, float]:
     return by_user
 
 
+def latest_operator_quantity_for_line(db: Session, line_id: int, user_id: int | None) -> float | None:
+    """Most recent absolute quantity recorded by one operator on a line."""
+    if user_id is None:
+        return None
+    entry = (
+        db.query(InventoryCountEntry)
+        .filter(
+            InventoryCountEntry.inventory_document_line_id == int(line_id),
+            InventoryCountEntry.user_id == int(user_id),
+        )
+        .order_by(InventoryCountEntry.created_at.desc(), InventoryCountEntry.id.desc())
+        .first()
+    )
+    if entry is None:
+        return None
+    return float(entry.counted_quantity)
+
+
 def has_operator_count_conflict(user_quantities: dict[int, float]) -> bool:
     if len(user_quantities) < 2:
         return False

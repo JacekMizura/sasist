@@ -1,10 +1,12 @@
 # Change log
 
-## 2026-06-08 — WMS inventory scan-first terminal + parallel counting
-- Active product: inline hero (duże zdjęcie, nazwa, EAN, badge’y) — bez modala/backdropu blokującego skan
-- Kompaktowe liczniki **Kartony | Sztuki | Suma**; skan kartonu +1 krt., skan szt. +1 szt. (nie rozbicie matematyczne)
-- Lista produktów pod panelem; neutralne wiersze bez indigo ringów
-- Backend: usunięto 423 `line_locked` przy równoległym liczeniu tej samej linii — konflikty przez wpisy, nie blokada sesji
+## 2026-06-08 — WMS inventory collector UX + per-operator counting
+- Usunięto listę „Policzone w lokalizacji” → **Ostatnio policzone przeze mnie** (max 2 pozycje)
+- Hero produktu: duże zdjęcie (bez ramek) → nazwa → EAN → lokalizacja → nośnik → kartony/sztuki/suma
+- Nośnik przypisywany w kontekście produktu (nie w belce lokalizacji)
+- Wada przeniesiona do dolnego paska: `[ Nieznany ] [ Wada ] [ Zakończ ]`
+- Backend: liczenia operatorów **nie sumują się** (27 + 8 ≠ 35); konflikt → `line.counted_quantity = null`, wpisy per operator w `inventory_count_entries`
+- API WMS: `scope=mine` na liniach, `my_counted_quantity` / `operator_count_conflict` na skanie
 
 ## 2026-06-08 — WMS inventory terminal UI (mockup-aligned)
 - Presentation-only restyle of operator flow: document cards, location scan, product scan, qty modal

@@ -1,4 +1,4 @@
-import { Minus, Plus } from "lucide-react";
+import { Minus, Package, Plus } from "lucide-react";
 
 import type { InventoryQtyEditState } from "@/modules/inventoryCount/ui/wms/inventoryQtyUtils";
 import { inventoryTotalPieces } from "@/modules/inventoryCount/ui/wms/inventoryQtyUtils";
@@ -8,9 +8,7 @@ type Props = {
   qtyState: InventoryQtyEditState;
   unitsPerCarton: number;
   disabled?: boolean;
-  lastScanKind?: "unit" | "carton" | null;
   onAdjust: (field: WmsQtyInputMode, delta: number) => void;
-  onSetField: (field: WmsQtyInputMode, value: number) => void;
   onSetInputMode: (mode: WmsQtyInputMode) => void;
   onSetDraft: (draft: string | null) => void;
   onCommitDraft: () => void;
@@ -20,12 +18,11 @@ function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 0 }).format(n);
 }
 
-function QtyColumn({
+function QtyCell({
   label,
   field,
   value,
   draft,
-  active,
   disabled,
   onAdjust,
   onSetInputMode,
@@ -36,7 +33,6 @@ function QtyColumn({
   field: WmsQtyInputMode;
   value: number;
   draft: string | null;
-  active: boolean;
   disabled?: boolean;
   onAdjust: (field: WmsQtyInputMode, delta: number) => void;
   onSetInputMode: (mode: WmsQtyInputMode) => void;
@@ -46,21 +42,17 @@ function QtyColumn({
   const display = draft ?? String(value);
 
   return (
-    <div
-      className={`flex flex-1 flex-col rounded-xl border px-3 py-2 ${
-        active ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white"
-      }`}
-    >
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <div className="mt-1 flex items-center justify-between gap-2">
+    <div className="flex-1 text-center">
+      <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+      <div className="flex items-center justify-center gap-3">
         <button
           type="button"
           disabled={disabled}
           onClick={() => onAdjust(field, -1)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          className="flex h-11 w-11 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
           aria-label={`Zmniejsz ${label.toLowerCase()}`}
         >
-          <Minus size={16} strokeWidth={2.5} />
+          <Minus size={22} strokeWidth={2.5} />
         </button>
         <input
           type="text"
@@ -76,31 +68,29 @@ function QtyColumn({
               onCommitDraft();
             }
           }}
-          className="w-full min-w-0 border-0 bg-transparent text-center text-2xl font-black tabular-nums text-slate-900 focus:outline-none disabled:opacity-40"
+          className="w-16 border-0 bg-transparent text-center text-3xl font-black tabular-nums text-slate-900 focus:outline-none disabled:opacity-40"
           aria-label={label}
         />
         <button
           type="button"
           disabled={disabled}
           onClick={() => onAdjust(field, 1)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          className="flex h-11 w-11 items-center justify-center text-slate-700 active:bg-slate-100 disabled:opacity-30"
           aria-label={`Zwiększ ${label.toLowerCase()}`}
         >
-          <Plus size={16} strokeWidth={2.5} />
+          <Plus size={22} strokeWidth={2.5} />
         </button>
       </div>
     </div>
   );
 }
 
-/** Compact kartony + sztuki counters with total — scan-first, not calculator modal. */
+/** Collector qty row — kartony + sztuki + suma, large touch targets. */
 export default function WmsInventoryQtyControl({
   qtyState,
   unitsPerCarton,
   disabled,
-  lastScanKind,
   onAdjust,
-  onSetField,
   onSetInputMode,
   onSetDraft,
   onCommitDraft,
@@ -110,56 +100,54 @@ export default function WmsInventoryQtyControl({
   const showCartons = pack > 1;
 
   return (
-    <div className="space-y-2">
-      {showCartons ? (
-        <div className="flex gap-2">
-          <QtyColumn
-            label="Kartony"
-            field="carton"
-            value={qtyState.cartonsCount}
-            draft={qtyState.inputMode === "carton" ? qtyState.draft : null}
-            active={qtyState.inputMode === "carton" || lastScanKind === "carton"}
-            disabled={disabled}
-            onAdjust={onAdjust}
-            onSetInputMode={onSetInputMode}
-            onSetDraft={onSetDraft}
-            onCommitDraft={onCommitDraft}
-          />
-          <QtyColumn
+    <div className="space-y-4">
+      <div className={`flex ${showCartons ? "gap-4" : ""}`}>
+        {showCartons ? (
+          <>
+            <QtyCell
+              label="Kartony"
+              field="carton"
+              value={qtyState.cartonsCount}
+              draft={qtyState.inputMode === "carton" ? qtyState.draft : null}
+              disabled={disabled}
+              onAdjust={onAdjust}
+              onSetInputMode={onSetInputMode}
+              onSetDraft={onSetDraft}
+              onCommitDraft={onCommitDraft}
+            />
+            <QtyCell
+              label="Sztuki"
+              field="unit"
+              value={qtyState.unitsCount}
+              draft={qtyState.inputMode === "unit" ? qtyState.draft : null}
+              disabled={disabled}
+              onAdjust={onAdjust}
+              onSetInputMode={onSetInputMode}
+              onSetDraft={onSetDraft}
+              onCommitDraft={onCommitDraft}
+            />
+          </>
+        ) : (
+          <QtyCell
             label="Sztuki"
             field="unit"
             value={qtyState.unitsCount}
             draft={qtyState.inputMode === "unit" ? qtyState.draft : null}
-            active={qtyState.inputMode === "unit" || lastScanKind === "unit"}
             disabled={disabled}
             onAdjust={onAdjust}
-            onSetInputMode={onSetInputMode}
+            onSetInputMode={(mode) => {
+              onSetInputMode(mode);
+            }}
             onSetDraft={onSetDraft}
             onCommitDraft={onCommitDraft}
           />
-        </div>
-      ) : (
-        <QtyColumn
-          label="Sztuki"
-          field="unit"
-          value={qtyState.unitsCount}
-          draft={qtyState.inputMode === "unit" ? qtyState.draft : null}
-          active
-          disabled={disabled}
-          onAdjust={onAdjust}
-          onSetInputMode={onSetInputMode}
-          onSetDraft={(d) => {
-            onSetInputMode("unit");
-            onSetDraft(d);
-          }}
-          onCommitDraft={onCommitDraft}
-        />
-      )}
+        )}
+      </div>
 
-      <div className="flex items-baseline justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Suma</span>
-        <span className="text-lg font-black tabular-nums text-slate-900">
-          {fmtQty(total)} <span className="text-xs font-bold text-slate-500">szt.</span>
+      <div className="flex items-baseline justify-between border-t border-slate-200 pt-3">
+        <span className="text-xs font-black uppercase tracking-widest text-slate-500">Suma</span>
+        <span className="text-2xl font-black tabular-nums text-slate-900">
+          {fmtQty(total)} <span className="text-sm font-bold text-slate-500">szt.</span>
         </span>
       </div>
     </div>

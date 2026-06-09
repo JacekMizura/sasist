@@ -331,10 +331,19 @@ def wms_inventory_task_detail(
 def wms_inventory_task_lines(
     task_id: int,
     tenant_id: int = Query(..., ge=1),
+    scope: Optional[str] = Query(None, description="mine = only lines counted by current operator"),
     db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
 ):
     try:
-        return get_task_lines(db, tenant_id=tenant_id, task_id=task_id, blind=True)
+        return get_task_lines(
+            db,
+            tenant_id=tenant_id,
+            task_id=task_id,
+            blind=True,
+            user_id=user.id if user else None,
+            scope_mine=(scope or "").strip().lower() == "mine",
+        )
     except InventoryCountError as exc:
         raise _map_error(exc) from exc
 
@@ -346,6 +355,7 @@ def wms_inventory_resolve_barcode(
     tenant_id: int = Query(..., ge=1),
     carrier_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
+    user: AppUser | None = Depends(get_optional_current_user),
 ):
     logger.info(
         "[inventory_count.api] resolve_barcode POST task_id=%s tenant_id=%s barcode=%s carrier_id=%s",
@@ -361,6 +371,7 @@ def wms_inventory_resolve_barcode(
             task_id=task_id,
             barcode_value=barcode_value,
             carrier_id=carrier_id,
+            user_id=user.id if user else None,
         )
     except InventoryCountError as exc:
         logger.info(
