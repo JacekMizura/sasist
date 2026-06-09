@@ -28,6 +28,7 @@ from ...services.inventory_carrier_ops import upsert_dock_inventory_for_loose_re
 from ...services.inventory_lot_keys import NO_EXPIRY_SENTINEL
 from ...services.order_item_pick_allocation_service import consume_inventory_fifo_slices
 from ...services.stock_disposition import STOCK_DISPOSITION_SALEABLE
+from ...services.stock_document_factory import create_stock_document
 from ...services.stock_operation_issue_service import append_issue_operation
 from ...services.stock_operation_receipt_service import append_receipt_operation
 from .audit_service import log_inventory_audit
@@ -141,7 +142,9 @@ def _create_inventory_stock_document(
         )
     except Exception:
         series = None
-    stock_doc = StockDocument(
+    stock_doc = create_stock_document(
+        db,
+        context=f"inventory_count_{document_type}",
         tenant_id=int(doc.tenant_id),
         warehouse_id=int(doc.warehouse_id),
         document_type=document_type,
@@ -151,10 +154,7 @@ def _create_inventory_stock_document(
         putaway_status="DONE",
         relocation_status="DONE",
         created_by_user_id=user_id,
-        notes=f"Inwentaryzacja {doc.number}",
     )
-    db.add(stock_doc)
-    db.flush()
     if series is not None:
         wh = db.query(Warehouse).filter(Warehouse.id == int(doc.warehouse_id)).first()
         wh_code = str(getattr(wh, "code", None) or "").strip() or None
