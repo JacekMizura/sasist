@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Wózki / Regały / Strefy / Nośniki: UI spójne z ERP
+- `CartsModuleLayout`: jedna biała powierzchnia + systemowe taby (jak Dokumenty)
+- `modules/carts/cartsModuleTokens.ts`: dense inputs/buttons/tables
+- Listy wózków: AppStatCard KPI, CartsListPageHeader, kompaktowe grupy
+- Edytory bulk/multi: formularze ERP (bez rounded-2xl / gradientów)
+- Regały/strefy: AppSection-style konfiguratory + AppEmptyState
+- Nośniki: tabela dokumentów, prostsze badge, CarrierGroupCard dopasowany do grup wózków
+
 ## 2026-06-08 — ProductLikePageLayout: wspólny shell produkt + zestaw
 - `components/catalog/`: ProductLikePageLayout, CatalogEntityPageShell, ProductLikeSection, tokens
 - ProductEditModal + BundleEditModal na tym samym layoutcie (header, taby, rail, footer)

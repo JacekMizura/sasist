@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
+
 import api from "../../api/axios";
+import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
+import { CartsListPageHeader } from "../../modules/carts/CartsListPageHeader";
+import { cartsPageShellClass } from "../../modules/carts/cartsModuleTokens";
+import { MapPin } from "lucide-react";
 import ZoneConfigurator from "./ZoneConfigurator";
 
 const TENANT_ID = 1;
@@ -31,7 +36,17 @@ export default function ZonesTab() {
       const res = await api.get("/zones/", {
         params: { tenant_id: TENANT_ID, warehouse_id: WAREHOUSE_ID },
       });
-      setZones(Array.isArray(res.data) ? res.data.map((z: Record<string, unknown>) => ({ ...z, length_cm: z.length_cm ?? null, width_cm: z.width_cm ?? null, height_cm: z.height_cm ?? null, max_weight_kg: z.max_weight_kg ?? null })) as Zone[] : []);
+      setZones(
+        Array.isArray(res.data)
+          ? (res.data.map((z: Record<string, unknown>) => ({
+              ...z,
+              length_cm: z.length_cm ?? null,
+              width_cm: z.width_cm ?? null,
+              height_cm: z.height_cm ?? null,
+              max_weight_kg: z.max_weight_kg ?? null,
+            })) as Zone[])
+          : []
+      );
     } catch (err: unknown) {
       console.error("[ZonesTab] Błąd pobierania stref:", err);
       setError("Nie udało się załadować stref.");
@@ -46,28 +61,26 @@ export default function ZonesTab() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center text-sm text-slate-500">Ładowanie stref…</div>
-    );
+    return <div className="py-10 text-center text-[13px] text-slate-500">Ładowanie stref…</div>;
   }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-white p-8 text-sm font-medium text-red-700">{error}</div>
+      <div className="rounded-lg border border-red-200 bg-white p-4 text-[13px] font-medium text-red-700">{error}</div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Strefy gabarytowe</h2>
-      </div>
+    <div className={cartsPageShellClass}>
+      <CartsListPageHeader title="Strefy gabarytowe" />
       <ZoneConfigurator zones={zones} onZoneAdded={fetchZones} />
-      {zones.length === 0 && (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
-          Brak stref. Dodaj strefę w formularzu powyżej.
-        </div>
-      )}
+      {zones.length === 0 ? (
+        <AppEmptyState
+          icon={MapPin}
+          title="Brak stref"
+          description="Dodaj strefę w formularzu powyżej."
+        />
+      ) : null}
     </div>
   );
 }

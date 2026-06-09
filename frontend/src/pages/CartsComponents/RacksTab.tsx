@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 
 import api from "../../api/axios";
+import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
+import { CartsListPageHeader } from "../../modules/carts/CartsListPageHeader";
+import {
+  cartsEmptyClass,
+  cartsGroupShellClass,
+  cartsPageShellClass,
+  cartsSectionTitleClass,
+} from "../../modules/carts/cartsModuleTokens";
+import { Layers } from "lucide-react";
 import ProgressBar from "./ui/ProgressBar";
 import RackConfigurator from "./RackConfigurator";
 
@@ -58,67 +67,54 @@ export default function RacksTab() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center text-sm text-slate-500">Ładowanie regałów…</div>
-    );
+    return <div className="py-10 text-center text-[13px] text-slate-500">Ładowanie regałów…</div>;
   }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-white p-8 text-sm font-medium text-red-700">{error}</div>
+      <div className="rounded-lg border border-red-200 bg-white p-4 text-[13px] font-medium text-red-700">{error}</div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Regały kompletacyjne</h2>
-      </div>
+    <div className={cartsPageShellClass}>
+      <CartsListPageHeader title="Regały kompletacyjne" />
       <RackConfigurator onRackAdded={fetchRacks} />
       {racks.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
-          Brak regałów. Dodaj regał w konfiguratorze powyżej.
-        </div>
+        <AppEmptyState
+          icon={Layers}
+          title="Brak regałów"
+          description="Dodaj regał w konfiguratorze powyżej."
+        />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-3">
           {racks.map((rack) => (
-            <div
-              key={rack.id}
-              className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
-            >
-              <div className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-900">
+            <div key={rack.id} className={cartsGroupShellClass}>
+              <div className="border-b border-slate-200/90 px-3 py-2 text-[13px] font-semibold text-slate-900">
                 {rack.name}
               </div>
-              {/* Shelf view: levels from top to bottom (level_index 0 = top) */}
-              <div className="p-4 flex flex-col gap-3">
+              <div className="space-y-2 p-3">
                 {[...(rack.levels || [])]
                   .sort((a, b) => a.level_index - b.level_index)
                   .map((level) => (
-                    <div
-                      key={level.id}
-                      className="border border-slate-200 rounded-lg p-3 bg-slate-50/50"
-                    >
-                      <div className="text-[10px] font-semibold text-slate-500 uppercase mb-2">
+                    <div key={level.id} className="rounded-md border border-slate-200/90 bg-white p-2">
+                      <div className={cartsSectionTitleClass}>
                         Poziom {level.level_index}
                         {level.name ? ` — ${level.name}` : ""}
                         {level.is_segmented ? " (segmenty)" : ""}
                       </div>
                       <div
                         className={
-                          level.is_segmented && level.segments.length > 1
-                            ? "grid gap-2"
-                            : "flex gap-2"
+                          level.is_segmented && level.segments.length > 1 ? "mt-2 grid gap-2" : "mt-2 flex gap-2"
                         }
                         style={
                           level.is_segmented && level.segments.length > 1
-                            ? {
-                                gridTemplateColumns: `repeat(${level.segments.length}, minmax(0, 1fr))`,
-                              }
+                            ? { gridTemplateColumns: `repeat(${level.segments.length}, minmax(0, 1fr))` }
                             : undefined
                         }
                       >
                         {(level.segments || []).length === 0 ? (
-                          <div className="rounded bg-slate-100 p-3 text-slate-400 text-xs">
+                          <div className="rounded border border-dashed border-slate-200 p-2 text-[12px] text-slate-400">
                             Brak segmentów
                           </div>
                         ) : (
@@ -127,17 +123,13 @@ export default function RacksTab() {
                             .map((seg) => (
                               <div
                                 key={seg.id}
-                                className="rounded border border-slate-200 bg-white p-2 min-h-[60px]"
+                                className="min-h-[52px] rounded border border-slate-200/90 bg-white p-2"
                               >
-                                <div className="text-[10px] font-bold text-slate-600">
-                                  {seg.order_id
-                                    ? `#${seg.order_number ?? seg.order_id}`
-                                    : "—"}
+                                <div className="text-[11px] font-medium text-slate-700">
+                                  {seg.order_id ? `#${seg.order_number ?? seg.order_id}` : "—"}
                                 </div>
                                 <div className="mt-1">
-                                  <ProgressBar
-                                    percent={seg.fill_percent}
-                                  />
+                                  <ProgressBar percent={seg.fill_percent} />
                                 </div>
                               </div>
                             ))

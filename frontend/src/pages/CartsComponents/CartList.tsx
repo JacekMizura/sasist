@@ -5,6 +5,15 @@ import { CartLabelPrintModal } from "./CartLabelPrintModal";
 import GroupHeader from "./ui/GroupHeader";
 import SummaryDashboard from "./ui/SummaryDashboard";
 import { useTranslation } from "../../locales";
+import { CartsInlineGroupForm } from "../../modules/carts/CartsInlineGroupForm";
+import { CartsListPageHeader } from "../../modules/carts/CartsListPageHeader";
+import {
+  cartsBtnApply,
+  cartsBtnSecondary,
+  cartsGroupShellClass,
+  cartsInputClass,
+  cartsPageShellClass,
+} from "../../modules/carts/cartsModuleTokens";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useCartsRefresh } from "../../context/CartsRefreshContext";
 
@@ -182,55 +191,39 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
   }, [groups]);
 
   return (
-    <div className="space-y-4 pb-12">
-      <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold text-slate-900">{t.sectionalCarts}</h2>
-          <p className="text-sm text-slate-600">{t.multiBasketManagement}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleResetFleet}
-            disabled={resetting}
-            className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-800 transition-colors hover:bg-violet-100 disabled:opacity-50"
-            title="Ustaw order.cart_id i basket_id na NULL, zeruj used_volume"
-          >
-            {resetting ? "…" : "Wyczyść przypisania"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowGroupForm(!showGroupForm)}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50"
-          >
-            {showGroupForm ? t.cancel : `+ ${t.newGroup}`}
-          </button>
-        </div>
-      </div>
+    <div className={`${cartsPageShellClass} animate-in fade-in duration-300`}>
+      <CartsListPageHeader
+        title={t.sectionalCarts}
+        description={t.multiBasketManagement}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={handleResetFleet}
+              disabled={resetting}
+              className={cartsBtnSecondary}
+              title="Ustaw order.cart_id i basket_id na NULL, zeruj used_volume"
+            >
+              {resetting ? "…" : "Wyczyść przypisania"}
+            </button>
+            <button type="button" onClick={() => setShowGroupForm(!showGroupForm)} className={cartsBtnSecondary}>
+              {showGroupForm ? t.cancel : `+ ${t.newGroup}`}
+            </button>
+          </>
+        }
+      />
 
       <SummaryDashboard summary={summary} />
 
-      {showGroupForm && (
-        <div className="space-y-3 bg-blue-50/80 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              autoFocus
-              placeholder={t.groupNamePlaceholder}
-              className="min-h-[44px] flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500/40"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
-            />
-            <button
-              type="button"
-              onClick={handleCreateGroup}
-              className="min-h-[44px] shrink-0 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-            >
-              {t.create}
-            </button>
-          </div>
-        </div>
-      )}
+      {showGroupForm ? (
+        <CartsInlineGroupForm
+          value={newGroupName}
+          onChange={setNewGroupName}
+          onSubmit={handleCreateGroup}
+          placeholder={t.groupNamePlaceholder}
+          submitLabel={t.create}
+        />
+      ) : null}
 
       {loading ? (
         <div className="animate-pulse py-8 text-center text-sm text-slate-500">{t.loading}</div>
@@ -243,28 +236,20 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
 
             const rightActions =
               group.id === 999 ? (
-                <button
-                  type="button"
-                  onClick={() => onAddNew(undefined)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50"
-                >
+                <button type="button" onClick={() => onAddNew(undefined)} className={cartsBtnSecondary}>
                   + {t.addMultiCart}
                 </button>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   {editingGroupId === group.id ? (
                     <>
                       <input
-                        className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                        className={`${cartsInputClass} max-w-[10rem]`}
                         value={editingGroupName}
                         onChange={(e) => setEditingGroupName(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSaveGroupEdit()}
                       />
-                      <button
-                        type="button"
-                        onClick={handleSaveGroupEdit}
-                        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                      >
+                      <button type="button" onClick={handleSaveGroupEdit} className={cartsBtnApply}>
                         {t.save}
                       </button>
                       <button
@@ -273,32 +258,20 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
                           setEditingGroupId(null);
                           setEditingGroupName("");
                         }}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        className={cartsBtnSecondary}
                       >
                         {t.cancel}
                       </button>
                     </>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => handleStartEditGroup(group)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50"
-                      >
+                      <button type="button" onClick={() => handleStartEditGroup(group)} className={cartsBtnSecondary}>
                         {t.editGroup}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteGroup(group.id)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50/40"
-                      >
+                      <button type="button" onClick={() => handleDeleteGroup(group.id)} className={cartsBtnSecondary}>
                         {t.deleteGroup}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onAddNew(group.id)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50"
-                      >
+                      <button type="button" onClick={() => onAddNew(group.id)} className={cartsBtnSecondary}>
                         + {t.addCart}
                       </button>
                     </>
@@ -307,7 +280,7 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
               );
 
             return (
-              <div key={group.id} className="space-y-4">
+              <div key={group.id} className={cartsGroupShellClass}>
                 <GroupHeader
                   title={group.name}
                   count={count}
@@ -318,9 +291,9 @@ export default function CartList({ refreshTrigger = 0, onAddNew, onEdit }: CartL
                 />
 
                 {!isCollapsed && (
-                  <div className="flex flex-col divide-y divide-slate-200">
+                  <div className="divide-y divide-slate-100 px-3">
                     {count === 0 ? (
-                      <div className="py-8 text-center text-sm text-slate-500">{t.noCartsInGroup}</div>
+                      <div className="py-6 text-center text-[13px] text-slate-500">{t.noCartsInGroup}</div>
                     ) : (
                       group.items.map((c) => (
                         <CartCard

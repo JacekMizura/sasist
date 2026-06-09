@@ -4,6 +4,24 @@ import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
 import CartImageUrlField from "./ui/CartImageUrlField";
+import {
+  cartsAppInputClass,
+  cartsBtnApply,
+  cartsBtnGhost,
+  cartsBtnSecondary,
+  cartsDangerBtnClass,
+  cartsEditorBasketBaseClass,
+  cartsEditorBasketDefaultClass,
+  cartsEditorBasketInvalidClass,
+  cartsEditorBasketSelectedClass,
+  cartsEditorGridClass,
+  cartsEditorLevelRowClass,
+  cartsFieldLabelClass,
+  cartsPageShellClass,
+  cartsSectionClass,
+  cartsSectionTitleClass,
+  cartsSelectClass,
+} from "../../modules/carts/cartsModuleTokens";
 
 // ---------------------------------------------------------------------------
 // Typy: koszyk (sekcja), rząd poziomów, grupa, props edytora
@@ -305,22 +323,22 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
   };
 
   return (
-    <div className="grid grid-cols-12 gap-6 items-start pb-20">
-      <div className="col-span-12 lg:col-span-9 space-y-4">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className={`${cartsPageShellClass} grid grid-cols-12 items-start gap-4 pb-8`}>
+      <div className="col-span-12 space-y-4 lg:col-span-9">
+        <div className={`${cartsSectionClass} grid grid-cols-1 gap-3 sm:grid-cols-2`}>
           {cartId ? (
-            <div className="space-y-1 sm:col-span-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ID</span>
-              <p className="font-mono text-sm font-bold text-slate-600 tabular-nums">{cartId}</p>
+            <div className="sm:col-span-2">
+              <span className={cartsFieldLabelClass}>ID</span>
+              <p className="font-mono text-[13px] font-medium tabular-nums text-slate-700">{cartId}</p>
             </div>
           ) : null}
-          <div className="space-y-1 sm:col-span-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="cart-editor-code">
+          <div className="sm:col-span-2">
+            <label className={cartsFieldLabelClass} htmlFor="cart-editor-code">
               Kod{cartId ? "" : " (opcjonalnie)"}
             </label>
             <input
               id="cart-editor-code"
-              className="w-full bg-slate-50 rounded-xl px-4 py-3 font-mono text-sm font-bold text-slate-800 border border-slate-200 outline-none focus:border-blue-500"
+              className={`${cartsAppInputClass} font-mono`}
               value={cartCode}
               onChange={(e) => setCartCode(e.target.value)}
               placeholder={cartId ? "" : "Puste = wygeneruj CART-0001"}
@@ -328,66 +346,58 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
             />
           </div>
           {cartId && cartScanCode ? (
-            <div className="space-y-1 sm:col-span-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                Kod skanowania WMS
-              </span>
-              <p className="font-mono text-sm font-semibold text-slate-700">{cartScanCode}</p>
+            <div className="sm:col-span-2">
+              <span className={cartsFieldLabelClass}>Kod skanowania WMS</span>
+              <p className="font-mono text-[13px] font-medium text-slate-700">{cartScanCode}</p>
             </div>
           ) : null}
         </div>
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-800 font-black text-xs uppercase flex items-center gap-2"
-          >
-            ← {t.back.toUpperCase()}
+
+        <div className={`${cartsSectionClass} flex flex-wrap items-center justify-between gap-3`}>
+          <button type="button" onClick={onClose} className={cartsBtnGhost}>
+            ← {t.back}
           </button>
-          <div className="flex-1 max-w-md mx-4">
+          <div className="min-w-0 flex-1 px-2">
+            <label className={cartsFieldLabelClass}>{t.name}</label>
             <input
-              className={`text-2xl font-black bg-transparent border-b-4 outline-none w-full uppercase text-center transition-all ${!cartName.trim() ? "border-red-200 focus:border-red-500" : "border-slate-50 focus:border-blue-600"}`}
+              className={`${cartsAppInputClass} text-center font-semibold uppercase ${!cartName.trim() ? "border-red-300" : ""}`}
               value={cartName}
               onChange={(e) => setCartName(e.target.value)}
               placeholder={t.cartNamePlaceholder}
             />
           </div>
           <div className="text-right">
-            <span className="text-[10px] font-black text-slate-400 uppercase block leading-none mb-1">
-              {t.capacity}
-            </span>
-            <div className="text-3xl font-black text-blue-600 leading-none">
-              {totalVolume(rows).toFixed(1)} <span className="text-sm uppercase text-blue-400">dm³</span>
+            <span className={cartsFieldLabelClass}>{t.capacity}</span>
+            <div className="text-lg font-bold tabular-nums text-slate-900">
+              {totalVolume(rows).toFixed(1)} <span className="text-[11px] font-medium text-slate-500">dm³</span>
             </div>
           </div>
         </div>
 
-        {/* CAPACITY MODE */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-xs font-black uppercase mb-4 text-slate-400 border-b pb-3 tracking-widest">
-            CAPACITY MODE
-          </h3>
-          <div className="flex flex-wrap gap-4 p-1">
+        <div className={cartsSectionClass}>
+          <h3 className={cartsSectionTitleClass}>Capacity mode</h3>
+          <div className="mt-2 flex flex-wrap gap-4">
             {(["volume", "orders", "mixed"] as const).map((mode) => (
-              <label key={mode} className="flex items-center gap-2 cursor-pointer">
+              <label key={mode} className="flex cursor-pointer items-center gap-2">
                 <input
                   type="radio"
                   name="capacityMode"
                   checked={capacityMode === mode}
                   onChange={() => setCapacityMode(mode)}
-                  className="w-4 h-4 text-blue-600"
+                  className="h-3.5 w-3.5 text-slate-800"
                 />
-                <span className="text-sm font-bold capitalize">{mode}</span>
+                <span className="text-[13px] font-medium capitalize text-slate-800">{mode}</span>
               </label>
             ))}
           </div>
           {(capacityMode === "volume" || capacityMode === "mixed") && (
-            <div className="mt-4">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_volume_dm3</label>
+            <div className="mt-3 max-w-xs">
+              <label className={cartsFieldLabelClass}>max_volume_dm3</label>
               <input
                 type="number"
                 min={0}
                 step={0.1}
-                className="w-full max-w-xs bg-slate-50 rounded-xl px-4 py-2 font-bold outline-none border border-slate-200"
+                className={cartsAppInputClass}
                 value={maxVolumeDm3 === "" ? "" : maxVolumeDm3}
                 onChange={(e) => setMaxVolumeDm3(e.target.value === "" ? "" : Number(e.target.value))}
                 placeholder={String(totalVolume(rows).toFixed(1))}
@@ -395,92 +405,81 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
             </div>
           )}
           {(capacityMode === "orders" || capacityMode === "mixed") && (
-            <div className="mt-4">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_orders</label>
+            <div className="mt-3 max-w-xs">
+              <label className={cartsFieldLabelClass}>max_orders</label>
               <input
                 type="number"
                 min={1}
-                className="w-full max-w-xs bg-slate-50 rounded-xl px-4 py-2 font-bold outline-none border border-slate-200"
+                className={cartsAppInputClass}
                 value={maxOrders === "" ? "" : maxOrders}
                 onChange={(e) => setMaxOrders(e.target.value === "" ? "" : Number(e.target.value))}
-                placeholder="e.g. 10"
+                placeholder="np. 10"
               />
             </div>
           )}
         </div>
 
-        {/* Sekcja: Tworzenie całego rzędu – numer rzędu, liczba koszyków, wymiary; przycisk dodaje cały rząd naraz. */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-xs font-black uppercase mb-4 text-slate-400 border-b pb-3 tracking-widest">
-            {t.bulkRowSectionTitle}
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 items-end">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">{t.rowNumber}</label>
+        <div className={cartsSectionClass}>
+          <h3 className={cartsSectionTitleClass}>{t.bulkRowSectionTitle}</h3>
+          <div className="mt-2 grid grid-cols-2 items-end gap-3 sm:grid-cols-5">
+            <div>
+              <label className={cartsFieldLabelClass}>{t.rowNumber}</label>
               <input
                 type="number"
                 min={1}
-                className="w-full bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className={`${cartsAppInputClass} no-number-spinner`}
                 value={addRowRow}
                 onChange={(e) => setAddRowRow(Math.max(1, Number(e.target.value) || 1))}
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">{t.basketsInRow}</label>
+            <div>
+              <label className={cartsFieldLabelClass}>{t.basketsInRow}</label>
               <input
                 type="number"
                 min={1}
                 max={20}
-                className="w-full bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className={`${cartsAppInputClass} no-number-spinner`}
                 value={addRowCount}
                 onChange={(e) => setAddRowCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">{t.length}</label>
+            <div>
+              <label className={cartsFieldLabelClass}>{t.length}</label>
               <input
                 type="number"
                 min={1}
-                className="w-full bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className={`${cartsAppInputClass} no-number-spinner`}
                 value={addRowLength}
                 onChange={(e) => setAddRowLength(Math.max(1, Number(e.target.value) || 0))}
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">{t.width}</label>
+            <div>
+              <label className={cartsFieldLabelClass}>{t.width}</label>
               <input
                 type="number"
                 min={1}
-                className="w-full bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className={`${cartsAppInputClass} no-number-spinner`}
                 value={addRowWidth}
                 onChange={(e) => setAddRowWidth(Math.max(1, Number(e.target.value) || 0))}
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">{t.height}</label>
+            <div>
+              <label className={cartsFieldLabelClass}>{t.height}</label>
               <input
                 type="number"
                 min={1}
-                className="w-full bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className={`${cartsAppInputClass} no-number-spinner`}
                 value={addRowHeight}
                 onChange={(e) => setAddRowHeight(Math.max(1, Number(e.target.value) || 0))}
               />
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleAddRow}
-            className="mt-4 w-full py-3 rounded-xl font-black text-[11px] uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 transition-all shadow-sm"
-          >
+          <button type="button" onClick={handleAddRow} className={`${cartsBtnSecondary} mt-3 w-full`}>
             {t.addRowFullButton}
           </button>
         </div>
 
-        {/* Lista poziomów (rzędów) z koszykami – każdy poziom ma etykietę i przycisk + do pojedynczego koszyka. */}
-        <div
-          ref={rowContainerRef}
-          className="bg-slate-200 rounded-[3rem] p-10 flex flex-col-reverse gap-6 border-4 border-slate-300 overflow-auto max-h-[70vh] shadow-inner relative custom-scrollbar"
-        >
+        <div ref={rowContainerRef} className={cartsEditorGridClass}>
           {(() => {
             const gapPx = 16;
             const rowPaddingPx = 32;
@@ -495,9 +494,9 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
               return (
             <div
               key={rIdx}
-              className="flex gap-4 items-end bg-white/30 p-4 rounded-2xl border border-slate-300/50 relative min-w-max transition-all"
+              className={`${cartsEditorLevelRowClass} relative min-w-max`}
             >
-              <div className="absolute -left-12 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] font-black text-slate-500 uppercase tracking-tighter">
+              <div className="absolute -left-2 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                 {t.level} {rIdx + 1}
               </div>
               {row.baskets.map((b, bIdx) => {
@@ -511,29 +510,22 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
                   <div key={bIdx} className="flex flex-col items-center shrink-0">
                     <div
                       onClick={() => setSelectedBasket({ r: rIdx, b: bIdx })}
-                      className={`cursor-pointer rounded-2xl border-4 flex flex-col items-center justify-center gap-1.5 p-3 transition-all relative shadow-lg shrink-0 text-center ${
+                      className={`${cartsEditorBasketBaseClass} ${
                         isSelected
-                          ? "bg-orange-500 border-white scale-105 shadow-2xl z-20"
+                          ? cartsEditorBasketSelectedClass
                           : isInvalid
-                            ? "bg-red-500 border-red-700 animate-pulse"
-                            : "border-white hover:opacity-95"
+                            ? cartsEditorBasketInvalidClass
+                            : cartsEditorBasketDefaultClass
                       }`}
                       style={{
                         width: `${finalWidth}px`,
                         height: `${BASKET_HEIGHT}px`,
-                        ...(!isSelected && !isInvalid && { background: "linear-gradient(180deg, #3568e2 0%, #2c5cd1 100%)" }),
                       }}
                     >
-                      <span
-                        className="text-sm font-semibold text-white uppercase truncate max-w-full text-center rounded-[10px] py-1 px-2.5 min-w-[48px] inline-block"
-                        style={{ background: "rgba(0,0,0,0.15)" }}
-                      >
+                      <span className="max-w-full truncate rounded px-1.5 py-0.5 text-[12px] font-semibold">
                         {b.name || t.noName}
                       </span>
-                      <span
-                        className="rounded-full text-xs font-medium text-white py-1 px-2.5 whitespace-nowrap"
-                        style={{ background: "rgba(0,0,0,0.2)", fontSize: "12px" }}
-                      >
+                      <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px] font-medium tabular-nums text-slate-700">
                         {basketVolume(b).toFixed(1)} dm³
                       </span>
                     </div>
@@ -544,8 +536,9 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
                 );
               })}
               <button
+                type="button"
                 onClick={() => handleAddBasket(rIdx)}
-                className="w-12 h-12 rounded-2xl bg-white border-2 border-slate-300 text-slate-400 font-black text-2xl hover:text-blue-600 hover:border-blue-600 transition-all shadow-sm flex items-center justify-center shrink-0"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-lg font-medium text-slate-500 hover:border-slate-400 hover:text-slate-800"
               >
                 +
               </button>
@@ -554,27 +547,22 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
           });
           })()}
           <button
+            type="button"
             onClick={handleAddLevel}
-            className="py-6 border-4 border-dashed border-slate-400 rounded-[2rem] text-slate-500 font-black text-xs uppercase hover:bg-slate-300 transition-all tracking-[0.2em] shadow-sm"
+            className="rounded-md border border-dashed border-slate-300 py-3 text-[12px] font-semibold uppercase tracking-wide text-slate-500 transition hover:border-slate-400 hover:bg-white"
           >
-            + {t.addNewLevel.toUpperCase()}
+            + {t.addNewLevel}
           </button>
         </div>
       </div>
 
-      <div className="col-span-12 lg:col-span-3 space-y-4 sticky top-4">
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
-          <h3 className="text-xs font-black uppercase mb-6 text-slate-400 border-b pb-4 tracking-widest text-center">
-            {t.membership}
-          </h3>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2">{t.group}</label>
-            <select
-              className="w-full bg-slate-50 rounded-2xl px-5 py-4 border border-slate-100 font-black text-slate-700 outline-none transition-all focus:border-blue-500"
-              value={groupSelectValue}
-              onChange={onGroupChange}
-            >
-              <option value="">{t.unassigned.toUpperCase()}</option>
+      <div className="col-span-12 space-y-3 lg:col-span-3 lg:sticky lg:top-4">
+        <div className={cartsSectionClass}>
+          <h3 className={`${cartsSectionTitleClass} text-center`}>{t.membership}</h3>
+          <div className="mt-2">
+            <label className={cartsFieldLabelClass}>{t.group}</label>
+            <select className={cartsSelectClass} value={groupSelectValue} onChange={onGroupChange}>
+              <option value="">{t.unassigned}</option>
               {availableGroups.map((g) => (
                 <option key={g.id} value={String(g.id)}>
                   {g.name}
@@ -584,25 +572,21 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
-          <h3 className="text-xs font-black uppercase mb-6 text-slate-400 border-b pb-4 tracking-widest text-center">
-            {t.photo}
-          </h3>
-          <CartImageUrlField value={imageUrl} onChange={setImageUrl} />
+        <div className={cartsSectionClass}>
+          <h3 className={`${cartsSectionTitleClass} text-center`}>{t.photo}</h3>
+          <div className="mt-2">
+            <CartImageUrlField value={imageUrl} onChange={setImageUrl} />
+          </div>
         </div>
 
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
-          <h3 className="text-xs font-black uppercase mb-6 text-slate-400 border-b pb-4 tracking-widest text-center">
-            {t.editSection}
-          </h3>
+        <div className={cartsSectionClass}>
+          <h3 className={`${cartsSectionTitleClass} text-center`}>{t.editSection}</h3>
           {selectedBasket ? (
-            <div className="space-y-5">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
-                  {t.sectionName}
-                </label>
+            <div className="mt-2 space-y-3">
+              <div>
+                <label className={cartsFieldLabelClass}>{t.sectionName}</label>
                 <input
-                  className={`w-full bg-slate-50 rounded-2xl px-5 py-4 border font-black text-slate-700 outline-none transition-all uppercase ${!rows[selectedBasket.r].baskets[selectedBasket.b].name ? "border-red-400 bg-red-50" : "border-slate-100 focus:border-blue-500"}`}
+                  className={`${cartsAppInputClass} uppercase ${!rows[selectedBasket.r].baskets[selectedBasket.b].name ? "border-red-300" : ""}`}
                   value={rows[selectedBasket.r].baskets[selectedBasket.b].name}
                   onChange={(e) => {
                     const u = rows.map((row, ri) =>
@@ -617,80 +601,70 @@ export default function CartEditor({ cartId, onClose }: CartEditorProps) {
                     );
                     setRows(u);
                   }}
-                  placeholder={t.sectionNamePlaceholder.toUpperCase()}
+                  placeholder={t.sectionNamePlaceholder}
                 />
               </div>
               {(["width", "length", "height"] as const).map((f) => (
-                <div key={f} className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
+                <div key={f}>
+                  <label className={cartsFieldLabelClass}>
                     {f === "width" ? t.widthX : f === "length" ? t.lengthY : t.heightZ}
                   </label>
-                  <div
-                    className={`flex items-center bg-slate-50 rounded-2xl px-5 py-4 border transition-all ${Number(rows[selectedBasket.r].baskets[selectedBasket.b][f]) <= 0 ? "border-red-400 bg-red-50" : "border-slate-100 focus-within:border-blue-500"}`}
-                  >
-                    <input
-                      type="number"
-                      className="bg-transparent font-black text-slate-700 outline-none w-full"
-                      value={rows[selectedBasket.r].baskets[selectedBasket.b][f] || ""}
-                      onChange={(e) => {
-                        const num = Number(e.target.value);
-                        const u = rows.map((row, ri) =>
-                          ri === selectedBasket.r
-                            ? {
-                                ...row,
-                                baskets: row.baskets.map((basket, bi) =>
-                                  bi === selectedBasket.b ? { ...basket, [f]: num } : basket
-                                ),
-                              }
-                            : row
-                        );
-                        setRows(u);
-                      }}
-                    />
-                    <span className="text-[10px] font-black text-slate-300">CM</span>
-                  </div>
+                  <input
+                    type="number"
+                    className={`${cartsAppInputClass} no-number-spinner ${Number(rows[selectedBasket.r].baskets[selectedBasket.b][f]) <= 0 ? "border-red-300" : ""}`}
+                    value={rows[selectedBasket.r].baskets[selectedBasket.b][f] || ""}
+                    onChange={(e) => {
+                      const num = Number(e.target.value);
+                      const u = rows.map((row, ri) =>
+                        ri === selectedBasket.r
+                          ? {
+                              ...row,
+                              baskets: row.baskets.map((basket, bi) =>
+                                bi === selectedBasket.b ? { ...basket, [f]: num } : basket
+                              ),
+                            }
+                          : row
+                      );
+                      setRows(u);
+                    }}
+                  />
                 </div>
               ))}
-              <div className="pt-2">
-                <button
-                  onClick={() => {
-                    const u = rows.map((row, ri) =>
-                      ri === selectedBasket.r
-                        ? {
-                            ...row,
-                            baskets: row.baskets.filter((_, bi) => bi !== selectedBasket.b),
-                          }
-                        : row
-                    );
-                    setRows(u);
-                    setSelectedBasket(null);
-                  }}
-                  className="w-full py-3 text-red-500 font-black text-[9px] uppercase hover:bg-red-50 rounded-xl transition-colors"
-                >
-                  {t.removeSection}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const u = rows.map((row, ri) =>
+                    ri === selectedBasket.r
+                      ? {
+                          ...row,
+                          baskets: row.baskets.filter((_, bi) => bi !== selectedBasket.b),
+                        }
+                      : row
+                  );
+                  setRows(u);
+                  setSelectedBasket(null);
+                }}
+                className={`${cartsDangerBtnClass} w-full`}
+              >
+                {t.removeSection}
+              </button>
             </div>
           ) : (
-            <div className="py-16 text-center text-slate-300 text-[10px] font-black uppercase tracking-widest leading-loose">
-              {t.selectElementToEdit}
-            </div>
+            <div className="py-8 text-center text-[12px] font-medium text-slate-400">{t.selectElementToEdit}</div>
           )}
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           <button
+            type="button"
             onClick={handleSave}
             disabled={loading || !isFormValid()}
-            className={`w-full py-6 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl transition-all ${isFormValid() ? "bg-slate-900 text-white hover:bg-blue-600" : "bg-slate-200 text-slate-400 cursor-not-allowed"}`}
+            className={`${cartsBtnApply} w-full disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            {loading ? t.saving.toUpperCase() : !isFormValid() ? t.completeData.toUpperCase() : t.saveProject.toUpperCase()}
+            {loading ? t.saving : !isFormValid() ? t.completeData : t.saveProject}
           </button>
-          <button
-            onClick={onClose}
-            className="w-full py-3 text-slate-400 font-black text-[10px] uppercase hover:text-slate-800 text-center tracking-widest"
-          >
-            {t.cancel.toUpperCase()}
+          <button type="button" onClick={onClose} className={`${cartsBtnGhost} w-full`}>
+            {t.cancel}
           </button>
         </div>
       </div>

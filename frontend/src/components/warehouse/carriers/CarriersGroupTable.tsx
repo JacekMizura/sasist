@@ -9,6 +9,15 @@ import { CarrierStatusBadge } from "./CarrierStatusBadge";
 import { CarrierEditModal } from "./CarrierEditModal";
 import { CarrierMoveLocationModal } from "./CarrierMoveLocationModal";
 import type { WarehouseCarrierGroupRead } from "../../../api/wmsCarrierApi";
+import {
+  cartsTableCellClass,
+  cartsTableClass,
+  cartsTableHeadCellClass,
+  cartsTableHeadClass,
+  cartsTableRowClass,
+  cartsTableWrapClass,
+} from "../../../modules/carts/cartsModuleTokens";
+import { filterToolbarBtnIconSquare } from "../../../components/filters/filterUiTokens";
 
 type Props = {
   tenantId: number;
@@ -53,52 +62,52 @@ export function CarriersGroupTable({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+      <div className={cartsTableWrapClass}>
+        <table className={cartsTableClass}>
+          <thead className={cartsTableHeadClass}>
             <tr>
-              <th className="px-3 py-2.5">Kod</th>
-              <th className="px-3 py-2.5">Status</th>
-              <th className="px-3 py-2.5">Lokalizacja</th>
-              <th className="px-3 py-2.5 text-right">SKU</th>
-              <th className="px-3 py-2.5 text-right">Sztuki</th>
-              <th className="px-3 py-2.5">Mix</th>
-              <th className="px-3 py-2.5">Ostatni ruch</th>
-              <th className="px-3 py-2.5 w-28">Akcje</th>
+              <th className={cartsTableHeadCellClass}>Kod</th>
+              <th className={cartsTableHeadCellClass}>Status</th>
+              <th className={cartsTableHeadCellClass}>Lokalizacja</th>
+              <th className={`${cartsTableHeadCellClass} text-right`}>SKU</th>
+              <th className={`${cartsTableHeadCellClass} text-right`}>Sztuki</th>
+              <th className={cartsTableHeadCellClass}>Mix</th>
+              <th className={cartsTableHeadCellClass}>Ostatni ruch</th>
+              <th className={`${cartsTableHeadCellClass} w-24`}>Akcje</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {rows.map((row) => {
               const busy = busyId === row.id;
               return (
-                <tr key={row.id} className="bg-white hover:bg-amber-50/30">
-                  <td className="px-3 py-2.5">
+                <tr key={row.id} className={cartsTableRowClass}>
+                  <td className={cartsTableCellClass}>
                     <Link to={detailPath(row.id)} state={navState} className="block min-w-[120px]">
-                      <CarrierBadge code={row.code} showMix={row.is_mixed} className="text-[12px]" />
+                      <CarrierBadge code={row.code} showMix={row.is_mixed} />
                       <span className="mt-0.5 block font-mono text-[10px] text-slate-500">{row.barcode}</span>
                     </Link>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className={cartsTableCellClass}>
                     <CarrierStatusBadge status={row.status} />
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-slate-800">
+                  <td className={`${cartsTableCellClass} font-mono text-[12px]`}>
                     {(row.current_location_code || "").trim() || "—"}
                   </td>
-                  <td className="px-3 py-2.5 text-right font-mono font-semibold tabular-nums">{row.sku_count}</td>
-                  <td className="px-3 py-2.5 text-right font-mono font-semibold tabular-nums">{row.total_qty}</td>
-                  <td className="px-3 py-2.5 text-xs font-bold text-slate-700">{row.is_mixed ? "Tak" : "Nie"}</td>
-                  <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                  <td className={`${cartsTableCellClass} text-right font-mono tabular-nums`}>{row.sku_count}</td>
+                  <td className={`${cartsTableCellClass} text-right font-mono tabular-nums`}>{row.total_qty}</td>
+                  <td className={`${cartsTableCellClass} text-[12px] text-slate-700`}>{row.is_mixed ? "Tak" : "Nie"}</td>
+                  <td className={`${cartsTableCellClass} font-mono text-[11px] text-slate-500 whitespace-nowrap`}>
                     {row.updated_at ? new Date(row.updated_at).toLocaleString("pl-PL") : "—"}
                   </td>
-                  <td className="relative px-2 py-2">
+                  <td className={`relative ${cartsTableCellClass}`}>
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => setMenuId((id) => (id === row.id ? null : row.id))}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                      className={filterToolbarBtnIconSquare}
                       aria-label="Akcje"
                     >
-                      <MoreHorizontal size={18} />
+                      <MoreHorizontal size={16} />
                     </button>
                     {menuId === row.id ? (
                       <>

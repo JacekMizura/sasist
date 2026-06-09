@@ -1,21 +1,21 @@
 const TONE: Record<string, string> = {
-  ACTIVE: "border-emerald-300 bg-emerald-50 text-emerald-900",
-  INBOUND: "border-sky-300 bg-sky-50 text-sky-900",
-  PUTAWAY: "border-violet-300 bg-violet-50 text-violet-900",
-  PICKING: "border-indigo-300 bg-indigo-50 text-indigo-900",
-  PACKING: "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-900",
-  SHIPPING: "border-cyan-300 bg-cyan-50 text-cyan-900",
-  BLOCKED: "border-rose-300 bg-rose-50 text-rose-900",
-  DAMAGED: "border-orange-400 bg-orange-50 text-orange-950",
-  ARCHIVED: "border-slate-300 bg-slate-100 text-slate-700",
+  ACTIVE: "border-emerald-200 bg-emerald-50/80 text-emerald-800",
+  INBOUND: "border-sky-200 bg-sky-50/80 text-sky-800",
+  PUTAWAY: "border-violet-200 bg-violet-50/80 text-violet-800",
+  PICKING: "border-indigo-200 bg-indigo-50/80 text-indigo-800",
+  PACKING: "border-fuchsia-200 bg-fuchsia-50/80 text-fuchsia-800",
+  SHIPPING: "border-cyan-200 bg-cyan-50/80 text-cyan-800",
+  BLOCKED: "border-rose-200 bg-rose-50/80 text-rose-800",
+  DAMAGED: "border-orange-200 bg-orange-50/80 text-orange-900",
+  ARCHIVED: "border-slate-200 bg-slate-50 text-slate-600",
   EMPTY: "border-slate-200 bg-white text-slate-600",
 };
 
 export function CarrierStatusBadge({ status }: { status: string }) {
   const s = (status || "ACTIVE").trim().toUpperCase();
-  const cls = TONE[s] ?? "border-slate-300 bg-slate-50 text-slate-800";
+  const cls = TONE[s] ?? "border-slate-200 bg-slate-50 text-slate-700";
   return (
-    <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${cls}`}>
+    <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${cls}`}>
       {s}
     </span>
   );

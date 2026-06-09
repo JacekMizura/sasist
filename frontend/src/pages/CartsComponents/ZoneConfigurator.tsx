@@ -1,5 +1,14 @@
 import { useState } from "react";
+
 import api from "../../api/axios";
+import {
+  cartsAppInputClass,
+  cartsBtnApply,
+  cartsFieldLabelClass,
+  cartsGroupShellClass,
+  cartsSectionClass,
+  cartsSectionTitleClass,
+} from "../../modules/carts/cartsModuleTokens";
 import ProgressBar from "./ui/ProgressBar";
 
 const TENANT_ID = 1;
@@ -73,144 +82,91 @@ export default function ZoneConfigurator({
   };
 
   return (
-    <div className="space-y-6">
-      <form
-        onSubmit={handleAdd}
-        className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"
-      >
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-700 mb-4">
-          Dodaj strefę podłogową
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="space-y-4">
+      <form onSubmit={handleAdd} className={cartsSectionClass}>
+        <h3 className={cartsSectionTitleClass}>Dodaj strefę podłogową</h3>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Nazwa (np. Strefa G1)
-            </label>
+            <label className={cartsFieldLabelClass}>Nazwa (np. Strefa G1)</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Strefa G1"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={cartsAppInputClass}
             />
           </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Długość (cm)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={lengthCm}
-              onChange={(e) => setLengthCm(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Szerokość (cm)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={widthCm}
-              onChange={(e) => setWidthCm(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Wysokość (cm)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={heightCm}
-              onChange={(e) => setHeightCm(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Max waga (kg)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={maxWeightKg}
-              onChange={(e) => setMaxWeightKg(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
+          {(
+            [
+              ["Długość (cm)", lengthCm, setLengthCm],
+              ["Szerokość (cm)", widthCm, setWidthCm],
+              ["Wysokość (cm)", heightCm, setHeightCm],
+              ["Max waga (kg)", maxWeightKg, setMaxWeightKg],
+            ] as const
+          ).map(([label, value, setter]) => (
+            <div key={label}>
+              <label className={cartsFieldLabelClass}>{label}</label>
+              <input
+                type="number"
+                min="0"
+                step={label.includes("waga") ? "0.1" : "1"}
+                value={value}
+                onChange={(e) => setter(e.target.value)}
+                className={`${cartsAppInputClass} no-number-spinner`}
+              />
+            </div>
+          ))}
         </div>
-        {lengthCm && widthCm && heightCm && (
-          <p className="mt-2 text-xs text-slate-500">
-            Objętość: {volumeDm3.toFixed(2)} dm³
-          </p>
-        )}
-        {error && (
-          <p className="mt-2 text-sm text-red-600">{error}</p>
-        )}
-        <div className="mt-4">
-          <button
-            type="submit"
-            disabled={submitting || !name.trim()}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold uppercase disabled:opacity-50 hover:bg-blue-700"
-          >
+        {lengthCm && widthCm && heightCm ? (
+          <p className="mt-2 text-[12px] text-slate-500">Objętość: {volumeDm3.toFixed(2)} dm³</p>
+        ) : null}
+        {error ? <p className="mt-2 text-[13px] text-red-600">{error}</p> : null}
+        <div className="mt-3">
+          <button type="submit" disabled={submitting || !name.trim()} className={cartsBtnApply}>
             {submitting ? "Zapisywanie…" : "Dodaj strefę"}
           </button>
         </div>
       </form>
 
-      {/* Grid of zone rectangles */}
-      <div>
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-700 mb-3">
-          Strefy (układ prostokątów)
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {zones.map((zone) => (
-            <div
-              key={zone.id}
-              className="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-sm min-h-[140px] flex flex-col"
-            >
-              <div className="font-bold text-slate-800 mb-2">{zone.name}</div>
-              {(zone.length_cm != null && zone.width_cm != null && zone.height_cm != null) && (
-                <div className="text-[10px] text-slate-500 mb-1">
-                  {zone.length_cm} × {zone.width_cm} × {zone.height_cm} cm
-                  {zone.max_weight_kg != null && zone.max_weight_kg > 0 && (
-                    <> · max {Number(zone.max_weight_kg).toFixed(2)} kg</>
-                  )}
+      {zones.length > 0 ? (
+        <div>
+          <h3 className={cartsSectionTitleClass}>Strefy (układ prostokątów)</h3>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {zones.map((zone) => (
+              <div key={zone.id} className={`${cartsGroupShellClass} flex min-h-[120px] flex-col p-3`}>
+                <div className="text-[13px] font-semibold text-slate-900">{zone.name}</div>
+                {zone.length_cm != null && zone.width_cm != null && zone.height_cm != null ? (
+                  <div className="mt-0.5 text-[11px] text-slate-500">
+                    {zone.length_cm} × {zone.width_cm} × {zone.height_cm} cm
+                    {zone.max_weight_kg != null && zone.max_weight_kg > 0 ? (
+                      <> · max {Number(zone.max_weight_kg).toFixed(2)} kg</>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="my-2">
+                  <ProgressBar percent={zone.occupancy_percent} />
                 </div>
-              )}
-              <div className="mb-2">
-                <ProgressBar percent={zone.occupancy_percent} />
+                <div className="text-[11px] text-slate-500">
+                  {Number(zone.used_volume).toFixed(2)} / {Number(zone.capacity_volume).toFixed(2)} dm³ (
+                  {Number(zone.occupancy_percent).toFixed(2)}%)
+                </div>
+                <div className="mt-auto pt-2 text-[11px] font-medium text-slate-500">Zamówienia</div>
+                <ul className="mt-0.5 space-y-0.5">
+                  {zone.orders.length === 0 ? (
+                    <li className="text-[12px] text-slate-400">Brak</li>
+                  ) : (
+                    zone.orders.map((o) => (
+                      <li key={`${zone.id}-${o.order_id}`} className="text-[12px] text-slate-700">
+                        #{o.order_number ?? o.order_id}
+                      </li>
+                    ))
+                  )}
+                </ul>
               </div>
-              <div className="text-[10px] text-slate-500 mb-2">
-                {Number(zone.used_volume).toFixed(2)} / {Number(zone.capacity_volume).toFixed(2)} dm³
-                ({Number(zone.occupancy_percent).toFixed(2)}%)
-              </div>
-              <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide mt-auto">
-                Zamówienia
-              </div>
-              <ul className="mt-1 space-y-0.5">
-                {zone.orders.length === 0 ? (
-                  <li className="text-slate-400 text-xs">Brak</li>
-                ) : (
-                  zone.orders.map((o) => (
-                    <li key={`${zone.id}-${o.order_id}`} className="text-xs text-slate-700">
-                      #{o.order_number ?? o.order_id}
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

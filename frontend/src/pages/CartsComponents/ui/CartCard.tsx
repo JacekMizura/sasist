@@ -5,9 +5,14 @@ import SimulationResultModal from "./SimulationResultModal";
 import OrderProductPreviewModal from "./OrderProductPreviewModal";
 import { CubeIcon, PencilIcon, TrashIcon, MagicWandIcon, ScaleIcon, ClearIcon, PrinterIcon } from "./Icons";
 import { useState, useEffect, useMemo } from "react";
+import { calculateCartStats } from "../cartStats";
+import {
+  cartsBtnSecondary,
+  cartsDangerBtnClass,
+  cartsWarningBtnClass,
+} from "../../../modules/carts/cartsModuleTokens";
 import { useTranslation } from "../../../locales";
 import api from "../../../api/axios";
-import { calculateCartStats } from "../cartStats";
 
 type BasketDetail = {
   id: number;
@@ -402,9 +407,11 @@ export default function CartCard(props: CartCardProps) {
 
   return (
     <>
-      <div className={`group relative flex gap-4 py-4 ${simulating ? "pointer-events-none opacity-70" : ""}`}>
+      <div
+        className={`group relative ${isBulk ? "grid grid-cols-[auto_1fr_minmax(120px,1fr)_auto] items-center gap-3 py-2.5" : "flex gap-3 py-3"} ${simulating ? "pointer-events-none opacity-70" : ""}`}
+      >
         <button
-          className="w-16 h-16 rounded-lg bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center text-slate-300 hover:border-blue-600 transition-colors"
+          className={`${isBulk ? "h-10 w-10" : "h-12 w-12"} shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white flex items-center justify-center text-slate-300 hover:border-slate-400 transition-colors`}
           onClick={() => setPreviewOpen(true)}
           aria-label="Open image preview"
           type="button"
@@ -450,27 +457,17 @@ export default function CartCard(props: CartCardProps) {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onEdit(id)}
-                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50/50"
-                aria-label={t.edit}
-                type="button"
-              >
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => onEdit(id)} className={cartsBtnSecondary} aria-label={t.edit} type="button">
                 Edytuj
               </button>
-              <button
-                onClick={() => onDelete(id)}
-                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:border-red-300 hover:bg-red-50/40"
-                aria-label={t.delete}
-                type="button"
-              >
+              <button onClick={() => onDelete(id)} className={cartsDangerBtnClass} aria-label={t.delete} type="button">
                 Usuń
               </button>
               {onPrintLabel != null && (
                 <button
                   onClick={() => onPrintLabel({ id, name })}
-                  className="h-9 rounded-lg bg-white hover:bg-cyan-50 text-slate-600 border border-slate-200 hover:border-cyan-300 transition-colors px-3 text-xs font-bold"
+                  className={cartsBtnSecondary}
                   aria-label="Drukuj etykietę"
                   type="button"
                   title="Drukuj etykietę"
@@ -482,7 +479,7 @@ export default function CartCard(props: CartCardProps) {
                 <button
                   onClick={() => setConfirmWholeCartClearOpen(true)}
                   disabled={clearingCart}
-                  className="h-9 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 transition-colors px-3 text-xs font-bold disabled:opacity-50"
+                  className={cartsWarningBtnClass}
                   aria-label={t.clear_cart}
                   title={t.clear_cart}
                   type="button"
@@ -494,7 +491,7 @@ export default function CartCard(props: CartCardProps) {
                 <button
                   onClick={handleSimulate}
                   disabled={simulating}
-                  className="w-9 h-9 rounded-full bg-slate-50 hover:bg-violet-600 text-slate-500 hover:text-white border border-slate-200 hover:border-violet-600 transition-colors flex items-center justify-center"
+                  className={cartsBtnSecondary}
                   aria-label={t.simulation_assign_button}
                   type="button"
                 >

@@ -4,6 +4,17 @@ import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
 import CartImageUrlField from "./ui/CartImageUrlField";
+import {
+  cartsAppInputClass,
+  cartsBtnApply,
+  cartsBtnGhost,
+  cartsBtnSecondary,
+  cartsFieldLabelClass,
+  cartsPageShellClass,
+  cartsSectionClass,
+  cartsSectionTitleClass,
+  cartsSelectClass,
+} from "../../modules/carts/cartsModuleTokens";
 
 /** Edytor wózka standardowego (bulk): nazwa, wymiary, grupa, zdjęcie. */
 
@@ -159,31 +170,31 @@ export default function BulkCartEditor({
   };
 
   return (
-    <div className="w-full min-w-0 space-y-4">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-4">
-        <h2 className="text-xl font-bold uppercase tracking-tight text-slate-900">
+    <div className={`${cartsPageShellClass} w-full min-w-0`}>
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200/90 pb-3">
+        <h2 className="text-base font-semibold text-slate-900">
           {cartId ? t.editBulkCart : t.newBulkCart}
         </h2>
-        <button type="button" onClick={onClose} className="text-xs font-semibold uppercase text-slate-500 hover:text-slate-800">
+        <button type="button" onClick={onClose} className={cartsBtnGhost}>
           {t.close}
         </button>
       </div>
 
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4">
+        <div className={`${cartsSectionClass} grid grid-cols-1 gap-3 md:grid-cols-2`}>
           {cartId ? (
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ID</span>
-              <p className="font-mono text-sm font-bold text-slate-600 tabular-nums">{cartId}</p>
+            <div>
+              <span className={cartsFieldLabelClass}>ID</span>
+              <p className="font-mono text-[13px] font-medium tabular-nums text-slate-700">{cartId}</p>
             </div>
           ) : null}
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="bulk-cart-editor-code">
+          <div className={cartId ? "" : "md:col-span-2"}>
+            <label className={cartsFieldLabelClass} htmlFor="bulk-cart-editor-code">
               Kod{cartId ? "" : " (opcjonalnie)"}
             </label>
             <input
               id="bulk-cart-editor-code"
-              className="w-full bg-slate-50 rounded-2xl px-6 py-4 border border-slate-100 font-mono text-sm font-bold text-slate-800 outline-none focus:border-blue-500 transition-all"
+              className={`${cartsAppInputClass} font-mono`}
               value={cartCode}
               onChange={(e) => setCartCode(e.target.value)}
               placeholder={cartId ? "" : "Puste = wygeneruj CART-0001"}
@@ -191,64 +202,58 @@ export default function BulkCartEditor({
             />
           </div>
           {cartId && cartScanCode ? (
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                Kod skanowania WMS
-              </span>
-              <p className="font-mono text-sm font-semibold text-slate-700">{cartScanCode}</p>
+            <div className="md:col-span-2">
+              <span className={cartsFieldLabelClass}>Kod skanowania WMS</span>
+              <p className="font-mono text-[13px] font-medium text-slate-700">{cartScanCode}</p>
             </div>
           ) : null}
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t.name}</label>
-          <input 
-            className="w-full bg-slate-50 rounded-2xl px-6 py-4 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 transition-all"
-            value={formData.name}
-            onChange={e => setFormData({...formData, name: e.target.value})}
-          />
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          {['width', 'length', 'height'].map((f) => (
-            <div key={f} className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                {f === 'width' ? t.width : f === 'length' ? t.length : t.height}
+          <div className="md:col-span-2">
+            <label className={cartsFieldLabelClass}>{t.name}</label>
+            <input
+              className={cartsAppInputClass}
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+          </div>
+          {(["width", "length", "height"] as const).map((f) => (
+            <div key={f}>
+              <label className={cartsFieldLabelClass}>
+                {f === "width" ? t.width : f === "length" ? t.length : t.height}
               </label>
-              <input 
+              <input
                 type="number"
-                /* Ukrycie strzałek góra/dół */
-                className="w-full bg-slate-50 rounded-2xl py-4 border border-slate-100 font-black text-slate-700 text-center outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                value={formData[f as keyof typeof formData] || ''}
-                onChange={e => setFormData({...formData, [f]: Number(e.target.value)})}
+                className={`${cartsAppInputClass} no-number-spinner text-center tabular-nums`}
+                value={formData[f] || ""}
+                onChange={(e) => setFormData({ ...formData, [f]: Number(e.target.value) })}
               />
             </div>
           ))}
         </div>
 
-        <div className="space-y-3 border-t border-slate-100 pt-4">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">CAPACITY MODE</h3>
-          <div className="flex flex-wrap gap-4">
+        <div className={cartsSectionClass}>
+          <h3 className={cartsSectionTitleClass}>Capacity mode</h3>
+          <div className="mt-2 flex flex-wrap gap-4">
             {(["volume", "orders", "mixed"] as const).map((mode) => (
-              <label key={mode} className="flex items-center gap-2 cursor-pointer">
+              <label key={mode} className="flex cursor-pointer items-center gap-2">
                 <input
                   type="radio"
                   name="capacityMode"
                   checked={capacityMode === mode}
                   onChange={() => setCapacityMode(mode)}
-                  className="w-4 h-4 text-blue-600"
+                  className="h-3.5 w-3.5 text-slate-800"
                 />
-                <span className="text-sm font-bold capitalize">{mode}</span>
+                <span className="text-[13px] font-medium capitalize text-slate-800">{mode}</span>
               </label>
             ))}
           </div>
           {(capacityMode === "volume" || capacityMode === "mixed") && (
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_volume_dm3</label>
+            <div className="mt-3 max-w-xs">
+              <label className={cartsFieldLabelClass}>max_volume_dm3</label>
               <input
                 type="number"
                 min={0}
                 step={0.1}
-                className="w-full bg-slate-50 rounded-2xl px-4 py-2 font-bold outline-none border border-slate-200"
+                className={cartsAppInputClass}
                 value={maxVolumeDm3 === "" ? "" : maxVolumeDm3}
                 onChange={(e) => setMaxVolumeDm3(e.target.value === "" ? "" : Number(e.target.value))}
                 placeholder={String(((formData.length * formData.width * formData.height) / 1000).toFixed(1))}
@@ -256,31 +261,31 @@ export default function BulkCartEditor({
             </div>
           )}
           {(capacityMode === "orders" || capacityMode === "mixed") && (
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">max_orders</label>
+            <div className="mt-3 max-w-xs">
+              <label className={cartsFieldLabelClass}>max_orders</label>
               <input
                 type="number"
                 min={1}
-                className="w-full bg-slate-50 rounded-2xl px-4 py-2 font-bold outline-none border border-slate-200"
+                className={cartsAppInputClass}
                 value={maxOrders === "" ? "" : maxOrders}
                 onChange={(e) => setMaxOrders(e.target.value === "" ? "" : Number(e.target.value))}
-                placeholder="e.g. 10"
+                placeholder="np. 10"
               />
             </div>
           )}
         </div>
 
-        <div className="flex flex-col gap-2 bg-slate-50/80 p-4">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.photo}</span>
-          <CartImageUrlField value={imageUrl} onChange={setImageUrl} />
+        <div className={cartsSectionClass}>
+          <span className={cartsSectionTitleClass}>{t.photo}</span>
+          <div className="mt-2">
+            <CartImageUrlField value={imageUrl} onChange={setImageUrl} />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-            Grupa
-          </label>
+        <div className={cartsSectionClass}>
+          <label className={cartsFieldLabelClass}>Grupa</label>
           <select
-            className="w-full bg-slate-50 rounded-2xl py-3 px-4 border border-slate-100 font-black text-slate-700 outline-none focus:border-blue-500 text-xs"
+            className={cartsSelectClass}
             value={groupId === null ? "" : String(groupId)}
             onChange={(e) => {
               const v = e.target.value;
@@ -292,7 +297,7 @@ export default function BulkCartEditor({
               }
             }}
           >
-            <option value="">{t.unassigned.toUpperCase()}</option>
+            <option value="">{t.unassigned}</option>
             {availableGroups.map((g) => (
               <option key={g.id} value={String(g.id)}>
                 {g.name}
@@ -301,13 +306,14 @@ export default function BulkCartEditor({
           </select>
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg transition-all"
-        >
-          {loading ? t.savingBulk : t.confirm}
-        </button>
+        <div className="flex justify-end gap-2 border-t border-slate-200/90 pt-3">
+          <button type="button" onClick={onClose} className={cartsBtnSecondary}>
+            {t.cancel}
+          </button>
+          <button type="button" onClick={handleSave} disabled={loading} className={cartsBtnApply}>
+            {loading ? t.savingBulk : t.confirm}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,9 +1,6 @@
-import WmsModuleLayout from "../components/layout/WmsModuleLayout";
-import { CARTS_TABS } from "../modules/carts/cartsTabs";
+import CartsModuleLayout from "../modules/carts/CartsModuleLayout";
 
-/**
- * Carts module: top tabs + Outlet (CartsBulk | CartsBaskets | CartsRacks | CartsZones).
- */
+/** Carts module: system tabs + outlet (bulk | baskets | racks | zones | carriers). */
 export default function CartsLayout() {
-  return <WmsModuleLayout tabs={CARTS_TABS} />;
+  return <CartsModuleLayout />;
 }

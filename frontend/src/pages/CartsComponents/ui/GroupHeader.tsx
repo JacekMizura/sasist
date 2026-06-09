@@ -1,4 +1,4 @@
-import { ChevronIcon } from "./Icons";
+import { ChevronRight } from "lucide-react";
 
 type GroupHeaderProps = {
   title: string;
@@ -18,23 +18,23 @@ export default function GroupHeader({
   rightActions,
 }: GroupHeaderProps) {
   return (
-    <div className="flex w-full items-center justify-between gap-2 border-b border-slate-200 py-3">
-      <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-3 text-left sm:gap-4">
-        <div className={`shrink-0 transition-transform ${collapsed ? "" : "rotate-90"}`}>
-          <ChevronIcon className="h-5 w-5 text-slate-400" />
-        </div>
+    <div className="flex w-full items-center justify-between gap-2 border-b border-slate-200/90 bg-white px-3 py-2">
+      <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        <ChevronRight
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${collapsed ? "" : "rotate-90"}`}
+          aria-hidden
+        />
         <div className="flex min-w-0 flex-col gap-0.5">
-          <div className="text-sm font-semibold text-slate-900">
+          <div className="text-[13px] font-semibold text-slate-900">
             {title}{" "}
-            <span className="font-medium text-slate-400">({count})</span>
+            <span className="font-normal text-slate-400">({count})</span>
           </div>
-          {summaryText ? (
-            <div className="text-xs text-slate-600">{summaryText}</div>
-          ) : null}
+          {summaryText ? <div className="text-[11px] text-slate-500">{summaryText}</div> : null}
         </div>
       </button>
-      <div className="ml-2 flex shrink-0 flex-wrap items-center justify-end gap-2">{rightActions}</div>
+      {rightActions ? (
+        <div className="ml-2 flex shrink-0 flex-wrap items-center justify-end gap-1.5">{rightActions}</div>
+      ) : null}
     </div>
   );
 }
-

@@ -15,12 +15,19 @@ import {
 } from "../../api/wmsCarrierApi";
 
 import { BulkCreateCarriersModal } from "../../components/warehouse/carriers/BulkCreateCarriersModal";
-
 import { CarrierGroupCard } from "../../components/warehouse/carriers/CarrierGroupCard";
-
 import { CarriersGroupTable } from "../../components/warehouse/carriers/CarriersGroupTable";
-
 import { CreateCarrierGroupModal } from "../../components/warehouse/carriers/CreateCarrierGroupModal";
+import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
+import { CartsListPageHeader } from "../../modules/carts/CartsListPageHeader";
+import {
+  cartsBtnApply,
+  cartsBtnSecondary,
+  cartsEmptyClass,
+  cartsInputClass,
+  cartsPageShellClass,
+} from "../../modules/carts/cartsModuleTokens";
+import { Box } from "lucide-react";
 
 import {
 
@@ -213,292 +220,126 @@ export default function WarehouseCarriersPage() {
 
 
   const emptyGroupCta = (groupId: number) => (
-
-    <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/40 px-4 py-8 text-center">
-
-      <p className="text-sm font-semibold text-slate-700">Brak nośników w tej grupie</p>
-
-      <p className="mt-2 text-xs text-slate-600">
-
+    <div className={`${cartsEmptyClass} px-4 py-6`}>
+      <p className="text-[13px] font-medium text-slate-700">Brak nośników w tej grupie</p>
+      <p className="mt-1.5 text-[12px] text-slate-600">
         Przygotuj pulę nośników z panelu lub przypisz przy przyjęciu PZ w WMS — oba sposoby działają równolegle.
-
       </p>
-
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-
-        <button
-
-          type="button"
-
-          onClick={() => openCreate(groupId, "bulk")}
-
-          className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-black uppercase text-white hover:bg-amber-700"
-
-        >
-
+      <div className="mt-3 flex flex-wrap justify-center gap-2">
+        <button type="button" onClick={() => openCreate(groupId, "bulk")} className={cartsBtnApply}>
           + Dodaj nośniki
-
         </button>
-
-        <button
-
-          type="button"
-
-          onClick={() => openCreate(groupId, "single")}
-
-          className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-950 hover:bg-amber-50"
-
-        >
-
+        <button type="button" onClick={() => openCreate(groupId, "single")} className={cartsBtnSecondary}>
           Utwórz 1 nośnik
-
         </button>
-
       </div>
-
     </div>
-
   );
 
 
 
-  const title = "Nośniki magazynowe";
-
-  const subtitle =
-
-    "";
-
-
-
   return (
-
-    <div className="p-4 sm:p-8">
-
-      <div className="mx-auto max-w-6xl space-y-6">
-
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
-
-          <div>
-
-            <h1 className="text-2xl font-black text-slate-900">{title}</h1>
-
-            <p className="text-sm text-slate-600">{subtitle}</p>
-
-            {!loading && !err ? (
-
-              <p className="mt-2 text-xs font-bold text-slate-500">
-
-                Grupy: <span className="tabular-nums text-slate-800">{stats.groupCount}</span> · Nośniki:{" "}
-
-                <span className="tabular-nums text-slate-800">{stats.total}</span> · Aktywne:{" "}
-
-                <span className="tabular-nums text-emerald-700">{stats.active}</span>
-
-              </p>
-
-            ) : null}
-
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-
+    <div className={cartsPageShellClass}>
+      <CartsListPageHeader
+        title="Nośniki magazynowe"
+        meta={
+          !loading && !err ? (
+            <>
+              Grupy: <span className="tabular-nums text-slate-800">{stats.groupCount}</span> · Nośniki:{" "}
+              <span className="tabular-nums text-slate-800">{stats.total}</span> · Aktywne:{" "}
+              <span className="tabular-nums text-emerald-700">{stats.active}</span>
+            </>
+          ) : undefined
+        }
+        actions={
+          <>
             {tenantSelectVisible ? (
-
-              <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
-
-                <span className="text-xs font-bold uppercase text-slate-500">Podmiot</span>
-
+              <label className="flex items-center gap-2 text-[13px] font-medium text-slate-700">
+                <span className="text-[11px] font-medium text-slate-500">Podmiot</span>
                 <select
-
                   value={tenantId}
-
                   onChange={(e) => setTenantId(Number(e.target.value) || 1)}
-
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold shadow-sm"
-
+                  className={cartsInputClass}
                 >
-
                   {tenants.map((t) => (
-
                     <option key={t.id} value={t.id}>
-
                       {t.name || `Tenant #${t.id}`}
-
                     </option>
-
                   ))}
-
                 </select>
-
               </label>
-
             ) : null}
-
             <button
-
               type="button"
-
               onClick={() => openCreate(null, "single")}
-
               disabled={groups.length === 0}
-
-              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-950 shadow-sm hover:bg-amber-100 disabled:opacity-50"
-
+              className={cartsBtnSecondary}
             >
-
               Utwórz 1 nośnik
-
             </button>
-
             <button
-
               type="button"
-
               onClick={() => openCreate(null, "bulk")}
-
               disabled={groups.length === 0}
-
-              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
-
+              className={cartsBtnApply}
             >
-
               + Dodaj nośniki
-
             </button>
-
-            <button
-
-              type="button"
-
-              onClick={() => setGroupModalOpen(true)}
-
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50"
-
-            >
-
+            <button type="button" onClick={() => setGroupModalOpen(true)} className={cartsBtnSecondary}>
               + Nowa grupa
-
             </button>
+          </>
+        }
+      />
 
-          </div>
+      {toast ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-medium text-emerald-900">
+          <span>{toast}</span>
+          <button type="button" onClick={() => setToast(null)} className="text-[11px] font-semibold text-emerald-800">
+            Zamknij
+          </button>
+        </div>
+      ) : null}
 
-        </header>
-
-
-
-        {toast ? (
-
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
-
-            <span>{toast}</span>
-
-            <button type="button" onClick={() => setToast(null)} className="text-xs font-bold uppercase text-emerald-800">
-
-              Zamknij
-
-            </button>
-
-          </div>
-
-        ) : null}
-
-
-
-        {loading ? (
-
-          <p className="py-12 text-center text-slate-500">Wczytywanie…</p>
-
-        ) : err ? (
-
-          <p className="py-12 text-center font-bold text-red-600">{err}</p>
-
-        ) : groups.length === 0 ? (
-
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-14 text-center">
-
-            <p className="text-lg font-black text-slate-800">Brak grup nośników</p>
-
-            <p className="mt-2 text-sm text-slate-600">Zdefiniuj typy (np. palety euro, kartony). Potem dodasz nośniki z tej zakładki.</p>
-
-            <button
-
-              type="button"
-
-              onClick={() => setGroupModalOpen(true)}
-
-              className="mt-6 rounded-xl bg-blue-600 px-6 py-3 text-sm font-black uppercase text-white shadow hover:bg-blue-700"
-
-            >
-
+      {loading ? (
+        <p className="py-10 text-center text-[13px] text-slate-500">Wczytywanie…</p>
+      ) : err ? (
+        <p className="py-10 text-center text-[13px] font-medium text-red-600">{err}</p>
+      ) : groups.length === 0 ? (
+        <AppEmptyState
+          icon={Box}
+          title="Brak grup nośników"
+          description="Zdefiniuj typy (np. palety euro, kartony). Potem dodasz nośniki z tej zakładki."
+          action={
+            <button type="button" onClick={() => setGroupModalOpen(true)} className={cartsBtnApply}>
               + Nowa grupa
-
             </button>
-
-          </div>
-
-        ) : (
-
-          <div className="space-y-5">
-
-            {groups.map((g) => {
-
-              const list = byGroupId.get(g.id) ?? [];
-
-              const activeN = countActive(list);
-
-              return (
-
-                <CarrierGroupCard
-
-                  key={g.id}
-
-                  title={(g.name || "").trim() || g.code}
-
-                  subtitle={`Kod grupy: ${(g.code || "").trim() || "—"}`}
-
-                  memberCount={list.length}
-
-                  activeCount={activeN}
-
-                  defaultOpen
-
-                  headerActions={
-
-                    <div className="flex flex-wrap gap-1">
-
-                      <button
-
-                        type="button"
-
-                        onClick={() => openCreate(g.id, "single")}
-
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
-
-                      >
-
-                        1 szt.
-
-                      </button>
-
-                      <button
-
-                        type="button"
-
-                        onClick={() => openCreate(g.id, "bulk")}
-
-                        className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-black uppercase text-white hover:bg-amber-700"
-
-                      >
-
-                        + Dodaj
-
-                      </button>
-
-                    </div>
-
-                  }
-
-                >
+          }
+        />
+      ) : (
+        <div className="space-y-3">
+          {groups.map((g) => {
+            const list = byGroupId.get(g.id) ?? [];
+            const activeN = countActive(list);
+            return (
+              <CarrierGroupCard
+                key={g.id}
+                title={(g.name || "").trim() || g.code}
+                subtitle={`Kod grupy: ${(g.code || "").trim() || "—"}`}
+                memberCount={list.length}
+                activeCount={activeN}
+                defaultOpen
+                headerActions={
+                  <div className="flex flex-wrap gap-1">
+                    <button type="button" onClick={() => openCreate(g.id, "single")} className={cartsBtnSecondary}>
+                      1 szt.
+                    </button>
+                    <button type="button" onClick={() => openCreate(g.id, "bulk")} className={cartsBtnApply}>
+                      + Dodaj
+                    </button>
+                  </div>
+                }
+              >
 
                   <CarriersGroupTable
 
@@ -561,14 +402,8 @@ export default function WarehouseCarriersPage() {
               </CarrierGroupCard>
 
             ) : null}
-
-          </div>
-
-        )}
-
-      </div>
-
-
+        </div>
+      )}
 
       <CreateCarrierGroupModal
 
@@ -599,12 +434,8 @@ export default function WarehouseCarriersPage() {
         onClose={() => setCreateModal((s) => ({ ...s, open: false }))}
 
         onSuccess={onCreated}
-
       />
-
     </div>
-
   );
-
 }
 
