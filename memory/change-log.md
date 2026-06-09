@@ -1,5 +1,9 @@
 # Change log
 
+## 2026-06-08 — Inventory UX: portal dropdown + draft delete
+- Reports document picker renders via portal (`z-index: 10050`) — no clipping under sticky ERP chrome
+- Draft documents deletable from list (trash action + confirm modal); `DELETE /inventory-count/documents/{id}` with status/session validation
+
 ## 2026-06-08 — ERP inventory layout unified with panel shell
 - Replaced custom inventory shell (`max-w-[1600px]`, white full-page) with standard `PageLayout` + `SettingsModuleStack` (same as Producenci / Administratorzy)
 - Module header: breadcrumbs, title, `TopTabsNavigation`, primary action in header

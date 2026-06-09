@@ -1,7 +1,7 @@
-import { ChevronDown, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 
 import type { InventoryDocumentRead } from "@/api/inventoryCountApi";
+import { FilterField } from "@/components/filters";
 import {
   moduleListDataCardClass,
   moduleListPageShellClass,
@@ -15,11 +15,11 @@ import {
   panelListDenseThBase,
   panelListDenseTheadClass,
 } from "@/components/operational";
-import { filterInputClass, FilterField } from "@/components/filters";
-import { inventoryDocOptionLabel } from "./InventoryDocListRow";
 import { inventoryReportDescription } from "../../inventoryCountUiLabels";
-import { erpSurfaceCard } from "./theme";
+import { inventoryDocOptionLabel } from "./InventoryDocListRow";
+import InventoryDocumentPicker from "./InventoryDocumentPicker";
 import InventoryStatusBadge from "./InventoryStatusBadge";
+import { erpSurfaceCard } from "./theme";
 
 export type ReportRow = {
   kind: string;
@@ -37,7 +37,7 @@ type Props = {
   downloadBusy: string | null;
 };
 
-/** Reports — standard ERP table + document picker (shell in {@link InventoryLayout}). */
+/** Reports — standard ERP table + portal document picker (shell in {@link InventoryLayout}). */
 export default function InventoryReportsView({
   reports,
   documents,
@@ -46,54 +46,23 @@ export default function InventoryReportsView({
   onDownload,
   downloadBusy,
 }: Props) {
-  const [open, setOpen] = useState(false);
-  const selectedDoc = documents.find((d) => d.id === selectedDocumentId);
-  const selectedLabel = selectedDoc ? inventoryDocOptionLabel(selectedDoc) : "";
+  const pickerOptions = [
+    { value: "" as const, label: "— wybierz dokument —" },
+    ...documents.map((doc) => ({
+      value: doc.id,
+      label: inventoryDocOptionLabel(doc),
+    })),
+  ];
 
   return (
     <div className={moduleListPageShellClass}>
       <div className={`${erpSurfaceCard} p-4`}>
         <FilterField label="Dokument">
-          <div className="relative max-w-md">
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              className={`${filterInputClass} flex w-full items-center justify-between text-left`}
-            >
-              <span className={selectedLabel ? "font-medium text-slate-900" : "text-slate-500"}>
-                {selectedLabel || "— wybierz dokument —"}
-              </span>
-              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
-            </button>
-
-            {open ? (
-              <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectDocument("");
-                    setOpen(false);
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50"
-                >
-                  — wybierz dokument —
-                </button>
-                {documents.map((doc) => (
-                  <button
-                    key={doc.id}
-                    type="button"
-                    onClick={() => {
-                      onSelectDocument(doc.id);
-                      setOpen(false);
-                    }}
-                    className="w-full px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                  >
-                    {inventoryDocOptionLabel(doc)}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <InventoryDocumentPicker
+            options={pickerOptions}
+            value={selectedDocumentId}
+            onChange={onSelectDocument}
+          />
         </FilterField>
       </div>
 

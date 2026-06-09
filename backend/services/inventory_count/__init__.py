@@ -7,6 +7,7 @@ from .count_entry_service import confirm_location_scan, get_line_for_operator, r
 from .dashboard_service import build_inventory_dashboard
 from .document_service import (
     create_inventory_document,
+    delete_draft_inventory_document,
     generate_inventory_tasks,
     get_inventory_document,
     list_inventory_documents,
@@ -32,6 +33,7 @@ __all__ = [
     "complete_recount",
     "confirm_location_scan",
     "create_inventory_document",
+    "delete_draft_inventory_document",
     "create_recounts_for_document",
     "generate_inventory_report",
     "generate_inventory_tasks",

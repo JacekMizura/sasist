@@ -21,9 +21,12 @@ from ...models.inventory_count.constants import (
     INV_STATUS_CANCELLED,
     INV_STATUS_ARCHIVED,
     INV_TYPE_FULL,
+    SESSION_STATUS_ACTIVE,
+    SESSION_STATUS_PAUSED,
     TASK_STATUS_OPEN,
 )
 from ...models.inventory_count.document import InventoryDocument
+from ...models.inventory_count.session import InventorySession
 from ...models.inventory_count.task import InventoryTask
 from .audit_service import log_inventory_audit
 from .errors import (
@@ -470,6 +473,45 @@ def generate_inventory_tasks(
     db.commit()
     db.refresh(doc)
     return {"document": _doc_to_dict(doc), "tasks_created": created}
+
+
+def delete_draft_inventory_document(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    user_id: int | None = None,
+) -> None:
+    """Hard-delete a draft document that was never started and has no active WMS sessions."""
+    del user_id  # reserved for future audit row
+    doc = (
+        db.query(InventoryDocument)
+        .filter(InventoryDocument.id == int(document_id), InventoryDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc is None:
+        raise InventoryDocumentNotFoundError(f"Inventory document {document_id} not found")
+
+    if doc.status != INV_STATUS_DRAFT:
+        raise InventoryInvalidTransitionError("Only draft documents can be deleted")
+
+    if doc.started_at is not None:
+        raise InventoryInvalidTransitionError("Cannot delete a started inventory document")
+
+    active_session = (
+        db.query(InventorySession.id)
+        .filter(
+            InventorySession.inventory_document_id == doc.id,
+            InventorySession.status.in_((SESSION_STATUS_ACTIVE, SESSION_STATUS_PAUSED)),
+        )
+        .limit(1)
+        .first()
+    )
+    if active_session is not None:
+        raise InventoryInvalidTransitionError("Cannot delete document with active WMS operator sessions")
+
+    db.delete(doc)
+    db.commit()
 
 
 def _transition_status(

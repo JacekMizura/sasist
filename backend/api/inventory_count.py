@@ -60,6 +60,7 @@ from ..services.inventory_count.permissions import (
     PERM_REJECT,
     PERM_SUBMIT,
     PERM_VIEW,
+    PERM_DELETE,
 )
 from ..services.inventory_count.audit_log_service import get_document_timelines, list_document_audit_log
 from ..services.inventory_count.job_service import ASYNC_EXPORT_LINE_THRESHOLD, enqueue_inventory_job, get_inventory_job
@@ -70,6 +71,7 @@ from ..services.inventory_count import (
     InventoryCountError,
     build_inventory_dashboard,
     create_inventory_document,
+    delete_draft_inventory_document,
     generate_inventory_tasks,
     get_inventory_document,
     list_inventory_documents,
@@ -206,6 +208,25 @@ def inventory_count_get_document(
         if doc is not None:
             payload["submit_readiness"] = evaluate_submit_readiness(db, doc)
         return payload
+    except InventoryCountError as exc:
+        raise _map_inventory_error(exc) from exc
+
+
+@router.delete("/documents/{document_id}")
+def inventory_count_delete_document(
+    document_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(require_inventory_permission(PERM_DELETE)),
+):
+    try:
+        delete_draft_inventory_document(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            user_id=user.id,
+        )
+        return {"ok": True, "document_id": document_id}
     except InventoryCountError as exc:
         raise _map_inventory_error(exc) from exc
 

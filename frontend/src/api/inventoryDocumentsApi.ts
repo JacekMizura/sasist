@@ -60,6 +60,12 @@ export async function fetchInventoryDocument(tenantId: number, documentId: numbe
   return data;
 }
 
+export async function deleteInventoryDocument(tenantId: number, documentId: number): Promise<void> {
+  await api.delete(`/inventory-count/documents/${documentId}`, {
+    params: { tenant_id: tenantId },
+  });
+}
+
 export async function listDocumentLines(
   tenantId: number,
   documentId: number,
