@@ -1,79 +1,127 @@
-import { AlertTriangle, Package } from "lucide-react";
+import { AlertTriangle, Image as ImageIcon } from "lucide-react";
 
+import { CarrierBadge } from "@/components/warehouse/carriers/CarrierBadge";
 import type { WmsCountedCarrierGroup, WmsCountedProduct, WmsUnexpectedProduct } from "../../wmsInventoryExecutionContext";
-import WmsInventoryProductThumb from "./WmsInventoryProductThumb";
-import { WMS_INV } from "./theme";
+import { formatCartonUnitSummary } from "./inventoryQtyUtils";
 
 type Props = {
   groups: WmsCountedCarrierGroup[];
   unexpectedItems: WmsUnexpectedProduct[];
   activeLineId: number | null;
   pulseLineId: number | null;
+  unitsPerCarton?: number;
   onSelect?: (item: WmsCountedProduct) => void;
 };
+
+function fmtQty(n: number): string {
+  return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 0 }).format(n);
+}
 
 function ProductRow({
   item,
   activeLineId,
   pulseLineId,
+  unitsPerCarton,
   onSelect,
 }: {
   item: WmsCountedProduct;
   activeLineId: number | null;
   pulseLineId: number | null;
+  unitsPerCarton?: number;
   onSelect?: (item: WmsCountedProduct) => void;
 }) {
   const isActive = item.line_id === activeLineId;
   const pulse = item.line_id === pulseLineId;
-  const ring = pulse
-    ? "ring-2 ring-emerald-400/60"
+  const pack = Math.max(1, unitsPerCarton ?? 1);
+  const summary = formatCartonUnitSummary(item.counted_quantity, pack);
+
+  const cardBg = pulse
+    ? "bg-emerald-50/80 ring-2 ring-emerald-400/50"
     : isActive
-      ? "ring-2 ring-[#5a45d0]/30 border-[#5a45d0]/40"
+      ? "bg-indigo-50/50 ring-2 ring-indigo-200"
       : item.defectReported
-        ? "ring-2 ring-amber-300/80 border-amber-200"
-        : "border-slate-200";
+        ? "bg-amber-50/40 ring-1 ring-amber-200"
+        : "bg-white hover:bg-slate-50/80";
 
   return (
     <button
       type="button"
       onClick={() => onSelect?.(item)}
-      className={`${WMS_INV.card} flex w-full items-center justify-between gap-4 p-4 text-left transition-all ${ring}`}
+      className={`group relative flex w-full flex-col items-center justify-between gap-4 border-b border-slate-200/60 p-5 transition-all duration-150 outline-none sm:flex-row sm:gap-6 ${cardBg}`}
     >
-      <div className="flex min-w-0 items-center gap-4">
-        <WmsInventoryProductThumb url={item.image_url} name={item.product_name} size="md" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-slate-800">{item.product_name ?? item.sku ?? "—"}</p>
+      <div className="flex min-w-0 w-full flex-1 items-center gap-4 text-left sm:w-auto">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center sm:h-20 sm:w-20">
+          {item.image_url ? (
+            <img
+              src={item.image_url}
+              alt=""
+              className="max-h-full max-w-full object-contain mix-blend-multiply drop-shadow-sm"
+              loading="lazy"
+            />
+          ) : (
+            <ImageIcon size={28} className="text-slate-200" strokeWidth={1.5} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
           {item.ean ? (
-            <p className="mt-0.5 text-[11px] text-slate-500">EAN {item.ean}</p>
-          ) : item.sku ? (
-            <p className="mt-0.5 text-[11px] text-slate-500">{item.sku}</p>
+            <p className="mb-1.5 font-mono text-lg font-black leading-none tracking-tight text-slate-900">
+              EAN: {item.ean}
+            </p>
+          ) : null}
+          <h3 className="line-clamp-2 text-xs font-semibold leading-tight text-slate-500 group-hover:text-[#5a4fcf]">
+            {item.product_name ?? item.sku ?? "—"}
+          </h3>
+          {item.carrier_code ? (
+            <div className="mt-2">
+              <CarrierBadge code={item.carrier_code} />
+            </div>
           ) : null}
           {item.defectReported ? (
-            <p className="mt-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+            <p className="mt-2 flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-amber-700">
               <AlertTriangle className="h-3 w-3" /> Wada zgłoszona
             </p>
           ) : null}
         </div>
       </div>
-      <p className="shrink-0 text-3xl font-bold tabular-nums leading-none text-[#23438e]">{item.counted_quantity}</p>
+
+      <div className="flex w-full shrink-0 items-center justify-center sm:w-[12rem]">
+        <div className="flex w-full max-w-[200px] flex-col items-center rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-3.5 group-hover:border-indigo-200">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#5a4fcf]">Policzono</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-black leading-none tabular-nums text-[#5a4fcf]">{fmtQty(item.counted_quantity)}</span>
+            <span className="text-[10px] font-bold text-[#5a4fcf]/80">szt.</span>
+          </div>
+          {summary ? <span className="mt-1 text-[10px] font-medium text-slate-500">{summary}</span> : null}
+        </div>
+      </div>
     </button>
   );
 }
 
 function UnexpectedRow({ item }: { item: WmsUnexpectedProduct }) {
   return (
-    <div className={`${WMS_INV.card} flex w-full items-center justify-between gap-4 border-dashed p-4`}>
-      <div className="flex min-w-0 items-center gap-4">
-        <WmsInventoryProductThumb url={null} name={item.temporary_name} size="md" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-slate-800">{item.temporary_name}</p>
-          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Produkt spoza systemu</p>
+    <div className="flex w-full flex-col items-center justify-between gap-4 border-b border-slate-200/60 bg-white p-5 sm:flex-row sm:gap-6">
+      <div className="flex min-w-0 w-full flex-1 items-center gap-4 text-left sm:w-auto">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 sm:h-20 sm:w-20">
+          <ImageIcon size={28} className="text-slate-300" strokeWidth={1.5} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Nieznany produkt</p>
+          <h3 className="line-clamp-2 text-xs font-semibold leading-tight text-slate-700">{item.temporary_name}</h3>
           {item.barcode_value ? (
-            <p className="mt-0.5 text-[11px] text-slate-500">Kod: {item.barcode_value}</p>
+            <p className="mt-1 font-mono text-[11px] text-slate-500">Kod: {item.barcode_value}</p>
           ) : null}
         </div>
       </div>
-      <p className="shrink-0 text-3xl font-bold tabular-nums leading-none text-amber-700">{item.quantity}</p>
+      <div className="flex w-full shrink-0 items-center justify-center sm:w-[12rem]">
+        <div className="flex w-full max-w-[200px] flex-col items-center rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-3.5">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#5a4fcf]">Policzono</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-black leading-none tabular-nums text-[#5a4fcf]">{fmtQty(item.quantity)}</span>
+            <span className="text-[10px] font-bold text-[#5a4fcf]/80">szt.</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -83,6 +131,7 @@ export default function WmsInventoryLocationCounts({
   unexpectedItems,
   activeLineId,
   pulseLineId,
+  unitsPerCarton,
   onSelect,
 }: Props) {
   if (groups.length === 0 && unexpectedItems.length === 0) return null;
@@ -90,29 +139,26 @@ export default function WmsInventoryLocationCounts({
   const hasCarriers = groups.some((g) => g.carrierId != null);
 
   return (
-    <section className="space-y-3">
+    <section className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
       {groups.map((group) => (
-        <div key={group.key} className="space-y-3">
+        <div key={group.key}>
           {hasCarriers ? (
-            <div
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest ${
-                group.carrierId != null
-                  ? "border border-slate-200 bg-white text-[#23438e]"
-                  : "border border-dashed border-slate-200 text-slate-400"
-              }`}
-            >
-              <Package className="h-3.5 w-3.5" />
-              {group.carrierCode ?? (group.carrierId != null ? `NOŚNIK #${group.carrierId}` : "Luzem (bez nośnika)")}
+            <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-5 py-2.5">
+              {group.carrierId != null && group.carrierCode ? (
+                <CarrierBadge code={group.carrierCode} />
+              ) : (
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Luzem</span>
+              )}
             </div>
           ) : null}
-
-          <ul className="space-y-3">
+          <ul>
             {group.items.map((item) => (
               <li key={item.line_id}>
                 <ProductRow
                   item={item}
                   activeLineId={activeLineId}
                   pulseLineId={pulseLineId}
+                  unitsPerCarton={unitsPerCarton}
                   onSelect={onSelect}
                 />
               </li>
@@ -122,9 +168,11 @@ export default function WmsInventoryLocationCounts({
       ))}
 
       {unexpectedItems.length > 0 ? (
-        <div className="space-y-3">
-          <p className={WMS_INV.textLabel}>Nieznane produkty</p>
-          <ul className="space-y-3">
+        <div>
+          <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-2.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nieznane produkty</span>
+          </div>
+          <ul>
             {unexpectedItems.map((item) => (
               <li key={item.unknown_id}>
                 <UnexpectedRow item={item} />

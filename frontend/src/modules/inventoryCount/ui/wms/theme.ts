@@ -28,7 +28,7 @@ export const WMS_INV = {
     "shrink-0 rounded-xl bg-[#23438e] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#1a326b] disabled:bg-slate-300",
   bottomBar:
     "fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 flex justify-center z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]",
-  bottomBarInner: "max-w-4xl w-full flex gap-4",
+  bottomBarInner: "mx-auto w-full max-w-5xl px-4 sm:px-6 flex gap-4",
   sidebar:
     "flex w-full shrink-0 flex-col border-slate-200/80 bg-white lg:h-full lg:min-h-0 lg:w-[320px] lg:min-w-[320px] lg:max-w-[320px] lg:overflow-y-auto lg:border-r",
   sidebarHeader: "shrink-0 border-b border-slate-100 px-4 py-4",

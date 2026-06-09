@@ -7,8 +7,10 @@ import {
   openWmsInventorySession,
   resolveWmsInventoryLocationScan,
 } from "@/api/inventoryCountApi";
-import WmsInventoryRecentLocationContext from "@/modules/inventoryCount/components/WmsInventoryRecentLocationContext";
-import WmsInventoryScanField from "@/modules/inventoryCount/components/WmsInventoryScanField";
+import WmsInventoryRecentLocationContext from "@/modules/inventoryCount/ui/wms/WmsInventoryRecentLocationContext";
+import WmsInventoryScanField from "@/modules/inventoryCount/ui/wms/WmsInventoryScanField";
+import { WMS_OPERATIONAL_CONTAINER } from "@/components/wms/execution/wmsLayoutTokens";
+import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
 import { useInventoryScanInput } from "@/modules/inventoryCount/hooks/useInventoryScanInput";
 import { wmsInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
 import {
@@ -18,7 +20,6 @@ import {
 } from "@/modules/inventoryCount/recentLocationsStorage";
 import { setActiveInventoryDocumentId } from "@/modules/inventoryCount/wmsActiveDocumentStorage";
 import { WMS_INV } from "@/modules/inventoryCount/ui/wms/theme";
-import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
 import { useWarehouse } from "@/context/WarehouseContext";
 
 const TENANT_ID = 1;
@@ -146,15 +147,15 @@ export default function WmsInventoryCountEntryPage() {
 
   if (!warehouseId) {
     return (
-      <div className={WMS_INV.shellWide}>
-        <p className={`py-4 text-sm font-bold ${WMS_INV.textMuted}`}>Wybierz magazyn.</p>
+      <div className={`${WMS_OPERATIONAL_CONTAINER} py-12`}>
+        <p className={`text-sm font-bold ${WMS_INV.textMuted}`}>Wybierz magazyn.</p>
       </div>
     );
   }
 
   if (!Number.isFinite(documentId)) {
     return (
-      <div className={WMS_INV.shellWide}>
+      <div className={`${WMS_OPERATIONAL_CONTAINER} py-12`}>
         <p className="text-sm text-rose-700">
           Brak dokumentu.{" "}
           <Link to={wmsInventoryCountPaths.root} className="underline">
@@ -167,7 +168,7 @@ export default function WmsInventoryCountEntryPage() {
 
   if (docBlocked) {
     return (
-      <div className={WMS_INV.shellWide}>
+      <div className={`${WMS_OPERATIONAL_CONTAINER} py-12`}>
         <p className="text-sm text-rose-700">{docBlocked}</p>
         <Link to={wmsInventoryCountPaths.root} className="mt-2 inline-block text-xs font-bold underline">
           Wróć do listy inwentaryzacji
@@ -177,10 +178,14 @@ export default function WmsInventoryCountEntryPage() {
   }
 
   return (
-    <div className={`${WMS_INV.shell} mt-4 flex flex-col items-stretch`}>
-      {docTitle ? <p className="mb-2 w-full text-sm font-semibold text-slate-600">{docTitle}</p> : null}
+    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-8 py-6`}>
+      <div>
+        <p className={WMS_INV.textLabel}>Krok 1 — lokalizacja</p>
+        {docTitle ? <h1 className="mt-1 text-xl font-black text-slate-900">{docTitle}</h1> : null}
+        <p className={`mt-2 ${WMS_INV.textSub}`}>Zeskanuj lokalizację, aby rozpocząć liczenie w tym dokumencie.</p>
+      </div>
 
-      <div className="relative mb-16 w-full max-w-2xl">
+      <div className="relative max-w-2xl">
         <WmsInventoryScanField
           inputRef={inputRef}
           value={query}
@@ -192,9 +197,7 @@ export default function WmsInventoryCountEntryPage() {
         />
       </div>
 
-      <div className="w-full">
-        <WmsInventoryRecentLocationContext items={recent} disabled={busy} onSelect={openRecent} />
-      </div>
+      <WmsInventoryRecentLocationContext items={recent} disabled={busy} onSelect={openRecent} />
     </div>
   );
 }

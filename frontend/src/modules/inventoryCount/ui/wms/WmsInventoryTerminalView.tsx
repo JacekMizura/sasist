@@ -1,14 +1,15 @@
 import { useRef } from "react";
 import { Link } from "react-router-dom";
 
+import { WMS_OPERATIONAL_CONTAINER } from "@/components/wms/execution/wmsLayoutTokens";
 import type { WmsInventoryTerminalPageState } from "@/modules/inventoryCount/hooks/useWmsInventoryTerminalPage";
+import { wmsInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
 import WmsInventoryActiveContextBar from "@/modules/inventoryCount/ui/wms/WmsInventoryActiveContextBar";
 import WmsInventoryLocationCounts from "@/modules/inventoryCount/ui/wms/WmsInventoryLocationCounts";
 import WmsInventoryLiveSearchPanel from "@/modules/inventoryCount/ui/wms/WmsInventoryLiveSearchPanel";
 import WmsInventoryProductDetailPanel from "@/modules/inventoryCount/ui/wms/WmsInventoryProductDetailPanel";
 import WmsInventoryScanField from "@/modules/inventoryCount/ui/wms/WmsInventoryScanField";
 import WmsInventoryUnknownProductModal from "@/modules/inventoryCount/ui/wms/WmsInventoryUnknownProductModal";
-import { wmsInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
 import { WMS_INV } from "@/modules/inventoryCount/ui/wms/theme";
 
 type Props = {
@@ -16,7 +17,7 @@ type Props = {
   documentId: number;
 };
 
-/** WMS counting terminal — presentation only. */
+/** WMS counting terminal — fullscreen operational flow (putaway/picking density). */
 export default function WmsInventoryTerminalView({ state, documentId }: Props) {
   const scanAnchorRef = useRef<HTMLDivElement>(null);
   const {
@@ -53,14 +54,16 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
     qtyPulse,
     invalidPulse,
     carrierScanMode,
-    qtyInputMode,
+    qtyEditState,
     setQtyInputMode,
+    setQtyDraft,
+    commitQtyDraft,
     packaging,
     unknownOpen,
     lastScanCode,
     setUnknownOpen,
     adjustQty,
-    setQty,
+    setQtyField,
     selectCountedProduct,
     enterCarrierScan,
     skipCarrier,
@@ -75,7 +78,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
   };
 
   return (
-    <div className={`${WMS_INV.shell} relative overflow-visible`}>
+    <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-6 py-6 pb-32`}>
       <WmsInventoryActiveContextBar
         location={locationContext}
         carrier={carrierContext}
@@ -118,13 +121,37 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
             />
           </div>
 
-          <WmsInventoryLocationCounts
-            groups={countedProductGroups}
-            unexpectedItems={unexpectedItems}
-            activeLineId={activeLineId}
-            pulseLineId={pulseLineId}
-            onSelect={selectCountedProduct}
-          />
+          {activeScan ? (
+            <WmsInventoryProductDetailPanel
+              scan={activeScan}
+              counted={activeCountedProduct}
+              pulse={qtyPulse}
+              invalid={invalidPulse}
+              isPartialInventory={isPartialInventory}
+              tenantId={tenantId}
+              warehouseId={warehouseId}
+              currentLocationId={task?.location_id}
+              qtyState={qtyEditState}
+              packaging={packaging}
+              onQtyModeChange={setQtyInputMode}
+              onQtyDraftChange={setQtyDraft}
+              onCommitQtyDraft={commitQtyDraft}
+              onAdjust={(field, d) => void adjustQty(field, d)}
+              onSetField={(field, v) => void setQtyField(field, v)}
+              onClose={focusScan}
+              onConfirm={focusScan}
+              onDefectSaved={(note) => markActiveDefect(note)}
+            />
+          ) : (
+            <WmsInventoryLocationCounts
+              groups={countedProductGroups}
+              unexpectedItems={unexpectedItems}
+              activeLineId={activeLineId}
+              pulseLineId={pulseLineId}
+              unitsPerCarton={packaging.unitsPerCarton}
+              onSelect={selectCountedProduct}
+            />
+          )}
         </>
       ) : (
         <WmsInventoryScanField
@@ -139,30 +166,9 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
         />
       )}
 
-      {counting && activeScan ? (
-        <WmsInventoryProductDetailPanel
-          scan={activeScan}
-          counted={activeCountedProduct}
-          pulse={qtyPulse}
-          invalid={invalidPulse}
-          isPartialInventory={isPartialInventory}
-          tenantId={tenantId}
-          warehouseId={warehouseId}
-          currentLocationId={task?.location_id}
-          qtyInputMode={qtyInputMode}
-          packaging={packaging}
-          onQtyModeChange={setQtyInputMode}
-          onAdjust={(d) => void adjustQty(d)}
-          onSetQuantity={(q) => void setQty(q)}
-          onClose={focusScan}
-          onConfirm={focusScan}
-          onDefectSaved={(note) => markActiveDefect(note)}
-        />
-      ) : null}
-
       {counting ? (
         <div className={WMS_INV.bottomBar}>
-          <div className={WMS_INV.bottomBarInner}>
+          <div className={`${WMS_OPERATIONAL_CONTAINER} flex gap-4`}>
             <button type="button" className={WMS_INV.btnAction} onClick={() => setUnknownOpen(true)}>
               Nieznany produkt
             </button>
@@ -195,7 +201,7 @@ export default function WmsInventoryTerminalView({ state, documentId }: Props) {
       {!counting && task ? (
         <Link
           to={wmsInventoryCountPaths.document(documentId)}
-          className={`mt-2 inline-block text-xs font-bold ${WMS_INV.textMuted}`}
+          className={`inline-block text-xs font-bold ${WMS_INV.textMuted}`}
         >
           ← Wróć do skanowania lokalizacji
         </Link>
@@ -211,7 +217,7 @@ type ErrorProps = {
 
 export function WmsInventoryTerminalErrorState({ message, backHref }: ErrorProps) {
   return (
-    <div className={WMS_INV.shell}>
+    <div className={`${WMS_OPERATIONAL_CONTAINER} py-8`}>
       <p className="text-sm font-bold text-red-700">{message}</p>
       <Link to={backHref} className={`mt-2 inline-block text-xs font-bold ${WMS_INV.textMuted}`}>
         Wróć
@@ -222,8 +228,8 @@ export function WmsInventoryTerminalErrorState({ message, backHref }: ErrorProps
 
 export function WmsInventoryTerminalLoadingState({ label = "…" }: { label?: string }) {
   return (
-    <div className={WMS_INV.shell}>
-      <p className={`py-2 text-sm font-bold ${WMS_INV.textMuted}`}>{label}</p>
+    <div className={`${WMS_OPERATIONAL_CONTAINER} py-8`}>
+      <p className={`text-sm font-bold ${WMS_INV.textMuted}`}>{label}</p>
     </div>
   );
 }

@@ -1,6 +1,11 @@
 # Change log
 
-## 2026-06-08 — WMS inventory terminal UX fixes (operator flow)
+## 2026-06-08 — WMS inventory UX correction (operational flow)
+- Removed persistent document sidebar; start screen = full-width document queue (putaway-style cards)
+- Removed „Utwórz dokument ERP” from WMS; execution-only flow
+- Carton qty: separate integer counters (kartony + sztuki resztowe), sum in pieces — no fractional cartons
+- Product rows, badges (LocationBadge, CarrierBadge), layout aligned with picking/putaway operational modules
+- Document switcher sticky header during execution; inline qty panel (no overlay modal)
 - White terminal shell; left sidebar operational document list (putaway/picking density)
 - LocationBadge SSOT; product thumbnails via WmsProductCard pattern
 - Live search portal (z-index 10060) — no dropdown clipping
