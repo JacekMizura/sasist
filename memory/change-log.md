@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-09 — WMS shell polish: topbar tabs, launcher command center, DnD
+- Topbar: glass (`backdrop-blur`, `bg-white/90`), underline active tab (Linear-style), DnD reorder pinned
+- Launcher: search + `/` shortcut, keyboard nav, pinned tiles drag-reorder (mobile: strzałki)
+- Kafelki: subtelniejszy hover, mniejsze badge, ciaśniejszy spacing, `React.memo`
+
 ## 2026-06-09 — Fix: GET /inventory-count/documents/{id}/conflicts → 500
 - Przyczyna: brak importu `list_document_conflicts` w `inventory_count.py` → NameError
 - `conflict_detail_service`: batch load (lines/products/locations/carriers/recounts/operators), `_safe_float`, per-item try/except, logi skip/partial

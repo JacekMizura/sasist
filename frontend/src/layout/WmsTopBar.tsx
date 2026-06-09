@@ -25,7 +25,7 @@ import { useVisibilityPolling } from "../hooks/useVisibilityPolling";
 const PRIORITY_TASKS_POLL_MS = 30_000;
 
 const iconBtn =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5a4fcf]/40";
+  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100/80 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5a4fcf]/40";
 
 export default function WmsTopBar() {
   const navigate = useNavigate();
@@ -37,7 +37,7 @@ export default function WmsTopBar() {
   const [priorityLoading, setPriorityLoading] = useState(false);
   const [rejectDraft, setRejectDraft] = useState<{ task: WarehousePriorityTask; reason: string } | null>(null);
 
-  const { pinnedTabsInOrder } = useWmsPinnedModes(user?.id ?? null);
+  const { pinnedTabsInOrder, reorderPinned } = useWmsPinnedModes(user?.id ?? null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 30_000);
@@ -163,33 +163,37 @@ export default function WmsTopBar() {
   };
 
   return (
-    <header className="shrink-0 border-b border-slate-200/80 bg-white">
-      <div className="flex h-11 items-center gap-3 px-3 sm:px-5">
-        <div className="flex shrink-0 items-center gap-2">
+    <header className="sticky top-0 z-40 shrink-0 border-b border-slate-200/60 bg-white/90 backdrop-blur-md supports-[backdrop-filter]:bg-white/80">
+      <div className="flex h-10 items-center gap-2 px-3 sm:px-4">
+        <div className="flex shrink-0 items-center gap-1.5">
           <NavLink
             to={WMS_ROUTES.menu}
             className={({ isActive }) =>
               [
-                "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
-                isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                "group relative inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-800",
               ].join(" ")
             }
             title="Moduły WMS"
             aria-label="Moduły WMS"
           >
-            <LayoutGrid size={16} strokeWidth={2.25} aria-hidden />
+            <LayoutGrid size={15} strokeWidth={2.25} aria-hidden />
           </NavLink>
-          <div className="hidden h-5 w-px bg-slate-200 sm:block" aria-hidden />
-          <div className="hidden items-center gap-1.5 sm:flex">
-            <Warehouse size={15} className="text-slate-400" strokeWidth={2} aria-hidden />
-            <span className="max-w-[9rem] truncate text-xs font-semibold text-slate-700">
+          <div className="hidden h-4 w-px bg-slate-200/90 sm:block" aria-hidden />
+          <div className="hidden items-center gap-1 sm:flex">
+            <Warehouse size={14} className="text-slate-400" strokeWidth={2} aria-hidden />
+            <span className="max-w-[8rem] truncate text-[11px] font-medium text-slate-600">
               {warehouse?.name?.trim() || "WMS"}
             </span>
           </div>
         </div>
 
-        <nav className="flex min-w-0 flex-1 items-center justify-center px-1 sm:px-3">
-          <WmsTopBarModuleNav tabs={pinnedTabsInOrder} className="justify-center" />
+        <nav className="flex min-w-0 flex-1 items-center justify-center px-0.5 sm:px-2">
+          <WmsTopBarModuleNav
+            tabs={pinnedTabsInOrder}
+            className="justify-center"
+            onReorder={reorderPinned}
+          />
         </nav>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">

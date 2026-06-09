@@ -76,6 +76,21 @@ export function useWmsPinnedModes(userId: number | null) {
     });
   }, []);
 
+  const reorderPinned = useCallback((activeKey: string, overKey: string) => {
+    if (activeKey === overKey) return;
+    setModes((prev) => {
+      const pinned = prev.filter((m) => m.pinned).sort((a, b) => a.order - b.order);
+      const oldIndex = pinned.findIndex((m) => m.key === activeKey);
+      const newIndex = pinned.findIndex((m) => m.key === overKey);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      const reordered = [...pinned];
+      const [moved] = reordered.splice(oldIndex, 1);
+      reordered.splice(newIndex, 0, moved);
+      const orderByKey = new Map(reordered.map((m, i) => [m.key, i]));
+      return prev.map((m) => (m.pinned ? { ...m, order: orderByKey.get(m.key) ?? m.order } : m));
+    });
+  }, []);
+
   return {
     modes,
     pinnedTabsInOrder,
@@ -85,6 +100,7 @@ export function useWmsPinnedModes(userId: number | null) {
     isPinned,
     togglePin,
     movePinned,
+    reorderPinned,
     catalogTabs: WMS_TAB_ITEMS,
   };
 }
