@@ -83,8 +83,8 @@ export function resolveWmsNavTabs(
     .map((m) => permissionFilteredCatalog.find((t) => t.id === m.key))
     .filter((t): t is WmsTabConfigItem => Boolean(t));
 
-  const baseTabs = pinnedTabs.length > 0 ? pinnedTabs : permissionFilteredCatalog;
-  const finalTabs = ensureMandatoryTabs(baseTabs);
+  /** Topbar shows only user-pinned modules (configure in /wms/menu). */
+  const finalTabs = pinnedTabs;
 
   return {
     catalog,
@@ -96,7 +96,7 @@ export function resolveWmsNavTabs(
     pinnedTabs,
     permissionFilteredCatalog,
     permissionFilteredIds,
-    baseTabs,
+    baseTabs: pinnedTabs,
     finalTabs,
     finalTabIds: finalTabs.map((t) => t.id),
   };

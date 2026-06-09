@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-09 — WMS launcher + topbar: przypinanie, biały UI
+- Launcher: bez hero, bg-white, kafel z pinezką (pin/unpin), reorder ←/→ dla przypiętych
+- Topbar: h-11, white, pills przypiętych modułów (środek), grid menu + magazyn (lewo)
+- `finalTabs` = tylko pinned (localStorage per user); brak fallbacku na cały katalog
+- Shell WMS: `bg-white` zamiast slate-100
+
 ## 2026-06-09 — Fix: inventory posting StockDocument(notes=…) TypeError
 - Przyczyna: `adjustment_service` przekazywał `notes=` do `StockDocument` — pole nie istnieje w modelu
 - Nowy `stock_document_factory.create_stock_document()` — walidacja kolumn ORM + log `STOCK_DOCUMENT_INVALID_KWARGS`

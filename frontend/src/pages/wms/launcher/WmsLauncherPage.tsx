@@ -1,31 +1,50 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { LayoutGrid, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/context/AuthContext";
-import { useWarehouse } from "@/context/WarehouseContext";
 import { useWmsPinnedModes } from "@/hooks/useWmsPinnedModes";
-import { getWmsModule, isWmsTabPathActive } from "../wmsTabConfig";
+import { getWmsModule, isWmsTabPathActive, type WmsTabConfigItem } from "../wmsTabConfig";
 import WmsModuleTile from "./WmsModuleTile";
 import { useWmsLauncherBadges } from "./useWmsLauncherBadges";
+import { useWarehouse } from "@/context/WarehouseContext";
 
-const DEFAULT_DESCRIPTION = "Moduł operacyjny magazynu";
+const DEFAULT_DESCRIPTION = "Moduł operacyjny";
 
-/**
- * Ekran startowy WMS — enterprise module grid (spójny z resztą systemu, nie terminal CE).
- */
+function sortTilesForLauncher(tiles: WmsTabConfigItem[], pinnedIds: string[]): WmsTabConfigItem[] {
+  const order = new Map(pinnedIds.map((id, i) => [id, i]));
+  return [...tiles].sort((a, b) => {
+    const aPin = order.has(a.id);
+    const bPin = order.has(b.id);
+    if (aPin && bPin) return (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0);
+    if (aPin) return -1;
+    if (bPin) return 1;
+    return 0;
+  });
+}
+
+/** Launcher modułów WMS — przypinanie, kolejność paska, bez hero. */
 export default function WmsLauncherPage() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { warehouse } = useWarehouse();
   const { user } = useAuth();
-  const { dashboardTiles } = useWmsPinnedModes(user?.id ?? null);
-  const { metrics, loading: metricsLoading } = useWmsLauncherBadges(warehouse?.id ?? null);
+  const { warehouse } = useWarehouse();
+  const {
+    dashboardTiles,
+    pinnedTabsInOrder,
+    isPinned,
+    togglePin,
+    movePinned,
+  } = useWmsPinnedModes(user?.id ?? null);
+  const { metrics } = useWmsLauncherBadges(warehouse?.id ?? null);
 
   const tileRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [focusedIndex, setFocusedIndex] = useState(0);
 
-  const warehouseName = warehouse?.name?.trim() || "Magazyn";
+  const pinnedIds = useMemo(() => pinnedTabsInOrder.map((t) => t.id), [pinnedTabsInOrder]);
+  const sortedTiles = useMemo(
+    () => sortTilesForLauncher(dashboardTiles, pinnedIds),
+    [dashboardTiles, pinnedIds],
+  );
 
   const openModule = useCallback(
     (path: string) => {
@@ -34,25 +53,30 @@ export default function WmsLauncherPage() {
     [navigate],
   );
 
+  const pinnedIndexById = useMemo(() => {
+    const map = new Map<string, number>();
+    pinnedTabsInOrder.forEach((t, i) => map.set(t.id, i));
+    return map;
+  }, [pinnedTabsInOrder]);
+
   const columnCount = () => {
     if (typeof window === "undefined") return 4;
     const w = window.innerWidth;
-    if (w < 640) return 1;
-    if (w < 1024) return 2;
-    if (w < 1280) return 3;
+    if (w < 640) return 2;
+    if (w < 1024) return 3;
     return 4;
   };
 
   useEffect(() => {
     tileRefs.current[focusedIndex]?.focus();
-  }, [focusedIndex, dashboardTiles.length]);
+  }, [focusedIndex, sortedTiles.length]);
 
   useEffect(() => {
     setFocusedIndex(0);
-  }, [dashboardTiles.length]);
+  }, [sortedTiles.length]);
 
   const onGridKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    const count = dashboardTiles.length;
+    const count = sortedTiles.length;
     if (count === 0) return;
 
     const cols = columnCount();
@@ -80,7 +104,7 @@ export default function WmsLauncherPage() {
       case "Enter":
       case " ":
         event.preventDefault();
-        openModule(dashboardTiles[focusedIndex].path);
+        openModule(sortedTiles[focusedIndex].path);
         return;
       default:
         return;
@@ -91,43 +115,24 @@ export default function WmsLauncherPage() {
   };
 
   return (
-    <div className="min-h-full bg-slate-50">
-      <div className="mx-auto w-full max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <header className="mb-8 lg:mb-10">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Warehouse Management</p>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{warehouseName}</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
-                Moduły operacyjne — wybierz proces, aby rozpocząć pracę.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-xs font-medium text-slate-500 shadow-sm">
-              <LayoutGrid size={14} className="text-slate-400" aria-hidden />
-              <span>
-                {dashboardTiles.length}{" "}
-                {dashboardTiles.length === 1 ? "moduł" : dashboardTiles.length < 5 ? "moduły" : "modułów"}
-              </span>
-              {metricsLoading ? <Loader2 size={14} className="animate-spin text-slate-400" aria-label="Odświeżanie" /> : null}
-            </div>
-          </div>
-        </header>
-
-        {dashboardTiles.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
+    <div className="min-h-full bg-white">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-6">
+        {sortedTiles.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 px-6 py-14 text-center">
             <p className="text-sm font-semibold text-slate-700">Brak modułów WMS dla tego użytkownika.</p>
-            <p className="mt-1 text-sm text-slate-500">Skontaktuj się z administratorem, aby nadać uprawnienia operacyjne.</p>
           </div>
         ) : (
           <div
             role="list"
             tabIndex={0}
             onKeyDown={onGridKeyDown}
-            className="grid grid-cols-1 gap-5 focus:outline-none sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4"
+            className="grid grid-cols-2 gap-3 focus:outline-none sm:gap-4 md:grid-cols-3 xl:grid-cols-4"
           >
-            {dashboardTiles.map((tab, index) => {
+            {sortedTiles.map((tab, index) => {
               const moduleDef = getWmsModule(tab.id);
               const description = moduleDef?.shortDescription?.trim() || DEFAULT_DESCRIPTION;
+              const pinned = isPinned(tab.id);
+              const pinIdx = pinnedIndexById.get(tab.id);
               return (
                 <div key={tab.id} role="listitem" className="min-w-0">
                   <WmsModuleTile
@@ -139,9 +144,17 @@ export default function WmsLauncherPage() {
                     description={description}
                     icon={tab.icon}
                     metrics={metrics[tab.id]}
+                    pinned={pinned}
                     focused={focusedIndex === index}
                     activeRoute={isWmsTabPathActive(pathname, tab)}
+                    canMoveLeft={pinned && pinIdx != null && pinIdx > 0}
+                    canMoveRight={
+                      pinned && pinIdx != null && pinIdx < pinnedTabsInOrder.length - 1
+                    }
                     onActivate={() => openModule(tab.path)}
+                    onTogglePin={() => togglePin(tab.id)}
+                    onMoveLeft={() => movePinned(tab.id, -1)}
+                    onMoveRight={() => movePinned(tab.id, 1)}
                   />
                 </div>
               );

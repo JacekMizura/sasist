@@ -14,12 +14,12 @@ import WmsTopBar from "./WmsTopBar";
  */
 function WmsLayoutChrome() {
   return (
-    <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-slate-100">
+    <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-white">
       <div className="shrink-0" style={{ zIndex: WMS_Z.topNav }}>
         <WmsTopBar />
       </div>
       <ScanFeedbackOverlay />
-      <main className="min-h-0 w-full flex-1 overflow-y-auto bg-slate-100">
+      <main className="min-h-0 w-full flex-1 overflow-y-auto bg-white">
         <Outlet />
       </main>
     </div>

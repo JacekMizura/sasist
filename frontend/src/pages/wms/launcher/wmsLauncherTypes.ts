@@ -119,9 +119,9 @@ export const WMS_MODULE_ACCENTS: Record<WmsTabId, WmsModuleAccent> = {
 };
 
 export const STAT_CHIP_CLASS: Record<WmsModuleStatTone, string> = {
-  neutral: "border-slate-200/80 bg-slate-50 text-slate-600",
-  info: "border-blue-200/80 bg-blue-50 text-blue-700",
-  success: "border-emerald-200/80 bg-emerald-50 text-emerald-700",
-  warning: "border-amber-200/80 bg-amber-50 text-amber-800",
-  critical: "border-red-200/80 bg-red-50 text-red-700",
+  neutral: "border-slate-200/70 bg-white text-slate-500",
+  info: "border-blue-100 bg-white text-blue-600",
+  success: "border-emerald-100 bg-white text-emerald-600",
+  warning: "border-amber-100 bg-white text-amber-700",
+  critical: "border-red-100 bg-white text-red-600",
 };
