@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { WMS_OPERATIONAL_CONTAINER } from "../../components/wms/execution/wmsLayoutTokens";
+import { FileText, Filter, RefreshCw } from "lucide-react";
+import {
+  WMS_TASK_GRID,
+  WMS_TERMINAL_INNER,
+  WMS_TERMINAL_SHELL,
+  WMS_TERMINAL_STACK,
+  WMS_TERMINAL_SECTION_TITLE,
+} from "../../components/wms/execution/wmsLayoutTokens";
+import { WmsTerminalEmptyState } from "../../components/wms/execution/WmsTerminalEmptyState";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -14,16 +22,11 @@ import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
 import { createWmsRecoveryBatch } from "../../api/wmsRecoveryBatchApi";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
-import {
-  priorityBadgeClass,
-  priorityLabelForTask,
-  priorityLevelFromTask,
-  sortTasksByPriority,
-} from "./brakiPriority";
+import { sortTasksByPriority } from "./brakiPriority";
 import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
 import { mergeQueueCards, type NormalizedShortageQueueCard } from "./brakiQueueMerge";
 import { readBrakiQueueStage } from "./readBrakiOperationalState";
-import { brakiQueueCardAccent, type BrakiQueueWorkflowId } from "./brakiWorkstreamUi";
+import { BrakiOrderIssueCard } from "./BrakiOrderIssueCard";
 
 type BrakiWorkflowFilterId =
   | "all"
@@ -50,22 +53,8 @@ function normalizeWorkflowStatus(t: OrderIssueTaskListItemApi): BrakiWorkflowFil
   return "awaiting";
 }
 
-function displayOrderNumber(raw: string): string {
-  const s = (raw || "").trim();
-  if (!s) return "—";
-  return s.startsWith("#") ? s : `#${s}`;
-}
-
-function fmtQty(n: number): string {
-  return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(Number(n) || 0);
-}
-
 function openIssueTask(navigate: ReturnType<typeof useNavigate>, t: OrderIssueTaskListItemApi) {
   navigate(WMS_ROUTES.issueTask(t.id));
-}
-
-function cardStatusLabel(card: NormalizedShortageQueueCard): string {
-  return card.workflow_stage || (card.raw.braki_workflow_status_label ?? "").trim() || "Braki w realizacji";
 }
 
 export default function WmsOrderIssuesHub() {
@@ -220,17 +209,19 @@ export default function WmsOrderIssuesHub() {
 
   if (warehouseId == null) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center p-6 text-center text-slate-600 bg-white">
-        Wybierz magazyn w nagłówku.
+      <div className={`${WMS_TERMINAL_SHELL} bg-white`}>
+        <div className={`${WMS_TERMINAL_INNER} py-8`}>
+          <WmsTerminalEmptyState title="Wybierz magazyn w nagłówku terminala." />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex w-full flex-col bg-white">
-      <div className={`${WMS_OPERATIONAL_CONTAINER} space-y-4 py-3 md:py-4`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-lg font-bold text-slate-900 md:text-xl">
+    <div className={`${WMS_TERMINAL_SHELL} flex w-full flex-col bg-white`}>
+      <div className={`${WMS_TERMINAL_INNER} ${WMS_TERMINAL_STACK}`}>
+        <div className="flex w-full flex-wrap items-center justify-between gap-3">
+          <h1 className={WMS_TERMINAL_SECTION_TITLE}>
             Zamówienia z brakami{" "}
             <span className="font-medium text-slate-500">({queueCards.length})</span>
           </h1>
@@ -239,62 +230,56 @@ export default function WmsOrderIssuesHub() {
               type="button"
               disabled={batchPending}
               onClick={() => void startRecoveryBatch()}
-              className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 md:flex"
+              className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 md:inline-flex"
             >
               {batchPending ? "Tworzenie…" : "Dogrywka batch"}
             </button>
             <button
               type="button"
               onClick={() => void load({ sync: true })}
-              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
             >
-              <i className="fa-solid fa-rotate-right text-sm text-slate-500"></i>
+              <RefreshCw className="h-4 w-4 text-slate-500" aria-hidden />
               <span className="hidden md:inline">Odśwież</span>
             </button>
           </div>
         </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-        <button
-          onClick={() => setIsFilterModalOpen(true)}
-          className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 active:bg-slate-100 sm:w-72"
-        >
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-              </svg>
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch">
+          <button
+            type="button"
+            onClick={() => setIsFilterModalOpen(true)}
+            className="flex min-w-[240px] flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50 sm:max-w-sm"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+              <Filter className="h-4 w-4" aria-hidden />
             </div>
-            <div className="flex flex-col justify-center">
-              <span className="mb-0.5 text-[10px] font-bold uppercase leading-none tracking-wider text-slate-400">
+            <div className="min-w-0">
+              <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Filtruj po statusie
               </span>
-              <span className="truncate text-sm font-semibold leading-tight text-slate-900">{activeFilterLabel}</span>
+              <span className="truncate text-sm font-semibold text-slate-900">{activeFilterLabel}</span>
             </div>
-          </div>
-        </button>
+          </button>
 
-        <button className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500 active:bg-slate-100 sm:w-80">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-              <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
-          </div>
-          <div className="flex flex-col justify-center overflow-hidden">
-            <span className="mb-0.5 text-[10px] font-bold uppercase leading-none tracking-wider text-slate-400">
-              Aktywny dokument rozlokowania
-            </span>
-            <span className="truncate text-sm font-semibold leading-tight text-slate-900">Wybierz dokument...</span>
-          </div>
-        </button>
-      </div>
+          <button
+            type="button"
+            className="flex min-w-[240px] flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50 sm:max-w-sm"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <FileText className="h-4 w-4" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Aktywny dokument rozlokowania
+              </span>
+              <span className="truncate text-sm font-semibold text-slate-500">Wybierz dokument…</span>
+            </div>
+          </button>
+        </div>
 
         {err ? (
-          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950">
+          <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <p className="font-semibold">{err}</p>
             <button
               type="button"
@@ -306,11 +291,11 @@ export default function WmsOrderIssuesHub() {
           </div>
         ) : null}
         {deeplinkMiss ? (
-          <p className="text-center text-sm font-medium text-amber-900">{deeplinkMiss}</p>
+          <p className="text-sm font-medium text-amber-900">{deeplinkMiss}</p>
         ) : null}
 
         {!loading && skippedTasks.length > 0 ? (
-          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+          <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <p className="font-semibold">
               {skippedTasks.length} zadanie/zadań wczytano w trybie awaryjnym (niepełne dane).
             </p>
@@ -318,118 +303,31 @@ export default function WmsOrderIssuesHub() {
         ) : null}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-            <i className="fa-solid fa-circle-notch animate-spin text-4xl"></i>
-            <p className="mt-4 text-sm font-medium">Ładowanie kolejki…</p>
+          <div className="flex items-center gap-3 py-8 text-slate-500">
+            <RefreshCw className="h-5 w-5 animate-spin" aria-hidden />
+            <p className="text-sm font-medium">Ładowanie kolejki…</p>
           </div>
         ) : queueCards.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
-            <p className="text-base font-semibold text-slate-800">Kolejka jest pusta</p>
-            <p className="mt-2 text-sm text-slate-600">
-              Po zgłoszeniu braku przy zbieraniu zamówienie pojawi się tutaj.
-            </p>
-          </div>
+          <WmsTerminalEmptyState
+            title="Kolejka jest pusta"
+            description="Po zgłoszeniu braku przy zbieraniu zamówienie pojawi się tutaj."
+            onRefresh={() => void load({ sync: true })}
+          />
         ) : filteredCards.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
-            <p className="text-base font-semibold text-slate-800">Brak zamówień dla wybranego filtra</p>
-            <p className="mt-2 text-sm text-slate-600">Zmień filtr statusu lub odśwież kolejkę.</p>
-          </div>
+          <WmsTerminalEmptyState
+            title="Brak zamówień dla wybranego filtra"
+            description="Zmień filtr statusu lub odśwież kolejkę."
+            onRefresh={() => void load({ sync: true })}
+          />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredCards.map((card: NormalizedShortageQueueCard) => {
-              const t = card.raw;
-              const wf = card.queue_stage as BrakiWorkflowFilterId;
-              const badgeCount =
-                card.recovery_count +
-                card.relocation_count +
-                card.ready_to_pack_count +
-                card.missing_count;
-              const missingNumber = Math.max(1, badgeCount);
-              const num = displayOrderNumber(t.order_number).replace("#", "");
-              const wfId = (
-                BRAKI_WORKFLOW_FILTERS.some((f) => f.id === wf) ? wf : "awaiting"
-              ) as BrakiQueueWorkflowId;
-              const { accent, shortageBadge, statusBadge, icon } = brakiQueueCardAccent(wfId);
-
-              const qtyLine =
-                (t.issue_queue_summary_line ?? "").trim() ||
-                card.workflow_stage ||
-                (t.issue_queue_status_label ?? "").trim() ||
-                "Braki w realizacji";
-
-              const statusLabel = cardStatusLabel(card);
-              const prLevel = priorityLevelFromTask(t);
-              const prLabel = priorityLabelForTask(t);
-              const prBadge = priorityBadgeClass(prLevel);
-
-              return (
-                <div
-                  key={`${t.order_id}-${t.id}`}
-                  onClick={() => openIssueTask(navigate, t)}
-                  className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-slate-300 hover:shadow-md active:scale-[0.99] md:p-5"
-                >
-                  <div className={`absolute bottom-0 left-0 top-0 w-1.5 ${accent}`}></div>
-
-                  <div className="pl-2">
-                    <div className="mb-4 flex items-start justify-between">
-                      <div>
-                        <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 md:text-xs">
-                          Zamówienie nr
-                        </div>
-                        <div className="text-xl font-bold tracking-tight text-slate-900 transition-colors group-hover:text-blue-700 md:text-2xl">
-                          {num}
-                        </div>
-                      </div>
-                      <div className={`rounded-lg border px-2.5 py-1.5 text-center ${shortageBadge}`}>
-                        <div className="mb-0.5 text-[9px] font-bold uppercase">Braki</div>
-                        <div className="text-lg font-bold leading-none md:text-xl">
-                          {fmtQty(missingNumber)}
-                          <span className="ml-0.5 text-[10px] md:text-xs">szt</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2.5 md:space-y-3">
-                      {card.partial_data ? (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900">
-                          ⚠ Niepełne dane operacyjne
-                        </div>
-                      ) : null}
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${prBadge}`}
-                        >
-                          {prLabel}
-                        </span>
-                        {(t.shortage_priority_score ?? 0) > 0 ? (
-                          <span className="text-[10px] font-bold text-slate-400">
-                            score {t.shortage_priority_score}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <div className="mt-0.5 w-14 shrink-0 text-[11px] font-semibold text-slate-500 md:text-xs">
-                          Status:
-                        </div>
-                        <div
-                          className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge}`}
-                        >
-                          <i className={`fa-solid ${icon} text-[9px]`}></i> {statusLabel}
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <div className="mt-0.5 w-14 shrink-0 text-[11px] font-semibold text-slate-500 md:text-xs">
-                          Typ:
-                        </div>
-                        <div className="rounded border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold leading-tight text-blue-700 md:text-sm">
-                          {qtyLine}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className={WMS_TASK_GRID}>
+            {filteredCards.map((card: NormalizedShortageQueueCard) => (
+              <BrakiOrderIssueCard
+                key={`${card.raw.order_id}-${card.raw.id}`}
+                card={card}
+                onOpen={(t) => openIssueTask(navigate, t)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -469,9 +367,9 @@ export default function WmsOrderIssuesHub() {
                       : "border-transparent bg-slate-50 text-slate-700 hover:bg-slate-100"
                   }`}
                 >
-                  <span className="text-sm font-bold md:text-base pr-2 text-left">{f.label}</span>
+                  <span className="pr-2 text-left text-sm font-bold md:text-base">{f.label}</span>
                   <span
-                    className={`rounded-md px-2 py-0.5 text-xs font-bold shrink-0 ${
+                    className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${
                       activeFilterId === f.id ? "bg-blue-100 text-blue-800" : "bg-slate-200 text-slate-700"
                     }`}
                   >

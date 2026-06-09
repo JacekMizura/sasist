@@ -14,6 +14,9 @@ import { ProductionWarehouseLocationSearch } from "./ProductionWarehouseLocation
 import { loadRecentTargetLocations, rememberTargetLocation } from "./productionUi";
 import { wmsProductionPaths } from "./productionPaths";
 import { WmsProductionTerminalEmptyState } from "./WmsProductionTerminalEmptyState";
+import { WmsProductionBatchQueueCard } from "./components/WmsProductionBatchQueueCard";
+import { WmsProductionActiveBatchBar } from "./components/WmsProductionActiveBatchBar";
+import { WMS_TASK_GRID, WMS_TERMINAL_LABEL } from "../../components/wms/execution/wmsLayoutTokens";
 
 const DEFAULT_TENANT = 1;
 
@@ -73,70 +76,81 @@ export default function PutawayPage() {
   const recentIds = batch ? loadRecentTargetLocations(batch.warehouse_id) : [];
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-5">
       {!activeId ? (
-        <div className="space-y-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Odkładanie wyrobów</p>
+        <div className="w-full space-y-4">
+          <p className={WMS_TERMINAL_LABEL}>Odkładanie wyrobów</p>
           {queue.length === 0 ? (
             <WmsProductionTerminalEmptyState
               title="Brak partii do odłożenia"
               description="Po zakończeniu produkcji partie oczekujące na odkładanie wyrobów gotowych pojawią się tutaj."
-              icon={<PackageCheck size={40} strokeWidth={1.5} />}
+              icon={<PackageCheck size={22} strokeWidth={2} />}
+              onRefresh={() => void loadQueue()}
             />
           ) : (
-            queue.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => {
-                  setActiveId(b.id);
-                  navigate(wmsProductionPaths.putaway(b.id));
-                }}
-                className="w-full rounded-2xl border-2 border-emerald-300 bg-white p-6 text-left shadow-md active:scale-[0.99]"
-              >
-                <p className="font-mono text-2xl font-black text-slate-900">{b.number}</p>
-                <span className={`mt-2 inline-block ${batchStatusBadgeClass(b.status)}`}>{BATCH_STATUS_LABEL[b.status]}</span>
-              </button>
-            ))
+            <div className={WMS_TASK_GRID}>
+              {queue.map((b) => (
+                <WmsProductionBatchQueueCard
+                  key={b.id}
+                  label="Partia"
+                  number={b.number}
+                  accent="emerald"
+                  statusBadge={
+                    <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
+                  }
+                  onClick={() => {
+                    setActiveId(b.id);
+                    navigate(wmsProductionPaths.putaway(b.id));
+                  }}
+                />
+              ))}
+            </div>
           )}
         </div>
       ) : batch ? (
         <>
-          <div className="rounded-2xl border-2 border-emerald-400 bg-emerald-50 p-5 text-center">
-            <p className="text-xs font-bold uppercase tracking-widest text-emerald-800">Odkładanie wyrobów gotowych</p>
-            <p className="font-mono text-lg font-bold text-slate-600">{batch.number}</p>
-          </div>
+          <WmsProductionActiveBatchBar
+            label="Odkładanie wyrobów gotowych"
+            number={batch.number}
+            accent="emerald"
+          />
 
-          <div className="space-y-5">
+          <div className="w-full space-y-4">
             {batch.lines.map((ln) => {
               const qty = ln.completed_quantity || ln.planned_quantity;
               return (
-                <div key={ln.id} className="rounded-2xl border-4 border-emerald-300 bg-white p-6 shadow-lg">
-                  <div className="flex items-center gap-4">
-                    <ProductThumb name={ln.product_name ?? undefined} size="lg" />
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Produkt</p>
-                      <p className="text-2xl font-black text-slate-900">{ln.product_name}</p>
+                <div
+                  key={ln.id}
+                  className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <div className="absolute bottom-0 left-0 top-0 w-1 bg-emerald-400" aria-hidden />
+                  <div className="pl-3">
+                    <div className="flex items-center gap-4">
+                      <ProductThumb name={ln.product_name ?? undefined} size="lg" />
+                      <div>
+                        <p className={WMS_TERMINAL_LABEL}>Produkt</p>
+                        <p className="text-xl font-bold text-slate-900">{ln.product_name}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Ilość</p>
-                      <p className="text-4xl font-black text-emerald-800">{qty}</p>
-                    </div>
-                    <div>
-                      <p className="mb-2 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
-                        <MapPin className="h-4 w-4" aria-hidden />
-                        Lokacja docelowa
-                      </p>
-                      <ProductionWarehouseLocationSearch
-                        tenantId={tenantId}
-                        warehouseId={batch.warehouse_id}
-                        value={targets[ln.id]?.id ?? null}
-                        valueLabel={targets[ln.id]?.code ?? null}
-                        recentLocationIds={recentIds}
-                        onChange={(id, code) => setTargets((prev) => ({ ...prev, [ln.id]: { id, code } }))}
-                      />
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className={WMS_TERMINAL_LABEL}>Ilość</p>
+                        <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">{qty}</p>
+                      </div>
+                      <div>
+                        <p className="mb-2 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                          <MapPin className="h-3.5 w-3.5" aria-hidden />
+                          Lokacja docelowa
+                        </p>
+                        <ProductionWarehouseLocationSearch
+                          tenantId={tenantId}
+                          warehouseId={batch.warehouse_id}
+                          value={targets[ln.id]?.id ?? null}
+                          valueLabel={targets[ln.id]?.code ?? null}
+                          recentLocationIds={recentIds}
+                          onChange={(id, code) => setTargets((prev) => ({ ...prev, [ln.id]: { id, code } }))}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -148,17 +162,17 @@ export default function PutawayPage() {
             type="button"
             disabled={busy}
             onClick={() => void confirmPutaway()}
-            className="sticky bottom-4 w-full rounded-2xl bg-emerald-600 py-5 text-xl font-black text-white shadow-xl hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.99]"
+            className="w-full max-w-xl rounded-xl bg-emerald-600 py-4 text-lg font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             Potwierdź odkładanie
           </button>
 
-          <Link to={wmsProductionPaths.execute(activeId)} className="block text-center text-sm text-slate-500 underline">
+          <Link to={wmsProductionPaths.execute(activeId)} className="block text-sm text-slate-500 underline">
             Wróć do produkcji
           </Link>
         </>
       ) : (
-        <p className="text-center text-slate-500">Wczytywanie…</p>
+        <p className="text-sm text-slate-500">Wczytywanie…</p>
       )}
     </div>
   );

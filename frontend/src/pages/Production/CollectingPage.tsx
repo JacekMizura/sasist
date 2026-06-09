@@ -17,6 +17,9 @@ import { wmsProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProgressBar } from "./components/ProgressBar";
 import { WmsProductionTerminalEmptyState } from "./WmsProductionTerminalEmptyState";
+import { WmsProductionBatchQueueCard } from "./components/WmsProductionBatchQueueCard";
+import { WmsProductionActiveBatchBar } from "./components/WmsProductionActiveBatchBar";
+import { WMS_TASK_GRID, WMS_TERMINAL_LABEL } from "../../components/wms/execution/wmsLayoutTokens";
 
 const DEFAULT_TENANT = 1;
 
@@ -95,46 +98,48 @@ export default function CollectingPage() {
   const batchQty = batch?.total_planned_units ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-5">
       {!activeBatchId ? (
-        <div className="space-y-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Kolejka zbierania</p>
+        <div className="w-full space-y-4">
+          <p className={WMS_TERMINAL_LABEL}>Kolejka zbierania</p>
           {queue.length === 0 ? (
             <WmsProductionTerminalEmptyState
               title="Brak partii do zbierania"
-              description="Gdy partia przejdzie do zbierania surowców, pojawi się tutaj na liście."
-              icon={<ClipboardList size={40} strokeWidth={1.5} />}
+              description="Gdy partia przejdzie do etapu zbierania surowców, pojawi się tutaj."
+              icon={<ClipboardList size={22} strokeWidth={2} />}
+              onRefresh={() => void loadQueue()}
             />
           ) : (
-            queue.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => void openBatch(b)}
-                className="w-full rounded-2xl border-2 border-amber-300 bg-white p-6 text-left shadow-md active:scale-[0.99] transition"
-              >
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Partia</p>
-                <p className="mt-1 font-mono text-2xl font-black text-slate-900">{b.number}</p>
-                <p className="mt-2 text-lg font-semibold text-slate-800">
-                  {b.lines?.[0]?.product_name ?? `${b.products_count ?? 0} produktów`}
-                </p>
-                <p className="mt-1 text-3xl font-black text-amber-800">{b.total_planned_units ?? 0} szt.</p>
-                <span className={`mt-3 inline-block ${batchStatusBadgeClass(b.status)}`}>{BATCH_STATUS_LABEL[b.status]}</span>
-              </button>
-            ))
+            <div className={WMS_TASK_GRID}>
+              {queue.map((b) => (
+                <WmsProductionBatchQueueCard
+                  key={b.id}
+                  label="Partia"
+                  number={b.number}
+                  productLine={b.lines?.[0]?.product_name ?? `${b.products_count ?? 0} produktów`}
+                  quantity={b.total_planned_units ?? 0}
+                  accent="amber"
+                  statusBadge={
+                    <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
+                  }
+                  onClick={() => void openBatch(b)}
+                />
+              ))}
+            </div>
           )}
         </div>
       ) : (
         <>
-          <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-5 text-center shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-800">Partia</p>
-            <p className="font-mono text-2xl font-black text-slate-900">{batch?.number ?? "—"}</p>
-            <p className="mt-1 text-lg font-bold text-slate-800">{batchLabel}</p>
-            <p className="text-4xl font-black text-amber-900">{batchQty} szt.</p>
-          </div>
+          <WmsProductionActiveBatchBar
+            label="Partia"
+            number={batch?.number ?? "—"}
+            productLine={batchLabel}
+            quantity={batchQty}
+            accent="amber"
+          />
 
           {state ? (
-            <div className="rounded-xl border border-amber-200 bg-white p-4">
+            <div className="w-full rounded-xl border border-slate-200 bg-white p-4">
               <ProgressBar
                 value={state.collected_count}
                 max={state.total_count || 1}
@@ -144,50 +149,59 @@ export default function CollectingPage() {
             </div>
           ) : null}
 
-          <div className="space-y-5">
+          <div className="w-full space-y-4">
             {(state?.tasks ?? []).map((t) => {
               const done = t.collected_qty >= t.required_qty - 1e-6;
               return (
                 <div
                   key={t.task_key}
-                  className={`rounded-2xl border-4 p-6 shadow-lg ${done ? "border-emerald-400 bg-emerald-50" : "border-slate-300 bg-white"}`}
+                  className={`relative overflow-hidden rounded-2xl border bg-white p-5 shadow-sm ${
+                    done ? "border-emerald-200" : "border-slate-200"
+                  }`}
                 >
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Lokalizacja</p>
-                  <p className="mt-1 inline-flex items-center gap-2 font-mono text-3xl font-black text-slate-900">
-                    <MapPin className="h-8 w-8 text-amber-600" aria-hidden />
-                    {t.location_code}
-                  </p>
-                  <p className="mt-4 text-xl font-bold text-slate-900">{t.product_name}</p>
-                  <p className="mt-2 text-4xl font-black text-amber-800">
-                    {t.required_qty} <span className="text-lg font-semibold text-slate-500">szt.</span>
-                  </p>
-                  {!done ? (
-                    <div className="mt-5 grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void confirmTask(t.task_key, t.required_qty)}
-                        className="col-span-2 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-5 text-lg font-bold text-white hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98]"
-                      >
-                        <Check className="h-6 w-6" aria-hidden />
-                        Potwierdź
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void confirmTask(t.task_key, t.required_qty)}
-                        className="col-span-2 inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-500 bg-amber-50 py-4 text-base font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                      >
-                        <ScanLine className="h-5 w-5" aria-hidden />
-                        Skanuj
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="mt-5 inline-flex items-center gap-2 text-lg font-bold text-emerald-700">
-                      <Check className="h-5 w-5" aria-hidden />
-                      Zebrane
+                  <div
+                    className={`absolute bottom-0 left-0 top-0 w-1 ${done ? "bg-emerald-400" : "bg-amber-400"}`}
+                    aria-hidden
+                  />
+                  <div className="pl-3">
+                    <p className={WMS_TERMINAL_LABEL}>Lokalizacja</p>
+                    <p className="mt-1 inline-flex items-center gap-2 font-mono text-2xl font-black text-slate-900">
+                      <MapPin className="h-6 w-6 text-amber-600" aria-hidden />
+                      {t.location_code}
                     </p>
-                  )}
+                    <p className="mt-3 text-lg font-bold text-slate-900">{t.product_name}</p>
+                    <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">
+                      {t.required_qty}
+                      <span className="ml-1 text-sm font-semibold text-slate-500">szt.</span>
+                    </p>
+                    {!done ? (
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void confirmTask(t.task_key, t.required_qty)}
+                          className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-4 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          <Check className="h-5 w-5" aria-hidden />
+                          Potwierdź
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void confirmTask(t.task_key, t.required_qty)}
+                          className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          <ScanLine className="h-4 w-4" aria-hidden />
+                          Skanuj
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-emerald-700">
+                        <Check className="h-4 w-4" aria-hidden />
+                        Zebrane
+                      </p>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -198,7 +212,7 @@ export default function CollectingPage() {
               type="button"
               disabled={busy}
               onClick={() => void finish()}
-              className="sticky bottom-4 w-full rounded-2xl bg-emerald-600 py-5 text-xl font-black text-white shadow-xl hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.99]"
+              className="w-full max-w-xl rounded-xl bg-emerald-600 py-4 text-lg font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
             >
               Zakończ zbieranie →
             </button>
@@ -207,7 +221,7 @@ export default function CollectingPage() {
           <Link
             to={wmsProductionPaths.collecting()}
             onClick={() => setActiveBatchId(null)}
-            className="block text-center text-sm font-medium text-slate-500 underline"
+            className="block text-sm font-medium text-slate-500 underline"
           >
             Wróć do kolejki
           </Link>

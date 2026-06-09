@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Braki + Produkcja wykonanie: terminal WMS layout
+- `wmsLayoutTokens`: `WMS_TERMINAL_SHELL`, `WMS_TERMINAL_INNER`, `WMS_TASK_GRID`, `WMS_TASK_CARD`
+- Braki: `WmsOrderIssuesHub` — left-aligned, grid 1/2/3, `BrakiOrderIssueCard` (accent strip, badges, CTA)
+- Produkcja: layout + Collecting/Execute/Putaway — grid kolejki, kompaktowy `WmsTerminalEmptyState`, `WmsProductionActiveBatchBar`
+- Wspólne: bez centrowania, bez wąskich wrapperów i kolorowych borderów całej karty
+
 ## 2026-06-09 — Dokumenty magazynowe: config-driven kolumny + RW/PW wartości
 - Frontend: `warehouseDocumentConfigs.ts`, `WarehouseDocumentsTable.tsx` — osobne kolumny per PZ/PW/RW/WZ/MM/ZD/ZW; usunięte kolumny płatności
 - Backend: `series` object, `resolve_document_financial_totals` dla RW/PW; persist totals przy posting inwentaryzacji

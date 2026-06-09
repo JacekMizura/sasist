@@ -47,31 +47,31 @@ export function brakiQueueCardAccent(wf: BrakiQueueWorkflowId): {
   if (wf === "awaiting") {
     return {
       accent: "bg-orange-400",
-      shortageBadge: "bg-orange-50 border-orange-200 text-orange-800",
-      statusBadge: "bg-orange-50 border border-orange-200 text-orange-800",
+      shortageBadge: "bg-orange-50 text-orange-800",
+      statusBadge: "bg-orange-50 text-orange-800",
       icon: "fa-triangle-exclamation",
     };
   }
   if (wf === "relocation_partial" || wf === "relocation" || wf === "pick_and_relocation") {
     return {
       accent: "bg-amber-400",
-      shortageBadge: "bg-amber-50 border-amber-200 text-amber-800",
-      statusBadge: "bg-amber-50 border border-amber-200 text-amber-800",
+      shortageBadge: "bg-amber-50 text-amber-800",
+      statusBadge: "bg-amber-50 text-amber-800",
       icon: "fa-clock",
     };
   }
   if (wf === "ready_pack") {
     return {
       accent: "bg-blue-400",
-      shortageBadge: "bg-blue-50 border-blue-200 text-blue-800",
-      statusBadge: "bg-blue-50 border border-blue-200 text-blue-800",
+      shortageBadge: "bg-blue-50 text-blue-800",
+      statusBadge: "bg-blue-50 text-blue-800",
       icon: "fa-box",
     };
   }
   return {
     accent: "bg-emerald-400",
-    shortageBadge: "bg-emerald-50 border-emerald-200 text-emerald-800",
-    statusBadge: "bg-emerald-50 border border-emerald-200 text-emerald-800",
+    shortageBadge: "bg-emerald-50 text-emerald-800",
+    statusBadge: "bg-emerald-50 text-emerald-800",
     icon: "fa-check",
   };
 }
