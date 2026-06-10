@@ -12,6 +12,7 @@ import {
   getWmsCustomerInsights,
   getWmsReturn,
   getWmsReturnsModeSettings,
+  commitWmsReturn,
   processWmsReturnLine,
   processWmsReturnLineSplit,
 } from "../../api/wmsReturnsApi";
@@ -1009,6 +1010,7 @@ export default function WmsReturnsPage() {
   /** Umożliwia `beginGridDecision` wywołanie zapisu przed deklaracją `saveSplitForLine` (kolejność hooków). */
   type SaveSplitForLineOpts = {
     hydrateReturn?: boolean;
+    commitWorkflow?: boolean;
     /** Pełna linia REJECTED — powód dla `POST …/process` (unikamy czytania przestarzałego `lineOverrides`). */
     fullLineRejectReason?: { reasonId: string; otherText?: string | null };
     /** Split z odrzuconymi sztukami (linia mieszana / częściowa) — powód zapisywany w polu `damage_type` RMZ. */
@@ -1624,30 +1626,8 @@ export default function WmsReturnsPage() {
 
       if (fullLineAccept) {
         applyLinePatch(lineId, { systemStatus: "OK" });
-        void (async () => {
-          const ok = await saveSplitForLineRef.current(lineId, rows, { hydrateReturn: true });
-          if (!ok) {
-            const seedNow = lineSeedByLineId.get(lineId);
-            if (seedNow) {
-              flushSync(() => {
-                setUnitRowsByLineId((p) => ({ ...p, [lineId]: buildUnitRowsForLineSeed(seedNow, dmgReasons) }));
-              });
-            }
-            setLineOverrides((p) => {
-              const n = { ...p };
-              delete n[lineId];
-              return n;
-            });
-            setDirtyLineIds((p) => {
-              const n = { ...p };
-              delete n[lineId];
-              return n;
-            });
-            return;
-          }
-          setInlineSaveToast("Zapisano");
-          window.setTimeout(() => setInlineSaveToast(null), 2200);
-        })();
+        setInlineSaveToast("Przyjęto lokalnie — użyj ZAPISZ u góry");
+        window.setTimeout(() => setInlineSaveToast(null), 2200);
       }
     },
     [isFinished, unitRowsByLineId, lineSeedByLineId, applyLinePatch],
@@ -2001,34 +1981,9 @@ export default function WmsReturnsPage() {
         applyLinePatch(lineId, { systemStatus: "OK" });
       }
 
-      const ok = await saveSplitForLineRef.current(lineId, rowsAfter, { hydrateReturn: true });
-      if (!ok) {
-        const seedNow = lineSeedByLineId.get(lineId);
-        if (seedNow) {
-          flushSync(() => {
-            setUnitRowsByLineId((p) => ({ ...p, [lineId]: buildUnitRowsForLineSeed(seedNow, dmgReasons) }));
-          });
-        }
-        setLineOverrides((p) => {
-          const n = { ...p };
-          delete n[lineId];
-          return n;
-        });
-        setDirtyLineIds((p) => {
-          const n = { ...p };
-          delete n[lineId];
-          return n;
-        });
-        return;
-      }
-      console.log("[returns.report.success]", {
-        return_id: returnId,
-        line_id: lineId,
-        click_timestamp: Date.now(),
-        will_complete_line: willCompleteLine,
-        pick_count: k,
-      });
-      setInlineSaveToast(willCompleteLine ? "Zapisano" : "Częściowo zapisano");
+      setInlineSaveToast(
+        willCompleteLine ? "Przyjęto lokalnie — użyj ZAPISZ u góry" : "Częściowo oznaczono — użyj ZAPISZ u góry",
+      );
       window.setTimeout(() => setInlineSaveToast(null), 2200);
     },
     [
@@ -2155,36 +2110,10 @@ export default function WmsReturnsPage() {
       });
       setGridLineModeByLineId((prev) => ({ ...prev, [lineId]: "idle" }));
 
-      void (async () => {
-        const rejPayload =
-          rid === WMS_REJECT_OTHER_ID ? { reasonId: rid, otherText: otherDraft.trim() } : { reasonId: rid };
-        const ok = await saveSplitForLineRef.current(lineId, rowsAfter, {
-          hydrateReturn: true,
-          rejectReasonForSplit: rejPayload,
-          ...(willAllRejected ? { fullLineRejectReason: rejPayload } : {}),
-        });
-        if (!ok) {
-          const seedNow = lineSeedByLineId.get(lineId);
-          if (seedNow) {
-            flushSync(() => {
-              setUnitRowsByLineId((p) => ({ ...p, [lineId]: buildUnitRowsForLineSeed(seedNow, dmgReasons) }));
-            });
-          }
-          setLineOverrides((p) => {
-            const n = { ...p };
-            delete n[lineId];
-            return n;
-          });
-          setDirtyLineIds((p) => {
-            const n = { ...p };
-            delete n[lineId];
-            return n;
-          });
-          return;
-        }
-        setInlineSaveToast(willAllRejected ? "Zapisano" : "Częściowo zapisano");
-        window.setTimeout(() => setInlineSaveToast(null), 2200);
-      })();
+      setInlineSaveToast(
+        willAllRejected ? "Odrzucono lokalnie — użyj ZAPISZ u góry" : "Częściowo odrzucono — użyj ZAPISZ u góry",
+      );
+      window.setTimeout(() => setInlineSaveToast(null), 2200);
     },
     [
       isFinished,
@@ -2218,10 +2147,6 @@ export default function WmsReturnsPage() {
 
       const desiredDamagedQty = 1;
       const photoUrls = draft.photoUrls;
-      if (photoUrls.length < 1) {
-        setDamageSaveError("Dodaj co najmniej jedno zdjęcie uszkodzenia.");
-        return;
-      }
 
       setDamageSaveError(null);
 
@@ -2278,33 +2203,13 @@ export default function WmsReturnsPage() {
       if (homDamaged) applyLinePatch(lineId, { systemStatus: "DAMAGED" });
       else if (homOk) applyLinePatch(lineId, { systemStatus: "OK" });
 
-      void (async () => {
-        const ok = await saveSplitForLineRef.current(lineId, computedRows, { hydrateReturn: true });
-        if (!ok) {
-          const seedNow = lineSeedByLineId.get(lineId);
-          if (seedNow) {
-            flushSync(() => {
-              setUnitRowsByLineId((p) => ({ ...p, [lineId]: buildUnitRowsForLineSeed(seedNow, dmgReasons) }));
-            });
-          }
-          setLineOverrides((p) => {
-            const n = { ...p };
-            delete n[lineId];
-            return n;
-          });
-          setDirtyLineIds((p) => {
-            const n = { ...p };
-            delete n[lineId];
-            return n;
-          });
-          return;
-        }
-        if (allResolved) clearDamageDraft();
-        setInlineSaveToast(allResolved ? "Zapisano" : "Częściowo zapisano");
-        window.setTimeout(() => setInlineSaveToast(null), 2200);
-      })();
+      if (allResolved) clearDamageDraft();
+      setInlineSaveToast(
+        allResolved ? "Oznaczono lokalnie — użyj ZAPISZ u góry" : "Częściowo oznaczono — użyj ZAPISZ u góry",
+      );
+      window.setTimeout(() => setInlineSaveToast(null), 2200);
     },
-    [isFinished, lineSeedByLineId, gridDamageDraftByLineId, applyLinePatch],
+    [isFinished, lineSeedByLineId, gridDamageDraftByLineId, applyLinePatch, createdBy],
   );
 
   const removeUnitPhotoAt = useCallback((lineId: string, unitIndex: number, urlIndex: number) => {
@@ -2352,6 +2257,9 @@ export default function WmsReturnsPage() {
         });
       }
       setDirtyLineIds((prev) => ({ ...prev, [lineId]: true }));
+    } catch (e) {
+      console.error("[returns.damage.upload] failed", { lineId, unitIndex, error: e });
+      setDamageSaveError(formatDamageSaveApiError(e) || "Nie udało się przesłać zdjęcia. Spróbuj ponownie.");
     } finally {
       setUploadingLinePhotoById((prev) => ({ ...prev, [uploadKey]: false }));
     }
@@ -2537,10 +2445,6 @@ export default function WmsReturnsPage() {
       const damagedRows = slice.filter((r) => r.decision === "DAMAGED");
       const rejected = slice.filter((r) => r.decision === "REJECTED").length;
       const allDamagePhotoUrls = [...new Set(damagedRows.flatMap((r) => r.photoUrls))];
-      if (wmsSettings?.require_photos && damagedRows.length > 0 && allDamagePhotoUrls.length < 1) {
-        setDamageSaveError("Dodaj zdjęcie dla uszkodzonych sztuk.");
-        return false;
-      }
 
       const aggregated = {
         accepted,
@@ -2594,6 +2498,7 @@ export default function WmsReturnsPage() {
           const completeLine = resolvedSum >= total;
 
       const hydrate = opts?.hydrateReturn === true;
+      const commitWorkflow = opts?.commitWorkflow === true;
       setSavingSplitByLineId((prev) => ({ ...prev, [lineId]: true }));
       try {
         if (completeLine && aggregated.damaged > 0 && allDamagePhotoUrls.length > 0) {
@@ -2650,16 +2555,28 @@ export default function WmsReturnsPage() {
             setDamageSaveError("Uzupełnij uzasadnienie (wymagane przy „Inny powód”).");
             return false;
           }
-          ret = await processWmsReturnLine(effectiveReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, {
-            decision: "REJECTED",
-            damage_type: rk,
-            ...(rk === WMS_REJECT_OTHER_ID ? { note: noteTrim } : {}),
-          });
+          ret = await processWmsReturnLine(
+            effectiveReturnDbId,
+            seed.orderItemId,
+            DAMAGE_TENANT_ID,
+            {
+              decision: "REJECTED",
+              damage_type: rk,
+              ...(rk === WMS_REJECT_OTHER_ID ? { note: noteTrim } : {}),
+            },
+            { commitWorkflow, warehouseId: Number(whId) },
+          );
         } else if (allOkLine) {
-          ret = await processWmsReturnLine(effectiveReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, {
-            decision: "OK",
-            condition: "A",
-          });
+          ret = await processWmsReturnLine(
+            effectiveReturnDbId,
+            seed.orderItemId,
+            DAMAGE_TENANT_ID,
+            {
+              decision: "OK",
+              condition: "A",
+            },
+            { commitWorkflow, warehouseId: Number(whId) },
+          );
         } else {
           const splitCondition: "A" | "B" | "C" | null =
             aggregated.damaged > 0
@@ -2717,7 +2634,13 @@ export default function WmsReturnsPage() {
             damageEntries: damage_entries,
             splitPayload: payload,
           });
-          ret = await processWmsReturnLineSplit(effectiveReturnDbId, seed.orderItemId, DAMAGE_TENANT_ID, payload);
+          ret = await processWmsReturnLineSplit(
+            effectiveReturnDbId,
+            seed.orderItemId,
+            DAMAGE_TENANT_ID,
+            payload,
+            { commitWorkflow, warehouseId: Number(whId) },
+          );
         }
 
         const lineAfterSave =
@@ -2771,7 +2694,6 @@ export default function WmsReturnsPage() {
       wmsReturn?.workflow_editable,
       unitRowsByLineId,
       rid,
-      wmsSettings?.require_photos,
       lineOverrides,
       dmgReasons,
     ]
@@ -3302,11 +3224,6 @@ export default function WmsReturnsPage() {
       const classesOk = damagedB + damagedC === damaged;
       if (!classesOk) return { ok: false, message: "Niezgodny podział klas uszkodzenia (B/C)." };
 
-      const requirePhotos = !!wmsSettings?.require_photos;
-      if (requirePhotos && damaged > 0) {
-        const allDamagePhotoUrls = [...new Set(damagedRows.flatMap((r) => r.photoUrls))];
-        if (allDamagePhotoUrls.length < 1) return { ok: false, message: "Dodaj zdjęcie dla uszkodzonych sztuk." };
-      }
       if (rejected > 0) {
         const rr = lineOverrides[lineId]?.rejectReasonId;
         if (rr == null || String(rr).trim() === "") {
@@ -3327,26 +3244,63 @@ export default function WmsReturnsPage() {
       }
       return { ok: true };
     },
-    [lineSeedByLineId, unitRowsByLineId, lineOverrides, wmsSettings?.require_photos]
+    [lineSeedByLineId, unitRowsByLineId, lineOverrides]
   );
+
+  const isLineFullyResolved = useCallback(
+    (lineId: string): boolean => {
+      const seed = lineSeedByLineId.get(lineId);
+      if (!seed) return false;
+      const total = Math.max(0, Math.floor(seed.candidate.availableQuantity));
+      if (total < 1) return true;
+      const rows = unitRowsByLineId[lineId] ?? [];
+      if (rows.length !== total) return false;
+      return rows.slice(0, total).every((r) => r.decision != null);
+    },
+    [lineSeedByLineId, unitRowsByLineId],
+  );
+
+  const allLinesFullyResolved = useMemo(() => {
+    if (lineSeeds.length < 1) return false;
+    return lineSeeds.every((s) => isLineFullyResolved(s.lineId));
+  }, [lineSeeds, isLineFullyResolved]);
+
+  const damagedUnitsMissingPhotos = useMemo(() => {
+    let missing = 0;
+    for (const s of lineSeeds) {
+      const rows = unitRowsByLineId[s.lineId] ?? [];
+      for (const r of rows) {
+        if (r.decision === "DAMAGED" && r.photoUrls.length < 1) missing += 1;
+      }
+    }
+    return missing;
+  }, [lineSeeds, unitRowsByLineId]);
 
   const handleSaveDirtyLines = useCallback(async () => {
     if (isFinished) return;
-    if (!hasChanges) return;
+    if (!allLinesFullyResolved) return;
     if (saveChangesLoading) return;
     if (selectedReturnDbId == null) {
       setDamageSaveError("Brak identyfikatora zwrotu — odśwież stronę lub otwórz dokument ponownie.");
       return;
     }
 
+    if (damagedUnitsMissingPhotos > 0) {
+      const proceed = window.confirm(
+        "Nie dodano zdjęcia uszkodzenia dla co najmniej jednej sztuki. Kontynuować?",
+      );
+      if (!proceed) return;
+    }
+
     const orderIdForList = wmsReturn?.order_id;
+    const whId = wmsReturn?.warehouse_id;
 
     setDamageSaveError(null);
     setSaveChangesLoading(true);
     try {
-      const changed = Object.keys(dirtyLineIds);
-      // 1) Validate everything first (no API calls if any line is invalid)
-      for (const lineId of changed) {
+      const lineIdsToSave = lineSeeds.map((s) => s.lineId).filter((lineId) => isLineFullyResolved(lineId));
+
+      for (const lineId of lineIdsToSave) {
         const v = validateLineSplitForSave(lineId);
         if (!v.ok) {
           setDamageSaveError(v.message);
@@ -3354,26 +3308,29 @@ export default function WmsReturnsPage() {
         }
       }
 
-      // 2) Save only changed lines
-      for (const lineId of changed) {
-        const ok = await saveSplitForLine(lineId, undefined, { hydrateReturn: false });
+      for (const lineId of lineIdsToSave) {
+        const ok = await saveSplitForLine(lineId, undefined, { hydrateReturn: false, commitWorkflow: false });
         if (!ok) {
-          // saveSplitForLine already setDamageSaveError
           return;
         }
       }
+
+      const committed = await commitWmsReturn(
+        selectedReturnDbId,
+        DAMAGE_TENANT_ID,
+        whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
+      );
 
       setLineOverrides({});
       setDirtyLineIds({});
       setGridUnlockEditByLineId({});
       setDamageSaveError(null);
+      setWmsReturn(committed);
 
       try {
         window.dispatchEvent(new Event("wms-returns-list-refresh"));
-        const updated = await getWmsReturn(selectedReturnDbId, DAMAGE_TENANT_ID);
-        setWmsReturn(updated);
-      } catch (e) {
-        console.warn("[WMS RMZ] Post-save reload skipped (still leaving screen)", e);
+      } catch {
+        /* ignore */
       }
 
       try {
@@ -3390,22 +3347,22 @@ export default function WmsReturnsPage() {
       });
     } catch (e) {
       console.error("SAVE DIRTY LINES FAILED", e);
-      setDamageSaveError(
-        formatDamageSaveApiError(e) || "Nie udało się zapisać zwrotu",
-      );
+      setDamageSaveError(formatDamageSaveApiError(e) || "Nie udało się zapisać zwrotu");
     } finally {
       setSaveChangesLoading(false);
     }
   }, [
     isFinished,
-    hasChanges,
+    allLinesFullyResolved,
     saveChangesLoading,
-    dirtyLineIds,
+    selectedReturnDbId,
+    damagedUnitsMissingPhotos,
+    lineSeeds,
+    isLineFullyResolved,
     validateLineSplitForSave,
     saveSplitForLine,
-    selectedReturnDbId,
-    setWmsReturn,
     wmsReturn?.order_id,
+    wmsReturn?.warehouse_id,
     navigate,
   ]);
 
@@ -3981,9 +3938,16 @@ export default function WmsReturnsPage() {
             </button>
             <button
               type="button"
-              disabled={sessionLoading || gridLoading || !hasChanges || saveChangesLoading || isFinished}
+              disabled={sessionLoading || gridLoading || !allLinesFullyResolved || saveChangesLoading || isFinished}
               className="min-h-14 w-full max-w-[15rem] rounded-lg bg-green-600 px-5 text-base font-bold text-white shadow-lg shadow-green-900/20 hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:min-h-[3.5rem] sm:text-lg lg:max-w-none lg:self-end lg:min-w-[14rem]"
               onClick={() => void handleSaveDirtyLines()}
+              title={
+                allLinesFullyResolved
+                  ? damagedUnitsMissingPhotos > 0
+                    ? "Brak zdjęcia uszkodzenia — zapis z potwierdzeniem"
+                    : "Zapisz wszystkie decyzje i wyślij do biura"
+                  : "Uzupełnij decyzje dla wszystkich pozycji"
+              }
             >
               {saveChangesLoading ? "Zapisywanie…" : "ZAPISZ"}
             </button>
@@ -4651,7 +4615,7 @@ export default function WmsReturnsPage() {
                                             ))}
                                           </div>
                                         ) : (
-                                          <p className="text-sm font-semibold text-rose-700">Wymagane min. 1 zdjęcie.</p>
+                                          <p className="text-sm font-semibold text-amber-700">Brak zdjęcia uszkodzenia (wymagane przy ZAPISZ)</p>
                                         )}
                                       </div>
 
@@ -4683,7 +4647,6 @@ export default function WmsReturnsPage() {
                                         disabled={
                                           isFinished ||
                                           damageUiClass == null ||
-                                          photoUrls.length < 1 ||
                                           !!uploadingLinePhotoById[`${ln.lineId}:0`] ||
                                           (damageUiClass != null &&
                                             filterRmzDamageTypeIdsForClass(damageUiClass, damageDraft.damageTypeIds).length < 1)
@@ -5126,7 +5089,7 @@ export default function WmsReturnsPage() {
                                             ))}
                                           </div>
                                         ) : (
-                                          <span className="text-[11px] font-medium text-rose-700">Wymagane min. 1 zdjęcie</span>
+                                          <span className="text-[11px] font-medium text-amber-700">Brak zdjęcia uszkodzenia</span>
                                         )}
                                         {isUploading ? <span className="text-[11px] text-slate-500">Wysyłanie…</span> : null}
                                       </div>

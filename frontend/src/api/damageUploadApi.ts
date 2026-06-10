@@ -36,7 +36,9 @@ export async function uploadDamageImageFile(file: File): Promise<string> {
 
 
 
-  const res = await api.post<{ url?: string }>("uploads", fd);
+  const res = await api.post<{ url?: string }>("uploads", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 
 
 

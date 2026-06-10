@@ -615,6 +615,8 @@ def _is_terminal(rs: Optional[ReturnStatus]) -> bool:
 def _next_transition_key_for_lines(
     returns_mode: ReturnsMode,
     rmz_lines: Sequence[RMZLine],
+    *,
+    require_damage_photos: bool = True,
 ) -> Optional[str]:
     if not rmz_lines or not all(ln.decision is not None for ln in rmz_lines):
         return None
@@ -629,7 +631,7 @@ def _next_transition_key_for_lines(
     if returns_mode == "two_step":
         return "office_pending"
     if returns_mode == "advanced":
-        if not all_damaged_have_evidence:
+        if require_damage_photos and not all_damaged_have_evidence:
             return None
         return "qc_complete"
     return None
@@ -1987,6 +1989,10 @@ def process_rmz_line_split(
         ge=1,
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
+    commit_workflow: bool = Query(
+        False,
+        description="When true, advance RMZ workflow (OMS sync). Default false — draft line persist only.",
+    ),
     db: Session = Depends(get_db),
 ):
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
@@ -2075,7 +2081,11 @@ def process_rmz_line_split(
             rejected_qty,
         )
         for e in entry_rows:
-            if settings.require_photos and not [u for u in (e.photo_urls or []) if str(u).strip()]:
+            if (
+                commit_workflow
+                and settings.require_photos
+                and not [u for u in (e.photo_urls or []) if str(u).strip()]
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail="At least one photo_url is required for each damage entry (photo_urls)",
@@ -2118,6 +2128,19 @@ def process_rmz_line_split(
                 row_d["final_disposition"] = e.final_disposition
             serializable.append(row_d)
         rmz_line.damage_entries_json = json.dumps(serializable, ensure_ascii=False)
+        uploaded_images_count = sum(
+            len([u for u in (e.photo_urls or []) if str(u).strip()]) for e in entry_rows
+        )
+        logger.info(
+            "[returns.damage.persist] return_id=%s order_item_id=%s tenant_id=%s "
+            "uploaded_images_count=%s decision_state=%s entries=%s",
+            return_id,
+            order_item_id,
+            tenant_id,
+            uploaded_images_count,
+            rmz_line.decision,
+            len(entry_rows),
+        )
         logger.info(
             "[WMS RMZ] split-process persisted damage_entries_json return_id=%s order_item_id=%s payload=%s",
             return_id,
@@ -2138,7 +2161,7 @@ def process_rmz_line_split(
         if damaged_qty > 0:
             if settings.require_condition and not condition:
                 raise HTTPException(status_code=400, detail="condition is required for DAMAGED")
-            if settings.require_photos and not photo_urls:
+            if commit_workflow and settings.require_photos and not photo_urls:
                 raise HTTPException(status_code=400, detail="At least one photo_url is required (photo_urls)")
 
         if damaged_qty > 0:
@@ -2190,10 +2213,24 @@ def process_rmz_line_split(
         rmz_line.processed_at = None
 
     db.flush()
-    rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
-    next_key = _next_transition_key_for_lines(mode, rmz_lines)
-    if next_key:
-        _apply_transition(db, row, next_key)
+    if commit_workflow:
+        rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
+        next_key = _next_transition_key_for_lines(mode, rmz_lines)
+        if next_key:
+            logger.info(
+                "[returns.return.commit] return_id=%s order_item_id=%s tenant_id=%s transition=%s",
+                return_id,
+                order_item_id,
+                tenant_id,
+                next_key,
+            )
+            _apply_transition(db, row, next_key)
+            logger.info(
+                "[returns.sync.oms] return_id=%s tenant_id=%s transition=%s",
+                return_id,
+                tenant_id,
+                next_key,
+            )
     db.commit()
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
@@ -2205,7 +2242,10 @@ def process_rmz_line_split(
         .first()
     )
     logger.info(
-        "[WMS RMZ] split-process post-commit return_id=%s order_item_id=%s damage_entries_json=%s damaged_b=%s damaged_c=%s rejected=%s",
+        "[WMS RMZ] split-process post-commit return_id=%s order_item_id=%s commit_workflow=%s damage_entries_json=%s damaged_b=%s damaged_c=%s rejected=%s",
+        return_id,
+        order_item_id,
+        commit_workflow,
         return_id,
         order_item_id,
         getattr(saved_line, "damage_entries_json", None),
@@ -2226,6 +2266,10 @@ def process_rmz_line(
         None,
         ge=1,
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
+    ),
+    commit_workflow: bool = Query(
+        False,
+        description="When true, advance RMZ workflow (OMS sync). Default false — draft line persist only.",
     ),
     db: Session = Depends(get_db),
 ):
@@ -2257,7 +2301,7 @@ def process_rmz_line(
     if decision == "DAMAGED":
         if settings.require_condition and not condition:
             raise HTTPException(status_code=400, detail="condition is required for DAMAGED")
-        if settings.require_photos:
+        if commit_workflow and settings.require_photos:
             if not photo_urls:
                 raise HTTPException(status_code=400, detail="At least one photo_url is required (photo_urls)")
         rmz_line.condition = condition if condition else None
@@ -2311,11 +2355,80 @@ def process_rmz_line(
 
     db.flush()
 
-    rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
-    next_key = _next_transition_key_for_lines(mode, rmz_lines)
-    if next_key:
-        _apply_transition(db, row, next_key)
+    if commit_workflow:
+        rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
+        next_key = _next_transition_key_for_lines(mode, rmz_lines)
+        if next_key:
+            logger.info(
+                "[returns.return.commit] return_id=%s order_item_id=%s tenant_id=%s transition=%s",
+                return_id,
+                order_item_id,
+                tenant_id,
+                next_key,
+            )
+            _apply_transition(db, row, next_key)
+            logger.info(
+                "[returns.sync.oms] return_id=%s tenant_id=%s transition=%s",
+                return_id,
+                tenant_id,
+                next_key,
+            )
 
+    db.commit()
+
+    row = _load_rmz(db, return_id, tenant_id, wh_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Return not found")
+    return _serialize_return_read(db, row)
+
+
+@returns_id_router.post("/{return_id:int}/commit-wms", response_model=WmsReturnRead)
+def commit_wms_return_workflow(
+    return_id: int,
+    tenant_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Finalize WMS receiving: all lines decided → workflow transition → OMS/office sync."""
+    wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
+    row = _load_rmz(db, return_id, tenant_id, wh_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Return not found")
+    if _is_terminal(row.return_status):
+        raise HTTPException(status_code=400, detail="Return already finished")
+
+    settings = _get_wms_settings(db, tenant_id, wh_id)
+    mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
+
+    rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
+    if not rmz_lines:
+        raise HTTPException(status_code=400, detail="Return has no lines")
+    if not all(ln.decision is not None for ln in rmz_lines):
+        raise HTTPException(status_code=400, detail="All return lines must be decided before WMS commit")
+
+    next_key = _next_transition_key_for_lines(mode, rmz_lines, require_damage_photos=False)
+    if not next_key:
+        raise HTTPException(status_code=400, detail="Return is not ready for workflow commit")
+
+    logger.info(
+        "[returns.return.commit] return_id=%s tenant_id=%s warehouse_id=%s transition=%s line_count=%s",
+        return_id,
+        tenant_id,
+        wh_id,
+        next_key,
+        len(rmz_lines),
+    )
+    _apply_transition(db, row, next_key)
+    logger.info(
+        "[returns.sync.oms] return_id=%s tenant_id=%s transition=%s",
+        return_id,
+        tenant_id,
+        next_key,
+    )
     db.commit()
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)

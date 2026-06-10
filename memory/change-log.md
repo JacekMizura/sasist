@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — WMS zwroty (RMZ/RMA): transakcyjny commit + upload zdjęć
+
+- **Upload 422:** axios usuwa `Content-Type` dla `FormData`; log `[returns.damage.upload]`
+- **Backend:** `commit_workflow=false` (domyślnie) na `split-process` / `process` — bez sync OMS; nowy `POST …/commit-wms`
+- **Frontend:** decyzje lokalne bez natychmiastowego API; **ZAPISZ** gdy wszystkie linie rozstrzygnięte; confirm przy DAMAGED bez zdjęć; upload fail nie blokuje decyzji
+
 ## 2026-06-08 — Nośniki: wizualny podgląd lokalizacji (LocationPreviewModal)
 
 - Klik badge lokalizacji → modal z mapą regałów, widokiem pionowym regału, zawartością nośnika

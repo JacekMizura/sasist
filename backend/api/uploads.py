@@ -4,12 +4,15 @@ Upload damage-entry images; cart preview images; returns URLs under /uploads/...
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+import logging
+
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from ..services.cart_image_upload import save_cart_image_bytes
 from ..services.damage_image_upload import save_damage_image_bytes
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -17,12 +20,20 @@ router = APIRouter()
     summary="Upload image (damage evidence)",
     response_description="Relative URL to GET the file under /uploads/",
 )
-async def upload_damage_image(file: UploadFile = File(..., description="Image file")):
+async def upload_damage_image(
+    request: Request,
+    file: UploadFile = File(..., description="Image file"),
+):
     """
     multipart/form-data, field name: `file`.
 
     Response: `{"url": "/uploads/{filename}"}` — open as `GET {origin}{url}`.
     """
+    logger.info(
+        "[returns.damage.upload] content_type=%s filename=%s",
+        request.headers.get("content-type"),
+        file.filename,
+    )
     raw = await file.read()
     try:
         url = save_damage_image_bytes(raw, file.content_type or "image/jpeg")

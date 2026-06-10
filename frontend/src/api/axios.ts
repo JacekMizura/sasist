@@ -134,6 +134,12 @@ api.interceptors.request.use(
       throw new Error(`[api] Refusing HTTP API request: ${finalUrl}`);
     }
 
+    if (config.data instanceof FormData) {
+      const headers = config.headers as Record<string, unknown>;
+      delete headers["Content-Type"];
+      delete headers["content-type"];
+    }
+
     const token = getStoredAccessToken();
 
     if (token) {
