@@ -10,7 +10,6 @@ type Props = {
   locationUuid?: string | null;
   activeRackId?: number | null;
   className?: string;
-  onRackFocus?: (rackId: number) => void;
   layout?: LayoutState | null;
   layoutLoading?: boolean;
   layoutError?: string | null;
@@ -22,7 +21,6 @@ export function LocationPreviewLayoutMap({
   locationUuid,
   activeRackId,
   className = "",
-  onRackFocus,
   layout: layoutProp,
   layoutLoading: layoutLoadingProp,
   layoutError: layoutErrorProp,
@@ -93,7 +91,6 @@ export function LocationPreviewLayoutMap({
       layout={layout}
       activeRackId={activeRackId}
       activeLocationUuid={locationUuid}
-      onRackSelect={onRackFocus}
       className={`min-h-[360px] ${className}`}
     />
   );

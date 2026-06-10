@@ -35,7 +35,8 @@ export function LocationPreviewModal({
   const [layout, setLayout] = useState<LayoutState | null>(null);
   const [layoutLoading, setLayoutLoading] = useState(false);
   const [layoutError, setLayoutError] = useState<string | null>(null);
-  const [focusedRackId, setFocusedRackId] = useState<number | null>(null);
+
+  const activeRackId = ctx?.rack?.id ?? ctx?.rack_grid.find((c) => c.is_active)?.id ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -53,7 +54,6 @@ export function LocationPreviewModal({
       setLayoutError(null);
       setLayoutLoading(false);
       setErr(null);
-      setFocusedRackId(null);
       return;
     }
     let cancelled = false;
@@ -64,8 +64,6 @@ export function LocationPreviewModal({
       .then(async (data) => {
         if (cancelled) return;
         setCtx(data);
-        const activeRack = data.rack_grid.find((c) => c.is_active);
-        setFocusedRackId(activeRack?.id ?? data.rack?.id ?? null);
 
         setLayoutLoading(true);
         setLayoutError(null);
@@ -115,8 +113,8 @@ export function LocationPreviewModal({
   const locationUuid = (ctx?.location.location_uuid ?? "").trim() || null;
 
   const rackState = useMemo(
-    () => findRackInLayout(layout, focusedRackId ?? ctx?.rack?.id ?? null, ctx?.rack?.name),
-    [layout, focusedRackId, ctx?.rack?.id, ctx?.rack?.name],
+    () => findRackInLayout(layout, activeRackId, ctx?.rack?.name),
+    [layout, activeRackId, ctx?.rack?.name],
   );
 
   const selectedBinLocation = useMemo(() => {
@@ -189,8 +187,7 @@ export function LocationPreviewModal({
                     tenantId={tenantId}
                     warehouseId={ctx.warehouse.id}
                     locationUuid={locationUuid}
-                    activeRackId={focusedRackId}
-                    onRackFocus={setFocusedRackId}
+                    activeRackId={activeRackId}
                     layout={layout}
                     layoutLoading={layoutLoading}
                     layoutError={layoutError}

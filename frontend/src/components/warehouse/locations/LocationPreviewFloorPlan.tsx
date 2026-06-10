@@ -7,7 +7,6 @@ type Props = {
   activeRackId?: number | null;
   activeLocationUuid?: string | null;
   className?: string;
-  onRackSelect?: (rackId: number) => void;
 };
 
 function rackLabel(rack: RackState, layout: LayoutState): string {
@@ -27,7 +26,6 @@ export function LocationPreviewFloorPlan({
   activeRackId,
   activeLocationUuid,
   className = "",
-  onRackSelect,
 }: Props) {
   const racks = layout.racks ?? [];
   const uuid = (activeLocationUuid ?? "").trim();
@@ -65,15 +63,15 @@ export function LocationPreviewFloorPlan({
     <div className={`flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
       <div className="shrink-0 border-b border-slate-100 px-4 py-2.5">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Plan hali</p>
-        <p className="text-sm text-slate-600">Kliknij regał, aby zobaczyć sloty</p>
+        <p className="text-sm text-slate-600">Podgląd położenia regału w magazynie</p>
       </div>
-      <div className="relative min-h-0 flex-1 bg-slate-50/40 p-4">
+      <div className="relative min-h-0 flex-1 bg-white p-4">
         <svg
           viewBox={`${view.minX} ${view.minY} ${view.w} ${view.h}`}
           preserveAspectRatio="xMidYMid meet"
-          className="h-full w-full"
+          className="pointer-events-none h-full w-full select-none"
           role="img"
-          aria-label="Plan magazynu — widok z góry"
+          aria-label="Plan magazynu — widok z góry, tylko do odczytu"
         >
           {racks.map((rack) => {
             const label = rackLabel(rack, layout);
@@ -84,18 +82,16 @@ export function LocationPreviewFloorPlan({
             const cy = rack.y + rack.height / 2;
             const fontSize = Math.min(rack.width, rack.height) * 0.38;
             return (
-              <g key={rack.id}>
+              <g key={rack.id} aria-hidden={!isHighlighted}>
                 <rect
                   x={rack.x + 0.06}
                   y={rack.y + 0.06}
                   width={Math.max(0.5, rack.width - 0.12)}
                   height={Math.max(0.5, rack.height - 0.12)}
                   rx={0.18}
-                  fill={isHighlighted ? "#dbeafe" : "#ffffff"}
-                  stroke={isHighlighted ? "#2563eb" : "#cbd5e1"}
-                  strokeWidth={isHighlighted ? 0.14 : 0.08}
-                  className={onRackSelect ? "cursor-pointer" : undefined}
-                  onClick={() => onRackSelect?.(rack.id)}
+                  fill={isHighlighted ? "#f0f7ff" : "#ffffff"}
+                  stroke={isHighlighted ? "#93c5fd" : "#e2e8f0"}
+                  strokeWidth={isHighlighted ? 0.1 : 0.08}
                 />
                 <text
                   x={cx}
@@ -103,10 +99,9 @@ export function LocationPreviewFloorPlan({
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fontSize={fontSize}
-                  fontWeight={700}
-                  fill={isHighlighted ? "#1e40af" : "#334155"}
+                  fontWeight={isHighlighted ? 700 : 600}
+                  fill={isHighlighted ? "#1e3a8a" : "#475569"}
                   fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-                  pointerEvents="none"
                 >
                   {label}
                 </text>
