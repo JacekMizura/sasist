@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Schema reconciliation: startup crash fix
+- `log_schema_tier()` — kwargs-safe (`columns_added`, `indexes_added`, `foreign_keys_added`, …)
+- Reconcile fazowy: tabele → kolumny → indeksy → FK (ostatni etap)
+- Orphan FK: NULL przed ADD CONSTRAINT (np. `direct_sale_sessions.customer_id`)
+- Topological sort fallback przy cyklach FK (zamiast `sorted_tables` crash/warn)
+
 ## 2026-06-08 — Klienci: utwardzenie GUS/BIR + VAT MF/VIES
 - Backend: `customers_gus.py`, cache PostgreSQL `gus_lookup_cache` (TTL 24h), timeout/retry/circuit breaker BIR
 - VAT badge tylko z MF (`rejestr_vat`) i VIES — rozdzielone od danych firmy GUS

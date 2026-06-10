@@ -51,8 +51,10 @@ def log_schema_tier(
     duration_ms: float | None = None,
     ok: bool | None = None,
     error: str | None = None,
+    **metrics: Any,
 ) -> None:
-    _emit(tier, step=step, duration_ms=duration_ms, ok=ok, error=error)
+    """Structured tier log — accepts optional reconcile counters via ``**metrics``."""
+    _emit(tier, step=step, duration_ms=duration_ms, ok=ok, error=error, **metrics)
 
 
 def log_startup_features(**fields: Any) -> None:

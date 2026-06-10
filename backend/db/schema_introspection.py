@@ -341,6 +341,112 @@ def _db_foreign_key_local_columns(engine: Engine, table: str) -> set[str]:
     return cols
 
 
+def _count_fk_orphan_rows(
+    engine: Engine,
+    local_table: str,
+    local_col: str,
+    remote_table: str,
+    remote_col: str,
+) -> int:
+    if not has_table(engine, local_table) or not has_table(engine, remote_table):
+        return 0
+    sql = text(
+        f"""
+        SELECT COUNT(*) FROM {local_table} AS t
+        WHERE t.{local_col} IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM {remote_table} AS r
+            WHERE r.{remote_col} = t.{local_col}
+          )
+        """
+    )
+    with engine.connect() as conn:
+        return int(conn.execute(sql).scalar() or 0)
+
+
+def _null_fk_orphan_rows(
+    engine: Engine,
+    local_table: str,
+    local_col: str,
+    remote_table: str,
+    remote_col: str,
+) -> int:
+    before = _count_fk_orphan_rows(engine, local_table, local_col, remote_table, remote_col)
+    if before == 0:
+        return 0
+    sql = text(
+        f"""
+        UPDATE {local_table} AS t
+        SET {local_col} = NULL
+        WHERE t.{local_col} IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM {remote_table} AS r
+            WHERE r.{remote_col} = t.{local_col}
+          )
+        """
+    )
+    with engine.begin() as conn:
+        conn.execute(sql)
+    return before
+
+
+def _repair_fk_orphans_for_constraint(
+    engine: Engine,
+    model: Any,
+    fk_constraint: Any,
+    *,
+    log_prefix: str,
+) -> bool:
+    """
+    Null orphan FK values when column is nullable.
+
+    Returns False when orphans exist on a NOT NULL column (FK must be skipped).
+    """
+    table = model.__tablename__
+    can_add = True
+
+    for col in fk_constraint.columns:
+        orphan_refs: list[tuple[str, str, int]] = []
+        for fk in col.foreign_keys:
+            remote_table = fk.column.table.name
+            remote_col = fk.column.name
+            count = _count_fk_orphan_rows(engine, table, col.key, remote_table, remote_col)
+            if count:
+                orphan_refs.append((remote_table, remote_col, count))
+
+        if not orphan_refs:
+            continue
+
+        if not col.nullable:
+            for remote_table, remote_col, count in orphan_refs:
+                logger.warning(
+                    "[%s] fk_orphan_skip table=%s column=%s remote=%s.%s orphans=%s "
+                    "reason=column_not_nullable",
+                    log_prefix,
+                    table,
+                    col.key,
+                    remote_table,
+                    remote_col,
+                    count,
+                )
+            can_add = False
+            continue
+
+        for remote_table, remote_col, _ in orphan_refs:
+            nulled = _null_fk_orphan_rows(engine, table, col.key, remote_table, remote_col)
+            logger.warning(
+                "[%s] fk_orphan_repaired table=%s column=%s remote=%s.%s orphans_nulled=%s",
+                log_prefix,
+                table,
+                col.key,
+                remote_table,
+                remote_col,
+                nulled,
+            )
+
+    return can_add
+
+
 def _ensure_model_foreign_keys(
     engine: Engine,
     model: Any,
@@ -365,6 +471,19 @@ def _ensure_model_foreign_keys(
             continue
         if not all(c in db_cols for c in local_cols):
             continue
+        if not _repair_fk_orphans_for_constraint(
+            engine, model, fk_constraint, log_prefix=log_prefix
+        ):
+            errors.append(
+                f"{table}.fk.{fk_constraint.name}: orphan_rows_non_nullable"
+            )
+            logger.warning(
+                "[%s] add_fk_skipped table=%s constraint=%s reason=orphan_rows",
+                log_prefix,
+                table,
+                fk_constraint.name,
+            )
+            continue
         try:
             stmt = str(AddConstraint(fk_constraint).compile(dialect=engine.dialect))
             with engine.begin() as conn:
@@ -378,17 +497,32 @@ def _ensure_model_foreign_keys(
                 engine.dialect.name,
             )
         except Exception as exc:
-            logger.exception(
-                "[%s] add_fk_failed table=%s constraint=%s dialect=%s",
+            logger.warning(
+                "[%s] add_fk_failed table=%s constraint=%s dialect=%s err=%s",
                 log_prefix,
                 table,
                 fk_constraint.name,
                 engine.dialect.name,
+                exc,
             )
             errors.append(f"{table}.fk.{fk_constraint.name}: {exc}")
             if strict:
                 raise
     return added
+
+
+def sync_model_foreign_keys(
+    engine: Engine,
+    model: Any,
+    *,
+    log_prefix: str = "schema.model_sync",
+    strict: bool = False,
+    errors: list[str] | None = None,
+) -> int:
+    err_list = errors if errors is not None else []
+    return _ensure_model_foreign_keys(
+        engine, model, log_prefix=log_prefix, strict=strict, errors=err_list
+    )
 
 
 def _ensure_model_indexes(
@@ -426,6 +560,20 @@ def _ensure_model_indexes(
     return added
 
 
+def sync_model_indexes(
+    engine: Engine,
+    model: Any,
+    *,
+    log_prefix: str = "schema.model_sync",
+    strict: bool = False,
+    errors: list[str] | None = None,
+) -> int:
+    err_list = errors if errors is not None else []
+    return _ensure_model_indexes(
+        engine, model, log_prefix=log_prefix, strict=strict, errors=err_list
+    )
+
+
 def ensure_model_table_from_orm(engine: Engine, model: Any, *, log_prefix: str = "schema.model_sync") -> bool:
     """Create a single missing table from ORM metadata (no create_all)."""
     from sqlalchemy.schema import CreateTable
@@ -440,29 +588,24 @@ def ensure_model_table_from_orm(engine: Engine, model: Any, *, log_prefix: str =
     return True
 
 
-def sync_model_schema(
+def sync_model_columns(
     engine: Engine,
     model: Any,
     *,
     log_prefix: str = "schema.model_sync",
-    sync_indexes: bool = True,
-    sync_foreign_keys: bool = True,
     strict: bool = False,
-) -> ModelSchemaSyncResult:
-    """
-    Full non-destructive sync for one ORM model:
-    ADD COLUMN, CREATE INDEX (IF NOT EXISTS), ADD FK constraints when missing.
-    Never drops columns, tables, or data.
-    """
+    errors: list[str] | None = None,
+) -> int:
+    """ADD COLUMN only — no indexes or foreign keys."""
     from sqlalchemy.schema import CreateColumn
 
+    err_list = errors if errors is not None else []
     table = model.__tablename__
     if not has_table(engine, table):
         logger.info("[%s] skip table=%s reason=missing_table", log_prefix, table)
-        return ModelSchemaSyncResult()
+        return 0
 
     columns_added = 0
-    errors: list[str] = []
     dialect = engine.dialect.name
     db_cols = get_table_column_names(engine, table)
 
@@ -495,20 +638,43 @@ def sync_model_schema(
                 col.key,
                 dialect,
             )
-            errors.append(f"{table}.{col.key}: {exc}")
+            err_list.append(f"{table}.{col.key}: {exc}")
             if strict:
                 raise
+    return columns_added
 
+
+def sync_model_schema(
+    engine: Engine,
+    model: Any,
+    *,
+    log_prefix: str = "schema.model_sync",
+    sync_indexes: bool = True,
+    sync_foreign_keys: bool = True,
+    strict: bool = False,
+) -> ModelSchemaSyncResult:
+    """
+    Full non-destructive sync for one ORM model:
+    ADD COLUMN, CREATE INDEX (IF NOT EXISTS), ADD FK constraints when missing.
+    Never drops columns, tables, or data.
+    """
+    errors: list[str] = []
+    columns_added = sync_model_columns(
+        engine, model, log_prefix=log_prefix, strict=strict, errors=errors
+    )
     indexes_added = 0
     if sync_indexes:
-        indexes_added = _ensure_model_indexes(engine, model, log_prefix=log_prefix, strict=strict, errors=errors)
-
+        indexes_added = sync_model_indexes(
+            engine, model, log_prefix=log_prefix, strict=strict, errors=errors
+        )
     foreign_keys_added = 0
     if sync_foreign_keys:
-        foreign_keys_added = _ensure_model_foreign_keys(
+        foreign_keys_added = sync_model_foreign_keys(
             engine, model, log_prefix=log_prefix, strict=strict, errors=errors
         )
 
+    table = model.__tablename__
+    dialect = engine.dialect.name
     if columns_added or indexes_added or foreign_keys_added:
         logger.info(
             "[%s] complete table=%s dialect=%s columns=%s indexes=%s fks=%s",

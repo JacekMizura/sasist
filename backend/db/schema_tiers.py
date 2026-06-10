@@ -237,9 +237,11 @@ def ensure_tier0_schema(engine: Engine) -> Tier0Result:
             step="postgres_orm_reconcile",
             duration_ms=reconcile.duration_ms,
             ok=not reconcile.errors,
+            tables_created=reconcile.tables_created,
             columns_added=reconcile.columns_added,
             indexes_added=reconcile.indexes_added,
             foreign_keys_added=reconcile.foreign_keys_added,
+            errors=len(reconcile.errors),
         )
         steps_run, failures = 0, []
     duration_ms = round((time.perf_counter() - t0) * 1000, 2)
