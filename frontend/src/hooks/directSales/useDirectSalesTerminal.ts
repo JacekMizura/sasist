@@ -68,7 +68,7 @@ export function useDirectSalesTerminal() {
     warehouseId,
     sessionId: sessionState.session?.id ?? null,
     customerId: sessionState.session?.customer_id ?? null,
-    onSessionUpdate: sessionState.onCustomerAttached,
+    onSessionUpdated: sessionState.applySession,
   });
 
   const unavailableReason = useMemo(

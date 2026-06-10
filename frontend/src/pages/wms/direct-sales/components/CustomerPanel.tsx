@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { safeDisplay, safeTrim } from "../../../../utils/safeStrings";
+import { getCustomerDisplayName } from "../../../../utils/getCustomerDisplayName";
 import type { useDirectSalesCustomer } from "../hooks/useDirectSalesCustomer";
 
 type CustomerState = ReturnType<typeof useDirectSalesCustomer>;
@@ -38,7 +39,7 @@ export function CustomerPanel({ customer, customerId, disabled }: Props) {
       {customer.detail ? (
         <div className="rounded-lg bg-slate-50 p-2 text-xs text-slate-700">
           <div className="font-medium text-slate-900">
-            {safeDisplay(customer.detail.company_name, `${customer.detail.first_name} ${customer.detail.last_name}`)}
+            {getCustomerDisplayName(customer.detail)}
           </div>
           {customer.detail.nip ? <div>NIP: {customer.detail.nip}</div> : null}
           {customer.detail.phone ? <div>Tel: {customer.detail.phone}</div> : null}
@@ -65,7 +66,7 @@ export function CustomerPanel({ customer, customerId, disabled }: Props) {
                     onClick={() => void customer.attachCustomer(row.id)}
                     className="flex w-full flex-col px-2 py-1.5 text-left text-xs hover:bg-sky-50 disabled:opacity-50"
                   >
-                    <span className="font-medium text-slate-900">{row.display_name}</span>
+                    <span className="font-medium text-slate-900">{getCustomerDisplayName(row)}</span>
                     <span className="text-slate-500">
                       {[row.phone, row.email, row.nip].filter(Boolean).join(" · ") || "—"}
                     </span>

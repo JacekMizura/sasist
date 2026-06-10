@@ -11,16 +11,17 @@ import {
 import { DAMAGE_TENANT_ID } from "../../../../constants/panelTenant";
 import { safeTrim } from "../../../../utils/safeStrings";
 import { clearDirectSaleCustomer, setDirectSaleCustomer } from "../services/directSalesApi";
+import type { DirectSaleSession } from "../../../../utils/normalizeDirectSales";
 
 const DEBOUNCE_MS = 150;
 
 type Args = {
   sessionId: number | null;
   customerId: number | null;
-  onSessionUpdate: (customerId: number | null) => void;
+  onSessionUpdated: (session: import("../../../../utils/normalizeDirectSales").DirectSaleSession) => void;
 };
 
-export function useDirectSalesCustomer({ sessionId, customerId, onSessionUpdate }: Args) {
+export function useDirectSalesCustomer({ sessionId, customerId, onSessionUpdated }: Args) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<CustomerListRow[]>([]);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
@@ -77,23 +78,24 @@ export function useDirectSalesCustomer({ sessionId, customerId, onSessionUpdate 
       setBusy(true);
       setError(null);
       try {
+        let updated: DirectSaleSession;
         if (id == null) {
-          await clearDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId });
-        } else {
-          await setDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId, customerId: id });
-        }
-        onSessionUpdate(id);
-        if (id == null) {
+          updated = await clearDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId });
           setDetail(null);
           setSearch("");
+        } else {
+          updated = await setDirectSaleCustomer({ tenantId: DAMAGE_TENANT_ID, sessionId, customerId: id });
+          const d = await getCustomer(id, DAMAGE_TENANT_ID);
+          setDetail(d);
         }
+        onSessionUpdated(updated);
       } catch (e) {
         setError(extractApiErrorMessage(e));
       } finally {
         setBusy(false);
       }
     },
-    [sessionId, onSessionUpdate],
+    [sessionId, onSessionUpdated],
   );
 
   const quickCreate = useCallback(

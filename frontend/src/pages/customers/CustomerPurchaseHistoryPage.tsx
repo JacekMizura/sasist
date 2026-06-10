@@ -9,6 +9,7 @@ import {
   type PurchaseHistorySummary,
 } from "../../api/customerPurchaseHistoryApi";
 import { getCustomer } from "../../api/customersApi";
+import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { CustomerDetailPageShell } from "./CustomerDetailPageShell";
 import { CustomerPurchaseHistoryDocumentsTable } from "./purchaseHistory/CustomerPurchaseHistoryDocumentsTable";
@@ -39,12 +40,8 @@ export default function CustomerPurchaseHistoryPage() {
   useEffect(() => {
     if (customerId == null) return;
     void getCustomer(customerId, tenantId)
-      .then((c) => {
-        const comp = (c.company_name || "").trim();
-        const person = `${c.first_name || ""} ${c.last_name || ""}`.trim();
-        setDisplayName(comp || person || `Klient #${customerId}`);
-      })
-      .catch(() => setDisplayName(`Klient #${customerId}`));
+      .then((c) => setDisplayName(getCustomerDisplayName(c)))
+      .catch(() => setDisplayName(getCustomerDisplayName({ id: customerId })));
   }, [customerId, tenantId]);
 
   const filtersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
@@ -98,7 +95,7 @@ export default function CustomerPurchaseHistoryPage() {
     );
   }
 
-  const title = displayName ?? `Klient #${customerId}`;
+  const title = displayName ?? getCustomerDisplayName({ id: customerId });
 
   return (
     <CustomerDetailPageShell

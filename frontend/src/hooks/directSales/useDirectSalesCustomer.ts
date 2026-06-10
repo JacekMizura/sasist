@@ -9,6 +9,7 @@ import {
   type CustomerListRow,
 } from "../../api/customersApi";
 import { clearDirectSaleCustomer, setDirectSaleCustomer } from "../../api/directSalesApi";
+import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
 import { formatDirectSalesMutationError } from "../../modules/directSales/errors/directSalesMutationErrors";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { safeTrim } from "../../utils/safeStrings";
@@ -19,10 +20,10 @@ type Args = {
   warehouseId: number | null;
   sessionId: number | null;
   customerId: number | null;
-  onSessionUpdate: (customerId: number | null) => void;
+  onSessionUpdated: (session: DirectSaleSession) => void;
 };
 
-export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onSessionUpdate }: Args) {
+export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onSessionUpdated }: Args) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<CustomerListRow[]>([]);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
@@ -74,6 +75,19 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
     return () => window.clearTimeout(t);
   }, [search]);
 
+  const refreshCustomerDetail = useCallback(async (id: number | null) => {
+    if (id == null) {
+      setDetail(null);
+      return;
+    }
+    try {
+      const d = await getCustomer(id, DAMAGE_TENANT_ID);
+      setDetail(d);
+    } catch {
+      setDetail(null);
+    }
+  }, []);
+
   const attachCustomer = useCallback(
     async (id: number | null) => {
       if (!sessionId || warehouseId == null) return;
@@ -81,16 +95,17 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
       setBusy(true);
       setError(null);
       try {
+        let updated: DirectSaleSession;
         if (id == null) {
-          await clearDirectSaleCustomer({ ...scope, sessionId });
-        } else {
-          await setDirectSaleCustomer({ ...scope, sessionId, customerId: id });
-        }
-        onSessionUpdate(id);
-        if (id == null) {
+          updated = await clearDirectSaleCustomer({ ...scope, sessionId });
           setDetail(null);
           setSearch("");
+        } else {
+          updated = await setDirectSaleCustomer({ ...scope, sessionId, customerId: id });
+          const d = await getCustomer(id, DAMAGE_TENANT_ID);
+          setDetail(d);
         }
+        onSessionUpdated(updated);
       } catch (e) {
         const { message, devDetail } = formatDirectSalesMutationError(e, "set-customer");
         setError(devDetail ? `${message} (${devDetail})` : message);
@@ -98,7 +113,7 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
         setBusy(false);
       }
     },
-    [warehouseId, sessionId, onSessionUpdate],
+    [warehouseId, sessionId, onSessionUpdated],
   );
 
   const lookupByNip = useCallback(
@@ -194,6 +209,7 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
     attachCustomer,
     lookupByNip,
     quickCreate,
+    refreshCustomerDetail,
   };
 }
 

@@ -15,6 +15,7 @@ import { UI_STRINGS } from "../../constants/uiStrings";
 import { countryLabel } from "../../constants/countryCodes";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { summarizeEntityBulkDeleteToast } from "../../types/entityBulkDelete";
+import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
 import {
   listSellasistToolbarSquareBtn,
   listSellasistToolbarToggleBtn,
@@ -350,7 +351,7 @@ export default function CustomersListPage() {
                               disabled={deleteBusy}
                               onChange={() => toggleOne(r.id)}
                               className={panelListDenseCheckboxInputClass}
-                              aria-label={`Zaznacz klienta ${r.display_name}`}
+                              aria-label={`Zaznacz klienta ${getCustomerDisplayName(r)}`}
                             />
                           </td>
                           <td className={operationalActionsColumnCellClass} onClick={(e) => e.stopPropagation()}>
@@ -385,7 +386,7 @@ export default function CustomersListPage() {
                             />
                           </td>
                           <td className={`${panelListDenseTdBase} font-medium text-slate-900 ${dataTdComfort}`}>
-                            {r.display_name}
+                            {getCustomerDisplayName(r)}
                           </td>
                           <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>{r.email?.trim() || "—"}</td>
                           <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>{r.phone?.trim() || "—"}</td>

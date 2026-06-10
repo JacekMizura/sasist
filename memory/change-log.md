@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-08 — Klienci: spójna nazwa + direct sales refresh
+- `getCustomerDisplayName()` — lista, detail, historia, direct sales (FV)
+- Direct sales: pełna sesja z `set-customer`, eager fetch klienta, auto-uzupełnianie formularza FV
+- Naprawa UI: przypisany klient widoczny od razu (bez błędnego `customer_is_retail` w stanie)
+
 ## 2026-06-08 — Schema reconciliation: startup crash fix
 - `log_schema_tier()` — kwargs-safe (`columns_added`, `indexes_added`, `foreign_keys_added`, …)
 - Reconcile fazowy: tabele → kolumny → indeksy → FK (ostatni etap)

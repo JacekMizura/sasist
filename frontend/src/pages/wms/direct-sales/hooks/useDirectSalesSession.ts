@@ -256,8 +256,8 @@ export function useDirectSalesSession({
   );
 
   const onCustomerAttached = useCallback(
-    (customerId: number | null) => {
-      setSession((s) => (s ? { ...s, customer_id: customerId } : s));
+    (session: DirectSaleSession) => {
+      setSession(session);
     },
     [],
   );

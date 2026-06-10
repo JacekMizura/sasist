@@ -371,8 +371,8 @@ export function useDirectSalesSession({
     [session, apiScope],
   );
 
-  const onCustomerAttached = useCallback((customerId: number | null) => {
-    setSession((s) => (s ? { ...s, customer_id: customerId } : s));
+  const onCustomerAttached = useCallback((session: DirectSaleSession) => {
+    setSession(session);
   }, []);
 
   const suspend = useCallback(async () => {

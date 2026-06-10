@@ -1,17 +1,21 @@
-import { useState } from "react";
-import { Building2, Loader2, Search, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Building2, Loader2, Search, User, X } from "lucide-react";
 
 import { lookupDirectSaleNip, postInvoiceCustomer } from "../../api/directSalesApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import type { DirectSalesCustomerState } from "../../hooks/directSales/useDirectSalesCustomer";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
-import { safeDisplay, safeTrim } from "../../utils/safeStrings";
+import {
+  formatCustomerAddressStreet,
+  getCustomerDefaultAddress,
+  getCustomerDisplayName,
+} from "../../utils/getCustomerDisplayName";
+import { safeTrim } from "../../utils/safeStrings";
 
 type Props = {
   customer: DirectSalesCustomerState;
   customerId: number | null;
-  customerIsRetail: boolean;
   sessionId: number | null;
   warehouseId: number;
   disabled?: boolean;
@@ -21,7 +25,6 @@ type Props = {
 export function CustomerPanel({
   customer,
   customerId,
-  customerIsRetail,
   sessionId,
   warehouseId,
   disabled,
@@ -37,29 +40,73 @@ export function CustomerPanel({
   const [saving, setSaving] = useState(false);
   const [nipLoading, setNipLoading] = useState(false);
 
-  const showSearch = !customerIsRetail && customer.detail;
+  useEffect(() => {
+    const d = customer.detail;
+    if (!d) return;
+    setCompany(d.company_name ?? "");
+    setNip(d.nip ?? "");
+    const addr = getCustomerDefaultAddress(d.addresses);
+    if (addr) {
+      setStreet(formatCustomerAddressStreet(addr));
+      setPostal(addr.postal_code ?? "");
+      setCity(addr.city ?? "");
+    }
+  }, [customer.detail?.id, customer.detail]);
+
+  const showAssigned = customerId != null;
+  const displayName = customer.detail ? getCustomerDisplayName(customer.detail) : null;
 
   return (
     <div className="bg-white rounded-3xl p-5 border border-blue-50 shadow-sm space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold text-blue-900/50 uppercase tracking-wider">Klient</h3>
+        {showAssigned ? (
+          <button
+            type="button"
+            disabled={disabled || customer.busy}
+            onClick={() => void customer.attachCustomer(null)}
+            className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800 disabled:opacity-50"
+          >
+            <X size={12} aria-hidden />
+            Wyczyść
+          </button>
+        ) : null}
       </div>
 
-      {showSearch ? (
+      {showAssigned ? (
         <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-              <User size={20} />
-            </div>
-            <div className="min-w-0">
-              <div className="font-bold text-slate-900 truncate">
-                {safeDisplay(customer.detail?.company_name, `${customer.detail?.first_name} ${customer.detail?.last_name}`)}
+          {customer.detail ? (
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                <User size={20} />
               </div>
-              {customer.detail?.nip ? (
-                <div className="text-[10px] font-bold text-blue-600">NIP: {customer.detail.nip}</div>
-              ) : null}
+              <div className="min-w-0 space-y-1">
+                <div className="font-bold text-slate-900 truncate">{displayName}</div>
+                {customer.detail.nip ? (
+                  <div className="text-[10px] font-bold text-blue-600">NIP: {customer.detail.nip}</div>
+                ) : null}
+                {customer.detail.phone ? (
+                  <div className="text-[10px] text-slate-600">Tel: {customer.detail.phone}</div>
+                ) : null}
+                {customer.detail.email ? (
+                  <div className="text-[10px] text-slate-600 truncate">{customer.detail.email}</div>
+                ) : null}
+                {(() => {
+                  const addr = getCustomerDefaultAddress(customer.detail.addresses);
+                  if (!addr) return null;
+                  const line = [formatCustomerAddressStreet(addr), addr.postal_code, addr.city]
+                    .filter(Boolean)
+                    .join(", ");
+                  return line ? <div className="text-[10px] text-slate-600">{line}</div> : null;
+                })()}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Wczytywanie danych klienta…
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -70,20 +117,22 @@ export function CustomerPanel({
               disabled={disabled || customer.busy}
               value={customer.search}
               onChange={(e) => customer.setSearch(e.target.value)}
-              placeholder="Szukaj"
+              placeholder="Szukaj klienta (min. 2 znaki)…"
               className="w-full pl-10 pr-4 py-3 bg-white border-2 border-blue-50 rounded-2xl text-sm font-medium"
             />
           </div>
+          {customer.loading ? <p className="text-[10px] text-slate-400">Szukam…</p> : null}
           {customer.results.length > 0 ? (
             <ul className="max-h-32 overflow-y-auto space-y-1">
               {customer.results.map((row) => (
                 <li key={row.id}>
                   <button
                     type="button"
+                    disabled={disabled || customer.busy}
                     onClick={() => void customer.attachCustomer(row.id)}
-                    className="w-full text-left p-2 rounded-xl hover:bg-blue-50 text-sm font-bold"
+                    className="w-full text-left p-2 rounded-xl hover:bg-blue-50 text-sm font-bold disabled:opacity-50"
                   >
-                    {row.display_name}
+                    {getCustomerDisplayName(row)}
                   </button>
                 </li>
               ))}
@@ -93,6 +142,7 @@ export function CustomerPanel({
       )}
 
       <div className="space-y-2 pt-2 border-t border-blue-50">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-blue-900/40">Dane do faktury</p>
         <div className="flex gap-2">
           <input
             value={nip}
@@ -128,7 +178,7 @@ export function CustomerPanel({
                 if (hit.customer_id) {
                   await customer.attachCustomer(hit.customer_id);
                 }
-              } catch (e) {
+              } catch {
                 setNipError("Błąd pobierania danych.");
               } finally {
                 setNipLoading(false);
@@ -175,9 +225,7 @@ export function CustomerPanel({
                 city: safeTrim(city) || null,
               });
               onSessionUpdated(s);
-              if (resolvedDirectSalesSettings.auto_save_customers) {
-                await customer.attachCustomer(s.customer_id);
-              }
+              await customer.refreshCustomerDetail(s.customer_id);
             } catch {
               setNipError("Nie udało się zapisać klienta faktury.");
             } finally {
@@ -190,6 +238,8 @@ export function CustomerPanel({
           {saving ? "Zapisywanie…" : "Zapisz klienta i przypisz do FV"}
         </button>
       </div>
+
+      {customer.error ? <p className="text-xs text-red-600">{customer.error}</p> : null}
     </div>
   );
 }

@@ -22,6 +22,7 @@ import { CustomerGusBadges } from "../../components/customers/CustomerGusBadges"
 import { CustomerGusLookupPanel } from "../../components/customers/CustomerGusLookupPanel";
 import { useCustomerGusLookup } from "../../hooks/customers/useCustomerGusLookup";
 import { applyGusToCustomerForm } from "../../utils/applyGusToCustomerForm";
+import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
 import { validatePolishNipChecksum } from "../../utils/polishNip";
 
 const PAYMENT_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
@@ -268,8 +269,19 @@ export default function CustomerEditPage() {
     }
   };
 
-  const breadcrumbTitle = isNew ? "Nowy klient" : idParam && /^\d+$/.test(idParam) ? `Klient #${idParam}` : "Klient";
   const customerIdNum = !isNew && idParam && /^\d+$/.test(idParam) ? Number(idParam) : null;
+
+  const breadcrumbTitle = isNew
+    ? "Nowy klient"
+    : loading
+      ? "Klient"
+      : getCustomerDisplayName({
+          id: customerIdNum,
+          company_name: companyName,
+          first_name: firstName,
+          last_name: lastName,
+          email,
+        });
 
   if (warehouseId == null) {
     return (
