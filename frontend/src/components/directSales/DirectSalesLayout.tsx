@@ -174,6 +174,7 @@ export function DirectSalesLayout({ terminal }: Props) {
               <CustomerPanel
                 customer={customer}
                 customerId={session?.customer_id ?? null}
+                customerIsRetail={session?.customer_is_retail ?? false}
                 sessionId={session?.id ?? null}
                 warehouseId={warehouseId ?? 0}
                 disabled={sessionState.busy}

@@ -9,10 +9,11 @@ type CustomerState = ReturnType<typeof useDirectSalesCustomer>;
 type Props = {
   customer: CustomerState;
   customerId: number | null;
+  customerIsRetail?: boolean;
   disabled?: boolean;
 };
 
-export function CustomerPanel({ customer, customerId, disabled }: Props) {
+export function CustomerPanel({ customer, customerId, customerIsRetail = false, disabled }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -21,11 +22,13 @@ export function CustomerPanel({ customer, customerId, disabled }: Props) {
   const [nip, setNip] = useState("");
   const [company, setCompany] = useState("");
 
+  const showAssigned = Boolean(customerId) && !customerIsRetail;
+
   return (
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Klient</h3>
-        {customerId ? (
+        {showAssigned ? (
           <button
             type="button"
             disabled={disabled || customer.busy}
@@ -36,7 +39,7 @@ export function CustomerPanel({ customer, customerId, disabled }: Props) {
           </button>
         ) : null}
       </div>
-      {customer.detail ? (
+      {showAssigned && customer.detail ? (
         <div className="rounded-lg bg-slate-50 p-2 text-xs text-slate-700">
           <div className="font-medium text-slate-900">
             {getCustomerDisplayName(customer.detail)}
@@ -45,6 +48,8 @@ export function CustomerPanel({ customer, customerId, disabled }: Props) {
           {customer.detail.phone ? <div>Tel: {customer.detail.phone}</div> : null}
           {customer.detail.email ? <div>{customer.detail.email}</div> : null}
         </div>
+      ) : showAssigned && customer.detailLoading ? (
+        <p className="text-[10px] text-slate-400">Wczytywanie…</p>
       ) : (
         <>
           <input
@@ -55,7 +60,7 @@ export function CustomerPanel({ customer, customerId, disabled }: Props) {
             placeholder="Szukaj klienta…"
             className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm disabled:opacity-50"
           />
-          {customer.loading ? <p className="text-[10px] text-slate-400">Szukam…</p> : null}
+          {customer.searchLoading ? <p className="text-[10px] text-slate-400">Szukam…</p> : null}
           {customer.results.length ? (
             <ul className="max-h-28 overflow-auto rounded border border-slate-100">
               {customer.results.map((row) => (

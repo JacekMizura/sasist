@@ -20,45 +20,81 @@ type Args = {
   warehouseId: number | null;
   sessionId: number | null;
   customerId: number | null;
+  customerIsRetail: boolean;
   onSessionUpdated: (session: DirectSaleSession) => void;
 };
 
-export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onSessionUpdated }: Args) {
+export function useDirectSalesCustomer({
+  warehouseId,
+  sessionId,
+  customerId,
+  customerIsRetail,
+  onSessionUpdated,
+}: Args) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<CustomerListRow[]>([]);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nipLookupLoading, setNipLookupLoading] = useState(false);
   const reqId = useRef(0);
 
+  const resetSearchState = useCallback(() => {
+    reqId.current += 1;
+    setSearch("");
+    setResults([]);
+    setSearchLoading(false);
+  }, []);
+
+  const resetCustomerState = useCallback(() => {
+    resetSearchState();
+    setDetail(null);
+    setDetailLoading(false);
+    setError(null);
+  }, [resetSearchState]);
+
   useEffect(() => {
-    if (customerId == null) {
+    if (customerId == null || customerIsRetail) {
       setDetail(null);
+      setDetailLoading(false);
       return;
     }
     let cancelled = false;
+    setDetailLoading(true);
     void getCustomer(customerId, DAMAGE_TENANT_ID)
       .then((d) => {
         if (!cancelled) setDetail(d);
       })
       .catch(() => {
         if (!cancelled) setDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [customerId]);
+  }, [customerId, customerIsRetail]);
+
+  useEffect(() => {
+    if (customerIsRetail) {
+      setDetail(null);
+      setDetailLoading(false);
+    }
+  }, [customerIsRetail]);
 
   useEffect(() => {
     const q = safeTrim(search);
     if (q.length < 2) {
+      reqId.current += 1;
       setResults([]);
+      setSearchLoading(false);
       return;
     }
     const id = ++reqId.current;
-    setLoading(true);
+    setSearchLoading(true);
     const t = window.setTimeout(() => {
       void listCustomers({ tenant_id: DAMAGE_TENANT_ID, search: q })
         .then((rows) => {
@@ -69,10 +105,13 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
           if (reqId.current === id) setResults([]);
         })
         .finally(() => {
-          if (reqId.current === id) setLoading(false);
+          if (reqId.current === id) setSearchLoading(false);
         });
     }, DEBOUNCE_MS);
-    return () => window.clearTimeout(t);
+    return () => {
+      window.clearTimeout(t);
+      if (reqId.current === id) setSearchLoading(false);
+    };
   }, [search]);
 
   const refreshCustomerDetail = useCallback(async (id: number | null) => {
@@ -98,8 +137,7 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
         let updated: DirectSaleSession;
         if (id == null) {
           updated = await clearDirectSaleCustomer({ ...scope, sessionId });
-          setDetail(null);
-          setSearch("");
+          resetCustomerState();
         } else {
           updated = await setDirectSaleCustomer({ ...scope, sessionId, customerId: id });
           const d = await getCustomer(id, DAMAGE_TENANT_ID);
@@ -113,7 +151,7 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
         setBusy(false);
       }
     },
-    [warehouseId, sessionId, onSessionUpdated],
+    [warehouseId, sessionId, onSessionUpdated, resetCustomerState],
   );
 
   const lookupByNip = useCallback(
@@ -184,8 +222,7 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
           product_discounts: [],
         });
         await attachCustomer(created.id);
-        setSearch("");
-        setResults([]);
+        resetSearchState();
         return created;
       } catch (e) {
         setError(extractApiErrorMessage(e));
@@ -194,7 +231,7 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
         setBusy(false);
       }
     },
-    [attachCustomer],
+    [attachCustomer, resetSearchState],
   );
 
   return {
@@ -202,7 +239,10 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
     setSearch,
     results,
     detail,
-    loading,
+    /** @deprecated use searchLoading */
+    loading: searchLoading,
+    searchLoading,
+    detailLoading,
     busy,
     error,
     nipLookupLoading,
@@ -210,6 +250,7 @@ export function useDirectSalesCustomer({ warehouseId, sessionId, customerId, onS
     lookupByNip,
     quickCreate,
     refreshCustomerDetail,
+    resetCustomerState,
   };
 }
 

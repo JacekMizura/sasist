@@ -98,6 +98,9 @@ export type NewComplaintWizardProps = {
   tenantId?: number;
   initialOrderId?: number | null;
   initialOrderItemIds?: number[];
+  initialCustomerName?: string;
+  initialCustomerEmail?: string;
+  initialCustomerPhone?: string;
   onCreated: (complaintId: number) => void;
 };
 
@@ -114,6 +117,9 @@ export default function NewComplaintWizard({
   tenantId = DAMAGE_TENANT_ID,
   initialOrderId = null,
   initialOrderItemIds,
+  initialCustomerName,
+  initialCustomerEmail,
+  initialCustomerPhone,
   onCreated,
 }: NewComplaintWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -164,6 +170,14 @@ export default function NewComplaintWizard({
   useEffect(() => {
     if (!open) return;
     reset();
+    if (initialCustomerName || initialCustomerEmail || initialCustomerPhone) {
+      setForm({
+        ...EMPTY_FORM,
+        customer_name: initialCustomerName?.trim() ?? "",
+        customer_email: initialCustomerEmail?.trim() ?? "",
+        customer_phone: initialCustomerPhone?.trim() ?? "",
+      });
+    }
     if (initialOrderId != null && initialOrderId > 0) {
       setStep(2);
       setOrderLoading(true);
@@ -173,7 +187,7 @@ export default function NewComplaintWizard({
         .catch(() => setOrder(null))
         .finally(() => setOrderLoading(false));
     }
-  }, [open, initialOrderId, reset]);
+  }, [open, initialOrderId, initialCustomerName, initialCustomerEmail, initialCustomerPhone, reset]);
 
   const applyInitialItems = useCallback(
     (ord: OrderLoaded) => {

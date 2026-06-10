@@ -16,6 +16,7 @@ import { safeTrim } from "../../utils/safeStrings";
 type Props = {
   customer: DirectSalesCustomerState;
   customerId: number | null;
+  customerIsRetail: boolean;
   sessionId: number | null;
   warehouseId: number;
   disabled?: boolean;
@@ -25,6 +26,7 @@ type Props = {
 export function CustomerPanel({
   customer,
   customerId,
+  customerIsRetail,
   sessionId,
   warehouseId,
   disabled,
@@ -53,7 +55,7 @@ export function CustomerPanel({
     }
   }, [customer.detail?.id, customer.detail]);
 
-  const showAssigned = customerId != null;
+  const showAssigned = customerId != null && !customerIsRetail;
   const displayName = customer.detail ? getCustomerDisplayName(customer.detail) : null;
 
   return (
@@ -101,11 +103,13 @@ export function CustomerPanel({
                 })()}
               </div>
             </div>
-          ) : (
+          ) : customer.detailLoading ? (
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               Wczytywanie danych klienta…
             </div>
+          ) : (
+            <div className="text-xs text-slate-500">Brak szczegółów klienta.</div>
           )}
         </div>
       ) : (
@@ -118,10 +122,10 @@ export function CustomerPanel({
               value={customer.search}
               onChange={(e) => customer.setSearch(e.target.value)}
               placeholder="Szukaj klienta (min. 2 znaki)…"
-              className="w-full pl-10 pr-4 py-3 bg-white border-2 border-blue-50 rounded-2xl text-sm font-medium"
+              className="w-full pl-10 pr-4 py-3 bg-white border-2 border-blue-50 rounded-2xl text-sm font-medium disabled:opacity-50"
             />
           </div>
-          {customer.loading ? <p className="text-[10px] text-slate-400">Szukam…</p> : null}
+          {customer.searchLoading ? <p className="text-[10px] text-slate-400">Szukam…</p> : null}
           {customer.results.length > 0 ? (
             <ul className="max-h-32 overflow-y-auto space-y-1">
               {customer.results.map((row) => (

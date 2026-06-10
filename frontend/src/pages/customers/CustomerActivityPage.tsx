@@ -55,7 +55,6 @@ export default function CustomerActivityPage() {
     <CustomerDetailPageShell
       customerId={customerId}
       title={title}
-      subtitle="Chronologiczny timeline zdarzeń klienta."
       sectionLabel="Aktywność"
       showTabs
     >

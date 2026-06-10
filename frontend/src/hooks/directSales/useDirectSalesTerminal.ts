@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useOperationalStatus } from "../operational/useOperationalStatus";
@@ -68,8 +69,37 @@ export function useDirectSalesTerminal() {
     warehouseId,
     sessionId: sessionState.session?.id ?? null,
     customerId: sessionState.session?.customer_id ?? null,
+    customerIsRetail: sessionState.session?.customer_is_retail ?? false,
     onSessionUpdated: sessionState.applySession,
   });
+
+  const location = useLocation();
+  const prefillDoneRef = useRef(false);
+
+  const attachCustomer = customer.attachCustomer;
+  const changeDocumentSubtype = sessionState.changeDocumentSubtype;
+
+  useEffect(() => {
+    const state = location.state as { prefillCustomerId?: number; prefillDocumentSubtype?: "INVOICE" | "RECEIPT" } | null;
+    const cid = state?.prefillCustomerId;
+    if (prefillDoneRef.current || cid == null || !Number.isFinite(cid) || warehouseId == null) return;
+    if (!sessionState.session?.id || sessionState.busy) return;
+
+    prefillDoneRef.current = true;
+    void (async () => {
+      await attachCustomer(Math.trunc(cid));
+      if (state?.prefillDocumentSubtype === "INVOICE") {
+        await changeDocumentSubtype("INVOICE");
+      }
+    })();
+  }, [
+    location.state,
+    warehouseId,
+    sessionState.session?.id,
+    sessionState.busy,
+    attachCustomer,
+    changeDocumentSubtype,
+  ]);
 
   const unavailableReason = useMemo(
     () => resolveDirectSalesUnavailableReason(status.features, sessionState.unavailable),

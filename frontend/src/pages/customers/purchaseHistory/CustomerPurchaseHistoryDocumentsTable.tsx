@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { ExternalLink } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import type { PurchaseHistoryDocumentRow } from "../../../api/customerPurchaseHistoryApi";
 import { OrderListPanelStatusBadge } from "../../../components/orders/orderList/OrderListPanelStatusBadge";
 import { formatMoneyPl } from "../../../utils/formatOrderMoney";
@@ -9,18 +8,7 @@ function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("pl-PL");
-}
-
-function ProductThumb({ url, name }: { url: string | null; name: string }) {
-  if (url) {
-    return <img src={url} alt="" className="h-9 w-9 shrink-0 rounded object-contain" />;
-  }
-  return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-slate-50 text-[10px] font-semibold text-slate-400">
-      ?
-    </span>
-  );
+  return d.toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
 }
 
 export function CustomerPurchaseHistoryDocumentsTable({
@@ -36,10 +24,12 @@ export function CustomerPurchaseHistoryDocumentsTable({
   pages: number;
   onPageChange: (p: number) => void;
 }) {
+  const navigate = useNavigate();
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-slate-800">Historia dokumentów</h2>
+        <h2 className="text-sm font-bold text-slate-800">Dokumenty sprzedaży</h2>
         {!loading ? (
           <span className="text-xs text-slate-500">{rows.length ? `Strona ${page} / ${pages}` : "Brak wyników"}</span>
         ) : null}
@@ -49,20 +39,7 @@ export function CustomerPurchaseHistoryDocumentsTable({
           <table className="min-w-full text-left text-sm">
             <thead className={documentsTableTheadCls}>
               <tr>
-                {[
-                  "Lp.",
-                  "Numer dokumentu",
-                  "Data",
-                  "Status",
-                  "Produkty",
-                  "Poz.",
-                  "Netto",
-                  "VAT",
-                  "Brutto",
-                  "Magazyn",
-                  "Operator",
-                  "Akcje",
-                ].map((h) => (
+                {["Lp.", "Numer", "Typ", "Data", "Status", "Netto", "VAT", "Brutto"].map((h) => (
                   <th key={h} className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold text-slate-600">
                     {h}
                   </th>
@@ -72,27 +49,49 @@ export function CustomerPurchaseHistoryDocumentsTable({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-3 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-slate-500">
                     Ładowanie…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-3 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-slate-500">
                     Brak dokumentów dla wybranych filtrów.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.order_id} className="border-t border-slate-100 hover:bg-slate-50/60">
-                    <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-600">{row.lp}</td>
-                    <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-900">
-                      <Link to={row.detail_path} className="text-blue-700 hover:underline">
+                  <tr
+                    key={row.order_id}
+                    className="cursor-pointer border-t border-slate-100 transition-colors hover:bg-slate-50/80"
+                    onClick={() => navigate(row.detail_path)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") navigate(row.detail_path);
+                    }}
+                    tabIndex={0}
+                    role="link"
+                  >
+                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-600">{row.lp}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <Link
+                        to={row.detail_path}
+                        className="font-semibold text-slate-900 hover:text-blue-700 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {row.document_number}
                       </Link>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-slate-700">{fmtDate(row.order_date)}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5">
+                      {row.order_channel ? (
+                        <span className="inline-flex rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                          {row.order_channel}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{fmtDate(row.order_date)}</td>
+                    <td className="px-3 py-2.5">
                       <OrderListPanelStatusBadge
                         compact
                         status={{
@@ -110,49 +109,10 @@ export function CustomerPurchaseHistoryDocumentsTable({
                         }}
                       />
                     </td>
-                    <td className="min-w-[220px] px-3 py-2">
-                      <div className="flex flex-col gap-1.5">
-                        {row.products_preview.slice(0, 3).map((p, i) => (
-                          <div key={`${row.order_id}-${i}`} className="flex min-w-0 items-center gap-2">
-                            <ProductThumb url={p.image_url} name={p.name} />
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-medium text-slate-900">{p.name}</p>
-                              <p className="truncate text-[11px] text-slate-500">
-                                {[p.sku && `SKU: ${p.sku}`, p.ean && `EAN: ${p.ean}`].filter(Boolean).join(" · ") ||
-                                  "—"}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                        {row.line_count > 3 ? (
-                          <p className="text-[11px] text-slate-500">+ {row.line_count - 3} pozycji</p>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-700">{row.line_count}</td>
-                    <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-900">{formatMoneyPl(row.net)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-700">{formatMoneyPl(row.vat)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 tabular-nums font-medium text-slate-900">
+                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-900">{formatMoneyPl(row.net)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-700">{formatMoneyPl(row.vat)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums font-semibold text-slate-900">
                       {formatMoneyPl(row.gross)}
-                    </td>
-                    <td className="px-3 py-2">
-                      {row.warehouse_name ? (
-                        <span className="inline-flex rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-700">
-                          {row.warehouse_name}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.operator_name ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      <Link
-                        to={row.detail_path}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
-                      >
-                        Otwórz
-                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                      </Link>
                     </td>
                   </tr>
                 ))

@@ -1,36 +1,80 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
 
-import type { PurchaseHistoryFilterOptions, PurchaseHistoryQueryFilters } from "../../../api/customerPurchaseHistoryApi";
+import type { PurchaseHistoryQueryFilters } from "../../../api/customerPurchaseHistoryApi";
 
 const inp =
-  "mt-1 min-h-[38px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
+  "mt-1 min-h-[36px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30";
 
 const labelClass = "block text-xs font-medium text-slate-600";
 
 type Props = {
   draft: PurchaseHistoryQueryFilters;
-  options: PurchaseHistoryFilterOptions | null;
   onChange: (patch: Partial<PurchaseHistoryQueryFilters>) => void;
   onApply: () => void;
   onClear: () => void;
 };
 
-export function CustomerPurchaseHistoryFilters({ draft, options, onChange, onApply, onClear }: Props) {
-  const [moreOpen, setMoreOpen] = useState(false);
-  const hasMoreActive =
-    draft.order_ui_status_id != null || draft.warehouse_id != null;
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function applyQuickRange(days: number | "year"): Partial<PurchaseHistoryQueryFilters> {
+  const to = new Date();
+  const from = new Date();
+  if (days === "year") {
+    from.setMonth(0, 1);
+  } else if (days === 0) {
+    // dziś
+  } else {
+    from.setDate(from.getDate() - days + 1);
+  }
+  return { date_from: isoDate(from), date_to: isoDate(to) };
+}
+
+const QUICK_RANGES: { label: string; range: Partial<PurchaseHistoryQueryFilters> }[] = [
+  { label: "Dziś", range: applyQuickRange(0) },
+  { label: "7 dni", range: applyQuickRange(7) },
+  { label: "30 dni", range: applyQuickRange(30) },
+  { label: "90 dni", range: applyQuickRange(90) },
+  { label: "Cały rok", range: applyQuickRange("year") },
+];
+
+export function CustomerPurchaseHistoryFilters({ draft, onChange, onApply, onClear }: Props) {
+  const [pendingRange, setPendingRange] = useState<string | null>(null);
 
   return (
     <section className="rounded-lg border border-slate-200/90 bg-white p-4 shadow-none">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="flex flex-wrap gap-2">
+        {QUICK_RANGES.map(({ label, range }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => {
+              onChange(range);
+              setPendingRange(label);
+            }}
+            className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${
+              pendingRange === label
+                ? "border-orange-400 bg-orange-50 text-orange-900"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className={labelClass}>
           Data od
           <input
             type="date"
             className={inp}
             value={draft.date_from ?? ""}
-            onChange={(e) => onChange({ date_from: e.target.value || undefined })}
+            onChange={(e) => {
+              setPendingRange(null);
+              onChange({ date_from: e.target.value || undefined });
+            }}
           />
         </label>
         <label className={labelClass}>
@@ -39,7 +83,10 @@ export function CustomerPurchaseHistoryFilters({ draft, options, onChange, onApp
             type="date"
             className={inp}
             value={draft.date_to ?? ""}
-            onChange={(e) => onChange({ date_to: e.target.value || undefined })}
+            onChange={(e) => {
+              setPendingRange(null);
+              onChange({ date_to: e.target.value || undefined });
+            }}
           />
         </label>
         <label className={labelClass}>
@@ -72,77 +119,18 @@ export function CustomerPurchaseHistoryFilters({ draft, options, onChange, onApp
         </label>
       </div>
 
-      <div className="mt-3">
-        <button
-          type="button"
-          onClick={() => setMoreOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-slate-900"
-          aria-expanded={moreOpen}
-        >
-          Więcej filtrów
-          {hasMoreActive ? (
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
-              aktywne
-            </span>
-          ) : null}
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${moreOpen ? "rotate-180" : ""}`}
-            aria-hidden
-          />
-        </button>
-
-        {moreOpen ? (
-          <div className="mt-3 grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
-            <label className={labelClass}>
-              Status dokumentu
-              <select
-                className={inp}
-                value={draft.order_ui_status_id ?? ""}
-                onChange={(e) =>
-                  onChange({ order_ui_status_id: e.target.value ? Number(e.target.value) : undefined })
-                }
-              >
-                <option value="">Wszystkie</option>
-                {(options?.statuses ?? []).map((s) => (
-                  <option key={String(s.id)} value={String(s.id)}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Magazyn
-              <select
-                className={inp}
-                value={draft.warehouse_id ?? ""}
-                onChange={(e) =>
-                  onChange({ warehouse_id: e.target.value ? Number(e.target.value) : undefined })
-                }
-              >
-                <option value="">Wszystkie</option>
-                {(options?.warehouses ?? []).map((w) => (
-                  <option key={String(w.id)} value={String(w.id)}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        ) : null}
-      </div>
-
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={onApply}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
         >
           Filtruj
         </button>
         <button
           type="button"
           onClick={() => {
-            setMoreOpen(false);
+            setPendingRange(null);
             onClear();
           }}
           className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"

@@ -20,8 +20,6 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { CustomerDetailPageShell } from "./CustomerDetailPageShell";
 import { CustomerGusBadges } from "../../components/customers/CustomerGusBadges";
 import { CustomerGusLookupPanel } from "../../components/customers/CustomerGusLookupPanel";
-import { CustomerNotesSection } from "../../components/customers/CustomerNotesSection";
-import { CustomerQuickActions } from "../../components/customers/CustomerQuickActions";
 import { useCustomerGusLookup } from "../../hooks/customers/useCustomerGusLookup";
 import { applyGusToCustomerForm } from "../../utils/applyGusToCustomerForm";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
@@ -32,7 +30,7 @@ const PAYMENT_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as 
 const MAIN_CARD_CLASS =
   "space-y-6";
 
-const ADDRESS_SHELL_CLASS = "rounded-lg bg-slate-100/40 p-4";
+const ADDRESS_SHELL_CLASS = "rounded-lg border border-slate-200/90 p-4";
 
 const inp =
   "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
@@ -285,16 +283,38 @@ export default function CustomerEditPage() {
           email,
         });
 
+  const copyCustomerData = useCallback(() => {
+    const addr = addresses[0];
+    const lines = [
+      getCustomerDisplayName({ company_name: companyName, first_name: firstName, last_name: lastName, email }),
+      companyName ? `Firma: ${companyName}` : "",
+      nip ? `NIP: ${nip}` : "",
+      addr?.street ? `Adres: ${addr.street} ${addr.house_number}${addr.apartment_number ? `/${addr.apartment_number}` : ""}` : "",
+      addr?.postal_code || addr?.city ? `${addr?.postal_code ?? ""} ${addr?.city ?? ""}`.trim() : "",
+      email ? `E-mail: ${email}` : "",
+      phone ? `Tel: ${phone}` : "",
+    ].filter(Boolean);
+    void navigator.clipboard.writeText(lines.join("\n"));
+  }, [addresses, companyName, email, firstName, lastName, nip, phone]);
+
   if (warehouseId == null) {
     return (
-      <CustomerDetailPageShell customerId={customerIdNum} title={breadcrumbTitle} showTabs={!isNew}>
+      <CustomerDetailPageShell customerId={customerIdNum} title={breadcrumbTitle} isNew={isNew} showTabs={!isNew}>
         <p className="text-sm text-amber-800">Wybierz magazyn w nagłówku — potrzebny do listy metod dostawy.</p>
       </CustomerDetailPageShell>
     );
   }
 
   return (
-    <CustomerDetailPageShell customerId={customerIdNum} title={breadcrumbTitle} showTabs={!isNew}>
+    <CustomerDetailPageShell
+      customerId={customerIdNum}
+      title={breadcrumbTitle}
+      isNew={isNew}
+      showTabs={!isNew}
+      onCopyCustomerData={copyCustomerData}
+      onExportHistory={() => customerIdNum && navigate(`/customers/${customerIdNum}/dokumenty`)}
+      onDeleteRequest={() => setDeleteModalOpen(true)}
+    >
       <div className={MAIN_CARD_CLASS}>
           {loading && !isNew ? (
             <p className="text-sm text-slate-500">Ładowanie…</p>
@@ -306,25 +326,6 @@ export default function CustomerEditPage() {
 
           {!loading ? (
             <>
-              {!isNew && customerIdNum ? (
-                <CustomerQuickActions
-                  customerId={customerIdNum}
-                  email={email}
-                  onCopyInvoice={() => {
-                    const addr = addresses[0];
-                    const lines = [
-                      companyName ? `Firma: ${companyName}` : "",
-                      nip ? `NIP: ${nip}` : "",
-                      addr?.street ? `Adres: ${addr.street} ${addr.house_number}${addr.apartment_number ? `/${addr.apartment_number}` : ""}` : "",
-                      addr?.postal_code || addr?.city ? `${addr?.postal_code ?? ""} ${addr?.city ?? ""}`.trim() : "",
-                      email ? `E-mail: ${email}` : "",
-                      phone ? `Tel: ${phone}` : "",
-                    ].filter(Boolean);
-                    void navigator.clipboard.writeText(lines.join("\n"));
-                  }}
-                />
-              ) : null}
-
               <section>
                 <h2 className={sectionTitleClass}>Dane do dokumentu</h2>
                 <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -636,10 +637,6 @@ export default function CustomerEditPage() {
                 </div>
               </section>
 
-              {!isNew && customerIdNum ? (
-                <CustomerNotesSection customerId={customerIdNum} tenantId={tenantId} />
-              ) : null}
-
               <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-4">
                 <button
                   type="button"
@@ -649,16 +646,6 @@ export default function CustomerEditPage() {
                 >
                   {saving ? "Zapisywanie…" : "Zapisz"}
                 </button>
-                {!isNew ? (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => setDeleteModalOpen(true)}
-                    className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    Usuń klienta
-                  </button>
-                ) : null}
               </div>
             </>
           ) : null}

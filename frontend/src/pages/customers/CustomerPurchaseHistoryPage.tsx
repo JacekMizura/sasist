@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   fetchCustomerPurchaseDocuments,
   fetchCustomerPurchaseSummary,
@@ -8,7 +8,6 @@ import {
   type PurchaseHistoryQueryFilters,
   type PurchaseHistorySummary,
 } from "../../api/customerPurchaseHistoryApi";
-import { getCustomer } from "../../api/customersApi";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { CustomerDetailPageShell } from "./CustomerDetailPageShell";
@@ -22,10 +21,10 @@ const EMPTY_FILTERS: PurchaseHistoryQueryFilters = {};
 
 export default function CustomerPurchaseHistoryPage() {
   const { id: idParam } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const tenantId = DAMAGE_TENANT_ID;
   const customerId = idParam && /^\d+$/.test(idParam) ? Number(idParam) : null;
 
-  const [displayName, setDisplayName] = useState<string | null>(null);
   const [draftFilters, setDraftFilters] = useState<PurchaseHistoryQueryFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<PurchaseHistoryQueryFilters>(EMPTY_FILTERS);
   const [summary, setSummary] = useState<PurchaseHistorySummary | null>(null);
@@ -36,13 +35,6 @@ export default function CustomerPurchaseHistoryPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (customerId == null) return;
-    void getCustomer(customerId, tenantId)
-      .then((c) => setDisplayName(getCustomerDisplayName(c)))
-      .catch(() => setDisplayName(getCustomerDisplayName({ id: customerId })));
-  }, [customerId, tenantId]);
 
   const filtersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
 
@@ -85,35 +77,31 @@ export default function CustomerPurchaseHistoryPage() {
 
   if (customerId == null) {
     return (
-      <CustomerDetailPageShell
-        customerId={null}
-        title="Klient"
-        sectionLabel="Historia zakupów"
-      >
+      <CustomerDetailPageShell customerId={null} title="Klient" sectionLabel="Historia zakupów">
         <p className="text-sm text-red-700">Nieprawidłowy identyfikator klienta.</p>
       </CustomerDetailPageShell>
     );
   }
 
-  const title = displayName ?? getCustomerDisplayName({ id: customerId });
+  const title = getCustomerDisplayName({ id: customerId });
+  const topProductName = topProducts?.items?.[0]?.name ?? null;
 
   return (
     <CustomerDetailPageShell
       customerId={customerId}
       title={title}
-      subtitle="Podsumowanie zakupów, dokumenty i trendy sprzedaży klienta."
       sectionLabel="Historia zakupów"
       showTabs
+      onExportHistory={() => navigate(`/customers/${customerId}/dokumenty`)}
     >
       {err ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{err}</p>
       ) : null}
 
-      <CustomerPurchaseHistoryKpi summary={summary} loading={loading} />
+      <CustomerPurchaseHistoryKpi summary={summary} loading={loading} topProductName={topProductName} />
 
       <CustomerPurchaseHistoryFilters
         draft={draftFilters}
-        options={summary?.filter_options ?? null}
         onChange={(patch) => setDraftFilters((prev) => ({ ...prev, ...patch }))}
         onApply={onApplyFilters}
         onClear={onClearFilters}
@@ -127,7 +115,7 @@ export default function CustomerPurchaseHistoryPage() {
         onPageChange={setPage}
       />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <CustomerPurchaseHistoryTopProducts items={topProducts?.items ?? []} loading={loading} />
         <CustomerPurchaseHistoryTrendChart
           points={trend?.points ?? []}

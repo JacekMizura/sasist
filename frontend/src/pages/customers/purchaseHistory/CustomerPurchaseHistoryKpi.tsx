@@ -1,32 +1,22 @@
 import type { PurchaseHistorySummary } from "../../../api/customerPurchaseHistoryApi";
-import { AppStatCard } from "../../../components/app-shell/AppStatCard";
 import { formatMoneyPl } from "../../../utils/formatOrderMoney";
+import { formatLastPurchaseLabel } from "../../../hooks/customers/useCustomerHeaderSummary";
 import { CalendarDays, Package, Receipt, RotateCcw, ShoppingCart, TrendingUp, Wallet } from "lucide-react";
-
-function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("pl-PL");
-}
-
-function fmtDays(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "—";
-  return `${n.toLocaleString("pl-PL", { maximumFractionDigits: 1 })} dni`;
-}
 
 export function CustomerPurchaseHistoryKpi({
   summary,
   loading,
+  topProductName,
 }: {
   summary: PurchaseHistorySummary | null;
   loading: boolean;
+  topProductName?: string | null;
 }) {
   if (loading && !summary) {
     return (
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-11 animate-pulse rounded-md border border-slate-100 bg-slate-50/80" />
+          <div key={i} className="h-[4.5rem] animate-pulse rounded-lg border border-slate-100 bg-white" />
         ))}
       </div>
     );
@@ -42,27 +32,39 @@ export function CustomerPurchaseHistoryKpi({
     );
   }
 
+  const cards = [
+    { label: "Obrót brutto", value: formatMoneyPl(summary.total_gross), icon: Wallet },
+    { label: "Liczba zamówień", value: summary.order_count.toLocaleString("pl-PL"), icon: ShoppingCart },
+    { label: "Średni koszyk", value: formatMoneyPl(summary.avg_basket_gross), icon: TrendingUp },
+    { label: "Zwroty / korekty", value: summary.returns_corrections_count.toLocaleString("pl-PL"), icon: RotateCcw },
+    { label: "Ostatni zakup", value: formatLastPurchaseLabel(summary.last_purchase_at), icon: CalendarDays },
+    {
+      label: "Top produkt",
+      value: topProductName?.trim() || "—",
+      icon: Package,
+    },
+  ];
+
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
-      <AppStatCard label="Obrót 30 dni" value={formatMoneyPl(summary.gross_30d ?? 0)} icon={Wallet} />
-      <AppStatCard label="Obrót 90 dni" value={formatMoneyPl(summary.gross_90d ?? 0)} icon={Wallet} />
-      <AppStatCard label="Obrót 365 dni" value={formatMoneyPl(summary.gross_365d ?? 0)} icon={Wallet} />
-      <AppStatCard label="Średnia wartość koszyka" value={formatMoneyPl(summary.avg_basket_gross)} icon={TrendingUp} />
-      <AppStatCard label="Ostatni zakup" value={fmtDate(summary.last_purchase_at)} icon={CalendarDays} />
-      <AppStatCard label="Liczba zamówień" value={summary.order_count.toLocaleString("pl-PL")} icon={ShoppingCart} />
-      <AppStatCard label="Największe zamówienie" value={formatMoneyPl(summary.max_order_gross ?? 0)} icon={Receipt} />
-      <AppStatCard label="Łączna wartość brutto" value={formatMoneyPl(summary.total_gross)} icon={Wallet} />
-      <AppStatCard
-        label="Łączna liczba produktów"
-        value={summary.total_products_qty.toLocaleString("pl-PL")}
-        icon={Package}
-      />
-      <AppStatCard
-        label="Zwroty / korekty"
-        value={summary.returns_corrections_count.toLocaleString("pl-PL")}
-        icon={RotateCcw}
-      />
-      <AppStatCard label="Średni odstęp między zakupami" value={fmtDays(summary.avg_days_between_orders)} icon={CalendarDays} />
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {cards.map(({ label, value, icon: Icon }) => (
+        <div
+          key={label}
+          className="rounded-lg border border-slate-200/90 bg-white p-3 shadow-none"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+              <p className="mt-1 truncate text-lg font-bold tabular-nums text-slate-900" title={String(value)}>
+                {value}
+              </p>
+            </div>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-100 text-slate-600">
+              <Icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            </span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
