@@ -27,7 +27,7 @@ export type GusLookupResult = {
 };
 
 export async function postGusLookup(nip: string, forceRefresh = false): Promise<GusLookupResult> {
-  const { data } = await api.post<GusLookupResult>("clients/gus-lookup", {
+  const { data } = await api.post<GusLookupResult>("customers/gus-lookup", {
     nip,
     force_refresh: forceRefresh,
   });

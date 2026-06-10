@@ -1,7 +1,13 @@
 # Change log
 
+## 2026-06-08 — Klienci: naprawa routerów + layout
+- Purchase history + GUS scalone w `customers_router` (jeden mount `/api/customers`)
+- GUS: `POST /api/customers/gus-lookup` (usunięto `/clients`)
+- Frontend: `CustomerDetailPageShell` (PageLayout + PageHeader jak lista klientów)
+- KPI historii: kompaktowy skeleton + empty state bez dużych pustych kart
+
 ## 2026-06-08 — Klienci: integracja GUS (NIP)
-- Backend: `POST /api/clients/gus-lookup` — proxy BIR1 GUS + wzbogacenie VAT z MF, cache 24h (`gus_nip_cache`)
+- Backend: `POST /api/customers/gus-lookup` — proxy BIR1 GUS + MF VAT, cache 24h
 - Frontend: pole NIP z „Pobierz z GUS”, debounce 900 ms, panel podglądu, „Uzupełnij dane” (tylko puste pola)
 - Badge: Zweryfikowano w GUS, Aktywny VAT, VAT UE
 - Env: `GUS_API_KEY`, opcjonalnie `GUS_USE_TEST=true` (środowisko testowe GUS)

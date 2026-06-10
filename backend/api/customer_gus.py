@@ -1,4 +1,4 @@
-"""Client-facing GUS lookup (proxy — frontend never calls GUS directly)."""
+"""GUS lookup — proxy po NIP (frontend nigdy nie woła GUS bezpośrednio)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from ..database import get_db
 from ..schemas.gus_lookup import GusLookupRequest, GusLookupResponse
 from ..services.customers.gus_lookup_service import lookup_gus_by_nip
 
-router = APIRouter(prefix="/clients", tags=["Klienci — GUS"])
+router = APIRouter(tags=["Customers — GUS"])
 
 
 @router.post("/gus-lookup", response_model=GusLookupResponse)

@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Home, Loader2 } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/PanelBulkStatusConfirmModal";
-import { panelDetailPageOuterClass } from "../../components/panelDetail/panelDetailLayout";
-import { PageGutter } from "../../components/layout/PageContainer";
-import { listSellasistToolbarSquareBtn } from "../../components/listPage/listSellasistTokens";
 import CountryCodeSelect from "../../components/customers/CountryCodeSelect";
 import {
   createCustomer,
@@ -16,10 +13,9 @@ import {
   type CustomerProductDiscountDto,
 } from "../../api/customersApi";
 import { getShippingMethods } from "../../api/shippingMethodsApi";
-import { UI_STRINGS } from "../../constants/uiStrings";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { CustomerDetailTabs } from "./CustomerDetailTabs";
+import { CustomerDetailPageShell } from "./CustomerDetailPageShell";
 import { CustomerGusBadges } from "../../components/customers/CustomerGusBadges";
 import { CustomerGusLookupPanel } from "../../components/customers/CustomerGusLookupPanel";
 import { useCustomerGusLookup } from "../../hooks/customers/useCustomerGusLookup";
@@ -29,7 +25,7 @@ import { validatePolishNipChecksum } from "../../utils/polishNip";
 const PAYMENT_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
 
 const MAIN_CARD_CLASS =
-  "rounded-xl border border-slate-200/90 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_8px_28px_rgba(15,23,42,0.07)] space-y-6";
+  "space-y-6";
 
 const ADDRESS_SHELL_CLASS = "rounded-lg bg-slate-100/40 p-4";
 
@@ -268,70 +264,19 @@ export default function CustomerEditPage() {
   };
 
   const breadcrumbTitle = isNew ? "Nowy klient" : idParam && /^\d+$/.test(idParam) ? `Klient #${idParam}` : "Klient";
+  const customerIdNum = !isNew && idParam && /^\d+$/.test(idParam) ? Number(idParam) : null;
 
   if (warehouseId == null) {
     return (
-      <div className={panelDetailPageOuterClass}>
-        <PageGutter>
-          <nav className="mb-2.5 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800"
-              aria-label="Panel"
-            >
-              <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-            </Link>
-            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-            <Link to="/customers" className="font-medium text-slate-500 transition hover:text-slate-800">
-              {UI_STRINGS.navigation.customersList}
-            </Link>
-            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-            <span className="font-medium text-slate-600">{breadcrumbTitle}</span>
-          </nav>
-          <div className={MAIN_CARD_CLASS}>
-            <p className="text-sm text-amber-800">Wybierz magazyn w nagłówku — potrzebny do listy metod dostawy.</p>
-          </div>
-        </PageGutter>
-      </div>
+      <CustomerDetailPageShell customerId={customerIdNum} title={breadcrumbTitle} showTabs={!isNew}>
+        <p className="text-sm text-amber-800">Wybierz magazyn w nagłówku — potrzebny do listy metod dostawy.</p>
+      </CustomerDetailPageShell>
     );
   }
 
   return (
-    <div className={panelDetailPageOuterClass}>
-      <PageGutter>
-        <nav className="mb-2.5 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800"
-            aria-label="Panel"
-          >
-            <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          </Link>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-          <Link to="/customers" className="font-medium text-slate-500 transition hover:text-slate-800">
-            {UI_STRINGS.navigation.customersList}
-          </Link>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-          <span className="font-medium text-slate-600">{breadcrumbTitle}</span>
-        </nav>
-
-        <div className={MAIN_CARD_CLASS}>
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
-            <h1 className="text-lg font-semibold leading-snug tracking-tight text-slate-900 sm:text-xl">
-              {isNew ? "Nowy klient" : `Klient #${idParam}`}
-            </h1>
-            <Link
-              to="/customers"
-              className={listSellasistToolbarSquareBtn}
-              title="Lista klientów"
-              aria-label="Lista klientów"
-            >
-              <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-            </Link>
-          </div>
-
-          {!isNew ? <CustomerDetailTabs /> : null}
-
+    <CustomerDetailPageShell customerId={customerIdNum} title={breadcrumbTitle} showTabs={!isNew}>
+      <div className={MAIN_CARD_CLASS}>
           {loading && !isNew ? (
             <p className="text-sm text-slate-500">Ładowanie…</p>
           ) : null}
@@ -674,7 +619,6 @@ export default function CustomerEditPage() {
             </>
           ) : null}
         </div>
-      </PageGutter>
 
       <PanelBulkStatusConfirmModal
         open={deleteModalOpen}
@@ -689,6 +633,6 @@ export default function CustomerEditPage() {
         }}
         onConfirm={() => void confirmDeleteCustomer()}
       />
-    </div>
+    </CustomerDetailPageShell>
   );
 }

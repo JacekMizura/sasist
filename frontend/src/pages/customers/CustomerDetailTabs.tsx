@@ -2,10 +2,10 @@ import { NavLink, useParams } from "react-router-dom";
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
   [
-    "inline-flex min-h-[36px] items-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+    "inline-flex min-h-[36px] items-center border-b-2 px-1 pb-2 pt-1 text-sm font-medium transition-colors -mb-px",
     isActive
-      ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200/80"
-      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+      ? "border-blue-600 text-blue-700"
+      : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900",
   ].join(" ");
 
 export function CustomerDetailTabs() {
@@ -15,7 +15,7 @@ export function CustomerDetailTabs() {
   const base = `/customers/${id}`;
 
   return (
-    <nav className="flex flex-wrap gap-1 border-b border-slate-100 pb-3" aria-label="Sekcje klienta">
+    <nav className="flex flex-wrap gap-6 border-b border-slate-200" aria-label="Sekcje klienta">
       <NavLink to={base} end className={tabClass}>
         Dane klienta
       </NavLink>

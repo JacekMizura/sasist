@@ -235,8 +235,6 @@ from .api.manufacturer import router as manufacturer_router
 from .api.purchasing import router as purchasing_router
 from .api.supplier import router as supplier_router
 from .api.customers import router as customers_router
-from .api.customer_purchase_history import router as customer_purchase_history_router
-from .api.clients_gus import router as clients_gus_router
 from .api.supplier_product import router as supplier_product_router
 from .api.supplier_product_links import router as supplier_product_links_router
 from .api.delivery import router as inbound_delivery_router
@@ -1523,8 +1521,6 @@ _API_ROUTERS = (
     purchasing_router,
     supplier_router,
     customers_router,
-    customer_purchase_history_router,
-    clients_gus_router,
     supplier_product_links_router,
     inbound_delivery_router,
     stock_documents_router,

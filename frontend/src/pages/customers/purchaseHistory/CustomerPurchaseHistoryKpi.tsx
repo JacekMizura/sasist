@@ -15,14 +15,30 @@ function fmtDays(n: number | null | undefined): string {
   return `${n.toLocaleString("pl-PL", { maximumFractionDigits: 1 })} dni`;
 }
 
-export function CustomerPurchaseHistoryKpi({ summary }: { summary: PurchaseHistorySummary | null }) {
-  if (!summary) {
+export function CustomerPurchaseHistoryKpi({
+  summary,
+  loading,
+}: {
+  summary: PurchaseHistorySummary | null;
+  loading: boolean;
+}) {
+  if (loading && !summary) {
     return (
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-[88px] animate-pulse rounded-lg border border-slate-200/90 bg-white" />
+          <div key={i} className="h-11 animate-pulse rounded-md border border-slate-100 bg-slate-50/80" />
         ))}
       </div>
+    );
+  }
+
+  if (!summary) return null;
+
+  if (summary.order_count === 0) {
+    return (
+      <p className="rounded-lg border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-600">
+        Brak historii zakupów dla tego klienta.
+      </p>
     );
   }
 

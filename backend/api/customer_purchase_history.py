@@ -22,7 +22,7 @@ from ..services.customers.purchase_history_service import (
     filters_from_query,
 )
 
-router = APIRouter(prefix="/customers", tags=["Customers — purchase history"])
+router = APIRouter(tags=["Customers — purchase history"])
 
 
 def _filter_params(
