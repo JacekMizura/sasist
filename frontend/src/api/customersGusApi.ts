@@ -21,14 +21,25 @@ export type GusLookupResult = {
   vat_active: boolean | null;
   vat_ue: boolean | null;
   vat_status: string | null;
+  vat_status_source: string | null;
+  vat_ue_source: string | null;
   source: string | null;
+  source_label: string | null;
+  fetched_at: string | null;
+  fetched_label: string | null;
   warning: string | null;
   error: string | null;
+  error_code: string | null;
 };
 
-export async function postGusLookup(nip: string, forceRefresh = false): Promise<GusLookupResult> {
+export async function postCustomerGusLookup(
+  nip: string,
+  tenantId: number,
+  forceRefresh = false,
+): Promise<GusLookupResult> {
   const { data } = await api.post<GusLookupResult>("customers/gus-lookup", {
     nip,
+    tenant_id: tenantId,
     force_refresh: forceRefresh,
   });
   return data;

@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import type { GusLookupResult } from "../../api/gusLookupApi";
+import type { GusLookupResult } from "../../api/customersGusApi";
 import { CustomerGusBadges } from "./CustomerGusBadges";
 
 function FieldRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -15,11 +15,21 @@ type Props = {
   result: GusLookupResult | null;
   loading: boolean;
   error: string | null;
+  canOverwrite?: boolean;
   onApply: () => void;
+  onApplyOverwrite?: () => void;
   onDismiss: () => void;
 };
 
-export function CustomerGusLookupPanel({ result, loading, error, onApply, onDismiss }: Props) {
+export function CustomerGusLookupPanel({
+  result,
+  loading,
+  error,
+  canOverwrite = false,
+  onApply,
+  onApplyOverwrite,
+  onDismiss,
+}: Props) {
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-600">
@@ -42,11 +52,11 @@ export function CustomerGusLookupPanel({ result, loading, error, onApply, onDism
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
           <h3 className="text-sm font-bold text-slate-800">Znaleziono dane firmy</h3>
+          {result.fetched_label ? (
+            <p className="text-xs text-slate-500">{result.fetched_label}</p>
+          ) : null}
           <CustomerGusBadges result={result} />
           {error ? <p className="text-xs text-amber-800">{error}</p> : null}
-          {result.from_cache ? (
-            <p className="text-[11px] text-slate-500">Dane z pamięci podręcznej (do 24 h).</p>
-          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -56,6 +66,15 @@ export function CustomerGusLookupPanel({ result, loading, error, onApply, onDism
           >
             Uzupełnij dane
           </button>
+          {canOverwrite && onApplyOverwrite ? (
+            <button
+              type="button"
+              onClick={onApplyOverwrite}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-950 hover:bg-amber-100"
+            >
+              Nadpisz istniejące
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onDismiss}
@@ -82,7 +101,7 @@ export function CustomerGusLookupPanel({ result, loading, error, onApply, onDism
         <FieldRow label="Miasto" value={result.city} />
         <FieldRow label="Województwo" value={result.voivodeship} />
         <FieldRow label="PKD" value={result.pkd} />
-        <FieldRow label="Status VAT" value={result.vat_status} />
+        <FieldRow label="Status VAT (MF)" value={result.vat_status} />
       </dl>
     </section>
   );

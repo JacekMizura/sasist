@@ -13,6 +13,8 @@ import {
   type CustomerProductDiscountDto,
 } from "../../api/customersApi";
 import { getShippingMethods } from "../../api/shippingMethodsApi";
+import { isSuperRole } from "../../auth/isSuperRole";
+import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { CustomerDetailPageShell } from "./CustomerDetailPageShell";
@@ -53,14 +55,17 @@ export default function CustomerEditPage() {
   const { id: idParam } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
+  const { user, hasPermission } = useAuth();
   const warehouseId = warehouse?.id ?? null;
   const tenantId = DAMAGE_TENANT_ID;
   const isNew = idParam === "new" || !idParam;
+  const canOverwriteGus = hasPermission("settings.users") || isSuperRole(user?.role ?? "");
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [gusOverwriteOpen, setGusOverwriteOpen] = useState(false);
   const [shippingOpts, setShippingOpts] = useState<{ id: string; name: string }[]>([]);
 
   const [firstName, setFirstName] = useState("");
@@ -79,11 +84,11 @@ export default function CustomerEditPage() {
   const [newDiscProductId, setNewDiscProductId] = useState("");
   const [newDiscPct, setNewDiscPct] = useState("0");
 
-  const gus = useCustomerGusLookup(nip);
+  const gus = useCustomerGusLookup(nip, tenantId);
 
-  const applyGusData = () => {
+  const applyGusData = (overwrite = false) => {
     if (!gus.result?.ok || !gus.result.found) return;
-    const next = applyGusToCustomerForm(gus.result, { companyName, nip, addresses });
+    const next = applyGusToCustomerForm(gus.result, { companyName, nip, addresses }, overwrite);
     setCompanyName(next.companyName);
     setNip(next.nip);
     setAddresses(next.addresses);
@@ -348,7 +353,9 @@ export default function CustomerEditPage() {
                       result={gus.result}
                       loading={gus.loading}
                       error={gus.error}
-                      onApply={applyGusData}
+                      onApply={() => applyGusData(false)}
+                      canOverwrite={canOverwriteGus}
+                      onApplyOverwrite={() => setGusOverwriteOpen(true)}
                       onDismiss={gus.clearResult}
                     />
                   </div>
@@ -358,7 +365,7 @@ export default function CustomerEditPage() {
                       result={null}
                       loading
                       error={null}
-                      onApply={applyGusData}
+                      onApply={() => applyGusData(false)}
                       onDismiss={gus.clearResult}
                     />
                   </div>
@@ -619,6 +626,19 @@ export default function CustomerEditPage() {
             </>
           ) : null}
         </div>
+
+      <PanelBulkStatusConfirmModal
+        open={gusOverwriteOpen}
+        title="Nadpisać dane z GUS?"
+        message="Istniejące pola formularza zostaną zastąpione danymi z rejestru."
+        subMessage="Tej operacji nie można cofnąć automatycznie — zapisz klienta dopiero po weryfikacji."
+        confirmLabel="Nadpisz dane"
+        onCancel={() => setGusOverwriteOpen(false)}
+        onConfirm={() => {
+          applyGusData(true);
+          setGusOverwriteOpen(false);
+        }}
+      />
 
       <PanelBulkStatusConfirmModal
         open={deleteModalOpen}

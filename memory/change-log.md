@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Klienci: utwardzenie GUS/BIR + VAT MF/VIES
+- Backend: `customers_gus.py`, cache PostgreSQL `gus_lookup_cache` (TTL 24h), timeout/retry/circuit breaker BIR
+- VAT badge tylko z MF (`rejestr_vat`) i VIES — rozdzielone od danych firmy GUS
+- Normalizacja adresów (title case PL, kod pocztowy, ulica/nr)
+- Frontend: `customersGusApi.ts`, brak auto-fetch przy wejściu na klienta; debounce 900 ms + przycisk „Pobierz z GUS”
+- Admin: „Nadpisz istniejące” z potwierdzeniem; panel: `fetched_label`, źródło danych
+- Logi strukturalne: nip, tenant_id, cache hit/miss, czas, source (bez pełnych danych firmy)
+
 ## 2026-06-08 — Klienci: naprawa routerów + layout
 - Purchase history + GUS scalone w `customers_router` (jeden mount `/api/customers`)
 - GUS: `POST /api/customers/gus-lookup` (usunięto `/clients`)

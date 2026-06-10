@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 
-from .customer_gus import router as gus_router
+from .customers_gus import router as gus_router
 from .customer_purchase_history import router as purchase_history_router
 
 router.include_router(gus_router)

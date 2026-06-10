@@ -14,5 +14,10 @@ router = APIRouter(tags=["Customers — GUS"])
 
 @router.post("/gus-lookup", response_model=GusLookupResponse)
 def post_gus_lookup(body: GusLookupRequest, db: Session = Depends(get_db)):
-    result = lookup_gus_by_nip(db, body.nip, force_refresh=bool(body.force_refresh))
+    result = lookup_gus_by_nip(
+        db,
+        body.nip,
+        force_refresh=bool(body.force_refresh),
+        tenant_id=body.tenant_id,
+    )
     return GusLookupResponse(**result)

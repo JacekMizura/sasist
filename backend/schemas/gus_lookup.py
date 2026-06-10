@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class GusLookupRequest(BaseModel):
     nip: str = Field(..., min_length=10, max_length=20, description="Numer NIP (10 cyfr)")
     force_refresh: bool = Field(False, description="Pomiń cache (ręczne odświeżenie)")
+    tenant_id: Optional[int] = Field(None, ge=1, description="Tenant — logowanie / audyt")
 
 
 class GusLookupResponse(BaseModel):
@@ -33,6 +34,12 @@ class GusLookupResponse(BaseModel):
     vat_active: Optional[bool] = None
     vat_ue: Optional[bool] = None
     vat_status: Optional[str] = None
+    vat_status_source: Optional[str] = None
+    vat_ue_source: Optional[str] = None
     source: Optional[str] = None
+    source_label: Optional[str] = None
+    fetched_at: Optional[str] = None
+    fetched_label: Optional[str] = None
     warning: Optional[str] = None
     error: Optional[str] = None
+    error_code: Optional[str] = None
