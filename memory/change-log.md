@@ -6,7 +6,14 @@
 - **Backend:** `commit_workflow=false` (domyślnie) na `split-process` / `process` — bez sync OMS; nowy `POST …/commit-wms`
 - **Frontend:** decyzje lokalne bez natychmiastowego API; **ZAPISZ** gdy wszystkie linie rozstrzygnięte; confirm przy DAMAGED bez zdjęć; upload fail nie blokuje decyzji
 
-## 2026-06-08 — Podgląd lokalizacji: industrial digital twin (v2)
+## 2026-06-08 — Podgląd lokalizacji: powrót do design systemu + projektant magazynu
+
+- **Usunięto** ciemny/neonowy custom map (digital twin, cyberpunk HUD)
+- **Mapa:** `WarehouseLayoutRenderer` (read) + ten sam layout co projektant magazynu (`GET /warehouse/layout`)
+- **Regał:** `RackSideViewGrid` — nomenklatura systemowa (`A1-A-1` via `resolveWarehouseLocation`)
+- **Modal:** jasny enterprise (white/slate), spójny z `ProductLocationMapModal`
+
+## 2026-06-08 — Podgląd lokalizacji: industrial digital twin (v2) — **COOFNIĘTE**
 
 - Ciemna posadzka hali (tekstura, vignette, siatka techniczna) zamiast szarego wireframe
 - Regały: metalowe słupy, segmenty, belki, cień na podłodze — nie kafelki/buttony

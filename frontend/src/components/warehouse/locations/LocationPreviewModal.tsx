@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Navigation, X } from "lucide-react";
+import { Loader2, MapPin, Navigation, X } from "lucide-react";
+import type { LayoutState } from "../../../types/warehouse";
+import { layoutService } from "../../../services/layoutService";
+import { layoutStateFromWarehouseApiPayload } from "../../../pages/Products/layoutStateFromWarehouseApi";
 import {
   getLocationVisualContext,
-  type LocationVisualBin,
   type LocationVisualContext,
 } from "../../../api/wmsLocationVisualApi";
+import { RackSideViewGrid } from "../RackSideViewGrid";
 import { LocationPreviewCarrierContents } from "./LocationPreviewCarrierContents";
 import { LocationPreviewInfoPanel } from "./LocationPreviewInfoPanel";
-import { LocationPreviewRackView } from "./LocationPreviewRackView";
-import { LocationPreviewWarehouseGrid } from "./LocationPreviewWarehouseGrid";
+import { findRackInLayout, LocationPreviewLayoutMap } from "./LocationPreviewLayoutMap";
 
 type Props = {
   open: boolean;
@@ -30,8 +32,10 @@ export function LocationPreviewModal({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ctx, setCtx] = useState<LocationVisualContext | null>(null);
+  const [layout, setLayout] = useState<LayoutState | null>(null);
+  const [layoutLoading, setLayoutLoading] = useState(false);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
   const [focusedRackId, setFocusedRackId] = useState<number | null>(null);
-  const [selectedBin, setSelectedBin] = useState<LocationVisualBin | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -45,21 +49,48 @@ export function LocationPreviewModal({
   useEffect(() => {
     if (!open || locationId < 1) {
       setCtx(null);
+      setLayout(null);
+      setLayoutError(null);
+      setLayoutLoading(false);
       setErr(null);
       setFocusedRackId(null);
-      setSelectedBin(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setErr(null);
+
     void getLocationVisualContext(tenantId, locationId, carrierId)
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return;
         setCtx(data);
         const activeRack = data.rack_grid.find((c) => c.is_active);
         setFocusedRackId(activeRack?.id ?? data.rack?.id ?? null);
-        setSelectedBin(data.rack_bins.find((b) => b.is_active) ?? null);
+
+        setLayoutLoading(true);
+        setLayoutError(null);
+        try {
+          const res = await layoutService.getLayout({
+            tenant_id: tenantId,
+            warehouse_id: data.warehouse.id,
+          });
+          if (cancelled) return;
+          const payload = res.data as { layout?: Record<string, unknown> } | undefined;
+          const d = (payload?.layout ?? res.data ?? {}) as Record<string, unknown>;
+          if (d && typeof d === "object") {
+            setLayout(layoutStateFromWarehouseApiPayload(d, data.warehouse.id));
+          } else {
+            setLayout(null);
+            setLayoutError("Brak danych layoutu magazynu.");
+          }
+        } catch {
+          if (!cancelled) {
+            setLayout(null);
+            setLayoutError("Nie udało się wczytać planu magazynu.");
+          }
+        } finally {
+          if (!cancelled) setLayoutLoading(false);
+        }
       })
       .catch(() => {
         if (!cancelled) {
@@ -70,6 +101,7 @@ export function LocationPreviewModal({
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
@@ -80,60 +112,52 @@ export function LocationPreviewModal({
     [ctx, locationCode, locationId],
   );
 
-  const activeOccupancy = useMemo(() => {
-    if (!ctx) return undefined;
-    return {
-      sku: ctx.occupancy.sku_count,
-      qty: ctx.occupancy.total_qty,
-      percent: ctx.occupancy.capacity_utilization_percent,
-    };
-  }, [ctx]);
+  const locationUuid = (ctx?.location.location_uuid ?? "").trim() || null;
 
-  const contentsForBin = useMemo(() => {
-    if (!ctx) return { products: [], label: null as string | null, emptyHint: "" };
-    if (selectedBin?.is_active || selectedBin?.code === ctx.location.code) {
-      return {
-        products: ctx.products,
-        label: selectedBin?.code || code,
-        emptyHint: "Brak produktów w tej lokalizacji.",
-      };
-    }
-    return {
-      products: [],
-      label: selectedBin?.code || null,
-      emptyHint: "Wybierz aktywną lokalizację (TU), aby zobaczyć zawartość nośnika.",
-    };
-  }, [ctx, selectedBin, code]);
+  const rackState = useMemo(
+    () => findRackInLayout(layout, focusedRackId ?? ctx?.rack?.id ?? null, ctx?.rack?.name),
+    [layout, focusedRackId, ctx?.rack?.id, ctx?.rack?.name],
+  );
+
+  const selectedBinLocation = useMemo(() => {
+    if (!rackState || !locationUuid) return null;
+    const bin = rackState.bins.find(
+      (b) => (b.locationUUID ?? "").trim() === locationUuid || (b.label ?? "").trim() === code,
+    );
+    if (!bin) return null;
+    return { level_index: bin.level_index, segment_index: bin.segment_index };
+  }, [rackState, locationUuid, code]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-2">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Nawigacja magazynu ${code}`}
-        className="flex h-[100dvh] w-full max-w-[min(98vw,1520px)] flex-col overflow-hidden bg-[#080c12] shadow-[0_0_80px_rgba(0,0,0,0.65)] sm:h-[min(96vh,960px)] sm:rounded-lg sm:border sm:border-slate-700/50"
+        aria-label={`Podgląd lokalizacji ${code}`}
+        className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:h-[min(92vh,900px)] sm:rounded-2xl"
       >
-        {/* Header — command center */}
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-700/60 bg-[#0c1018] px-4 py-3 sm:px-5">
-          <div className="min-w-0">
-            <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-cyan-500/70">
-              Warehouse navigation
-            </p>
-            <h2 className="truncate font-mono text-xl font-bold tracking-tight text-white sm:text-2xl">{code}</h2>
-            {ctx ? (
-              <p className="truncate text-xs text-slate-500">
-                {ctx.warehouse.name}
-                {ctx.zone.code ? ` · ${ctx.zone.code}` : ""}
-                {ctx.zone.aisle ? ` · alejka ${ctx.zone.aisle}` : ""}
-              </p>
-            ) : null}
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+              <MapPin className="h-5 w-5" strokeWidth={2} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">Lokalizacja {code}</h2>
+              {ctx ? (
+                <p className="mt-0.5 truncate text-sm text-slate-600">
+                  {ctx.warehouse.name}
+                  {ctx.zone.code ? ` · ${ctx.zone.code}` : ""}
+                  {ctx.zone.aisle ? ` · alejka ${ctx.zone.aisle}` : ""}
+                </p>
+              ) : null}
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-800/80 text-slate-300 transition hover:bg-slate-700 hover:text-white"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
             aria-label="Zamknij"
           >
             <X className="h-5 w-5" />
@@ -142,47 +166,69 @@ export function LocationPreviewModal({
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading ? (
-            <div className="flex h-full items-center justify-center gap-3 text-slate-400">
-              <Loader2 className="h-7 w-7 animate-spin text-cyan-500" />
-              <span className="text-sm font-medium">Inicjalizacja digital twin…</span>
+            <div className="flex h-full items-center justify-center gap-2 text-slate-600">
+              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              <span className="text-sm">Ładowanie…</span>
             </div>
           ) : err ? (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <p className="text-sm text-amber-400">{err}</p>
+              <p className="text-sm text-red-700">{err}</p>
               <button
                 type="button"
                 onClick={onClose}
-                className="mt-4 rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700"
+                className="mt-4 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
               >
                 Zamknij
               </button>
             </div>
           ) : ctx ? (
             <div className="flex h-full min-h-0 flex-col">
-              <section className="min-h-0 flex-[3] p-1 sm:p-1.5">
-                <div className="grid h-full min-h-[300px] grid-cols-1 gap-1 sm:gap-1.5 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-                  <LocationPreviewWarehouseGrid
-                    cells={ctx.rack_grid}
-                    warehouseName={ctx.warehouse.name}
-                    focusedRackId={focusedRackId}
+              <section className="min-h-0 flex-[3] border-b border-slate-100 p-3 sm:p-4">
+                <div className="grid h-full min-h-[280px] grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+                  <LocationPreviewLayoutMap
+                    tenantId={tenantId}
+                    warehouseId={ctx.warehouse.id}
+                    locationUuid={locationUuid}
+                    activeRackId={focusedRackId}
                     onRackFocus={setFocusedRackId}
-                    activeOccupancy={activeOccupancy}
+                    layout={layout}
+                    layoutLoading={layoutLoading}
+                    layoutError={layoutError}
                   />
-                  <LocationPreviewRackView
-                    bins={ctx.rack_bins}
-                    rackName={ctx.rack?.name}
-                    selectedBinCode={selectedBin?.code ?? code}
-                    onBinSelect={setSelectedBin}
-                  />
+                  <div className="flex min-h-[240px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <div className="shrink-0 border-b border-slate-100 px-3 py-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Widok regału</p>
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {rackState?.name ?? ctx.rack?.name ?? "—"}
+                      </p>
+                    </div>
+                    <div className="min-h-0 flex-1 p-2">
+                      {rackState ? (
+                        <RackSideViewGrid
+                          rack={rackState}
+                          layout={layout}
+                          selectedLocation={selectedBinLocation}
+                          showLabels
+                          className="h-full"
+                        />
+                      ) : (
+                        <p className="flex h-full items-center justify-center text-sm text-slate-500">
+                          Brak regału w projekcie magazynu.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Plan magazynu z projektanta · pomarańczowy slot = Twoja lokalizacja · Ctrl + kółko: zoom
+                </p>
               </section>
 
-              <section className="grid min-h-0 shrink-0 grid-cols-1 gap-1.5 border-t border-slate-800 bg-[#0a0e14] p-1.5 sm:max-h-[32%] sm:grid-cols-2 sm:p-2">
+              <section className="grid min-h-0 shrink-0 grid-cols-1 gap-3 p-3 sm:max-h-[32%] sm:grid-cols-2 sm:p-4">
                 <LocationPreviewInfoPanel ctx={ctx} locationCode={code} />
                 <LocationPreviewCarrierContents
-                  products={contentsForBin.products}
-                  selectedLabel={contentsForBin.label}
-                  emptyHint={contentsForBin.emptyHint}
+                  products={ctx.products}
+                  selectedLabel={code}
                   occupancyPercent={ctx.occupancy.capacity_utilization_percent}
                 />
               </section>
@@ -190,11 +236,11 @@ export function LocationPreviewModal({
           ) : null}
         </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-800 bg-[#0c1018] px-4 py-2 sm:px-5">
+        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 sm:px-6">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700"
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
           >
             Zamknij
           </button>
@@ -202,7 +248,7 @@ export function LocationPreviewModal({
             type="button"
             disabled
             title="Wkrótce — integracja z trasą pickera"
-            className="inline-flex items-center gap-2 rounded-md bg-cyan-600/40 px-4 py-2 text-sm font-semibold text-cyan-200/60"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white opacity-50"
           >
             <Navigation className="h-4 w-4" />
             Pokaż trasę
