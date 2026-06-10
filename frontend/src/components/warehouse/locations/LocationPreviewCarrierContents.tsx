@@ -22,11 +22,11 @@ export function LocationPreviewCarrierContents({
         <p className="text-sm font-semibold text-slate-900">Zawartość nośnika</p>
         <div className="flex items-center gap-2">
           {selectedLabel ? (
-            <span className="truncate rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs font-medium text-slate-700">
+            <span className="truncate rounded-md border border-slate-200 bg-white px-2 py-0.5 font-mono text-xs font-medium text-slate-700">
               {selectedLabel}
             </span>
           ) : null}
-          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{util}%</span>
+          <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">{util}%</span>
         </div>
       </div>
 
@@ -39,7 +39,7 @@ export function LocationPreviewCarrierContents({
             return (
               <li
                 key={p.product_id}
-                className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-2.5 transition hover:border-slate-200 hover:bg-white"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5 transition hover:border-slate-300 hover:shadow-sm"
               >
                 <CarrierProductThumb imageUrl={p.image_url} alt={name} size="xl" />
                 <div className="min-w-0 flex-1">

@@ -6,6 +6,12 @@
 - **Backend:** `commit_workflow=false` (domyślnie) na `split-process` / `process` — bez sync OMS; nowy `POST …/commit-wms`
 - **Frontend:** decyzje lokalne bez natychmiastowego API; **ZAPISZ** gdy wszystkie linie rozstrzygnięte; confirm przy DAMAGED bez zdjęć; upload fail nie blokuje decyzji
 
+## 2026-06-08 — Podgląd lokalizacji: fix pustej mapy + większy shelf view
+
+- **Mapa:** jawna wysokość kontenera (`min(52vh,520px)`), `useDesignerCanvas(null)`, auto-fit na aktywny regał — naprawia pusty lewy panel (flex `h-full` = 0px)
+- **Regał:** `RackSideViewGrid` `embeddedPreview` — większe sloty, etykiety, subtelny highlight; dane zajętości dla aktywnego slota
+- **UI:** białe tła zamiast szarych placeholderów w modalu i liście produktów
+
 ## 2026-06-08 — Podgląd lokalizacji: powrót do design systemu + projektant magazynu
 
 - **Usunięto** ciemny/neonowy custom map (digital twin, cyberpunk HUD)

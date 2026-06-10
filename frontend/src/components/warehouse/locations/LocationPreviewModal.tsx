@@ -128,6 +128,22 @@ export function LocationPreviewModal({
     return { level_index: bin.level_index, segment_index: bin.segment_index };
   }, [rackState, locationUuid, code]);
 
+  const previewBinCounts = useMemo(() => {
+    if (!selectedBinLocation || !ctx) return undefined;
+    const key = `${selectedBinLocation.level_index}-${selectedBinLocation.segment_index}`;
+    return {
+      [key]: ctx.occupancy.total_qty,
+    };
+  }, [selectedBinLocation, ctx]);
+
+  const previewBinSkuCounts = useMemo(() => {
+    if (!selectedBinLocation || !ctx) return undefined;
+    const key = `${selectedBinLocation.level_index}-${selectedBinLocation.segment_index}`;
+    return {
+      [key]: ctx.occupancy.sku_count,
+    };
+  }, [selectedBinLocation, ctx]);
+
   if (!open) return null;
 
   return (
@@ -140,7 +156,7 @@ export function LocationPreviewModal({
       >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm">
               <MapPin className="h-5 w-5" strokeWidth={2} />
             </span>
             <div className="min-w-0">
@@ -184,7 +200,7 @@ export function LocationPreviewModal({
           ) : ctx ? (
             <div className="flex h-full min-h-0 flex-col">
               <section className="min-h-0 flex-[3] border-b border-slate-100 p-3 sm:p-4">
-                <div className="grid h-full min-h-[280px] grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+                <div className="grid min-h-[min(52vh,520px)] grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:items-stretch">
                   <LocationPreviewLayoutMap
                     tenantId={tenantId}
                     warehouseId={ctx.warehouse.id}
@@ -194,22 +210,26 @@ export function LocationPreviewModal({
                     layout={layout}
                     layoutLoading={layoutLoading}
                     layoutError={layoutError}
+                    className="h-[min(52vh,520px)]"
                   />
-                  <div className="flex min-h-[240px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
-                    <div className="shrink-0 border-b border-slate-100 px-3 py-2">
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Widok regału</p>
-                      <p className="truncate text-sm font-semibold text-slate-900">
+                  <div className="flex h-[min(52vh,520px)] min-h-[320px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div className="shrink-0 border-b border-slate-100 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Widok regału</p>
+                      <p className="truncate text-base font-semibold text-slate-900">
                         {rackState?.name ?? ctx.rack?.name ?? "—"}
                       </p>
                     </div>
-                    <div className="min-h-0 flex-1 p-2">
+                    <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
                       {rackState ? (
                         <RackSideViewGrid
                           rack={rackState}
                           layout={layout}
                           selectedLocation={selectedBinLocation}
+                          binItemCounts={previewBinCounts}
+                          binUniqueProductCounts={previewBinSkuCounts}
                           showLabels
-                          className="h-full"
+                          embeddedPreview
+                          className="h-full min-h-[280px]"
                         />
                       ) : (
                         <p className="flex h-full items-center justify-center text-sm text-slate-500">
@@ -219,8 +239,8 @@ export function LocationPreviewModal({
                     </div>
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  Plan magazynu z projektanta · pomarańczowy slot = Twoja lokalizacja · Ctrl + kółko: zoom
+                <p className="mt-3 text-xs text-slate-500">
+                  Plan z projektanta magazynu · niebieski slot = aktywna lokalizacja · Ctrl + kółko: zoom
                 </p>
               </section>
 

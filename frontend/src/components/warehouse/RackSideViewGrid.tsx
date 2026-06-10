@@ -63,6 +63,7 @@ export function RackSideViewGrid({
   hoveredLocationUUID = null,
   showLabels = true,
   layout = null,
+  embeddedPreview = false,
 }: {
   rack: RackState;
   className?: string;
@@ -99,6 +100,8 @@ export function RackSideViewGrid({
   showLabels?: boolean;
   /** When set, beam/bin labels use `resolveWarehouseLocation` (`rack_direction` + `bin_direction`). */
   layout?: LayoutState | null;
+  /** Larger slots + labels for embedded location preview modal. */
+  embeddedPreview?: boolean;
 }) {
   const hoveredUuidNorm = (hoveredLocationUUID ?? "").trim();
   const hasLevelMaxLoad = levelMaxLoadKg != null && levelMaxLoadKg > 0;
@@ -137,8 +140,8 @@ export function RackSideViewGrid({
   const contentAreaY = margin;
 
   // Level then beam; lowest level has base beam (grey). Total = L bin rows + L beams.
-  const beamHeight = BEAM_HEIGHT_VIEWBOX;
-  const binRowHeight = Math.max(20, (contentAreaH - L * beamHeight) / L);
+  const beamHeight = embeddedPreview ? 28 : BEAM_HEIGHT_VIEWBOX;
+  const binRowHeight = Math.max(embeddedPreview ? 52 : 20, (contentAreaH - L * beamHeight) / L);
   // Top of bin row for level (level L-1 at top, level 0 at bottom)
   const levelToBinRowY = (level: number) => contentAreaY + (L - 1 - level) * (binRowHeight + beamHeight);
   // Top of beam (below bins); one beam per level (orange above floor, grey base at bottom)
@@ -213,9 +216,9 @@ export function RackSideViewGrid({
                 ? `${Math.round(loadKg)} / ${maxKg} kg${exceeded ? " ⚠" : ""}`
                 : `${Math.round(loadKg)} kg`;
               const beamCenterY = beamY + beamHeight / 2;
-              const labelW = 46;
-              const labelH = 20;
-              const badgeH = 20;
+              const labelW = embeddedPreview ? 72 : 46;
+              const labelH = embeddedPreview ? 24 : 20;
+              const badgeH = embeddedPreview ? 22 : 20;
               const badgePaddingH = 16;
               const badgeCharWidth = 7;
               const badgeW = Math.max(64, weightText.length * badgeCharWidth + badgePaddingH);
@@ -235,10 +238,12 @@ export function RackSideViewGrid({
                       {Array.from({ length: locs }, (_, vis) => {
                         const seg = segmentIndexForVisualSlot(vis, locs, binDirectionRtl);
                         const addr = addresses[seg] ?? "";
-                        const displayAddr = String(addr).length > 12 ? String(addr).slice(0, 10) + "…" : String(addr);
+                        const displayAddr = String(addr).length > 14 ? String(addr).slice(0, 12) + "…" : String(addr);
                         const slotCenterX = ox + cellWLev * (vis + 0.5);
                         const rectX = slotCenterX - labelW / 2;
                         const rectY = beamCenterY - labelH / 2;
+                        const isSelectedAddr =
+                          selectedLocation?.level_index === lev && selectedLocation?.segment_index === seg;
                         return (
                           <g key={`beam-${lev}-${seg}`} filter="url(#rack-beam-badge-shadow)">
                             <rect
@@ -247,15 +252,16 @@ export function RackSideViewGrid({
                               width={labelW}
                               height={labelH}
                               rx={6}
-                              fill="#ffffff"
-                              stroke="#d1d5db"
+                              fill={isSelectedAddr ? "#eff6ff" : "#ffffff"}
+                              stroke={isSelectedAddr ? "#2563eb" : "#d1d5db"}
+                              strokeWidth={isSelectedAddr ? 2 : 1}
                             />
                             <text
                               x={slotCenterX}
                               y={beamCenterY}
                               textAnchor="middle"
                               dominantBaseline="middle"
-                              fontSize={13}
+                              fontSize={embeddedPreview ? 14 : 13}
                               fontWeight={700}
                               fill="#111827"
                               fontFamily="system-ui, sans-serif"
@@ -267,6 +273,7 @@ export function RackSideViewGrid({
                       })}
                     </g>
                   )}
+                  {!embeddedPreview && (
                   <g filter="url(#rack-beam-badge-shadow)">
                     <rect
                       x={badgeX}
@@ -290,6 +297,7 @@ export function RackSideViewGrid({
                       {weightText}
                     </text>
                   </g>
+                  )}
                   {!isBaseBeam && exceeded && (
                     <text
                       x={ox + contentW / 2}
@@ -369,9 +377,9 @@ export function RackSideViewGrid({
                 const h = contentH;
                 const cx = x + w / 2;
                 const style = getStorageTypeStyle(storageType);
-                const fill = isSelected ? "#eff6ff" : storageType === "primary" ? BIN_BG : style.bg;
-                const stroke = isSelected ? "#1d4ed8" : storageType === "primary" ? BIN_BORDER : style.border;
-                const strokeWidth = isSelected ? 4 : 1;
+                const fill = isSelected ? "#eff6ff" : storageType === "primary" ? (embeddedPreview ? "#ffffff" : BIN_BG) : style.bg;
+                const stroke = isSelected ? "#2563eb" : storageType === "primary" ? (embeddedPreview ? "#cbd5e1" : BIN_BORDER) : style.border;
+                const strokeWidth = isSelected ? (embeddedPreview ? 2.5 : 4) : 1;
                 const line1Y = y + textPadding + startOff;
                 const line2Y = line1Y + linePx + gapPx;
                 const line3Y = line2Y + linePx + gapPx;
@@ -380,8 +388,12 @@ export function RackSideViewGrid({
                 const pctY = barY + barHPx + gapPx + 8 * scale;
                 const barW = Math.max(0, w - 2 * barPad);
                 const barX = x + barPad;
-                const fontSize = Math.max(8, Math.min(14, w * 0.26, (h - 24) * 0.2) * scale);
-                const fontSizeSub = Math.max(7, fontSize - 2);
+                const fontSize = embeddedPreview
+                  ? Math.max(13, Math.min(18, w * 0.22, (h - 16) * 0.35))
+                  : Math.max(8, Math.min(14, w * 0.26, (h - 24) * 0.2) * scale);
+                const fontSizeSub = embeddedPreview ? Math.max(11, fontSize - 2) : Math.max(7, fontSize - 2);
+                const showCompactPreview =
+                  embeddedPreview && (binItemCounts?.[`${lev}-${bin}`] ?? quantity) === 0;
                 const binLabel =
                   binState != null
                     ? resolveWarehouseLocation(rack, binState, layout ?? null).label || `L${lev + 1}-${bin + 1}`
@@ -429,7 +441,7 @@ export function RackSideViewGrid({
                         rx={2}
                       />
                     )}
-                    {isSidebarLocationHover && (
+                    {isSidebarLocationHover && !embeddedPreview && (
                       <rect
                         x={x + 1}
                         y={y + 1}
@@ -469,6 +481,20 @@ export function RackSideViewGrid({
                       </g>
                     )}
                     {/* Bin data: different products, total quantity, volume usage; then utilization bar */}
+                    {showCompactPreview ? (
+                      <text
+                        x={cx}
+                        y={y + h / 2 + 4}
+                        textAnchor="middle"
+                        fontSize={fontSize}
+                        fontWeight={600}
+                        fill={isSelected ? "#1e40af" : "#334155"}
+                        fontFamily="system-ui, sans-serif"
+                      >
+                        {binLabel}
+                      </text>
+                    ) : (
+                      <>
                     <text x={cx} y={line1Y} textAnchor="middle" fontSize={fontSizeSub} fill="#64748b" fontFamily="system-ui, sans-serif">
                       Różnych produktów: {uniqueCount}
                     </text>
@@ -515,6 +541,8 @@ export function RackSideViewGrid({
                           Fizyczna poj.: {binMaxCapacityPieces[`${lev}-${bin}`]} szt.
                         </text>
                       </g>
+                    )}
+                      </>
                     )}
                   </g>
                 );
