@@ -1,65 +1,64 @@
 import type { WarehouseCarrierRead } from "../../../api/wmsCarrierApi";
-import { carrierPrefixMeta } from "./carrierConstants";
+import { formatCarrierCode } from "../../../utils/formatCarrierCode";
+import { carrierPrefixMeta, CARRIER_CODE_DISPLAY_ZERO_PAD } from "./carrierConstants";
+import { CarrierMixBadge } from "./CarrierMixBadge";
 
 type Props = {
   carrier: Pick<WarehouseCarrierRead, "code" | "barcode" | "name" | "notes" | "is_mixed">;
   size?: "sm" | "md" | "lg";
-  showSecondaryCode?: boolean;
   className?: string;
 };
 
-/** Kod techniczny + nazwa biznesowa + opis — bez duplikacji code/barcode. */
-export function CarrierIdentity({
-  carrier,
-  size = "md",
-  showSecondaryCode = false,
-  className = "",
-}: Props) {
-  const primary = (carrier.barcode || carrier.code || "").trim() || "—";
-  const secondary =
-    showSecondaryCode && carrier.code && carrier.barcode && carrier.code !== carrier.barcode
-      ? carrier.code.trim()
-      : null;
+/** Nazwa biznesowa na pierwszym planie; kod techniczny jako meta (bez duplikacji). */
+export function CarrierIdentity({ carrier, size = "md", className = "" }: Props) {
+  const rawCode = (carrier.barcode || carrier.code || "").trim();
+  const formattedCode = formatCarrierCode(rawCode, { zeroPad: CARRIER_CODE_DISPLAY_ZERO_PAD });
   const displayName = (carrier.name || "").trim();
   const description = (carrier.notes || "").trim();
-  const prefix = primary.split("-")[0]?.toUpperCase() ?? "";
+  const prefix = rawCode.split("-")[0]?.toUpperCase() ?? "";
   const meta = carrierPrefixMeta(prefix);
 
+  const titleClass =
+    size === "lg"
+      ? "text-[18px] font-bold leading-snug text-slate-900"
+      : size === "sm"
+        ? "text-[14px] font-bold leading-snug text-slate-900"
+        : "text-[16px] font-bold leading-snug text-slate-900";
+
   const codeClass =
-    size === "lg" ? "text-lg font-black" : size === "sm" ? "text-[13px] font-bold" : "text-[15px] font-bold";
+    size === "lg" ? "text-[13px]" : size === "sm" ? "text-[11px]" : "text-[12px]";
+
+  const primaryLabel = displayName || formattedCode;
 
   return (
     <div className={`min-w-0 ${className}`}>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 items-start gap-2">
         {meta ? (
           <span
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[11px] font-black"
-            style={{ borderColor: meta.border, backgroundColor: meta.bg, color: meta.fg }}
+            className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] font-black"
+            style={{ backgroundColor: meta.bg, color: meta.fg }}
             title={meta.label}
           >
             {meta.icon}
           </span>
         ) : null}
-        <span className={`font-mono tabular-nums text-slate-900 ${codeClass}`}>{primary}</span>
-        {carrier.is_mixed ? (
-          <span className="rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-bold uppercase text-violet-800">
-            MIX
-          </span>
-        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <p className={`truncate ${titleClass}`}>{primaryLabel}</p>
+            {carrier.is_mixed ? <CarrierMixBadge isMixed size="sm" /> : null}
+          </div>
+          {displayName ? (
+            <p className={`mt-0.5 truncate font-mono tabular-nums text-slate-500 ${codeClass}`}>{formattedCode}</p>
+          ) : null}
+          {description ? (
+            <p
+              className={`mt-0.5 line-clamp-1 text-slate-500 ${size === "sm" ? "text-[12px]" : "text-[13px]"}`}
+            >
+              {description}
+            </p>
+          ) : null}
+        </div>
       </div>
-      {displayName ? (
-        <p className={`mt-0.5 truncate font-semibold text-slate-800 ${size === "sm" ? "text-[13px]" : "text-[14px]"}`}>
-          {displayName}
-        </p>
-      ) : null}
-      {description ? (
-        <p className={`mt-0.5 line-clamp-2 text-slate-500 ${size === "sm" ? "text-[12px]" : "text-[13px]"}`}>
-          {description}
-        </p>
-      ) : null}
-      {secondary ? (
-        <p className="mt-0.5 font-mono text-[11px] text-slate-400">ID: {secondary}</p>
-      ) : null}
     </div>
   );
 }

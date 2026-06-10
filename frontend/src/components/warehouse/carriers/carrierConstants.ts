@@ -39,3 +39,6 @@ export function carrierStatusOptions() {
     label: carrierStatusLabel(s),
   }));
 }
+
+/** Domyślny padding zer w wyświetlaniu kodów (0 = PAL-10). Ustaw 6 dla PAL-000010. */
+export const CARRIER_CODE_DISPLAY_ZERO_PAD = 0;

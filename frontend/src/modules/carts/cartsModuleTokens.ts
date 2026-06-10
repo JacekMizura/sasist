@@ -40,11 +40,11 @@ export const cartsTableClass = "min-w-full text-left text-[15px]";
 export const cartsTableHeadClass =
   "border-b border-slate-200 bg-slate-50 text-[12px] font-bold uppercase tracking-wide text-slate-600";
 
-export const cartsTableHeadCellClass = "px-3 py-2.5 font-bold";
+export const cartsTableHeadCellClass = "px-3 py-2 font-bold";
 
-export const cartsTableRowClass = "border-b border-slate-100 bg-white transition hover:bg-slate-50/80";
+export const cartsTableRowClass = "border-b border-slate-100 bg-white transition hover:bg-slate-50/70";
 
-export const cartsTableCellClass = "px-3 py-2.5 align-middle text-slate-800";
+export const cartsTableCellClass = "px-3 py-2 align-middle text-slate-800";
 
 export const cartsEmptyClass =
   "rounded-lg border border-dashed border-slate-200 bg-white py-10 text-center text-[13px] text-slate-500";

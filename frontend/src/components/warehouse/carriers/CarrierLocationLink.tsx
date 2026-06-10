@@ -6,7 +6,7 @@ type Props = {
   className?: string;
 };
 
-/** Lokalizacja magazynowa jako badge — klik otwiera podgląd (alert) lub przyszły deep link. */
+/** Badge lokalizacji — większy, klikalny podgląd. */
 export function CarrierLocationLink({ locationCode, locationId, className }: Props) {
   const code = (locationCode || "").trim();
   if (!code) {
@@ -16,13 +16,19 @@ export function CarrierLocationLink({ locationCode, locationId, className }: Pro
   return (
     <button
       type="button"
-      title={locationId ? `Lokalizacja #${locationId}` : code}
-      onClick={() => {
-        window.alert(`Lokalizacja: ${code}${locationId ? `\nID: ${locationId}` : ""}`);
+      title={locationId ? `Lokalizacja ${code}` : code}
+      onClick={(e) => {
+        e.stopPropagation();
+        window.alert(`Lokalizacja: ${code}${locationId ? `\nRef: #${locationId}` : ""}`);
       }}
-      className={`inline-flex max-w-full text-left ${className ?? ""}`}
+      className={`inline-flex max-w-full text-left transition hover:opacity-90 ${className ?? ""}`}
     >
-      <LocationBadge code={code} type="PICK" className="!text-[13px] !font-bold" layoutSpread />
+      <LocationBadge
+        code={code}
+        type="PICK"
+        className="!px-3 !py-1.5 !text-[14px] !font-bold !leading-none"
+        layoutSpread
+      />
     </button>
   );
 }

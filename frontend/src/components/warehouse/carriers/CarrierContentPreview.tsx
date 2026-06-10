@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Package } from "lucide-react";
 import { getWmsCarrier, type WarehouseCarrierItemRead } from "../../../api/wmsCarrierApi";
+import { CarrierMixBadge } from "./CarrierMixBadge";
+import { CarrierProductThumb } from "./CarrierProductThumb";
 
 type Props = {
   tenantId: number;
@@ -9,6 +10,22 @@ type Props = {
   totalQty: number;
   isMixed?: boolean;
 };
+
+function PopoverProductRow({ item }: { item: WarehouseCarrierItemRead }) {
+  const name = (item.product_name || "").trim() || (item.product_sku || "").trim() || `#${item.product_id}`;
+  const meta = [item.product_sku, item.product_ean].filter(Boolean).join(" · ") || "—";
+
+  return (
+    <li className="flex items-center gap-3 border-b border-slate-100 py-2.5 last:border-0">
+      <CarrierProductThumb imageUrl={item.product_image_url} alt={name} size="md" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[14px] font-semibold leading-snug text-slate-900">{name}</p>
+        <p className="mt-0.5 truncate font-mono text-[11px] text-slate-500">{meta}</p>
+      </div>
+      <p className="shrink-0 text-right text-[16px] font-black tabular-nums text-slate-900">{item.quantity}</p>
+    </li>
+  );
+}
 
 export function CarrierContentPreview({ tenantId, carrierId, skuCount, totalQty, isMixed }: Props) {
   const [open, setOpen] = useState(false);
@@ -45,52 +62,46 @@ export function CarrierContentPreview({ tenantId, carrierId, skuCount, totalQty,
   }, [open]);
 
   if (skuCount <= 0 && totalQty <= 0) {
-    return <span className="text-[13px] text-slate-400">Pusty</span>;
+    return <span className="text-[13px] font-medium text-slate-400">Pusty</span>;
   }
 
   return (
-    <div className="relative inline-block" ref={wrapRef}>
+    <div className="relative inline-block max-w-full" ref={wrapRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-left text-[13px] font-medium text-slate-800 hover:border-slate-300 hover:bg-white"
+        className="inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100/90 px-2.5 py-1 text-[13px] font-semibold text-slate-800 transition hover:bg-slate-200/90"
       >
-        <Package className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
-        <span>
-          SKU: <strong className="tabular-nums">{skuCount}</strong>
-          <span className="mx-1 text-slate-300">·</span>
-          <strong className="tabular-nums">{totalQty}</strong> szt.
+        <span className="tabular-nums">
+          SKU <strong>{skuCount}</strong>
+          <span className="mx-1 font-normal text-slate-400">•</span>
+          <strong>{totalQty}</strong> szt.
         </span>
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-30 mt-1 w-[min(100vw-2rem,20rem)] rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Zawartość</p>
-            {isMixed ? (
-              <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-800">
-                MIX
-              </span>
-            ) : null}
+        <div className="absolute left-0 top-full z-30 mt-1.5 w-[min(100vw-1.5rem,22rem)] overflow-hidden rounded-xl bg-white py-2 shadow-2xl ring-1 ring-slate-200/80">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 pb-2 pt-1">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Zawartość</p>
+              <p className="mt-0.5 text-[14px] font-bold tabular-nums text-slate-900">
+                {skuCount} SKU · {totalQty} szt.
+              </p>
+            </div>
+            <CarrierMixBadge isMixed={isMixed} size="md" />
           </div>
-          {loading ? (
-            <p className="text-[13px] text-slate-500">Wczytywanie…</p>
-          ) : items.length === 0 ? (
-            <p className="text-[13px] text-slate-500">Brak pozycji do podglądu.</p>
-          ) : (
-            <ul className="max-h-48 space-y-2 overflow-y-auto">
-              {items.slice(0, 12).map((it) => (
-                <li key={it.id} className="rounded-md border border-slate-100 bg-slate-50/80 px-2 py-1.5">
-                  <p className="truncate text-[13px] font-semibold text-slate-900">
-                    {it.product_name || it.product_sku || `#${it.product_id}`}
-                  </p>
-                  <p className="mt-0.5 font-mono text-[11px] text-slate-500">
-                    {[it.product_sku, it.product_ean].filter(Boolean).join(" · ") || "—"}
-                  </p>
-                  <p className="mt-0.5 text-[13px] font-bold tabular-nums text-slate-800">{it.quantity} szt.</p>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="max-h-56 overflow-y-auto px-3">
+            {loading ? (
+              <p className="py-4 text-center text-[13px] text-slate-500">Wczytywanie…</p>
+            ) : items.length === 0 ? (
+              <p className="py-4 text-center text-[13px] text-slate-500">Brak pozycji.</p>
+            ) : (
+              <ul>
+                {items.slice(0, 15).map((it) => (
+                  <PopoverProductRow key={it.id} item={it} />
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       ) : null}
     </div>

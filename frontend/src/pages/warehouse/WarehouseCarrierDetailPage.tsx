@@ -104,23 +104,19 @@ export default function WarehouseCarrierDetailPage() {
   return (
     <div className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
       <form onSubmit={noopSubmit} className={`${catalogEntityCardShellClass} overflow-hidden`}>
-        <header className="border-b border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-5">
+        <header className="border-b border-slate-200 bg-white px-4 py-2.5 sm:px-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <CarrierIdentity carrier={detail} size="lg" />
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[14px] text-slate-700">
-                <span className="font-semibold text-slate-800">{groupLabel}</span>
-                <span className="text-slate-300">•</span>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[14px]">
+                <span className="font-medium text-slate-600">{groupLabel}</span>
                 <CarrierStatusBadge status={detail.status} />
-                <span className="text-slate-300">•</span>
                 <CarrierLocationLink
                   locationCode={detail.current_location_code}
                   locationId={detail.current_location_id}
                 />
-                <span className="text-slate-300">•</span>
-                <span className="font-bold tabular-nums">{detail.total_qty} szt.</span>
-                <span className="text-slate-300">•</span>
-                <span className="font-bold tabular-nums">{detail.sku_count} SKU</span>
+                <span className="text-[15px] font-black tabular-nums text-slate-900">{detail.total_qty} szt.</span>
+                <span className="text-[14px] font-bold tabular-nums text-slate-600">{detail.sku_count} SKU</span>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">

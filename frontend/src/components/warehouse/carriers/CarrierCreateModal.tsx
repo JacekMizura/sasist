@@ -45,7 +45,7 @@ export function CarrierCreateModal({ tenantId, open, onClose, onCreated }: Props
     <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 p-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="text-lg font-black text-slate-900">Nowy nośnik</h2>
-        <p className="mt-1 text-sm text-slate-600">Utworzony zostanie kod i kod kreskowy (np. PAL-000001).</p>
+        <p className="mt-1 text-sm text-slate-600">Kod zostanie nadany automatycznie (np. PAL-1, BOX-2).</p>
         <label className="mt-4 block text-xs font-bold uppercase text-slate-500">Prefiks</label>
         <select
           value={prefix}

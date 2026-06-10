@@ -17,7 +17,7 @@ def normalize_carrier_prefix(prefix: str) -> CarrierPrefix:
 
 
 def next_carrier_numeric_suffix(db, tenant_id: int, *, prefix: CarrierPrefix) -> int:
-    """Kolejny numer dla ``{prefix}-{n:06d}`` w ramach tenanta (na podstawie istniejących ``warehouse_carriers.barcode``)."""
+    """Kolejny numer dla ``{prefix}-{n}`` w ramach tenanta (parsuje istniejące ``warehouse_carriers.barcode``)."""
     from sqlalchemy.orm import Session
 
     from ..models.warehouse_carrier import WarehouseCarrier
@@ -43,10 +43,17 @@ def next_carrier_numeric_suffix(db, tenant_id: int, *, prefix: CarrierPrefix) ->
     return max_n + 1
 
 
-def generate_carrier_barcode(db, tenant_id: int, *, prefix: str = "PAL") -> str:
+def format_carrier_barcode(prefix: CarrierPrefix, n: int, *, zero_pad: int = 0) -> str:
+    """Format ``PREFIX-n``; domyślnie bez zer z przodu (PAL-10). ``zero_pad=6`` → PAL-000010."""
+    if zero_pad and zero_pad > 0:
+        return f"{prefix}-{int(n):0{int(zero_pad)}d}"
+    return f"{prefix}-{int(n)}"
+
+
+def generate_carrier_barcode(db, tenant_id: int, *, prefix: str = "PAL", zero_pad: int = 0) -> str:
     p = normalize_carrier_prefix(prefix)
     n = next_carrier_numeric_suffix(db, tenant_id, prefix=p)
-    return f"{p}-{n:06d}"
+    return format_carrier_barcode(p, n, zero_pad=zero_pad)
 
 
 def infer_prefix_from_barcode(barcode: str) -> CarrierPrefix | None:

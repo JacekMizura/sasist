@@ -216,7 +216,7 @@ export function CarriersGroupTable({
         {rows.map((row) => {
           const busy = busyId === row.id;
           return (
-            <article key={row.id} className={`${cartsSectionClass} space-y-2.5`}>
+            <article key={row.id} className={`${cartsSectionClass} space-y-2 py-2.5`}>
               <div className="flex items-start justify-between gap-2">
                 <Link to={detailPath(row.id)} state={navState} className="min-w-0 flex-1">
                   <CarrierIdentity carrier={row} size="lg" />
