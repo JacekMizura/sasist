@@ -18,7 +18,12 @@ from ...schemas.customer import (
     CustomerProductDiscountOut,
     CustomerSummaryOut,
 )
-from .customer_constants import infer_customer_type, normalize_customer_status, parse_customer_flags
+from .customer_constants import (
+    infer_customer_type,
+    infer_sales_channel,
+    normalize_customer_status,
+    parse_customer_flags,
+)
 from .stats_refresh_service import ensure_customer_stats_fresh
 
 logger = logging.getLogger(__name__)
@@ -41,6 +46,8 @@ def flags_out(c: Customer) -> CustomerFlagsOut:
         debtor=bool(raw.get("debtor")),
         priority=bool(raw.get("priority")),
         suspicious=bool(raw.get("suspicious")),
+        requires_invoice=bool(raw.get("requires_invoice")),
+        marketplace=bool(raw.get("marketplace")),
     )
 
 
@@ -139,6 +146,7 @@ def customer_to_detail_out(
         dt = "RECEIPT"
     ctype = infer_customer_type(row)  # type: ignore[assignment]
     status = normalize_customer_status(getattr(row, "customer_status", None))
+    channel = infer_sales_channel(row)  # type: ignore[assignment]
     return CustomerDetailOut(
         id=int(row.id),
         tenant_id=int(row.tenant_id),
@@ -157,6 +165,7 @@ def customer_to_detail_out(
         global_discount_percent=float(row.global_discount_percent or 0),
         customer_type=ctype,  # type: ignore[arg-type]
         customer_status=status,  # type: ignore[arg-type]
+        sales_channel=channel,  # type: ignore[arg-type]
         flags=flags_out(row),
         credit_limit_gross=float(row.credit_limit_gross)
         if getattr(row, "credit_limit_gross", None) is not None
@@ -192,6 +201,7 @@ def customers_to_list_out(
         stats = stats_map.get(int(r.id))
         ctype = infer_customer_type(r)  # type: ignore[assignment]
         status = normalize_customer_status(getattr(r, "customer_status", None))
+        channel = infer_sales_channel(r)  # type: ignore[assignment]
         out.append(
             CustomerListOut(
                 id=int(r.id),
@@ -203,6 +213,7 @@ def customers_to_list_out(
                 country_code=(r.country_code or "PL").strip().upper()[:8] or "PL",
                 customer_type=ctype,  # type: ignore[arg-type]
                 customer_status=status,  # type: ignore[arg-type]
+                sales_channel=channel,  # type: ignore[arg-type]
                 flags=flags_out(r),
                 order_count=int(stats.order_count or 0) if stats else 0,
                 total_gross=round(float(stats.total_gross or 0), 2) if stats else 0.0,

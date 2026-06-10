@@ -9,8 +9,17 @@ from pydantic import BaseModel, Field, field_validator
 
 
 DocumentTypePref = Literal["RECEIPT", "INVOICE"]
-CustomerTypePref = Literal["retail", "wholesale", "company", "marketplace", "b2b"]
+CustomerTypePref = Literal["retail", "wholesale", "company"]
 CustomerStatusPref = Literal["active", "blocked", "archived"]
+SalesChannelPref = Literal[
+    "store",
+    "ecommerce",
+    "allegro",
+    "amazon",
+    "phone",
+    "b2b_portal",
+    "marketplace_other",
+]
 
 
 class CustomerFlagsOut(BaseModel):
@@ -18,6 +27,8 @@ class CustomerFlagsOut(BaseModel):
     debtor: bool = False
     priority: bool = False
     suspicious: bool = False
+    requires_invoice: bool = False
+    marketplace: bool = False
 
 
 class CustomerSummaryOut(BaseModel):
@@ -81,6 +92,7 @@ class CustomerListOut(BaseModel):
     country_code: str = "PL"
     customer_type: CustomerTypePref = "retail"
     customer_status: CustomerStatusPref = "active"
+    sales_channel: SalesChannelPref = "store"
     flags: CustomerFlagsOut = Field(default_factory=CustomerFlagsOut)
     order_count: int = 0
     total_gross: float = 0.0
@@ -103,6 +115,7 @@ class CustomerBase(BaseModel):
     global_discount_percent: float = Field(0.0, ge=0.0, le=100.0)
     customer_type: CustomerTypePref = "retail"
     customer_status: CustomerStatusPref = "active"
+    sales_channel: SalesChannelPref = "store"
     flags: CustomerFlagsOut = Field(default_factory=CustomerFlagsOut)
     credit_limit_gross: Optional[float] = Field(None, ge=0)
     payment_terms_days: Optional[int] = Field(None, ge=0)
@@ -138,6 +151,8 @@ class CustomerUpdate(BaseModel):
     preferred_payment_method: Optional[str] = Field(None, max_length=128)
     global_discount_percent: Optional[float] = Field(None, ge=0.0, le=100.0)
     customer_type: Optional[CustomerTypePref] = None
+    sales_channel: Optional[SalesChannelPref] = None
+    flags: Optional[CustomerFlagsOut] = None
     credit_limit_gross: Optional[float] = Field(None, ge=0)
     payment_terms_days: Optional[int] = Field(None, ge=0)
     account_manager_user_id: Optional[int] = Field(None, ge=1)
@@ -148,6 +163,7 @@ class CustomerUpdate(BaseModel):
 class CustomerCrmPatchBody(BaseModel):
     customer_type: Optional[CustomerTypePref] = None
     customer_status: Optional[CustomerStatusPref] = None
+    sales_channel: Optional[SalesChannelPref] = None
     flags: Optional[CustomerFlagsOut] = None
     credit_limit_gross: Optional[float] = Field(None, ge=0)
     payment_terms_days: Optional[int] = Field(None, ge=0)

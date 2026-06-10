@@ -2,6 +2,10 @@ import { useEffect, useState, type MutableRefObject } from "react";
 
 import { COUNTRY_OPTIONS } from "../../../constants/countryCodes";
 import {
+  CUSTOMER_TYPE_OPTIONS,
+  SALES_CHANNEL_OPTIONS,
+} from "../../../modules/customers/customerProfile";
+import {
   FilterDateRange,
   FilterField,
   FilterGrid,
@@ -18,12 +22,14 @@ import {
 import { listSellasistFilterGridClass4 } from "../../listPage/listSellasistTokens";
 import type { AppliedCustomerListFilters } from "./customerListFilterTypes";
 
-/** Bumped for unified `date_range` field id. */
-const CUSTOMER_LIST_FILTER_STORAGE_KEY = "customers.list.v2";
+/** Bumped for CRM type/channel filters. */
+const CUSTOMER_LIST_FILTER_STORAGE_KEY = "customers.list.v3";
 
 const CUSTOMER_LIST_FILTER_CATALOG: FilterFieldCatalogItem[] = [
   { id: "search", label: "Szukaj" },
   { id: "country", label: "Kraj" },
+  { id: "customer_type", label: "Typ klienta" },
+  { id: "sales_channel", label: "Kanał sprzedaży" },
   { id: "has_orders", label: "Ma zamówienia" },
   { id: "has_email", label: "Ma e-mail" },
   { id: "has_phone", label: "Ma telefon" },
@@ -96,6 +102,44 @@ export function CustomerListFiltersPanel({
               {COUNTRY_OPTIONS.map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.flag} {c.name}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+        );
+      case "customer_type":
+        return (
+          <FilterField key={fieldId} label="Typ klienta">
+            <select
+              className={filterSelectClass}
+              value={draft.customerType}
+              onChange={(e) =>
+                onChangeDraft({ customerType: e.target.value as AppliedCustomerListFilters["customerType"] })
+              }
+            >
+              <option value="">Wszystkie</option>
+              {CUSTOMER_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+        );
+      case "sales_channel":
+        return (
+          <FilterField key={fieldId} label="Kanał sprzedaży">
+            <select
+              className={filterSelectClass}
+              value={draft.salesChannel}
+              onChange={(e) =>
+                onChangeDraft({ salesChannel: e.target.value as AppliedCustomerListFilters["salesChannel"] })
+              }
+            >
+              <option value="">Wszystkie</option>
+              {SALES_CHANNEL_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </select>

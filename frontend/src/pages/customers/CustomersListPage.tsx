@@ -16,6 +16,7 @@ import { countryLabel } from "../../constants/countryCodes";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { summarizeEntityBulkDeleteToast } from "../../types/entityBulkDelete";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
+import { customerTypeLabel, salesChannelLabel } from "../../modules/customers/customerProfile";
 import {
   listSellasistToolbarSquareBtn,
   listSellasistToolbarToggleBtn,
@@ -79,6 +80,8 @@ export default function CustomersListPage() {
           has_phone: triStateToBool(af.hasPhone),
           created_from: af.dateFrom.trim() || undefined,
           created_to: af.dateTo.trim() || undefined,
+          customer_type: af.customerType || undefined,
+          sales_channel: af.salesChannel || undefined,
         }),
       );
     } catch {
@@ -328,6 +331,8 @@ export default function CustomersListPage() {
                       </th>
                       <th className={operationalActionsColumnHeaderClass}>Akcje</th>
                       <th className={`${panelListDenseThBase} text-left`}>Imię i nazwisko / firma</th>
+                      <th className={`${panelListDenseThBase} text-left`}>Typ</th>
+                      <th className={`${panelListDenseThBase} text-left`}>Kanał</th>
                       <th className={`${panelListDenseThBase} text-left`}>E-mail</th>
                       <th className={`${panelListDenseThBase} text-left`}>Telefon</th>
                       <th className={`${panelListDenseThBase} text-left`}>NIP</th>
@@ -337,7 +342,7 @@ export default function CustomersListPage() {
                   <tbody>
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className={`${panelListDenseTdBase} py-10 text-center text-slate-600`}>
+                        <td colSpan={9} className={`${panelListDenseTdBase} py-10 text-center text-slate-600`}>
                           <p className="text-sm">Brak klientów.</p>
                           <Link
                             to="/customers/new"
@@ -400,6 +405,31 @@ export default function CustomersListPage() {
                           </td>
                           <td className={`${panelListDenseTdBase} font-medium text-slate-900 ${dataTdComfort}`}>
                             {getCustomerDisplayName(r)}
+                          </td>
+                          <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                                {customerTypeLabel(r.customer_type)}
+                              </span>
+                              {r.flags?.vip ? (
+                                <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                                  VIP
+                                </span>
+                              ) : null}
+                              {r.flags?.marketplace ? (
+                                <span className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-900">
+                                  MP
+                                </span>
+                              ) : null}
+                              {r.customer_status === "blocked" ? (
+                                <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-800">
+                                  Blokada
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>
+                            {salesChannelLabel(r.sales_channel)}
                           </td>
                           <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>{r.email?.trim() || "—"}</td>
                           <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>{r.phone?.trim() || "—"}</td>

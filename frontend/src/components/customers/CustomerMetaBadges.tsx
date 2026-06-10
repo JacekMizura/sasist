@@ -3,6 +3,7 @@ import {
   customerStatusLabel,
   customerTypeLabel,
   formatCustomerMoney,
+  salesChannelLabel,
 } from "../../modules/customers/customerProfile";
 
 const pillBase =
@@ -30,15 +31,46 @@ export function CustomerMetaBadges({ detail, orderCount, lastPurchaseAt, compact
   if (flags.vip) {
     badges.push({ key: "vip", label: "VIP", className: "border-amber-200 bg-amber-50 text-amber-900" });
   }
+  if (status === "blocked") {
+    badges.push({ key: "blocked", label: "Zablokowany", className: "border-red-300 bg-red-50 text-red-800" });
+  }
+  if (flags.marketplace) {
+    badges.push({
+      key: "marketplace",
+      label: "Marketplace",
+      className: "border-indigo-200 bg-indigo-50 text-indigo-900",
+    });
+  }
+  if (flags.priority) {
+    badges.push({
+      key: "priority",
+      label: "Priorytet",
+      className: "border-sky-200 bg-sky-50 text-sky-900",
+    });
+  }
   if (flags.debtor) {
     badges.push({ key: "debtor", label: "Dłużnik", className: "border-rose-200 bg-rose-50 text-rose-800" });
   }
-  if (status === "blocked") {
-    badges.push({ key: "blocked", label: "Blokada", className: "border-red-300 bg-red-50 text-red-800" });
-  } else if (status === "active") {
-    badges.push({ key: "active", label: customerStatusLabel(status), className: "border-emerald-200 bg-emerald-50 text-emerald-800" });
+  if (status === "active" && !compact) {
+    badges.push({
+      key: "active",
+      label: customerStatusLabel(status),
+      className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    });
   } else if (status === "archived") {
-    badges.push({ key: "archived", label: customerStatusLabel(status), className: "border-slate-300 bg-slate-100 text-slate-600" });
+    badges.push({
+      key: "archived",
+      label: customerStatusLabel(status),
+      className: "border-slate-300 bg-slate-100 text-slate-600",
+    });
+  }
+
+  if (!compact && detail?.sales_channel && detail.sales_channel !== "store") {
+    badges.push({
+      key: "channel",
+      label: salesChannelLabel(detail.sales_channel),
+      className: "border-violet-200 bg-violet-50 text-violet-900",
+    });
   }
 
   badges.push({

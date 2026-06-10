@@ -18,12 +18,13 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-CUSTOMER_SCHEMA_VERSION = "2026.06.08.2"
+CUSTOMER_SCHEMA_VERSION = "2026.06.08.3"
 
 REQUIRED_CUSTOMERS_COLUMNS: frozenset[str] = frozenset(
     {
         "customer_type",
         "customer_status",
+        "sales_channel",
         "flags_json",
         "credit_limit_gross",
         "payment_terms_days",
@@ -98,6 +99,12 @@ def ensure_customer_crm_schema(engine: Engine) -> int:
             )
         except Exception:
             logger.exception("[customer.schema] sync_failed table=%s", spec.table_name)
+    try:
+        from ..services.customers.customer_data_migration import migrate_customer_crm_legacy_values
+
+        migrate_customer_crm_legacy_values(engine)
+    except Exception:
+        logger.exception("[customer.schema] legacy_migration_failed dialect=%s", engine.dialect.name)
     logger.info(
         "[customer.schema] complete version=%s columns_added=%s dialect=%s",
         CUSTOMER_SCHEMA_VERSION,

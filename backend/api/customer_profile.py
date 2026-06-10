@@ -43,6 +43,7 @@ def patch_customer_crm(
             performed_by_user_id=_operator_id(user),
             customer_type=body.customer_type,
             customer_status=body.customer_status,
+            sales_channel=body.sales_channel,
             flags=flags_payload,
             credit_limit_gross=body.credit_limit_gross,
             payment_terms_days=body.payment_terms_days,

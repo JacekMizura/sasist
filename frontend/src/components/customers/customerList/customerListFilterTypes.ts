@@ -1,3 +1,5 @@
+import type { CustomerType, SalesChannel } from "../../modules/customers/customerProfile";
+
 export type CustomerTriState = "" | "yes" | "no";
 
 export type AppliedCustomerListFilters = {
@@ -8,6 +10,8 @@ export type AppliedCustomerListFilters = {
   hasPhone: CustomerTriState;
   dateFrom: string;
   dateTo: string;
+  customerType: "" | CustomerType;
+  salesChannel: "" | SalesChannel;
 };
 
 export const DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS: AppliedCustomerListFilters = {
@@ -18,6 +22,8 @@ export const DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS: AppliedCustomerListFilters =
   hasPhone: "",
   dateFrom: "",
   dateTo: "",
+  customerType: "",
+  salesChannel: "",
 };
 
 export function triStateToBool(v: CustomerTriState): boolean | undefined {

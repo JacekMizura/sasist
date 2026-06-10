@@ -32,6 +32,7 @@ class Customer(Base):
 
     customer_type = Column(String(32), nullable=False, default="retail", index=True)
     customer_status = Column(String(32), nullable=False, default="active", index=True)
+    sales_channel = Column(String(32), nullable=False, default="store", index=True)
     flags_json = Column(Text, nullable=True)
     credit_limit_gross = Column(Float, nullable=True)
     payment_terms_days = Column(Integer, nullable=True)

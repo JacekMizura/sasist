@@ -27,7 +27,13 @@ from ..schemas.customer import (
     CustomerUpdate,
 )
 from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
-from ..services.customers.customer_constants import normalize_customer_type
+from ..services.customers.customer_constants import (
+    dump_customer_flags,
+    merge_customer_flags,
+    normalize_sales_channel,
+    parse_customer_flags,
+    resolve_customer_type_input,
+)
 from ..services.customers.customer_profile_service import ensure_customer_profile_defaults
 from ..services.customers.customer_projection import (
     customer_to_detail_out,
@@ -178,6 +184,8 @@ def list_customers(
     has_phone: Optional[bool] = Query(None),
     created_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     created_to: Optional[str] = Query(None, description="YYYY-MM-DD (włącznie)"),
+    customer_type: Optional[str] = Query(None, description="retail | company | wholesale"),
+    sales_channel: Optional[str] = Query(None, description="store | ecommerce | allegro | …"),
     db: Session = Depends(get_db),
 ):
     try:
@@ -243,6 +251,13 @@ def list_customers(
             end_excl = d_to + timedelta(days=1)
             q = q.filter(Customer.created_at < end_excl)
 
+        if customer_type and str(customer_type).strip():
+            ctype, _ = resolve_customer_type_input(customer_type)
+            q = q.filter(func.lower(Customer.customer_type) == ctype)
+        if sales_channel and str(sales_channel).strip():
+            channel = normalize_sales_channel(sales_channel)
+            q = q.filter(func.lower(Customer.sales_channel) == channel)
+
         rows = q.order_by(Customer.id.desc()).all()
         return customers_to_list_out(db, rows, tenant_id=int(tenant_id))
     except Exception:
@@ -254,9 +269,15 @@ def list_customers(
 @router.post("/", response_model=CustomerDetailOut, status_code=201, include_in_schema=False)
 def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
     _assert_shipping_method_for_tenant(db, tenant_id=body.tenant_id, method_id=body.preferred_shipping_method_id)
-    inferred_type = normalize_customer_type(body.customer_type) if getattr(body, "customer_type", None) else (
-        "company" if ((body.company_name or "").strip() or (body.nip or "").strip()) else "retail"
+    inferred_type, type_flags = (
+        resolve_customer_type_input(body.customer_type)
+        if getattr(body, "customer_type", None)
+        else (
+            ("company" if ((body.company_name or "").strip() or (body.nip or "").strip()) else "retail"),
+            {},
+        )
     )
+    channel = normalize_sales_channel(getattr(body, "sales_channel", None))
     row = Customer(
         tenant_id=int(body.tenant_id),
         first_name=(body.first_name or "").strip(),
@@ -271,8 +292,16 @@ def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
         preferred_payment_method=(body.preferred_payment_method or "").strip() or None,
         global_discount_percent=float(body.global_discount_percent or 0),
         customer_type=inferred_type,
+        sales_channel=channel,
     )
     ensure_customer_profile_defaults(db, row)
+    if type_flags:
+        row.flags_json = dump_customer_flags(type_flags)
+    if getattr(body, "flags", None) is not None:
+        current = parse_customer_flags(row.flags_json)
+        row.flags_json = dump_customer_flags(
+            merge_customer_flags(current, body.flags.model_dump())
+        )
     db.add(row)
     db.flush()
     if body.addresses:
@@ -343,7 +372,16 @@ def patch_customer(
     if "global_discount_percent" in fields and body.global_discount_percent is not None:
         row.global_discount_percent = float(body.global_discount_percent)
     if "customer_type" in fields and body.customer_type is not None:
-        row.customer_type = str(body.customer_type).strip().lower()
+        new_type, type_flags = resolve_customer_type_input(body.customer_type)
+        row.customer_type = new_type
+        if type_flags:
+            current = parse_customer_flags(getattr(row, "flags_json", None))
+            row.flags_json = dump_customer_flags(merge_customer_flags(current, type_flags))
+    if "sales_channel" in fields and body.sales_channel is not None:
+        row.sales_channel = normalize_sales_channel(body.sales_channel)
+    if "flags" in fields and body.flags is not None:
+        current = parse_customer_flags(getattr(row, "flags_json", None))
+        row.flags_json = dump_customer_flags(merge_customer_flags(current, body.flags.model_dump()))
     if "credit_limit_gross" in fields:
         row.credit_limit_gross = float(body.credit_limit_gross) if body.credit_limit_gross is not None else None
     if "payment_terms_days" in fields:

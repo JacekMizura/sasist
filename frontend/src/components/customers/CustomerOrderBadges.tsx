@@ -14,7 +14,7 @@ export function CustomerOrderBadges({ customerType, customerStatus, flags, compa
   const items: Array<{ key: string; label: string; className: string }> = [];
   if (flags?.vip) items.push({ key: "vip", label: "VIP", className: "border-amber-200 bg-amber-50 text-amber-900" });
   const t = String(customerType || "").toLowerCase();
-  if (t === "wholesale" || t === "b2b") {
+  if (t === "wholesale") {
     items.push({ key: "wholesale", label: "Hurt", className: "border-violet-200 bg-violet-50 text-violet-800" });
   }
   if (flags?.debtor) items.push({ key: "debtor", label: "Dłużnik", className: "border-rose-200 bg-rose-50 text-rose-800" });

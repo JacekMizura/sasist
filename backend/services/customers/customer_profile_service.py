@@ -14,11 +14,16 @@ from .customer_constants import (
     CUSTOMER_FLAGS,
     CUSTOMER_STATUS_DEFAULT,
     CUSTOMER_TYPE_DEFAULT,
+    SALES_CHANNEL_DEFAULT,
     dump_customer_flags,
     infer_customer_type,
+    infer_sales_channel,
+    merge_customer_flags,
     normalize_customer_status,
     normalize_customer_type,
+    normalize_sales_channel,
     parse_customer_flags,
+    resolve_customer_type_input,
 )
 from .errors import CustomerNotFoundError
 
@@ -53,11 +58,13 @@ def customer_profile_dict(customer: Customer) -> dict[str, Any]:
     flags = parse_customer_flags(getattr(customer, "flags_json", None))
     ctype = infer_customer_type(customer)
     status = normalize_customer_status(getattr(customer, "customer_status", None))
+    channel = infer_sales_channel(customer)
     if getattr(customer, "deleted_at", None):
         status = "archived"
     return {
         "customer_type": ctype,
         "customer_status": status,
+        "sales_channel": channel,
         "flags": flags,
         "credit_limit_gross": float(customer.credit_limit_gross)
         if getattr(customer, "credit_limit_gross", None) is not None
@@ -105,6 +112,7 @@ def patch_customer_crm_profile(
     performed_by_user_id: int | None = None,
     customer_type: str | None = None,
     customer_status: str | None = None,
+    sales_channel: str | None = None,
     flags: dict[str, bool] | None = None,
     credit_limit_gross: float | None = None,
     payment_terms_days: int | None = None,
@@ -117,7 +125,7 @@ def patch_customer_crm_profile(
     events: list[tuple[str, str, str, dict[str, Any] | None]] = []
 
     if customer_type is not None:
-        new_type = normalize_customer_type(customer_type)
+        new_type, type_flags = resolve_customer_type_input(customer_type)
         old_type = infer_customer_type(row)
         if new_type != old_type:
             row.customer_type = new_type
@@ -127,6 +135,23 @@ def patch_customer_crm_profile(
                     "Typ klienta",
                     f"Typ: {old_type} → {new_type}",
                     {"from": old_type, "to": new_type},
+                )
+            )
+        if type_flags:
+            current = parse_customer_flags(getattr(row, "flags_json", None))
+            row.flags_json = dump_customer_flags(merge_customer_flags(current, type_flags))
+
+    if sales_channel is not None:
+        new_channel = normalize_sales_channel(sales_channel)
+        old_channel = infer_sales_channel(row)
+        if new_channel != old_channel:
+            row.sales_channel = new_channel
+            events.append(
+                (
+                    "PROFILE_CHANNEL_CHANGED",
+                    "Kanał sprzedaży",
+                    f"Kanał: {old_channel} → {new_channel}",
+                    {"from": old_channel, "to": new_channel},
                 )
             )
 
@@ -151,10 +176,8 @@ def patch_customer_crm_profile(
 
     if flags is not None:
         current = parse_customer_flags(getattr(row, "flags_json", None))
-        for key in CUSTOMER_FLAGS:
-            if key in flags:
-                current[key] = bool(flags[key])
-        row.flags_json = dump_customer_flags(current)
+        merged = merge_customer_flags(current, {k: bool(v) for k, v in flags.items() if k in CUSTOMER_FLAGS})
+        row.flags_json = dump_customer_flags(merged)
         if "vip" in flags:
             if flags["vip"]:
                 events.append(("VIP_MARKED", "VIP", "Klient oznaczony jako VIP", None))
@@ -229,7 +252,11 @@ def apply_customer_crm_action(
 def ensure_customer_profile_defaults(db: Session, customer: Customer) -> None:
     if not getattr(customer, "customer_type", None):
         customer.customer_type = infer_customer_type(customer)
+    else:
+        customer.customer_type = normalize_customer_type(customer.customer_type)
     if not getattr(customer, "customer_status", None):
         customer.customer_status = CUSTOMER_STATUS_DEFAULT
+    if not getattr(customer, "sales_channel", None):
+        customer.sales_channel = SALES_CHANNEL_DEFAULT
     if getattr(customer, "flags_json", None) is None:
         customer.flags_json = dump_customer_flags({})

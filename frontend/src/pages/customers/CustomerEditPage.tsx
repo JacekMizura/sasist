@@ -23,7 +23,17 @@ import { CustomerGusLookupPanel } from "../../components/customers/CustomerGusLo
 import { useCustomerGusLookup } from "../../hooks/customers/useCustomerGusLookup";
 import { applyGusToCustomerForm } from "../../utils/applyGusToCustomerForm";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
-import { isWholesaleType, type CustomerType } from "../../modules/customers/customerProfile";
+import {
+  CUSTOMER_TYPE_OPTIONS,
+  SALES_CHANNEL_OPTIONS,
+  isCompanyType,
+  isWholesaleType,
+  normalizeCustomerType,
+  normalizeSalesChannel,
+  type CustomerFlags,
+  type CustomerType,
+  type SalesChannel,
+} from "../../modules/customers/customerProfile";
 import { validatePolishNipChecksum } from "../../utils/polishNip";
 
 const PAYMENT_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
@@ -82,6 +92,10 @@ export default function CustomerEditPage() {
   const [payMethod, setPayMethod] = useState("");
   const [globalDisc, setGlobalDisc] = useState(0);
   const [customerType, setCustomerType] = useState<CustomerType>("retail");
+  const [salesChannel, setSalesChannel] = useState<SalesChannel>("store");
+  const [flagMarketplace, setFlagMarketplace] = useState(false);
+  const [flagPriority, setFlagPriority] = useState(false);
+  const [flagRequiresInvoice, setFlagRequiresInvoice] = useState(false);
   const [creditLimit, setCreditLimit] = useState("");
   const [paymentTermsDays, setPaymentTermsDays] = useState("");
   const [addresses, setAddresses] = useState<CustomerAddressDto[]>([emptyAddress()]);
@@ -112,7 +126,11 @@ export default function CustomerEditPage() {
     setShipMethodId(d.preferred_shipping_method_id?.trim() ?? "");
     setPayMethod(d.preferred_payment_method?.trim() ?? "");
     setGlobalDisc(Number(d.global_discount_percent) || 0);
-    setCustomerType((d.customer_type as CustomerType) || "retail");
+    setCustomerType(normalizeCustomerType(d.customer_type));
+    setSalesChannel(normalizeSalesChannel(d.sales_channel));
+    setFlagMarketplace(!!d.flags?.marketplace);
+    setFlagPriority(!!d.flags?.priority);
+    setFlagRequiresInvoice(!!d.flags?.requires_invoice);
     setCreditLimit(d.credit_limit_gross != null ? String(d.credit_limit_gross) : "");
     setPaymentTermsDays(d.payment_terms_days != null ? String(d.payment_terms_days) : "");
     setAddresses(d.addresses?.length ? d.addresses : [emptyAddress()]);
@@ -193,6 +211,12 @@ export default function CustomerEditPage() {
       preferred_payment_method: payMethod.trim() || null,
       global_discount_percent: globalDisc,
       customer_type: customerType,
+      sales_channel: salesChannel,
+      flags: {
+        marketplace: flagMarketplace,
+        priority: flagPriority,
+        requires_invoice: flagRequiresInvoice,
+      } satisfies CustomerFlags,
       credit_limit_gross: creditLimit.trim() ? parseFloat(creditLimit.replace(",", ".")) : null,
       payment_terms_days: paymentTermsDays.trim() ? parseInt(paymentTermsDays, 10) : null,
       addresses: addresses.map((a) => ({
@@ -225,6 +249,10 @@ export default function CustomerEditPage() {
       payMethod,
       globalDisc,
       customerType,
+      salesChannel,
+      flagMarketplace,
+      flagPriority,
+      flagRequiresInvoice,
       creditLimit,
       paymentTermsDays,
       addresses,
@@ -548,11 +576,25 @@ export default function CustomerEditPage() {
                       value={customerType}
                       onChange={(e) => setCustomerType(e.target.value as CustomerType)}
                     >
-                      <option value="retail">Detaliczny</option>
-                      <option value="wholesale">Hurtowy</option>
-                      <option value="company">Firma</option>
-                      <option value="marketplace">Marketplace</option>
-                      <option value="b2b">B2B</option>
+                      {CUSTOMER_TYPE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">
+                    Kanał sprzedaży
+                    <select
+                      className={inp}
+                      value={salesChannel}
+                      onChange={(e) => setSalesChannel(e.target.value as SalesChannel)}
+                    >
+                      {SALES_CHANNEL_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   {isWholesaleType(customerType) ? (
@@ -577,6 +619,37 @@ export default function CustomerEditPage() {
                       </label>
                     </>
                   ) : null}
+                </div>
+                {isCompanyType(customerType) ? (
+                  <p className="mt-3 text-sm text-slate-600">
+                    Firma: użyj NIP i weryfikacji GUS/VIES oraz dokumentu FV przy sprzedaży B2B okazjonalnej.
+                  </p>
+                ) : null}
+                <div className="mt-4 flex flex-wrap gap-4">
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={flagMarketplace}
+                      onChange={(e) => setFlagMarketplace(e.target.checked)}
+                    />
+                    Marketplace
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={flagPriority}
+                      onChange={(e) => setFlagPriority(e.target.checked)}
+                    />
+                    Priorytet
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={flagRequiresInvoice}
+                      onChange={(e) => setFlagRequiresInvoice(e.target.checked)}
+                    />
+                    Wymaga faktury
+                  </label>
                 </div>
               </section>
 

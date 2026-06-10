@@ -1,4 +1,10 @@
-import type { CustomerFlags, CustomerStatus, CustomerSummary, CustomerType } from "../modules/customers/customerProfile";
+import type {
+  CustomerFlags,
+  CustomerStatus,
+  CustomerSummary,
+  CustomerType,
+  SalesChannel,
+} from "../modules/customers/customerProfile";
 import { getAxiosRequestDebugUrl, logApiBaseDebug } from "../config/apiBase";
 import api from "./axios";
 import type { EntityBulkDeleteResult } from "../types/entityBulkDelete";
@@ -37,6 +43,7 @@ export type CustomerListRow = {
   country_code: string;
   customer_type?: CustomerType;
   customer_status?: CustomerStatus;
+  sales_channel?: SalesChannel;
   flags?: CustomerFlags;
   order_count?: number;
   total_gross?: number;
@@ -58,6 +65,7 @@ export type CustomerDetail = {
   global_discount_percent: number;
   customer_type?: CustomerType;
   customer_status?: CustomerStatus;
+  sales_channel?: SalesChannel;
   flags?: CustomerFlags;
   credit_limit_gross?: number | null;
   payment_terms_days?: number | null;
@@ -90,6 +98,11 @@ export type CustomerCreatePayload = {
   preferred_shipping_method_id?: string | null;
   preferred_payment_method?: string | null;
   global_discount_percent: number;
+  customer_type?: CustomerType;
+  sales_channel?: SalesChannel;
+  flags?: CustomerFlags;
+  credit_limit_gross?: number | null;
+  payment_terms_days?: number | null;
   addresses: Omit<CustomerAddressDto, "id" | "customer_id">[];
   product_discounts: { product_id: number; discount_percent: number }[];
 };
@@ -103,6 +116,8 @@ export type ListCustomersParams = {
   has_phone?: boolean;
   created_from?: string;
   created_to?: string;
+  customer_type?: CustomerType;
+  sales_channel?: SalesChannel;
 };
 
 export async function listCustomers(params: ListCustomersParams): Promise<CustomerListRow[]> {
@@ -116,6 +131,8 @@ export async function listCustomers(params: ListCustomersParams): Promise<Custom
   if (params.has_phone === true || params.has_phone === false) p.has_phone = params.has_phone;
   if (params.created_from?.trim()) p.created_from = params.created_from.trim();
   if (params.created_to?.trim()) p.created_to = params.created_to.trim();
+  if (params.customer_type) p.customer_type = params.customer_type;
+  if (params.sales_channel) p.sales_channel = params.sales_channel;
 
   /** Must match backend `@router.get("")` — trailing slash triggers 307 → often `http://` Location on Railway. */
   const url = "customers";

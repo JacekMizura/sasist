@@ -357,6 +357,7 @@ def _python_default_for_not_null_column(col: Any, table: str) -> Any | None:
     known: dict[tuple[str, str], Any] = {
         ("customers", "customer_type"): "retail",
         ("customers", "customer_status"): "active",
+        ("customers", "sales_channel"): "store",
     }
     if (table, col.key) in known:
         return known[(table, col.key)]
