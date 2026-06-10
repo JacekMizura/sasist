@@ -6,6 +6,13 @@
 - **Backend:** `commit_workflow=false` (domyślnie) na `split-process` / `process` — bez sync OMS; nowy `POST …/commit-wms`
 - **Frontend:** decyzje lokalne bez natychmiastowego API; **ZAPISZ** gdy wszystkie linie rozstrzygnięte; confirm przy DAMAGED bez zdjęć; upload fail nie blokuje decyzji
 
+## 2026-06-08 — Podgląd lokalizacji WMS: layout magazyn-first
+
+- Modal: **72% plan magazynu** (mapa + regał fizyczny), **28% info + zawartość**
+- Usunięto mini-mapkę z kolorowymi kwadratami; plan z alejkami, strefami, skalą, cieniami
+- Regał: konstrukcja pionowa, poziomy, sloty, glow + badge TU
+- Panel info skrócony (więcej pod rozwijanym linkiem); karty produktów większe
+
 ## 2026-06-08 — Nośniki: wizualny podgląd lokalizacji (LocationPreviewModal)
 
 - Klik badge lokalizacji → modal z mapą regałów, widokiem pionowym regału, zawartością nośnika

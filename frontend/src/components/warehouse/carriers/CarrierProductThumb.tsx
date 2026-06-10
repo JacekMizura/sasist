@@ -3,7 +3,7 @@ import { ImageIcon } from "lucide-react";
 type Props = {
   imageUrl?: string | null;
   alt?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 };
 
@@ -11,6 +11,7 @@ const SIZE_CLASS = {
   sm: "h-10 w-10",
   md: "h-12 w-12",
   lg: "h-14 w-14",
+  xl: "h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]",
 } as const;
 
 /** Zdjęcie produktu bez boxa — czyste, floating (OMS/WMS). */
