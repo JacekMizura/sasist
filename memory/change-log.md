@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Klienci: integracja GUS (NIP)
+- Backend: `POST /api/clients/gus-lookup` — proxy BIR1 GUS + wzbogacenie VAT z MF, cache 24h (`gus_nip_cache`)
+- Frontend: pole NIP z „Pobierz z GUS”, debounce 900 ms, panel podglądu, „Uzupełnij dane” (tylko puste pola)
+- Badge: Zweryfikowano w GUS, Aktywny VAT, VAT UE
+- Env: `GUS_API_KEY`, opcjonalnie `GUS_USE_TEST=true` (środowisko testowe GUS)
+
 ## 2026-06-08 — Klienci: historia zakupów (CRM dashboard)
 - Backend: tabele `customer_sales_stats`, `customer_product_stats`; lazy refresh (TTL 60 min)
 - Endpointy: `/customers/{id}/purchase-history/{summary,documents,top-products,trend}` + filtry/paginacja

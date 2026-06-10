@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Home } from "lucide-react";
+import { ChevronLeft, ChevronRight, Home, Loader2 } from "lucide-react";
 import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/PanelBulkStatusConfirmModal";
 import { panelDetailPageOuterClass } from "../../components/panelDetail/panelDetailLayout";
 import { PageGutter } from "../../components/layout/PageContainer";
@@ -20,6 +20,11 @@ import { UI_STRINGS } from "../../constants/uiStrings";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { CustomerDetailTabs } from "./CustomerDetailTabs";
+import { CustomerGusBadges } from "../../components/customers/CustomerGusBadges";
+import { CustomerGusLookupPanel } from "../../components/customers/CustomerGusLookupPanel";
+import { useCustomerGusLookup } from "../../hooks/customers/useCustomerGusLookup";
+import { applyGusToCustomerForm } from "../../utils/applyGusToCustomerForm";
+import { validatePolishNipChecksum } from "../../utils/polishNip";
 
 const PAYMENT_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
 
@@ -77,6 +82,17 @@ export default function CustomerEditPage() {
   const [discounts, setDiscounts] = useState<CustomerProductDiscountDto[]>([]);
   const [newDiscProductId, setNewDiscProductId] = useState("");
   const [newDiscPct, setNewDiscPct] = useState("0");
+
+  const gus = useCustomerGusLookup(nip);
+
+  const applyGusData = () => {
+    if (!gus.result?.ok || !gus.result.found) return;
+    const next = applyGusToCustomerForm(gus.result, { companyName, nip, addresses });
+    setCompanyName(next.companyName);
+    setNip(next.nip);
+    setAddresses(next.addresses);
+    gus.markApplied();
+  };
 
   const applyDetail = useCallback((d: CustomerDetail) => {
     setFirstName(d.first_name ?? "");
@@ -349,9 +365,30 @@ export default function CustomerEditPage() {
                     Nazwa firmy (opcjonalnie)
                     <input className={inp} value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
                   </label>
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
                     NIP (opcjonalnie)
-                    <input className={inp} value={nip} onChange={(e) => setNip(e.target.value)} />
+                    <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-start">
+                      <input
+                        className={`${inp} sm:max-w-xs`}
+                        value={nip}
+                        onChange={(e) => setNip(e.target.value)}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="000-000-00-00"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => gus.fetchManual()}
+                        disabled={!validatePolishNipChecksum(nip) || gus.loading}
+                        className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {gus.loading ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-hidden />
+                        ) : null}
+                        Pobierz z GUS
+                      </button>
+                    </div>
+                    {gus.result && !gus.applied ? <div className="mt-2"><CustomerGusBadges result={gus.result} /></div> : null}
                   </label>
                   <label className="block text-sm font-medium text-slate-700">
                     Kraj (kod)
@@ -360,6 +397,31 @@ export default function CustomerEditPage() {
                     </div>
                   </label>
                 </div>
+                {gus.result && !gus.applied ? (
+                  <div className="mt-4">
+                    <CustomerGusLookupPanel
+                      result={gus.result}
+                      loading={gus.loading}
+                      error={gus.error}
+                      onApply={applyGusData}
+                      onDismiss={gus.clearResult}
+                    />
+                  </div>
+                ) : gus.loading && !gus.result ? (
+                  <div className="mt-4">
+                    <CustomerGusLookupPanel
+                      result={null}
+                      loading
+                      error={null}
+                      onApply={applyGusData}
+                      onDismiss={gus.clearResult}
+                    />
+                  </div>
+                ) : gus.error && !gus.result ? (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+                    {gus.error}
+                  </p>
+                ) : null}
               </section>
 
               <section>
