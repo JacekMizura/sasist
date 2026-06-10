@@ -19,6 +19,7 @@ import { getShippingMethods } from "../../api/shippingMethodsApi";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { CustomerDetailTabs } from "./CustomerDetailTabs";
 
 const PAYMENT_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
 
@@ -312,6 +313,8 @@ export default function CustomerEditPage() {
               <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             </Link>
           </div>
+
+          {!isNew ? <CustomerDetailTabs /> : null}
 
           {loading && !isNew ? (
             <p className="text-sm text-slate-500">Ładowanie…</p>
