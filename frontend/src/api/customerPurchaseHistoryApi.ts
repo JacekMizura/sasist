@@ -54,6 +54,10 @@ export type PurchaseHistorySummary = {
   total_products_qty: number;
   returns_corrections_count: number;
   avg_days_between_orders: number | null;
+  gross_30d?: number;
+  gross_90d?: number;
+  gross_365d?: number;
+  max_order_gross?: number;
   stats_computed_at: string | null;
   filter_options: PurchaseHistoryFilterOptions;
 };

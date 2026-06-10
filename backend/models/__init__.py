@@ -19,6 +19,7 @@ from .manufacturer import Manufacturer  # noqa: F401 - before Product (FK)
 from .supplier import Supplier  # noqa: F401 - before Product (default_supplier_id FK)
 from .customer import Customer, CustomerAddress, CustomerProductDiscount  # noqa: F401
 from .customer_analytics import CustomerProductStats, CustomerSalesStats  # noqa: F401
+from .customer_crm import CustomerNote  # noqa: F401
 from .gus_lookup_cache import GusLookupCache, GusNipCache  # noqa: F401
 from .product import Product
 from .product_barcode import ProductBarcode  # noqa: F401 — after Product

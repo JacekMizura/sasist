@@ -20,6 +20,8 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { CustomerDetailPageShell } from "./CustomerDetailPageShell";
 import { CustomerGusBadges } from "../../components/customers/CustomerGusBadges";
 import { CustomerGusLookupPanel } from "../../components/customers/CustomerGusLookupPanel";
+import { CustomerNotesSection } from "../../components/customers/CustomerNotesSection";
+import { CustomerQuickActions } from "../../components/customers/CustomerQuickActions";
 import { useCustomerGusLookup } from "../../hooks/customers/useCustomerGusLookup";
 import { applyGusToCustomerForm } from "../../utils/applyGusToCustomerForm";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
@@ -304,6 +306,25 @@ export default function CustomerEditPage() {
 
           {!loading ? (
             <>
+              {!isNew && customerIdNum ? (
+                <CustomerQuickActions
+                  customerId={customerIdNum}
+                  email={email}
+                  onCopyInvoice={() => {
+                    const addr = addresses[0];
+                    const lines = [
+                      companyName ? `Firma: ${companyName}` : "",
+                      nip ? `NIP: ${nip}` : "",
+                      addr?.street ? `Adres: ${addr.street} ${addr.house_number}${addr.apartment_number ? `/${addr.apartment_number}` : ""}` : "",
+                      addr?.postal_code || addr?.city ? `${addr?.postal_code ?? ""} ${addr?.city ?? ""}`.trim() : "",
+                      email ? `E-mail: ${email}` : "",
+                      phone ? `Tel: ${phone}` : "",
+                    ].filter(Boolean);
+                    void navigator.clipboard.writeText(lines.join("\n"));
+                  }}
+                />
+              ) : null}
+
               <section>
                 <h2 className={sectionTitleClass}>Dane do dokumentu</h2>
                 <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -614,6 +635,10 @@ export default function CustomerEditPage() {
                   </label>
                 </div>
               </section>
+
+              {!isNew && customerIdNum ? (
+                <CustomerNotesSection customerId={customerIdNum} tenantId={tenantId} />
+              ) : null}
 
               <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-4">
                 <button

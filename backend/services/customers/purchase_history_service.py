@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import desc
@@ -252,7 +252,36 @@ def build_summary(
 
     payload["stats_computed_at"] = stats.computed_at.isoformat() if stats.computed_at else None
     payload["filter_options"] = build_filter_options(db, customer_id=customer_id, tenant_id=tenant_id)
+    _attach_rolling_metrics(db, customer_id=customer_id, tenant_id=tenant_id, payload=payload)
     return payload
+
+
+def _rolling_gross(orders: List[Order], *, days: int, now: datetime | None = None) -> float:
+    ref = now or datetime.utcnow()
+    cutoff = ref - timedelta(days=days)
+    total = 0.0
+    for order in orders:
+        odt = order.order_date or order.created_at
+        if odt and odt >= cutoff:
+            total += order_financials(order)[2]
+    return round(total, 2)
+
+
+def _attach_rolling_metrics(
+    db: Session,
+    *,
+    customer_id: int,
+    tenant_id: int,
+    payload: dict[str, Any],
+) -> None:
+    orders = _base_orders_query(db, customer_id=customer_id, tenant_id=tenant_id).all()
+    max_gross = 0.0
+    for order in orders:
+        max_gross = max(max_gross, order_financials(order)[2])
+    payload["gross_30d"] = _rolling_gross(orders, days=30)
+    payload["gross_90d"] = _rolling_gross(orders, days=90)
+    payload["gross_365d"] = _rolling_gross(orders, days=365)
+    payload["max_order_gross"] = round(max_gross, 2)
 
 
 def _filters_empty(flt: PurchaseHistoryFilters) -> bool:

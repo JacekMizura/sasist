@@ -220,6 +220,7 @@ import WmsInventoryCountTaskRedirect from "./pages/wms/inventory-count/WmsInvent
 import CustomersListPage from "./pages/customers/CustomersListPage"
 import CustomerEditPage from "./pages/customers/CustomerEditPage"
 import CustomerPurchaseHistoryPage from "./pages/customers/CustomerPurchaseHistoryPage"
+import CustomerActivityPage from "./pages/customers/CustomerActivityPage"
 import PurchaseOrdersPage from "./pages/Assortment/PurchaseOrdersPage"
 import ProductsImportTabPage from "./pages/Products/ProductsImportTabPage"
 import ProductsImportHistoryTabPage from "./pages/Products/ProductsImportHistoryTabPage"
@@ -574,6 +575,7 @@ export const router = createBrowserRouter(
                 <Route path="customers" element={<CustomersListPage />} />
                 <Route path="customers/new" element={<CustomerEditPage />} />
                 <Route path="customers/:id/historia-zakupow" element={<CustomerPurchaseHistoryPage />} />
+                <Route path="customers/:id/aktywnosc" element={<CustomerActivityPage />} />
                 <Route path="customers/:id" element={<CustomerEditPage />} />
                 <Route path="bundles" element={<BundlesPage />} />
                 <Route path="bundles/new" element={<BundleNewPage />} />

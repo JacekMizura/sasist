@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-06-08 — Klienci: CRM-lite etap 1–2 (order-link, aktywność, notatki)
+- Backend: `customer_order_link_service` — podgląd/utworzenie/połączenie klienta z zamówienia + wykrywanie duplikatów (email, telefon, NIP, nazwa)
+- Endpointy: `GET/POST /api/customers/order-link/{preview,create,link}`
+- Backend: `customer_notes`, `customer_activity_service`, `customer_note_service` — timeline (zamówienia + notatki), CRUD notatek (pin, soft delete)
+- Endpointy: `/api/customers/{id}/activity`, `/api/customers/{id}/notes`
+- Historia zakupów KPI: obrót 30/90/365 dni, największe zamówienie (`purchase_history_service`)
+- Frontend: `OrderCustomerLinkPanel` w `OrderDetailPage` (badge „Klient niezapisany”), `getCustomerDisplayName` na linku klienta
+- Frontend: zakładka „Aktywność”, `CustomerNotesSection`, `CustomerQuickActions`, rozszerzone KPI historii
+- **Następne etapy:** tagi/segmenty, merge duplikatów, wiele adresów, pełniejszy timeline (FV, zwroty, GUS)
+
 ## 2026-06-08 — Klienci: spójna nazwa + direct sales refresh
 - `getCustomerDisplayName()` — lista, detail, historia, direct sales (FV)
 - Direct sales: pełna sesja z `set-customer`, eager fetch klienta, auto-uzupełnianie formularza FV

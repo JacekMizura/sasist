@@ -85,6 +85,8 @@ import { getOrderPanelSubgroups, getOrderUiStatusSummary, patchOrderUiStatus } f
 import { useWarehouse } from "../../context/WarehouseContext";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusBrief, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { OrderCustomerLinkPanel } from "../../components/customers/OrderCustomerLinkPanel";
+import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
 import NewComplaintWizard from "../Complaints/NewComplaintWizard";
 import { OrderStatusSidebar, ORDERS_PANEL_GROUP_LABELS, type OrderPanelFilter } from "../../components/orders/OrderStatusSidebar";
@@ -1420,6 +1422,17 @@ export default function OrderDetailPage() {
     [order?.addresses_json],
   );
 
+  const orderHasUnlinkedCustomerData = useMemo(() => {
+    if (!order) return false;
+    if (order.customer_id || order.customer?.id) return false;
+    const email = contact.email !== "—" ? contact.email.trim() : "";
+    const phone = contact.phone !== "—" ? contact.phone.trim() : "";
+    const nip = (billingInvoice?.nip ?? "").replace(/\D/g, "");
+    const company = (billingInvoice?.companyName ?? "").trim();
+    const hasAddress = contact.addressLines.some((line) => line.trim() && line !== "—");
+    return Boolean(email || phone || nip.length >= 10 || company || hasAddress);
+  }, [order, contact, billingInvoice]);
+
   const shippingExtras = useMemo(
     () => (order ? parseShippingExtras(order.addresses_json) : null),
     [order?.addresses_json],
@@ -2270,7 +2283,18 @@ export default function OrderDetailPage() {
                   <SummaryDashboardCard title="Kupujący" right={<button onClick={() => setEditBuyerModalOpen(true)} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></button>}>
                     <div className="text-sm space-y-2">
                       <p className="font-bold text-lg text-slate-900">{contact.name}</p>
-                      {order.customer && <Link to={`/customers/${order.customer.id}`} className="text-blue-700 font-medium hover:underline">{order.customer.display_name}</Link>}
+                      {order.customer ? (
+                        <Link to={`/customers/${order.customer.id}`} className="text-blue-700 font-medium hover:underline">
+                          {getCustomerDisplayName(order.customer)}
+                        </Link>
+                      ) : null}
+                      <OrderCustomerLinkPanel
+                        orderId={order.id}
+                        tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
+                        customerId={order.customer_id ?? order.customer?.id}
+                        hasContactData={orderHasUnlinkedCustomerData}
+                        onLinked={() => void reloadOrderById(order.id)}
+                      />
                       <p className="text-slate-600 flex items-center pt-2"><Phone size={14} className="mr-2 text-slate-400"/> {contact.phone}</p>
                       <p className="text-slate-600 flex items-center"><Mail size={14} className="mr-2 text-slate-400"/> <span className="break-all">{contact.email}</span></p>
                     </div>

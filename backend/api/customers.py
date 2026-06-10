@@ -35,9 +35,13 @@ router = APIRouter(prefix="/customers", tags=["Customers"])
 
 from .customers_gus import router as gus_router
 from .customer_purchase_history import router as purchase_history_router
+from .customer_order_link import router as order_link_router
+from .customer_crm import router as crm_router
 
+router.include_router(order_link_router)
 router.include_router(gus_router)
 router.include_router(purchase_history_router)
+router.include_router(crm_router)
 
 
 def _display_name(c: Customer) -> str:

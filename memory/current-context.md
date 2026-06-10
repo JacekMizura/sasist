@@ -1,7 +1,21 @@
 # Current context
 
 ## Active goal
-Enterprise **Inventory / Stock Count** module — operator-first configuration + WMS blind counting + scoped reconciliation.
+**Klienci — CRM-lite (iteracyjnie)** bez psucia logiki zamówień / istniejących endpointów.
+
+### Etap 1–2 (done)
+- `getCustomerDisplayName()` — wspólna nazwa w liście, karcie, direct sales, zamówieniach
+- Order link: badge „Klient niezapisany”, dodaj/połącz z istniejącym, duplikaty przy tworzeniu
+- Notatki handlowe (pin, soft delete) na karcie klienta
+- Zakładka „Aktywność” — timeline zamówień + notatek
+- Historia zakupów: uproszczone filtry + KPI (obrót 30/90/365, ostatni zakup, średni koszyk, max zamówienie)
+
+### Etap 3–5 (planned)
+- Tagi i segmenty + filtry listy
+- `customer_merge_service` — scalanie duplikatów
+- Wiele typów adresów (FV, dostawa, paczkomat…)
+- Pełniejszy timeline (FV, paragony, zwroty, reklamacje, GUS, zmiany danych)
+- GUS source badges (GUS/MF/VIES/CACHE) + ręczne odświeżenie cache
 
 ## Inventory config redesign (2026-06-08)
 - Movement policy replaces lock jargon (allow / block pick / block all)

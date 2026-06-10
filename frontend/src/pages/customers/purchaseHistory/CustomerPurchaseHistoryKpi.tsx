@@ -24,8 +24,8 @@ export function CustomerPurchaseHistoryKpi({
 }) {
   if (loading && !summary) {
     return (
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-        {Array.from({ length: 8 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-11 animate-pulse rounded-md border border-slate-100 bg-slate-50/80" />
         ))}
       </div>
@@ -43,12 +43,15 @@ export function CustomerPurchaseHistoryKpi({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <AppStatCard label="Łączna wartość brutto" value={formatMoneyPl(summary.total_gross)} icon={Wallet} />
-      <AppStatCard label="Łączna wartość netto" value={formatMoneyPl(summary.total_net)} icon={Receipt} />
-      <AppStatCard label="Liczba zamówień" value={summary.order_count.toLocaleString("pl-PL")} icon={ShoppingCart} />
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
+      <AppStatCard label="Obrót 30 dni" value={formatMoneyPl(summary.gross_30d ?? 0)} icon={Wallet} />
+      <AppStatCard label="Obrót 90 dni" value={formatMoneyPl(summary.gross_90d ?? 0)} icon={Wallet} />
+      <AppStatCard label="Obrót 365 dni" value={formatMoneyPl(summary.gross_365d ?? 0)} icon={Wallet} />
       <AppStatCard label="Średnia wartość koszyka" value={formatMoneyPl(summary.avg_basket_gross)} icon={TrendingUp} />
       <AppStatCard label="Ostatni zakup" value={fmtDate(summary.last_purchase_at)} icon={CalendarDays} />
+      <AppStatCard label="Liczba zamówień" value={summary.order_count.toLocaleString("pl-PL")} icon={ShoppingCart} />
+      <AppStatCard label="Największe zamówienie" value={formatMoneyPl(summary.max_order_gross ?? 0)} icon={Receipt} />
+      <AppStatCard label="Łączna wartość brutto" value={formatMoneyPl(summary.total_gross)} icon={Wallet} />
       <AppStatCard
         label="Łączna liczba produktów"
         value={summary.total_products_qty.toLocaleString("pl-PL")}

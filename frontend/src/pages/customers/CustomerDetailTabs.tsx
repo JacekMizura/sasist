@@ -22,6 +22,9 @@ export function CustomerDetailTabs() {
       <NavLink to={`${base}/historia-zakupow`} className={tabClass}>
         Historia zakupów
       </NavLink>
+      <NavLink to={`${base}/aktywnosc`} className={tabClass}>
+        Aktywność
+      </NavLink>
     </nav>
   );
 }

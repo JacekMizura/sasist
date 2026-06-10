@@ -72,6 +72,10 @@ class PurchaseHistorySummaryOut(BaseModel):
     total_products_qty: int = 0
     returns_corrections_count: int = 0
     avg_days_between_orders: Optional[float] = None
+    gross_30d: float = 0.0
+    gross_90d: float = 0.0
+    gross_365d: float = 0.0
+    max_order_gross: float = 0.0
     stats_computed_at: Optional[str] = None
     filter_options: PurchaseHistoryFilterOptions = Field(default_factory=PurchaseHistoryFilterOptions)
 
