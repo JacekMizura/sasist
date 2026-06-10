@@ -26,6 +26,11 @@ from ..services.stock_document_service import (
 )
 from ..services.stock_operation_receipt_service import append_receipt_operation
 from ..utils.product_vat import product_vat_rate_percent
+from .document_number_service import (
+    DocumentSeriesOperationalError,
+    assign_series_number_to_stock_document,
+    require_warehouse_series,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +188,44 @@ def _any_planned_lines(db: Session, tenant_id: int, warehouse_id: int, lines: Se
     return False
 
 
+def assign_return_receipt_document_number(db: Session, doc: StockDocument) -> Optional[str]:
+    """Numeracja PZ_RT — preferuje serię PZ_RT (prefiks PZR), fallback ZW / PZ."""
+    from ..models.warehouse import Warehouse
+
+    tenant_id = int(doc.tenant_id)
+    wh_id = int(doc.warehouse_id)
+    wh = db.query(Warehouse).filter(Warehouse.id == wh_id).first()
+    wh_code = str(getattr(wh, "code", None) or "").strip() or None
+    if getattr(doc, "document_number", None):
+        return str(doc.document_number)
+    for subtype in ("PZ_RT", "ZW", "PZ"):
+        try:
+            series = require_warehouse_series(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=wh_id,
+                subtype=subtype,
+            )
+            number = assign_series_number_to_stock_document(
+                db, doc, series, warehouse_code=wh_code
+            )
+            logger.info(
+                "[PZ_RT] assigned number doc_id=%s number=%s series_subtype=%s",
+                doc.id,
+                number,
+                subtype,
+            )
+            return number
+        except DocumentSeriesOperationalError:
+            continue
+    logger.warning(
+        "[PZ_RT] no document series for return receipt tenant_id=%s warehouse_id=%s",
+        tenant_id,
+        wh_id,
+    )
+    return None
+
+
 def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Optional[StockDocument]:
     """
     Tworzy lub zwraca istniejący PZ_RT dla RMZ. Wykonuje RECEIPT na lokacji przyjęcia i ustawia receiving=DONE.
@@ -200,6 +243,8 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
         .first()
     )
     if existing is not None:
+        if not str(getattr(existing, "document_number", None) or "").strip():
+            assign_return_receipt_document_number(db, existing)
         logger.info("[PZ_RT] already exists rmz_id=%s doc_id=%s", rmz.id, existing.id)
         return existing
 
@@ -306,6 +351,7 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
 
     recompute_putaway_status_for_document(doc, item_rows)
     doc.updated_at = datetime.utcnow()
+    assign_return_receipt_document_number(db, doc)
 
     _patch_damage_entries_with_stock_links(db, lines, doc.id)
     db.flush()

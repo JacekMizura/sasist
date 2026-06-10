@@ -15,6 +15,7 @@ import {
   commitWmsReturn,
   processWmsReturnLine,
   processWmsReturnLineSplit,
+  processWmsReturnRefund,
 } from "../../api/wmsReturnsApi";
 import { getWmsReturnModuleConfig } from "../../api/returnModuleConfigApi";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -3286,6 +3287,10 @@ export default function WmsReturnsPage() {
     }
 
     if (damagedUnitsMissingPhotos > 0) {
+      if (wmsSettings?.require_photos) {
+        setDamageSaveError("Dodaj zdjęcie uszkodzenia dla wszystkich uszkodzonych sztuk.");
+        return;
+      }
       const proceed = window.confirm(
         "Nie dodano zdjęcia uszkodzenia dla co najmniej jednej sztuki. Kontynuować?",
       );
@@ -3295,6 +3300,7 @@ export default function WmsReturnsPage() {
     const orderIdForList = wmsReturn?.order_id;
     const whId = wmsReturn?.warehouse_id;
 
+    console.log("[returns.finalize.start]", selectedReturnDbId);
     setDamageSaveError(null);
     setSaveChangesLoading(true);
     try {
@@ -3315,17 +3321,35 @@ export default function WmsReturnsPage() {
         }
       }
 
-      const committed = await commitWmsReturn(
+      let finalReturn = await commitWmsReturn(
         selectedReturnDbId,
         DAMAGE_TENANT_ID,
         whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
       );
 
+      if (wmsSettings?.enable_refund) {
+        const amt = fullRefundAmount;
+        const shipAmt = refundShipping ? refundShippingAmount : 0;
+        finalReturn = await processWmsReturnRefund(
+          selectedReturnDbId,
+          DAMAGE_TENANT_ID,
+          {
+            refund_type: amt > 0 || (refundShipping && shipAmt > 0) ? "PARTIAL" : "NONE",
+            refund_amount: Number.isFinite(amt) && amt > 0 ? amt : null,
+            refund_shipping: refundShipping,
+            refund_shipping_amount:
+              refundShipping && Number.isFinite(shipAmt) && shipAmt > 0 ? shipAmt : null,
+            decided_by: "wms_operator",
+          },
+          whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
+        );
+      }
+
       setLineOverrides({});
       setDirtyLineIds({});
       setGridUnlockEditByLineId({});
       setDamageSaveError(null);
-      setWmsReturn(committed);
+      setWmsReturn(finalReturn);
 
       try {
         window.dispatchEvent(new Event("wms-returns-list-refresh"));
@@ -3346,7 +3370,7 @@ export default function WmsReturnsPage() {
             : undefined,
       });
     } catch (e) {
-      console.error("SAVE DIRTY LINES FAILED", e);
+      console.error("[returns.finalize] failed", e);
       setDamageSaveError(formatDamageSaveApiError(e) || "Nie udało się zapisać zwrotu");
     } finally {
       setSaveChangesLoading(false);
@@ -3357,10 +3381,15 @@ export default function WmsReturnsPage() {
     saveChangesLoading,
     selectedReturnDbId,
     damagedUnitsMissingPhotos,
+    wmsSettings?.require_photos,
+    wmsSettings?.enable_refund,
     lineSeeds,
     isLineFullyResolved,
     validateLineSplitForSave,
     saveSplitForLine,
+    fullRefundAmount,
+    refundShipping,
+    refundShippingAmount,
     wmsReturn?.order_id,
     wmsReturn?.warehouse_id,
     navigate,
@@ -3949,7 +3978,17 @@ export default function WmsReturnsPage() {
                   : "Uzupełnij decyzje dla wszystkich pozycji"
               }
             >
-              {saveChangesLoading ? "Zapisywanie…" : "ZAPISZ"}
+              {saveChangesLoading ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <span
+                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                    aria-hidden
+                  />
+                  Zapisywanie…
+                </span>
+              ) : (
+                "ZAPISZ"
+              )}
             </button>
             <button
               type="button"

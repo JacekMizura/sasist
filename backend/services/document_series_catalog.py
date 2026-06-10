@@ -96,6 +96,7 @@ OPERATIONAL_CORRECTION_SERIES: list[OperationalSeriesSpec] = [
 
 # Optional — not auto-seeded unless extended; catalog knows routes for UI when configured.
 OPTIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
+    _wh("PZ_RT", name="PZ zwrot RMZ", prefix="PZR"),
     _wh("ZWZ", name="ZWZ — zwrot zewnętrzny"),
     _wh("INW", name="INW — inwentaryzacja"),
     _wh("RK", name="RK — korekta magazynowa"),

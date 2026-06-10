@@ -50,7 +50,10 @@ from ..schemas.wms_return import (
     ReturnsMode,
 )
 from ..services.delete_service import archive_wms_returns_bulk
-from ..services.rmz_return_receipt_service import ensure_rmz_return_receipt_after_refund
+from ..services.rmz_return_receipt_service import (
+    ensure_rmz_return_receipt_after_refund,
+    ensure_rmz_return_receipt_document,
+)
 from ..services.return_status_service import get_by_transition_key, seed_default_statuses_session
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
 from ..utils.panel_ui_status_tokens import resolve_panel_status_tokens
@@ -635,6 +638,69 @@ def _next_transition_key_for_lines(
             return None
         return "qc_complete"
     return None
+
+
+def _validate_rmz_lines_ready_for_finalize(
+    rmz_lines: Sequence[RMZLine],
+    *,
+    require_photos: bool,
+) -> None:
+    if not rmz_lines:
+        raise HTTPException(status_code=400, detail="Return has no lines")
+    if not all(ln.decision is not None for ln in rmz_lines):
+        raise HTTPException(status_code=400, detail="All return lines must be decided before finalize")
+
+    for ln in rmz_lines:
+        total = int(float(ln.quantity or 0))
+        if total <= 0:
+            continue
+        acc = int(ln.accepted_qty or 0)
+        dbq = int(ln.damaged_b_qty or 0)
+        dcq = int(ln.damaged_c_qty or 0)
+        rej = int(ln.rejected_qty or 0)
+        dmg = dbq + dcq
+        resolved = acc + dmg + rej
+        if resolved < total:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Line order_item_id={ln.order_item_id} is not fully resolved ({resolved}/{total})",
+            )
+        if dmg > 0 and dbq + dcq != dmg:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Line order_item_id={ln.order_item_id}: damaged_b_qty + damaged_c_qty must equal damaged units",
+            )
+        if dmg > 0 or ln.decision == "DAMAGED":
+            parsed = _parse_damage_entries_raw(getattr(ln, "damage_entries_json", None))
+            if parsed:
+                for ent in parsed:
+                    cond = ent.get("condition")
+                    if cond not in ("B", "C"):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Line order_item_id={ln.order_item_id}: each damage entry requires condition B or C",
+                        )
+            if require_photos and not _rmz_line_has_damage_photos(ln):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Line order_item_id={ln.order_item_id}: at least one damage photo is required",
+                )
+
+
+def _resolve_finalize_transition_key(
+    returns_mode: ReturnsMode,
+    rmz_lines: Sequence[RMZLine],
+    *,
+    enable_refund: bool,
+) -> str:
+    all_rejected = all(ln.decision == "REJECTED" for ln in rmz_lines)
+    if all_rejected:
+        return "rejected"
+    if enable_refund:
+        if returns_mode == "two_step":
+            return "office_pending"
+        return "qc_complete"
+    return "success"
 
 
 def _apply_transition(db: Session, row: WmsOrderReturn, transition_key: str) -> None:
@@ -2393,43 +2459,62 @@ def commit_wms_return_workflow(
     ),
     db: Session = Depends(get_db),
 ):
-    """Finalize WMS receiving: all lines decided → workflow transition → OMS/office sync."""
+    """Finalize WMS receiving: validate lines → PZ_RT stock receipt → workflow transition."""
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
-    row = _load_rmz(db, return_id, tenant_id, wh_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Return not found")
-    if _is_terminal(row.return_status):
-        raise HTTPException(status_code=400, detail="Return already finished")
-
-    settings = _get_wms_settings(db, tenant_id, wh_id)
-    mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
-
-    rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
-    if not rmz_lines:
-        raise HTTPException(status_code=400, detail="Return has no lines")
-    if not all(ln.decision is not None for ln in rmz_lines):
-        raise HTTPException(status_code=400, detail="All return lines must be decided before WMS commit")
-
-    next_key = _next_transition_key_for_lines(mode, rmz_lines, require_damage_photos=False)
-    if not next_key:
-        raise HTTPException(status_code=400, detail="Return is not ready for workflow commit")
-
     logger.info(
-        "[returns.return.commit] return_id=%s tenant_id=%s warehouse_id=%s transition=%s line_count=%s",
+        "[returns.finalize.start] return_id=%s tenant_id=%s warehouse_id=%s",
         return_id,
         tenant_id,
         wh_id,
-        next_key,
-        len(rmz_lines),
     )
-    _apply_transition(db, row, next_key)
-    logger.info(
-        "[returns.sync.oms] return_id=%s tenant_id=%s transition=%s",
-        return_id,
-        tenant_id,
-        next_key,
-    )
-    db.commit()
+    try:
+        row = _load_rmz(db, return_id, tenant_id, wh_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Return not found")
+        if _is_terminal(row.return_status):
+            raise HTTPException(status_code=400, detail="Return already finished")
+
+        settings = _get_wms_settings(db, tenant_id, wh_id)
+        mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
+
+        rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
+        _validate_rmz_lines_ready_for_finalize(rmz_lines, require_photos=bool(settings.require_photos))
+
+        next_key = _resolve_finalize_transition_key(
+            mode,
+            rmz_lines,
+            enable_refund=bool(settings.enable_refund),
+        )
+
+        try:
+            pz_doc = ensure_rmz_return_receipt_document(db, row)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        logger.info(
+            "[returns.return.commit] return_id=%s tenant_id=%s warehouse_id=%s transition=%s line_count=%s pz_doc_id=%s",
+            return_id,
+            tenant_id,
+            wh_id,
+            next_key,
+            len(rmz_lines),
+            getattr(pz_doc, "id", None),
+        )
+        _apply_transition(db, row, next_key)
+        logger.info(
+            "[returns.sync.oms] return_id=%s tenant_id=%s transition=%s",
+            return_id,
+            tenant_id,
+            next_key,
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("[returns.finalize] failed return_id=%s", return_id)
+        raise HTTPException(status_code=500, detail="Return finalize failed") from None
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:

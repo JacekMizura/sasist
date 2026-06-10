@@ -1,5 +1,10 @@
 # Current context
 
+## WMS returns finalize (2026-06-08)
+- `POST …/commit-wms` = pełne finalize: walidacja linii/zdjęć → PZ_RT + numer serii (PZR/ZW) → transition (`success` bez refundu, `qc_complete`/`office_pending` z refundem)
+- Frontend ZAPISZ: commit → opcjonalnie `processWmsReturnRefund` gdy `enable_refund` → redirect `/wms/returns`
+- Ruchy magazynowe tylko w `ensure_rmz_return_receipt_document` (przy finalize, nie przy split-process)
+
 ## Direct sales line delete (2026-06-08)
 - Root cause: `db.refresh(sess)` nie przeładowywał kolekcji `lines` po delete → stale line w totals/enrichment → 500
 - Fix: `line_delete_service` + reload sesji przez `get_session` po commit
