@@ -7,12 +7,20 @@ Use SQLAlchemy Inspector instead of sqlite_master / PRAGMA where possible.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, Engine
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ModelSchemaSyncResult:
+    columns_added: int = 0
+    indexes_added: int = 0
+    foreign_keys_added: int = 0
 
 
 def get_engine(bind: Engine | Connection) -> Engine:
@@ -311,32 +319,153 @@ def _alter_table_add_column_sql(engine: Engine, table: str, col_sql: str) -> str
     return f"ALTER TABLE {table} ADD COLUMN {col_sql}"
 
 
-def ensure_model_schema_sync(
+def _create_index_if_missing_sql(engine: Engine, create_index_stmt: str) -> str:
+    """Append IF NOT EXISTS where supported (safe re-run on startup)."""
+    upper = create_index_stmt.upper()
+    if "IF NOT EXISTS" in upper:
+        return create_index_stmt
+    if engine.dialect.name in ("postgresql", "sqlite"):
+        if upper.startswith("CREATE UNIQUE INDEX "):
+            return create_index_stmt.replace("CREATE UNIQUE INDEX ", "CREATE UNIQUE INDEX IF NOT EXISTS ", 1)
+        if upper.startswith("CREATE INDEX "):
+            return create_index_stmt.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ", 1)
+    return create_index_stmt
+
+
+def _db_foreign_key_local_columns(engine: Engine, table: str) -> set[str]:
+    insp = inspect(engine)
+    cols: set[str] = set()
+    for fk in insp.get_foreign_keys(table):
+        for local_col in fk.get("constrained_columns") or []:
+            cols.add(str(local_col))
+    return cols
+
+
+def _ensure_model_foreign_keys(
+    engine: Engine,
+    model: Any,
+    *,
+    log_prefix: str,
+    strict: bool,
+    errors: list[str],
+) -> int:
+    from sqlalchemy.schema import AddConstraint
+
+    table = model.__tablename__
+    if not has_table(engine, table):
+        return 0
+
+    db_cols = get_table_column_names(engine, table)
+    db_fk_cols = _db_foreign_key_local_columns(engine, table)
+    added = 0
+
+    for fk_constraint in model.__table__.foreign_key_constraints:
+        local_cols = [c.key for c in fk_constraint.columns]
+        if not local_cols or all(c in db_fk_cols for c in local_cols):
+            continue
+        if not all(c in db_cols for c in local_cols):
+            continue
+        try:
+            stmt = str(AddConstraint(fk_constraint).compile(dialect=engine.dialect))
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+            added += 1
+            logger.info(
+                "[%s] added_fk table=%s constraint=%s dialect=%s",
+                log_prefix,
+                table,
+                fk_constraint.name,
+                engine.dialect.name,
+            )
+        except Exception as exc:
+            logger.exception(
+                "[%s] add_fk_failed table=%s constraint=%s dialect=%s",
+                log_prefix,
+                table,
+                fk_constraint.name,
+                engine.dialect.name,
+            )
+            errors.append(f"{table}.fk.{fk_constraint.name}: {exc}")
+            if strict:
+                raise
+    return added
+
+
+def _ensure_model_indexes(
+    engine: Engine,
+    model: Any,
+    *,
+    log_prefix: str,
+    strict: bool,
+    errors: list[str],
+) -> int:
+    from sqlalchemy.schema import CreateIndex
+
+    table = model.__tablename__
+    if not has_table(engine, table):
+        return 0
+
+    existing = {str(i.get("name") or "") for i in inspect(engine).get_indexes(table)}
+    added = 0
+    for idx in model.__table__.indexes:
+        idx_name = str(idx.name or "")
+        if not idx_name or idx_name in existing:
+            continue
+        try:
+            raw = str(CreateIndex(idx).compile(dialect=engine.dialect))
+            stmt = _create_index_if_missing_sql(engine, raw)
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+            added += 1
+            logger.info("[%s] added_index table=%s index=%s dialect=%s", log_prefix, table, idx_name, engine.dialect.name)
+        except Exception as exc:
+            logger.exception("[%s] add_index_failed table=%s index=%s", log_prefix, table, idx_name)
+            errors.append(f"{table}.index.{idx_name}: {exc}")
+            if strict:
+                raise
+    return added
+
+
+def ensure_model_table_from_orm(engine: Engine, model: Any, *, log_prefix: str = "schema.model_sync") -> bool:
+    """Create a single missing table from ORM metadata (no create_all)."""
+    from sqlalchemy.schema import CreateTable
+
+    table = model.__tablename__
+    if has_table(engine, table):
+        return False
+    ddl = str(CreateTable(model.__table__).compile(dialect=engine.dialect))
+    with engine.begin() as conn:
+        conn.execute(text(ddl))
+    logger.info("[%s] created_table table=%s dialect=%s", log_prefix, table, engine.dialect.name)
+    return True
+
+
+def sync_model_schema(
     engine: Engine,
     model: Any,
     *,
     log_prefix: str = "schema.model_sync",
-    sync_indexes: bool = False,
+    sync_indexes: bool = True,
+    sync_foreign_keys: bool = True,
     strict: bool = False,
-) -> int:
+) -> ModelSchemaSyncResult:
     """
-    Reusable isolated schema sync for a single ORM model.
-
-    - Adds missing columns (one transaction per column)
-    - Optionally creates missing ORM indexes
-    - Never alters existing column types (audit reports drift instead)
+    Full non-destructive sync for one ORM model:
+    ADD COLUMN, CREATE INDEX (IF NOT EXISTS), ADD FK constraints when missing.
+    Never drops columns, tables, or data.
     """
-    from sqlalchemy.schema import CreateColumn, CreateIndex
+    from sqlalchemy.schema import CreateColumn
 
     table = model.__tablename__
     if not has_table(engine, table):
         logger.info("[%s] skip table=%s reason=missing_table", log_prefix, table)
-        return 0
+        return ModelSchemaSyncResult()
 
-    added = 0
+    columns_added = 0
     errors: list[str] = []
     dialect = engine.dialect.name
     db_cols = get_table_column_names(engine, table)
+
     for col in model.__table__.columns:
         if col.key in db_cols:
             continue
@@ -345,13 +474,13 @@ def ensure_model_schema_sync(
         try:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
-            added += 1
+            columns_added += 1
             print(
-                f"PRODUCTION_SCHEMA_ADDED_COLUMN table={table} column={col.key} dialect={dialect}",
+                f"SCHEMA_SYNC_ADDED_COLUMN table={table} column={col.key} dialect={dialect}",
                 flush=True,
             )
             logger.info(
-                "[%s] added_column table=%s column=%s dialect=%s stmt=%s committed=true",
+                "[%s] added_column table=%s column=%s dialect=%s stmt=%s",
                 log_prefix,
                 table,
                 col.key,
@@ -360,41 +489,70 @@ def ensure_model_schema_sync(
             )
         except Exception as exc:
             logger.exception(
-                "[%s] add_column_failed table=%s column=%s dialect=%s stmt=%s",
+                "[%s] add_column_failed table=%s column=%s dialect=%s",
                 log_prefix,
                 table,
                 col.key,
                 dialect,
-                stmt,
             )
             errors.append(f"{table}.{col.key}: {exc}")
             if strict:
                 raise
 
+    indexes_added = 0
     if sync_indexes:
-        existing = {str(i.get("name") or "") for i in inspect(engine).get_indexes(table)}
-        for idx in model.__table__.indexes:
-            idx_name = str(idx.name or "")
-            if not idx_name or idx_name in existing:
-                continue
-            try:
-                stmt = str(CreateIndex(idx).compile(dialect=engine.dialect))
-                with engine.begin() as conn:
-                    conn.execute(text(stmt))
-                logger.info("[%s] added_index table=%s index=%s", log_prefix, table, idx_name)
-            except Exception:
-                logger.exception(
-                    "[%s] add_index_failed table=%s index=%s",
-                    log_prefix,
-                    table,
-                    idx_name,
-                )
+        indexes_added = _ensure_model_indexes(engine, model, log_prefix=log_prefix, strict=strict, errors=errors)
 
-    if added:
-        logger.info("[%s] complete table=%s dialect=%s columns_added=%s", log_prefix, table, dialect, added)
+    foreign_keys_added = 0
+    if sync_foreign_keys:
+        foreign_keys_added = _ensure_model_foreign_keys(
+            engine, model, log_prefix=log_prefix, strict=strict, errors=errors
+        )
+
+    if columns_added or indexes_added or foreign_keys_added:
+        logger.info(
+            "[%s] complete table=%s dialect=%s columns=%s indexes=%s fks=%s",
+            log_prefix,
+            table,
+            dialect,
+            columns_added,
+            indexes_added,
+            foreign_keys_added,
+        )
     if strict and errors:
         raise RuntimeError(f"schema sync failed for {table}: {'; '.join(errors)}")
-    return added
+    return ModelSchemaSyncResult(
+        columns_added=columns_added,
+        indexes_added=indexes_added,
+        foreign_keys_added=foreign_keys_added,
+    )
+
+
+def ensure_model_schema_sync(
+    engine: Engine,
+    model: Any,
+    *,
+    log_prefix: str = "schema.model_sync",
+    sync_indexes: bool = False,
+    sync_foreign_keys: bool = False,
+    strict: bool = False,
+) -> int:
+    """
+    Reusable isolated schema sync for a single ORM model.
+
+    - Adds missing columns (one transaction per column)
+    - Optionally creates missing ORM indexes and foreign keys
+    - Never alters existing column types (audit reports drift instead)
+    """
+    result = sync_model_schema(
+        engine,
+        model,
+        log_prefix=log_prefix,
+        sync_indexes=sync_indexes,
+        sync_foreign_keys=sync_foreign_keys,
+        strict=strict,
+    )
+    return result.columns_added
 
 
 def _ensure_orm_columns_for_model(engine: Engine, model: Any) -> int:

@@ -24,6 +24,7 @@ from .schema_introspection import (
     sync_tier0_orm_columns_from_models,
     verify_tier0_sql_probes,
 )
+from .schema_reconciliation import reconcile_startup_schema
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,8 @@ def ensure_tier0_schema(engine: Engine) -> Tier0Result:
     added = ensure_operational_core_orm_columns(engine)
     added += sync_tier0_orm_columns_from_models(engine)
     added += ensure_tier0_document_warehouse_schema(engine)
+    reconcile = reconcile_startup_schema(engine, phase="tier0")
+    added += reconcile.columns_added
     if engine.dialect.name == "sqlite":
         steps_run, failures = _run_steps(engine, _tier0_ensure_steps(), tier_tag="schema.tier0")
     else:
@@ -231,9 +234,12 @@ def ensure_tier0_schema(engine: Engine) -> Tier0Result:
 
         log_schema_tier(
             "schema.tier0",
-            step="postgres_orm_sync_only",
-            duration_ms=0,
-            ok=True,
+            step="postgres_orm_reconcile",
+            duration_ms=reconcile.duration_ms,
+            ok=not reconcile.errors,
+            columns_added=reconcile.columns_added,
+            indexes_added=reconcile.indexes_added,
+            foreign_keys_added=reconcile.foreign_keys_added,
         )
         steps_run, failures = 0, []
     duration_ms = round((time.perf_counter() - t0) * 1000, 2)
@@ -326,6 +332,10 @@ def ensure_tier1_operational_schema(engine: Engine) -> Tier1Result:
     """
     t0 = time.perf_counter()
     steps_run, failures = _run_steps(engine, _tier1_ensure_steps(), tier_tag="schema.tier1")
+    reconcile = reconcile_startup_schema(engine, phase="tier1")
+    if reconcile.errors:
+        for err in reconcile.errors[:20]:
+            logger.warning("[schema.tier1] reconcile_warning %s", err)
     duration_ms = round((time.perf_counter() - t0) * 1000, 2)
     return Tier1Result(
         steps_run=steps_run,

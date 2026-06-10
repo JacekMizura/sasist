@@ -16,9 +16,11 @@ from ..utils.ui_status_color import normalize_stored_color
 logger = logging.getLogger(__name__)
 
 from .schema_introspection import (
+    ensure_model_table_from_orm,
     get_table_column_names as _table_column_names,
     has_index as _has_index,
     has_table as _table_exists,
+    sync_model_schema,
 )
 
 
@@ -5957,179 +5959,50 @@ def ensure_order_custom_fields_tables(engine: Engine) -> None:
         conn.commit()
 
 
+def _ensure_models_schema(engine: Engine, models: list, *, log_prefix: str) -> None:
+    """Dialect-agnostic ORM sync: create missing tables + columns + indexes + FKs."""
+    for model in models:
+        ensure_model_table_from_orm(engine, model, log_prefix=log_prefix)
+        sync_model_schema(
+            engine,
+            model,
+            log_prefix=log_prefix,
+            sync_indexes=True,
+            sync_foreign_keys=True,
+        )
+
+
 def ensure_workforce_operational_tables(engine: Engine) -> None:
     """User operational activity, employer cost profiles, panel status access matrix (WMS workforce)."""
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS user_activity_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    user_id INTEGER,
-                    tenant_id INTEGER,
-                    action_type VARCHAR(96) NOT NULL,
-                    module VARCHAR(64) NOT NULL,
-                    entity_type VARCHAR(80),
-                    entity_id INTEGER,
-                    metadata_json TEXT,
-                    created_at DATETIME NOT NULL,
-                    FOREIGN KEY(user_id) REFERENCES app_users (id) ON DELETE SET NULL,
-                    FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE SET NULL
-                )
-                """
-            )
-        )
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_user_created ON user_activity_logs(user_id, created_at)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_module_created ON user_activity_logs(module, created_at)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_action ON user_activity_logs(action_type)"))
+    from ..models.employee_cost_profile import EmployeeCostProfile
+    from ..models.user_activity_log import UserActivityLog
+    from ..models.workforce_status_access import WorkforceStatusAccess
 
-        ual_cols = _table_column_names(conn, "user_activity_logs")
-        if "warehouse_id" not in ual_cols:
-            conn.execute(text("ALTER TABLE user_activity_logs ADD COLUMN warehouse_id INTEGER"))
-        if "session_id" not in ual_cols:
-            conn.execute(text("ALTER TABLE user_activity_logs ADD COLUMN session_id VARCHAR(64)"))
-        conn.execute(
-            text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_session ON user_activity_logs(session_id, created_at)")
-        )
-        conn.execute(
-            text("CREATE INDEX IF NOT EXISTS ix_user_activity_logs_warehouse ON user_activity_logs(warehouse_id, created_at)")
-        )
-
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS employee_cost_profiles (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    tenant_id INTEGER,
-                    contract_type VARCHAR(16) NOT NULL DEFAULT 'uop',
-                    gross_monthly_pln REAL,
-                    employer_total_monthly_pln REAL,
-                    net_monthly_pln REAL,
-                    default_hours_per_month REAL NOT NULL DEFAULT 168,
-                    hourly_pln REAL,
-                    employer_hourly_pln REAL,
-                    ppk_enabled INTEGER NOT NULL DEFAULT 0,
-                    employer_side_rate_override REAL,
-                    notes TEXT,
-                    is_active INTEGER NOT NULL DEFAULT 1,
-                    created_at DATETIME,
-                    updated_at DATETIME,
-                    FOREIGN KEY(user_id) REFERENCES app_users (id) ON DELETE CASCADE,
-                    FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE SET NULL,
-                    UNIQUE (user_id)
-                )
-                """
-            )
-        )
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_employee_cost_profiles_tenant ON employee_cost_profiles(tenant_id)"))
-
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS workforce_status_access (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    tenant_id INTEGER NOT NULL,
-                    warehouse_id INTEGER NOT NULL,
-                    role VARCHAR(64) NOT NULL,
-                    order_ui_status_id INTEGER NOT NULL,
-                    can_visible INTEGER NOT NULL DEFAULT 1,
-                    can_edit INTEGER NOT NULL DEFAULT 0,
-                    can_transition INTEGER NOT NULL DEFAULT 0,
-                    can_process INTEGER NOT NULL DEFAULT 0,
-                    can_print INTEGER NOT NULL DEFAULT 0,
-                    can_complete INTEGER NOT NULL DEFAULT 0,
-                    created_at DATETIME,
-                    updated_at DATETIME,
-                    FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
-                    FOREIGN KEY(warehouse_id) REFERENCES warehouses (id) ON DELETE CASCADE,
-                    FOREIGN KEY(order_ui_status_id) REFERENCES order_ui_statuses (id) ON DELETE CASCADE,
-                    UNIQUE (tenant_id, warehouse_id, role, order_ui_status_id)
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_workforce_status_access_lookup ON workforce_status_access(tenant_id, warehouse_id, role)"
-            )
-        )
-        conn.commit()
+    _ensure_models_schema(
+        engine,
+        [UserActivityLog, EmployeeCostProfile, WorkforceStatusAccess],
+        log_prefix="schema.workforce",
+    )
+    logger.info(
+        "[schema.workforce] operational_tables ensured dialect=%s",
+        engine.dialect.name,
+    )
 
 
 def ensure_workforce_user_groups_schema(engine: Engine) -> None:
-    """Operational user groups, primary group on app_users, WMS modes + org fields on user_wms_profiles, per-user status overrides."""
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS workforce_user_groups (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    created_at DATETIME NOT NULL,
-                    updated_at DATETIME NOT NULL,
-                    name VARCHAR(128) NOT NULL,
-                    color VARCHAR(32) NOT NULL DEFAULT '#64748b',
-                    icon_key VARCHAR(64) NOT NULL DEFAULT 'Users',
-                    archived_at DATETIME,
-                    default_permission_keys_json TEXT,
-                    default_wms_modes_json TEXT
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS workforce_user_status_access (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    tenant_id INTEGER NOT NULL,
-                    warehouse_id INTEGER NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    order_ui_status_id INTEGER NOT NULL,
-                    can_visible INTEGER NOT NULL DEFAULT 1,
-                    can_edit INTEGER NOT NULL DEFAULT 0,
-                    can_transition INTEGER NOT NULL DEFAULT 0,
-                    can_process INTEGER NOT NULL DEFAULT 0,
-                    can_print INTEGER NOT NULL DEFAULT 0,
-                    can_complete INTEGER NOT NULL DEFAULT 0,
-                    created_at DATETIME,
-                    updated_at DATETIME,
-                    FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
-                    FOREIGN KEY(warehouse_id) REFERENCES warehouses (id) ON DELETE CASCADE,
-                    FOREIGN KEY(user_id) REFERENCES app_users (id) ON DELETE CASCADE,
-                    FOREIGN KEY(order_ui_status_id) REFERENCES order_ui_statuses (id) ON DELETE CASCADE,
-                    UNIQUE (tenant_id, warehouse_id, user_id, order_ui_status_id)
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_workforce_user_status_access_lookup "
-                "ON workforce_user_status_access(tenant_id, warehouse_id, user_id)"
-            )
-        )
+    """Operational user groups, primary group on app_users, WMS modes + org fields on user_wms_profiles."""
+    from ..models.app_user import AppUser, UserWmsProfile
+    from ..models.workforce_user_group import WorkforceUserGroup, WorkforceUserStatusAccess
 
-        r = conn.execute(text("PRAGMA table_info(app_users)"))
-        au_cols = {row[1] for row in r}
-        if "primary_workforce_group_id" not in au_cols:
-            conn.execute(text("ALTER TABLE app_users ADD COLUMN primary_workforce_group_id INTEGER"))
-
-        r2 = conn.execute(text("PRAGMA table_info(user_wms_profiles)"))
-        wp_cols = {row[1] for row in r2}
-        extra_wp: list[tuple[str, str]] = [
-            ("wms_operational_modes_json", "TEXT"),
-            ("workforce_supervisor_user_id", "INTEGER"),
-            ("workforce_employment_type", "VARCHAR(32)"),
-            ("workforce_shift_type", "VARCHAR(32)"),
-            ("workforce_active_zone_ids_json", "TEXT"),
-            ("workforce_default_workstation", "VARCHAR(128)"),
-            ("workforce_color_tag", "VARCHAR(32)"),
-        ]
-        for col, ddl in extra_wp:
-            if col not in wp_cols:
-                conn.execute(text(f"ALTER TABLE user_wms_profiles ADD COLUMN {col} {ddl}"))
-        conn.commit()
+    _ensure_models_schema(
+        engine,
+        [WorkforceUserGroup, WorkforceUserStatusAccess, AppUser, UserWmsProfile],
+        log_prefix="schema.workforce_groups",
+    )
+    logger.info(
+        "[schema.workforce_groups] user_groups ensured dialect=%s",
+        engine.dialect.name,
+    )
 
 
 def ensure_return_product_decisions_creates_stock_document_column(engine: Engine) -> None:

@@ -530,8 +530,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 def ensure_sqlite_tables(*, announce: bool = False) -> None:
     """
-    Create the SQLite file (on first connect) and all ORM tables.
-    Idempotent — safe on every import and on FastAPI startup (e.g. after test.db was removed).
+    Bootstrap missing tables on first connect (idempotent).
+
+    Column/index/FK drift is handled by ``reconcile_startup_schema`` in Tier 0 —
+    not by repeated create_all migrations.
     """
     if announce:
         print("Creating database tables...")
@@ -576,6 +578,9 @@ _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_product_compositions_and_batches",
     "ensure_production_batch_schema_sync",
     "ensure_production_schema_evolution",
+    # Workforce — ORM-based sync (PostgreSQL + SQLite).
+    "ensure_workforce_operational_tables",
+    "ensure_workforce_user_groups_schema",
 })
 _POSTGRES_SQLITE_ONLY_HELPERS: list[str] = []
 if not _is_sqlite_engine():

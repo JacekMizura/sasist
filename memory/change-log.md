@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — PostgreSQL schema reconciliation (ORM startup sync)
+- `schema_reconciliation.py`: pełna rekonsyliacja ORM vs DB (CREATE TABLE, ADD COLUMN, INDEX, FK)
+- `sync_model_schema` / `ensure_model_schema_sync`: indeksy IF NOT EXISTS + brakujące FK
+- Tier 0 bootstrap: `reconcile_startup_schema` na PostgreSQL i SQLite (nie tylko create_all)
+- Tier 1 background: drugi przebieg reconcile po ensure_* operacyjnych
+- `ensure_workforce_operational_tables` / `ensure_workforce_user_groups_schema`: ORM sync (naprawa `user_activity_logs.warehouse_id` na PG)
+- main.py: workforce ensures w allowliście PostgreSQL
+
 ## 2026-06-08 — Wózki z koszykami: uproszczony UX edytora
 - CartEditor: usunięto taby Podstawowe/Pojemność/Powiązania; meta w headerze + zwijane info techniczne
 - CartSectionGrid: karty koszyków bez szarych teł; edycja w drawerze bocznym
