@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type { LocationVisualRackGridCell } from "../../../api/wmsLocationVisualApi";
-
-const ZONE_TINT: Record<string, { fill: string; stroke: string; label: string }> = {
-  A1: { fill: "rgba(59,130,246,0.08)", stroke: "rgba(59,130,246,0.25)", label: "Strefa A1" },
-  B1: { fill: "rgba(34,197,94,0.08)", stroke: "rgba(34,197,94,0.25)", label: "Strefa B1" },
-  C1: { fill: "rgba(234,179,8,0.08)", stroke: "rgba(234,179,8,0.25)", label: "Strefa C1" },
-};
+import { WarehouseRackTopDown } from "./WarehouseRackTopDown";
+import {
+  computeFloorLayout,
+  toFloorSvg,
+  toFloorSvgSize,
+  zoneMeta,
+} from "./warehouseFloorPlanUtils";
 
 type TooltipState = {
   x: number;
@@ -23,9 +24,38 @@ type Props = {
   className?: string;
 };
 
-function zoneStyle(code: string) {
-  const key = (code || "").trim().toUpperCase();
-  return ZONE_TINT[key] || { fill: "rgba(100,116,139,0.06)", stroke: "rgba(100,116,139,0.2)", label: `Strefa ${code || "?"}` };
+function AisleArrows({
+  uid,
+  x,
+  y,
+  width,
+  height,
+  orientation,
+}: {
+  uid: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  orientation: "h" | "v";
+}) {
+  const count = orientation === "h" ? Math.max(2, Math.floor(width / 120)) : Math.max(2, Math.floor(height / 100));
+  const items = Array.from({ length: count });
+  return (
+    <g opacity="0.55">
+      {items.map((_, i) => {
+        const t = (i + 0.5) / count;
+        const cx = orientation === "h" ? x + width * t : x + width / 2;
+        const cy = orientation === "h" ? y + height / 2 : y + height * t;
+        const rot = orientation === "h" ? 0 : 90;
+        return (
+          <g key={`arr-${i}`} transform={`translate(${cx},${cy}) rotate(${rot})`}>
+            <path d="M-5,0 L5,0 M2,-3 L5,0 L2,3" stroke={`url(#${uid}-aisle-arrow)`} strokeWidth="1.8" fill="none" />
+          </g>
+        );
+      })}
+    </g>
+  );
 }
 
 export function LocationPreviewWarehouseGrid({
@@ -36,276 +66,279 @@ export function LocationPreviewWarehouseGrid({
   activeOccupancy,
   className = "",
 }: Props) {
+  const uid = useId().replace(/:/g, "");
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
-  const layout = useMemo(() => {
-    if (!cells.length) return null;
-
-    const pad = 0.04;
-    const minX = Math.min(...cells.map((c) => c.x)) - pad;
-    const minY = Math.min(...cells.map((c) => c.y)) - pad;
-    const maxX = Math.max(...cells.map((c) => c.x + c.width)) + pad;
-    const maxY = Math.max(...cells.map((c) => c.y + c.height)) + pad;
-    const w = maxX - minX;
-    const h = maxY - minY;
-
-    const zones = new Map<string, LocationVisualRackGridCell[]>();
-    for (const c of cells) {
-      const z = (c.zone_code || "Inna").trim();
-      const list = zones.get(z) || [];
-      list.push(c);
-      zones.set(z, list);
-    }
-
-    const zoneBoxes = Array.from(zones.entries()).map(([code, rackCells]) => {
-      const zx = Math.min(...rackCells.map((c) => c.x));
-      const zy = Math.min(...rackCells.map((c) => c.y));
-      const zx2 = Math.max(...rackCells.map((c) => c.x + c.width));
-      const zy2 = Math.max(...rackCells.map((c) => c.y + c.height));
-      return { code, x: zx, y: zy, width: zx2 - zx, height: zy2 - zy };
-    });
-
-    const activeId = cells.find((c) => c.is_active)?.id ?? cells[0]?.id ?? null;
-    const focusId = focusedRackId ?? activeId;
-
-    return { minX, minY, w, h, zoneBoxes, focusId, activeId };
-  }, [cells, focusedRackId]);
+  const layout = useMemo(() => computeFloorLayout(cells, focusedRackId), [cells, focusedRackId]);
 
   if (!cells.length || !layout) {
     return (
       <div
-        className={`flex h-full min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-300/80 bg-[#eef1f5] text-sm text-slate-500 ${className}`}
+        className={`flex h-full min-h-[220px] items-center justify-center bg-[#0c1018] text-sm text-slate-400 ${className}`}
       >
         Brak planu magazynu dla tej lokalizacji.
       </div>
     );
   }
 
-  const toSvg = (x: number, y: number) => ({
-    x: ((x - layout.minX) / layout.w) * 1000,
-    y: ((y - layout.minY) / layout.h) * 620,
-  });
+  const { bounds, zoneBoxes, aisles } = layout;
+  const scaleM = Math.max(1, Math.round(bounds.w * 14));
+  const scaleH = Math.max(1, Math.round(bounds.h * 14));
 
-  const scaleMeters = Math.max(1, Math.round(layout.w * 12));
+  const svgX = (nx: number) => toFloorSvg(nx, 0, bounds).x;
+  const svgY = (ny: number) => toFloorSvg(0, ny, bounds).y;
+  const svgW = (nw: number) => toFloorSvgSize(nw, bounds, "x");
+  const svgH = (nh: number) => toFloorSvgSize(nh, bounds, "y");
 
   return (
     <div
-      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300/70 bg-[#dfe4ea] shadow-inner ${className}`}
+      className={`relative flex h-full min-h-0 flex-col overflow-hidden bg-[#080c12] ${className}`}
       onMouseLeave={() => setTooltip(null)}
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-300/50 bg-[#d5dbe3]/90 px-3 py-2">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">Plan magazynu</p>
-          <p className="text-xs font-semibold text-slate-800">{warehouseName || "Magazyn"}</p>
+      {/* HUD */}
+      <div className="absolute left-3 top-3 z-20 flex items-start gap-3">
+        <div className="rounded-md border border-cyan-500/20 bg-[#0f1520]/90 px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md">
+          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-400/80">Digital twin · top view</p>
+          <p className="mt-0.5 text-sm font-semibold text-slate-100">{warehouseName || "Magazyn"}</p>
         </div>
-        <div className="text-right text-[10px] font-medium text-slate-600">
-          <p>Skala orientacyjna</p>
-          <p className="font-mono text-slate-800">~{scaleMeters} m × {Math.max(1, Math.round(layout.h * 12))} m</p>
+        <div className="rounded-md border border-slate-600/30 bg-[#0f1520]/75 px-2.5 py-2 backdrop-blur-md">
+          <p className="text-[9px] uppercase tracking-wider text-slate-500">Skala hali</p>
+          <p className="font-mono text-xs font-semibold text-slate-300">
+            {scaleM}×{scaleH} m
+          </p>
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-[#e8ecf1]">
-        <svg viewBox="0 0 1000 620" className="h-full w-full" preserveAspectRatio="xMidYMid meet">
+      <div className="relative min-h-0 flex-1">
+        <svg viewBox="0 0 1000 640" className="h-full w-full" preserveAspectRatio="xMidYMid meet">
           <defs>
-            <pattern id="wh-floor-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#cbd5e1" strokeWidth="0.6" opacity="0.45" />
+            <radialGradient id={`${uid}-floor-vignette`} cx="50%" cy="45%" r="70%">
+              <stop offset="0%" stopColor="#141c28" />
+              <stop offset="100%" stopColor="#080c12" />
+            </radialGradient>
+            <pattern id={`${uid}-floor-fine`} width="8" height="8" patternUnits="userSpaceOnUse">
+              <path d="M8 0 L0 0 0 8" fill="none" stroke="#1e293b" strokeWidth="0.35" opacity="0.5" />
             </pattern>
-            <filter id="rack-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#2563eb" floodOpacity="0.55" />
-              <feDropShadow dx="0" dy="0" stdDeviation="14" floodColor="#38bdf8" floodOpacity="0.35" />
+            <pattern id={`${uid}-floor-coarse`} width="40" height="40" patternUnits="userSpaceOnUse">
+              <rect width="40" height="40" fill="none" stroke="#243044" strokeWidth="0.6" opacity="0.35" />
+            </pattern>
+            <linearGradient id={`${uid}-aisle-surface`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#1a2230" />
+              <stop offset="50%" stopColor="#222b3a" />
+              <stop offset="100%" stopColor="#161d28" />
+            </linearGradient>
+            <linearGradient id={`${uid}-aisle-arrow`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.3" />
+              <stop offset="50%" stopColor="#fbbf24" />
+              <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.3" />
+            </linearGradient>
+            <linearGradient id={`${uid}-rack-surface`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#2a3548" />
+              <stop offset="40%" stopColor="#1e2836" />
+              <stop offset="100%" stopColor="#151c26" />
+            </linearGradient>
+            <linearGradient id={`${uid}-upright`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#475569" />
+              <stop offset="50%" stopColor="#64748b" />
+              <stop offset="100%" stopColor="#334155" />
+            </linearGradient>
+            <filter id={`${uid}-shadow-blur`} x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="5" />
             </filter>
-            <linearGradient id="aisle-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f8fafc" />
-              <stop offset="100%" stopColor="#e2e8f0" />
-            </linearGradient>
-            <linearGradient id="rack-top" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#64748b" />
-              <stop offset="100%" stopColor="#475569" />
-            </linearGradient>
+            <filter id={`${uid}-active-glow`} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="8" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id={`${uid}-beacon-glow`} x="-80%" y="-80%" width="260%" height="260%">
+              <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#38bdf8" floodOpacity="0.9" />
+            </filter>
+            <filter id="wh-floor-noise" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" result="n" />
+              <feColorMatrix type="saturate" values="0" in="n" result="gn" />
+              <feBlend in="SourceGraphic" in2="gn" mode="multiply" />
+            </filter>
           </defs>
 
-          <rect x="0" y="0" width="1000" height="620" fill="url(#wh-floor-grid)" />
+          {/* Posadzka hali */}
+          <rect x="0" y="0" width="1000" height="640" fill={`url(#${uid}-floor-vignette)`} />
+          <rect x="0" y="0" width="1000" height="640" fill={`url(#${uid}-floor-coarse)`} />
+          <rect x="0" y="0" width="1000" height="640" fill={`url(#${uid}-floor-fine)`} opacity="0.65" />
 
-          {/* Alejki — poziome i pionowe przejścia */}
-          {[0.18, 0.52, 0.82].map((frac) => (
-            <rect
-              key={`aisle-h-${frac}`}
-              x={40}
-              y={620 * frac - 14}
-              width={920}
-              height={28}
-              rx={6}
-              fill="url(#aisle-fill)"
-              stroke="#cbd5e1"
-              strokeWidth="1"
-              opacity="0.95"
-            />
-          ))}
-          {[0.22, 0.55, 0.78].map((frac) => (
-            <rect
-              key={`aisle-v-${frac}`}
-              x={1000 * frac - 12}
-              y={30}
-              width={24}
-              height={560}
-              rx={6}
-              fill="url(#aisle-fill)"
-              stroke="#cbd5e1"
-              strokeWidth="1"
-              opacity="0.9"
-            />
-          ))}
-
-          {/* Strefy */}
-          {layout.zoneBoxes.map((zone) => {
-            const p = toSvg(zone.x - 0.012, zone.y - 0.012);
-            const pw = (zone.width + 0.024) / layout.w * 1000;
-            const ph = (zone.height + 0.024) / layout.h * 620;
-            const st = zoneStyle(zone.code);
+          {/* Strefy — wash na posadzce */}
+          {zoneBoxes.map((zone) => {
+            const p = toFloorSvg(zone.x, zone.y, bounds);
+            const pw = svgW(zone.width);
+            const ph = svgH(zone.height);
+            const meta = zoneMeta(zone.code);
             return (
               <g key={`zone-${zone.code}`}>
+                <rect x={p.x} y={p.y} width={pw} height={ph} fill={meta.floorTint} />
                 <rect
                   x={p.x}
                   y={p.y}
                   width={pw}
                   height={ph}
-                  rx={10}
-                  fill={st.fill}
-                  stroke={st.stroke}
-                  strokeWidth="1.5"
-                  strokeDasharray="6 4"
+                  fill="none"
+                  stroke={meta.accent}
+                  strokeWidth="0.8"
+                  opacity="0.22"
                 />
                 <text
-                  x={p.x + 10}
-                  y={p.y + 18}
-                  fill="#475569"
+                  x={p.x + 12}
+                  y={p.y + 20}
+                  fill={meta.accent}
                   fontSize="11"
                   fontWeight="700"
-                  letterSpacing="0.06em"
+                  letterSpacing="0.14em"
+                  opacity="0.75"
                 >
-                  {st.label}
+                  {meta.label.toUpperCase()}
                 </text>
+                <text x={p.x + 12} y={p.y + 34} fill="#64748b" fontSize="9" fontWeight="600" opacity="0.7">
+                  {zone.code}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Alejki — wyliczone z rozmieszczenia regałów */}
+          {aisles.map((aisle) => {
+            const ax = svgX(aisle.x);
+            const ay = svgY(aisle.y);
+            const aw = svgW(aisle.width);
+            const ah = svgH(aisle.height);
+            const isWide = aisle.orientation === "h" ? ah : aw;
+            return (
+              <g key={`aisle-${aisle.label}-${ax}-${ay}`}>
+                <rect x={ax} y={ay} width={aw} height={ah} fill={`url(#${uid}-aisle-surface)`} />
+                {/* krawędzie jezdni */}
+                <line
+                  x1={ax}
+                  y1={ay + (aisle.orientation === "h" ? 1 : 0)}
+                  x2={ax + (aisle.orientation === "h" ? aw : 0)}
+                  y2={ay + (aisle.orientation === "h" ? 1 : ah)}
+                  stroke="#64748b"
+                  strokeWidth="1"
+                  opacity="0.35"
+                />
+                <line
+                  x1={ax + (aisle.orientation === "h" ? 0 : aw - 1)}
+                  y1={ay + (aisle.orientation === "h" ? ah - 1 : 0)}
+                  x2={ax + aw}
+                  y2={ay + ah}
+                  stroke="#64748b"
+                  strokeWidth="1"
+                  opacity="0.35"
+                />
+                {/* pas ruchu */}
+                {aisle.orientation === "h" ? (
+                  <line
+                    x1={ax + 16}
+                    y1={ay + ah / 2}
+                    x2={ax + aw - 16}
+                    y2={ay + ah / 2}
+                    stroke="#fbbf24"
+                    strokeWidth="1.2"
+                    strokeDasharray="10 8"
+                    opacity="0.55"
+                  />
+                ) : (
+                  <line
+                    x1={ax + aw / 2}
+                    y1={ay + 16}
+                    x2={ax + aw / 2}
+                    y2={ay + ah - 16}
+                    stroke="#fbbf24"
+                    strokeWidth="1.2"
+                    strokeDasharray="10 8"
+                    opacity="0.55"
+                  />
+                )}
+                <AisleArrows uid={uid} x={ax} y={ay} width={aw} height={ah} orientation={aisle.orientation} />
+                {aisle.label && isWide > 18 ? (
+                  <text
+                    x={ax + (aisle.orientation === "h" ? 8 : aw / 2)}
+                    y={ay + (aisle.orientation === "h" ? ah / 2 + 4 : 14)}
+                    fill="#94a3b8"
+                    fontSize="8"
+                    fontWeight="700"
+                    letterSpacing="0.08em"
+                    transform={aisle.orientation === "v" ? `rotate(-90 ${ax + aw / 2} ${ay + 14})` : undefined}
+                    opacity="0.65"
+                  >
+                    {aisle.label}
+                  </text>
+                ) : null}
               </g>
             );
           })}
 
           {/* Regały */}
           {cells.map((cell) => {
-            const p = toSvg(cell.x, cell.y);
-            const pw = (cell.width / layout.w) * 1000;
-            const ph = (cell.height / layout.h) * 620;
+            const p = toFloorSvg(cell.x, cell.y, bounds);
+            const pw = svgW(cell.width);
+            const ph = svgH(cell.height);
             const isActive = cell.is_active;
             const isFocused = layout.focusId === cell.id;
-            const depth = Math.min(8, pw * 0.06);
 
             return (
-              <g
+              <WarehouseRackTopDown
                 key={cell.id}
-                className="cursor-pointer transition-opacity hover:opacity-95"
-                onClick={() => onRackFocus?.(cell.id)}
-                onMouseEnter={(e) => {
-                  const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement | null)?.getBoundingClientRect();
+                cell={cell}
+                x={p.x}
+                y={p.y}
+                width={pw}
+                height={ph}
+                isActive={isActive}
+                isFocused={isFocused}
+                uid={uid}
+                onFocus={() => onRackFocus?.(cell.id)}
+                onHover={(e) => {
+                  const svg = e.currentTarget.ownerSVGElement;
+                  const rect = svg?.getBoundingClientRect();
                   if (!rect) return;
                   const occ =
                     isActive && activeOccupancy
-                      ? `Zajętość ${Math.round(activeOccupancy.percent)}% · SKU ${activeOccupancy.sku} · ${activeOccupancy.qty} szt.`
+                      ? `${Math.round(activeOccupancy.percent)}% zajętości · ${activeOccupancy.sku} SKU · ${activeOccupancy.qty} szt.`
                       : "Kliknij, aby skupić widok regału";
                   setTooltip({
                     x: e.clientX - rect.left,
                     y: e.clientY - rect.top,
-                    title: cell.name || `Regał #${cell.id}`,
+                    title: cell.name || `Regał ${cell.id}`,
                     detail: occ,
                   });
                 }}
-                onMouseMove={(e) => {
-                  const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement | null)?.getBoundingClientRect();
+                onHoverMove={(e) => {
+                  const svg = e.currentTarget.ownerSVGElement;
+                  const rect = svg?.getBoundingClientRect();
                   if (!rect) return;
                   setTooltip((prev) =>
                     prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : prev,
                   );
                 }}
-              >
-                {/* cień / głębia */}
-                <rect
-                  x={p.x + depth}
-                  y={p.y + depth}
-                  width={pw}
-                  height={ph}
-                  rx={4}
-                  fill="#334155"
-                  opacity={0.35}
-                />
-                {/* korpus regału */}
-                <rect
-                  x={p.x}
-                  y={p.y}
-                  width={pw}
-                  height={ph}
-                  rx={4}
-                  fill={isFocused ? "#1e40af" : "url(#rack-top)"}
-                  stroke={isActive ? "#38bdf8" : isFocused ? "#60a5fa" : "#334155"}
-                  strokeWidth={isActive ? 3 : isFocused ? 2.5 : 1.5}
-                  filter={isActive ? "url(#rack-glow)" : undefined}
-                  className={isActive ? "animate-[rackPulse_2s_ease-in-out_infinite]" : undefined}
-                />
-                {/* segmenty na regale (top-down) */}
-                {Array.from({ length: Math.max(2, Math.min(4, Math.round(ph / 28))) }).map((_, i, arr) => (
-                  <line
-                    key={`seg-${cell.id}-${i}`}
-                    x1={p.x + 4}
-                    x2={p.x + pw - 4}
-                    y1={p.y + (ph / arr.length) * (i + 1)}
-                    y2={p.y + (ph / arr.length) * (i + 1)}
-                    stroke="#94a3b8"
-                    strokeWidth="0.8"
-                    opacity="0.7"
-                  />
-                ))}
-                <text
-                  x={p.x + pw / 2}
-                  y={p.y + ph / 2 + 4}
-                  textAnchor="middle"
-                  fill={isFocused ? "#eff6ff" : "#f8fafc"}
-                  fontSize={Math.max(9, Math.min(13, pw / 8))}
-                  fontWeight="800"
-                >
-                  {cell.name}
-                </text>
-                {isActive ? (
-                  <g>
-                    <rect
-                      x={p.x + pw / 2 - 22}
-                      y={p.y - 16}
-                      width={44}
-                      height={18}
-                      rx={9}
-                      fill="#2563eb"
-                      stroke="#bfdbfe"
-                      strokeWidth="1"
-                    />
-                    <text x={p.x + pw / 2} y={p.y - 3} textAnchor="middle" fill="#fff" fontSize="10" fontWeight="800">
-                      TU
-                    </text>
-                  </g>
-                ) : null}
-              </g>
+              />
             );
           })}
 
-          {/* Północ / orientacja */}
-          <g transform="translate(920, 36)">
-            <polygon points="0,0 -8,14 8,14" fill="#64748b" />
-            <text x="0" y="28" textAnchor="middle" fill="#64748b" fontSize="10" fontWeight="700">
+          {/* Kompas */}
+          <g transform="translate(948, 48)">
+            <circle r="16" fill="#0f1520" stroke="#334155" strokeWidth="1" opacity="0.9" />
+            <polygon points="0,-10 -5,6 5,6" fill="#38bdf8" />
+            <text y="24" textAnchor="middle" fill="#64748b" fontSize="8" fontWeight="700">
               N
             </text>
           </g>
 
           {/* Skala */}
-          <g transform="translate(24, 580)">
-            <line x1="0" y1="0" x2="80" y2="0" stroke="#475569" strokeWidth="2" />
-            <line x1="0" y1="-4" x2="0" y2="4" stroke="#475569" strokeWidth="2" />
-            <line x1="80" y1="-4" x2="80" y2="4" stroke="#475569" strokeWidth="2" />
-            <text x="40" y="14" textAnchor="middle" fill="#475569" fontSize="9" fontWeight="600">
+          <g transform="translate(24, 608)">
+            <rect x="-4" y="-10" width="108" height="22" rx="3" fill="#0f1520" opacity="0.85" />
+            <line x1="0" y1="0" x2="80" y2="0" stroke="#94a3b8" strokeWidth="2" />
+            <line x1="0" y1="-4" x2="0" y2="4" stroke="#94a3b8" strokeWidth="2" />
+            <line x1="80" y1="-4" x2="80" y2="4" stroke="#94a3b8" strokeWidth="2" />
+            <text x="40" y="-2" textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="600">
               ~10 m
             </text>
           </g>
@@ -313,19 +346,22 @@ export function LocationPreviewWarehouseGrid({
 
         {tooltip ? (
           <div
-            className="pointer-events-none absolute z-10 max-w-[220px] rounded-lg border border-slate-200 bg-white/95 px-2.5 py-2 text-xs shadow-lg backdrop-blur-sm"
-            style={{ left: Math.min(tooltip.x + 12, 280), top: Math.max(8, tooltip.y - 8) }}
+            className="pointer-events-none absolute z-30 max-w-[240px] rounded border border-cyan-500/25 bg-[#0f1520]/95 px-3 py-2 text-xs shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-md"
+            style={{ left: Math.min(tooltip.x + 14, 320), top: Math.max(12, tooltip.y - 10) }}
           >
-            <p className="font-bold text-slate-900">{tooltip.title}</p>
-            <p className="mt-0.5 text-slate-600">{tooltip.detail}</p>
+            <p className="font-bold tracking-wide text-cyan-100">{tooltip.title}</p>
+            <p className="mt-1 text-slate-400">{tooltip.detail}</p>
           </div>
         ) : null}
       </div>
 
       <style>{`
-        @keyframes rackPulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.88; }
+        @keyframes whPulseRing {
+          0%, 100% { opacity: 0.35; stroke-width: 1.5; }
+          50% { opacity: 0.75; stroke-width: 2.5; }
+        }
+        .wh-loc-pulse-ring-${uid} {
+          animation: whPulseRing 2.4s ease-in-out infinite;
         }
       `}</style>
     </div>

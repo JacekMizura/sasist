@@ -6,6 +6,14 @@
 - **Backend:** `commit_workflow=false` (domyślnie) na `split-process` / `process` — bez sync OMS; nowy `POST …/commit-wms`
 - **Frontend:** decyzje lokalne bez natychmiastowego API; **ZAPISZ** gdy wszystkie linie rozstrzygnięte; confirm przy DAMAGED bez zdjęć; upload fail nie blokuje decyzji
 
+## 2026-06-08 — Podgląd lokalizacji: industrial digital twin (v2)
+
+- Ciemna posadzka hali (tekstura, vignette, siatka techniczna) zamiast szarego wireframe
+- Regały: metalowe słupy, segmenty, belki, cień na podłodze — nie kafelki/buttony
+- Alejki wyliczane z pozycji regałów: pasy ruchu, strzałki, numeracja A-/V-
+- Strefy: subtelne wash + etykiety (Kompletacja, Przyjęcie, Składowanie…)
+- Modal = warehouse navigation center (dark HUD); regał front z konstrukcją i glow TU
+
 ## 2026-06-08 — Podgląd lokalizacji WMS: layout magazyn-first
 
 - Modal: **72% plan magazynu** (mapa + regał fizyczny), **28% info + zawartość**
