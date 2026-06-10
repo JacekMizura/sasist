@@ -963,6 +963,12 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_stock_documents_created_by_columns failed at import")
 try:
+    from .db.customer_schema import ensure_customer_crm_schema
+
+    ensure_customer_crm_schema(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_customer_crm_schema failed at import")
+try:
     ensure_product_barcodes_table(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_product_barcodes_table failed at import")
@@ -1018,6 +1024,12 @@ def _upgrade_schema_background() -> None:
     ensure_warehouse_inventory_movements_table(engine)
     ensure_order_item_pick_allocations_table(engine)
     ensure_customers_deleted_at_column(engine)
+    try:
+        from .db.customer_schema import ensure_customer_crm_schema
+
+        ensure_customer_crm_schema(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_customer_crm_schema failed in background upgrade")
     ensure_bundles_deleted_at_column(engine)
     ensure_damage_report_columns(engine)
     ensure_wms_refunds_columns(engine)

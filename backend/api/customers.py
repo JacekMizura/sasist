@@ -243,7 +243,11 @@ def list_customers(
         q = q.filter(Customer.created_at < end_excl)
 
     rows = q.order_by(Customer.id.desc()).all()
-    return customers_to_list_out(db, rows, tenant_id=int(tenant_id))
+    try:
+        return customers_to_list_out(db, rows, tenant_id=int(tenant_id))
+    except Exception:
+        logger.exception("[customers.list] failed tenant_id=%s", tenant_id)
+        raise
 
 
 @router.post("", response_model=CustomerDetailOut, status_code=201)

@@ -255,7 +255,7 @@ export default function CustomersListPage() {
             }
           />
 
-          {err && (
+          {err && !loading && rows.length > 0 && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{err}</div>
           )}
 
@@ -293,8 +293,21 @@ export default function CustomersListPage() {
           )}
 
           {loading ? (
-            <div className="py-12 text-center text-sm text-slate-500">
-              Ładowanie…
+            <div className="space-y-2 py-8" aria-busy="true" aria-label="Ładowanie listy klientów">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-10 animate-pulse rounded-md bg-slate-100" />
+              ))}
+            </div>
+          ) : err ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-8 text-center">
+              <p className="text-sm font-medium text-amber-900">{err}</p>
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="mt-4 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100"
+              >
+                Spróbuj ponownie
+              </button>
             </div>
           ) : (
             <div className="min-w-0 overflow-hidden">

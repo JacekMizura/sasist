@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Klienci: naprawa GET /api/customers (500)
+- **Przyczyna:** ORM miał kolumny CRM (`customer_type`, `customer_status`, `flags_json`, …) bez migracji DB → `OperationalError: no such column`
+- **`backend/db/customer_schema.py`:** `ensure_customer_crm_schema()` — ADD COLUMN + CREATE TABLE (`customer_notes`, `customer_crm_events`) via `ensure_model_schema_sync`
+- **`main.py`:** sync przy imporcie + w `upgrade_schema_background`
+- **`customers.py`:** `logger.exception("[customers.list] failed tenant_id=%s")`
+- Frontend: skeleton ładowania + retry przy błędzie listy
+- Testy: `backend/tests/test_customers_list_api.py`
+
 ## 2026-06-08 — Wózki / nośniki: UI operacyjny WMS (frontend only)
 - Wózki standardowe (`BulkCartEditor`): usunięte taby, jeden widok (dane, wymiary, pojemność, operacje, zdjęcie)
 - Tokeny modułu: większe fonty (15–16px), badge, koszyki w edytorze wózków z koszykami
