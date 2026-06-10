@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from datetime import datetime, time
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable, TypeVar
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -39,6 +40,7 @@ from ..models.wms_order_event import (
 from ..models.wms_packing_session import WmsPackingSession
 from ..models.wms_product_warehouse_operation import WmsProductWarehouseOperation
 from ..schemas.warehouse_operations import (
+    WarehouseInboundSummaryOut,
     WarehouseOperationsAlertOut,
     WarehouseOperationsConfigOut,
     WarehouseOperationsQueueOut,
@@ -48,6 +50,7 @@ from ..schemas.warehouse_operations import (
     WarehouseOperatorIdleStatsOut,
     WarehouseOperatorOrderProgressOut,
     WarehouseOperatorTimelineEventOut,
+    WarehousePutawayLoadOut,
 )
 from .wms_dashboard_service import build_wms_dashboard_summary
 from .warehouse_operations_domains import (
@@ -64,6 +67,35 @@ MODE_PICKING = "KOMPLETACJA"
 MODE_PACKING = "PAKOWANIE"
 MODE_OPERATIONS = "OPERACJE MAGAZYNOWE"
 MODE_SHORTAGES = "BRAKI"
+
+logger = logging.getLogger(__name__)
+_VALID_MAIN_MODES = frozenset({MODE_PICKING, MODE_PACKING, MODE_OPERATIONS, MODE_SHORTAGES})
+_T = TypeVar("_T")
+
+
+def _safe_main_mode(value: Any) -> str:
+    mode = str(value or MODE_OPERATIONS)
+    return mode if mode in _VALID_MAIN_MODES else MODE_OPERATIONS
+
+
+def _snapshot_section(
+    name: str,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    default: _T,
+    fn: Callable[[], _T],
+) -> _T:
+    try:
+        return fn()
+    except Exception:
+        logger.exception(
+            "[warehouse.snapshot] section=%s failed tenant=%s warehouse=%s",
+            name,
+            tenant_id,
+            warehouse_id,
+        )
+        return default
 
 PICKING_EVENTS = {EVT_PICKING_STARTED, EVT_PICKED_ITEM, EVT_PICKING_FINISHED}
 PACKING_EVENTS = {
@@ -417,7 +449,7 @@ def _timeline_out(ev: dict[str, Any]) -> WarehouseOperatorTimelineEventOut:
         at=_iso(at) or "",
         time_label=_time_label(at),
         title=str(ev.get("title") or ""),
-        main_mode=ev.get("main_mode") or MODE_OPERATIONS,
+        main_mode=_safe_main_mode(ev.get("main_mode")),
         submode=str(ev.get("submode") or "Operacja"),
         location=ev.get("location"),
         metadata=ev.get("metadata") or {},
@@ -1426,77 +1458,201 @@ def build_warehouse_operations_snapshot(
     end = date_to or now
     short_break_minutes = max(1, int(short_break_minutes or 5))
     long_break_minutes = max(short_break_minutes + 1, int(long_break_minutes or 10))
+    tid = int(tenant_id)
+    wid = int(warehouse_id)
 
-    events = []
-    events.extend(_collect_wms_order_events(db, tenant_id=tenant_id, warehouse_id=warehouse_id, start=start, end=end))
-    events.extend(_collect_packing_session_events(db, tenant_id=tenant_id, warehouse_id=warehouse_id, start=start, end=end))
-    events.extend(_collect_operation_session_events(db, tenant_id=tenant_id, warehouse_id=warehouse_id, start=start, end=end))
-    events.extend(_collect_pick_events(db, tenant_id=tenant_id, warehouse_id=warehouse_id, start=start, end=end))
-    events.extend(_collect_workforce_events(db, tenant_id=tenant_id, warehouse_id=warehouse_id, start=start, end=end))
-    events.extend(_collect_receiving_scan_events(db, tenant_id=tenant_id, warehouse_id=warehouse_id, start=start, end=end))
-    events.extend(_collect_product_operation_events(db, tenant_id=tenant_id, warehouse_id=warehouse_id, start=start, end=end))
-    events.extend(_collect_inventory_movement_events(db, tenant_id=tenant_id, warehouse_id=warehouse_id, start=start, end=end))
-    events = sorted(events, key=lambda e: e["at"])
+    def _events() -> list[dict[str, Any]]:
+        collected: list[dict[str, Any]] = []
+        collectors: list[tuple[str, Callable[[], list[dict[str, Any]]]]] = [
+            (
+                "events.wms_order",
+                lambda: _collect_wms_order_events(
+                    db, tenant_id=tid, warehouse_id=wid, start=start, end=end
+                ),
+            ),
+            (
+                "events.packing_session",
+                lambda: _collect_packing_session_events(
+                    db, tenant_id=tid, warehouse_id=wid, start=start, end=end
+                ),
+            ),
+            (
+                "events.operation_session",
+                lambda: _collect_operation_session_events(
+                    db, tenant_id=tid, warehouse_id=wid, start=start, end=end
+                ),
+            ),
+            (
+                "events.pick",
+                lambda: _collect_pick_events(db, tenant_id=tid, warehouse_id=wid, start=start, end=end),
+            ),
+            (
+                "events.workforce",
+                lambda: _collect_workforce_events(
+                    db, tenant_id=tid, warehouse_id=wid, start=start, end=end
+                ),
+            ),
+            (
+                "events.receiving_scan",
+                lambda: _collect_receiving_scan_events(
+                    db, tenant_id=tid, warehouse_id=wid, start=start, end=end
+                ),
+            ),
+            (
+                "events.product_operation",
+                lambda: _collect_product_operation_events(
+                    db, tenant_id=tid, warehouse_id=wid, start=start, end=end
+                ),
+            ),
+            (
+                "events.inventory_movement",
+                lambda: _collect_inventory_movement_events(
+                    db, tenant_id=tid, warehouse_id=wid, start=start, end=end
+                ),
+            ),
+        ]
+        for section_name, collector in collectors:
+            collected.extend(
+                _snapshot_section(
+                    section_name,
+                    tenant_id=tid,
+                    warehouse_id=wid,
+                    default=[],
+                    fn=collector,
+                )
+            )
+        return sorted(collected, key=lambda e: e["at"])
 
-    operators = _build_operator_cards(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        events=events,
-        now=now,
-        range_start=start,
-        short_break_minutes=short_break_minutes,
-        long_break_minutes=long_break_minutes,
+    events = _snapshot_section(
+        "events",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=[],
+        fn=_events,
+    )
+
+    operators = _snapshot_section(
+        "operators",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=[],
+        fn=lambda: _build_operator_cards(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            events=events,
+            now=now,
+            range_start=start,
+            short_break_minutes=short_break_minutes,
+            long_break_minutes=long_break_minutes,
+        ),
     )
     live = [op for op in operators if op.minutes_since_activity <= long_break_minutes]
     active_by_mode = {MODE_PICKING: 0, MODE_PACKING: 0, MODE_OPERATIONS: 0, MODE_SHORTAGES: 0}
     for op in live:
-        active_by_mode[op.main_mode] = active_by_mode.get(op.main_mode, 0) + 1
-    queues, queue_meta = _queue_counts(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-    replenishments = build_replenishment_alerts(db, tenant_id=tenant_id, warehouse_id=warehouse_id, now=now)
-    inbound_summary, inbound_deliveries = build_inbound_overview(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        now=now,
+        active_by_mode[_safe_main_mode(op.main_mode)] = active_by_mode.get(_safe_main_mode(op.main_mode), 0) + 1
+
+    queues, queue_meta = _snapshot_section(
+        "queues",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=([], {}),
+        fn=lambda: _queue_counts(db, tenant_id=tid, warehouse_id=wid),
     )
-    putaway_load = build_putaway_load(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        active_putaway_operators=sum(
-            1
-            for op in live
-            if op.main_mode == MODE_OPERATIONS and "rozlok" in str(op.submode or "").lower()
+    replenishments = _snapshot_section(
+        "replenishments",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=[],
+        fn=lambda: build_replenishment_alerts(db, tenant_id=tid, warehouse_id=wid, now=now),
+    )
+    inbound_summary, inbound_deliveries = _snapshot_section(
+        "inbound",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=(WarehouseInboundSummaryOut(), []),
+        fn=lambda: build_inbound_overview(db, tenant_id=tid, warehouse_id=wid, now=now),
+    )
+    putaway_load = _snapshot_section(
+        "putaway",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=WarehousePutawayLoadOut(),
+        fn=lambda: build_putaway_load(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            active_putaway_operators=sum(
+                1
+                for op in live
+                if _safe_main_mode(op.main_mode) == MODE_OPERATIONS
+                and "rozlok" in str(op.submode or "").lower()
+            ),
+            now=now,
         ),
-        now=now,
     )
-    carrier_issues = build_carrier_issues(db, tenant_id=tenant_id, warehouse_id=warehouse_id, now=now)
-    employee_rankings = build_employee_rankings(operators)
-    bottlenecks = build_bottlenecks(
-        queues=queues,
-        inbound=inbound_summary,
-        putaway=putaway_load,
-        operators=live,
-        now=now,
+    carrier_issues = _snapshot_section(
+        "carrier_issues",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=[],
+        fn=lambda: build_carrier_issues(db, tenant_id=tid, warehouse_id=wid, now=now),
     )
-    base_alerts = _alerts(operators=operators, queue_meta=queue_meta, now=now, long_break_minutes=long_break_minutes)
-    alerts = extend_alerts(
-        base_alerts=base_alerts,
-        bottlenecks=bottlenecks,
-        replenishments=replenishments,
-        inbound=inbound_summary,
-        putaway=putaway_load,
-        carrier_issues=carrier_issues,
-        queues=queues,
-        operators=operators,
-        now=now,
+    employee_rankings = _snapshot_section(
+        "employee_rankings",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=[],
+        fn=lambda: build_employee_rankings(operators),
+    )
+    bottlenecks = _snapshot_section(
+        "bottlenecks",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=[],
+        fn=lambda: build_bottlenecks(
+            queues=queues,
+            inbound=inbound_summary,
+            putaway=putaway_load,
+            operators=live,
+            now=now,
+        ),
+    )
+    base_alerts = _snapshot_section(
+        "base_alerts",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=[],
+        fn=lambda: _alerts(
+            operators=operators,
+            queue_meta=queue_meta,
+            now=now,
+            long_break_minutes=long_break_minutes,
+        ),
+    )
+    alerts = _snapshot_section(
+        "alerts",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=base_alerts,
+        fn=lambda: extend_alerts(
+            base_alerts=base_alerts,
+            bottlenecks=bottlenecks,
+            replenishments=replenishments,
+            inbound=inbound_summary,
+            putaway=putaway_load,
+            carrier_issues=carrier_issues,
+            queues=queues,
+            operators=operators,
+            now=now,
+        ),
     )
     completed_today = sum(
         1
         for ev in events
         if ev["at"].date() == now.date()
-        and str(ev.get("event_type") or "").upper() in {EVT_PICKING_FINISHED, EVT_PACKING_FINISHED, EVT_PACKING_AUTOMATION_FINISHED}
+        and str(ev.get("event_type") or "").upper()
+        in {EVT_PICKING_FINISHED, EVT_PACKING_FINISHED, EVT_PACKING_AUTOMATION_FINISHED}
     )
     avg_pick_minutes = _average_gap_minutes(events, EVT_PICKING_STARTED, EVT_PICKING_FINISHED)
     avg_pack_minutes = _average_gap_minutes(events, EVT_PACKING_STARTED, EVT_PACKING_FINISHED)
@@ -1510,7 +1666,7 @@ def build_warehouse_operations_snapshot(
         picking=active_by_mode.get(MODE_PICKING, 0),
         packing=active_by_mode.get(MODE_PACKING, 0),
         warehouse_operations=active_by_mode.get(MODE_OPERATIONS, 0),
-        shortages=active_by_mode.get(MODE_SHORTAGES, 0) + int(queues[-1].value or 0),
+        shortages=active_by_mode.get(MODE_SHORTAGES, 0) + int((queues[-1].value or 0) if queues else 0),
         idle_operators=sum(1 for op in operators if op.minutes_since_activity > short_break_minutes),
         orders_completed_today=completed_today,
         warehouse_efficiency_percent=efficiency,
@@ -1523,7 +1679,16 @@ def build_warehouse_operations_snapshot(
         sla_risk_percent=sla_risk,
         generated_at=_iso(now) or "",
     )
-    activity_stream = [_timeline_out(ev) for ev in reversed(events[-50:])]
+    activity_stream: list[WarehouseOperatorTimelineEventOut] = []
+    for ev in reversed(events[-50:]):
+        try:
+            activity_stream.append(_timeline_out(ev))
+        except Exception:
+            logger.exception(
+                "[warehouse.snapshot] section=activity_stream.item failed tenant=%s warehouse=%s",
+                tid,
+                wid,
+            )
     return WarehouseOperationsSnapshotOut(
         config=WarehouseOperationsConfigOut(
             short_break_minutes=short_break_minutes,
@@ -1531,12 +1696,26 @@ def build_warehouse_operations_snapshot(
         ),
         summary=summary,
         operators=operators,
-        picking_operators=[op for op in operators if op.main_mode == MODE_PICKING and op.minutes_since_activity <= long_break_minutes],
-        packing_operators=[op for op in operators if op.main_mode == MODE_PACKING and op.minutes_since_activity <= long_break_minutes],
-        warehouse_operation_operators=[
-            op for op in operators if op.main_mode == MODE_OPERATIONS and op.minutes_since_activity <= long_break_minutes
+        picking_operators=[
+            op
+            for op in operators
+            if _safe_main_mode(op.main_mode) == MODE_PICKING and op.minutes_since_activity <= long_break_minutes
         ],
-        shortage_operators=[op for op in operators if op.main_mode == MODE_SHORTAGES and op.minutes_since_activity <= long_break_minutes],
+        packing_operators=[
+            op
+            for op in operators
+            if _safe_main_mode(op.main_mode) == MODE_PACKING and op.minutes_since_activity <= long_break_minutes
+        ],
+        warehouse_operation_operators=[
+            op
+            for op in operators
+            if _safe_main_mode(op.main_mode) == MODE_OPERATIONS and op.minutes_since_activity <= long_break_minutes
+        ],
+        shortage_operators=[
+            op
+            for op in operators
+            if _safe_main_mode(op.main_mode) == MODE_SHORTAGES and op.minutes_since_activity <= long_break_minutes
+        ],
         queues=queues,
         alerts=alerts,
         activity_stream=activity_stream,

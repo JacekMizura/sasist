@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 from datetime import datetime
 from typing import Literal
 
@@ -27,7 +28,9 @@ from ..models.wms_operational_task import (
     queue_projection_for_task_type,
 )
 from ..schemas.warehouse_operations import (
+    WarehouseOperationsConfigOut,
     WarehouseOperationsSnapshotOut,
+    WarehouseOperationsSummaryOut,
     WarehousePriorityTaskActionIn,
     WarehousePriorityTaskCreateIn,
     WarehousePriorityTaskOut,
@@ -40,6 +43,7 @@ from ..services.warehouse_operations_service import (
 )
 
 router = APIRouter(prefix="/wms/warehouse-operations", tags=["WMS warehouse operations"])
+logger = logging.getLogger(__name__)
 
 PRIORITY_TASK_TYPES = {
     "replenishment": "REPLENISHMENT",
@@ -194,13 +198,38 @@ def get_warehouse_operations_snapshot(
     long_break_minutes: int = Query(10, ge=2, le=240),
     db: Session = Depends(get_db),
 ) -> WarehouseOperationsSnapshotOut:
-    return build_warehouse_operations_snapshot(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        short_break_minutes=short_break_minutes,
-        long_break_minutes=long_break_minutes,
-    )
+    try:
+        return build_warehouse_operations_snapshot(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            short_break_minutes=short_break_minutes,
+            long_break_minutes=long_break_minutes,
+        )
+    except Exception:
+        logger.exception(
+            "[warehouse.snapshot] failed tenant=%s warehouse=%s",
+            tenant_id,
+            warehouse_id,
+        )
+        now = datetime.utcnow().isoformat(timespec="seconds")
+        return WarehouseOperationsSnapshotOut(
+            config=WarehouseOperationsConfigOut(
+                short_break_minutes=short_break_minutes,
+                long_break_minutes=long_break_minutes,
+            ),
+            summary=WarehouseOperationsSummaryOut(
+                generated_at=now,
+            ),
+            operators=[],
+            picking_operators=[],
+            packing_operators=[],
+            warehouse_operation_operators=[],
+            shortage_operators=[],
+            queues=[],
+            alerts=[],
+            activity_stream=[],
+        )
 
 
 @router.get("/priority-tasks", response_model=list[WarehousePriorityTaskOut])

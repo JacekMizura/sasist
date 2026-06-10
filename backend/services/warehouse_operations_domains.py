@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from datetime import datetime, time
 from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ..models.app_user import AppUser
 from ..models.inbound_delivery import InboundDelivery
@@ -42,6 +45,32 @@ MODE_PICKING = "KOMPLETACJA"
 MODE_PACKING = "PAKOWANIE"
 MODE_OPERATIONS = "OPERACJE MAGAZYNOWE"
 MODE_SHORTAGES = "BRAKI"
+
+_ALERT_CATEGORIES = frozenset(
+    {"Braki", "Kompletacja", "Pakowanie", "Rozlokowanie", "Dostawy", "Przewoźnicy", "Operatorzy", "System"}
+)
+
+
+def _normalize_alert_category(category: str) -> str:
+    raw = (category or "").strip()
+    if raw in _ALERT_CATEGORIES:
+        return raw
+    lowered = raw.lower()
+    if "brak" in lowered:
+        return "Braki"
+    if "pakow" in lowered:
+        return "Pakowanie"
+    if "komplet" in lowered or "pick" in lowered:
+        return "Kompletacja"
+    if "rozlok" in lowered or "putaway" in lowered:
+        return "Rozlokowanie"
+    if "dostaw" in lowered or "przyj" in lowered or "inbound" in lowered:
+        return "Dostawy"
+    if "przewo" in lowered or "carrier" in lowered:
+        return "Przewoźnicy"
+    if "operator" in lowered:
+        return "Operatorzy"
+    return "System"
 
 
 def _parse_json(raw: str | None) -> dict[str, Any]:
@@ -621,8 +650,8 @@ def _alert(
         description=description,
         created_at=_iso(now) or "",
         minutes_ago=0,
-        area=category,
-        category=category,  # type: ignore[arg-type]
+        area=_normalize_alert_category(category),
+        category=_normalize_alert_category(category),  # type: ignore[arg-type]
         priority_group=priority_group,  # type: ignore[arg-type]
         severity_label=severity_label,
         responsible_area=responsible_area,
@@ -808,7 +837,7 @@ def extend_alerts(
                 alert_id="putaway-delayed",
                 level=level,
                 title=f"Rozlokowanie PZ opóźnione{f' — Strefa {top_zone.zone}' if top_zone else ''}",
-                category="Rozlokowanie PZ",
+                category="Rozlokowanie",
                 priority_group="critical_now" if level == "critical" else "requires_action",
                 description="Towar po przyjęciu czeka na rozlokowanie PZ i może blokować uzupełnienia pick-face.",
                 responsible_area="Rozlokowanie PZ",

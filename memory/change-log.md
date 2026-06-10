@@ -6,6 +6,13 @@
 - **Backend:** `commit_workflow=false` (domyślnie) na `split-process` / `process` — bez sync OMS; nowy `POST …/commit-wms`
 - **Frontend:** decyzje lokalne bez natychmiastowego API; **ZAPISZ** gdy wszystkie linie rozstrzygnięte; confirm przy DAMAGED bez zdjęć; upload fail nie blokuje decyzji
 
+## 2026-06-08 — Snapshot operacji magazynowych: fix 500 po zwrocie RMZ
+
+- **Przyczyna:** alert rozlokowania używał `category="Rozlokowanie PZ"` poza enumem Pydantic → 500 gdy po RMZ/PZ_RT pojawiał się towar do rozlokowania
+- **Fix:** kategoria `"Rozlokowanie"` + `_normalize_alert_category()` jako fallback
+- **Odporność:** każda sekcja snapshotu w `try/except` z `[warehouse.snapshot] section=…`; endpoint zwraca pusty snapshot zamiast 500 przy total failure
+- **Frontend:** `getWarehouseOperationsSnapshot` zwraca `null` zamiast rzucać — nie blokuje workflow zwrotów
+
 ## 2026-06-08 — Podgląd lokalizacji: fix pustej mapy + większy shelf view
 
 - **Mapa:** jawna wysokość kontenera (`min(52vh,520px)`), `useDesignerCanvas(null)`, auto-fit na aktywny regał — naprawia pusty lewy panel (flex `h-full` = 0px)

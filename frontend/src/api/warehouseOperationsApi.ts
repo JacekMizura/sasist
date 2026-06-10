@@ -287,16 +287,20 @@ export type WarehouseOperationsSnapshotQuery = {
 
 export async function getWarehouseOperationsSnapshot(
   query: WarehouseOperationsSnapshotQuery,
-): Promise<WarehouseOperationsSnapshot> {
-  const res = await api.get<WarehouseOperationsSnapshot>("/wms/warehouse-operations/snapshot", {
-    params: {
-      tenant_id: query.tenantId,
-      warehouse_id: query.warehouseId,
-      short_break_minutes: query.shortBreakMinutes,
-      long_break_minutes: query.longBreakMinutes,
-    },
-  });
-  return res.data;
+): Promise<WarehouseOperationsSnapshot | null> {
+  try {
+    const res = await api.get<WarehouseOperationsSnapshot>("/wms/warehouse-operations/snapshot", {
+      params: {
+        tenant_id: query.tenantId,
+        warehouse_id: query.warehouseId,
+        short_break_minutes: query.shortBreakMinutes,
+        long_break_minutes: query.longBreakMinutes,
+      },
+    });
+    return res.data;
+  } catch {
+    return null;
+  }
 }
 
 export type CreateReplenishmentRelocationPayload = {

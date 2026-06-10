@@ -738,7 +738,10 @@ export default function WarehouseOperationsPage() {
       shortBreakMinutes: config.shortBreakMinutes,
       longBreakMinutes: config.longBreakMinutes,
     })
-      .then(setSnapshot)
+      .then((data) => {
+        if (data) setSnapshot(data);
+        else setError("Centrum operacyjne chwilowo niedostępne — odśwież za chwilę.");
+      })
       .catch((err) => setError(err?.message ?? "Błąd ładowania centrum operacyjnego"))
       .finally(() => {
         setLoading(false);

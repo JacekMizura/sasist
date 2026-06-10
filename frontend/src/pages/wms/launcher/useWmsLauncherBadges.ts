@@ -34,7 +34,7 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
       const next: WmsLauncherMetricsMap = {};
       const [issues, snapshot, inventoryDocs] = await Promise.all([
         listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId).catch(() => ({ tasks: [] as unknown[] })),
-        getWarehouseOperationsSnapshot({ tenantId: DAMAGE_TENANT_ID, warehouseId }).catch(() => null),
+        getWarehouseOperationsSnapshot({ tenantId: DAMAGE_TENANT_ID, warehouseId }),
         fetchWmsActiveInventoryDocuments(DAMAGE_TENANT_ID, warehouseId).catch(() => []),
       ]);
 
