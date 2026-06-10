@@ -18,7 +18,7 @@ export function CarrierStatusBadge({ status }: { status: string }) {
   const key = (status || "ACTIVE").trim().toUpperCase();
   const cls = TONE[key] ?? "border-slate-200 bg-slate-50 text-slate-700";
   return (
-    <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${cls}`}>
+    <span className={`inline-flex rounded-md border px-2.5 py-1 text-[13px] font-bold leading-none ${cls}`}>
       {carrierStatusLabel(status)}
     </span>
   );

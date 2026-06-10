@@ -16,13 +16,13 @@ export function capacityModeLabel(mode: string | null | undefined): string {
 const CARRIER_STATUS_PL: Record<string, string> = {
   ACTIVE: "Aktywny",
   INBOUND: "Przyjęcie",
-  PUTAWAY: "Rozlokowanie",
+  PUTAWAY: "Odkładanie",
   PICKING: "Kompletacja",
   PACKING: "Pakowanie",
   SHIPPING: "Wysyłka",
   BLOCKED: "Zablokowany",
   DAMAGED: "Uszkodzony",
-  ARCHIVED: "Zarchiwizowany",
+  ARCHIVED: "Archiwalny",
   EMPTY: "Pusty",
   INACTIVE: "Nieaktywny",
 };

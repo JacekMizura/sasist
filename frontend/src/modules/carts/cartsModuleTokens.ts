@@ -16,7 +16,7 @@ export {
   appSectionTitleClass as cartsSectionTitleClass,
 } from "../../components/app-shell/appShellTokens";
 
-export const cartsPageShellClass = "space-y-4 text-[13px]";
+export const cartsPageShellClass = "space-y-3 text-[15px] leading-relaxed";
 
 export const cartsSectionClass =
   "rounded-lg border border-slate-200/90 bg-white p-3 shadow-none";
@@ -35,28 +35,28 @@ export const cartsWarningBtnClass =
 
 export const cartsTableWrapClass = "min-w-0 overflow-x-auto rounded-lg border border-slate-200/90";
 
-export const cartsTableClass = "min-w-full text-left text-[13px]";
+export const cartsTableClass = "min-w-full text-left text-[15px]";
 
 export const cartsTableHeadClass =
-  "border-b border-slate-200 bg-white text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+  "border-b border-slate-200 bg-slate-50 text-[12px] font-bold uppercase tracking-wide text-slate-600";
 
-export const cartsTableHeadCellClass = "px-3 py-2 font-semibold";
+export const cartsTableHeadCellClass = "px-3 py-2.5 font-bold";
 
 export const cartsTableRowClass = "border-b border-slate-100 bg-white transition hover:bg-slate-50/80";
 
-export const cartsTableCellClass = "px-3 py-2 align-middle text-slate-800";
+export const cartsTableCellClass = "px-3 py-2.5 align-middle text-slate-800";
 
 export const cartsEmptyClass =
   "rounded-lg border border-dashed border-slate-200 bg-white py-10 text-center text-[13px] text-slate-500";
 
 export const cartsEditorGridClass =
-  "rounded-lg border border-slate-200/90 bg-slate-50/40 p-3 overflow-auto max-h-[65vh]";
+  "rounded-lg border border-slate-200/90 bg-slate-50/40 p-3 overflow-x-auto overflow-y-auto max-h-[65vh]";
 
 export const cartsEditorLevelRowClass =
   "flex items-end gap-2 rounded-md border border-slate-200/90 bg-white p-2";
 
 export const cartsEditorBasketBaseClass =
-  "cursor-pointer rounded-md border flex flex-col items-center justify-center gap-1 p-2 transition shrink-0 text-center min-h-[72px]";
+  "cursor-pointer rounded-md border flex flex-col items-center justify-center gap-1 p-2.5 transition shrink-0 text-center min-h-[84px] text-[14px] font-semibold";
 
 export const cartsEditorBasketDefaultClass =
   "border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-400 hover:bg-slate-50";

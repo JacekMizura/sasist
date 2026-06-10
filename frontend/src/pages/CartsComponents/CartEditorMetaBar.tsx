@@ -79,14 +79,14 @@ export function CartEditorMetaBar({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 text-xs">
+        <div className="flex flex-wrap gap-2 text-[13px]">
           <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
             <span className="text-slate-500">Sekcje: </span>
-            <span className="font-semibold tabular-nums text-slate-900">{sectionCount}</span>
+            <span className="font-bold tabular-nums text-slate-900">{sectionCount}</span>
           </div>
           <div className="rounded-md border border-emerald-200/80 bg-emerald-50/50 px-3 py-2">
             <span className="text-emerald-800/80">Pojemność: </span>
-            <span className="font-semibold tabular-nums text-emerald-900">{totalVolumeDm3.toFixed(1)} dm³</span>
+            <span className="font-bold tabular-nums text-emerald-900">{totalVolumeDm3.toFixed(1)} dm³</span>
           </div>
         </div>
       </div>
@@ -95,7 +95,7 @@ export function CartEditorMetaBar({
         <button
           type="button"
           onClick={() => setTechOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900"
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-600 hover:text-slate-900"
         >
           {techOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           Informacje techniczne

@@ -120,7 +120,7 @@ export function CartSectionGrid({
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-slate-900">{b.name || noNameLabel}</p>
-                        <p className="mt-1 text-[11px] tabular-nums text-slate-500">
+                        <p className="mt-1 text-[13px] tabular-nums text-slate-500">
                           {b.length} × {b.width} × {b.height} cm
                         </p>
                         <p className="mt-1 text-xs font-semibold tabular-nums text-slate-700">{vol.toFixed(1)} dm³</p>
@@ -131,7 +131,7 @@ export function CartSectionGrid({
                           type="button"
                           title="Edytuj"
                           onClick={() => setSelectedBasket({ r: rIdx, b: bIdx })}
-                          className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-md border border-slate-200 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-md border border-slate-200 text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
                           Edytuj
@@ -156,7 +156,7 @@ export function CartSectionGrid({
                     onAddBasket(rIdx);
                     setSelectedBasket({ r: rIdx, b: colIdx });
                   }}
-                  className="flex h-[108px] w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-slate-300 bg-white text-[10px] font-medium text-slate-500 hover:border-slate-400 hover:text-slate-800"
+                  className="flex h-[116px] w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-slate-300 bg-white text-[12px] font-semibold text-slate-500 hover:border-slate-400 hover:text-slate-800"
                   aria-label="Dodaj koszyk obok"
                 >
                   <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />

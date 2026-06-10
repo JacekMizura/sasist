@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ClipboardList, Package, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { ProductLikePageLayout } from "../../components/catalog/ProductLikePageLayout";
-import { ProductLikeSection } from "../../components/catalog/ProductLikeSection";
 import { catalogEntityCardShellClass } from "../../components/catalog/CatalogEntityPageShell";
 import {
   emptyWmsCarrier,
@@ -12,25 +10,19 @@ import {
   type WarehouseCarrierDetailRead,
   type WarehouseCarrierLogRead,
 } from "../../api/wmsCarrierApi";
-import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 import { CarrierItemsTable } from "../../components/warehouse/carriers/CarrierItemsTable";
 import { CarrierStatusBadge } from "../../components/warehouse/carriers/CarrierStatusBadge";
+import { CarrierIdentity } from "../../components/warehouse/carriers/CarrierIdentity";
+import { CarrierLocationLink } from "../../components/warehouse/carriers/CarrierLocationLink";
 import { carrierOperationLabel } from "../../components/warehouse/carriers/carrierOperationLabels";
-import { carrierStatusLabel } from "../../modules/warehouse-structure/labels";
 import {
   useWarehouseCarriersPaths,
   useWarehouseCarriersSurface,
   useWarehouseCarriersTenant,
 } from "./warehouseCarriersTenant";
 import { openCarrierLabelPrint } from "../../utils/carrierLabelPrint";
-
-type CarrierTab = "basic" | "content" | "history";
-
-const CARRIER_TABS = [
-  { id: "basic" as const, label: "Podstawowe", icon: Package },
-  { id: "content" as const, label: "Zawartość", icon: ClipboardList },
-  { id: "history" as const, label: "Historia", icon: ClipboardList },
-];
+import { cartsSectionClass } from "../../modules/carts/cartsModuleTokens";
+import { wmsBtnSecondary, wmsSectionTitle } from "../../modules/carts/wmsOperationalUi";
 
 export default function WarehouseCarrierDetailPage() {
   const { id: idParam } = useParams();
@@ -40,7 +32,6 @@ export default function WarehouseCarrierDetailPage() {
   const paths = useWarehouseCarriersPaths(surface);
   const { tenantId, setTenantId, tenants, tenantSelectVisible } = useWarehouseCarriersTenant(surface);
 
-  const [activeTab, setActiveTab] = useState<CarrierTab>("basic");
   const [detail, setDetail] = useState<WarehouseCarrierDetailRead | null>(null);
   const [logs, setLogs] = useState<WarehouseCarrierLogRead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +83,7 @@ export default function WarehouseCarrierDetailPage() {
   if (loading) {
     return (
       <div className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
-        <div className={`${catalogEntityCardShellClass} flex min-h-[40vh] items-center justify-center text-slate-500`}>
+        <div className={`${catalogEntityCardShellClass} flex min-h-[40vh] items-center justify-center text-[15px] text-slate-500`}>
           Wczytywanie nośnika…
         </div>
       </div>
@@ -107,105 +98,37 @@ export default function WarehouseCarrierDetailPage() {
     );
   }
 
-  const tabContent = (() => {
-    switch (activeTab) {
-      case "basic":
-        return (
-          <ProductLikeSection title="Informacje podstawowe">
-            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="rounded-lg border border-slate-200 p-4">
-                <dt className="text-xs font-medium text-slate-500">Status</dt>
-                <dd className="mt-2">
-                  <CarrierStatusBadge status={detail.status} />
-                </dd>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <dt className="text-xs font-medium text-slate-500">Lokalizacja</dt>
-                <dd className="mt-2 font-mono text-lg font-semibold text-slate-900">
-                  {(detail.current_location_code || "").trim() || "—"}
-                </dd>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <dt className="text-xs font-medium text-slate-500">Typ (grupa)</dt>
-                <dd className="mt-2 text-lg font-semibold text-slate-900">
-                  {(detail.carrier_group_code || "—").trim()}
-                </dd>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <dt className="text-xs font-medium text-slate-500">Kod kreskowy</dt>
-                <dd className="mt-2 font-mono text-sm text-slate-800">{detail.barcode}</dd>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <dt className="text-xs font-medium text-slate-500">Mieszanka (mix)</dt>
-                <dd className="mt-2 text-lg font-semibold text-slate-900">{detail.is_mixed ? "Tak" : "Nie"}</dd>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <dt className="text-xs font-medium text-slate-500">Pozycje / SKU</dt>
-                <dd className="mt-2 text-lg font-semibold tabular-nums text-slate-900">
-                  {detail.items?.length ?? 0} / {detail.sku_count ?? 0}
-                </dd>
-              </div>
-            </dl>
-          </ProductLikeSection>
-        );
-      case "content":
-        return (
-          <ProductLikeSection title="Produkty na nośniku">
-            <CarrierItemsTable items={detail.items} />
-          </ProductLikeSection>
-        );
-      case "history":
-        return (
-          <ProductLikeSection title="Dziennik operacji">
-            {logs.length === 0 ? (
-              <p className="text-sm text-slate-600">Brak wpisów.</p>
-            ) : (
-              <ul className="max-h-[480px] space-y-2 overflow-y-auto">
-                {logs.map((lg) => (
-                  <li key={lg.id} className="rounded-lg border border-slate-200 px-3 py-2.5">
-                    <div className="flex flex-wrap justify-between gap-2">
-                      <span className="text-sm font-semibold text-slate-900">
-                        {carrierOperationLabel(lg.operation_type, lg.operation_type_label)}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        {lg.created_at ? new Date(lg.created_at).toLocaleString("pl-PL") : ""}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-600">{lg.performed_by_name || "—"}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </ProductLikeSection>
-        );
-      default:
-        return null;
-    }
-  })();
+  const lastLog = logs[0];
+  const groupLabel = (detail.carrier_group_code || "—").trim();
 
   return (
     <div className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
-      <div className={`${catalogEntityCardShellClass} overflow-hidden`}>
-        <ProductLikePageLayout
-          variant="page"
-          modeLabel="Nośnik magazynowy"
-          title={detail.code}
-          titleBadge={<CarrierBadge code={detail.code} showMix={detail.is_mixed} />}
-          metaChips={[
-            { label: "Status", value: carrierStatusLabel(detail.status), variant: "emerald" },
-            {
-              label: "Lokalizacja",
-              value: (detail.current_location_code || "").trim() || "—",
-            },
-            { label: "Grupa", value: (detail.carrier_group_code || "—").trim() },
-          ]}
-          headerActions={
+      <form onSubmit={noopSubmit} className={`${catalogEntityCardShellClass} overflow-hidden`}>
+        <header className="border-b border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <CarrierIdentity carrier={detail} size="lg" />
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[14px] text-slate-700">
+                <span className="font-semibold text-slate-800">{groupLabel}</span>
+                <span className="text-slate-300">•</span>
+                <CarrierStatusBadge status={detail.status} />
+                <span className="text-slate-300">•</span>
+                <CarrierLocationLink
+                  locationCode={detail.current_location_code}
+                  locationId={detail.current_location_id}
+                />
+                <span className="text-slate-300">•</span>
+                <span className="font-bold tabular-nums">{detail.total_qty} szt.</span>
+                <span className="text-slate-300">•</span>
+                <span className="font-bold tabular-nums">{detail.sku_count} SKU</span>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               {tenantSelectVisible ? (
                 <select
                   value={tenantId}
                   onChange={(e) => setTenantId(Number(e.target.value) || 1)}
-                  className="rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  className="rounded-md border border-slate-300 px-2 py-2 text-[14px]"
                 >
                   {tenants.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -214,49 +137,88 @@ export default function WarehouseCarrierDetailPage() {
                   ))}
                 </select>
               ) : null}
-              <Link
-                to={paths.list}
-                state={{ tenantId }}
-                className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Lista nośników
+              <Link to={paths.list} state={{ tenantId }} className={wmsBtnSecondary}>
+                Lista
               </Link>
-              <button
-                type="button"
-                onClick={() => openCarrierLabelPrint(detail)}
-                className="inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
-              >
-                <Printer className="h-4 w-4" />
-                Drukuj etykietę
+              <button type="button" onClick={() => openCarrierLabelPrint(detail)} className={wmsBtnSecondary}>
+                <Printer className="mr-1.5 h-4 w-4" />
+                Etykieta
               </button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void onEmpty()}
-                className="rounded border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                className="inline-flex h-10 items-center rounded-md border border-red-200 bg-white px-4 text-[14px] font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
               >
                 Opróżnij
               </button>
             </div>
-          }
-          tabs={CARRIER_TABS}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onSubmit={noopSubmit}
-          showSaveButton={false}
-          footerExtra={
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Wstecz
-            </button>
-          }
-        >
-          {tabContent}
-        </ProductLikePageLayout>
-      </div>
+          </div>
+        </header>
+
+        <div className="space-y-3 p-3 sm:p-4">
+          {(lastLog || detail.notes) && (
+            <section className={`${cartsSectionClass} grid gap-3 sm:grid-cols-2`}>
+              {lastLog ? (
+                <div>
+                  <h3 className={wmsSectionTitle}>Ostatnia operacja</h3>
+                  <p className="mt-2 text-[15px] font-bold text-slate-900">
+                    {carrierOperationLabel(lastLog.operation_type, lastLog.operation_type_label)}
+                  </p>
+                  <p className="mt-1 text-[13px] text-slate-600">
+                    {lastLog.created_at ? new Date(lastLog.created_at).toLocaleString("pl-PL") : "—"}
+                  </p>
+                  <p className="mt-1 text-[14px] font-semibold text-slate-800">
+                    Operator: {lastLog.performed_by_name || "—"}
+                  </p>
+                </div>
+              ) : null}
+              {detail.notes ? (
+                <div>
+                  <h3 className={wmsSectionTitle}>Opis operacyjny</h3>
+                  <p className="mt-2 text-[15px] text-slate-800">{detail.notes}</p>
+                </div>
+              ) : null}
+            </section>
+          )}
+
+          <section className={cartsSectionClass}>
+            <h3 className={wmsSectionTitle}>Produkty na nośniku</h3>
+            <div className="mt-3">
+              <CarrierItemsTable items={detail.items} />
+            </div>
+          </section>
+
+          <section className={cartsSectionClass}>
+            <h3 className={wmsSectionTitle}>Historia ruchów</h3>
+            {logs.length === 0 ? (
+              <p className="mt-3 text-[14px] text-slate-600">Brak wpisów.</p>
+            ) : (
+              <ul className="mt-3 max-h-[360px] space-y-2 overflow-y-auto">
+                {logs.map((lg) => (
+                  <li key={lg.id} className="rounded-md border border-slate-200 bg-slate-50/50 px-3 py-2.5">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-[14px] font-bold text-slate-900">
+                        {carrierOperationLabel(lg.operation_type, lg.operation_type_label)}
+                      </span>
+                      <span className="text-[13px] text-slate-500">
+                        {lg.created_at ? new Date(lg.created_at).toLocaleString("pl-PL") : ""}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[13px] text-slate-600">{lg.performed_by_name || "—"}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <footer className="flex justify-end border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
+          <button type="button" onClick={() => navigate(-1)} className={wmsBtnSecondary}>
+            Wstecz
+          </button>
+        </footer>
+      </form>
     </div>
   );
 }

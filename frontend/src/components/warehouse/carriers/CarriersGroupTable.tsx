@@ -4,12 +4,15 @@ import { Archive, MapPin, MoreHorizontal, Pencil, Printer, Wrench } from "lucide
 import type { WarehouseCarrierRead } from "../../../api/wmsCarrierApi";
 import { patchWmsCarrier } from "../../../api/wmsCarrierApi";
 import { openCarrierLabelPrint } from "../../../utils/carrierLabelPrint";
-import { CarrierBadge } from "./CarrierBadge";
 import { CarrierStatusBadge } from "./CarrierStatusBadge";
 import { CarrierEditModal } from "./CarrierEditModal";
 import { CarrierMoveLocationModal } from "./CarrierMoveLocationModal";
+import { CarrierIdentity } from "./CarrierIdentity";
+import { CarrierLocationLink } from "./CarrierLocationLink";
+import { CarrierContentPreview } from "./CarrierContentPreview";
 import type { WarehouseCarrierGroupRead } from "../../../api/wmsCarrierApi";
 import {
+  cartsSectionClass,
   cartsTableCellClass,
   cartsTableClass,
   cartsTableHeadCellClass,
@@ -29,6 +32,91 @@ type Props = {
   emptyHint?: ReactNode;
 };
 
+function CarrierRowMenu({
+  row,
+  busy,
+  open,
+  onToggle,
+  onClose,
+  onEdit,
+  onMove,
+  onStatus,
+}: {
+  row: WarehouseCarrierRead;
+  busy: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onEdit: () => void;
+  onMove: () => void;
+  onStatus: (status: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onToggle}
+        className={`${filterToolbarBtnIconSquare} !h-9 !w-9`}
+        aria-label="Akcje"
+      >
+        <MoreHorizontal size={18} />
+      </button>
+      {open ? (
+        <>
+          <button type="button" className="fixed inset-0 z-10 cursor-default" aria-label="Zamknij menu" onClick={onClose} />
+          <div className="absolute right-0 top-10 z-20 min-w-[210px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[14px] hover:bg-slate-50"
+              onClick={() => {
+                onClose();
+                openCarrierLabelPrint(row);
+              }}
+            >
+              <Printer size={16} /> Drukuj etykietę
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[14px] hover:bg-slate-50"
+              onClick={() => {
+                onClose();
+                onEdit();
+              }}
+            >
+              <Pencil size={16} /> Edytuj
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[14px] hover:bg-slate-50"
+              onClick={() => {
+                onClose();
+                onMove();
+              }}
+            >
+              <MapPin size={16} /> Zmień lokalizację
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[14px] hover:bg-slate-50"
+              onClick={() => void onStatus("DAMAGED")}
+            >
+              <Wrench size={16} /> Oznacz jako uszkodzony
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[14px] text-slate-700 hover:bg-slate-50"
+              onClick={() => void onStatus("ARCHIVED")}
+            >
+              <Archive size={16} /> Archiwizuj
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function CarriersGroupTable({
   tenantId,
   rows,
@@ -44,7 +132,7 @@ export function CarriersGroupTable({
   const [busyId, setBusyId] = useState<number | null>(null);
 
   if (rows.length === 0) {
-    return emptyHint ? <>{emptyHint}</> : <p className="py-6 text-center text-sm text-slate-500">Brak nośników.</p>;
+    return emptyHint ? <>{emptyHint}</> : <p className="py-6 text-center text-[15px] text-slate-500">Brak nośników.</p>;
   }
 
   const setStatus = async (row: WarehouseCarrierRead, status: string) => {
@@ -62,18 +150,16 @@ export function CarriersGroupTable({
 
   return (
     <>
-      <div className={cartsTableWrapClass}>
+      <div className={`${cartsTableWrapClass} hidden md:block`}>
         <table className={cartsTableClass}>
           <thead className={cartsTableHeadClass}>
             <tr>
-              <th className={cartsTableHeadCellClass}>Kod</th>
+              <th className={cartsTableHeadCellClass}>Nośnik</th>
               <th className={cartsTableHeadCellClass}>Status</th>
               <th className={cartsTableHeadCellClass}>Lokalizacja</th>
-              <th className={`${cartsTableHeadCellClass} text-right`}>SKU</th>
-              <th className={`${cartsTableHeadCellClass} text-right`}>Sztuki</th>
-              <th className={cartsTableHeadCellClass}>Mix</th>
+              <th className={cartsTableHeadCellClass}>Zawartość</th>
               <th className={cartsTableHeadCellClass}>Ostatni ruch</th>
-              <th className={`${cartsTableHeadCellClass} w-24`}>Akcje</th>
+              <th className={`${cartsTableHeadCellClass} w-16`}>Akcje</th>
             </tr>
           </thead>
           <tbody>
@@ -82,95 +168,87 @@ export function CarriersGroupTable({
               return (
                 <tr key={row.id} className={cartsTableRowClass}>
                   <td className={cartsTableCellClass}>
-                    <Link to={detailPath(row.id)} state={navState} className="block min-w-[120px]">
-                      <CarrierBadge code={row.code} showMix={row.is_mixed} />
-                      <span className="mt-0.5 block font-mono text-[10px] text-slate-500">{row.barcode}</span>
+                    <Link to={detailPath(row.id)} state={navState} className="block min-w-[140px] hover:opacity-90">
+                      <CarrierIdentity carrier={row} size="md" />
                     </Link>
                   </td>
                   <td className={cartsTableCellClass}>
                     <CarrierStatusBadge status={row.status} />
                   </td>
-                  <td className={`${cartsTableCellClass} font-mono text-[12px]`}>
-                    {(row.current_location_code || "").trim() || "—"}
+                  <td className={cartsTableCellClass}>
+                    <CarrierLocationLink
+                      locationCode={row.current_location_code}
+                      locationId={row.current_location_id}
+                    />
                   </td>
-                  <td className={`${cartsTableCellClass} text-right font-mono tabular-nums`}>{row.sku_count}</td>
-                  <td className={`${cartsTableCellClass} text-right font-mono tabular-nums`}>{row.total_qty}</td>
-                  <td className={`${cartsTableCellClass} text-[12px] text-slate-700`}>{row.is_mixed ? "Tak" : "Nie"}</td>
-                  <td className={`${cartsTableCellClass} font-mono text-[11px] text-slate-500 whitespace-nowrap`}>
+                  <td className={cartsTableCellClass}>
+                    <CarrierContentPreview
+                      tenantId={tenantId}
+                      carrierId={row.id}
+                      skuCount={row.sku_count}
+                      totalQty={row.total_qty}
+                      isMixed={row.is_mixed}
+                    />
+                  </td>
+                  <td className={`${cartsTableCellClass} text-[13px] text-slate-600 whitespace-nowrap`}>
                     {row.updated_at ? new Date(row.updated_at).toLocaleString("pl-PL") : "—"}
                   </td>
-                  <td className={`relative ${cartsTableCellClass}`}>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setMenuId((id) => (id === row.id ? null : row.id))}
-                      className={filterToolbarBtnIconSquare}
-                      aria-label="Akcje"
-                    >
-                      <MoreHorizontal size={16} />
-                    </button>
-                    {menuId === row.id ? (
-                      <>
-                        <button
-                          type="button"
-                          className="fixed inset-0 z-10 cursor-default"
-                          aria-label="Zamknij menu"
-                          onClick={() => setMenuId(null)}
-                        />
-                        <div className="absolute right-2 top-11 z-20 min-w-[200px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
-                            onClick={() => {
-                              setMenuId(null);
-                              openCarrierLabelPrint(row);
-                            }}
-                          >
-                            <Printer size={16} /> Drukuj etykietę
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
-                            onClick={() => {
-                              setMenuId(null);
-                              setEditRow(row);
-                            }}
-                          >
-                            <Pencil size={16} /> Edytuj
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
-                            onClick={() => {
-                              setMenuId(null);
-                              setMoveRow(row);
-                            }}
-                          >
-                            <MapPin size={16} /> Zmień lokalizację
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
-                            onClick={() => void setStatus(row, "DAMAGED")}
-                          >
-                            <Wrench size={16} /> Oznacz jako uszkodzony
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                            onClick={() => void setStatus(row, "ARCHIVED")}
-                          >
-                            <Archive size={16} /> Archiwizuj
-                          </button>
-                        </div>
-                      </>
-                    ) : null}
+                  <td className={cartsTableCellClass}>
+                    <CarrierRowMenu
+                      row={row}
+                      busy={busy}
+                      open={menuId === row.id}
+                      onToggle={() => setMenuId((id) => (id === row.id ? null : row.id))}
+                      onClose={() => setMenuId(null)}
+                      onEdit={() => setEditRow(row)}
+                      onMove={() => setMoveRow(row)}
+                      onStatus={(s) => void setStatus(row, s)}
+                    />
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="grid gap-3 md:hidden">
+        {rows.map((row) => {
+          const busy = busyId === row.id;
+          return (
+            <article key={row.id} className={`${cartsSectionClass} space-y-2.5`}>
+              <div className="flex items-start justify-between gap-2">
+                <Link to={detailPath(row.id)} state={navState} className="min-w-0 flex-1">
+                  <CarrierIdentity carrier={row} size="lg" />
+                </Link>
+                <CarrierRowMenu
+                  row={row}
+                  busy={busy}
+                  open={menuId === row.id}
+                  onToggle={() => setMenuId((id) => (id === row.id ? null : row.id))}
+                  onClose={() => setMenuId(null)}
+                  onEdit={() => setEditRow(row)}
+                  onMove={() => setMoveRow(row)}
+                  onStatus={(s) => void setStatus(row, s)}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <CarrierStatusBadge status={row.status} />
+                <CarrierLocationLink locationCode={row.current_location_code} locationId={row.current_location_id} />
+              </div>
+              <CarrierContentPreview
+                tenantId={tenantId}
+                carrierId={row.id}
+                skuCount={row.sku_count}
+                totalQty={row.total_qty}
+                isMixed={row.is_mixed}
+              />
+              <p className="text-[13px] text-slate-500">
+                Ostatni ruch: {row.updated_at ? new Date(row.updated_at).toLocaleString("pl-PL") : "—"}
+              </p>
+            </article>
+          );
+        })}
       </div>
 
       <CarrierEditModal

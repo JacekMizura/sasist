@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { patchWmsCarrier, type WarehouseCarrierGroupRead, type WarehouseCarrierRead } from "../../../api/wmsCarrierApi";
-import { CARRIER_CREATE_STATUSES } from "./carrierConstants";
+import { carrierStatusOptions } from "./carrierConstants";
+import { CarrierIdentity } from "./CarrierIdentity";
+import {
+  wmsBtnPrimary,
+  wmsBtnSecondary,
+  wmsInputClass,
+  wmsSectionTitle,
+  wmsSelectClass,
+} from "../../../modules/carts/wmsOperationalUi";
 
 function apiErrMessage(e: unknown): string {
   if (axios.isAxiosError(e)) {
@@ -28,6 +36,8 @@ export function CarrierEditModal({ tenantId, open, carrier, groups, onClose, onS
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const statusOptions = carrierStatusOptions();
 
   useEffect(() => {
     if (!open || !carrier) return;
@@ -60,23 +70,35 @@ export function CarrierEditModal({ tenantId, open, carrier, groups, onClose, onS
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-black text-slate-900">Edytuj nośnik</h2>
-        <p className="mt-1 font-mono text-sm text-slate-600">{carrier.code}</p>
+    <div className="fixed inset-0 z-[2000] flex items-end justify-center bg-slate-900/50 p-3 sm:items-center sm:p-4">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
+        <h2 className="text-[17px] font-black text-slate-900">Edytuj nośnik</h2>
+        <div className="mt-2">
+          <CarrierIdentity carrier={carrier} size="md" />
+        </div>
 
-        <label className="mt-4 block text-xs font-bold uppercase text-slate-500">Nazwa (opcjonalnie)</label>
+        <label className={`${wmsSectionTitle} mt-4 block`}>Nazwa wyświetlana</label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+          className={`${wmsInputClass} mt-1.5`}
+          placeholder="np. Niebieska paleta outlet"
         />
 
-        <label className="mt-3 block text-xs font-bold uppercase text-slate-500">Grupa</label>
+        <label className={`${wmsSectionTitle} mt-3 block`}>Opis / alias operacyjny</label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          className={`${wmsInputClass} mt-1.5 resize-none`}
+          placeholder="np. Mix promocji"
+        />
+
+        <label className={`${wmsSectionTitle} mt-3 block`}>Grupa</label>
         <select
           value={groupId}
           onChange={(e) => setGroupId(e.target.value ? Number(e.target.value) : "")}
-          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+          className={`${wmsSelectClass} mt-1.5`}
         >
           <option value="">— bez grupy —</option>
           {groups.map((g) => (
@@ -86,39 +108,22 @@ export function CarrierEditModal({ tenantId, open, carrier, groups, onClose, onS
           ))}
         </select>
 
-        <label className="mt-3 block text-xs font-bold uppercase text-slate-500">Status</label>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-        >
-          {CARRIER_CREATE_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
+        <label className={`${wmsSectionTitle} mt-3 block`}>Status</label>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${wmsSelectClass} mt-1.5`}>
+          {statusOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
 
-        <label className="mt-3 block text-xs font-bold uppercase text-slate-500">Notatki</label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-        />
+        {err ? <p className="mt-3 text-[14px] font-medium text-red-600">{err}</p> : null}
 
-        {err ? <p className="mt-3 text-sm font-medium text-red-600">{err}</p> : null}
-
-        <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700">
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={wmsBtnSecondary}>
             Anuluj
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void submit()}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black uppercase text-white hover:bg-slate-800 disabled:opacity-50"
-          >
+          <button type="button" disabled={busy} onClick={() => void submit()} className={wmsBtnPrimary}>
             {busy ? "Zapis…" : "Zapisz"}
           </button>
         </div>

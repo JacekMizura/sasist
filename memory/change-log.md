@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Wózki / nośniki: UI operacyjny WMS (frontend only)
+- Wózki standardowe (`BulkCartEditor`): usunięte taby, jeden widok (dane, wymiary, pojemność, operacje, zdjęcie)
+- Tokeny modułu: większe fonty (15–16px), badge, koszyki w edytorze wózków z koszykami
+- Nośniki: `CarrierIdentity` (kod + nazwa + opis, bez duplikatu barcode), `CarrierContentPreview` (popover zawartości), `CarrierLocationLink` (badge lokalizacji)
+- Lista nośników: tabela desktop + kafle mobile; statusy PL w modalach; prefiksy PAL/BOX/BIN z kolorem i typem
+- Szczegóły nośnika: kompaktowy header operacyjny, produkty + historia + ostatnia operacja bez tabów ProductLike
+- Etykiety: PUTAWAY → „Odkładanie”, ARCHIVED → „Archiwalny”
+
 ## 2026-06-08 — Klienci: CRM profile (typ, status, flagi, VIP/blokada, agregaty)
 - Model `customers`: `customer_type`, `customer_status`, `flags_json`, pola hurtowe (limit, termin, opiekun)
 - Tabela `customer_crm_events` — timeline (VIP, blokada, zmiana typu/statusu)
