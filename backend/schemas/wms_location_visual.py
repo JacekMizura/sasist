@@ -1,0 +1,92 @@
+"""Response models for WMS location visual preview."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
+
+
+class LocationVisualWarehouseOut(BaseModel):
+    id: int
+    name: str
+
+
+class LocationVisualZoneOut(BaseModel):
+    code: str = ""
+    aisle: str = ""
+    level: str = ""
+    position: str = ""
+
+
+class LocationVisualRackOut(BaseModel):
+    id: int
+    name: str = ""
+    aisle_letter: str = ""
+    rack_index: int = 0
+    levels: int = 0
+    bins_per_level: int = 0
+    color: Optional[str] = None
+
+
+class LocationVisualRackGridCellOut(BaseModel):
+    id: int
+    name: str = ""
+    x: float = 0
+    y: float = 0
+    width: float = 1
+    height: float = 1
+    color: Optional[str] = None
+    zone_code: str = ""
+    is_active: bool = False
+
+
+class LocationVisualBinOut(BaseModel):
+    code: str = ""
+    location_id: Optional[int] = None
+    level_index: int = 0
+    level_number: int = 1
+    segment_index: int = 0
+    segment_label: str = ""
+    is_active: bool = False
+
+
+class LocationVisualCarrierOut(BaseModel):
+    id: int
+    code: str
+    barcode: str = ""
+    name: Optional[str] = None
+    status: str = "ACTIVE"
+    sku_count: int = 0
+    total_qty: float = 0
+
+
+class LocationVisualProductOut(BaseModel):
+    product_id: int
+    sku: Optional[str] = None
+    name: Optional[str] = None
+    image_url: Optional[str] = None
+    quantity: float = 0
+
+
+class LocationVisualOccupancyOut(BaseModel):
+    sku_count: int = 0
+    total_qty: float = 0
+    occupied_volume_dm3: float = 0
+    capacity_utilization_percent: float = 0
+    storage_type: Optional[str] = None
+    location_type: str = "PICK"
+
+
+class LocationVisualContextOut(BaseModel):
+    warehouse: LocationVisualWarehouseOut
+    location: dict = Field(default_factory=dict)
+    zone: LocationVisualZoneOut
+    rack: Optional[LocationVisualRackOut] = None
+    rack_grid: List[LocationVisualRackGridCellOut] = Field(default_factory=list)
+    rack_bins: List[LocationVisualBinOut] = Field(default_factory=list)
+    carrier: Optional[LocationVisualCarrierOut] = None
+    products: List[LocationVisualProductOut] = Field(default_factory=list)
+    occupancy: LocationVisualOccupancyOut = Field(default_factory=LocationVisualOccupancyOut)
+    last_movement_at: Optional[datetime] = None

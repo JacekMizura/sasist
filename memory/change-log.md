@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Nośniki: wizualny podgląd lokalizacji (LocationPreviewModal)
+
+- Klik badge lokalizacji → modal z mapą regałów, widokiem pionowym regału, zawartością nośnika
+- API: `GET /api/wms/locations/{id}/visual-context`
+- Komponenty: `LocationPreviewModal`, `LocationPreviewWarehouseGrid`, `LocationPreviewRackView`
+
 ## 2026-06-08 — Klienci CRM: typ / kanał / flagi (architektura ERP)
 
 - **`customer_type`:** tylko `retail`, `company`, `wholesale` (usunięto `marketplace`, `b2b` z enum)

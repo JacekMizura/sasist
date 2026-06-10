@@ -276,6 +276,7 @@ from .api.wms_relocation import router as wms_relocation_router
 from .api.wms_mm_transfer import router as wms_mm_transfer_router
 from .api.wms_replenishment import router as wms_replenishment_router
 from .api.wms_carriers import router as wms_carriers_router
+from .api.wms_locations import router as wms_locations_router
 from .api.office_return_ui import router as office_return_ui_router
 from .api.office_return_module import router as office_return_module_router
 from .api.wms_return_module import router as wms_return_module_router
@@ -1623,6 +1624,7 @@ _API_ROUTERS = (
     wms_mm_transfer_router,
     wms_replenishment_router,
     wms_carriers_router,
+    wms_locations_router,
     office_return_ui_router,
     office_return_module_router,
     wms_return_module_router,

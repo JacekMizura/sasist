@@ -112,8 +112,10 @@ export default function WarehouseCarrierDetailPage() {
                 <span className="font-medium text-slate-600">{groupLabel}</span>
                 <CarrierStatusBadge status={detail.status} />
                 <CarrierLocationLink
+                  tenantId={tenantId}
                   locationCode={detail.current_location_code}
                   locationId={detail.current_location_id}
+                  carrierId={detail.id}
                 />
                 <span className="text-[15px] font-black tabular-nums text-slate-900">{detail.total_qty} szt.</span>
                 <span className="text-[14px] font-bold tabular-nums text-slate-600">{detail.sku_count} SKU</span>

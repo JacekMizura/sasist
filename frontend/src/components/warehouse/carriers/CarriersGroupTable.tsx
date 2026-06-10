@@ -177,8 +177,10 @@ export function CarriersGroupTable({
                   </td>
                   <td className={cartsTableCellClass}>
                     <CarrierLocationLink
+                      tenantId={tenantId}
                       locationCode={row.current_location_code}
                       locationId={row.current_location_id}
+                      carrierId={row.id}
                     />
                   </td>
                   <td className={cartsTableCellClass}>
@@ -234,7 +236,12 @@ export function CarriersGroupTable({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <CarrierStatusBadge status={row.status} />
-                <CarrierLocationLink locationCode={row.current_location_code} locationId={row.current_location_id} />
+                <CarrierLocationLink
+                  tenantId={tenantId}
+                  locationCode={row.current_location_code}
+                  locationId={row.current_location_id}
+                  carrierId={row.id}
+                />
               </div>
               <CarrierContentPreview
                 tenantId={tenantId}
