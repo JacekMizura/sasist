@@ -1880,18 +1880,26 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
     cust_brief: Optional[CustomerBriefOut] = None
     cust_id = getattr(order, "customer_id", None)
     if cust_id is not None:
-        cu = (
-            db.query(Customer)
-            .filter(Customer.id == int(cust_id), Customer.tenant_id == int(order.tenant_id))
-            .first()
-        )
-        if cu is not None:
-            comp = (cu.company_name or "").strip()
-            if comp:
-                dn = comp
-            else:
-                dn = f"{(cu.first_name or '').strip()} {(cu.last_name or '').strip()}".strip() or f"#{cu.id}"
-            cust_brief = CustomerBriefOut(id=int(cu.id), display_name=dn)
+        try:
+            cu = (
+                db.query(Customer)
+                .filter(Customer.id == int(cust_id), Customer.tenant_id == int(order.tenant_id))
+                .first()
+            )
+            if cu is not None:
+                comp = (cu.company_name or "").strip()
+                if comp:
+                    dn = comp
+                else:
+                    dn = f"{(cu.first_name or '').strip()} {(cu.last_name or '').strip()}".strip() or f"#{cu.id}"
+                cust_brief = CustomerBriefOut(id=int(cu.id), display_name=dn)
+        except Exception:
+            logger.exception(
+                "[orders.detail] customer brief failed order_id=%s tenant_id=%s customer_id=%s",
+                order.id,
+                order.tenant_id,
+                cust_id,
+            )
 
     op_rows = (
         db.query(OrderOperationalNote)
@@ -3277,19 +3285,28 @@ def get_order_details(
     db: Session = Depends(get_db)
 ):
     logger.info("ORDERS GET order_id=%s", order_id)
-    order = (
-        db.query(Order)
-        .options(
-            joinedload(Order.items).joinedload(OrderItem.product),
-            joinedload(Order.order_ui_status),
-            joinedload(Order.shipping_method_row),
+    try:
+        order = (
+            db.query(Order)
+            .options(
+                joinedload(Order.items).joinedload(OrderItem.product),
+                joinedload(Order.order_ui_status),
+                joinedload(Order.shipping_method_row),
+            )
+            .filter(Order.id == order_id)
+            .first()
         )
-        .filter(Order.id == order_id)
-        .first()
-    )
 
-    if not order:
-        logger.warning("ORDERS GET order_id=%s not found", order_id)
-        raise HTTPException(status_code=404, detail="Order not found")
+        if not order:
+            logger.warning("ORDERS GET order_id=%s not found", order_id)
+            raise HTTPException(status_code=404, detail="Order not found")
 
-    return build_order_read(db, order)
+        return build_order_read(db, order)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "[orders.detail] failed order_id=%s",
+            order_id,
+        )
+        raise

@@ -180,70 +180,70 @@ def list_customers(
     created_to: Optional[str] = Query(None, description="YYYY-MM-DD (włącznie)"),
     db: Session = Depends(get_db),
 ):
-    q = db.query(Customer).filter(Customer.tenant_id == int(tenant_id), Customer.deleted_at.is_(None))
-    if search and str(search).strip():
-        s = f"%{str(search).strip()}%"
-        q = q.filter(
-            or_(
-                Customer.first_name.ilike(s),
-                Customer.last_name.ilike(s),
-                Customer.email.ilike(s),
-                Customer.phone.ilike(s),
-                Customer.company_name.ilike(s),
-                Customer.nip.ilike(s),
-            )
-        )
-    cc = (country_code or "").strip().upper()
-    if cc:
-        q = q.filter(func.upper(func.trim(Customer.country_code)) == cc[:8])
-
-    if has_orders is True:
-        q = q.filter(
-            exists().where(
-                Order.customer_id == Customer.id,
-                Order.tenant_id == Customer.tenant_id,
-                Order.deleted_at.is_(None),
-            )
-        )
-    elif has_orders is False:
-        q = q.filter(
-            ~exists().where(
-                Order.customer_id == Customer.id,
-                Order.tenant_id == Customer.tenant_id,
-                Order.deleted_at.is_(None),
-            )
-        )
-
-    if has_email is True:
-        q = q.filter(func.length(func.trim(func.coalesce(Customer.email, ""))) > 0)
-    elif has_email is False:
-        q = q.filter(
-            or_(
-                Customer.email.is_(None),
-                func.trim(func.coalesce(Customer.email, "")) == "",
-            )
-        )
-
-    if has_phone is True:
-        q = q.filter(func.length(func.trim(func.coalesce(Customer.phone, ""))) > 0)
-    elif has_phone is False:
-        q = q.filter(
-            or_(
-                Customer.phone.is_(None),
-                func.trim(func.coalesce(Customer.phone, "")) == "",
-            )
-        )
-
-    d_from = _parse_yyyy_mm_dd_customer(created_from)
-    if d_from is not None:
-        q = q.filter(Customer.created_at >= d_from)
-    d_to = _parse_yyyy_mm_dd_customer(created_to)
-    if d_to is not None:
-        end_excl = d_to + timedelta(days=1)
-        q = q.filter(Customer.created_at < end_excl)
-
-    rows = q.order_by(Customer.id.desc()).all()
     try:
+        q = db.query(Customer).filter(Customer.tenant_id == int(tenant_id), Customer.deleted_at.is_(None))
+        if search and str(search).strip():
+            s = f"%{str(search).strip()}%"
+            q = q.filter(
+                or_(
+                    Customer.first_name.ilike(s),
+                    Customer.last_name.ilike(s),
+                    Customer.email.ilike(s),
+                    Customer.phone.ilike(s),
+                    Customer.company_name.ilike(s),
+                    Customer.nip.ilike(s),
+                )
+            )
+        cc = (country_code or "").strip().upper()
+        if cc:
+            q = q.filter(func.upper(func.trim(Customer.country_code)) == cc[:8])
+
+        if has_orders is True:
+            q = q.filter(
+                exists().where(
+                    Order.customer_id == Customer.id,
+                    Order.tenant_id == Customer.tenant_id,
+                    Order.deleted_at.is_(None),
+                )
+            )
+        elif has_orders is False:
+            q = q.filter(
+                ~exists().where(
+                    Order.customer_id == Customer.id,
+                    Order.tenant_id == Customer.tenant_id,
+                    Order.deleted_at.is_(None),
+                )
+            )
+
+        if has_email is True:
+            q = q.filter(func.length(func.trim(func.coalesce(Customer.email, ""))) > 0)
+        elif has_email is False:
+            q = q.filter(
+                or_(
+                    Customer.email.is_(None),
+                    func.trim(func.coalesce(Customer.email, "")) == "",
+                )
+            )
+
+        if has_phone is True:
+            q = q.filter(func.length(func.trim(func.coalesce(Customer.phone, ""))) > 0)
+        elif has_phone is False:
+            q = q.filter(
+                or_(
+                    Customer.phone.is_(None),
+                    func.trim(func.coalesce(Customer.phone, "")) == "",
+                )
+            )
+
+        d_from = _parse_yyyy_mm_dd_customer(created_from)
+        if d_from is not None:
+            q = q.filter(Customer.created_at >= d_from)
+        d_to = _parse_yyyy_mm_dd_customer(created_to)
+        if d_to is not None:
+            end_excl = d_to + timedelta(days=1)
+            q = q.filter(Customer.created_at < end_excl)
+
+        rows = q.order_by(Customer.id.desc()).all()
         return customers_to_list_out(db, rows, tenant_id=int(tenant_id))
     except Exception:
         logger.exception("[customers.list] failed tenant_id=%s", tenant_id)

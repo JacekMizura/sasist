@@ -1444,6 +1444,21 @@ def _bootstrap_tier0_platform_schema(*, phase: str) -> None:
     t0 = time.perf_counter()
     ensure_sqlite_tables(announce=(phase == "import"))
     tier0, validation = bootstrap_tier0_platform_schema(engine)
+    try:
+        from .db.customer_schema import ensure_customer_crm_schema, verify_customer_schema_columns
+
+        crm_added = ensure_customer_crm_schema(engine)
+        missing = verify_customer_schema_columns(engine)
+        if missing:
+            raise RuntimeError(f"customers schema missing columns after sync: {missing}")
+        if crm_added:
+            print(f"[startup] customer.schema synced phase={phase} columns_added={crm_added}", flush=True)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "[startup] customer.schema ensure/verify failed phase=%s",
+            phase,
+        )
+        raise
     run_production_schema_startup_gate(engine, phase=phase)
     duration_ms = round((time.perf_counter() - t0) * 1000, 2)
     log_startup_schema(

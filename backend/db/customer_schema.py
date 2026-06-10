@@ -18,7 +18,18 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-CUSTOMER_SCHEMA_VERSION = "2026.06.08.1"
+CUSTOMER_SCHEMA_VERSION = "2026.06.08.2"
+
+REQUIRED_CUSTOMERS_COLUMNS: frozenset[str] = frozenset(
+    {
+        "customer_type",
+        "customer_status",
+        "flags_json",
+        "credit_limit_gross",
+        "payment_terms_days",
+        "account_manager_user_id",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -94,3 +105,32 @@ def ensure_customer_crm_schema(engine: Engine) -> int:
         engine.dialect.name,
     )
     return added
+
+
+def verify_customer_schema_columns(engine: Engine) -> list[str]:
+    """
+    Log missing CRM columns on ``customers`` (information_schema / PRAGMA).
+    Returns list of missing column names (empty = OK).
+    """
+    from .schema_introspection import get_table_column_names, has_table
+
+    if not has_table(engine, "customers"):
+        logger.error("[customer.schema.verify] table=customers missing dialect=%s", engine.dialect.name)
+        return ["<table customers missing>"]
+
+    db_cols = set(get_table_column_names(engine, "customers"))
+    missing = sorted(REQUIRED_CUSTOMERS_COLUMNS - db_cols)
+    if missing:
+        logger.error(
+            "[customer.schema.verify] table=customers missing_columns=%s dialect=%s",
+            missing,
+            engine.dialect.name,
+        )
+    else:
+        logger.info("[customer.schema.verify] table=customers ok dialect=%s", engine.dialect.name)
+
+    for table in ("customer_sales_stats", "customer_notes", "customer_crm_events"):
+        if not has_table(engine, table):
+            logger.error("[customer.schema.verify] table=%s missing dialect=%s", table, engine.dialect.name)
+
+    return missing

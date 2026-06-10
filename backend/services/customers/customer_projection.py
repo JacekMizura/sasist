@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import List
+import logging
+from typing import Dict, List
 
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,8 @@ from ...schemas.customer import (
 )
 from .customer_constants import infer_customer_type, normalize_customer_status, parse_customer_flags
 from .stats_refresh_service import ensure_customer_stats_fresh
+
+logger = logging.getLogger(__name__)
 
 
 def display_name(c: Customer) -> str:
@@ -41,8 +44,43 @@ def flags_out(c: Customer) -> CustomerFlagsOut:
     )
 
 
+def _load_customer_stats_map(
+    db: Session,
+    *,
+    customer_ids: List[int],
+    tenant_id: int,
+) -> Dict[int, CustomerSalesStats]:
+    if not customer_ids:
+        return {}
+    try:
+        stats_rows = (
+            db.query(CustomerSalesStats)
+            .filter(
+                CustomerSalesStats.customer_id.in_(customer_ids),
+                CustomerSalesStats.tenant_id == int(tenant_id),
+            )
+            .all()
+        )
+        return {int(s.customer_id): s for s in stats_rows}
+    except Exception:
+        logger.exception(
+            "[customers.list] stats projection failed tenant_id=%s customer_count=%s",
+            tenant_id,
+            len(customer_ids),
+        )
+        return {}
+
+
 def summary_out(db: Session, *, customer_id: int, tenant_id: int) -> CustomerSummaryOut:
-    stats = ensure_customer_stats_fresh(db, customer_id=int(customer_id), tenant_id=int(tenant_id))
+    try:
+        stats = ensure_customer_stats_fresh(db, customer_id=int(customer_id), tenant_id=int(tenant_id))
+    except Exception:
+        logger.exception(
+            "[customers.detail] stats projection failed customer_id=%s tenant_id=%s",
+            customer_id,
+            tenant_id,
+        )
+        return CustomerSummaryOut()
     return CustomerSummaryOut(
         order_count=int(stats.order_count or 0),
         total_gross=round(float(stats.total_gross or 0), 2),
@@ -148,15 +186,7 @@ def customers_to_list_out(
     if not rows:
         return []
     ids = [int(r.id) for r in rows]
-    stats_rows = (
-        db.query(CustomerSalesStats)
-        .filter(
-            CustomerSalesStats.customer_id.in_(ids),
-            CustomerSalesStats.tenant_id == int(tenant_id),
-        )
-        .all()
-    )
-    stats_map = {int(s.customer_id): s for s in stats_rows}
+    stats_map = _load_customer_stats_map(db, customer_ids=ids, tenant_id=int(tenant_id))
     out: List[CustomerListOut] = []
     for r in rows:
         stats = stats_map.get(int(r.id))
