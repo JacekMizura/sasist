@@ -11,48 +11,55 @@ function formatDateTime(raw?: string | null): string {
   return d.toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</dt>
+      <dd className="mt-1 break-words text-base font-semibold leading-snug text-slate-900">{value}</dd>
+    </div>
+  );
+}
+
 type Props = {
   ctx: LocationVisualContext;
   locationCode: string;
 };
 
 export function LocationPreviewInfoPanel({ ctx, locationCode }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const code = (ctx.location.code || locationCode || "").trim() || `#${ctx.location.id}`;
-  const carrierLabel = ctx.carrier ? formatCarrierCode(ctx.carrier.code) : null;
+  const carrierLabel = ctx.carrier ? formatCarrierCode(ctx.carrier.code) : "—";
   const badgeKind = (ctx.occupancy.location_type || "PICK").toUpperCase() as WmsLocationBadgeKind;
   const util = Math.round(ctx.occupancy.capacity_utilization_percent);
+  const storageType = (ctx.occupancy.storage_type || "PRIMARY").toUpperCase();
+
+  const detailRows: [string, string][] = [
+    ["Strefa", ctx.zone.code || "—"],
+    ["Alejka", ctx.zone.aisle || "—"],
+    ["Poziom", ctx.zone.level || "—"],
+    ["Pozycja", ctx.zone.position || "—"],
+    ["Typ", storageType],
+    ["Nośnik", carrierLabel],
+  ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="font-mono text-xl font-bold tracking-tight text-slate-900">{code}</p>
-          <p className="mt-0.5 truncate text-xs text-slate-500">{ctx.warehouse.name}</p>
+          <p className="mt-1 text-sm text-slate-600">{ctx.warehouse.name}</p>
         </div>
         <LocationBadge code={code} type={badgeKind} layoutSpread />
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-        <div>
-          <dt className="text-xs text-slate-500">Nośnik</dt>
-          <dd className="text-sm font-semibold text-slate-900">{carrierLabel || "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-slate-500">Zajętość</dt>
-          <dd className="text-sm font-semibold text-slate-900">{util}%</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-slate-500">SKU</dt>
-          <dd className="text-sm font-semibold text-slate-900">{ctx.occupancy.sku_count}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-slate-500">Ostatni ruch</dt>
-          <dd className="text-sm font-semibold text-slate-900">{formatDateTime(ctx.last_movement_at)}</dd>
-        </div>
+      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+        <DetailField label="Zajętość" value={`${util}%`} />
+        <DetailField label="SKU" value={String(ctx.occupancy.sku_count)} />
+        <DetailField label="Ilość" value={`${ctx.occupancy.total_qty} szt.`} />
+        <DetailField label="Ostatni ruch" value={formatDateTime(ctx.last_movement_at)} />
       </dl>
 
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
         <div
           className="h-full rounded-full bg-blue-500 transition-all"
           style={{ width: `${Math.min(100, Math.max(0, util))}%` }}
@@ -62,29 +69,17 @@ export function LocationPreviewInfoPanel({ ctx, locationCode }: Props) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+        className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
       >
-        {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         {expanded ? "Mniej informacji" : "Więcej informacji"}
       </button>
 
       {expanded ? (
-        <dl className="mt-2 space-y-1.5 border-t border-slate-100 pt-2 text-xs">
-          {[
-            ["Strefa", ctx.zone.code],
-            ["Alejka", ctx.zone.aisle],
-            ["Poziom", ctx.zone.level],
-            ["Pozycja", ctx.zone.position],
-            ["Ilość", `${ctx.occupancy.total_qty} szt.`],
-            ["Typ", ctx.occupancy.storage_type],
-          ].map(([k, v]) =>
-            v ? (
-              <div key={k} className="flex justify-between gap-2">
-                <dt className="text-slate-500">{k}</dt>
-                <dd className="font-medium text-slate-800">{v}</dd>
-              </div>
-            ) : null,
-          )}
+        <dl className="mt-4 grid grid-cols-2 gap-x-8 gap-y-5 border-t border-slate-100 pt-4">
+          {detailRows.map(([label, value]) => (
+            <DetailField key={label} label={label} value={value} />
+          ))}
         </dl>
       ) : null}
     </div>
