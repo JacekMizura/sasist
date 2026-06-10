@@ -23,6 +23,7 @@ import { CustomerGusLookupPanel } from "../../components/customers/CustomerGusLo
 import { useCustomerGusLookup } from "../../hooks/customers/useCustomerGusLookup";
 import { applyGusToCustomerForm } from "../../utils/applyGusToCustomerForm";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
+import { isWholesaleType, type CustomerType } from "../../modules/customers/customerProfile";
 import { validatePolishNipChecksum } from "../../utils/polishNip";
 
 const PAYMENT_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
@@ -80,6 +81,9 @@ export default function CustomerEditPage() {
   const [shipMethodId, setShipMethodId] = useState("");
   const [payMethod, setPayMethod] = useState("");
   const [globalDisc, setGlobalDisc] = useState(0);
+  const [customerType, setCustomerType] = useState<CustomerType>("retail");
+  const [creditLimit, setCreditLimit] = useState("");
+  const [paymentTermsDays, setPaymentTermsDays] = useState("");
   const [addresses, setAddresses] = useState<CustomerAddressDto[]>([emptyAddress()]);
   const [discounts, setDiscounts] = useState<CustomerProductDiscountDto[]>([]);
   const [newDiscProductId, setNewDiscProductId] = useState("");
@@ -108,6 +112,9 @@ export default function CustomerEditPage() {
     setShipMethodId(d.preferred_shipping_method_id?.trim() ?? "");
     setPayMethod(d.preferred_payment_method?.trim() ?? "");
     setGlobalDisc(Number(d.global_discount_percent) || 0);
+    setCustomerType((d.customer_type as CustomerType) || "retail");
+    setCreditLimit(d.credit_limit_gross != null ? String(d.credit_limit_gross) : "");
+    setPaymentTermsDays(d.payment_terms_days != null ? String(d.payment_terms_days) : "");
     setAddresses(d.addresses?.length ? d.addresses : [emptyAddress()]);
     setDiscounts(d.product_discounts ?? []);
   }, []);
@@ -185,6 +192,9 @@ export default function CustomerEditPage() {
       preferred_shipping_method_id: shipMethodId.trim() || null,
       preferred_payment_method: payMethod.trim() || null,
       global_discount_percent: globalDisc,
+      customer_type: customerType,
+      credit_limit_gross: creditLimit.trim() ? parseFloat(creditLimit.replace(",", ".")) : null,
+      payment_terms_days: paymentTermsDays.trim() ? parseInt(paymentTermsDays, 10) : null,
       addresses: addresses.map((a) => ({
         first_name: a.first_name.trim(),
         last_name: a.last_name.trim(),
@@ -214,6 +224,9 @@ export default function CustomerEditPage() {
       shipMethodId,
       payMethod,
       globalDisc,
+      customerType,
+      creditLimit,
+      paymentTermsDays,
       addresses,
       discounts,
     ],
@@ -522,6 +535,48 @@ export default function CustomerEditPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </section>
+
+              <section>
+                <h2 className={sectionTitleClass}>Profil CRM</h2>
+                <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Typ klienta
+                    <select
+                      className={inp}
+                      value={customerType}
+                      onChange={(e) => setCustomerType(e.target.value as CustomerType)}
+                    >
+                      <option value="retail">Detaliczny</option>
+                      <option value="wholesale">Hurtowy</option>
+                      <option value="company">Firma</option>
+                      <option value="marketplace">Marketplace</option>
+                      <option value="b2b">B2B</option>
+                    </select>
+                  </label>
+                  {isWholesaleType(customerType) ? (
+                    <>
+                      <label className="block text-sm font-medium text-slate-700">
+                        Limit kupiecki (brutto)
+                        <input
+                          className={inp}
+                          value={creditLimit}
+                          onChange={(e) => setCreditLimit(e.target.value)}
+                          placeholder="np. 50000"
+                        />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        Termin płatności (dni)
+                        <input
+                          className={inp}
+                          value={paymentTermsDays}
+                          onChange={(e) => setPaymentTermsDays(e.target.value)}
+                          placeholder="np. 14"
+                        />
+                      </label>
+                    </>
+                  ) : null}
                 </div>
               </section>
 

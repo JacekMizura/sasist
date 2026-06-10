@@ -69,6 +69,7 @@ export function useDirectSalesSession({
 
   const [session, setSession] = useState<DirectSaleSession | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removingLineId, setRemovingLineId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [mixedCashAmount, setMixedCashAmount] = useState(0);
@@ -353,8 +354,9 @@ export function useDirectSalesSession({
   const removeLine = useCallback(
     async (lineId: number) => {
       const scope = apiScope();
-      if (!session || !scope) return;
-      setBusy(true);
+      if (!session || !scope || removingLineId != null) return;
+      setRemovingLineId(lineId);
+      setError(null);
       try {
         const fresh = await deleteDirectSaleLine({
           ...scope,
@@ -363,12 +365,14 @@ export function useDirectSalesSession({
         });
         setSession(fresh);
       } catch (e) {
-        setError(extractApiErrorMessage(e));
+        const msg = extractApiErrorMessage(e);
+        setError(msg);
+        showScannerToast(msg, "error");
       } finally {
-        setBusy(false);
+        setRemovingLineId(null);
       }
     },
-    [session, apiScope],
+    [session, apiScope, removingLineId, showScannerToast],
   );
 
   const onCustomerAttached = useCallback((session: DirectSaleSession) => {
@@ -563,6 +567,7 @@ export function useDirectSalesSession({
   return {
     session,
     busy,
+    removingLineId,
     unavailable,
     error,
     total,

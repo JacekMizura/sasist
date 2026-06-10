@@ -23,7 +23,7 @@ def _margin_percent(sale: float | None, purchase: float | None) -> float | None:
 
 
 def enrich_session_lines(db: Session, sess: DirectSaleSession) -> list[dict]:
-    lines = list(sess.lines or [])
+    lines = [ln for ln in (sess.lines or []) if getattr(ln, "product_id", None) is not None]
     if not lines:
         return []
 

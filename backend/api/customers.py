@@ -27,6 +27,13 @@ from ..schemas.customer import (
     CustomerUpdate,
 )
 from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
+from ..services.customers.customer_constants import normalize_customer_type
+from ..services.customers.customer_profile_service import ensure_customer_profile_defaults
+from ..services.customers.customer_projection import (
+    customer_to_detail_out,
+    customers_to_list_out,
+    display_name,
+)
 from ..services.delete_service import delete_customer_transaction, delete_customers_bulk_transaction
 
 logger = logging.getLogger(__name__)
@@ -37,21 +44,21 @@ from .customers_gus import router as gus_router
 from .customer_purchase_history import router as purchase_history_router
 from .customer_order_link import router as order_link_router
 from .customer_crm import router as crm_router
+from .customer_profile import router as profile_router
 
 router.include_router(order_link_router)
 router.include_router(gus_router)
 router.include_router(purchase_history_router)
 router.include_router(crm_router)
+router.include_router(profile_router)
 
 
 def _display_name(c: Customer) -> str:
-    comp = (c.company_name or "").strip()
-    if comp:
-        return comp
-    fn = (c.first_name or "").strip()
-    ln = (c.last_name or "").strip()
-    full = f"{fn} {ln}".strip()
-    return full or f"#{c.id}"
+    return display_name(c)
+
+
+def _customer_to_detail_out(db: Session, row: Customer, *, include_summary: bool = False) -> CustomerDetailOut:
+    return customer_to_detail_out(db, row, include_summary=include_summary)
 
 
 def _assert_shipping_method_for_tenant(db: Session, *, tenant_id: int, method_id: Optional[str]) -> None:
@@ -65,68 +72,6 @@ def _assert_shipping_method_for_tenant(db: Session, *, tenant_id: int, method_id
     )
     if sm is None:
         raise HTTPException(status_code=400, detail="preferred_shipping_method_id not found for tenant")
-
-
-def _customer_to_detail_out(db: Session, row: Customer) -> CustomerDetailOut:
-    addr_rows = sorted(row.addresses or [], key=lambda a: a.id or 0)
-    addresses = [
-        CustomerAddressOut(
-            id=int(a.id),
-            customer_id=int(a.customer_id),
-            first_name=a.first_name or "",
-            last_name=a.last_name or "",
-            company_name=a.company_name,
-            street=a.street or "",
-            house_number=a.house_number or "",
-            apartment_number=a.apartment_number,
-            postal_code=a.postal_code or "",
-            city=a.city or "",
-            country_code=a.country_code or "PL",
-            is_default=bool(a.is_default),
-        )
-        for a in addr_rows
-    ]
-    disc_out: List[CustomerProductDiscountOut] = []
-    for d in row.product_discounts or []:
-        pname = None
-        psku = None
-        if d.product_id:
-            p = db.query(Product).filter(Product.id == int(d.product_id)).first()
-            if p:
-                pname = (p.name or "").strip() or None
-                psku = (p.sku or "").strip() or None
-        disc_out.append(
-            CustomerProductDiscountOut(
-                id=int(d.id),
-                customer_id=int(d.customer_id),
-                product_id=int(d.product_id),
-                discount_percent=float(d.discount_percent or 0),
-                product_name=pname,
-                product_sku=psku,
-            )
-        )
-    dt = str(row.default_document_type or "RECEIPT").strip().upper()
-    if dt not in ("RECEIPT", "INVOICE"):
-        dt = "RECEIPT"
-    return CustomerDetailOut(
-        id=int(row.id),
-        tenant_id=int(row.tenant_id),
-        first_name=row.first_name or "",
-        last_name=row.last_name or "",
-        phone=row.phone,
-        email=row.email,
-        company_name=row.company_name,
-        nip=row.nip,
-        country_code=(row.country_code or "PL").strip().upper()[:8] or "PL",
-        default_document_type=dt,  # type: ignore[arg-type]
-        preferred_shipping_method_id=str(row.preferred_shipping_method_id).strip() if row.preferred_shipping_method_id else None,
-        preferred_payment_method=(row.preferred_payment_method or "").strip() or None,
-        global_discount_percent=float(row.global_discount_percent or 0),
-        created_at=getattr(row, "created_at", None),
-        updated_at=getattr(row, "updated_at", None),
-        addresses=addresses,
-        product_discounts=disc_out,
-    )
 
 
 def _replace_addresses(db: Session, customer_id: int, addresses: List[CustomerAddressCreate]) -> None:
@@ -298,26 +243,16 @@ def list_customers(
         q = q.filter(Customer.created_at < end_excl)
 
     rows = q.order_by(Customer.id.desc()).all()
-    out: List[CustomerListOut] = []
-    for r in rows:
-        out.append(
-            CustomerListOut(
-                id=int(r.id),
-                tenant_id=int(r.tenant_id),
-                display_name=_display_name(r),
-                email=r.email,
-                phone=r.phone,
-                nip=r.nip,
-                country_code=(r.country_code or "PL").strip().upper()[:8] or "PL",
-            )
-        )
-    return out
+    return customers_to_list_out(db, rows, tenant_id=int(tenant_id))
 
 
 @router.post("", response_model=CustomerDetailOut, status_code=201)
 @router.post("/", response_model=CustomerDetailOut, status_code=201, include_in_schema=False)
 def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
     _assert_shipping_method_for_tenant(db, tenant_id=body.tenant_id, method_id=body.preferred_shipping_method_id)
+    inferred_type = normalize_customer_type(body.customer_type) if getattr(body, "customer_type", None) else (
+        "company" if ((body.company_name or "").strip() or (body.nip or "").strip()) else "retail"
+    )
     row = Customer(
         tenant_id=int(body.tenant_id),
         first_name=(body.first_name or "").strip(),
@@ -331,7 +266,9 @@ def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
         preferred_shipping_method_id=str(body.preferred_shipping_method_id).strip() if body.preferred_shipping_method_id else None,
         preferred_payment_method=(body.preferred_payment_method or "").strip() or None,
         global_discount_percent=float(body.global_discount_percent or 0),
+        customer_type=inferred_type,
     )
+    ensure_customer_profile_defaults(db, row)
     db.add(row)
     db.flush()
     if body.addresses:
@@ -363,7 +300,7 @@ def get_customer(
     db: Session = Depends(get_db),
 ):
     row = _get_customer_or_404(db, customer_id, tenant_id)
-    return _customer_to_detail_out(db, row)
+    return _customer_to_detail_out(db, row, include_summary=True)
 
 
 @router.patch("/{customer_id}", response_model=CustomerDetailOut)
@@ -401,6 +338,16 @@ def patch_customer(
         row.preferred_payment_method = (body.preferred_payment_method or "").strip() or None
     if "global_discount_percent" in fields and body.global_discount_percent is not None:
         row.global_discount_percent = float(body.global_discount_percent)
+    if "customer_type" in fields and body.customer_type is not None:
+        row.customer_type = str(body.customer_type).strip().lower()
+    if "credit_limit_gross" in fields:
+        row.credit_limit_gross = float(body.credit_limit_gross) if body.credit_limit_gross is not None else None
+    if "payment_terms_days" in fields:
+        row.payment_terms_days = int(body.payment_terms_days) if body.payment_terms_days is not None else None
+    if "account_manager_user_id" in fields:
+        row.account_manager_user_id = (
+            int(body.account_manager_user_id) if body.account_manager_user_id else None
+        )
     if "addresses" in fields and body.addresses is not None:
         _replace_addresses(db, int(row.id), body.addresses)
         _normalize_default_addresses(db, int(row.id))
@@ -410,7 +357,7 @@ def patch_customer(
     db.commit()
     db.refresh(row)
     row = _get_customer_or_404(db, customer_id, tenant_id)
-    return _customer_to_detail_out(db, row)
+    return _customer_to_detail_out(db, row, include_summary=True)
 
 
 @router.delete("/{customer_id}", response_model=EntityBulkDeleteResult)

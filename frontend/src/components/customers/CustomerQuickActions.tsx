@@ -1,20 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  ChevronDown,
-  Mail,
-  MoreHorizontal,
-  PackagePlus,
-  RotateCcw,
-  ShoppingBag,
-} from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 
-import type { CustomerDetail } from "../../api/customersApi";
-import NewComplaintWizard from "../../pages/Complaints/NewComplaintWizard";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { postCustomerCrmAction, type CustomerCrmAction, type CustomerDetail } from "../../api/customersApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
+import { customerIsBlocked } from "../../modules/customers/customerProfile";
 import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
-import { safeTrim } from "../../utils/safeStrings";
 
 type Props = {
   customerId: number;
@@ -22,13 +12,11 @@ type Props = {
   onCopyCustomerData?: () => void;
   onExportHistory?: () => void;
   onDeleteRequest?: () => void;
+  onProfileUpdated?: (detail: CustomerDetail) => void;
 };
 
 const ghostBtn =
   "inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50";
-
-const primaryBtn =
-  "inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50";
 
 export function CustomerQuickActions({
   customerId,
@@ -36,16 +24,15 @@ export function CustomerQuickActions({
   onCopyCustomerData,
   onExportHistory,
   onDeleteRequest,
+  onProfileUpdated,
 }: Props) {
-  const navigate = useNavigate();
-  const { warehouse } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
   const [moreOpen, setMoreOpen] = useState(false);
-  const [complaintOpen, setComplaintOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [localDetail, setLocalDetail] = useState<CustomerDetail | null>(detail);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const email = detail?.email ?? null;
-  const mailHref = email?.trim() ? `mailto:${email.trim()}` : undefined;
+  useEffect(() => setLocalDetail(detail), [detail]);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -56,149 +43,161 @@ export function CustomerQuickActions({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [moreOpen]);
 
-  const startDirectSale = useCallback(() => {
-    if (warehouseId == null) return;
-    navigate("/wms/direct-sales", {
-      state: { prefillCustomerId: customerId, prefillDocumentSubtype: "INVOICE" as const },
-    });
-  }, [customerId, navigate, warehouseId]);
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  const runAction = useCallback(
+    async (action: CustomerCrmAction, optimistic?: Partial<CustomerDetail>) => {
+      setBusy(true);
+      const prev = localDetail;
+      if (optimistic && prev) {
+        const next = { ...prev, ...optimistic } as CustomerDetail;
+        setLocalDetail(next);
+        onProfileUpdated?.(next);
+      }
+      try {
+        const fresh = await postCustomerCrmAction(customerId, DAMAGE_TENANT_ID, action);
+        setLocalDetail(fresh);
+        onProfileUpdated?.(fresh);
+        setToast("Zapisano zmiany profilu klienta.");
+      } catch {
+        setLocalDetail(prev);
+        if (prev) onProfileUpdated?.(prev);
+        setToast("Nie udało się zapisać zmiany.");
+      } finally {
+        setBusy(false);
+        setMoreOpen(false);
+      }
+    },
+    [customerId, localDetail, onProfileUpdated],
+  );
 
   const copyCustomerData = useCallback(() => {
     if (onCopyCustomerData) {
       onCopyCustomerData();
       return;
     }
-    if (!detail) return;
-    const addr = detail.addresses?.find((a) => a.is_default) ?? detail.addresses?.[0];
+    const d = localDetail;
+    if (!d) return;
+    const addr = d.addresses?.find((a) => a.is_default) ?? d.addresses?.[0];
     const lines = [
-      getCustomerDisplayName(detail),
-      detail.company_name ? `Firma: ${detail.company_name}` : "",
-      detail.nip ? `NIP: ${detail.nip}` : "",
-      detail.email ? `E-mail: ${detail.email}` : "",
-      detail.phone ? `Tel: ${detail.phone}` : "",
+      getCustomerDisplayName(d),
+      d.company_name ? `Firma: ${d.company_name}` : "",
+      d.nip ? `NIP: ${d.nip}` : "",
+      d.email ? `E-mail: ${d.email}` : "",
+      d.phone ? `Tel: ${d.phone}` : "",
       addr
         ? `Adres: ${[addr.street, addr.house_number, addr.apartment_number ? `/${addr.apartment_number}` : ""].filter(Boolean).join(" ")}, ${addr.postal_code ?? ""} ${addr.city ?? ""}`.trim()
         : "",
     ].filter(Boolean);
     void navigator.clipboard.writeText(lines.join("\n"));
-  }, [detail, onCopyCustomerData]);
+    setToast("Skopiowano dane klienta.");
+    setMoreOpen(false);
+  }, [localDetail, onCopyCustomerData]);
 
-  const customerName = detail
-    ? getCustomerDisplayName(detail)
-    : getCustomerDisplayName({ id: customerId });
+  const flags = localDetail?.flags ?? {};
+  const blocked = customerIsBlocked(localDetail?.customer_status);
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
-        <button
-          type="button"
-          className={primaryBtn}
-          disabled={warehouseId == null}
-          title={warehouseId == null ? "Wybierz magazyn" : undefined}
-          onClick={startDirectSale}
-        >
-          <ShoppingBag className="h-3.5 w-3.5" aria-hidden />
-          Nowe zamówienie
-        </button>
+      <div className="relative" ref={menuRef}>
         <button
           type="button"
           className={ghostBtn}
-          disabled={warehouseId == null}
-          onClick={() => setComplaintOpen(true)}
+          disabled={busy}
+          aria-expanded={moreOpen}
+          aria-haspopup="menu"
+          onClick={() => setMoreOpen((v) => !v)}
         >
-          <PackagePlus className="h-3.5 w-3.5" aria-hidden />
-          Reklamacja
+          <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
+          Więcej
+          <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />
         </button>
-        <button
-          type="button"
-          className={ghostBtn}
-          onClick={() =>
-            navigate("/orders/returns", { state: { prefillCustomerId: customerId, prefillCustomerName: customerName } })
-          }
-        >
-          <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-          Zwrot
-        </button>
-        {mailHref ? (
-          <a href={mailHref} className={ghostBtn}>
-            <Mail className="h-3.5 w-3.5" aria-hidden />
-            E-mail
-          </a>
-        ) : (
-          <span className={`${ghostBtn} opacity-40 cursor-not-allowed`} title="Brak adresu e-mail">
-            <Mail className="h-3.5 w-3.5" aria-hidden />
-            E-mail
-          </span>
-        )}
-
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            className={ghostBtn}
-            aria-expanded={moreOpen}
-            aria-haspopup="menu"
-            onClick={() => setMoreOpen((v) => !v)}
+        {moreOpen ? (
+          <div
+            className="absolute right-0 top-full z-30 mt-1 min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+            role="menu"
           >
-            <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
-            Więcej
-            <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />
-          </button>
-          {moreOpen ? (
-            <div
-              className="absolute right-0 top-full z-30 mt-1 min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
-              role="menu"
+            <button type="button" role="menuitem" className="menu-item" onClick={copyCustomerData}>
+              Kopiuj dane klienta
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                onExportHistory?.();
+                setMoreOpen(false);
+              }}
             >
-              <button type="button" role="menuitem" className="menu-item" onClick={() => { copyCustomerData(); setMoreOpen(false); }}>
-                Kopiuj dane klienta
-              </button>
+              Eksport historii zakupów
+            </button>
+            <div className="my-1 border-t border-slate-100" />
+            {flags.vip ? (
               <button
                 type="button"
                 role="menuitem"
                 className="menu-item"
-                onClick={() => {
-                  onExportHistory?.();
-                  setMoreOpen(false);
-                }}
+                disabled={busy}
+                onClick={() => void runAction("unmark_vip", { flags: { ...flags, vip: false } })}
               >
-                Eksport historii zakupów
+                Usuń VIP
               </button>
-              <button type="button" role="menuitem" className="menu-item opacity-50 cursor-not-allowed" disabled title="Wkrótce">
+            ) : (
+              <button
+                type="button"
+                role="menuitem"
+                className="menu-item"
+                disabled={busy}
+                onClick={() => void runAction("mark_vip", { flags: { ...flags, vip: true } })}
+              >
                 Oznacz VIP
               </button>
-              <button type="button" role="menuitem" className="menu-item opacity-50 cursor-not-allowed" disabled title="Wkrótce">
-                Zablokuj klienta
+            )}
+            {blocked ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="menu-item"
+                disabled={busy}
+                onClick={() => void runAction("unblock", { customer_status: "active" })}
+              >
+                Odblokuj klienta
               </button>
-              <div className="my-1 border-t border-slate-100" />
+            ) : (
               <button
                 type="button"
                 role="menuitem"
                 className="menu-item text-red-700 hover:bg-red-50"
-                onClick={() => {
-                  onDeleteRequest?.();
-                  setMoreOpen(false);
-                }}
+                disabled={busy}
+                onClick={() => void runAction("block", { customer_status: "blocked" })}
               >
-                Usuń klienta
+                Zablokuj klienta
               </button>
-            </div>
-          ) : null}
-        </div>
+            )}
+            <div className="my-1 border-t border-slate-100" />
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item text-red-700 hover:bg-red-50"
+              onClick={() => {
+                onDeleteRequest?.();
+                setMoreOpen(false);
+              }}
+            >
+              Usuń klienta
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {warehouseId != null ? (
-        <NewComplaintWizard
-          open={complaintOpen}
-          onClose={() => setComplaintOpen(false)}
-          warehouseId={warehouseId}
-          tenantId={DAMAGE_TENANT_ID}
-          initialCustomerName={customerName}
-          initialCustomerEmail={safeTrim(detail?.email) || undefined}
-          initialCustomerPhone={safeTrim(detail?.phone) || undefined}
-          onCreated={(cid) => {
-            setComplaintOpen(false);
-            navigate(`/complaints/${cid}`);
-          }}
-        />
+      {toast ? (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-lg">
+          {toast}
+        </div>
       ) : null}
 
       <style>{`

@@ -1,5 +1,9 @@
 # Current context
 
+## Direct sales line delete (2026-06-08)
+- Root cause: `db.refresh(sess)` nie przeładowywał kolekcji `lines` po delete → stale line w totals/enrichment → 500
+- Fix: `line_delete_service` + reload sesji przez `get_session` po commit
+
 ## Active goal
 **Klienci — CRM-lite (iteracyjnie)** bez psucia logiki zamówień / istniejących endpointów.
 

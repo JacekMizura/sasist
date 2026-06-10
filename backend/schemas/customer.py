@@ -9,6 +9,24 @@ from pydantic import BaseModel, Field, field_validator
 
 
 DocumentTypePref = Literal["RECEIPT", "INVOICE"]
+CustomerTypePref = Literal["retail", "wholesale", "company", "marketplace", "b2b"]
+CustomerStatusPref = Literal["active", "blocked", "archived"]
+
+
+class CustomerFlagsOut(BaseModel):
+    vip: bool = False
+    debtor: bool = False
+    priority: bool = False
+    suspicious: bool = False
+
+
+class CustomerSummaryOut(BaseModel):
+    order_count: int = 0
+    total_gross: float = 0.0
+    total_net: float = 0.0
+    avg_basket_gross: float = 0.0
+    last_order_at: Optional[datetime] = None
+    returns_count: int = 0
 
 
 class CustomerAddressBase(BaseModel):
@@ -61,6 +79,11 @@ class CustomerListOut(BaseModel):
     phone: Optional[str] = None
     nip: Optional[str] = None
     country_code: str = "PL"
+    customer_type: CustomerTypePref = "retail"
+    customer_status: CustomerStatusPref = "active"
+    flags: CustomerFlagsOut = Field(default_factory=CustomerFlagsOut)
+    order_count: int = 0
+    total_gross: float = 0.0
 
     class Config:
         from_attributes = True
@@ -78,6 +101,12 @@ class CustomerBase(BaseModel):
     preferred_shipping_method_id: Optional[str] = Field(None, max_length=36)
     preferred_payment_method: Optional[str] = Field(None, max_length=128)
     global_discount_percent: float = Field(0.0, ge=0.0, le=100.0)
+    customer_type: CustomerTypePref = "retail"
+    customer_status: CustomerStatusPref = "active"
+    flags: CustomerFlagsOut = Field(default_factory=CustomerFlagsOut)
+    credit_limit_gross: Optional[float] = Field(None, ge=0)
+    payment_terms_days: Optional[int] = Field(None, ge=0)
+    account_manager_user_id: Optional[int] = Field(None, ge=1)
 
     @field_validator("default_document_type", mode="before")
     @classmethod
@@ -108,8 +137,32 @@ class CustomerUpdate(BaseModel):
     preferred_shipping_method_id: Optional[str] = Field(None, max_length=36)
     preferred_payment_method: Optional[str] = Field(None, max_length=128)
     global_discount_percent: Optional[float] = Field(None, ge=0.0, le=100.0)
+    customer_type: Optional[CustomerTypePref] = None
+    credit_limit_gross: Optional[float] = Field(None, ge=0)
+    payment_terms_days: Optional[int] = Field(None, ge=0)
+    account_manager_user_id: Optional[int] = Field(None, ge=1)
     addresses: Optional[List[CustomerAddressCreate]] = None
     product_discounts: Optional[List[CustomerProductDiscountWrite]] = None
+
+
+class CustomerCrmPatchBody(BaseModel):
+    customer_type: Optional[CustomerTypePref] = None
+    customer_status: Optional[CustomerStatusPref] = None
+    flags: Optional[CustomerFlagsOut] = None
+    credit_limit_gross: Optional[float] = Field(None, ge=0)
+    payment_terms_days: Optional[int] = Field(None, ge=0)
+    account_manager_user_id: Optional[int] = Field(None, ge=1)
+
+
+class CustomerCrmActionBody(BaseModel):
+    action: Literal[
+        "mark_vip",
+        "unmark_vip",
+        "mark_debtor",
+        "unmark_debtor",
+        "block",
+        "unblock",
+    ]
 
 
 class CustomerDetailOut(CustomerBase):
@@ -117,6 +170,7 @@ class CustomerDetailOut(CustomerBase):
     tenant_id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    summary: Optional[CustomerSummaryOut] = None
     addresses: List[CustomerAddressOut] = Field(default_factory=list)
     product_discounts: List[CustomerProductDiscountOut] = Field(default_factory=list)
 

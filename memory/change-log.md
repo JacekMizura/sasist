@@ -1,5 +1,23 @@
 # Change log
 
+## 2026-06-08 — Klienci: CRM profile (typ, status, flagi, VIP/blokada, agregaty)
+- Model `customers`: `customer_type`, `customer_status`, `flags_json`, pola hurtowe (limit, termin, opiekun)
+- Tabela `customer_crm_events` — timeline (VIP, blokada, zmiana typu/statusu)
+- API: `PATCH /customers/{id}/crm`, `POST /customers/{id}/crm/actions` (mark_vip, block, …)
+- Lista klientów: typ, status, flagi, `order_count`, `total_gross` (batch stats)
+- Detail: `summary` z KPI; self-heal agregatów gdy `order_count=0` ale są zamówienia
+- Stats: pomijanie anulowanych/draftów; refresh po complete direct sale
+- Blokada: guard w `set_session_customer` → 403 „Klient jest zablokowany”
+- Frontend: header CRM (back inline, badge VIP/Blokada, tylko menu „Więcej”), summary strip, picker z KPI, form hurtowy
+
+## 2026-06-08 — Direct sales: naprawa DELETE pozycji koszyka (500)
+- Nowy `line_delete_service.py`: lookup linii z DB, bezpieczne zwolnienie rezerwacji, activity event non-blocking
+- Endpoint `DELETE .../lines/{line_id}`: commit → `get_session` (fresh lines) → `_session_to_read`; pełny `logger.exception` przy 500
+- `_session_to_read` / `enrich_session_lines`: pomijanie linii bez `product_id`, per-line try/except na financials
+- PATCH qty=0: ten sam reload sesji po commit
+- Frontend: `removingLineId` (loading tylko na usuwanej pozycji), toast przy błędzie
+- Testy: `backend/tests/test_direct_sale_line_delete.py` (5 cases)
+
 ## 2026-06-08 — Klienci: CRM-lite etap 1–2 (order-link, aktywność, notatki)
 - Backend: `customer_order_link_service` — podgląd/utworzenie/połączenie klienta z zamówienia + wykrywanie duplikatów (email, telefon, NIP, nazwa)
 - Endpointy: `GET/POST /api/customers/order-link/{preview,create,link}`

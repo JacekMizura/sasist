@@ -6,11 +6,13 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from sqlalchemy import exists
 from sqlalchemy.orm import Session, joinedload
 
 from ...models.customer_analytics import CustomerProductStats, CustomerSalesStats
 from ...models.order import Order
 from ...models.order_item import OrderItem, order_item_is_replaced_line
+from .customer_constants import order_excluded_from_customer_stats
 from .order_financials import line_financials, order_financials, order_line_quantity
 
 STATS_TTL_MINUTES = 60
@@ -38,6 +40,17 @@ def ensure_customer_stats_fresh(
         )
         .first()
     )
+    if not force and stats_are_fresh(existing):
+        if existing is not None and int(existing.order_count or 0) == 0:
+            has_orders = db.query(
+                exists().where(
+                    Order.customer_id == int(customer_id),
+                    Order.tenant_id == int(tenant_id),
+                    Order.deleted_at.is_(None),
+                )
+            ).scalar()
+            if has_orders:
+                force = True
     if not force and stats_are_fresh(existing):
         return existing  # type: ignore[return-value]
 
@@ -74,7 +87,7 @@ def _is_return_or_correction(order: Order) -> bool:
 def rebuild_customer_stats(db: Session, *, customer_id: int, tenant_id: int) -> None:
     orders: List[Order] = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .options(joinedload(Order.items).joinedload(OrderItem.product), joinedload(Order.order_ui_status))
         .filter(
             Order.customer_id == int(customer_id),
             Order.tenant_id == int(tenant_id),
@@ -83,6 +96,7 @@ def rebuild_customer_stats(db: Session, *, customer_id: int, tenant_id: int) -> 
         .order_by(Order.order_date.asc(), Order.id.asc())
         .all()
     )
+    orders = [o for o in orders if not order_excluded_from_customer_stats(o)]
 
     total_net = total_vat = total_gross = 0.0
     total_products_qty = 0
@@ -186,3 +200,14 @@ def rebuild_customer_stats(db: Session, *, customer_id: int, tenant_id: int) -> 
         )
 
     db.commit()
+
+
+def refresh_customer_stats_after_order(
+    db: Session,
+    *,
+    customer_id: int | None,
+    tenant_id: int,
+) -> None:
+    if not customer_id:
+        return
+    rebuild_customer_stats(db, customer_id=int(customer_id), tenant_id=int(tenant_id))

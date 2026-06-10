@@ -5,6 +5,7 @@ type Props = {
   session: DirectSaleSession | null;
   warehouseId: number;
   busy: boolean;
+  removingLineId?: number | null;
   highlight?: boolean;
   onQtyChange: (lineId: number, qty: number) => void;
   onLocationChange: (lineId: number, locationId: number | null) => void;
@@ -16,6 +17,7 @@ export function SessionLinesPanel({
   session,
   warehouseId,
   busy,
+  removingLineId = null,
   highlight,
   onQtyChange,
   onLocationChange,
@@ -44,6 +46,7 @@ export function SessionLinesPanel({
               line={ln}
               warehouseId={warehouseId}
               busy={busy}
+              removing={removingLineId === ln.id}
               onQtyChange={onQtyChange}
               onLocationChange={onLocationChange}
               onRemove={onRemove}

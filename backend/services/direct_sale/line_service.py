@@ -9,19 +9,13 @@ from sqlalchemy.orm import Session
 
 from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
 from .errors import DirectSaleError
+from .line_delete_service import get_session_line, remove_session_line as _remove_session_line
 from .scan_service import session_add_product_line
 
 
 def _require_mutable_session(sess: DirectSaleSession) -> None:
     if sess.status not in ("ACTIVE", "SUSPENDED", "CHECKOUT"):
         raise DirectSaleError("Sesja zamknięta.", code="session_closed")
-
-
-def _get_line(sess: DirectSaleSession, line_id: int) -> DirectSaleSessionLine:
-    for ln in sess.lines or []:
-        if int(ln.id) == int(line_id):
-            return ln
-    raise DirectSaleError("Nie znaleziono pozycji.", code="line_not_found", http_status=404)
 
 
 def _touch_soft_hold_qty(line: DirectSaleSessionLine, qty: float) -> None:
@@ -44,15 +38,18 @@ def update_session_line_quantity(
     *,
     line_id: int,
     quantity: float,
+    performed_by_user_id: int | None = None,
 ) -> DirectSaleSessionLine | None:
     _require_mutable_session(sess)
-    line = _get_line(sess, line_id)
     qty = float(quantity)
     if qty <= 0:
-        db.delete(line)
-        sess.last_activity_at = datetime.utcnow()
-        db.flush()
-        return None
+        return _remove_session_line(
+            db,
+            sess,
+            line_id=line_id,
+            performed_by_user_id=performed_by_user_id,
+        )
+    line = get_session_line(db, sess, line_id=line_id)
     line.quantity = qty
     _touch_soft_hold_qty(line, qty)
     sess.last_activity_at = datetime.utcnow()
@@ -68,7 +65,7 @@ def update_session_line_location(
     source_location_id: int | None,
 ) -> DirectSaleSessionLine:
     _require_mutable_session(sess)
-    line = _get_line(sess, line_id)
+    line = get_session_line(db, sess, line_id=line_id)
     line.source_location_id = int(source_location_id) if source_location_id else None
     if line.metadata_json:
         try:
@@ -97,7 +94,7 @@ def update_session_line_discount(
     from .session_financials_service import compute_line_financials
 
     _require_mutable_session(sess)
-    line = _get_line(sess, line_id)
+    line = get_session_line(db, sess, line_id=line_id)
     dt = str(discount_type or "").strip().lower()
     if dt not in ("percent", "amount", ""):
         raise DirectSaleError("Nieprawidłowy typ rabatu.", code="invalid_discount")
@@ -117,12 +114,19 @@ def update_session_line_discount(
     return line
 
 
-def remove_session_line(db: Session, sess: DirectSaleSession, *, line_id: int) -> None:
-    _require_mutable_session(sess)
-    line = _get_line(sess, line_id)
-    db.delete(line)
-    sess.last_activity_at = datetime.utcnow()
-    db.flush()
+def remove_session_line(
+    db: Session,
+    sess: DirectSaleSession,
+    *,
+    line_id: int,
+    performed_by_user_id: int | None = None,
+) -> None:
+    _remove_session_line(
+        db,
+        sess,
+        line_id=line_id,
+        performed_by_user_id=performed_by_user_id,
+    )
 
 
 def add_product_to_session(

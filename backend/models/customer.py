@@ -30,6 +30,18 @@ class Customer(Base):
 
     global_discount_percent = Column(Float, nullable=False, default=0.0)
 
+    customer_type = Column(String(32), nullable=False, default="retail", index=True)
+    customer_status = Column(String(32), nullable=False, default="active", index=True)
+    flags_json = Column(Text, nullable=True)
+    credit_limit_gross = Column(Float, nullable=True)
+    payment_terms_days = Column(Integer, nullable=True)
+    account_manager_user_id = Column(
+        Integer,
+        ForeignKey("app_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
     #: Archiwizacja — ukrycie z listy; zamówienia zachowują customer_id dla historii.

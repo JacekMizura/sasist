@@ -6,7 +6,7 @@ from typing import Any, List
 
 from sqlalchemy.orm import Session, joinedload
 
-from ...models.customer_crm import CustomerNote
+from ...models.customer_crm import CustomerCrmEvent, CustomerNote
 from ...models.order import Order
 from .customer_note_service import _author_name, _assert_customer
 from .purchase_history_service import _document_number, _status_badge
@@ -48,6 +48,30 @@ def build_customer_activity_timeline(
                 "summary": f"{doc_no} · {badge['name']}",
                 "detail_path": f"/orders/{order.id}",
                 "_sort": odt,
+            }
+        )
+
+    crm_events = (
+        db.query(CustomerCrmEvent)
+        .filter(
+            CustomerCrmEvent.customer_id == int(customer_id),
+            CustomerCrmEvent.tenant_id == int(tenant_id),
+        )
+        .order_by(CustomerCrmEvent.created_at.desc())
+        .limit(60)
+        .all()
+    )
+    for ev in crm_events:
+        items.append(
+            {
+                "id": f"crm-{ev.id}",
+                "event_type": str(ev.event_type or "CRM"),
+                "event_label": str(ev.event_label or "CRM"),
+                "occurred_at": ev.created_at.isoformat() if ev.created_at else "",
+                "operator_name": _author_name(db, ev.performed_by_user_id),
+                "summary": str(ev.summary or ev.event_label or ""),
+                "detail_path": None,
+                "_sort": ev.created_at,
             }
         )
 

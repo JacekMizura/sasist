@@ -151,6 +151,7 @@ export function DirectSalesLayout({ terminal }: Props) {
             session={session}
             warehouseId={warehouseId}
             busy={sessionState.busy}
+            removingLineId={sessionState.removingLineId}
             highlight={issueFlash}
             onQtyChange={(id, qty) => void sessionState.changeLineQty(id, qty)}
             onLocationChange={(id, loc) => void sessionState.changeLineLocation(id, loc)}

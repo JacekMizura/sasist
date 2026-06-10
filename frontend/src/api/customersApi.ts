@@ -1,3 +1,4 @@
+import type { CustomerFlags, CustomerStatus, CustomerSummary, CustomerType } from "../modules/customers/customerProfile";
 import { getAxiosRequestDebugUrl, logApiBaseDebug } from "../config/apiBase";
 import api from "./axios";
 import type { EntityBulkDeleteResult } from "../types/entityBulkDelete";
@@ -34,6 +35,11 @@ export type CustomerListRow = {
   phone?: string | null;
   nip?: string | null;
   country_code: string;
+  customer_type?: CustomerType;
+  customer_status?: CustomerStatus;
+  flags?: CustomerFlags;
+  order_count?: number;
+  total_gross?: number;
 };
 
 export type CustomerDetail = {
@@ -50,11 +56,26 @@ export type CustomerDetail = {
   preferred_shipping_method_id?: string | null;
   preferred_payment_method?: string | null;
   global_discount_percent: number;
+  customer_type?: CustomerType;
+  customer_status?: CustomerStatus;
+  flags?: CustomerFlags;
+  credit_limit_gross?: number | null;
+  payment_terms_days?: number | null;
+  account_manager_user_id?: number | null;
+  summary?: CustomerSummary | null;
   created_at?: string | null;
   updated_at?: string | null;
   addresses: CustomerAddressDto[];
   product_discounts: CustomerProductDiscountDto[];
 };
+
+export type CustomerCrmAction =
+  | "mark_vip"
+  | "unmark_vip"
+  | "mark_debtor"
+  | "unmark_debtor"
+  | "block"
+  | "unblock";
 
 export type CustomerCreatePayload = {
   tenant_id: number;
@@ -128,6 +149,19 @@ export async function patchCustomer(
   body: Partial<Omit<CustomerCreatePayload, "tenant_id">>,
 ): Promise<CustomerDetail> {
   const res = await api.patch<CustomerDetail>(`/customers/${id}`, body, { params: { tenant_id: tenantId } });
+  return res.data;
+}
+
+export async function postCustomerCrmAction(
+  id: number,
+  tenantId: number,
+  action: CustomerCrmAction,
+): Promise<CustomerDetail> {
+  const res = await api.post<CustomerDetail>(
+    `/customers/${id}/crm/actions`,
+    { action },
+    { params: { tenant_id: tenantId } },
+  );
   return res.data;
 }
 

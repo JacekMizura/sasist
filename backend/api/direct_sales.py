@@ -134,12 +134,29 @@ def _session_to_read(db: Session, sess: DirectSaleSession) -> DirectSaleSessionR
     enriched = enrich_session_lines(db, sess)
     fin_by_line: dict[int, dict] = {}
     for ln in sess.lines or []:
-        fin_by_line[int(ln.id)] = compute_line_financials(db, ln)
+        if ln.id is None or getattr(ln, "product_id", None) is None:
+            continue
+        try:
+            fin_by_line[int(ln.id)] = compute_line_financials(db, ln)
+        except Exception:
+            _logger.warning(
+                "[direct-sales.totals] line financials failed session_id=%s line_id=%s",
+                sess.id,
+                getattr(ln, "id", None),
+                exc_info=True,
+            )
     lines = [
         _line_to_read(row["line"], meta=row, fin=fin_by_line.get(int(row["line"].id)))
         for row in enriched
     ]
-    totals_raw = compute_session_totals(db, sess)
+    try:
+        totals_raw = compute_session_totals(db, sess)
+    except Exception:
+        _logger.exception(
+            "[direct-sales.totals] compute_session_totals failed session_id=%s",
+            sess.id,
+        )
+        raise
     totals = DirectSaleSessionTotalsRead(
         subtotal_gross=float(totals_raw["subtotal_gross"]),
         line_discounts_gross=float(totals_raw["line_discounts_gross"]),
@@ -457,10 +474,25 @@ def patch_session_line(
                 discount_value=float(body.line_discount_value or 0),
             )
         db.commit()
-        db.refresh(sess)
-        return _session_to_read(db, sess)
+        fresh = get_session(db, session_id, tenant_id=tenant_id)
+        if fresh is None:
+            raise HTTPException(status_code=404, detail="Sesja nie istnieje.")
+        return _session_to_read(db, fresh)
     except DirectSaleError as exc:
+        db.rollback()
         raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _logger.exception(
+            "[direct-sales.line.patch] unhandled session_id=%s line_id=%s\n%s",
+            session_id,
+            line_id,
+            traceback.format_exc(),
+        )
+        raise HTTPException(status_code=500, detail="Nie udało się zaktualizować pozycji.") from exc
 
 
 @router.patch("/session/{session_id}/document", response_model=DirectSaleSessionRead)
@@ -556,12 +588,49 @@ def delete_session_line(
 ):
     sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
     try:
+        _logger.info(
+            "[direct-sales.line.delete] start session_id=%s line_id=%s tenant_id=%s",
+            session_id,
+            line_id,
+            tenant_id,
+        )
         remove_session_line(db, sess, line_id=line_id)
         db.commit()
-        db.refresh(sess)
-        return _session_to_read(db, sess)
+        fresh = get_session(db, session_id, tenant_id=tenant_id)
+        if fresh is None:
+            raise HTTPException(status_code=404, detail="Sesja nie istnieje.")
+        payload = _session_to_read(db, fresh)
+        _logger.info(
+            "[direct-sales.line.delete] ok session_id=%s line_id=%s remaining_lines=%s total_gross=%s",
+            session_id,
+            line_id,
+            len(payload.lines),
+            payload.totals.total_gross if payload.totals else None,
+        )
+        return payload
     except DirectSaleError as exc:
+        db.rollback()
+        _logger.warning(
+            "[direct-sales.line.delete] domain error session_id=%s line_id=%s code=%s msg=%s",
+            session_id,
+            line_id,
+            exc.code,
+            exc.message,
+        )
         raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _logger.exception(
+            "[direct-sales.line.delete] unhandled session_id=%s line_id=%s tenant_id=%s\n%s",
+            session_id,
+            line_id,
+            tenant_id,
+            traceback.format_exc(),
+        )
+        raise HTTPException(status_code=500, detail="Nie udało się usunąć pozycji.") from exc
 
 
 @router.post("/session/{session_id}/resume", response_model=DirectSaleSessionRead)
@@ -771,6 +840,24 @@ def post_session_complete(
                     tb = traceback.format_exc()
                     return _failure_response(commit_exc, stage="commit", tb=tb)
         current_step = "response"
+        try:
+            from ..models.order import Order
+            from ..services.customers.stats_refresh_service import refresh_customer_stats_after_order
+
+            order_row = db.query(Order).filter(Order.id == int(result.order_id)).first()
+            if order_row and order_row.customer_id:
+                refresh_customer_stats_after_order(
+                    db,
+                    customer_id=int(order_row.customer_id),
+                    tenant_id=tenant_id,
+                )
+        except Exception:
+            _complete_log.warning(
+                "[direct-sales.complete] customer_stats_refresh_failed session_id=%s order_id=%s",
+                session_id,
+                result.order_id,
+                exc_info=True,
+            )
         completion = None
         try:
             completion_read = build_direct_sale_completion_read(

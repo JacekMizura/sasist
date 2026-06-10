@@ -4,10 +4,10 @@ import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { CustomerDetailHeader } from "../../components/customers/CustomerDetailHeader";
+import { CustomerSummaryStrip } from "../../components/customers/CustomerSummaryStrip";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { useCustomerHeaderSummary } from "../../hooks/customers/useCustomerHeaderSummary";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { listSellasistToolbarSquareBtn } from "../../components/listPage/listSellasistTokens";
 import { CustomerDetailTabs } from "./CustomerDetailTabs";
 
 type CustomerDetailPageShellProps = {
@@ -72,17 +72,6 @@ export function CustomerDetailPageShell({
           </nav>
         ) : null}
 
-        <div className="hidden lg:block">
-          <Link
-            to="/customers"
-            className={listSellasistToolbarSquareBtn}
-            title="Lista klientów"
-            aria-label="Lista klientów"
-          >
-            <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          </Link>
-        </div>
-
         <CustomerDetailHeader
           customerId={customerId}
           isNew={isNew}
@@ -91,10 +80,18 @@ export function CustomerDetailPageShell({
           onCopyCustomerData={onCopyCustomerData}
           onExportHistory={onExportHistory}
           onDeleteRequest={onDeleteRequest}
+          onProfileUpdated={(detail) => {
+            summary.applyDetail(detail);
+            summary.refresh();
+          }}
           extraActions={headerExtra}
         />
 
         {showTabs && customerId != null ? <CustomerDetailTabs /> : null}
+
+        {customerId != null && !isNew ? (
+          <CustomerSummaryStrip summary={summary} loading={summary.loading} />
+        ) : null}
       </div>
 
       <div className="mt-4 space-y-4">{children}</div>

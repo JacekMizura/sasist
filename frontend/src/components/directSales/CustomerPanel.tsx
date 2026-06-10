@@ -6,6 +6,7 @@ import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import type { DirectSalesCustomerState } from "../../hooks/directSales/useDirectSalesCustomer";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
+import { customerPickerSubtitle } from "../../modules/customers/customerProfile";
 import {
   formatCustomerAddressStreet,
   getCustomerDefaultAddress,
@@ -134,9 +135,12 @@ export function CustomerPanel({
                     type="button"
                     disabled={disabled || customer.busy}
                     onClick={() => void customer.attachCustomer(row.id)}
-                    className="w-full text-left p-2 rounded-xl hover:bg-blue-50 text-sm font-bold disabled:opacity-50"
+                    className="w-full rounded-xl p-2 text-left hover:bg-blue-50 disabled:opacity-50"
                   >
-                    {getCustomerDisplayName(row)}
+                    <div className="text-sm font-bold text-slate-900">{getCustomerDisplayName(row)}</div>
+                    <div className="mt-0.5 whitespace-pre-line text-[11px] font-medium text-slate-500">
+                      {customerPickerSubtitle(row)}
+                    </div>
                   </button>
                 </li>
               ))}

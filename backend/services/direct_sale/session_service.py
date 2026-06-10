@@ -134,6 +134,18 @@ def set_session_customer(
         retail = ensure_retail_customer(db, tenant_id=int(sess.tenant_id))
         sess.customer_id = int(retail.id)
     else:
+        from ..customers.customer_guard_service import assert_customer_active_for_commerce
+        from ..customers.errors import CustomerBlockedError
+        from .errors import DirectSaleError
+
+        try:
+            assert_customer_active_for_commerce(
+                db,
+                customer_id=int(customer_id),
+                tenant_id=int(sess.tenant_id),
+            )
+        except CustomerBlockedError as exc:
+            raise DirectSaleError(str(exc.message), code="customer_blocked", http_status=403) from exc
         sess.customer_id = int(customer_id)
     sess.last_activity_at = datetime.utcnow()
     return sess
