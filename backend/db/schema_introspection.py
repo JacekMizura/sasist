@@ -319,6 +319,121 @@ def _alter_table_add_column_sql(engine: Engine, table: str, col_sql: str) -> str
     return f"ALTER TABLE {table} ADD COLUMN {col_sql}"
 
 
+def _strip_not_null_from_col_sql(col_sql: str) -> str:
+    import re
+
+    return re.sub(r"\s+NOT NULL\b", "", col_sql, flags=re.IGNORECASE).strip()
+
+
+def _table_has_rows(engine: Engine, table: str) -> bool:
+    if not has_table(engine, table):
+        return False
+    with engine.connect() as conn:
+        return bool(conn.execute(text(f"SELECT 1 FROM {table} LIMIT 1")).scalar())
+
+
+def _python_default_for_not_null_column(col: Any, table: str) -> Any | None:
+    """Resolve backfill value for existing rows when adding NOT NULL without server DEFAULT."""
+    if col.server_default is not None:
+        arg = getattr(col.server_default, "arg", None)
+        if arg is not None and not callable(arg):
+            text_val = str(arg).strip().strip("'").strip('"')
+            return text_val
+
+    default = col.default
+    if default is not None:
+        arg = getattr(default, "arg", None)
+        if arg is not None and not callable(arg):
+            return arg
+        if callable(arg):
+            try:
+                return arg()
+            except TypeError:
+                try:
+                    return arg(None)
+                except Exception:
+                    pass
+
+    known: dict[tuple[str, str], Any] = {
+        ("customers", "customer_type"): "retail",
+        ("customers", "customer_status"): "active",
+    }
+    if (table, col.key) in known:
+        return known[(table, col.key)]
+
+    from sqlalchemy import Boolean, Float, Integer, String, Text
+
+    col_type = col.type
+    if isinstance(col_type, Boolean):
+        return False
+    if isinstance(col_type, (Integer,)):
+        return 0
+    if isinstance(col_type, (Float,)):
+        return 0.0
+    if isinstance(col_type, (String, Text)):
+        return ""
+    return None
+
+
+def _add_orm_column_with_optional_backfill(
+    engine: Engine,
+    *,
+    table: str,
+    col: Any,
+    col_sql: str,
+    log_prefix: str,
+) -> None:
+    """
+    PostgreSQL/SQLite: NOT NULL on populated tables requires nullable add → backfill → SET NOT NULL.
+    Empty tables or nullable columns use a single ADD COLUMN.
+    """
+    dialect = engine.dialect.name
+    direct_stmt = _alter_table_add_column_sql(engine, table, col_sql)
+    needs_backfill = (
+        col.nullable is False
+        and _table_has_rows(engine, table)
+        and dialect in ("postgresql", "sqlite")
+    )
+
+    if not needs_backfill:
+        with engine.begin() as conn:
+            conn.execute(text(direct_stmt))
+        return
+
+    backfill = _python_default_for_not_null_column(col, table)
+    if backfill is None:
+        logger.warning(
+            "[%s] not_null_backfill_missing table=%s column=%s — attempting direct ADD",
+            log_prefix,
+            table,
+            col.key,
+        )
+        with engine.begin() as conn:
+            conn.execute(text(direct_stmt))
+        return
+
+    nullable_sql = _alter_table_add_column_sql(
+        engine,
+        table,
+        _strip_not_null_from_col_sql(col_sql),
+    )
+    with engine.begin() as conn:
+        conn.execute(text(nullable_sql))
+        conn.execute(
+            text(f"UPDATE {table} SET {col.key} = :v WHERE {col.key} IS NULL"),
+            {"v": backfill},
+        )
+        if dialect == "postgresql":
+            conn.execute(text(f"ALTER TABLE {table} ALTER COLUMN {col.key} SET NOT NULL"))
+        logger.info(
+            "[%s] not_null_backfill table=%s column=%s default=%r dialect=%s",
+            log_prefix,
+            table,
+            col.key,
+            backfill,
+            dialect,
+        )
+
 def _create_index_if_missing_sql(engine: Engine, create_index_stmt: str) -> str:
     """Append IF NOT EXISTS where supported (safe re-run on startup)."""
     upper = create_index_stmt.upper()
@@ -540,10 +655,22 @@ def _ensure_model_indexes(
         return 0
 
     existing = {str(i.get("name") or "") for i in inspect(engine).get_indexes(table)}
+    db_col_set = set(get_table_column_names(engine, table))
     added = 0
     for idx in model.__table__.indexes:
         idx_name = str(idx.name or "")
         if not idx_name or idx_name in existing:
+            continue
+        idx_cols = {c.name for c in idx.columns}
+        missing_cols = idx_cols - db_col_set
+        if missing_cols:
+            logger.warning(
+                "[%s] skip_index table=%s index=%s reason=missing_columns missing=%s",
+                log_prefix,
+                table,
+                idx_name,
+                sorted(missing_cols),
+            )
             continue
         try:
             raw = str(CreateIndex(idx).compile(dialect=engine.dialect))
@@ -595,11 +722,13 @@ def sync_model_columns(
     log_prefix: str = "schema.model_sync",
     strict: bool = False,
     errors: list[str] | None = None,
+    failed_columns: set[str] | None = None,
 ) -> int:
     """ADD COLUMN only — no indexes or foreign keys."""
     from sqlalchemy.schema import CreateColumn
 
     err_list = errors if errors is not None else []
+    failed = failed_columns if failed_columns is not None else set()
     table = model.__tablename__
     if not has_table(engine, table):
         logger.info("[%s] skip table=%s reason=missing_table", log_prefix, table)
@@ -607,30 +736,35 @@ def sync_model_columns(
 
     columns_added = 0
     dialect = engine.dialect.name
-    db_cols = get_table_column_names(engine, table)
+    db_cols = set(get_table_column_names(engine, table))
 
     for col in model.__table__.columns:
         if col.key in db_cols:
             continue
         col_sql = str(CreateColumn(col).compile(dialect=engine.dialect))
-        stmt = _alter_table_add_column_sql(engine, table, col_sql)
         try:
-            with engine.begin() as conn:
-                conn.execute(text(stmt))
+            _add_orm_column_with_optional_backfill(
+                engine,
+                table=table,
+                col=col,
+                col_sql=col_sql,
+                log_prefix=log_prefix,
+            )
             columns_added += 1
+            db_cols.add(col.key)
             print(
                 f"SCHEMA_SYNC_ADDED_COLUMN table={table} column={col.key} dialect={dialect}",
                 flush=True,
             )
             logger.info(
-                "[%s] added_column table=%s column=%s dialect=%s stmt=%s",
+                "[%s] added_column table=%s column=%s dialect=%s",
                 log_prefix,
                 table,
                 col.key,
                 dialect,
-                stmt,
             )
         except Exception as exc:
+            failed.add(col.key)
             logger.exception(
                 "[%s] add_column_failed table=%s column=%s dialect=%s",
                 log_prefix,
@@ -659,8 +793,14 @@ def sync_model_schema(
     Never drops columns, tables, or data.
     """
     errors: list[str] = []
+    failed_columns: set[str] = set()
     columns_added = sync_model_columns(
-        engine, model, log_prefix=log_prefix, strict=strict, errors=errors
+        engine,
+        model,
+        log_prefix=log_prefix,
+        strict=strict,
+        errors=errors,
+        failed_columns=failed_columns,
     )
     indexes_added = 0
     if sync_indexes:
