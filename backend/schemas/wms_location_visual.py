@@ -79,6 +79,14 @@ class LocationVisualOccupancyOut(BaseModel):
     location_type: str = "PICK"
 
 
+class LocationVisualLastMovementOut(BaseModel):
+    """Ostatni ruch magazynowy powiązany z lokalizacją / nośnikiem."""
+
+    type_label: str = Field(default="", description="Np. Przyjęcie PZ, Rozlokowanie")
+    document_label: Optional[str] = Field(default=None, description="Numer dokumentu, np. PZ-2026-00452")
+    occurred_at: Optional[datetime] = None
+
+
 class LocationVisualContextOut(BaseModel):
     warehouse: LocationVisualWarehouseOut
     location: dict = Field(default_factory=dict)
@@ -89,4 +97,5 @@ class LocationVisualContextOut(BaseModel):
     carrier: Optional[LocationVisualCarrierOut] = None
     products: List[LocationVisualProductOut] = Field(default_factory=list)
     occupancy: LocationVisualOccupancyOut = Field(default_factory=LocationVisualOccupancyOut)
+    last_movement: Optional[LocationVisualLastMovementOut] = None
     last_movement_at: Optional[datetime] = None

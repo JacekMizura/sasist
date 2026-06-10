@@ -73,21 +73,21 @@ export function LocationPreviewRackFrontView({
   }, [levelConfig, binRtl, rack, layout, selectedLocation, uuid, code]);
 
   return (
-    <div className={`flex min-h-0 flex-col ${className}`}>
-      <div className="flex min-h-0 flex-1 flex-col justify-center gap-2.5">
+    <div className={`flex h-full min-h-0 flex-col overflow-hidden ${className}`}>
+      <div className="flex min-h-0 flex-1 flex-col justify-center gap-2 overflow-hidden">
         {rows.map((row) => (
           <div
             key={row.levelIndex}
-            className="grid gap-2"
+            className="grid shrink-0 gap-1.5 sm:gap-2"
             style={{ gridTemplateColumns: `repeat(${row.slots.length}, minmax(0, 1fr))` }}
           >
             {row.slots.map((slot, vis) => (
               <div
                 key={`${row.levelIndex}-${slot.segmentIndex}-${vis}`}
                 className={[
-                  "flex min-h-[3.75rem] flex-col items-center justify-center rounded-lg border-2 px-2 py-3 text-center sm:min-h-[4.5rem] md:min-h-[5rem]",
+                  "flex min-h-[3.25rem] flex-col items-center justify-center rounded-lg border-2 px-1.5 py-2 text-center sm:min-h-[4rem] md:min-h-[4.5rem]",
                   slot.isActive
-                    ? "border-blue-600 bg-blue-600 text-white shadow-lg ring-4 ring-blue-100"
+                    ? "border-blue-600 bg-blue-600 text-white shadow-md ring-2 ring-blue-100"
                     : "border-slate-200 bg-white text-slate-800",
                 ].join(" ")}
                 aria-current={slot.isActive ? "true" : undefined}
@@ -95,7 +95,7 @@ export function LocationPreviewRackFrontView({
               >
                 <span
                   className={[
-                    "font-mono text-base font-bold leading-tight sm:text-lg md:text-xl",
+                    "font-mono text-sm font-bold leading-tight sm:text-base md:text-lg",
                     slot.isActive ? "text-white" : "text-slate-900",
                   ].join(" ")}
                 >
@@ -106,7 +106,7 @@ export function LocationPreviewRackFrontView({
           </div>
         ))}
       </div>
-      <p className="mt-4 shrink-0 text-center text-xs text-slate-500">
+      <p className="mt-2 shrink-0 text-center text-[10px] text-slate-500">
         Góra = wyższy poziom · niebieski = Twoja lokalizacja
       </p>
     </div>

@@ -69,7 +69,7 @@ export function LocationPreviewLayoutMap({
   if (loading) {
     return (
       <div
-        className={`flex min-h-[360px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-600 ${className}`}
+        className={`flex h-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-600 ${className}`}
       >
         Ładowanie planu magazynu…
       </div>
@@ -79,7 +79,7 @@ export function LocationPreviewLayoutMap({
   if (loadError || !layout) {
     return (
       <div
-        className={`flex min-h-[360px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-center text-sm text-slate-600 ${className}`}
+        className={`flex h-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-center text-sm text-slate-600 ${className}`}
       >
         {loadError || "Brak planu magazynu."}
       </div>
@@ -91,7 +91,7 @@ export function LocationPreviewLayoutMap({
       layout={layout}
       activeRackId={activeRackId}
       activeLocationUuid={locationUuid}
-      className={`min-h-[360px] ${className}`}
+      className={`h-full overflow-hidden ${className}`}
     />
   );
 }

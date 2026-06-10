@@ -60,12 +60,12 @@ export function LocationPreviewFloorPlan({
   }
 
   return (
-    <div className={`flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
-      <div className="shrink-0 border-b border-slate-100 px-4 py-2.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Plan hali</p>
-        <p className="text-sm text-slate-600">Podgląd położenia regału w magazynie</p>
+    <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
+      <div className="shrink-0 border-b border-slate-100 px-3 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Plan hali</p>
+        <p className="text-xs text-slate-600">Podgląd położenia regału w magazynie</p>
       </div>
-      <div className="relative min-h-0 flex-1 bg-white p-4">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-white p-3">
         <svg
           viewBox={`${view.minX} ${view.minY} ${view.w} ${view.h}`}
           preserveAspectRatio="xMidYMid meet"

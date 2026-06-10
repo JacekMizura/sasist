@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
@@ -10,12 +11,24 @@ from sqlalchemy.orm import Session
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
+from ..models.stock_document import StockDocument
+from ..models.stock_operation import (
+    STOCK_OP_ADJUSTMENT,
+    STOCK_OP_ISSUE,
+    STOCK_OP_MOVE,
+    STOCK_OP_MOVE_IN,
+    STOCK_OP_MOVE_OUT,
+    STOCK_OP_PUTAWAY,
+    STOCK_OP_RECEIPT,
+    StockOperation,
+)
 from ..models.warehouse import Bin, Rack, Warehouse, WarehouseLayout
 from ..models.warehouse_carrier import WarehouseCarrier, WarehouseCarrierLog
 from ..schemas.wms_location_visual import (
     LocationVisualBinOut,
     LocationVisualCarrierOut,
     LocationVisualContextOut,
+    LocationVisualLastMovementOut,
     LocationVisualOccupancyOut,
     LocationVisualProductOut,
     LocationVisualRackGridCellOut,
@@ -23,13 +36,104 @@ from ..schemas.wms_location_visual import (
     LocationVisualWarehouseOut,
     LocationVisualZoneOut,
 )
+from .document_number_service import stock_document_display_label
 from .location_badge import batch_location_storage_types, wms_location_badge_kind
 from .location_label_parse import parse_location
-from .wms_carrier_service import _carrier_items_from_inventory, _carrier_stats
+from .wms_carrier_service import _carrier_items_from_inventory, _carrier_stats, carrier_operation_label
 
 
 class LocationVisualContextError(LookupError):
     pass
+
+
+_STOCK_OP_LABELS: dict[str, str] = {
+    STOCK_OP_RECEIPT: "Przyjęcie",
+    STOCK_OP_PUTAWAY: "Rozlokowanie",
+    STOCK_OP_ISSUE: "Wydanie",
+    STOCK_OP_MOVE: "Przesunięcie",
+    STOCK_OP_MOVE_OUT: "Przesunięcie (wyjście)",
+    STOCK_OP_MOVE_IN: "Przesunięcie (wejście)",
+    STOCK_OP_ADJUSTMENT: "Korekta",
+}
+
+
+def _stock_op_label(op_type: str) -> str:
+    key = (op_type or "").strip().upper()
+    if not key:
+        return "Ruch magazynowy"
+    return _STOCK_OP_LABELS.get(key, key.replace("_", " ").title())
+
+
+def _document_display_label(doc: StockDocument) -> str:
+    stored = str(getattr(doc, "document_number", None) or "").strip()
+    if stored:
+        return stored
+    return stock_document_display_label(doc)
+
+
+def _document_type_short(doc: StockDocument) -> str:
+    dt = str(getattr(doc, "document_type", None) or "PZ").strip().upper()
+    if dt in ("PZ", "PZ_RT", "RETURN_RECEIPT"):
+        return "PZ"
+    return dt
+
+
+def _last_movement_from_carrier_log(db: Session, log_row: WarehouseCarrierLog) -> LocationVisualLastMovementOut:
+    meta: dict[str, Any] = {}
+    raw = getattr(log_row, "metadata_json", None)
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                meta = parsed
+        except (TypeError, ValueError, json.JSONDecodeError):
+            meta = {}
+
+    doc_label: str | None = None
+    doc_type_short: str | None = None
+    pz_id = meta.get("pz_id") or meta.get("document_id") or meta.get("source_document_id")
+    if pz_id is not None:
+        try:
+            doc = db.query(StockDocument).filter(StockDocument.id == int(pz_id)).first()
+            if doc is not None:
+                doc_label = _document_display_label(doc)
+                doc_type_short = _document_type_short(doc)
+        except (TypeError, ValueError):
+            pass
+
+    type_label = carrier_operation_label(str(log_row.operation_type or ""))
+    if doc_type_short and not doc_label:
+        type_label = f"Przyjęcie {doc_type_short}"
+    elif doc_type_short and type_label.lower().startswith("przyj"):
+        type_label = f"Przyjęcie {doc_type_short}"
+
+    return LocationVisualLastMovementOut(
+        type_label=type_label,
+        document_label=doc_label,
+        occurred_at=log_row.created_at,
+    )
+
+
+def _last_movement_from_location(db: Session, *, location_id: int) -> LocationVisualLastMovementOut | None:
+    hit = (
+        db.query(StockOperation, StockDocument)
+        .join(StockDocument, StockDocument.id == StockOperation.document_id)
+        .filter(StockOperation.location_id == int(location_id))
+        .order_by(StockOperation.created_at.desc(), StockOperation.id.desc())
+        .first()
+    )
+    if not hit:
+        return None
+    op, doc = hit
+    doc_type = _document_type_short(doc)
+    type_label = _stock_op_label(str(op.type or ""))
+    if doc_type:
+        type_label = f"{type_label} {doc_type}".strip()
+    return LocationVisualLastMovementOut(
+        type_label=type_label,
+        document_label=_document_display_label(doc),
+        occurred_at=op.created_at,
+    )
 
 
 def _segment_label(index: int) -> str:
@@ -220,7 +324,7 @@ def build_location_visual_context(
     carrier = _resolve_carrier(db, tenant_id=tenant_id, location_id=int(loc.id), carrier_id=carrier_id)
     carrier_out: LocationVisualCarrierOut | None = None
     products: list[LocationVisualProductOut] = []
-    last_movement_at: datetime | None = getattr(loc, "updated_at", None)
+    last_movement: LocationVisualLastMovementOut | None = None
 
     if carrier is not None:
         sku_count, total_qty = _carrier_stats(db, int(tenant_id), int(carrier.id))
@@ -253,10 +357,20 @@ def build_location_visual_context(
             .order_by(WarehouseCarrierLog.created_at.desc())
             .first()
         )
-        if log_row and log_row.created_at:
-            last_movement_at = log_row.created_at
+        if log_row is not None:
+            last_movement = _last_movement_from_carrier_log(db, log_row)
     else:
         products = _products_at_location(db, tenant_id=tenant_id, location_id=int(loc.id))
+        last_movement = _last_movement_from_location(db, location_id=int(loc.id))
+
+    if last_movement is None and getattr(loc, "updated_at", None):
+        last_movement = LocationVisualLastMovementOut(
+            type_label="Aktualizacja lokalizacji",
+            document_label=None,
+            occurred_at=getattr(loc, "updated_at", None),
+        )
+
+    last_movement_at = last_movement.occurred_at if last_movement else getattr(loc, "updated_at", None)
 
     sku_count = len(products)
     total_qty = sum(float(p.quantity or 0) for p in products)
@@ -287,5 +401,6 @@ def build_location_visual_context(
         carrier=carrier_out,
         products=products,
         occupancy=occupancy,
+        last_movement=last_movement,
         last_movement_at=last_movement_at,
     )

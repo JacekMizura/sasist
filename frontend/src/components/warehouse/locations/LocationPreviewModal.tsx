@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, MapPin, Navigation, X } from "lucide-react";
+import { Loader2, MapPin, X } from "lucide-react";
 import type { LayoutState } from "../../../types/warehouse";
 import { layoutService } from "../../../services/layoutService";
 import { layoutStateFromWarehouseApiPayload } from "../../../pages/Products/layoutStateFromWarehouseApi";
@@ -20,6 +20,8 @@ type Props = {
   locationCode?: string | null;
   carrierId?: number | null;
 };
+
+const MAP_ROW_HEIGHT = "h-[240px] sm:h-[260px] lg:h-[280px]";
 
 export function LocationPreviewModal({
   open,
@@ -129,22 +131,22 @@ export function LocationPreviewModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-3 sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Podgląd lokalizacji ${code}`}
-        className="flex h-[100dvh] w-full max-w-7xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:h-[min(94vh,920px)] sm:rounded-2xl"
+        className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
       >
-        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm">
-              <MapPin className="h-5 w-5" strokeWidth={2} />
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm">
+              <MapPin className="h-4 w-4" strokeWidth={2} />
             </span>
             <div className="min-w-0">
-              <h2 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">Lokalizacja {code}</h2>
+              <h2 className="truncate text-base font-semibold text-slate-900 sm:text-lg">Lokalizacja {code}</h2>
               {ctx ? (
-                <p className="mt-0.5 truncate text-sm text-slate-600">
+                <p className="mt-0.5 truncate text-xs text-slate-600 sm:text-sm">
                   {ctx.warehouse.name}
                   {ctx.zone.code ? ` · ${ctx.zone.code}` : ""}
                   {ctx.zone.aisle ? ` · alejka ${ctx.zone.aisle}` : ""}
@@ -155,21 +157,21 @@ export function LocationPreviewModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
             aria-label="Zamknij"
           >
             <X className="h-5 w-5" />
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {loading ? (
-            <div className="flex h-full items-center justify-center gap-2 text-slate-600">
+            <div className="flex flex-1 items-center justify-center gap-2 text-slate-600">
               <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
               <span className="text-sm">Ładowanie…</span>
             </div>
           ) : err ? (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
               <p className="text-sm text-red-700">{err}</p>
               <button
                 type="button"
@@ -180,9 +182,9 @@ export function LocationPreviewModal({
               </button>
             </div>
           ) : ctx ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <section className="min-h-0 flex-[3] border-b border-slate-100 p-3 sm:p-5">
-                <div className="grid min-h-[min(58vh,560px)] grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+            <>
+              <div className="grid shrink-0 grid-cols-1 border-b border-slate-100 lg:grid-cols-2">
+                <div className={`${MAP_ROW_HEIGHT} min-h-0 overflow-hidden border-b border-slate-100 p-3 lg:border-b-0 lg:border-r`}>
                   <LocationPreviewLayoutMap
                     tenantId={tenantId}
                     warehouseId={ctx.warehouse.id}
@@ -191,16 +193,19 @@ export function LocationPreviewModal({
                     layout={layout}
                     layoutLoading={layoutLoading}
                     layoutError={layoutError}
-                    className="h-full min-h-[360px]"
+                    className="h-full overflow-hidden"
                   />
-                  <div className="flex h-full min-h-[360px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="shrink-0 border-b border-slate-100 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Rzut regału</p>
-                      <p className="truncate text-lg font-semibold text-slate-900">
+                </div>
+
+                <div className={`${MAP_ROW_HEIGHT} flex min-h-0 flex-col overflow-hidden p-3`}>
+                  <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="shrink-0 border-b border-slate-100 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Rzut regału</p>
+                      <p className="truncate text-sm font-semibold text-slate-900">
                         {rackState?.name ?? ctx.rack?.name ?? "—"}
                       </p>
                     </div>
-                    <div className="flex min-h-0 flex-1 flex-col p-4">
+                    <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3">
                       {rackState ? (
                         <LocationPreviewRackFrontView
                           rack={rackState}
@@ -208,46 +213,40 @@ export function LocationPreviewModal({
                           selectedLocation={selectedBinLocation}
                           activeLocationUuid={locationUuid}
                           activeLocationCode={code}
-                          className="h-full min-h-[280px]"
+                          className="h-full w-full max-w-lg"
                         />
                       ) : (
-                        <p className="flex h-full items-center justify-center text-sm text-slate-500">
-                          Brak regału w projekcie magazynu.
-                        </p>
+                        <p className="text-center text-sm text-slate-500">Brak regału w projekcie magazynu.</p>
                       )}
                     </div>
                   </div>
                 </div>
-              </section>
+              </div>
 
-              <section className="grid min-h-0 shrink-0 grid-cols-1 gap-3 p-3 sm:max-h-[32%] sm:grid-cols-2 sm:p-4">
-                <LocationPreviewInfoPanel ctx={ctx} locationCode={code} />
-                <LocationPreviewCarrierContents
-                  products={ctx.products}
-                  selectedLabel={code}
-                  occupancyPercent={ctx.occupancy.capacity_utilization_percent}
-                />
-              </section>
-            </div>
+              <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
+                <div className="min-h-0 overflow-hidden border-b border-slate-100 p-3 lg:max-h-none lg:border-b-0 lg:border-r">
+                  <LocationPreviewInfoPanel ctx={ctx} locationCode={code} className="h-full max-h-[220px] lg:max-h-none" />
+                </div>
+                <div className="min-h-0 overflow-hidden p-3">
+                  <LocationPreviewCarrierContents
+                    products={ctx.products}
+                    selectedLabel={code}
+                    occupancyPercent={ctx.occupancy.capacity_utilization_percent}
+                    className="h-full min-h-[160px] max-h-[220px] lg:max-h-none"
+                  />
+                </div>
+              </div>
+            </>
           ) : null}
         </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 sm:px-6">
+        <footer className="flex shrink-0 justify-end border-t border-slate-100 px-4 py-2.5 sm:px-5">
           <button
             type="button"
             onClick={onClose}
             className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
           >
             Zamknij
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Wkrótce — integracja z trasą pickera"
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white opacity-50"
-          >
-            <Navigation className="h-4 w-4" />
-            Pokaż trasę
           </button>
         </footer>
       </div>

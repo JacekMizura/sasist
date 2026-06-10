@@ -68,6 +68,12 @@ export type LocationVisualOccupancy = {
   location_type: string;
 };
 
+export type LocationVisualLastMovement = {
+  type_label: string;
+  document_label?: string | null;
+  occurred_at?: string | null;
+};
+
 export type LocationVisualContext = {
   warehouse: LocationVisualWarehouse;
   location: { id: number; code: string; name: string; location_uuid?: string | null; rack_name?: string | null };
@@ -78,6 +84,7 @@ export type LocationVisualContext = {
   carrier?: LocationVisualCarrier | null;
   products: LocationVisualProduct[];
   occupancy: LocationVisualOccupancy;
+  last_movement?: LocationVisualLastMovement | null;
   last_movement_at?: string | null;
 };
 
