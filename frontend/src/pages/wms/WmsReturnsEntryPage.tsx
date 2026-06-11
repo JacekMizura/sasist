@@ -6,9 +6,9 @@ import api from "../../api/axios";
 import { listComplaints } from "../../api/complaintsApi";
 import {
   listWmsReturnsForOrder,
+  lookupOrdersAdvancedForWms,
   lookupOrdersForWms,
   normalizeWmsReturnsSearchQuery,
-  wmsReturnsManualSearchValidationError,
 } from "../../api/wmsReturnsApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -19,6 +19,15 @@ import { wmsReturnShowsFreshIncomingBadge } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { WmsActiveZPzPanel } from "./WmsActiveZPzPanel";
+import {
+  WmsReturnsAdvancedSearchPanel,
+  type WmsReturnsOrderSearchPreview,
+} from "./WmsReturnsAdvancedSearchPanel";
+import {
+  EMPTY_WMS_RETURNS_ADVANCED_FILTERS,
+  wmsReturnsAdvancedSearchHasCriteria,
+  type WmsReturnsAdvancedSearchFilters,
+} from "./wmsReturnsAdvancedSearchTypes";
 import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { formatWmsListDate } from "./wmsListFormatters";
 
@@ -54,7 +63,7 @@ type OrderDetail = {
 
 type WmsReturnsQueueFilter = "all" | "returns" | "complaints";
 
-type ReturnsEntryScreen = "start" | "manualSearch" | "order";
+type ReturnsEntryScreen = "start" | "order";
 
 type MergedQueueEntry =
   | { kind: "return"; sortTs: number; id: number; ret: WmsReturnListItem }
@@ -323,6 +332,7 @@ const KNOWN_SOURCE_LABEL: Record<string, string> = {
   woocommerce: "WooCommerce",
   prestashop: "PrestaShop",
   bricklink: "Bricklink",
+  temu: "Temu",
 };
 
 function formatOrderTileDate(iso?: string | null): string {
@@ -332,20 +342,15 @@ function formatOrderTileDate(iso?: string | null): string {
   return d.toLocaleDateString("pl-PL", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
-type OrderSearchPreview = {
-  id: number;
-  orderLabel: string;
-  customer: string;
-  source: string;
-  date: string;
-  matchedReturnId: number | null;
-};
+type OrderSearchPreview = WmsReturnsOrderSearchPreview;
 
 function orderSearchPreviewFromDetail(o: OrderDetail, hit: OrderLookupHit): OrderSearchPreview {
+  const contact = orderTileContactFromAddresses(o.addresses_json);
   return {
     id: hit.id,
     orderLabel: `#${(o.number ?? "").trim() || o.id}`,
     customer: headerCustomerFromOrder(o),
+    phone: contact.phone ?? "—",
     source: normalizeOrderSourceDisplay(o.source),
     date: formatOrderTileDate(o.order_date ?? o.created_at ?? null),
     matchedReturnId:
@@ -359,6 +364,7 @@ function orderSearchPreviewFallback(hit: OrderLookupHit): OrderSearchPreview {
     id: hit.id,
     orderLabel: num ? `#${num.replace(/^#/, "")}` : `#${hit.id}`,
     customer: "—",
+    phone: "—",
     source: "—",
     date: "—",
     matchedReturnId:
@@ -561,7 +567,12 @@ export default function WmsReturnsEntryPage() {
   const warehouseId = warehouse?.id ?? null;
 
   const [trackingQ, setTrackingQ] = useState("");
-  const [searchQ, setSearchQ] = useState("");
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<WmsReturnsAdvancedSearchFilters>(
+    EMPTY_WMS_RETURNS_ADVANCED_FILTERS,
+  );
+  const [advancedErr, setAdvancedErr] = useState<string | null>(null);
+  const [advancedLoading, setAdvancedLoading] = useState(false);
   const [screen, setScreen] = useState<ReturnsEntryScreen>("start");
   const [loading, setLoading] = useState(false);
   const [hits, setHits] = useState<OrderLookupHit[]>([]);
@@ -587,7 +598,6 @@ export default function WmsReturnsEntryPage() {
   const preselectSig = useRef<string | null>(null);
   const searchRef = useRef<(overrideQ?: string) => Promise<void>>(async () => {});
   const trackingInputRef = useRef<HTMLInputElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const firstHitButtonRef = useRef<HTMLButtonElement | null>(null);
   const firstQueueTileRef = useRef<HTMLButtonElement | null>(null);
 
@@ -730,15 +740,13 @@ export default function WmsReturnsEntryPage() {
     const id = window.requestAnimationFrame(() => {
       if (screen === "start") {
         trackingInputRef.current?.focus();
-      } else if (screen === "manualSearch") {
-        searchInputRef.current?.focus();
       }
     });
     return () => window.cancelAnimationFrame(id);
   }, [screen]);
 
   const runLookup = useCallback(
-    async (rawInput: string, mode: "tracking" | "manual") => {
+    async (rawInput: string) => {
       const raw = rawInput.trim();
       if (!raw) return;
 
@@ -752,20 +760,7 @@ export default function WmsReturnsEntryPage() {
           setHits([]);
           setSelectedOrder(null);
           setErr("Brak wyników dla podanego zapytania.");
-          if (mode === "manual") setScreen("manualSearch");
           return;
-        }
-
-        if (mode === "manual") {
-          const validationErr = wmsReturnsManualSearchValidationError(query);
-          if (validationErr) {
-            setHits([]);
-            setSelectedOrder(null);
-            setErr(validationErr);
-            setScreen("manualSearch");
-            return;
-          }
-          setScreen("manualSearch");
         }
 
         const data = await lookupOrdersForWms(query, DAMAGE_TENANT_ID, warehouseId);
@@ -774,7 +769,6 @@ export default function WmsReturnsEntryPage() {
           setHits([]);
           setSelectedOrder(null);
           setErr("Brak wyników dla podanego zapytania.");
-          if (mode === "manual") setScreen("manualSearch");
           return;
         }
 
@@ -789,13 +783,12 @@ export default function WmsReturnsEntryPage() {
           return;
         }
 
+        setAdvancedSearchOpen(true);
         setHits(data);
         setSelectedOrder(null);
-        setScreen("manualSearch");
         window.requestAnimationFrame(() => firstHitButtonRef.current?.focus());
       } catch {
         setErr("Nie udało się wyszukać.");
-        if (mode === "manual") setScreen("manualSearch");
       } finally {
         setLoading(false);
       }
@@ -803,22 +796,58 @@ export default function WmsReturnsEntryPage() {
     [warehouseId, loadOrderById],
   );
 
+  const runAdvancedSearch = useCallback(async () => {
+    if (!wmsReturnsAdvancedSearchHasCriteria(advancedFilters)) {
+      setAdvancedErr("Uzupełnij co najmniej jedno pole wyszukiwania.");
+      setHits([]);
+      setHitPreviews([]);
+      return;
+    }
+
+    setAdvancedLoading(true);
+    setAdvancedErr(null);
+    setOrderLoadErr(null);
+
+    try {
+      const data = await lookupOrdersAdvancedForWms(advancedFilters, DAMAGE_TENANT_ID, warehouseId);
+
+      if (data.length === 0) {
+        setHits([]);
+        setHitPreviews([]);
+        setAdvancedErr("Brak wyników dla podanych kryteriów.");
+        return;
+      }
+
+      setAdvancedErr(null);
+
+      if (data.length === 1) {
+        setHits([]);
+        setHitPreviews([]);
+        const hit = data[0];
+        const rid =
+          hit.matched_return_id != null && Number.isFinite(hit.matched_return_id) ? hit.matched_return_id : null;
+        await loadOrderById(hit.id, { highlightReturnId: rid });
+        return;
+      }
+
+      setHits(data);
+      window.requestAnimationFrame(() => firstHitButtonRef.current?.focus());
+    } catch {
+      setAdvancedErr("Nie udało się wyszukać.");
+      setHits([]);
+      setHitPreviews([]);
+    } finally {
+      setAdvancedLoading(false);
+    }
+  }, [advancedFilters, warehouseId, loadOrderById]);
+
   const searchByTracking = useCallback(
     async (overrideQ?: string) => {
       const raw = (overrideQ ?? trackingQ).trim();
       if (!raw) return;
-      await runLookup(raw, "tracking");
+      await runLookup(raw);
     },
     [trackingQ, runLookup],
-  );
-
-  const search = useCallback(
-    async (overrideQ?: string) => {
-      const raw = (overrideQ ?? searchQ).trim();
-      if (!raw) return;
-      await runLookup(raw, "manual");
-    },
-    [searchQ, runLookup],
   );
 
   useEffect(() => {
@@ -902,15 +931,6 @@ export default function WmsReturnsEntryPage() {
     navigate(WMS_ROUTES.returnsOrderSession(selectedOrder.id));
   }, [navigate, selectedOrder]);
 
-  const openManualSearch = useCallback(() => {
-    setScreen("manualSearch");
-    setErr(null);
-    setOrderLoadErr(null);
-    setHits([]);
-    setHitPreviews([]);
-    window.requestAnimationFrame(() => searchInputRef.current?.focus());
-  }, []);
-
   const backToStart = useCallback(() => {
     setScreen("start");
     setSelectedOrder(null);
@@ -923,20 +943,33 @@ export default function WmsReturnsEntryPage() {
     setHits([]);
     setHitPreviews([]);
     setErr(null);
+    setAdvancedErr(null);
     setTrackingQ("");
-    setSearchQ("");
     window.requestAnimationFrame(() => trackingInputRef.current?.focus());
   }, []);
 
-  const backFromManualSearch = useCallback(() => {
-    setScreen("start");
+  const toggleAdvancedSearch = useCallback(() => {
+    setAdvancedSearchOpen((open) => !open);
+    setAdvancedErr(null);
+  }, []);
+
+  const clearAdvancedFilters = useCallback(() => {
+    setAdvancedFilters(EMPTY_WMS_RETURNS_ADVANCED_FILTERS);
     setHits([]);
     setHitPreviews([]);
-    setSearchQ("");
-    setErr(null);
-    setOrderLoadErr(null);
-    window.requestAnimationFrame(() => trackingInputRef.current?.focus());
+    setAdvancedErr(null);
   }, []);
+
+  const handleAdvancedFiltersChange = useCallback((patch: Partial<WmsReturnsAdvancedSearchFilters>) => {
+    setAdvancedFilters((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const handleSelectSearchResult = useCallback(
+    (preview: OrderSearchPreview) => {
+      void loadOrderById(preview.id, { highlightReturnId: preview.matchedReturnId ?? undefined });
+    },
+    [loadOrderById],
+  );
 
   const hasReturns = orderReturns.length > 0;
   const hasComplaints = orderComplaints.length > 0;
@@ -984,8 +1017,9 @@ export default function WmsReturnsEntryPage() {
 
         <div className={`${WORK_LAYOUT} w-full px-4 pb-8 pt-4 md:px-6 md:pt-6`}>
           {screen === "start" ? (
-            <div className={`${SCAN_COLUMN} flex flex-col items-center py-6 text-center md:py-10`}>
-              <div className="relative mb-6 h-24 w-24 md:h-32 md:w-32">
+            <div className="mx-auto w-full max-w-3xl py-6 md:py-10">
+              <div className="flex flex-col items-center text-center">
+                <div className="relative mb-6 h-24 w-24 md:h-32 md:w-32">
                 <div className="absolute inset-0 animate-[pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] rounded-full bg-blue-50" />
                 <div className="absolute inset-2 flex items-center justify-center rounded-full border-2 border-dashed border-blue-200 bg-white">
                   <svg
@@ -1001,8 +1035,9 @@ export default function WmsReturnsEntryPage() {
               </div>
 
               <h2 className="mb-8 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Skanowanie zwrotu</h2>
+              </div>
 
-              <div className="w-full space-y-4 text-left">
+              <div className={`mx-auto w-full space-y-4 text-left ${advancedSearchOpen ? "max-w-3xl" : SCAN_COLUMN}`}>
                 <div>
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Numer listu przewozowego</p>
                   <div className="relative w-full">
@@ -1041,104 +1076,29 @@ export default function WmsReturnsEntryPage() {
                   </div>
                 </div>
 
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={openManualSearch}
-                    className="text-sm font-semibold text-blue-600 underline-offset-2 hover:text-blue-800 hover:underline"
-                  >
-                    Wyszukiwanie ręczne
-                  </button>
-                </div>
+                <WmsReturnsAdvancedSearchPanel
+                  open={advancedSearchOpen}
+                  onToggle={toggleAdvancedSearch}
+                  filters={advancedFilters}
+                  onFiltersChange={handleAdvancedFiltersChange}
+                  onClearFilters={clearAdvancedFilters}
+                  onSearch={() => void runAdvancedSearch()}
+                  loading={advancedLoading}
+                  error={advancedErr}
+                  results={hitPreviews}
+                  resultsLoading={hitPreviewsLoading}
+                  onSelectResult={handleSelectSearchResult}
+                  firstResultRef={firstHitButtonRef}
+                />
+              </div>
 
+              <div className={`${SCAN_COLUMN} mx-auto mt-4 space-y-4 text-left`}>
                 {err ? <p className="text-sm text-rose-600">{err}</p> : null}
                 {orderLoadErr ? <p className="text-sm text-rose-600">{orderLoadErr}</p> : null}
                 {loading ? <p className="text-sm font-medium text-slate-500">Szukam…</p> : null}
 
                 {zPzPanel}
               </div>
-            </div>
-          ) : null}
-
-          {screen === "manualSearch" ? (
-            <div className="space-y-6">
-              <div className={`${SCAN_COLUMN} space-y-4`}>
-                <button
-                  type="button"
-                  onClick={backFromManualSearch}
-                  className="inline-flex items-center text-sm font-semibold text-slate-600 transition hover:text-slate-900"
-                >
-                  ← Wróć do skanowania
-                </button>
-
-                <h2 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Wyszukiwanie zamówienia</h2>
-
-                <div className="relative w-full">
-                  <svg
-                    className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
-                    viewBox="0 0 512 512"
-                    fill="currentColor"
-                    aria-hidden
-                  >
-                    <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z" />
-                  </svg>
-                  <input
-                    id="wms-returns-search-input"
-                    ref={searchInputRef}
-                    value={searchQ}
-                    onChange={(e) => setSearchQ(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void search();
-                    }}
-                    disabled={loading}
-                    placeholder="Numer zamówienia, imię, nazwisko lub telefon"
-                    className="h-12 w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </div>
-
-                {err ? <p className="text-sm text-rose-600">{err}</p> : null}
-                {orderLoadErr ? <p className="text-sm text-rose-600">{orderLoadErr}</p> : null}
-                {loading ? <p className="text-sm font-medium text-slate-500">Szukam…</p> : null}
-              </div>
-
-              {hits.length > 0 ? (
-                <div className="w-full">
-                  <h3 className="mb-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Wyniki wyszukiwania
-                  </h3>
-                  {hitPreviewsLoading ? (
-                    <p className="text-sm text-slate-500">Wczytywanie wyników…</p>
-                  ) : (
-                    <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                      {hitPreviews.map((preview, hi) => (
-                        <li key={preview.id}>
-                          <button
-                            type="button"
-                            ref={hi === 0 ? firstHitButtonRef : undefined}
-                            className="flex w-full flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm outline-none transition hover:border-slate-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#41546a]/35 sm:flex-row sm:items-center"
-                            onClick={() =>
-                              void loadOrderById(preview.id, {
-                                highlightReturnId: preview.matchedReturnId ?? undefined,
-                              })
-                            }
-                          >
-                            <div className="min-w-[7rem] shrink-0">
-                              <div className="text-xl font-bold tabular-nums text-slate-900">{preview.orderLabel}</div>
-                              <div className="text-sm tabular-nums text-slate-500">{preview.date}</div>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-base font-semibold text-slate-900">{preview.customer}</div>
-                              <div className="truncate text-sm text-slate-500">{preview.source}</div>
-                            </div>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ) : null}
             </div>
           ) : null}
 

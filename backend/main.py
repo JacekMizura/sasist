@@ -1589,6 +1589,7 @@ API_PREFIX = "/api"
 WMS_RETURNS_MOUNT_PREFIX = f"{API_PREFIX}/wms/returns"
 WMS_RETURNS_LOOKUP_PATHS = (
     f"{WMS_RETURNS_MOUNT_PREFIX}/orders/lookup",
+    f"{WMS_RETURNS_MOUNT_PREFIX}/orders/advanced-lookup",
     f"{WMS_RETURNS_MOUNT_PREFIX}/lookup",
 )
 

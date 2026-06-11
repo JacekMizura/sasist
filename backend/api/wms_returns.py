@@ -1755,6 +1755,157 @@ def _wms_returns_orders_lookup_search(
     return [_order_lookup_hit_from_row(o, None) for o in partial]
 
 
+def _wms_returns_advanced_lookup_has_criteria(**fields: Optional[str]) -> bool:
+    return any((v or "").strip() for v in fields.values())
+
+
+def _wms_returns_orders_advanced_lookup_search(
+    db: Session,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    *,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    order_number: Optional[str] = None,
+    tracking_number: Optional[str] = None,
+    rmz_number: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> List[OrderLookupHit]:
+    """AND search across optional customer / order / RMZ fields — no SKU/EAN."""
+    if not _wms_returns_advanced_lookup_has_criteria(
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+        email=email,
+        order_number=order_number,
+        tracking_number=tracking_number,
+        rmz_number=rmz_number,
+        date_from=date_from,
+        date_to=date_to,
+    ):
+        return []
+
+    try:
+        wh_id = (
+            int(warehouse_id)
+            if warehouse_id is not None and int(warehouse_id) > 0
+            else resolve_tenant_default_warehouse_id(db, tenant_id)
+        )
+    except ValueError as err:
+        logger.warning("[returns.advanced_lookup] warehouse resolve failed: %s", err)
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu") from err
+
+    matched_return_by_order: dict[int, int] = {}
+    rmz_term = (rmz_number or "").strip()
+    if rmz_term:
+        rmz_term_norm = rmz_term
+        while rmz_term_norm.startswith("#"):
+            rmz_term_norm = rmz_term_norm[1:].strip()
+        like_rmz = f"%{rmz_term_norm}%"
+        rmz_rows = (
+            db.query(WmsOrderReturn)
+            .filter(
+                WmsOrderReturn.tenant_id == tenant_id,
+                WmsOrderReturn.deleted_at.is_(None),
+                or_(
+                    WmsOrderReturn.rmz_number.ilike(like_rmz),
+                    WmsOrderReturn.external_id.ilike(like_rmz),
+                ),
+            )
+            .limit(50)
+            .all()
+        )
+        for row in rmz_rows:
+            matched_return_by_order[int(row.order_id)] = int(row.id)
+
+    q = (
+        db.query(Order)
+        .outerjoin(Customer, Customer.id == Order.customer_id)
+        .filter(Order.tenant_id == tenant_id, Order.deleted_at.is_(None))
+    )
+    q = q.filter(Order.warehouse_id == wh_id)
+
+    fn = (first_name or "").strip()
+    if fn:
+        like_fn = f"%{fn}%"
+        q = q.filter(or_(Customer.first_name.ilike(like_fn), Order.addresses_json.ilike(like_fn)))
+
+    ln = (last_name or "").strip()
+    if ln:
+        like_ln = f"%{ln}%"
+        q = q.filter(or_(Customer.last_name.ilike(like_ln), Order.addresses_json.ilike(like_ln)))
+
+    em = (email or "").strip()
+    if em:
+        like_em = f"%{em}%"
+        q = q.filter(or_(Customer.email.ilike(like_em), Order.addresses_json.ilike(like_em)))
+
+    ph = (phone or "").strip()
+    if ph:
+        digits = re.sub(r"\D", "", ph)
+        phone_parts = [p for p in {ph, digits} if p]
+        phone_filters = []
+        for part in phone_parts:
+            like_ph = f"%{part}%"
+            phone_filters.extend(
+                [
+                    Customer.phone.ilike(like_ph),
+                    Order.addresses_json.ilike(like_ph),
+                ]
+            )
+        q = q.filter(or_(*phone_filters))
+
+    onum = (order_number or "").strip()
+    while onum.startswith("#"):
+        onum = onum[1:].strip()
+    if onum:
+        like_on = f"%{onum}%"
+        q = q.filter(
+            or_(
+                Order.number.ilike(like_on),
+                Order.external_id.ilike(like_on),
+                Order.sales_document_number.ilike(like_on),
+            )
+        )
+
+    tr = (tracking_number or "").strip()
+    if tr:
+        like_tr = f"%{tr}%"
+        tr_low = tr.lower()
+        q = q.filter(
+            or_(
+                Order.barcode.ilike(like_tr),
+                func.lower(Order.scan_code) == tr_low,
+                Order.import_metadata_json.ilike(like_tr),
+                Order.external_id.ilike(like_tr),
+            )
+        )
+
+    if rmz_term and matched_return_by_order:
+        q = q.filter(Order.id.in_(list(matched_return_by_order.keys())))
+    elif rmz_term:
+        return []
+
+    order_ts = func.coalesce(Order.order_date, Order.created_at)
+    d_from = _parse_yyyy_mm_dd(date_from)
+    if d_from is not None:
+        q = q.filter(order_ts >= datetime.combine(d_from, datetime.min.time()))
+    d_to = _parse_yyyy_mm_dd(date_to)
+    if d_to is not None:
+        end_excl = datetime.combine(d_to + timedelta(days=1), datetime.min.time())
+        q = q.filter(order_ts < end_excl)
+
+    rows = q.order_by(Order.id.desc()).limit(50).all()
+    hits: List[OrderLookupHit] = []
+    for o in rows:
+        rid = matched_return_by_order.get(int(o.id))
+        hits.append(_order_lookup_hit_from_row(o, rid))
+    return hits
+
+
 def _lookup_orders_empty_response(*, reason: str) -> List[OrderLookupHit]:
     print(f"[returns.lookup] returning empty list ({reason})", flush=True)
     return []
@@ -1811,6 +1962,54 @@ def lookup_orders(
     if found == 0:
         return _lookup_orders_empty_response(reason="no matches")
     return results
+
+
+@lookup_router.get(
+    "/orders/advanced-lookup",
+    response_model=List[OrderLookupHit],
+    status_code=200,
+    summary="Zaawansowane wyszukiwanie zamówienia pod zwrot WMS",
+    name="wms_returns_orders_advanced_lookup",
+)
+def lookup_orders_advanced(
+    tenant_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Magazyn z UI WMS; gdy brak — domyślny magazyn tenanta.",
+    ),
+    first_name: Optional[str] = Query(None, max_length=128),
+    last_name: Optional[str] = Query(None, max_length=128),
+    phone: Optional[str] = Query(None, max_length=64),
+    email: Optional[str] = Query(None, max_length=256),
+    order_number: Optional[str] = Query(None, max_length=128),
+    tracking_number: Optional[str] = Query(None, max_length=128),
+    rmz_number: Optional[str] = Query(None, max_length=128),
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db: Session = Depends(get_db_for_lookup),
+) -> List[OrderLookupHit]:
+    """Wielokryterialne wyszukiwanie (AND) — bez SKU/EAN."""
+    try:
+        return _wms_returns_orders_advanced_lookup_search(
+            db,
+            tenant_id,
+            warehouse_id,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+            email=email,
+            order_number=order_number,
+            tracking_number=tracking_number,
+            rmz_number=rmz_number,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        logger.exception("[returns.advanced_lookup] database error")
+        raise HTTPException(status_code=500, detail="Błąd wyszukiwania zamówienia") from None
 
 
 @router.get("/active-z-pz", response_model=Optional[ActiveZPzRead])

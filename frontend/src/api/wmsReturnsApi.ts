@@ -17,6 +17,7 @@ import type {
   WmsRefundCreate,
 } from "../types/wmsReturn";
 import type { AppliedReturnListFilters } from "../components/returns/returnList/returnListFilterTypes";
+import type { WmsReturnsAdvancedSearchFilters } from "../pages/wms/wmsReturnsAdvancedSearchTypes";
 
 const tenantOnly = (tenantId: number) => ({ tenant_id: tenantId });
 
@@ -90,6 +91,40 @@ export async function lookupOrdersForWms(
     console.error("returns lookup failed", error);
     throw error;
   }
+}
+
+function advancedLookupParam(value: string): string | undefined {
+  const t = value.trim();
+  return t ? t : undefined;
+}
+
+/** Zaawansowane wyszukiwanie zamówień (AND) — bez SKU/EAN. */
+export async function lookupOrdersAdvancedForWms(
+  filters: WmsReturnsAdvancedSearchFilters,
+  tenantId: number,
+  warehouseId?: number | null,
+): Promise<OrderLookupHit[]> {
+  const params: Record<string, string | number> = { tenant_id: tenantId };
+  if (warehouseId != null && Number.isFinite(warehouseId) && warehouseId > 0) {
+    params.warehouse_id = warehouseId;
+  }
+  const map: Record<string, string> = {
+    first_name: filters.firstName,
+    last_name: filters.lastName,
+    phone: filters.phone,
+    email: filters.email,
+    order_number: filters.orderNumber,
+    tracking_number: filters.trackingNumber,
+    rmz_number: filters.rmzNumber,
+    date_from: filters.dateFrom,
+    date_to: filters.dateTo,
+  };
+  for (const [key, raw] of Object.entries(map)) {
+    const v = advancedLookupParam(raw);
+    if (v) params[key] = v;
+  }
+  const res = await api.get<OrderLookupHit[]>("wms/returns/orders/advanced-lookup", { params });
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 export async function listWmsReturnsForOrder(orderId: number, tenantId: number): Promise<WmsReturnListItem[]> {
