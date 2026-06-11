@@ -1235,7 +1235,7 @@ def _upgrade_schema_background() -> None:
         ensure_stock_documents_updated_at_column(engine)
         migrate_stock_documents_nullable_warehouse_location(engine)
         ensure_stock_documents_return_receipt_schema(engine)
-    ensure_z_pz_return_receipt_columns(engine)
+        ensure_z_pz_return_receipt_columns(engine)
         ensure_stock_document_items_return_receipt_columns(engine)
         ensure_stock_document_items_stock_disposition_column(engine)
         ensure_return_product_decisions_creates_stock_document_column(engine)
