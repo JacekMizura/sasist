@@ -2439,6 +2439,10 @@ def ensure_stock_documents_created_by_columns(engine: Engine) -> None:
 
 def ensure_stock_documents_receiving_status_column(engine: Engine) -> None:
     """WMS przyjęcie / rozlokowanie workflow columns + legacy enum migration."""
+    # Z-PZ columns must exist before ORM loads StockDocument (migrate_wms_pz_workflow_statuses).
+    from .z_pz_schema import ensure_z_pz_schema
+
+    ensure_z_pz_schema(engine)
     # Must run before ORM touches StockDocument (migrate_wms_pz_workflow_statuses): adds rmz_id + nullable supplier/delivery.
     ensure_stock_documents_return_receipt_schema(engine)
     with engine.connect() as conn:
@@ -6022,86 +6026,10 @@ def ensure_workforce_user_groups_schema(engine: Engine) -> None:
 
 
 def ensure_z_pz_return_receipt_columns(engine: Engine) -> None:
-    """Z-PZ: RMZ linkage (return links table + line metadata)."""
-    with engine.connect() as conn:
-        if not _table_exists(conn, "stock_document_return_links"):
-            conn.execute(
-                text(
-                    """
-                    CREATE TABLE IF NOT EXISTS stock_document_return_links (
-                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
-                        stock_document_id INTEGER NOT NULL REFERENCES stock_documents(id) ON DELETE CASCADE,
-                        rmz_id INTEGER NOT NULL REFERENCES wms_order_returns(id) ON DELETE CASCADE,
-                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE (stock_document_id, rmz_id)
-                    )
-                    """
-                )
-            )
-            conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS ix_stock_document_return_links_doc "
-                    "ON stock_document_return_links(stock_document_id)"
-                )
-            )
-            conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS ix_stock_document_return_links_rmz "
-                    "ON stock_document_return_links(rmz_id)"
-                )
-            )
-        if _table_exists(conn, "stock_document_items"):
-            cols = _table_column_names(conn, "stock_document_items")
-            if "source_rmz_id" not in cols:
-                conn.execute(
-                    text(
-                        "ALTER TABLE stock_document_items ADD COLUMN source_rmz_id INTEGER "
-                        "REFERENCES wms_order_returns(id) ON DELETE SET NULL"
-                    )
-                )
-            if "return_decision" not in cols:
-                conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN return_decision VARCHAR(24)"))
-        if _table_exists(conn, "stock_documents"):
-            sd_cols = _table_column_names(conn, "stock_documents")
-            if "is_collective_return_receipt" not in sd_cols:
-                conn.execute(
-                    text(
-                        "ALTER TABLE stock_documents ADD COLUMN is_collective_return_receipt "
-                        "INTEGER NOT NULL DEFAULT 0"
-                    )
-                )
-            if "collective_business_date" not in sd_cols:
-                conn.execute(text("ALTER TABLE stock_documents ADD COLUMN collective_business_date DATE"))
-            dialect = engine.dialect.name
-            if dialect == "postgresql":
-                conn.execute(
-                    text(
-                        """
-                        CREATE UNIQUE INDEX IF NOT EXISTS ux_stock_documents_collective_z_pz_daily
-                        ON stock_documents (tenant_id, warehouse_id, document_type, collective_business_date)
-                        WHERE is_collective_return_receipt = TRUE
-                          AND status = 'draft'
-                          AND relocation_status = 'OPEN'
-                          AND document_type = 'Z_PZ'
-                        """
-                    )
-                )
-            else:
-                conn.execute(
-                    text(
-                        """
-                        CREATE UNIQUE INDEX IF NOT EXISTS ux_stock_documents_collective_z_pz_daily
-                        ON stock_documents (tenant_id, warehouse_id, document_type, collective_business_date)
-                        WHERE is_collective_return_receipt = 1
-                          AND status = 'draft'
-                          AND relocation_status = 'OPEN'
-                          AND document_type = 'Z_PZ'
-                        """
-                    )
-                )
-        conn.commit()
+    """Z-PZ: RMZ linkage — delegates to ``ensure_z_pz_schema`` (canonical)."""
+    from .z_pz_schema import ensure_z_pz_schema
+
+    ensure_z_pz_schema(engine)
 
 
 def ensure_return_product_decisions_creates_stock_document_column(engine: Engine) -> None:

@@ -924,8 +924,19 @@ try:
     ensure_tenant_default_warehouse_column(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_tenant_business_profile_columns failed at import")
+# Z-PZ schema — blocking; must run before any StockDocument ORM query at import.
+try:
+    from .db.z_pz_schema import require_z_pz_schema_or_raise
+
+    require_z_pz_schema_or_raise(engine, phase="import")
+except Exception:
+    logging.getLogger(__name__).exception("require_z_pz_schema_or_raise failed at import")
+    raise
 try:
     ensure_stock_documents_tables(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_documents_tables failed at import")
+try:
     ensure_stock_document_item_ordered_received_columns(engine)
     ensure_stock_document_item_quantity_putaway_column(engine)
     ensure_stock_document_item_putaway_meta_columns(engine)
@@ -933,34 +944,64 @@ try:
     ensure_stock_document_item_wms_line_source_column(engine)
     ensure_stock_document_items_wm_receipt_columns(engine)
     ensure_stock_document_item_receiving_split_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_document_item_columns failed at import")
+try:
     ensure_receiving_scan_logs_table(engine)
     ensure_stock_item_locations_table(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_receiving_scan_logs_table failed at import")
+try:
     ensure_stock_documents_financial_columns(engine)
     ensure_stock_documents_relocation_status_column(engine)
     ensure_stock_documents_mm_location_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_documents_header_columns failed at import")
+try:
     ensure_stock_operations_unit_price_net_column(engine)
     ensure_stock_operations_stock_disposition_column(engine)
     ensure_document_series_extended_columns(engine)
     ensure_stock_document_series_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_operations_and_series_columns failed at import")
+try:
+    ensure_stock_documents_return_receipt_schema(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_documents_return_receipt_schema failed at import")
+try:
     ensure_stock_documents_receiving_status_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_documents_receiving_status_column failed at import")
+try:
     ensure_wms_ad_hoc_receiving_schema(engine)
     ensure_stock_documents_created_by_columns(engine)
     ensure_stock_documents_updated_at_column(engine)
     migrate_stock_documents_nullable_warehouse_location(engine)
-    ensure_stock_documents_return_receipt_schema(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_documents_wms_meta failed at import")
+try:
     ensure_z_pz_return_receipt_columns(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_z_pz_return_receipt_columns failed at import")
+try:
     ensure_stock_document_items_return_receipt_columns(engine)
     ensure_stock_document_items_stock_disposition_column(engine)
     ensure_return_product_decisions_creates_stock_document_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_stock_document_items_return_columns failed at import")
+try:
     ensure_workforce_operational_tables(engine)
     ensure_workforce_user_groups_schema(engine)
     ensure_company_profile_table(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_workforce_and_company_profile failed at import")
+try:
     ensure_stock_document_item_lot_columns(engine)
     migrate_inventory_lot_unique_sqlite(engine)
     ensure_inventory_stock_disposition_columns(engine)
     ensure_warehouse_sqlite_schema_stabilization(engine)
 except Exception:
-    logging.getLogger(__name__).exception("ensure_stock_documents_tables failed at import")
+    logging.getLogger(__name__).exception("ensure_stock_lot_and_inventory_sqlite failed at import")
 try:
     ensure_stock_documents_created_by_columns(engine)
 except Exception:
@@ -1212,7 +1253,17 @@ def _upgrade_schema_background() -> None:
     except Exception:
         pass
     try:
+        from .db.z_pz_schema import require_z_pz_schema_or_raise
+
+        require_z_pz_schema_or_raise(engine, phase="startup_background")
+    except Exception:
+        logging.getLogger(__name__).exception("require_z_pz_schema_or_raise failed at startup")
+        raise
+    try:
         ensure_stock_documents_tables(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_documents_tables failed at startup")
+    try:
         ensure_stock_document_item_ordered_received_columns(engine)
         ensure_stock_document_item_quantity_putaway_column(engine)
         ensure_stock_document_item_putaway_meta_columns(engine)
@@ -1220,30 +1271,57 @@ def _upgrade_schema_background() -> None:
         ensure_stock_document_item_wms_line_source_column(engine)
         ensure_stock_document_items_wm_receipt_columns(engine)
         ensure_stock_document_item_receiving_split_columns(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_document_item_columns failed at startup")
+    try:
         ensure_receiving_scan_logs_table(engine)
         ensure_stock_item_locations_table(engine)
+    except Exception:
+        pass
+    try:
         ensure_stock_documents_financial_columns(engine)
         ensure_stock_documents_relocation_status_column(engine)
         ensure_stock_documents_mm_location_columns(engine)
+    except Exception:
+        pass
+    try:
         ensure_stock_operations_unit_price_net_column(engine)
         ensure_stock_operations_stock_disposition_column(engine)
         ensure_document_series_extended_columns(engine)
         ensure_stock_document_series_columns(engine)
+    except Exception:
+        pass
+    try:
+        ensure_stock_documents_return_receipt_schema(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_documents_return_receipt_schema failed at startup")
+    try:
         ensure_stock_documents_receiving_status_column(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_documents_receiving_status_column failed at startup")
+    try:
         ensure_wms_ad_hoc_receiving_schema(engine)
         ensure_stock_documents_created_by_columns(engine)
         ensure_stock_documents_updated_at_column(engine)
         migrate_stock_documents_nullable_warehouse_location(engine)
-        ensure_stock_documents_return_receipt_schema(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_documents_wms_meta failed at startup")
+    try:
         ensure_z_pz_return_receipt_columns(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_z_pz_return_receipt_columns failed at startup")
+    try:
         ensure_stock_document_items_return_receipt_columns(engine)
         ensure_stock_document_items_stock_disposition_column(engine)
         ensure_return_product_decisions_creates_stock_document_column(engine)
+    except Exception:
+        pass
+    try:
         ensure_workforce_operational_tables(engine)
         ensure_workforce_user_groups_schema(engine)
         ensure_company_profile_table(engine)
     except Exception:
-        logging.getLogger(__name__).exception("stock_documents schema upgrade block failed")
+        pass
     try:
         ensure_stock_documents_created_by_columns(engine)
     except Exception:
@@ -1446,6 +1524,16 @@ def _bootstrap_tier0_platform_schema(*, phase: str) -> None:
 
     recycle_connection_pool()
     t0 = time.perf_counter()
+    try:
+        from .db.z_pz_schema import require_z_pz_schema_or_raise
+
+        require_z_pz_schema_or_raise(engine, phase=phase)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "[startup] z_pz.schema ensure/verify failed phase=%s",
+            phase,
+        )
+        raise
     ensure_sqlite_tables(announce=(phase == "import"))
     tier0, validation = bootstrap_tier0_platform_schema(engine)
     try:

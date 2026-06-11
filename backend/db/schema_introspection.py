@@ -982,6 +982,9 @@ def ensure_tier0_document_warehouse_schema(engine: Engine) -> int:
     added += ensure_sale_documents_orm_columns(engine)
     added += ensure_stock_documents_orm_columns(engine)
     added += ensure_stock_document_items_orm_columns(engine)
+    from .z_pz_schema import ensure_z_pz_schema
+
+    ensure_z_pz_schema(engine)
     added += ensure_sale_document_stock_links_orm_columns(engine)
     added += ensure_order_documents_orm_columns(engine)
     return added
@@ -1015,8 +1018,13 @@ def verify_tier0_sql_probes(engine: Engine) -> list[dict[str, Any]]:
         ),
         (
             "stock_documents",
-            "SELECT document_series_id, document_number, order_id, source_sale_document_id "
+            "SELECT document_series_id, document_number, order_id, source_sale_document_id, "
+            "source_rmz_ids_json, is_collective_return_receipt, collective_business_date "
             "FROM stock_documents LIMIT 1",
+        ),
+        (
+            "stock_document_items",
+            "SELECT source_rmz_id, return_decision FROM stock_document_items LIMIT 1",
         ),
         (
             "document_series",

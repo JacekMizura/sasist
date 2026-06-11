@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Z-PZ schema sync (fix 500 orders/stock-documents)
+
+- **`backend/db/z_pz_schema.py`**: `ensure_z_pz_schema()` — jawna, idempotentna migracja kolumn Z-PZ (PG + SQLite)
+- Startup: `require_z_pz_schema_or_raise()` przed tier0/API; log `[Z_PZ_SCHEMA] …=OK|MISSING`
+- `main.py`: rozdzielone try/except migracji stock_documents; Z-PZ przed `migrate_wms_pz_workflow_statuses`
+- Tier0 SQL probes: kolumny Z-PZ w `stock_documents` / `stock_document_items`
+- Test: `backend/tests/returns/test_z_pz_schema_startup.py`
+
 ## 2026-06-08 — WMS zwroty (RMZ/RMA): transakcyjny commit + upload zdjęć
 
 - **Upload 422:** axios usuwa `Content-Type` dla `FormData`; log `[returns.damage.upload]`
