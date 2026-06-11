@@ -27,9 +27,9 @@ export function ExternalStatusBadge({ status }: { status: BusinessDocStatus }) {
 /** Sales-style document type (FV, PA, Korekta) — extended palette for mag types too. */
 export function DocumentTypeBadge({ code }: { code: string }) {
   const u = code.trim().toUpperCase();
-  const mag = ["PZ", "PW", "WZ", "MM", "RW", "ZW", "ZD", "INV"];
-  const norm = mag.includes(u) ? normalizeWarehouseDocType(u) : null;
-  const label = norm ? warehouseDocTypeBadgeLabel(norm) : u.slice(0, 8);
+  const mag = ["PZ", "Z_PZ", "PW", "WZ", "MM", "RW", "ZW", "ZD", "INV"];
+  const norm = mag.includes(u) || u === "Z-PZ" ? normalizeWarehouseDocType(u) : null;
+  const label = norm ? warehouseDocTypeBadgeLabel(norm) : u === "Z_PZ" || u === "Z-PZ" ? "Z-PZ" : u.slice(0, 8);
   let cls = "bg-slate-100 text-slate-800 ring-slate-200/90";
   if (u === "FV" || u === "FAKTURA") cls = "bg-violet-100 text-violet-900 ring-violet-200/90";
   else if (u === "PA" || u === "PARAGON") cls = "bg-sky-100 text-sky-900 ring-sky-200/90";
@@ -41,6 +41,7 @@ export function DocumentTypeBadge({ code }: { code: string }) {
   else if (u === "RW") cls = "bg-orange-100 text-orange-900 ring-orange-200/90";
   else if (u === "ZD") cls = "bg-blue-100 text-blue-900 ring-blue-200/90";
   else if (u === "ZW") cls = "bg-amber-100 text-amber-900 ring-amber-200/90";
+  else if (u === "Z_PZ" || u === "Z-PZ") cls = "bg-teal-100 text-teal-900 ring-teal-200/90";
   else if (u === "INV") cls = "bg-indigo-100 text-indigo-900 ring-indigo-200/90";
   return <span className={`${pill} font-bold uppercase tracking-wide ${cls}`}>{label}</span>;
 }

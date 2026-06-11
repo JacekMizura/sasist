@@ -579,6 +579,14 @@ export default function DocumentsWarehousePage() {
 
   const listConfig = useMemo(() => getWarehouseDocumentConfig(docTab), [docTab]);
 
+  const docTypeTitle = useMemo(() => {
+    const seg = String(docSegment ?? "").trim().toLowerCase();
+    const hit = warehouseTypes.find((t) => (t.route_segment || "").toLowerCase() === seg);
+    if (hit?.operational_code) return hit.operational_code;
+    if (docTab === "Z_PZ") return "Z-PZ";
+    return docTab;
+  }, [docSegment, warehouseTypes, docTab]);
+
   const warehouseKpi = useMemo(() => {
     const total = rows.length;
     const drafts = rows.filter((r) => r.status === "draft").length;
@@ -651,7 +659,7 @@ export default function DocumentsWarehousePage() {
       ) : null}
 
       <DocumentsSectionShell
-        title={`Dokumenty magazynowe — ${docTab}`}
+        title={`Dokumenty magazynowe — ${docTypeTitle}`}
         kpi={<DocumentsKpiRow items={warehouseKpi} />}
         toolbar={
           <DocumentsFiltersToolbar>
@@ -686,7 +694,7 @@ export default function DocumentsWarehousePage() {
             <DocumentsEmptyState
               icon={ClipboardList}
               title="Nie znaleziono dokumentów"
-              description={`Brak zapisów typu ${docTab} dla wybranej organizacji. Utwórz dokument z modułu magazynowego (np. przyjęcie PZ), aby pojawił się na liście.`}
+              description={`Brak zapisów typu ${docTypeTitle} dla wybranej organizacji. Utwórz dokument z modułu magazynowego (np. przyjęcie PZ), aby pojawił się na liście.`}
             />
           </DocumentsTableCard>
         ) : (

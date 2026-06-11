@@ -80,7 +80,7 @@ def summarize_collective_z_pz(db: Session, doc: StockDocument) -> dict[str, Any]
         "created_at": created.isoformat() if isinstance(created, datetime) else None,
         "warehouse_id": int(doc.warehouse_id) if getattr(doc, "warehouse_id", None) else None,
         "barcode_value": f"ZPZ-{int(doc.id)}",
-        "detail_path": f"/documents/warehouse/wz?id={int(doc.id)}",
+        "detail_path": f"/documents/warehouse/z-pz?id={int(doc.id)}",
     }
 
 

@@ -4,7 +4,7 @@ import type { StockDocumentListRow } from "@/api/stockDocumentsApi";
 import { formatMoneyPl } from "@/utils/formatOrderMoney";
 import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
 import { documentsTableTheadCls } from "./documentsDashboardPrimitives";
-import { businessDocStatus } from "./warehouseDocumentsUi";
+import { warehouseDocumentListStatus } from "./warehouseDocumentsUi";
 import {
   getWarehouseDocumentConfig,
   WAREHOUSE_COLUMN_LABELS,
@@ -75,7 +75,7 @@ export default function WarehouseDocumentsTable({
 
   function renderCell(col: WarehouseListColumnId, r: StockDocumentListRow) {
     const dt = config.type;
-    const st = businessDocStatus({
+    const st = warehouseDocumentListStatus({
       status: r.status,
       document_type: r.document_type,
       total_received: r.total_received,

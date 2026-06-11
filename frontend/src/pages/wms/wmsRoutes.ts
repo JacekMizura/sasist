@@ -6,9 +6,6 @@ export const WMS_ROUTES = {
   /** Ekran startowy / launcher trybów WMS (pełna strona, nie modal). */
   menu: "/wms/menu",
   returns: "/wms/returns",
-  /** Etykieta nośnika — zbiorczy Z-PZ (druk). */
-  returnsActiveZPzLabel: (stockDocumentId: number | string) =>
-    `/wms/returns/active-z-pz/${stockDocumentId}/label`,
   /** Grid processing for one RMZ session. */
   returnsProcess: (returnId: number | string) => `/wms/returns/process/${returnId}`,
   complaintsProcess: (complaintId: number | string) => `/wms/returns/complaints/${complaintId}`,

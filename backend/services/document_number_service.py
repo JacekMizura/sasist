@@ -55,7 +55,7 @@ def _series_active(series: DocumentSeries) -> bool:
 def _pad_number(n: int, series: DocumentSeries) -> str:
     raw = getattr(series, "padding_length", None)
     if raw is None:
-        width = 6
+        width = 0
     else:
         width = int(raw)
     num = str(max(1, int(n)))

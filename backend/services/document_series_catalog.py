@@ -79,7 +79,7 @@ OPERATIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
         "yearly_reset": True,
         "monthly_reset": False,
         "warehouse_effect": True,
-        "padding_length": 6,
+        "padding_length": 0,
         "is_default": True,
     },
     _wh("WZ", name="WZ — wydania", print_template_id=3),
@@ -129,9 +129,11 @@ def operational_code_for_spec(spec: OperationalSeriesSpec) -> str:
 def stock_document_type_for_subtype(subtype: str) -> str | None:
     """Map series subtype → stock_documents.document_type (warehouse ops)."""
     sub = str(subtype or "").strip().upper()
-    warehouse_subtypes = {operational_code_for_spec(s) for s in OPERATIONAL_WAREHOUSE_SERIES}
-    warehouse_subtypes.update(operational_code_for_spec(s) for s in OPTIONAL_WAREHOUSE_SERIES)
-    if sub in warehouse_subtypes:
+    if sub == "Z-PZ":
+        sub = "Z_PZ"
+    all_specs = OPERATIONAL_WAREHOUSE_SERIES + OPTIONAL_WAREHOUSE_SERIES
+    known_subtypes = {str(s["subtype"]).strip().upper() for s in all_specs}
+    if sub in known_subtypes:
         return sub
     return None
 
@@ -180,7 +182,7 @@ def normalize_series_spec(spec: OperationalSeriesSpec) -> dict:
         "operational_code": operational_code_for_spec(spec),
         "series_type": st,
         "numbering_format": str(spec.get("numbering_format") or DEFAULT_NUMBERING_FORMAT),
-        "padding_length": int(spec.get("padding_length") or 6),
+        "padding_length": int(spec["padding_length"]) if "padding_length" in spec else 0,
         "is_default": bool(spec.get("is_default", True)),
         "monthly_reset": bool(spec.get("monthly_reset", True)),
         "yearly_reset": bool(spec.get("yearly_reset", False)),

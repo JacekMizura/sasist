@@ -288,6 +288,8 @@ export type WmsSettingsRead = {
   require_photos: boolean;
   require_condition: boolean;
   enable_refund: boolean;
+  z_pz_print_label_on_close?: boolean;
+  z_pz_label_template_id?: number | null;
 };
 
 /** POST /wms/settings body — warehouse_id optional (server uses tenant default). */

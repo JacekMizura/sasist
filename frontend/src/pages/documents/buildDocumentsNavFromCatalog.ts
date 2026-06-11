@@ -15,6 +15,8 @@ import {
 import type { OperationalDocumentSeriesDto } from "../../api/documentSeriesApi";
 import { DOCUMENTS_NAV_SECTIONS, type DocumentsNavItem, type DocumentsNavSection } from "./documentsNavConfig";
 
+const WAREHOUSE_NAV_ORDER = ["MM", "PZ", "PW", "RW", "WZ", "ZD", "Z-PZ", "ZW"];
+
 function iconForOperationalItem(item: OperationalDocumentSeriesDto): LucideIcon {
   const code = item.operational_code.toUpperCase();
   if (code === "FV") return FileText;
@@ -33,6 +35,29 @@ function navItemFromSeries(item: OperationalDocumentSeriesDto): DocumentsNavItem
     label: item.operational_code,
     Icon: iconForOperationalItem(item),
   };
+}
+
+function sortWarehouseNavItems(items: DocumentsNavItem[]): DocumentsNavItem[] {
+  return [...items].sort((a, b) => {
+    const ia = WAREHOUSE_NAV_ORDER.indexOf(a.label.toUpperCase());
+    const ib = WAREHOUSE_NAV_ORDER.indexOf(b.label.toUpperCase());
+    const ra = ia >= 0 ? ia : WAREHOUSE_NAV_ORDER.length;
+    const rb = ib >= 0 ? ib : WAREHOUSE_NAV_ORDER.length;
+    if (ra !== rb) return ra - rb;
+    return a.label.localeCompare(b.label, "pl");
+  });
+}
+
+function dedupeNavItems(items: DocumentsNavItem[]): DocumentsNavItem[] {
+  const seen = new Set<string>();
+  const out: DocumentsNavItem[] = [];
+  for (const item of items) {
+    const key = item.path.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
 }
 
 /** Series-driven sidebar sections — only configured operational types appear. */
@@ -59,7 +84,11 @@ export function buildDocumentsSidebarFromCatalog(
   }
 
   if (p === "/documents/warehouse" || p.startsWith("/documents/warehouse/")) {
-    const wh = items.filter((i) => i.series_type === "WAREHOUSE").map(navItemFromSeries).filter(Boolean) as DocumentsNavItem[];
+    const wh = sortWarehouseNavItems(
+      dedupeNavItems(
+        items.filter((i) => i.series_type === "WAREHOUSE").map(navItemFromSeries).filter(Boolean) as DocumentsNavItem[],
+      ),
+    );
     return wh.length ? [{ title: "Magazyn", items: wh }] : [];
   }
 

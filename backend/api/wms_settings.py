@@ -100,6 +100,8 @@ def _row_to_read(row: WmsSettings) -> WmsSettingsRead:
         require_photos=bool(row.require_photos),
         require_condition=bool(row.require_condition),
         enable_refund=bool(row.enable_refund),
+        z_pz_print_label_on_close=bool(getattr(row, "z_pz_print_label_on_close", False)),
+        z_pz_label_template_id=getattr(row, "z_pz_label_template_id", None),
     )
 
 
@@ -168,6 +170,11 @@ def set_returns_mode(
     row.require_photos = require_photos
     row.require_condition = require_condition
     row.enable_refund = enable_refund
+    if body.z_pz_print_label_on_close is not None:
+        row.z_pz_print_label_on_close = bool(body.z_pz_print_label_on_close)
+    if body.z_pz_label_template_id is not None:
+        tpl = int(body.z_pz_label_template_id)
+        row.z_pz_label_template_id = tpl if tpl > 0 else None
     db.commit()
     db.refresh(row)
 

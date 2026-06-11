@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Z-PZ poprawki: panel, numeracja, lista, auto-druk
+
+- **Panel WMS:** kompaktowy kafelek (numer, AKTYWNY, pozycje/sztuki, data, Zamknij)
+- **Ustawienia WMS → Zwroty:** checkbox auto-druk + wybór szablonu etykiety; `POST /labels/print/z-pz`
+- **Numeracja:** brak paddingu domyślnie (`Z-PZ-2026-1`); seria Z_PZ `padding_length=0`
+- **Dokumenty magazynowe:** `Z_PZ` w katalogu/menu (dedupe segmentów, kolejność MM→Z-PZ); lista OTWARTY/ZAMKNIĘTY
+
 ## 2026-06-08 — Z-PZ zbiorczy: OPEN do ręcznego zamknięcia (nośnik zwrotów)
 
 - **Backend:** status `OPEN` / `CLOSED`; wyszukiwanie aktywnego Z-PZ bez filtra daty (`collective_z_pz_service.py`)

@@ -424,6 +424,8 @@ class WmsSettingsRead(BaseModel):
     require_photos: bool = False
     require_condition: bool = False
     enable_refund: bool = False
+    z_pz_print_label_on_close: bool = False
+    z_pz_label_template_id: Optional[int] = None
 
 
 class WmsSettingsUpsert(BaseModel):
@@ -432,6 +434,8 @@ class WmsSettingsUpsert(BaseModel):
     tenant_id: Optional[int] = None
     warehouse_id: Optional[int] = None
     returns_mode: ReturnsMode
+    z_pz_print_label_on_close: Optional[bool] = None
+    z_pz_label_template_id: Optional[int] = None
 
 
 class WmsSettingsSave(BaseModel):

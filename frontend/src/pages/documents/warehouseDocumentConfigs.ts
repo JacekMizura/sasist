@@ -3,7 +3,7 @@
  * Shared layout — type-specific columns only.
  */
 
-export const WAREHOUSE_DOC_TYPES = ["PZ", "PW", "RW", "WZ", "MM", "ZD", "ZW"] as const;
+export const WAREHOUSE_DOC_TYPES = ["PZ", "Z_PZ", "PW", "RW", "WZ", "MM", "ZD", "ZW"] as const;
 export type WarehouseDocType = (typeof WAREHOUSE_DOC_TYPES)[number];
 
 export type WarehouseListColumnId =
@@ -84,6 +84,23 @@ export const warehouseDocumentConfigs: Record<WarehouseDocType, WarehouseDocumen
     showCustomerInDetail: false,
     showDocumentSource: true,
     financialDetail: "full",
+  },
+  Z_PZ: {
+    type: "Z_PZ",
+    columns: [
+      COL.documentNumber,
+      COL.status,
+      COL.lineCount,
+      COL.totalQty,
+      COL.operator,
+      COL.date,
+      COL.actions,
+    ],
+    valueField: "net",
+    showSupplierInDetail: false,
+    showCustomerInDetail: false,
+    showDocumentSource: false,
+    financialDetail: "none",
   },
   PW: {
     type: "PW",
@@ -221,7 +238,8 @@ export const WAREHOUSE_COLUMN_LABELS: Record<WarehouseListColumnId, string> = {
 export function normalizeWarehouseDocType(raw: string | undefined | null): WarehouseDocType {
   const u = String(raw ?? "PZ")
     .trim()
-    .toUpperCase();
+    .toUpperCase()
+    .replace(/-/g, "_");
   if (WAREHOUSE_DOC_TYPES.includes(u as WarehouseDocType)) return u as WarehouseDocType;
   if (u === "PM") return "MM";
   return "PZ";

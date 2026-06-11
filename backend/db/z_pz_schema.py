@@ -22,7 +22,7 @@ from .schema_introspection import (
 
 logger = logging.getLogger(__name__)
 
-Z_PZ_SCHEMA_VERSION = "2026.06.08.4"
+Z_PZ_SCHEMA_VERSION = "2026.06.08.5"
 
 # Startup verification — primary Z-PZ columns (user-facing contract).
 Z_PZ_VERIFY_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -107,6 +107,20 @@ def _column_specs() -> tuple[_ColumnSpec, ...]:
             "ALTER TABLE document_series ADD COLUMN collective_return_receipt "
             "BOOLEAN NOT NULL DEFAULT TRUE",
         ),
+        _ColumnSpec(
+            "wms_settings",
+            "z_pz_print_label_on_close",
+            "ALTER TABLE wms_settings ADD COLUMN z_pz_print_label_on_close "
+            "INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE wms_settings ADD COLUMN z_pz_print_label_on_close "
+            "BOOLEAN NOT NULL DEFAULT FALSE",
+        ),
+        _ColumnSpec(
+            "wms_settings",
+            "z_pz_label_template_id",
+            "ALTER TABLE wms_settings ADD COLUMN z_pz_label_template_id INTEGER",
+            "ALTER TABLE wms_settings ADD COLUMN z_pz_label_template_id INTEGER",
+        ),
     )
 
 
@@ -179,6 +193,24 @@ def _migrate_collective_z_pz_open_status(engine: Engine) -> None:
             )
 
 
+def _migrate_z_pz_series_padding(engine: Engine) -> None:
+    if not has_table(engine, "document_series"):
+        return
+    cols = set(get_table_column_names(engine, "document_series"))
+    if "padding_length" not in cols or "subtype" not in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE document_series
+                SET padding_length = 0
+                WHERE subtype = 'Z_PZ' AND COALESCE(padding_length, 6) = 6
+                """
+            )
+        )
+
+
 def _ensure_collective_z_pz_unique_index(engine: Engine) -> None:
     if not has_table(engine, "stock_documents"):
         return
@@ -248,6 +280,7 @@ def ensure_z_pz_schema(engine: Engine) -> int:
         raise
 
     try:
+        _migrate_z_pz_series_padding(engine)
         _ensure_collective_z_pz_unique_index(engine)
         _ensure_wms_order_returns_indexes(engine)
     except Exception:

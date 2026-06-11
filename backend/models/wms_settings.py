@@ -26,6 +26,9 @@ class WmsSettings(Base):
     require_condition = Column(Boolean, nullable=False, default=False)
     enable_refund = Column(Boolean, nullable=False, default=False)
 
+    z_pz_print_label_on_close = Column(Boolean, nullable=False, default=False)
+    z_pz_label_template_id = Column(Integer, nullable=True)
+
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 

@@ -128,7 +128,7 @@ def _apply_spec_to_new_row(row: DocumentSeries, spec: dict) -> None:
     if hasattr(DocumentSeries, "is_default"):
         row.is_default = bool(spec.get("is_default", True))
     if hasattr(DocumentSeries, "padding_length"):
-        row.padding_length = int(spec.get("padding_length") or 6)
+        row.padding_length = int(spec["padding_length"]) if "padding_length" in spec else 0
 
 
 def _ensure_series_row(

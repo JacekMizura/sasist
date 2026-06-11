@@ -12,6 +12,7 @@ export {
 export type DocumentTypeFilterTab = import("./warehouseDocumentConfigs").WarehouseDocType;
 
 export function warehouseDocTypeBadgeLabel(t: import("./warehouseDocumentConfigs").WarehouseDocType): string {
+  if (t === "Z_PZ") return "Z-PZ";
   return t === "MM" ? "PM" : t;
 }
 
@@ -73,12 +74,37 @@ export function typeBadgeClass(t: import("./warehouseDocumentConfigs").Warehouse
       return "bg-blue-100 text-blue-900 ring-blue-200/90";
     case "ZW":
       return "bg-amber-100 text-amber-900 ring-amber-200/90";
+    case "Z_PZ":
+      return "bg-teal-100 text-teal-900 ring-teal-200/90";
     default:
       return "bg-slate-100 text-slate-800 ring-slate-200/90";
   }
 }
 
-export type BusinessDocStatus = "NOWE" | "W TRAKCIE" | "GOTOWE" | "ZAKOŃCZONE" | "ANULOWANE" | "ZREALIZOWANA";
+export type BusinessDocStatus = "NOWE" | "W TRAKCIE" | "GOTOWE" | "ZAKOŃCZONE" | "ANULOWANE" | "ZREALIZOWANA" | "OTWARTY" | "ZAMKNIĘTY";
+
+export function warehouseDocumentListStatus(
+  r: {
+    status: string;
+    document_type?: string;
+    total_received?: number;
+    receiving_status?: string;
+    putaway_status?: string;
+    relocation_status?: string;
+    is_fully_received?: boolean;
+    is_fully_putaway?: boolean;
+  },
+): BusinessDocStatus {
+  const docType = String(r.document_type ?? "")
+    .trim()
+    .toUpperCase();
+  const st = (r.status || "").trim().toUpperCase();
+  if (docType === "Z_PZ") {
+    if (st === "OPEN") return "OTWARTY";
+    if (st === "CLOSED") return "ZAMKNIĘTY";
+  }
+  return businessDocStatus(r);
+}
 
 export function businessDocStatus(r: {
   status: string;
@@ -158,6 +184,10 @@ export function businessStatusBadgeClass(status: BusinessDocStatus): string {
       return "bg-amber-50 text-amber-900 ring-amber-200/90";
     case "ANULOWANE":
       return "bg-rose-50 text-rose-900 ring-rose-200/90";
+    case "OTWARTY":
+      return "bg-emerald-50 text-emerald-800 ring-emerald-200/90";
+    case "ZAMKNIĘTY":
+      return "bg-slate-100 text-slate-700 ring-slate-200/90";
     default:
       return "bg-slate-100 text-slate-700 ring-slate-200/90";
   }

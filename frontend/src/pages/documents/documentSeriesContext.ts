@@ -30,10 +30,13 @@ export function parseDocumentsPathForSeriesContext(pathname: string): DocumentSe
     const seg = (parts[2] ?? "").toLowerCase();
     const map: Record<string, DocumentSeriesSubtype> = {
       pz: "PZ",
+      "z-pz": "Z_PZ",
       wz: "WZ",
       mm: "MM",
       rw: "RW",
       pw: "PW",
+      zd: "ZD",
+      zw: "ZW",
     };
     const st = map[seg];
     if (st) return { type: "WAREHOUSE", subtype: st };

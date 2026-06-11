@@ -47,6 +47,27 @@ class TestFormatDocumentNumber(unittest.TestCase):
         out = format_document_number(s, 3, now=datetime(2026, 6, 4))
         self.assertEqual(out, "PA/2026/06/3")
 
+    def test_z_pz_year_format_no_padding(self):
+        s = _series(
+            prefix="Z-PZ",
+            numbering_format="{PREFIX}-{YEAR}-{NUMBER}",
+            padding_length=0,
+            monthly_reset=False,
+        )
+        out = format_document_number(s, 3, now=datetime(2026, 6, 4))
+        self.assertEqual(out, "Z-PZ-2026-3")
+
+    def test_default_no_padding_when_unset(self):
+        s = SimpleNamespace(
+            prefix="Z-PZ",
+            suffix="",
+            numbering_format="{PREFIX}-{YEAR}-{NUMBER}",
+            code="MAG1",
+            monthly_reset=False,
+        )
+        out = format_document_number(s, 1, now=datetime(2026, 6, 4))
+        self.assertEqual(out, "Z-PZ-2026-1")
+
     def test_wz_with_warehouse_code_legacy_format(self):
         s = _series(
             prefix="WZ",

@@ -225,8 +225,16 @@ export async function setWmsReturnsModeSettings(payload: {
   tenant_id?: number | null;
   warehouse_id?: number | null;
   returns_mode: string;
+  z_pz_print_label_on_close?: boolean;
+  z_pz_label_template_id?: number | null;
 }): Promise<WmsSettingsRead> {
   const body: Record<string, unknown> = { returns_mode: payload.returns_mode };
+  if (payload.z_pz_print_label_on_close != null) {
+    body.z_pz_print_label_on_close = payload.z_pz_print_label_on_close;
+  }
+  if (payload.z_pz_label_template_id !== undefined) {
+    body.z_pz_label_template_id = payload.z_pz_label_template_id;
+  }
   if (payload.tenant_id != null && Number.isFinite(Number(payload.tenant_id)) && Number(payload.tenant_id) > 0) {
     body.tenant_id = Math.floor(Number(payload.tenant_id));
   }

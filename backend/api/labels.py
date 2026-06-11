@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from ..models.label_template import SavedLabelTemplate
 from ..models.order import Order
 from ..models.bundle import Bundle
 from ..models.product import Product
+from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.tenant import Tenant
 from ..models.wms_order_return import WmsOrderReturn
 from ..models.wms_rmz_line import RMZLine
@@ -79,6 +80,11 @@ class CartLabelBody(BaseModel):
 class ReturnLabelPrintBody(BaseModel):
     return_line_id: int
     template_type: str = "RETURN"
+
+
+class ZPzLabelPrintBody(BaseModel):
+    stock_document_id: int = Field(ge=1)
+    template_id: int = Field(ge=1)
 
 
 def _return_line_to_label_record(
@@ -291,6 +297,74 @@ def post_labels_print_return(
     pdf_bytes = render_label_template(
         db=db,
         template_id=template.id,
+        data=[record],
+        tenant_id=tenant_id,
+    )
+    return Response(content=pdf_bytes, media_type="application/pdf")
+
+
+def _z_pz_to_label_record(
+    doc: StockDocument,
+    *,
+    line_count: int,
+    unit_sum: float,
+) -> dict:
+    num = str(getattr(doc, "document_number", None) or "").strip() or f"Z-PZ #{int(doc.id)}"
+    barcode = f"ZPZ-{int(doc.id)}"
+    units = int(unit_sum) if float(unit_sum).is_integer() else round(float(unit_sum), 4)
+    return {
+        "document_number": num,
+        "barcode_data": barcode,
+        "barcode_value": barcode,
+        "line_count": str(line_count),
+        "unit_sum": str(units),
+        "quantity": str(units),
+        "{document_number}": num,
+        "{barcode_data}": barcode,
+        "{barcode_value}": barcode,
+        "{line_count}": str(line_count),
+        "{unit_sum}": str(units),
+    }
+
+
+@router.post("/print/z-pz")
+def post_labels_print_z_pz(
+    body: ZPzLabelPrintBody,
+    tenant_id: int = TENANT_ID,
+    db: Session = Depends(get_db),
+):
+    """Generate Z-PZ carrier label PDF (template from WMS returns settings)."""
+    doc = (
+        db.query(StockDocument)
+        .filter(
+            StockDocument.id == int(body.stock_document_id),
+            StockDocument.tenant_id == tenant_id,
+            StockDocument.document_type == "Z_PZ",
+        )
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Dokument Z-PZ nie znaleziony")
+    template = db.query(SavedLabelTemplate).filter(
+        SavedLabelTemplate.id == int(body.template_id),
+        SavedLabelTemplate.tenant_id == tenant_id,
+    ).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Szablon etykiety nie znaleziony")
+    agg = (
+        db.query(
+            func.count(StockDocumentItem.id),
+            func.coalesce(func.sum(StockDocumentItem.received_quantity), 0.0),
+        )
+        .filter(StockDocumentItem.document_id == int(doc.id))
+        .one()
+    )
+    line_count = int(agg[0] or 0)
+    unit_sum = float(agg[1] or 0.0)
+    record = _z_pz_to_label_record(doc, line_count=line_count, unit_sum=unit_sum)
+    pdf_bytes = render_label_template(
+        db=db,
+        template_id=int(body.template_id),
         data=[record],
         tenant_id=tenant_id,
     )
