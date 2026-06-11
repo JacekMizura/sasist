@@ -64,6 +64,7 @@ def build_operational_catalog(
 
     catalog: list[dict[str, Any]] = []
     seen_segments: set[str] = set()
+    seen_stock_types: set[str] = set()
     for row in visible:
         st = str(getattr(row, "series_type", None) or "WAREHOUSE").strip().upper()
         sub = str(getattr(row, "subtype", None) or "").strip().upper()
@@ -77,6 +78,11 @@ def build_operational_catalog(
                 continue
             seen_segments.add(seg_key)
         stock_type = stock_document_type_for_subtype(sub if st == "WAREHOUSE" else "")
+        if st == "WAREHOUSE" and stock_type:
+            stock_key = str(stock_type).strip().upper()
+            if stock_key in seen_stock_types:
+                continue
+            seen_stock_types.add(stock_key)
         catalog.append(
             {
                 "series_id": str(row.id),

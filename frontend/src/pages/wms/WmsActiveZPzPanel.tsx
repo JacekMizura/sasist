@@ -81,7 +81,7 @@ export function WmsActiveZPzPanel({ warehouseId, refreshKey = 0, onClosed }: Pro
   if (!doc) {
     if (err) {
       return (
-        <div className="mx-auto mb-2 w-full max-w-5xl rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+        <div className="mx-auto mb-2 w-full max-w-sm rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
           {err}
         </div>
       );
@@ -90,38 +90,57 @@ export function WmsActiveZPzPanel({ warehouseId, refreshKey = 0, onClosed }: Pro
   }
 
   const createdLabel = formatWmsListDate(doc.created_at ?? null);
-  const lineLabel =
-    doc.line_count === 1 ? "pozycja" : doc.line_count >= 2 && doc.line_count <= 4 ? "pozycje" : "pozycji";
   const unitSum = Math.round(doc.unit_sum * 100) / 100;
+  const rmzCount = doc.rmz_count ?? 0;
 
   return (
     <section
-      className="mx-auto mb-3 w-full max-w-5xl rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+      className="mx-auto mb-2 w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
       aria-label="Aktywny dokument zwrotów"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-sm font-bold text-slate-900">{doc.document_number}</span>
-            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate font-mono text-sm font-bold text-slate-900">{doc.document_number}</span>
+            <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800">
               AKTYWNY
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-slate-600">
-            {doc.line_count} {lineLabel} · {unitSum} szt.
-          </p>
-          {createdLabel ? <p className="text-xs text-slate-500">utworzono {createdLabel}</p> : null}
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] leading-snug text-slate-600">
+            <div>
+              <dt className="sr-only">Liczba RMZ</dt>
+              <dd>
+                RMZ: <span className="font-semibold tabular-nums text-slate-800">{rmzCount}</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="sr-only">Liczba pozycji</dt>
+              <dd>
+                Pozycje: <span className="font-semibold tabular-nums text-slate-800">{doc.line_count}</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="sr-only">Liczba sztuk</dt>
+              <dd>
+                Sztuki: <span className="font-semibold tabular-nums text-slate-800">{unitSum}</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="sr-only">Data utworzenia</dt>
+              <dd className="tabular-nums">{createdLabel || "—"}</dd>
+            </div>
+          </dl>
         </div>
         <button
           type="button"
           disabled={closing}
           onClick={() => void handleClose()}
-          className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-slate-800 px-3 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
+          className="inline-flex h-7 shrink-0 items-center justify-center rounded-md bg-slate-800 px-2.5 text-[11px] font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
         >
-          {closing ? "Zamykanie…" : "Zamknij dokument"}
+          {closing ? "…" : "Zamknij dokument"}
         </button>
       </div>
-      {err ? <p className="mt-2 text-xs text-rose-700">{err}</p> : null}
+      {err ? <p className="mt-1.5 text-[11px] text-rose-700">{err}</p> : null}
     </section>
   );
 }

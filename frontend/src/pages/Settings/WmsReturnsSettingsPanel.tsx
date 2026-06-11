@@ -219,7 +219,7 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
                 onChange={(e) => setDraftPrintLabel(e.target.checked)}
               />
               <span>
-                <span className={fieldLabel}>Drukuj etykietę po zamknięciu dokumentu Z-PZ</span>
+                <span className={fieldLabel}>Drukuj etykietę po zamknięciu Z-PZ</span>
                 <span className={fieldHint}>
                   Po zamknięciu nośnika zwrotów etykieta trafi na drukarkę WMS (QZ) lub do podglądu PDF.
                 </span>

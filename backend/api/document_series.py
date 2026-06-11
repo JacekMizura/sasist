@@ -137,7 +137,7 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         numbering_format=str(row.numbering_format or "{PREFIX}{NUMBER}"),
         reset_each_period=bool(row.reset_each_period),
         code=str(getattr(row, "code", None) or ""),
-        padding_length=int(getattr(row, "padding_length", None) or 6),
+        padding_length=int(getattr(row, "padding_length", None) or 0),
         yearly_reset=bool(getattr(row, "yearly_reset", False)),
         monthly_reset=bool(getattr(row, "monthly_reset", False)),
         is_default=bool(getattr(row, "is_default", False)),
@@ -310,7 +310,7 @@ def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
     if hasattr(row, "code"):
         row.code = (body.code or "").strip()
     if hasattr(row, "padding_length"):
-        row.padding_length = int(body.padding_length or 6)
+        row.padding_length = int(body.padding_length or 0)
     if hasattr(row, "yearly_reset"):
         row.yearly_reset = bool(body.yearly_reset)
     if hasattr(row, "monthly_reset"):

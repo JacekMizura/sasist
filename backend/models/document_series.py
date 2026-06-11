@@ -96,7 +96,7 @@ class DocumentSeries(Base):
     reset_each_period = Column(Boolean, nullable=False, default=False)
     #: Short warehouse/location code for {WAREHOUSE}/{CODE} tokens in numbering_format.
     code = Column(String(32), nullable=False, default="")
-    padding_length = Column(Integer, nullable=False, default=6)
+    padding_length = Column(Integer, nullable=False, default=0)
     yearly_reset = Column(Boolean, nullable=False, default=False)
     monthly_reset = Column(Boolean, nullable=False, default=False)
     is_default = Column(Boolean, nullable=False, default=False, index=True)

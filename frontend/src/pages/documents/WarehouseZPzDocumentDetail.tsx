@@ -30,9 +30,15 @@ function fmtQty(n: number) {
 
 type MetaItem = { label: string; value: ReactNode };
 
-function MetaGrid({ items }: { items: MetaItem[] }) {
+function MetaGrid({ items, cols = 3 }: { items: MetaItem[]; cols?: 2 | 3 | 4 }) {
+  const colCls =
+    cols === 2
+      ? "sm:grid-cols-2"
+      : cols === 4
+        ? "sm:grid-cols-2 lg:grid-cols-4"
+        : "sm:grid-cols-2 lg:grid-cols-3";
   return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
+    <dl className={`grid grid-cols-2 gap-x-6 gap-y-4 ${colCls}`}>
       {items.map((item) => (
         <div key={item.label} className="min-w-0">
           <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{item.label}</dt>
@@ -48,9 +54,18 @@ type Props = {
   status: BusinessDocStatus;
   loading?: boolean;
   error?: string | null;
+  layout?: "page" | "embedded";
+  backLink?: ReactNode;
 };
 
-export function WarehouseZPzDocumentDetail({ detail, status, loading, error }: Props) {
+export function WarehouseZPzDocumentDetail({
+  detail,
+  status,
+  loading,
+  error,
+  layout = "embedded",
+  backLink,
+}: Props) {
   const docNumber = (detail.document_number || "").trim() || `#${detail.id}`;
   const currency = detail.currency || "PLN";
 
@@ -74,7 +89,7 @@ export function WarehouseZPzDocumentDetail({ detail, status, loading, error }: P
         ? valueSum
         : null;
 
-  const metaItems: MetaItem[] = [
+  const headerItems: MetaItem[] = [
     {
       label: "Magazyn",
       value: detail.warehouse_id == null ? "—" : (detail.warehouse_name || "").trim() || `#${detail.warehouse_id}`,
@@ -91,6 +106,9 @@ export function WarehouseZPzDocumentDetail({ detail, status, loading, error }: P
       label: "Data zamknięcia",
       value: <span className="tabular-nums">{formatDt(detail.closed_at ?? null)}</span>,
     },
+  ];
+
+  const summaryItems: MetaItem[] = [
     {
       label: "Liczba pozycji",
       value: <span className="tabular-nums">{lineCount}</span>,
@@ -101,30 +119,41 @@ export function WarehouseZPzDocumentDetail({ detail, status, loading, error }: P
     },
     {
       label: "Wartość dokumentu",
-      value: <span className="tabular-nums font-semibold">{fmtMoneyCur(docValue, currency)}</span>,
+      value: <span className="tabular-nums text-base font-semibold">{fmtMoneyCur(docValue, currency)}</span>,
     },
   ];
 
+  const shellCls =
+    layout === "page"
+      ? "flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm"
+      : "flex min-h-0 flex-col";
+
   return (
-    <>
-      <header className="shrink-0 border-b border-slate-200 bg-white px-6 pb-5 pt-6">
+    <div className={shellCls}>
+      <header className="shrink-0 border-b border-slate-200 bg-white px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
+        {backLink ? <div className="mb-4">{backLink}</div> : null}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Zbiorczy dokument zwrotu</p>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{docNumber}</h2>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Dokument magazynowy · Z-PZ</p>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{docNumber}</h1>
           </div>
           <ExternalStatusBadge status={status} />
         </div>
-        <div className="mt-6 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
-          <MetaGrid items={metaItems} />
+        <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+          <MetaGrid items={headerItems} cols={4} />
         </div>
       </header>
 
       {error ? (
-        <div className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-800">{error}</div>
+        <div className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800 sm:px-6">{error}</div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+        <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Podsumowanie</h2>
+        <MetaGrid items={summaryItems} cols={3} />
+      </div>
+
+      <div className={`min-h-0 flex-1 ${layout === "page" ? "overflow-y-auto" : ""} p-5 sm:p-6`}>
         {loading ? (
           <div className="flex items-center justify-center py-16 text-sm text-slate-500">Wczytywanie…</div>
         ) : (
@@ -139,7 +168,7 @@ export function WarehouseZPzDocumentDetail({ detail, status, loading, error }: P
                     <th className="px-4 py-3 font-bold text-right">Ilość</th>
                     <th className="px-4 py-3 font-bold text-right">Cena zakupu</th>
                     <th className="px-4 py-3 font-bold text-right">Wartość</th>
-                    <th className="px-4 py-3 font-bold text-center">Decyzja</th>
+                    <th className="px-4 py-3 font-bold text-center">Decyzja zwrotu</th>
                     <th className="px-4 py-3 font-bold">Źródłowy RMZ</th>
                   </tr>
                 </thead>
@@ -202,6 +231,6 @@ export function WarehouseZPzDocumentDetail({ detail, status, loading, error }: P
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }

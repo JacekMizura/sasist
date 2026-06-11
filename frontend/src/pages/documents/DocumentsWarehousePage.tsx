@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ClipboardList } from "lucide-react";
 import api from "../../api/axios";
@@ -25,7 +25,7 @@ import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
 import WarehouseDocumentsTable from "./WarehouseDocumentsTable";
 import { WarehouseDocumentDetailFooter } from "./WarehouseDocumentDetailFooter";
 import { WarehouseDocumentLinesSection } from "./WarehouseDocumentLinesSection";
-import { WarehouseZPzDocumentDetail } from "./WarehouseZPzDocumentDetail";
+import { WarehouseZPzDocumentPage } from "./WarehouseZPzDocumentPage";
 import { getWarehouseDocumentConfig } from "./warehouseDocumentConfigs";
 import {
   documentSourceLabelDetail,
@@ -87,6 +87,7 @@ function parseQty(s: string): number | null {
 export default function DocumentsWarehousePage() {
   const { docSegment } = useParams<{ docSegment: string }>();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const { warehouseTypes, firstWarehousePath, loading: seriesLoading, hasWarehouseType } = useOperationalDocumentSeries();
@@ -98,6 +99,13 @@ export default function DocumentsWarehousePage() {
     if (!hit?.stock_document_type) return null;
     return normalizeWarehouseDocType(hit.stock_document_type);
   }, [docSegment, warehouseTypes]);
+
+  const zPzPageId = useMemo(() => {
+    if (routeType !== "Z_PZ") return null;
+    const raw = searchParams.get("id");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [routeType, searchParams]);
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
@@ -220,6 +228,10 @@ export default function DocumentsWarehousePage() {
 
   const openDetail = useCallback(
     async (id: number) => {
+      if (docTab === "Z_PZ" || routeType === "Z_PZ") {
+        navigate(`/documents/warehouse/z-pz?id=${id}`);
+        return;
+      }
       setDetailOpen(true);
       setDetailId(id);
       setDetail(null);
@@ -243,16 +255,17 @@ export default function DocumentsWarehousePage() {
         setDetailLoading(false);
       }
     },
-    [tenantId],
+    [tenantId, docTab, routeType, navigate],
   );
 
   useEffect(() => {
+    if (routeType === "Z_PZ") return;
     const raw = searchParams.get("id");
     const openId = raw ? Number(raw) : NaN;
     if (!Number.isFinite(openId) || openId <= 0) return;
     if (detailId === openId && detailOpen) return;
     void openDetail(openId);
-  }, [searchParams, openDetail, detailId, detailOpen]);
+  }, [searchParams, openDetail, detailId, detailOpen, routeType]);
 
   const receiveAll = useCallback(() => {
     if (!detail) return;
@@ -491,10 +504,6 @@ export default function DocumentsWarehousePage() {
   const isDraft = docStatusLower === "draft";
   const isWmsCompleteDraft = docStatusLower === "zakonczone";
   const isPzDetail = detail ? normalizeWarehouseDocType(detail.document_type) === "PZ" : false;
-  const isZpzDetail =
-    detail != null
-      ? normalizeWarehouseDocType(detail.document_type) === "Z_PZ"
-      : docTab === "Z_PZ" || routeType === "Z_PZ";
   const isWzDetail = detail ? normalizeWarehouseDocType(detail.document_type) === "WZ" : false;
   const detailDocType = detail ? normalizeWarehouseDocType(detail.document_type) : docTab;
   const detailListConfig = getWarehouseDocumentConfig(detailDocType);
@@ -652,6 +661,10 @@ export default function DocumentsWarehousePage() {
     );
   }
 
+  if (zPzPageId != null) {
+    return <WarehouseZPzDocumentPage documentId={zPzPageId} />;
+  }
+
   return (
     <>
       {toastText ? (
@@ -774,21 +787,6 @@ export default function DocumentsWarehousePage() {
             className="flex max-h-[min(92vh,calc(100dvh-2rem))] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {isZpzDetail ? (
-              detail ? (
-                <WarehouseZPzDocumentDetail
-                  detail={detail}
-                  status={detailBizStatus ?? warehouseDocumentListStatus(detail)}
-                  loading={detailLoading}
-                  error={detailErr}
-                />
-              ) : (
-                <header className="shrink-0 border-b border-slate-200 bg-white px-6 py-6">
-                  <p className="text-sm text-slate-500">Wczytywanie dokumentu…</p>
-                </header>
-              )
-            ) : (
-              <>
             <header className="shrink-0 border-b border-slate-200 bg-white px-6 pb-5 pt-6">
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 {detail ? `Dokument magazynowy · ${normalizeWarehouseDocType(detail.document_type)}` : "Dokument magazynowy"}
@@ -1091,8 +1089,6 @@ export default function DocumentsWarehousePage() {
                 </div>
               ) : null}
             </div>
-              </>
-            )}
 
             <WarehouseDocumentDetailFooter
               detailBusy={detailBusy}

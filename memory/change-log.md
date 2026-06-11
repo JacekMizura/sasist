@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Z-PZ UI komplet + numeracja globalna bez zer
+
+- **Numeracja:** domyślne `padding_length=0` (model, schema, API); repair serii WAREHOUSE; RMZ bez `:05d`
+- **Kafelek aktywnego Z-PZ:** tylko `/wms/returns`, max-w-sm, RMZ/pozycje/sztuki/data + Zamknij
+- **Szczegóły Z-PZ:** pełny ekran `/documents/warehouse/z-pz?id=` (Sellasist: nagłówek, podsumowanie, tabela + RMZ)
+- **Menu dokumentów:** dedupe po etykiecie + stock_type w katalogu API (fix duplikat PZ)
+
 ## 2026-06-08 — Numeracja magazynowa bez paddingu + widok Z-PZ (Sellasist)
 
 - **Numeracja:** wszystkie serie WAREHOUSE (PZ, MM, WZ, RW, PW, ZD, Z-PZ) + RMZ bez wiodących zer; migracja `padding_length=0`; `_next_rmz_number` → `RMZ-2026-1`

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-# Monthly numbering: PZ/2026/06/000001
+# Monthly numbering: PZ/2026/06/1
 DEFAULT_NUMBERING_FORMAT = "{PREFIX}/{YEAR}/{MONTH}/{NUMBER}"
 
 

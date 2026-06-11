@@ -49,12 +49,15 @@ function sortWarehouseNavItems(items: DocumentsNavItem[]): DocumentsNavItem[] {
 }
 
 function dedupeNavItems(items: DocumentsNavItem[]): DocumentsNavItem[] {
-  const seen = new Set<string>();
+  const seenPaths = new Set<string>();
+  const seenLabels = new Set<string>();
   const out: DocumentsNavItem[] = [];
   for (const item of items) {
-    const key = item.path.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const pathKey = item.path.toLowerCase();
+    const labelKey = item.label.trim().toUpperCase();
+    if (seenPaths.has(pathKey) || seenLabels.has(labelKey)) continue;
+    seenPaths.add(pathKey);
+    seenLabels.add(labelKey);
     out.push(item);
   }
   return out;

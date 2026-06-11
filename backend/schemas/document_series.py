@@ -83,7 +83,7 @@ class DocumentSeriesBase(BaseModel):
     numbering_format: str = Field("{PREFIX}{NUMBER}", max_length=256)
     reset_each_period: bool = False
     code: str = Field("", max_length=32)
-    padding_length: int = Field(6, ge=0, le=12)
+    padding_length: int = Field(0, ge=0, le=12)
     yearly_reset: bool = False
     monthly_reset: bool = False
     is_default: bool = False

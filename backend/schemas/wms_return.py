@@ -376,7 +376,7 @@ class WmsReturnRead(BaseModel):
     )
     warehouse_document_number: Optional[str] = Field(
         default=None,
-        description="Numer dokumentu Z-PZ (np. Z-PZ-2026-000001).",
+        description="Numer dokumentu Z-PZ (np. Z-PZ-2026-1).",
     )
 
 
@@ -400,6 +400,7 @@ class ActiveZPzRead(BaseModel):
     status: str = "OPEN"
     line_count: int = 0
     unit_sum: float = 0.0
+    rmz_count: int = 0
     created_at: Optional[datetime] = None
     warehouse_id: Optional[int] = None
     barcode_value: str

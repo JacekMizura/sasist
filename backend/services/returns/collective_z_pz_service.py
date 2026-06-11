@@ -68,6 +68,15 @@ def summarize_collective_z_pz(db: Session, doc: StockDocument) -> dict[str, Any]
     )
     line_count = int(rows[0] or 0)
     unit_sum = float(rows[1] or 0.0)
+    rmz_count = int(
+        db.query(func.count(func.distinct(StockDocumentItem.source_rmz_id)))
+        .filter(
+            StockDocumentItem.document_id == int(doc.id),
+            StockDocumentItem.source_rmz_id.isnot(None),
+        )
+        .scalar()
+        or 0
+    )
     num = str(getattr(doc, "document_number", None) or "").strip() or f"Z-PZ #{int(doc.id)}"
     created = getattr(doc, "created_at", None)
     return {
@@ -77,6 +86,7 @@ def summarize_collective_z_pz(db: Session, doc: StockDocument) -> dict[str, Any]
         "status": str(getattr(doc, "status", None) or Z_PZ_STATUS_OPEN),
         "line_count": line_count,
         "unit_sum": round(unit_sum, 4),
+        "rmz_count": rmz_count,
         "created_at": created.isoformat() if isinstance(created, datetime) else None,
         "warehouse_id": int(doc.warehouse_id) if getattr(doc, "warehouse_id", None) else None,
         "barcode_value": f"ZPZ-{int(doc.id)}",

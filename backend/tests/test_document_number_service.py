@@ -23,7 +23,7 @@ def _series(**kwargs):
         prefix="MM",
         suffix="",
         numbering_format=DEFAULT_NUMBERING_FORMAT,
-        padding_length=6,
+        padding_length=0,
         code="MAG1",
         monthly_reset=True,
     )
@@ -35,12 +35,12 @@ class TestFormatDocumentNumber(unittest.TestCase):
     def test_mm_monthly_format(self):
         s = _series()
         out = format_document_number(s, 1, now=datetime(2026, 6, 4))
-        self.assertEqual(out, "MM/2026/06/000001")
+        self.assertEqual(out, "MM/2026/06/1")
 
     def test_pz_monthly_format(self):
         s = _series(prefix="PZ", subtype="PZ")
         out = format_document_number(s, 42, now=datetime(2026, 6, 4))
-        self.assertEqual(out, "PZ/2026/06/000042")
+        self.assertEqual(out, "PZ/2026/06/42")
 
     def test_pa_receipt_zero_padding(self):
         s = _series(prefix="PA", numbering_format="{PREFIX}/{YEAR}/{MONTH}/{NUMBER}", padding_length=0)
@@ -76,7 +76,7 @@ class TestFormatDocumentNumber(unittest.TestCase):
             monthly_reset=False,
         )
         out = format_document_number(s, 145, now=datetime(2026, 3, 1))
-        self.assertEqual(out, "WZ/MAG1/2026/000145")
+        self.assertEqual(out, "WZ/MAG1/2026/145")
 
 
 class TestMonthlyReset(unittest.TestCase):
