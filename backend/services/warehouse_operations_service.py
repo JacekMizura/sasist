@@ -1289,8 +1289,19 @@ def _queue_counts(db: Session, *, tenant_id: int, warehouse_id: int) -> tuple[li
         .filter(
             StockDocument.tenant_id == tenant_id,
             StockDocument.warehouse_id == warehouse_id,
-            StockDocument.document_type.in_(["PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM"]),
+            StockDocument.document_type == "PZ",
             StockDocument.receiving_status.in_(["NEW", "IN_PROGRESS"]),
+        )
+        .scalar()
+        or 0
+    )
+    z_pz_putaway_docs = int(
+        db.query(func.count(StockDocument.id))
+        .filter(
+            StockDocument.tenant_id == tenant_id,
+            StockDocument.warehouse_id == warehouse_id,
+            StockDocument.document_type == "Z_PZ",
+            StockDocument.putaway_status.in_(["NOT_STARTED", "IN_PROGRESS"]),
         )
         .scalar()
         or 0
@@ -1300,6 +1311,7 @@ def _queue_counts(db: Session, *, tenant_id: int, warehouse_id: int) -> tuple[li
         .filter(
             StockDocument.tenant_id == tenant_id,
             StockDocument.warehouse_id == warehouse_id,
+            StockDocument.document_type.in_(["PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"]),
             StockDocument.putaway_status.in_(["NOT_STARTED", "IN_PROGRESS"]),
         )
         .scalar()
@@ -1324,7 +1336,7 @@ def _queue_counts(db: Session, *, tenant_id: int, warehouse_id: int) -> tuple[li
             key="operations",
             label="Operacje magazynowe",
             value=receiving_docs + putaway_docs + active_relocation_tasks,
-            detail=f"PZ: {receiving_docs}, rozlokowanie: {putaway_docs}, relokacje: {active_relocation_tasks}",
+            detail=f"PZ: {receiving_docs}, Z-PZ: {z_pz_putaway_docs}, rozlokowanie: {putaway_docs}, relokacje: {active_relocation_tasks}",
             tone="neutral",
         ),
         WarehouseOperationsQueueOut(
@@ -1340,6 +1352,7 @@ def _queue_counts(db: Session, *, tenant_id: int, warehouse_id: int) -> tuple[li
         "active_shortage_tasks": active_shortage_tasks,
         "active_relocation_tasks": active_relocation_tasks,
         "receiving_docs": receiving_docs,
+        "z_pz_putaway_docs": z_pz_putaway_docs,
         "putaway_docs": putaway_docs,
         "packing_braki": int(dash.packing_braki),
         "orders_delayed": int(getattr(dash, "orders_delayed", 0) or 0),

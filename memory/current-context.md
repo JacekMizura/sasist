@@ -3,7 +3,7 @@
 ## WMS returns finalize (2026-06-08)
 - Dokument **Z-PZ** (`Z_PZ`) zamiast zwykłego PZ / legacy PZ_RT
 - Seria **Z-PZ** auto-seed: numeracja `Z-PZ-2026-000001`, opcja `collective_return_receipt` (zbiorczy / dzień)
-- RMZ: `warehouse_document_id`, `warehouse_document_type`; Z-PZ: `source_rmz_ids_json` + linie `source_rmz_id`
+- RMZ: `warehouse_document_id`, `warehouse_document_type`; powiązania `stock_document_return_links`; linie `source_rmz_id` + `return_decision`
 - REJECTED bez ruchu magazynowego; ACCEPTED/DAMAGED → Z-PZ → kolejka rozlokowania
 
 ## Direct sales line delete (2026-06-08)

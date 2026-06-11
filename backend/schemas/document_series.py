@@ -90,7 +90,7 @@ class DocumentSeriesBase(BaseModel):
     is_active: bool = True
     notes: Optional[str] = None
     collective_return_receipt: bool = Field(
-        default=False,
+        default=True,
         description="Z-PZ: jeden zbiorczy dokument na dzień zamiast osobnego Z-PZ per RMZ.",
     )
     company_name: Optional[str] = Field(None, max_length=256)

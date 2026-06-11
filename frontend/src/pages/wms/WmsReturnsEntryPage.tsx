@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 
 import api from "../../api/axios";
 import { listComplaints } from "../../api/complaintsApi";
@@ -1180,6 +1180,15 @@ export default function WmsReturnsEntryPage() {
                                     onActivate={() => navigate(WMS_ROUTES.returnsProcess(r.id))}
                                     tileRef={idx === 0 ? firstQueueTileRef : undefined}
                                   />
+                                  {r.warehouse_document_id != null && r.warehouse_document_number ? (
+                                    <Link
+                                      to={WMS_ROUTES.putawayPz(r.warehouse_document_id)}
+                                      className="mt-1 inline-flex max-w-full truncate text-xs font-medium text-[#41546a] underline-offset-2 hover:underline"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {r.warehouse_document_number}
+                                    </Link>
+                                  ) : null}
                                 </div>
                               );
                             }

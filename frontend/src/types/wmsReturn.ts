@@ -102,6 +102,10 @@ export type WmsReturnListItem = {
   total_refund_amount?: number;
   /** Panel triage label (not workflow status). */
   ui_status?: ReturnUiStatusBrief | null;
+  stock_document_ids?: number[];
+  warehouse_document_id?: number | null;
+  warehouse_document_type?: string | null;
+  warehouse_document_number?: string | null;
 };
 
 /** Wpis uszkodzenia w odpowiedzi GET (split-process / odczyt linii). */
@@ -186,6 +190,7 @@ export type WmsReturnRead = {
   stock_document_ids?: number[];
   warehouse_document_id?: number | null;
   warehouse_document_type?: string | null;
+  warehouse_document_number?: string | null;
 };
 
 export type WmsReturnCreate = {

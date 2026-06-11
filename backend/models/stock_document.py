@@ -155,6 +155,8 @@ class StockDocumentItem(Base):
         nullable=True,
         index=True,
     )
+    #: Decyzja zwrotu przy finalizacji RMZ: ACCEPTED | DAMAGED_B | DAMAGED_C.
+    return_decision = Column(String(24), nullable=True, index=True)
 
     #: Sugestia WMS: przyjęcie na wskazany nośnik (operator może zignorować i przyjąć luzem).
     suggested_warehouse_carrier_id = Column(

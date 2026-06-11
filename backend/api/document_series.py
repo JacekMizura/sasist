@@ -143,7 +143,13 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         is_default=bool(getattr(row, "is_default", False)),
         is_active=bool(getattr(row, "is_active", True)),
         notes=row.notes,
-        collective_return_receipt=bool(getattr(row, "collective_return_receipt", False)),
+        collective_return_receipt=bool(
+            getattr(
+                row,
+                "collective_return_receipt",
+                str(getattr(row, "subtype", "") or "").upper() == "Z_PZ",
+            )
+        ),
         company_name=row.company_name,
         company_street=getattr(row, "company_street", None),
         company_house_number=getattr(row, "company_house_number", None),

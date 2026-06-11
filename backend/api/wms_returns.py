@@ -53,6 +53,7 @@ from ..services.delete_service import archive_wms_returns_bulk
 from ..services.rmz_return_receipt_service import (
     ensure_rmz_return_receipt_after_refund,
     ensure_rmz_return_receipt_document,
+    stock_document_ids_for_rmz,
 )
 from ..services.return_status_service import get_by_transition_key, seed_default_statuses_session
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
@@ -142,28 +143,31 @@ def _parse_damage_entries_raw(raw: object) -> List[dict]:
     return [x for x in data if isinstance(x, dict)] if isinstance(data, list) else []
 
 def _stock_document_ids_for_rmz(db: Session, rmz_id: int) -> List[int]:
-    ids: set[int] = set()
-    rmz = db.query(WmsOrderReturn).filter(WmsOrderReturn.id == int(rmz_id)).first()
-    if rmz is not None and getattr(rmz, "warehouse_document_id", None):
-        ids.add(int(rmz.warehouse_document_id))
+    return stock_document_ids_for_rmz(db, rmz_id)
 
-    for row in (
-        db.query(StockDocument.id)
-        .filter(StockDocument.rmz_id == int(rmz_id))
-        .order_by(StockDocument.id.asc())
-        .all()
-    ):
-        ids.add(int(row[0]))
 
-    for row in (
-        db.query(StockDocumentItem.document_id)
-        .filter(StockDocumentItem.source_rmz_id == int(rmz_id))
-        .distinct()
-        .all()
-    ):
-        ids.add(int(row[0]))
+def _warehouse_document_number(db: Session, doc_id: Optional[int]) -> Optional[str]:
+    if doc_id is None:
+        return None
+    doc = db.query(StockDocument).filter(StockDocument.id == int(doc_id)).first()
+    if doc is None:
+        return None
+    num = str(getattr(doc, "document_number", None) or "").strip()
+    if num:
+        return num
+    dt = str(getattr(doc, "document_type", None) or "Z_PZ").strip().upper()
+    label = "Z-PZ" if dt == "Z_PZ" else dt
+    return f"{label} #{int(doc.id)}"
 
-    return sorted(ids)
+
+def _rmz_document_fields(db: Session, row: WmsOrderReturn) -> dict:
+    wh_doc_id = getattr(row, "warehouse_document_id", None)
+    return {
+        "stock_document_ids": _stock_document_ids_for_rmz(db, row.id),
+        "warehouse_document_id": wh_doc_id,
+        "warehouse_document_type": (str(getattr(row, "warehouse_document_type", None) or "").strip() or None),
+        "warehouse_document_number": _warehouse_document_number(db, wh_doc_id),
+    }
 
 
 def _optional_positive_int(raw: object) -> Optional[int]:
@@ -1210,9 +1214,7 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
         ui_status=_brief_ui_status(ui_row),
         workflow_finished=terminal,
         workflow_editable=not terminal,
-        stock_document_ids=_stock_document_ids_for_rmz(db, row.id),
-        warehouse_document_id=getattr(row, "warehouse_document_id", None),
-        warehouse_document_type=(str(getattr(row, "warehouse_document_type", None) or "").strip() or None),
+        **_rmz_document_fields(db, row),
     )
 
 
@@ -1249,6 +1251,7 @@ def _list_item_from_row(db: Session, r: WmsOrderReturn, order: Order) -> WmsRetu
         refund=_build_refund_dict(refund_row),  # type: ignore[arg-type]
         ui_status=_brief_ui_status(ui_row),
         total_refund_amount=total_refund,
+        **_rmz_document_fields(db, r),
     )
 
 

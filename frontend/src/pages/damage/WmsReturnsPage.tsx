@@ -3358,7 +3358,11 @@ export default function WmsReturnsPage() {
       }
 
       try {
-        sessionStorage.setItem("wms_returns_saved_toast", "Zwrot zapisany");
+        const docNo = (finalReturn.warehouse_document_number || "").trim();
+        const toastMsg = docNo
+          ? `Zwrot zakończony. Utworzono dokument ${docNo}`
+          : "Zwrot zakończony";
+        sessionStorage.setItem("wms_returns_saved_toast", toastMsg);
       } catch {
         /* quota / private mode */
       }

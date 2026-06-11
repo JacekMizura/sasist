@@ -320,6 +320,10 @@ class WmsReturnListItem(BaseModel):
         default=0.0,
         description="Panel list: refund + shipping when set, else estimate from RMZ lines × order item prices.",
     )
+    stock_document_ids: List[int] = Field(default_factory=list)
+    warehouse_document_id: Optional[int] = None
+    warehouse_document_type: Optional[str] = None
+    warehouse_document_number: Optional[str] = None
 
 
 class WmsReturnQueueCountsRead(BaseModel):
@@ -369,6 +373,10 @@ class WmsReturnRead(BaseModel):
     warehouse_document_type: Optional[str] = Field(
         default=None,
         description="Typ dokumentu magazynowego (np. Z_PZ).",
+    )
+    warehouse_document_number: Optional[str] = Field(
+        default=None,
+        description="Numer dokumentu Z-PZ (np. Z-PZ-2026-000001).",
     )
 
 

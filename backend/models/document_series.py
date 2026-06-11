@@ -106,7 +106,7 @@ class DocumentSeries(Base):
     notes = Column(Text, nullable=True)
 
     #: Z-PZ only: gdy True — jeden dokument Z-PZ na dzień, dopisywanie pozycji ze wszystkich RMZ.
-    collective_return_receipt = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    collective_return_receipt = Column(Boolean, nullable=False, default=True, server_default=text("1"))
 
     company_name = Column(String(256), nullable=True)
     company_street = Column(String(256), nullable=True)

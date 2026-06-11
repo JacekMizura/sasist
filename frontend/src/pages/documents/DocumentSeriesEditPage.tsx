@@ -118,7 +118,7 @@ function dtoToWrite(d: DocumentSeriesDto): DocumentSeriesWritePayload {
     is_default: d.is_default ?? false,
     is_active: d.is_active ?? true,
     notes: d.notes,
-    collective_return_receipt: d.collective_return_receipt ?? false,
+    collective_return_receipt: d.collective_return_receipt ?? (d.subtype === "Z_PZ" ? true : false),
     company_name: d.company_name,
     company_street: d.company_street ?? null,
     company_house_number: d.company_house_number ?? null,
@@ -488,7 +488,7 @@ export default function DocumentSeriesEditPage() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
-                    checked={draft.collective_return_receipt ?? false}
+                    checked={draft.collective_return_receipt ?? true}
                     onChange={(e) => setField("collective_return_receipt", e.target.checked)}
                   />
                   <span>

@@ -74,7 +74,7 @@ OPERATIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
         "subtype": "Z_PZ",
         "operational_code": "Z-PZ",
         "prefix": "Z-PZ",
-        "name": "Z-PZ — PZ zwrotna (RMZ)",
+        "name": "Zwroty",
         "numbering_format": "{PREFIX}-{YEAR}-{NUMBER}",
         "yearly_reset": True,
         "monthly_reset": False,

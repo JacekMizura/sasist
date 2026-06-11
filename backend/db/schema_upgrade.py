@@ -3970,7 +3970,7 @@ def ensure_document_series_extended_columns(engine: Engine) -> None:
             ("is_default", false_bool),
             ("is_active", true_bool),
             ("last_number_period", "VARCHAR(16)"),
-            ("collective_return_receipt", false_bool),
+            ("collective_return_receipt", true_bool),
         ]
         for col, typ in additions:
             if col not in cols:
@@ -6022,12 +6022,36 @@ def ensure_workforce_user_groups_schema(engine: Engine) -> None:
 
 
 def ensure_z_pz_return_receipt_columns(engine: Engine) -> None:
-    """Z-PZ: RMZ linkage columns on stock documents / lines."""
+    """Z-PZ: RMZ linkage (return links table + line metadata)."""
     with engine.connect() as conn:
-        if _table_exists(conn, "stock_documents"):
-            cols = _table_column_names(conn, "stock_documents")
-            if "source_rmz_ids_json" not in cols:
-                conn.execute(text("ALTER TABLE stock_documents ADD COLUMN source_rmz_ids_json TEXT"))
+        if not _table_exists(conn, "stock_document_return_links"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS stock_document_return_links (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        stock_document_id INTEGER NOT NULL REFERENCES stock_documents(id) ON DELETE CASCADE,
+                        rmz_id INTEGER NOT NULL REFERENCES wms_order_returns(id) ON DELETE CASCADE,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (stock_document_id, rmz_id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_stock_document_return_links_doc "
+                    "ON stock_document_return_links(stock_document_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_stock_document_return_links_rmz "
+                    "ON stock_document_return_links(rmz_id)"
+                )
+            )
         if _table_exists(conn, "stock_document_items"):
             cols = _table_column_names(conn, "stock_document_items")
             if "source_rmz_id" not in cols:
@@ -6037,6 +6061,8 @@ def ensure_z_pz_return_receipt_columns(engine: Engine) -> None:
                         "REFERENCES wms_order_returns(id) ON DELETE SET NULL"
                     )
                 )
+            if "return_decision" not in cols:
+                conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN return_decision VARCHAR(24)"))
         conn.commit()
 
 
