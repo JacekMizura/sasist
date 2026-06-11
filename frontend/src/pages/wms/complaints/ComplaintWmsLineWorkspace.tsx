@@ -36,6 +36,7 @@ type Props = {
   onPhoneSessionChange: (session: PhoneUploadSessionState | null) => void;
   onDecision: (action: ComplaintWmsDecisionAction) => void | Promise<void>;
   onWarehouseReceive?: () => void | Promise<void>;
+  warehouseActionsAvailable?: boolean;
 };
 
 function fmtDate(iso?: string | null): string {
@@ -153,6 +154,7 @@ export function ComplaintWmsLineWorkspace({
   onPhoneSessionChange,
   onDecision,
   onWarehouseReceive,
+  warehouseActionsAvailable = true,
 }: Props) {
   const imgSrc = line.product_image_url ? resolveDamageMediaUrl(line.product_image_url) : "";
   const complaintStatus = normalizeComplaintStatus(data.status);
@@ -262,24 +264,27 @@ export function ComplaintWmsLineWorkspace({
           />
         </div>
 
-        <div className="space-y-2 border-t border-slate-100 px-4 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Przyjęcie magazynowe</p>
-          {line.warehouse_receipt_posted ? (
-            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
-              Towar przyjęty — linia Z-PZ utworzona
-            </p>
-          ) : (
-            <DecisionButton
-              label="TOWAR OTRZYMANY"
-              tone="emerald"
-              disabled={receiveBusy || decisionBusy}
-              onClick={() => void onWarehouseReceive?.()}
-            />
-          )}
-        </div>
+        {warehouseActionsAvailable ? (
+          <div className="space-y-2 border-t border-slate-100 px-4 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Przyjęcie magazynowe</p>
+            {line.warehouse_receipt_posted ? (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+                Towar przyjęty — linia Z-PZ utworzona
+              </p>
+            ) : (
+              <DecisionButton
+                label="TOWAR OTRZYMANY"
+                tone="emerald"
+                disabled={receiveBusy || decisionBusy}
+                onClick={() => void onWarehouseReceive?.()}
+              />
+            )}
+          </div>
+        ) : null}
 
-        <div className="space-y-2 border-t border-slate-100 px-4 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Decyzja magazynowa</p>
+        {warehouseActionsAvailable ? (
+          <div className="space-y-2 border-t border-slate-100 px-4 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Decyzja magazynowa</p>
           <DecisionButton
             label="PRZYJĘTA DO WERYFIKACJI"
             tone="slate"
@@ -327,6 +332,13 @@ export function ComplaintWmsLineWorkspace({
             />
           </div>
         </div>
+        ) : (
+          <div className="border-t border-slate-100 px-4 py-4">
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              Reklamacja bez udziału magazynu — obsługa wyłącznie biznesowa / serwisowa.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

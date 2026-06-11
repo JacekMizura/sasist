@@ -168,6 +168,7 @@ export type ComplaintListItem = {
   customer_reason?: string | null;
   /** Z listy `GET /complaints/` — liczba wierszy `complaint_lines` (kafel kolejki). */
   lines_count?: number | null;
+  physical_receipt_mode?: string;
 };
 
 export type ComplaintDocumentItem = {
@@ -257,6 +258,9 @@ export type ComplaintDetail = {
   warehouse_document_id?: number | null;
   warehouse_document_type?: string | null;
   warehouse_document_number?: string | null;
+  /** WAREHOUSE | SERVICE_FORWARD | DIRECT_SERVICE */
+  physical_receipt_mode?: string;
+  warehouse_actions_available?: boolean;
 };
 
 export type ComplaintStatusSummaryDto = {

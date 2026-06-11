@@ -290,6 +290,22 @@ export async function patchComplaintLine(
   return normalizeComplaintDetail(res.data);
 }
 
+export type ComplaintPhysicalReceiptMode = "WAREHOUSE" | "SERVICE_FORWARD" | "DIRECT_SERVICE";
+
+export async function patchComplaintPhysicalReceiptMode(
+  complaintId: number,
+  tenantId: number,
+  warehouseId: number | undefined,
+  physicalReceiptMode: ComplaintPhysicalReceiptMode,
+): Promise<ComplaintDetail> {
+  const res = await api.patch<ComplaintDetail>(
+    `/complaints/${complaintId}/physical-receipt-mode`,
+    { physical_receipt_mode: physicalReceiptMode },
+    { params: complaintQueryParams(tenantId, warehouseId) },
+  );
+  return normalizeComplaintDetail(res.data);
+}
+
 /** Fizyczny odbiór towaru reklamacyjnego — linia Z-PZ (QUARANTINE). */
 export async function receiveComplaintLineWarehouse(
   complaintId: number,

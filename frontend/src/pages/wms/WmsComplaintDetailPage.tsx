@@ -6,11 +6,13 @@ import { Link, useParams } from "react-router-dom";
 import {
   getComplaint,
   patchComplaintLine,
+  patchComplaintPhysicalReceiptMode,
   patchComplaintStatus,
   receiveComplaintLineWarehouse,
   updateLineOperation,
   uploadComplaintPanelPhotos,
   wmsUpdateComplaintItems,
+  type ComplaintPhysicalReceiptMode,
 } from "../../api/complaintsApi";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import {
@@ -23,6 +25,10 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { ComplaintProcessLineSidebar } from "./complaints/ComplaintProcessLineSidebar";
+import {
+  ComplaintWmsPhysicalReceiptMode,
+  normalizePhysicalReceiptMode,
+} from "./complaints/ComplaintWmsPhysicalReceiptMode";
 import {
   ComplaintWmsLineWorkspace,
   type ComplaintWmsDecisionAction,
@@ -81,6 +87,7 @@ export default function WmsComplaintDetailPage() {
   const [saveBusy, setSaveBusy] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState(false);
   const [receiveBusyLineId, setReceiveBusyLineId] = useState<number | null>(null);
+  const [modeBusy, setModeBusy] = useState(false);
   const [saveComplaintConfirmOpen, setSaveComplaintConfirmOpen] = useState(false);
   const [noteByLine, setNoteByLine] = useState<Record<number, string>>({});
 
@@ -179,6 +186,15 @@ export default function WmsComplaintDetailPage() {
   );
   const totalQty = useMemo(() => lines.reduce((sum, l) => sum + (l.quantity ?? 0), 0), [lines]);
   const resolvedCount = useMemo(() => lines.filter((l) => complaintLineIsResolved(l)).length, [lines]);
+  const physicalReceiptMode = useMemo(
+    () => normalizePhysicalReceiptMode(data?.physical_receipt_mode),
+    [data?.physical_receipt_mode],
+  );
+  const warehouseActionsAvailable = data?.warehouse_actions_available !== false && physicalReceiptMode !== "DIRECT_SERVICE";
+  const anyLineReceiptPosted = useMemo(
+    () => lines.some((l) => l.warehouse_receipt_posted),
+    [lines],
+  );
 
   const sidebarItems = useMemo(() => {
     const all = complaintLineSidebarItems(lines, data?.status);
@@ -294,7 +310,7 @@ export default function WmsComplaintDetailPage() {
       try {
         let next: ComplaintDetail = data;
         if (action === "verification") {
-          if (!line.warehouse_receipt_posted) {
+          if (warehouseActionsAvailable && !line.warehouse_receipt_posted) {
             next = await receiveComplaintLineWarehouse(data.id, line.id, DAMAGE_TENANT_ID, warehouseId);
           }
           try {
@@ -338,7 +354,28 @@ export default function WmsComplaintDetailPage() {
         setDecisionBusy(false);
       }
     },
-    [data, showToast, warehouseId],
+    [data, showToast, warehouseActionsAvailable, warehouseId],
+  );
+
+  const handlePhysicalReceiptModeChange = useCallback(
+    async (mode: ComplaintPhysicalReceiptMode) => {
+      if (data == null || modeBusy) return;
+      setModeBusy(true);
+      try {
+        const next = await patchComplaintPhysicalReceiptMode(data.id, DAMAGE_TENANT_ID, warehouseId, mode);
+        setData(next);
+        showToast("Zapisano sposób obsługi towaru");
+      } catch (e) {
+        const msg =
+          axios.isAxiosError(e) && typeof e.response?.data === "object" && e.response.data && "detail" in e.response.data
+            ? String((e.response.data as { detail: unknown }).detail)
+            : "Nie udało się zapisać trybu obsługi towaru.";
+        showToast(msg, 3000);
+      } finally {
+        setModeBusy(false);
+      }
+    },
+    [data, modeBusy, showToast, warehouseId],
   );
 
   const handleWarehouseReceive = useCallback(
@@ -503,6 +540,13 @@ export default function WmsComplaintDetailPage() {
               />
             </div>
             <section className="flex min-h-0 min-w-0 flex-col overflow-y-auto bg-white p-2 lg:p-3">
+              <div className="mb-3 max-w-4xl">
+                <ComplaintWmsPhysicalReceiptMode
+                  value={physicalReceiptMode}
+                  disabled={modeBusy || anyLineReceiptPosted}
+                  onChange={handlePhysicalReceiptModeChange}
+                />
+              </div>
               {!activeLine ? (
                 <div className="flex flex-1 flex-col items-center justify-center p-10 text-center text-slate-500">
                   <p className="text-sm font-medium">Wybierz pozycję z listy, aby rozpocząć obsługę reklamacji.</p>
@@ -533,6 +577,7 @@ export default function WmsComplaintDetailPage() {
                   onPhoneSessionChange={setPhoneUploadSession}
                   onDecision={(action) => void applyDecision(activeLine, action)}
                   onWarehouseReceive={() => void handleWarehouseReceive(activeLine)}
+                  warehouseActionsAvailable={warehouseActionsAvailable}
                 />
               )}
             </section>

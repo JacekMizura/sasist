@@ -545,11 +545,13 @@ def backfill_stock_item_locations_if_needed(db: Session) -> None:
 
 def list_wms_putaway_pz_documents(db: Session, tenant_id: int) -> List[WmsReceivingPzListRow]:
     """PZ ready for putaway: any received qty (live) + relocation OPEN. MM drafts use /wms/mm/relocation."""
+    from .complaints.complaint_physical_receipt import document_has_putaway_eligible_received_lines
+
     pz_docs, pz_by = _load_putaway_pz_docs_with_lines(db, tenant_id)
     merged: List[tuple[StockDocument, List[StockDocumentItem]]] = []
     for d in pz_docs:
         lines = pz_by.get(d.id) or []
-        if any(float(x.received_quantity or 0) > 1e-9 for x in lines):
+        if document_has_putaway_eligible_received_lines(db, lines):
             merged.append((d, lines))
     merged.sort(
         key=lambda t: getattr(t[0], "updated_at", None) or datetime.min,
@@ -587,6 +589,10 @@ def suggest_putaway_location(db: Session, tenant_id: int, item_id: int) -> WmsPu
     if float(row.received_quantity or 0) <= 1e-9:
         return WmsPutawaySuggestLocationOut(source="none")
     if is_stock_document_item_wm_material(row):
+        return WmsPutawaySuggestLocationOut(source="none")
+    from .complaints.complaint_physical_receipt import stock_document_item_requires_putaway
+
+    if not stock_document_item_requires_putaway(row, db=db):
         return WmsPutawaySuggestLocationOut(source="none")
 
     mm_skip_source: set[int] = set()
@@ -772,6 +778,10 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
     if float(row.received_quantity or 0) <= 1e-9 or row.product_id is None:
         return WmsPutawayLocationSuggestionsOut()
     if is_stock_document_item_wm_material(row):
+        return WmsPutawayLocationSuggestionsOut()
+    from .complaints.complaint_physical_receipt import stock_document_item_requires_putaway
+
+    if not stock_document_item_requires_putaway(row, db=db):
         return WmsPutawayLocationSuggestionsOut()
 
     mm_skip_source: set[int] = set()
@@ -1162,6 +1172,12 @@ def patch_wms_putaway_item(
         raise ValueError(
             "Rozlokowanie WMS dotyczy produktów w lokalizacjach. Kartony i materiały pakowe są księgowane "
             "na stanie materiałów magazynowych przy zatwierdzeniu przyjęcia dostawy."
+        )
+    from .complaints.complaint_physical_receipt import stock_document_item_requires_putaway
+
+    if not stock_document_item_requires_putaway(row, db=db):
+        raise ValueError(
+            "Ta linia reklamacji nie wymaga rozlokowania magazynowego (przekazanie do serwisu / direct-service)."
         )
 
     rec = float(row.received_quantity or 0)

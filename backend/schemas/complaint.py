@@ -234,6 +234,7 @@ class ComplaintListRead(BaseModel):
     customer_reason: Optional[str] = None
     #: Liczba wierszy `complaint_lines` (kafel listy — skrót bez nazw produktów).
     lines_count: int = 0
+    physical_receipt_mode: str = "WAREHOUSE"
 
 
 class ComplaintStatusCountRow(BaseModel):
@@ -295,7 +296,15 @@ ComplaintLogisticsStatusCode = Literal[
     "IN_INSPECTION",
     "IN_SERVICE",
     "RETURNED_FROM_SERVICE",
+    "FORWARDED_TO_SERVICE",
+    "SENT_DIRECTLY_TO_SERVICE",
 ]
+
+ComplaintPhysicalReceiptMode = Literal["WAREHOUSE", "SERVICE_FORWARD", "DIRECT_SERVICE"]
+
+
+class ComplaintPhysicalReceiptModePatch(BaseModel):
+    physical_receipt_mode: ComplaintPhysicalReceiptMode
 
 
 class ComplaintAuditEventRead(BaseModel):
@@ -429,6 +438,8 @@ class ComplaintRead(BaseModel):
     warehouse_document_id: Optional[int] = None
     warehouse_document_type: Optional[str] = None
     warehouse_document_number: Optional[str] = None
+    physical_receipt_mode: str = "WAREHOUSE"
+    warehouse_actions_available: bool = True
 
 
 def complaint_photo_url_dedupe_key(url: str) -> str:

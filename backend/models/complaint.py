@@ -92,6 +92,9 @@ class Complaint(Base):
     logistics_expected_return_date = Column(Date, nullable=True)
     logistics_in_service_since = Column(DateTime, nullable=True)
 
+    #: Sposób fizycznego obiegu towaru: WAREHOUSE | SERVICE_FORWARD | DIRECT_SERVICE
+    physical_receipt_mode = Column(String(24), nullable=False, default="WAREHOUSE", index=True)
+
     #: Powiązany dokument magazynowy Z-PZ (przyjęcie towaru reklamacyjnego).
     warehouse_document_id = Column(
         Integer,

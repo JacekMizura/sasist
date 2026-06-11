@@ -41,6 +41,7 @@ from ..schemas.complaint import (
     ComplaintLogisticsActionBody,
     ComplaintLineRead,
     ComplaintListRead,
+    ComplaintPhysicalReceiptModePatch,
     ComplaintOrderSummary,
     ComplaintRead,
     ComplaintResolutionPatch,
@@ -66,9 +67,20 @@ from ..services.complaint_documents_sync import (
     regenerate_complaint_documents as run_regenerate_complaint_documents,
 )
 from ..services.complaints.complaint_receipt_service import (
+    apply_direct_service_logistics,
+    complaint_has_warehouse_receipt,
     complaint_line_receipt_posted,
     receive_complaint_line_at_warehouse,
     sync_complaint_line_disposition_from_decision,
+)
+from ..services.complaints.complaint_physical_receipt import (
+    ALL_PHYSICAL_RECEIPT_MODES,
+    LOGISTICS_SENT_DIRECTLY_TO_SERVICE,
+    PHYSICAL_RECEIPT_MODE_DIRECT_SERVICE,
+    PHYSICAL_RECEIPT_MODE_SERVICE_FORWARD,
+    PHYSICAL_RECEIPT_MODE_WAREHOUSE,
+    complaint_allows_warehouse_actions,
+    normalize_physical_receipt_mode,
 )
 from .order import build_order_read
 from ..services.complaint_image_upload import (
@@ -183,6 +195,8 @@ ALL_LOGISTICS_STATUSES: frozenset[str] = frozenset(
         "IN_INSPECTION",
         "IN_SERVICE",
         "RETURNED_FROM_SERVICE",
+        "FORWARDED_TO_SERVICE",
+        "SENT_DIRECTLY_TO_SERVICE",
     }
 )
 
@@ -1098,6 +1112,8 @@ def build_complaint_read(db: Session, c: Complaint) -> ComplaintRead:
             db,
             getattr(c, "warehouse_document_id", None),
         ),
+        physical_receipt_mode=normalize_physical_receipt_mode(getattr(c, "physical_receipt_mode", None)),
+        warehouse_actions_available=complaint_allows_warehouse_actions(c),
     )
 
 
@@ -1151,6 +1167,7 @@ def _list_read(c: Complaint, db: Session) -> ComplaintListRead:
         defect_ids=_defect_ids_from_complaint(c),
         customer_reason=_list_customer_reason_display(c),
         lines_count=lines_count,
+        physical_receipt_mode=normalize_physical_receipt_mode(getattr(c, "physical_receipt_mode", None)),
     )
 
 
@@ -1188,6 +1205,10 @@ def list_complaints(
         None,
         description="Dokładny status: NOWE | WERYFIKACJA | DECYZJA | ZAAKCEPTOWANA | ODRZUCONA",
     ),
+    physical_receipt_mode: Optional[str] = Query(
+        None,
+        description="WAREHOUSE | SERVICE_FORWARD | DIRECT_SERVICE",
+    ),
     sort_by: str = Query(
         "deadline_urgency",
         description="deadline_urgency | created_at | id | title",
@@ -1214,6 +1235,12 @@ def list_complaints(
                 query = query.filter(or_(Complaint.status.is_(None), Complaint.status == "", Complaint.status == "NOWE"))
             else:
                 query = query.filter(Complaint.status == raw)
+
+        if physical_receipt_mode and str(physical_receipt_mode).strip():
+            mode_raw = str(physical_receipt_mode).strip().upper()
+            if mode_raw not in ALL_PHYSICAL_RECEIPT_MODES:
+                raise HTTPException(status_code=400, detail="Invalid physical_receipt_mode filter")
+            query = query.filter(Complaint.physical_receipt_mode == mode_raw)
 
         if q and q.strip():
             term = f"%{q.strip()}%"
@@ -2103,6 +2130,72 @@ def patch_complaint_line(
     return build_complaint_read(db, c)
 
 
+@router.patch("/{complaint_id}/physical-receipt-mode", response_model=ComplaintRead)
+def patch_complaint_physical_receipt_mode(
+    complaint_id: int,
+    body: ComplaintPhysicalReceiptModePatch,
+    tenant_id: int = Query(...),
+    warehouse_id: int = Depends(complaint_panel_warehouse_id),
+    db: Session = Depends(get_db),
+):
+    """Sposób obsługi towaru: magazyn / przekazanie do serwisu / direct-service (bez magazynu)."""
+    _apply_due_response_deadlines(db, tenant_id, warehouse_id)
+    c = (
+        db.query(Complaint)
+        .options(
+            joinedload(Complaint.order),
+            joinedload(Complaint.lines).joinedload(ComplaintLine.order_item).joinedload(OrderItem.product),
+        )
+        .filter(
+            Complaint.id == complaint_id,
+            _tenant_warehouse_active(tenant_id, warehouse_id),
+        )
+        .first()
+    )
+    if not c or getattr(c, "deleted_at", None) is not None:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+
+    new_mode = normalize_physical_receipt_mode(body.physical_receipt_mode)
+    old_mode = normalize_physical_receipt_mode(getattr(c, "physical_receipt_mode", None))
+    if new_mode == old_mode:
+        return build_complaint_read(db, c)
+
+    if complaint_has_warehouse_receipt(db, int(c.id)):
+        raise HTTPException(
+            status_code=400,
+            detail="Nie można zmienić trybu po utworzeniu linii Z-PZ / przyjęciu magazynowym.",
+        )
+
+    if new_mode == PHYSICAL_RECEIPT_MODE_DIRECT_SERVICE:
+        apply_direct_service_logistics(c)
+    elif old_mode == PHYSICAL_RECEIPT_MODE_DIRECT_SERVICE:
+        c.logistics_status = "WAITING_FOR_ITEM"
+
+    c.physical_receipt_mode = new_mode
+    append_complaint_audit_event(
+        db,
+        c.id,
+        "physical_receipt_mode",
+        f"Ustawiono sposób obsługi towaru: {new_mode}.",
+        meta={"from": old_mode, "to": new_mode},
+    )
+    db.add(c)
+    db.commit()
+
+    refreshed = (
+        db.query(Complaint)
+        .options(
+            joinedload(Complaint.order),
+            joinedload(Complaint.lines).joinedload(ComplaintLine.order_item).joinedload(OrderItem.product),
+        )
+        .filter(Complaint.id == complaint_id, _tenant_warehouse_active(tenant_id, warehouse_id))
+        .first()
+    )
+    if not refreshed:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    return build_complaint_read(db, refreshed)
+
+
 @router.post("/{complaint_id}/lines/{line_id}/warehouse-receive", response_model=ComplaintRead)
 def receive_complaint_line_warehouse(
     complaint_id: int,
@@ -2131,8 +2224,17 @@ def receive_complaint_line_warehouse(
     if line is None:
         raise HTTPException(status_code=404, detail="Complaint line not found")
 
+    mode = normalize_physical_receipt_mode(getattr(c, "physical_receipt_mode", None))
+    if mode == PHYSICAL_RECEIPT_MODE_DIRECT_SERVICE:
+        raise HTTPException(
+            status_code=400,
+            detail="Reklamacja bez udziału magazynu — brak przyjęcia magazynowego i Z-PZ.",
+        )
+
     ls = _norm_logistics_status(getattr(c, "logistics_status", None))
-    if ls not in ("WAITING_FOR_ITEM", "RECEIVED", ""):
+    if ls in (LOGISTICS_SENT_DIRECTLY_TO_SERVICE,):
+        raise HTTPException(status_code=400, detail="Reklamacja direct-service — magazyn nie uczestniczy.")
+    if ls not in ("WAITING_FOR_ITEM", "RECEIVED", "FORWARDED_TO_SERVICE", ""):
         raise HTTPException(
             status_code=400,
             detail="Przyjęcie magazynowe możliwe tylko gdy reklamacja oczekuje na towar lub towar został odebrany.",
@@ -2143,17 +2245,23 @@ def receive_complaint_line_warehouse(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if ls == "WAITING_FOR_ITEM":
+    if ls == "WAITING_FOR_ITEM" and mode == PHYSICAL_RECEIPT_MODE_WAREHOUSE:
         c.logistics_status = "RECEIVED"
+    audit_msg = (
+        "Przekazano towar do serwisu (Z-PZ, bez rozlokowania)."
+        if mode == PHYSICAL_RECEIPT_MODE_SERVICE_FORWARD
+        else "Przyjęto towar reklamacyjny do magazynu (Z-PZ)."
+    )
     append_complaint_audit_event(
         db,
         complaint_id,
         "warehouse_receive",
-        "Przyjęto towar reklamacyjny do magazynu (Z-PZ).",
+        audit_msg,
         meta={
             "complaint_line_id": line_id,
-            "stock_document_id": int(doc.id),
-            "document_number": _complaint_warehouse_document_number(db, int(doc.id)),
+            "physical_receipt_mode": mode,
+            "stock_document_id": int(doc.id) if doc is not None else None,
+            "document_number": _complaint_warehouse_document_number(db, int(doc.id)) if doc else None,
         },
     )
     db.add(c)

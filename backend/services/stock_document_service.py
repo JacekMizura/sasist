@@ -538,8 +538,11 @@ def effective_putaway_quantity_for_line(db: Session, row: StockDocumentItem) -> 
 
 def compute_is_fully_putaway_for_items(db: Session, items: List[StockDocumentItem]) -> bool:
     """Lines with received > 0 must have effective putaway >= received_quantity."""
+    from .complaints.complaint_physical_receipt import filter_putaway_eligible_lines
+
     eps = 1e-5
-    for row in items:
+    eligible = filter_putaway_eligible_lines(db, items)
+    for row in eligible:
         rec = float(row.received_quantity or 0)
         if rec <= eps:
             continue
@@ -697,10 +700,13 @@ def recompute_putaway_status_for_document(
     """PZ / Z-PZ / MM: NOT_STARTED | IN_PROGRESS | DONE from lines (received > 0)."""
     if not doc_allows_putaway_status_recompute(doc):
         return
+    from .complaints.complaint_physical_receipt import filter_putaway_eligible_lines
+
     eps = 1e-5
+    rows_for_putaway = item_rows if db is None else filter_putaway_eligible_lines(db, item_rows)
     candidates = [
         r
-        for r in item_rows
+        for r in rows_for_putaway
         if float(r.received_quantity or 0) > eps and not is_stock_document_item_wm_material(r)
     ]
     if not candidates:

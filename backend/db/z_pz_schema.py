@@ -41,6 +41,7 @@ Z_PZ_EXTENDED_VERIFY: tuple[tuple[str, str], ...] = (
     ("wms_order_returns", "warehouse_document_type"),
     ("complaints", "warehouse_document_id"),
     ("complaints", "warehouse_document_type"),
+    ("complaints", "physical_receipt_mode"),
     ("document_series", "collective_return_receipt"),
 )
 
@@ -132,6 +133,12 @@ def _column_specs() -> tuple[_ColumnSpec, ...]:
             "warehouse_document_type",
             "ALTER TABLE complaints ADD COLUMN warehouse_document_type VARCHAR(32)",
             "ALTER TABLE complaints ADD COLUMN warehouse_document_type VARCHAR(32)",
+        ),
+        _ColumnSpec(
+            "complaints",
+            "physical_receipt_mode",
+            "ALTER TABLE complaints ADD COLUMN physical_receipt_mode VARCHAR(24) NOT NULL DEFAULT 'WAREHOUSE'",
+            "ALTER TABLE complaints ADD COLUMN physical_receipt_mode VARCHAR(24) NOT NULL DEFAULT 'WAREHOUSE'",
         ),
         _ColumnSpec(
             "document_series",
