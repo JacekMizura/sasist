@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, text
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -75,8 +75,13 @@ class StockDocument(Base):
     created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_by_user_name = Column(String(256), nullable=True)
 
-    #: Z-PZ zbiorczy: lista źródłowych RMZ (JSON array of int ids).
+    #: Z-PZ zbiorczy: lista źródłowych RMZ (JSON array of int ids) — legacy, prefer stock_document_return_links.
     source_rmz_ids_json = Column(Text, nullable=True)
+    #: Z-PZ zbiorczy dzienny — guard unikalności per magazyn / dzień.
+    is_collective_return_receipt = Column(
+        Boolean, nullable=False, default=False, server_default=text("0"), index=True
+    )
+    collective_business_date = Column(Date, nullable=True, index=True)
 
     rmz_return = relationship("WmsOrderReturn", foreign_keys=[rmz_id])
     created_by_user = relationship("AppUser", foreign_keys=[created_by_user_id])

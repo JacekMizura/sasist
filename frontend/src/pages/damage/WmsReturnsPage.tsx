@@ -12,10 +12,9 @@ import {
   getWmsCustomerInsights,
   getWmsReturn,
   getWmsReturnsModeSettings,
-  commitWmsReturn,
+  finalizeWmsReturn,
   processWmsReturnLine,
   processWmsReturnLineSplit,
-  processWmsReturnRefund,
 } from "../../api/wmsReturnsApi";
 import { getWmsReturnModuleConfig } from "../../api/returnModuleConfigApi";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -3277,6 +3276,118 @@ export default function WmsReturnsPage() {
     return missing;
   }, [lineSeeds, unitRowsByLineId]);
 
+  const buildFinalizeLinePayload = useCallback(
+    (
+      lineId: string,
+    ): { ok: true; line: import("../../types/wmsReturn").WmsReturnFinalizeLineIn } | { ok: false; message: string } => {
+      const seed = lineSeedByLineId.get(lineId);
+      if (!seed) return { ok: false, message: "Brak danych pozycji — odśwież widok." };
+      const total = Math.max(0, Math.floor(seed.candidate.availableQuantity));
+      const rows = unitRowsByLineId[lineId] ?? [];
+      if (rows.length !== total) {
+        return { ok: false, message: "Niezgodna liczba wierszy jednostek — odśwież widok." };
+      }
+      const slice = rows.slice(0, total);
+      for (let i = 0; i < slice.length; i += 1) {
+        const r = slice[i]!;
+        if (r.decision == null) continue;
+        if (r.decision === "DAMAGED") {
+          if (filterRmzDamageTypeIdsForClass(r.damageClass, r.damageTypeIds, dmgReasons).length < 1) {
+            return {
+              ok: false,
+              message: "Dla każdej uszkodzonej sztuki wybierz co najmniej jeden typ uszkodzenia.",
+            };
+          }
+        }
+      }
+      const accepted = slice.filter((r) => r.decision === "ACCEPTED").length;
+      const damagedRows = slice.filter((r) => r.decision === "DAMAGED");
+      const rejected = slice.filter((r) => r.decision === "REJECTED").length;
+      const allDamagePhotoUrls = [...new Set(damagedRows.flatMap((r) => r.photoUrls))];
+      const aggregated = {
+        accepted,
+        damaged: damagedRows.length,
+        damagedB: damagedRows.filter((r) => r.damageClass === "B").length,
+        damagedC: damagedRows.filter((r) => r.damageClass === "C").length,
+        rejected,
+      };
+      const resolvedSum = aggregated.accepted + aggregated.damaged + aggregated.rejected;
+      if (resolvedSum < total) {
+        return { ok: false, message: "Nie wszystkie sztuki pozycji są rozstrzygnięte." };
+      }
+      if (rejected > 0) {
+        const ovLine = lineOverrides[lineId];
+        const rk =
+          ovLine?.rejectReasonId != null && String(ovLine.rejectReasonId).trim() !== ""
+            ? String(ovLine.rejectReasonId).trim()
+            : "";
+        if (!rk) {
+          return { ok: false, message: "Brak powodu odrzucenia dla zapisu." };
+        }
+        const noteTrim =
+          rk === WMS_REJECT_OTHER_ID ? String(ovLine?.rejectReasonOtherText ?? "").trim() : "";
+        if (rk === WMS_REJECT_OTHER_ID && !noteTrim) {
+          return { ok: false, message: "Uzupełnij uzasadnienie (wymagane przy „Inny powód”)." };
+        }
+      }
+      const encodedDamageTypes = mergeRmzDamageTypePayloadFromUnits(
+        slice.map((r) => ({ decision: r.decision, damageTypeIds: r.damageTypeIds })),
+        dmgReasons,
+      );
+      if (aggregated.damagedB + aggregated.damagedC !== aggregated.damaged) {
+        return { ok: false, message: "Niezgodny podział klas uszkodzenia (B/C)." };
+      }
+      const damage_entries =
+        aggregated.damaged > 0 ? buildDamageEntriesForSplitPayload(slice, dmgReasons) : [];
+      const splitCondition: "A" | "B" | "C" | null =
+        aggregated.damaged > 0
+          ? aggregated.damagedC > 0
+            ? "C"
+            : "B"
+          : aggregated.accepted > 0
+            ? "A"
+            : null;
+      let splitDamageType: string | null = null;
+      if (damage_entries.length === 0 && aggregated.damaged > 0) {
+        splitDamageType = encodedDamageTypes || null;
+      }
+      if (aggregated.rejected > 0) {
+        const ovLine = lineOverrides[lineId];
+        const rk =
+          ovLine?.rejectReasonId != null && String(ovLine.rejectReasonId).trim() !== ""
+            ? String(ovLine.rejectReasonId).trim()
+            : "";
+        if (rk) {
+          const enc = encodeRejectReasonForSplitPayload(
+            rk,
+            rk === WMS_REJECT_OTHER_ID ? ovLine?.rejectReasonOtherText ?? null : null,
+          );
+          splitDamageType = splitDamageType ? `${splitDamageType} | reject:${enc}` : `reject:${enc}`;
+        }
+      }
+      if (aggregated.damaged > 0 && damage_entries.length < 1) {
+        return { ok: false, message: "Brak damage_entries dla uszkodzonych sztuk — zapis został zablokowany." };
+      }
+      return {
+        ok: true,
+        line: {
+          order_item_id: seed.orderItemId,
+          product_id: seed.candidate.productId,
+          accepted_qty: aggregated.accepted,
+          damaged_qty: aggregated.damaged,
+          damaged_b_qty: aggregated.damagedB,
+          damaged_c_qty: aggregated.damagedC,
+          rejected_qty: aggregated.rejected,
+          condition: splitCondition,
+          photo_urls: allDamagePhotoUrls,
+          damage_type: splitDamageType,
+          ...(damage_entries.length > 0 ? { damage_entries } : {}),
+        },
+      };
+    },
+    [lineSeedByLineId, unitRowsByLineId, lineOverrides, dmgReasons],
+  );
+
   const handleSaveDirtyLines = useCallback(async () => {
     if (isFinished) return;
     if (!allLinesFullyResolved) return;
@@ -3314,35 +3425,66 @@ export default function WmsReturnsPage() {
         }
       }
 
+      const finalizeLines: import("../../types/wmsReturn").WmsReturnFinalizeLineIn[] = [];
       for (const lineId of lineIdsToSave) {
-        const ok = await saveSplitForLine(lineId, undefined, { hydrateReturn: false, commitWorkflow: false });
-        if (!ok) {
+        const built = buildFinalizeLinePayload(lineId);
+        if (!built.ok) {
+          setDamageSaveError(built.message);
           return;
         }
+        finalizeLines.push(built.line);
       }
 
-      let finalReturn = await commitWmsReturn(
+      const amt = fullRefundAmount;
+      const shipAmt = refundShipping ? refundShippingAmount : 0;
+      const enableRefund = Boolean(wmsSettings?.enable_refund);
+      const finalReturn = await finalizeWmsReturn(
         selectedReturnDbId,
         DAMAGE_TENANT_ID,
+        {
+          lines: finalizeLines,
+          process_refund: enableRefund,
+          refund: enableRefund
+            ? {
+                refund_type: amt > 0 || (refundShipping && shipAmt > 0) ? "PARTIAL" : "NONE",
+                refund_amount: Number.isFinite(amt) && amt > 0 ? amt : null,
+                refund_shipping: refundShipping,
+                refund_shipping_amount:
+                  refundShipping && Number.isFinite(shipAmt) && shipAmt > 0 ? shipAmt : null,
+                decided_by: "wms_operator",
+              }
+            : null,
+        },
         whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
       );
 
-      if (wmsSettings?.enable_refund) {
-        const amt = fullRefundAmount;
-        const shipAmt = refundShipping ? refundShippingAmount : 0;
-        finalReturn = await processWmsReturnRefund(
-          selectedReturnDbId,
-          DAMAGE_TENANT_ID,
-          {
-            refund_type: amt > 0 || (refundShipping && shipAmt > 0) ? "PARTIAL" : "NONE",
-            refund_amount: Number.isFinite(amt) && amt > 0 ? amt : null,
-            refund_shipping: refundShipping,
-            refund_shipping_amount:
-              refundShipping && Number.isFinite(shipAmt) && shipAmt > 0 ? shipAmt : null,
-            decided_by: "wms_operator",
-          },
-          whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
-        );
+      for (const lineId of lineIdsToSave) {
+        const built = buildFinalizeLinePayload(lineId);
+        if (!built.ok) continue;
+        const seed = lineSeedByLineId.get(lineId);
+        if (seed && built.line.damaged_qty > 0 && whId != null) {
+          const rows = unitRowsByLineId[lineId] ?? [];
+          const damagedRows = rows.filter((r) => r.decision === "DAMAGED");
+          const allDamagePhotoUrls = [...new Set(damagedRows.flatMap((r) => r.photoUrls))];
+          if (allDamagePhotoUrls.length > 0) {
+            const encodedDamageTypes = mergeRmzDamageTypePayloadFromUnits(
+              rows.map((r) => ({ decision: r.decision, damageTypeIds: r.damageTypeIds })),
+              dmgReasons,
+            );
+            try {
+              await createDamageEntry({
+                tenant_id: DAMAGE_TENANT_ID,
+                warehouse_id: Number(whId),
+                product_id: seed.candidate.productId,
+                quantity: built.line.damaged_qty,
+                photo_urls: allDamagePhotoUrls,
+                damage_type: encodedDamageTypes || "other",
+              });
+            } catch {
+              /* RMZ finalize succeeded; damage module entry is best-effort */
+            }
+          }
+        }
       }
 
       setLineOverrides({});
@@ -3390,7 +3532,10 @@ export default function WmsReturnsPage() {
     lineSeeds,
     isLineFullyResolved,
     validateLineSplitForSave,
-    saveSplitForLine,
+    buildFinalizeLinePayload,
+    lineSeedByLineId,
+    unitRowsByLineId,
+    dmgReasons,
     fullRefundAmount,
     refundShipping,
     refundShippingAmount,

@@ -12,6 +12,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models.document_series import DocumentSeries
@@ -33,6 +34,10 @@ from .document_number_service import (
     DocumentSeriesOperationalError,
     assign_series_number_to_stock_document,
     require_warehouse_series,
+)
+from .returns.collective_z_pz_lock import (
+    acquire_collective_z_pz_lock,
+    dialect_supports_for_update,
 )
 from .returns.z_pz_constants import (
     DISPOSITION_OUTLET_B,
@@ -402,25 +407,72 @@ def _find_collective_z_pz_for_today(
     tenant_id: int,
     warehouse_id: int,
     series_id: str,
+    business_date: Optional[date] = None,
+    for_update: bool = False,
 ) -> Optional[StockDocument]:
-    now = datetime.utcnow()
-    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = day_start + timedelta(days=1)
-    return (
-        db.query(StockDocument)
-        .filter(
-            StockDocument.tenant_id == int(tenant_id),
-            StockDocument.warehouse_id == int(warehouse_id),
-            StockDocument.document_type == Z_PZ,
-            StockDocument.document_series_id == str(series_id),
-            StockDocument.status == "draft",
-            StockDocument.relocation_status == "OPEN",
-            StockDocument.created_at >= day_start,
-            StockDocument.created_at < day_end,
-        )
-        .order_by(StockDocument.id.desc())
-        .first()
+    biz_day = business_date or datetime.utcnow().date()
+    q = db.query(StockDocument).filter(
+        StockDocument.tenant_id == int(tenant_id),
+        StockDocument.warehouse_id == int(warehouse_id),
+        StockDocument.document_type == Z_PZ,
+        StockDocument.document_series_id == str(series_id),
+        StockDocument.status == "draft",
+        StockDocument.relocation_status == "OPEN",
+        StockDocument.is_collective_return_receipt.is_(True),
+        StockDocument.collective_business_date == biz_day,
     )
+    if for_update and dialect_supports_for_update(db):
+        q = q.with_for_update()
+    return q.order_by(StockDocument.id.desc()).first()
+
+
+def _find_or_create_collective_z_pz(
+    db: Session,
+    rmz: WmsOrderReturn,
+    *,
+    series: DocumentSeries,
+) -> StockDocument:
+    tenant_id = int(rmz.tenant_id)
+    wh_id = int(rmz.warehouse_id)
+    business_date = datetime.utcnow().date()
+    acquire_collective_z_pz_lock(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=wh_id,
+        business_date=business_date,
+    )
+    existing = _find_collective_z_pz_for_today(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=wh_id,
+        series_id=str(series.id),
+        business_date=business_date,
+        for_update=True,
+    )
+    if existing is not None:
+        return existing
+
+    try:
+        with db.begin_nested():
+            return _create_z_pz_shell(
+                db,
+                rmz,
+                series=series,
+                collective=True,
+                business_date=business_date,
+            )
+    except IntegrityError:
+        hit = _find_collective_z_pz_for_today(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=wh_id,
+            series_id=str(series.id),
+            business_date=business_date,
+            for_update=True,
+        )
+        if hit is not None:
+            return hit
+        raise
 
 
 def _create_z_pz_shell(
@@ -429,8 +481,10 @@ def _create_z_pz_shell(
     *,
     series: DocumentSeries,
     collective: bool,
+    business_date: Optional[date] = None,
 ) -> StockDocument:
     now = datetime.utcnow()
+    biz_day = business_date or now.date()
     doc = StockDocument(
         tenant_id=int(rmz.tenant_id),
         document_type=Z_PZ,
@@ -444,6 +498,8 @@ def _create_z_pz_shell(
         receiving_status="DONE",
         putaway_status="NOT_STARTED",
         relocation_status="OPEN",
+        is_collective_return_receipt=bool(collective),
+        collective_business_date=biz_day if collective else None,
         created_at=now,
         updated_at=now,
     )
@@ -630,12 +686,7 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
 
     doc: StockDocument
     if collective:
-        doc = _find_collective_z_pz_for_today(
-            db,
-            tenant_id=tenant_id,
-            warehouse_id=wh_id,
-            series_id=str(series.id),
-        ) or _create_z_pz_shell(db, rmz, series=series, collective=True)
+        doc = _find_or_create_collective_z_pz(db, rmz, series=series)
     else:
         doc = _create_z_pz_shell(db, rmz, series=series, collective=False)
 

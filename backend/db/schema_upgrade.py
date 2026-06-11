@@ -6063,6 +6063,44 @@ def ensure_z_pz_return_receipt_columns(engine: Engine) -> None:
                 )
             if "return_decision" not in cols:
                 conn.execute(text("ALTER TABLE stock_document_items ADD COLUMN return_decision VARCHAR(24)"))
+        if _table_exists(conn, "stock_documents"):
+            sd_cols = _table_column_names(conn, "stock_documents")
+            if "is_collective_return_receipt" not in sd_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE stock_documents ADD COLUMN is_collective_return_receipt "
+                        "INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+            if "collective_business_date" not in sd_cols:
+                conn.execute(text("ALTER TABLE stock_documents ADD COLUMN collective_business_date DATE"))
+            dialect = engine.dialect.name
+            if dialect == "postgresql":
+                conn.execute(
+                    text(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS ux_stock_documents_collective_z_pz_daily
+                        ON stock_documents (tenant_id, warehouse_id, document_type, collective_business_date)
+                        WHERE is_collective_return_receipt = TRUE
+                          AND status = 'draft'
+                          AND relocation_status = 'OPEN'
+                          AND document_type = 'Z_PZ'
+                        """
+                    )
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS ux_stock_documents_collective_z_pz_daily
+                        ON stock_documents (tenant_id, warehouse_id, document_type, collective_business_date)
+                        WHERE is_collective_return_receipt = 1
+                          AND status = 'draft'
+                          AND relocation_status = 'OPEN'
+                          AND document_type = 'Z_PZ'
+                        """
+                    )
+                )
         conn.commit()
 
 

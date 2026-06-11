@@ -316,6 +316,16 @@ export type WmsReturnLineSplitProcess = {
   damage_entries?: WmsReturnLineDamageEntryPayload[];
 };
 
+export type WmsReturnFinalizeLineIn = WmsReturnLineSplitProcess & {
+  order_item_id: number;
+};
+
+export type WmsReturnFinalizeBody = {
+  lines: WmsReturnFinalizeLineIn[];
+  process_refund?: boolean;
+  refund?: WmsRefundCreate | null;
+};
+
 export type WmsRefundRead = {
   id: number;
   rmz_id: number;

@@ -447,6 +447,18 @@ class WmsReturnLineSplitProcess(BaseModel):
     damage_entries: List[WmsReturnLineDamageEntryIn] = Field(default_factory=list)
 
 
+class WmsReturnFinalizeLineIn(WmsReturnLineSplitProcess):
+    order_item_id: int = Field(ge=1)
+
+
+class WmsReturnFinalizeBody(BaseModel):
+    """POST /wms/returns/id/{id}/finalize — atomowy zapis linii + Z-PZ + status + refund."""
+
+    lines: List[WmsReturnFinalizeLineIn] = Field(..., min_length=1)
+    process_refund: bool = False
+    refund: Optional[WmsRefundCreate] = None
+
+
 class WmsReturnWorkflowStatusPatch(BaseModel):
     """Manual workflow step: set `ReturnStatus` for this RMZ (tenant + warehouse must match)."""
 

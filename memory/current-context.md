@@ -2,9 +2,9 @@
 
 ## WMS returns finalize (2026-06-08)
 - Dokument **Z-PZ** (`Z_PZ`) zamiast zwykłego PZ / legacy PZ_RT
-- Seria **Z-PZ** auto-seed: numeracja `Z-PZ-2026-000001`, opcja `collective_return_receipt` (zbiorczy / dzień)
-- RMZ: `warehouse_document_id`, `warehouse_document_type`; powiązania `stock_document_return_links`; linie `source_rmz_id` + `return_decision`
-- REJECTED bez ruchu magazynowego; ACCEPTED/DAMAGED → Z-PZ → kolejka rozlokowania
+- **POST /wms/returns/id/{id}/finalize** — atomowy: linie + Z-PZ + status + refund (jedna transakcja)
+- Zbiorczy Z-PZ: `pg_advisory_xact_lock` + partial unique index + `collective_business_date`
+- Po finalize: `warehouse_document_id` ustawione → edycja zablokowana (API + UI readonly)
 
 ## Direct sales line delete (2026-06-08)
 - Root cause: `db.refresh(sess)` nie przeładowywał kolekcji `lines` po delete → stale line w totals/enrichment → 500

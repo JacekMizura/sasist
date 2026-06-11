@@ -7,6 +7,7 @@ import type {
   WmsReturnCreate,
   WmsReturnLineProcess,
   WmsReturnLineSplitProcess,
+  WmsReturnFinalizeBody,
   WmsReturnListItem,
   WmsReturnRead,
   WmsSettingsRead,
@@ -280,6 +281,21 @@ export async function commitWmsReturn(
     params.warehouse_id = Number(warehouseId);
   }
   const res = await api.post<WmsReturnRead>(`wms/returns/id/${returnId}/commit-wms`, null, { params });
+  return res.data;
+}
+
+/** Atomowy finalize: wszystkie linie + Z-PZ + status + refund w jednej transakcji. */
+export async function finalizeWmsReturn(
+  returnId: number,
+  tenantId: number,
+  body: WmsReturnFinalizeBody,
+  warehouseId?: number | null,
+): Promise<WmsReturnRead> {
+  const params: Record<string, string | number> = { tenant_id: tenantId };
+  if (warehouseId != null && Number.isFinite(Number(warehouseId)) && Number(warehouseId) > 0) {
+    params.warehouse_id = Number(warehouseId);
+  }
+  const res = await api.post<WmsReturnRead>(`wms/returns/id/${returnId}/finalize`, body, { params });
   return res.data;
 }
 

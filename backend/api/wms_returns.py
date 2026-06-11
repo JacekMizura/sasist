@@ -44,6 +44,7 @@ from ..schemas.wms_return import (
     WmsReturnLineProcess,
     WmsReturnLineSplitProcess,
     WmsRefundCreate,
+    WmsReturnFinalizeBody,
     WmsReturnsBulkArchiveBody,
     WmsReturnWorkflowStatusPatch,
     WmsReturnQueueCountsRead,
@@ -55,6 +56,9 @@ from ..services.rmz_return_receipt_service import (
     ensure_rmz_return_receipt_document,
     stock_document_ids_for_rmz,
 )
+from ..services.returns.errors import RmzFinalizeError
+from ..services.returns.rmz_finalize_service import finalize_rmz_return
+from ..services.returns.rmz_line_split_service import assert_rmz_editable
 from ..services.return_status_service import get_by_transition_key, seed_default_statuses_session
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
 from ..utils.panel_ui_status_tokens import resolve_panel_status_tokens
@@ -1135,6 +1139,13 @@ def _shipping_cost_from_order(order: Order) -> Optional[float]:
     return 0.0
 
 
+def _raise_if_rmz_not_editable(row: WmsOrderReturn) -> None:
+    try:
+        assert_rmz_editable(row)
+    except RmzFinalizeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
 def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
     _normalize_unset_decision_line_quantities(db)
     rmz_lines = (
@@ -2085,8 +2096,7 @@ def process_rmz_line_split(
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
         raise HTTPException(status_code=404, detail="Return not found")
-    if _is_terminal(row.return_status):
-        raise HTTPException(status_code=400, detail="Return already finished")
+    _raise_if_rmz_not_editable(row)
 
     settings = _get_wms_settings(db, tenant_id, wh_id)
     mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
@@ -2102,203 +2112,21 @@ def process_rmz_line_split(
         raise HTTPException(status_code=400, detail="Product mismatch for return line")
     return_type = str(getattr(row, "return_type", "RMA") or "RMA").upper()
 
-    total_qty = int(rmz_line.quantity or 0)
-    accepted_qty = int(body.accepted_qty)
-    rejected_qty = int(body.rejected_qty)
-    entry_rows = list(body.damage_entries or [])
-    use_entries = len(entry_rows) > 0
+    try:
+        from ..services.returns.rmz_line_split_service import apply_rmz_line_split
 
-    if use_entries:
-        ids_seen = set()
-        for e in entry_rows:
-            if e.id in ids_seen:
-                raise HTTPException(status_code=400, detail="duplicate damage entry id in request")
-            ids_seen.add(e.id)
-            if int(e.qty) != 1:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Each damage entry must represent exactly one physical unit (qty must be 1).",
-                )
-        damaged_qty = sum(int(e.qty) for e in entry_rows)
-        damaged_b_qty = sum(int(e.qty) for e in entry_rows if e.condition == "B")
-        damaged_c_qty = sum(int(e.qty) for e in entry_rows if e.condition == "C")
-        resolved_sum = accepted_qty + damaged_qty + rejected_qty
-        if resolved_sum > total_qty:
-            raise HTTPException(
-                status_code=400,
-                detail="accepted_qty + sum(damage_entries.qty) + rejected_qty cannot exceed line quantity",
-            )
-        if resolved_sum < 1:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one unit must be resolved before saving split-process payload",
-            )
-    else:
-        damaged_qty = int(body.damaged_qty)
-        damaged_b_qty = int(body.damaged_b_qty)
-        damaged_c_qty = int(body.damaged_c_qty)
-        resolved_sum = accepted_qty + damaged_qty + rejected_qty
-        if resolved_sum > total_qty:
-            raise HTTPException(
-                status_code=400,
-                detail="accepted_qty + damaged_qty + rejected_qty cannot exceed line quantity",
-            )
-        if resolved_sum < 1:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one unit must be resolved before saving split-process payload",
-            )
-        if damaged_b_qty + damaged_c_qty != damaged_qty:
-            raise HTTPException(
-                status_code=400,
-                detail="damaged_b_qty + damaged_c_qty must equal damaged_qty",
-            )
-
-    if return_type == "UNCLAIMED" and rejected_qty > 0:
-        raise HTTPException(status_code=400, detail="UNCLAIMED return does not allow rejected_qty > 0")
-
-    if use_entries:
-        logger.info(
-            "[WMS RMZ] split-process submit return_id=%s order_item_id=%s entries=%s accepted=%s rejected=%s",
-            return_id,
-            order_item_id,
-            len(entry_rows),
-            accepted_qty,
-            rejected_qty,
+        apply_rmz_line_split(
+            db,
+            row,
+            rmz_line,
+            body,
+            settings=settings,
+            return_type=return_type,
+            validate_photos=bool(commit_workflow),
         )
-        for e in entry_rows:
-            if (
-                commit_workflow
-                and settings.require_photos
-                and not [u for u in (e.photo_urls or []) if str(u).strip()]
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="At least one photo_url is required for each damage entry (photo_urls)",
-                )
-        serializable = []
-        for e in entry_rows:
-            created_at_out = (
-                e.created_at.astimezone(timezone.utc).isoformat()
-                if e.created_at is not None
-                else datetime.now(timezone.utc).isoformat()
-            )
-            row_d: dict = {
-                "id": e.id,
-                "qty": int(e.qty),
-                "condition": e.condition,
-                "damage_type": (str(e.damage_type).strip() if e.damage_type else None) or None,
-                "photo_urls": [str(u).strip() for u in (e.photo_urls or []) if str(u).strip()],
-                "note": (str(e.note).strip() if e.note else None) or None,
-                "operator_name": (str(e.operator_name).strip() if e.operator_name else None) or None,
-                "created_at": created_at_out,
-            }
-            if getattr(e, "stock_document_id", None):
-                row_d["stock_document_id"] = int(e.stock_document_id)  # type: ignore[arg-type]
-            if getattr(e, "stock_document_line_id", None):
-                row_d["stock_document_line_id"] = int(e.stock_document_line_id)  # type: ignore[arg-type]
-            if getattr(e, "disposition", None):
-                row_d["disposition"] = str(e.disposition).strip()[:48]
-            if getattr(e, "location_id", None):
-                row_d["location_id"] = int(e.location_id)  # type: ignore[arg-type]
-            if getattr(e, "putaway_status", None):
-                row_d["putaway_status"] = str(e.putaway_status).strip()[:32]
-            if getattr(e, "putaway_completed_at", None):
-                pca = e.putaway_completed_at
-                row_d["putaway_completed_at"] = (
-                    pca.astimezone(timezone.utc).isoformat()
-                    if isinstance(pca, datetime) and pca.tzinfo is not None
-                    else (pca.isoformat() if isinstance(pca, datetime) else str(pca))
-                )
-            if e.final_disposition:
-                row_d["final_disposition"] = e.final_disposition
-            serializable.append(row_d)
-        rmz_line.damage_entries_json = json.dumps(serializable, ensure_ascii=False)
-        uploaded_images_count = sum(
-            len([u for u in (e.photo_urls or []) if str(u).strip()]) for e in entry_rows
-        )
-        logger.info(
-            "[returns.damage.persist] return_id=%s order_item_id=%s tenant_id=%s "
-            "uploaded_images_count=%s decision_state=%s entries=%s",
-            return_id,
-            order_item_id,
-            tenant_id,
-            uploaded_images_count,
-            rmz_line.decision,
-            len(entry_rows),
-        )
-        logger.info(
-            "[WMS RMZ] split-process persisted damage_entries_json return_id=%s order_item_id=%s payload=%s",
-            return_id,
-            order_item_id,
-            rmz_line.damage_entries_json,
-        )
-        rmz_line.photo_urls = None
-        rmz_line.damage_type = None
-        if damaged_qty > 0:
-            rmz_line.condition = "C" if damaged_c_qty > 0 and damaged_b_qty == 0 else "B"
-        elif accepted_qty > 0:
-            rmz_line.condition = "A"
-        else:
-            rmz_line.condition = None
-    else:
-        condition = body.condition
-        photo_urls = body.photo_urls or []
-        if damaged_qty > 0:
-            if settings.require_condition and not condition:
-                raise HTTPException(status_code=400, detail="condition is required for DAMAGED")
-            if commit_workflow and settings.require_photos and not photo_urls:
-                raise HTTPException(status_code=400, detail="At least one photo_url is required (photo_urls)")
+    except RmzFinalizeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
-        if damaged_qty > 0:
-            if condition is not None:
-                rmz_line.condition = condition
-            rmz_line.photo_urls = (
-                json.dumps(list(photo_urls), ensure_ascii=False) if photo_urls else None
-            )
-        else:
-            rmz_line.photo_urls = None
-            if accepted_qty > 0:
-                rmz_line.condition = "A"
-            else:
-                rmz_line.condition = None
-        rmz_line.damage_entries_json = None
-
-    complete_line = resolved_sum >= total_qty
-
-    rmz_line.accepted_qty = accepted_qty
-    rmz_line.damaged_b_qty = damaged_b_qty
-    rmz_line.damaged_c_qty = damaged_c_qty
-    rmz_line.rejected_qty = rejected_qty
-
-    dt_raw = str(body.damage_type).strip() if body.damage_type else ""
-    if dt_raw:
-        rmz_line.damage_type = dt_raw[:512]
-    else:
-        rmz_line.damage_type = None
-
-    if complete_line:
-        if rejected_qty == total_qty:
-            rmz_line.decision = "REJECTED"
-        elif damaged_qty > 0:
-            rmz_line.decision = "DAMAGED"
-        else:
-            rmz_line.decision = "OK"
-        if rejected_qty > 0:
-            rmz_line.final_disposition = "RETURN_TO_CUSTOMER"
-        elif damaged_c_qty > 0:
-            rmz_line.final_disposition = "REPAIR"
-        elif damaged_b_qty > 0:
-            rmz_line.final_disposition = "OUTLET"
-        elif accepted_qty > 0:
-            rmz_line.final_disposition = "RESTOCK"
-        rmz_line.processed_at = datetime.utcnow()
-    else:
-        rmz_line.decision = None
-        rmz_line.final_disposition = None
-        rmz_line.processed_at = None
-
-    db.flush()
     if commit_workflow:
         rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
         next_key = _next_transition_key_for_lines(mode, rmz_lines)
@@ -2332,8 +2160,6 @@ def process_rmz_line_split(
         return_id,
         order_item_id,
         commit_workflow,
-        return_id,
-        order_item_id,
         getattr(saved_line, "damage_entries_json", None),
         int(getattr(saved_line, "damaged_b_qty", 0) or 0),
         int(getattr(saved_line, "damaged_c_qty", 0) or 0),
@@ -2363,8 +2189,7 @@ def process_rmz_line(
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
         raise HTTPException(status_code=404, detail="Return not found")
-    if _is_terminal(row.return_status):
-        raise HTTPException(status_code=400, detail="Return already finished")
+    _raise_if_rmz_not_editable(row)
 
     settings = _get_wms_settings(db, tenant_id, wh_id)
     mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
@@ -2468,6 +2293,60 @@ def process_rmz_line(
     return _serialize_return_read(db, row)
 
 
+@returns_id_router.post("/{return_id:int}/finalize", response_model=WmsReturnRead)
+def finalize_wms_return(
+    return_id: int,
+    body: WmsReturnFinalizeBody,
+    tenant_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Atomowy finalize RMZ: linie → Z-PZ → status → refund (jedna transakcja)."""
+    wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
+    logger.info(
+        "[returns.finalize.start] return_id=%s tenant_id=%s warehouse_id=%s lines=%s",
+        return_id,
+        tenant_id,
+        wh_id,
+        len(body.lines),
+    )
+    try:
+        row = _load_rmz(db, return_id, tenant_id, wh_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Return not found")
+        _raise_if_rmz_not_editable(row)
+
+        settings = _get_wms_settings(db, tenant_id, wh_id)
+        finalize_rmz_return(
+            db,
+            row,
+            line_payloads=body.lines,
+            settings=settings,
+            refund=body.refund,
+            process_refund=bool(body.process_refund),
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except RmzFinalizeError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    except Exception:
+        db.rollback()
+        logger.exception("[returns.finalize] failed return_id=%s", return_id)
+        raise HTTPException(status_code=500, detail="Return finalize failed") from None
+
+    row = _load_rmz(db, return_id, tenant_id, wh_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Return not found")
+    return _serialize_return_read(db, row)
+
+
 @returns_id_router.post("/{return_id:int}/commit-wms", response_model=WmsReturnRead)
 def commit_wms_return_workflow(
     return_id: int,
@@ -2491,8 +2370,7 @@ def commit_wms_return_workflow(
         row = _load_rmz(db, return_id, tenant_id, wh_id)
         if not row:
             raise HTTPException(status_code=404, detail="Return not found")
-        if _is_terminal(row.return_status):
-            raise HTTPException(status_code=400, detail="Return already finished")
+        _raise_if_rmz_not_editable(row)
 
         settings = _get_wms_settings(db, tenant_id, wh_id)
         mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
@@ -2558,8 +2436,7 @@ def process_rmz_refund(
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
         raise HTTPException(status_code=404, detail="Return not found")
-    if _is_terminal(row.return_status):
-        raise HTTPException(status_code=400, detail="Return already finished")
+    _raise_if_rmz_not_editable(row)
     return_type = str(getattr(row, "return_type", "RMA") or "RMA").upper()
     if return_type == "UNCLAIMED":
         refund = db.query(WmsRefund).filter(WmsRefund.rmz_id == row.id).first()
