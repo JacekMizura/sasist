@@ -62,7 +62,7 @@ export function RmzProcessLineSidebar({
       <div className="flex items-center justify-between border-b border-slate-200 p-4">
         <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-900">
           <ListOrdered size={16} aria-hidden />
-          Obsługa pozycji
+          OBSŁUGA POZYCJI
         </div>
         <span className="rounded bg-slate-100 px-2 py-1 text-xs font-bold tabular-nums text-slate-600">
           {resolvedCount} / {totalCount} rozstrzyg.

@@ -24,7 +24,7 @@ export function RmzPendingItemsPanel({ items, addingOrderItemId, disabled = fals
     <section className="flex max-h-[42vh] min-h-[140px] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
         <PackagePlus size={16} className="text-slate-700" aria-hidden />
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900">Do dodania</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900">DO DODANIA</h2>
       </header>
       <ul className="custom-scrollbar flex-1 space-y-2 overflow-y-auto p-3">
         {items.length === 0 ? (
@@ -57,7 +57,9 @@ export function RmzPendingItemsPanel({ items, addingOrderItemId, disabled = fals
                       w zamówieniu: <span className="tabular-nums">{item.orderQuantity}</span>
                     </p>
                   </div>
-                  <span className="shrink-0 text-xs font-bold uppercase text-blue-700">{busy ? "…" : "Dodaj"}</span>
+                  {busy ? (
+                    <span className="shrink-0 text-xs font-bold uppercase text-blue-700">…</span>
+                  ) : null}
                 </button>
               </li>
             );

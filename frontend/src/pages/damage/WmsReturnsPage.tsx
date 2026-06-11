@@ -4375,7 +4375,7 @@ export default function WmsReturnsPage() {
             <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
               {lineSeeds.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center p-10 text-center text-slate-500">
-                  <p className="text-sm font-medium">Dodaj produkt z sekcji „Do dodania”, aby rozpocząć obsługę.</p>
+                  <p className="text-sm font-medium">Kliknij produkt w sekcji „DO DODANIA”, aby rozpocząć obsługę.</p>
                 </div>
               ) : leftViewMode === "grid" ? (
                 (() => {
