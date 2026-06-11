@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LayoutGrid, Maximize2, Minimize2, ScanLine, Warehouse } from "lucide-react";
+import { Menu, ScanLine } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import WmsTopBarModuleNav from "../components/wms/WmsTopBarModuleNav";
-import GlobalWarehouseSelect from "../components/layout/GlobalWarehouseSelect";
 import UserAccountMenu from "../components/layout/UserAccountMenu";
 import { SHOW_WMS_DEV_SCANNER } from "../context/WmsScannerContext";
 import { useAuth } from "../context/AuthContext";
@@ -24,36 +23,18 @@ import { useVisibilityPolling } from "../hooks/useVisibilityPolling";
 
 const PRIORITY_TASKS_POLL_MS = 30_000;
 
-const iconBtn =
-  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100/80 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5a4fcf]/40";
+const devIconBtn =
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400/40";
 
 export default function WmsTopBar() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { showWarehouseSelector, warehouse } = useWarehouse();
-  const [fs, setFs] = useState(false);
-  const [clock, setClock] = useState(() => new Date());
+  const { warehouse } = useWarehouse();
   const [priorityTasks, setPriorityTasks] = useState<WarehousePriorityTask[]>([]);
   const [priorityLoading, setPriorityLoading] = useState(false);
   const [rejectDraft, setRejectDraft] = useState<{ task: WarehousePriorityTask; reason: string } | null>(null);
 
   const { pinnedTabsInOrder, reorderPinned } = useWmsPinnedModes(user?.id ?? null);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setClock(new Date()), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const timeLabel = clock.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
-
-  const syncFs = useCallback(() => {
-    setFs(Boolean(document.fullscreenElement));
-  }, []);
-
-  useEffect(() => {
-    document.addEventListener("fullscreenchange", syncFs);
-    return () => document.removeEventListener("fullscreenchange", syncFs);
-  }, [syncFs]);
 
   const priorityInflightRef = useRef(false);
   const loadPriorityTasks = useCallback(async () => {
@@ -99,18 +80,6 @@ export default function WmsTopBar() {
       /* browser may block sound */
     }
   }, [priorityTasks]);
-
-  const toggleFs = async () => {
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
-    } catch {
-      /* ignore */
-    }
-  };
 
   const openDevScanner = () => {
     if (SHOW_WMS_DEV_SCANNER) {
@@ -163,75 +132,49 @@ export default function WmsTopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 shrink-0 border-b border-slate-200/60 bg-white/90 backdrop-blur-md supports-[backdrop-filter]:bg-white/80">
-      <div className="flex h-10 items-center gap-2 px-3 sm:px-4">
-        <div className="flex shrink-0 items-center gap-1.5">
+    <header className="sticky top-0 z-40 shrink-0 select-none border-b border-slate-200 bg-white shadow-sm">
+      <div className="flex h-16 items-stretch">
+        <div className="flex shrink-0 items-center px-3 sm:px-4">
           <NavLink
             to={WMS_ROUTES.menu}
             className={({ isActive }) =>
               [
-                "group relative inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors",
-                isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-800",
+                "inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                isActive ? "text-slate-900" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800",
               ].join(" ")
             }
-            title="Moduły WMS"
-            aria-label="Moduły WMS"
+            title="Menu główne"
+            aria-label="Menu główne"
           >
-            <LayoutGrid size={15} strokeWidth={2.25} aria-hidden />
+            <Menu size={24} strokeWidth={2} aria-hidden />
           </NavLink>
-          <div className="hidden h-4 w-px bg-slate-200/90 sm:block" aria-hidden />
-          <div className="hidden items-center gap-1 sm:flex">
-            <Warehouse size={14} className="text-slate-400" strokeWidth={2} aria-hidden />
-            <span className="max-w-[8rem] truncate text-[11px] font-medium text-slate-600">
-              {warehouse?.name?.trim() || "WMS"}
-            </span>
-          </div>
         </div>
 
-        <nav className="flex min-w-0 flex-1 items-center justify-center px-0.5 sm:px-2">
-          <WmsTopBarModuleNav
-            tabs={pinnedTabsInOrder}
-            className="justify-center"
-            onReorder={reorderPinned}
-          />
+        <nav className="flex min-w-0 flex-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <WmsTopBarModuleNav tabs={pinnedTabsInOrder} className="h-full min-w-0 px-1 sm:px-2" onReorder={reorderPinned} />
         </nav>
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <span className="hidden items-center gap-1.5 text-[11px] tabular-nums text-slate-400 lg:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
-            {timeLabel}
-          </span>
-
-          {showWarehouseSelector ? (
-            <div className="hidden w-[11rem] md:block">
-              <GlobalWarehouseSelect variant="topbar" className="w-full text-xs" />
-            </div>
-          ) : null}
-
+        <div className="flex shrink-0 items-center gap-2 px-3 sm:px-4">
           {SHOW_WMS_DEV_SCANNER ? (
-            <button type="button" className={iconBtn} title="Skaner dev" aria-label="Skaner dev" onClick={openDevScanner}>
-              <ScanLine className="h-4 w-4" strokeWidth={2} />
+            <button type="button" className={devIconBtn} title="Skaner dev" aria-label="Skaner dev" onClick={openDevScanner}>
+              <ScanLine size={18} strokeWidth={2} />
             </button>
           ) : null}
-          <button type="button" className={iconBtn} title="Pełny ekran" aria-label="Pełny ekran" onClick={() => void toggleFs()}>
-            {fs ? <Minimize2 className="h-4 w-4" strokeWidth={2} /> : <Maximize2 className="h-4 w-4" strokeWidth={2} />}
-          </button>
-
-          <UserAccountMenu compact />
+          <UserAccountMenu compact hideChevron profileVariant="minimal" />
         </div>
       </div>
 
       {priorityTasks.length ? (
-        <div className="border-t border-orange-100/80 bg-white px-3 py-2 sm:px-5">
+        <div className="border-t border-slate-100 bg-slate-50/80 px-3 py-2 sm:px-4">
           <div className="flex gap-2 overflow-x-auto">
             {priorityTasks.map((task) => (
               <div
                 key={task.id}
-                className="flex min-w-[16rem] items-center gap-2 rounded-lg border border-orange-200/70 bg-white px-3 py-2 shadow-sm"
+                className="flex min-w-[16rem] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
+                    <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
                       Priorytet
                     </span>
                     {task.sla_countdown_minutes != null ? (
@@ -299,7 +242,7 @@ export default function WmsTopBar() {
               value={rejectDraft.reason}
               onChange={(event) => setRejectDraft({ ...rejectDraft, reason: event.target.value })}
               rows={4}
-              className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#5a4fcf]/40 focus:ring-2 focus:ring-[#5a4fcf]/10"
+              className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200/80"
               placeholder="Opisz powód odrzucenia zadania..."
             />
             <div className="mt-4 flex justify-end gap-2">

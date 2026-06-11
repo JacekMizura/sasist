@@ -16,11 +16,15 @@ function initials(u: { first_name: string | null; last_name: string | null; logi
 type UserAccountMenuProps = {
   /** Dense header row: smaller avatar, tighter padding. */
   compact?: boolean;
+  /** Hide dropdown chevron (WMS terminal header). */
+  hideChevron?: boolean;
+  /** WMS minimal profile — slate avatar, no gradient. */
+  profileVariant?: "default" | "minimal";
 };
 
 const MENU_Z = 10050;
 
-export default function UserAccountMenu({ compact = false }: UserAccountMenuProps) {
+export default function UserAccountMenu({ compact = false, hideChevron = false, profileVariant = "default" }: UserAccountMenuProps) {
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -144,8 +148,8 @@ export default function UserAccountMenu({ compact = false }: UserAccountMenuProp
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={[
-          "group flex items-center rounded-xl transition-colors hover:bg-slate-50",
-          compact ? "gap-3 p-1" : "gap-3 p-1.5 pr-3 text-left",
+          "group flex items-center rounded-lg transition-opacity hover:opacity-80",
+          compact ? "gap-3" : "gap-3 p-1.5 pr-3 text-left",
         ].join(" ")}
         aria-expanded={open}
         aria-haspopup="menu"
@@ -153,19 +157,23 @@ export default function UserAccountMenu({ compact = false }: UserAccountMenuProp
         
         {/* TEKST (Dla wersji compact pokazujemy go po LEWEJ stronie od awatara) */}
         {compact ? (
-          <span className="hidden min-w-0 flex-col text-right xl:flex justify-center h-full">
-            <span className="max-w-[9.5rem] truncate text-sm font-bold leading-tight text-slate-900">{display}</span>
-            <span className="max-w-[9.5rem] truncate text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">
+          <span className="hidden min-w-0 flex-col text-right sm:flex">
+            <span className="max-w-[9.5rem] truncate text-sm font-bold leading-tight text-slate-800">{display}</span>
+            <span className="max-w-[9.5rem] truncate text-[10px] font-bold uppercase tracking-wider text-slate-500">
               {user.role}
             </span>
           </span>
         ) : null}
 
-        {/* AWATAR */}
         <span
           className={[
-            "flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-blue-50 font-bold text-indigo-700 border border-indigo-200 shadow-sm transition-transform group-hover:scale-105",
-            compact ? "h-9 w-9 text-sm" : "h-10 w-10 text-sm",
+            "flex shrink-0 items-center justify-center rounded-full font-bold shadow-sm",
+            profileVariant === "minimal"
+              ? "h-9 w-9 bg-slate-800 text-sm text-white"
+              : [
+                  "bg-gradient-to-br from-indigo-100 to-blue-50 text-indigo-700 border border-indigo-200 transition-transform group-hover:scale-105",
+                  compact ? "h-9 w-9 text-sm" : "h-10 w-10 text-sm",
+                ].join(" "),
           ].join(" ")}
         >
           {initials(user)}
@@ -178,13 +186,14 @@ export default function UserAccountMenu({ compact = false }: UserAccountMenuProp
           </span>
         ) : null}
 
-        {/* STRZAŁKA */}
-        <ChevronDown 
-          className={`shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors ${
-            compact ? "h-4 w-4 hidden xl:block mr-1" : "h-4 w-4"
-          }`} 
-          aria-hidden 
-        />
+        {!hideChevron ? (
+          <ChevronDown
+            className={`shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors ${
+              compact ? "mr-1 hidden h-4 w-4 xl:block" : "h-4 w-4"
+            }`}
+            aria-hidden
+          />
+        ) : null}
 
       </button>
       {open && typeof document !== "undefined" ? createPortal(menuBody, document.body) : null}
