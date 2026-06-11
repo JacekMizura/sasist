@@ -122,7 +122,7 @@ def _load_putaway_pz_docs_with_lines(
         StockDocument.receiving_status.in_(("IN_PROGRESS", "DONE")),
         StockDocument.putaway_status.in_(("NOT_STARTED", "IN_PROGRESS", "DONE")),
         StockDocument.relocation_status != "DONE",
-        StockDocument.status.in_(("draft", "posted")),
+        StockDocument.status.in_(("draft", "posted", "CLOSED")),
     )
     for f in extra_filters:
         q = q.filter(f)
@@ -148,7 +148,7 @@ def _doc_allows_putaway(doc: StockDocument) -> bool:
     if dt == "MM":
         return st == "draft"
     if dt in ("PZ", "Z_PZ", "PZ_RT"):
-        return st in ("draft", "posted")
+        return st in ("draft", "posted", "CLOSED")
     return False
 
 

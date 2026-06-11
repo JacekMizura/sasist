@@ -344,3 +344,25 @@ export type WmsRefundCreate = {
   refund_shipping_amount?: number | null;
   decided_by?: string | null;
 };
+
+/** Aktywny (OPEN) zbiorczy Z-PZ — jeden fizyczny nośnik zwrotów. */
+export type ActiveZPzRead = {
+  stock_document_id: number;
+  document_number: string;
+  document_type: string;
+  status: string;
+  line_count: number;
+  unit_sum: number;
+  created_at?: string | null;
+  warehouse_id?: number | null;
+  barcode_value: string;
+  detail_path: string;
+};
+
+export type ActiveZPzCloseRead = {
+  stock_document_id: number;
+  document_number: string;
+  status: string;
+  line_count: number;
+  unit_sum: number;
+};

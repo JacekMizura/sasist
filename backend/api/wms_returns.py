@@ -48,10 +48,18 @@ from ..schemas.wms_return import (
     WmsReturnsBulkArchiveBody,
     WmsReturnWorkflowStatusPatch,
     WmsReturnQueueCountsRead,
+    ActiveZPzRead,
+    ActiveZPzCloseRead,
     ReturnsMode,
 )
 from ..services.delete_service import archive_wms_returns_bulk
+from ..services.returns.collective_z_pz_service import (
+    close_active_collective_z_pz,
+    get_active_collective_z_pz_summary,
+    summarize_collective_z_pz,
+)
 from ..services.rmz_return_receipt_service import (
+    _resolve_z_pz_series,
     ensure_rmz_return_receipt_after_refund,
     ensure_rmz_return_receipt_document,
     stock_document_ids_for_rmz,
@@ -1715,6 +1723,77 @@ def lookup_orders(
     if found == 0:
         return _lookup_orders_empty_response(reason="no matches")
     return results
+
+
+@router.get("/active-z-pz", response_model=Optional[ActiveZPzRead])
+def get_active_collective_z_pz(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    """Aktywny (OPEN) zbiorczy Z-PZ dla magazynu — panel WMS Zwroty."""
+    try:
+        wh_id = (
+            int(warehouse_id)
+            if warehouse_id is not None and int(warehouse_id) > 0
+            else resolve_tenant_default_warehouse_id(db, tenant_id)
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
+    try:
+        series = _resolve_z_pz_series(db, int(tenant_id), wh_id)
+    except Exception:
+        return None
+    if not bool(getattr(series, "collective_return_receipt", True)):
+        return None
+    row = get_active_collective_z_pz_summary(
+        db, tenant_id=int(tenant_id), warehouse_id=wh_id, series=series
+    )
+    return ActiveZPzRead(**row) if row else None
+
+
+@router.post("/active-z-pz/close", response_model=ActiveZPzCloseRead)
+def close_active_collective_z_pz_endpoint(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    """Zamknij aktywny Z-PZ — nośnik pełny → kolejka rozlokowania."""
+    try:
+        wh_id = (
+            int(warehouse_id)
+            if warehouse_id is not None and int(warehouse_id) > 0
+            else resolve_tenant_default_warehouse_id(db, tenant_id)
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
+    try:
+        series = _resolve_z_pz_series(db, int(tenant_id), wh_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not bool(getattr(series, "collective_return_receipt", True)):
+        raise HTTPException(status_code=400, detail="Seria Z-PZ nie jest w trybie zbiorczym.")
+    try:
+        doc = close_active_collective_z_pz(
+            db, tenant_id=int(tenant_id), warehouse_id=wh_id, series=series
+        )
+        db.commit()
+        db.refresh(doc)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        logger.exception("[Z-PZ] close failed tenant=%s wh=%s", tenant_id, wh_id)
+        raise HTTPException(status_code=500, detail="Nie udało się zamknąć dokumentu Z-PZ.") from None
+    summary = summarize_collective_z_pz(db, doc)
+    return ActiveZPzCloseRead(
+        stock_document_id=int(summary["stock_document_id"]),
+        document_number=str(summary["document_number"]),
+        status=str(summary["status"]),
+        line_count=int(summary["line_count"]),
+        unit_sum=float(summary["unit_sum"]),
+    )
 
 
 @router.get("/queue-counts", response_model=WmsReturnQueueCountsRead)

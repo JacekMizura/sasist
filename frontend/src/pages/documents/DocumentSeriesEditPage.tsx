@@ -494,8 +494,8 @@ export default function DocumentSeriesEditPage() {
                   <span>
                     <span className="font-medium">Zbiorczy dokument dla zwrotów</span>
                     <span className="mt-0.5 block text-xs text-slate-500">
-                      Wszystkie produkty przyjęte ze zwrotów trafiają do jednego Z-PZ na dzień zamiast osobnego
-                      dokumentu dla każdego RMZ.
+                      Wszystkie produkty przyjęte ze zwrotów trafiają do jednego otwartego Z-PZ na magazyn.
+                      Operator zamyka dokument ręcznie, gdy nośnik zwrotów jest pełny — wtedy trafia do rozlokowania.
                     </span>
                   </span>
                 </label>

@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Z-PZ zbiorczy: OPEN do ręcznego zamknięcia (nośnik zwrotów)
+
+- **Backend:** status `OPEN` / `CLOSED`; wyszukiwanie aktywnego Z-PZ bez filtra daty (`collective_z_pz_service.py`)
+- **API:** `GET/POST /api/wms/returns/active-z-pz` (+ `/close`) — zamknięcie → `relocation_status=OPEN`, kolejka rozlokowania
+- **Migracja:** `draft`→`OPEN` dla starych zbiorczych; indeks `ux_stock_documents_collective_z_pz_open`
+- **Frontend:** panel „Aktywny dokument zwrotów” na `/wms/returns`; etykieta druku (QR + kod kreskowy)
+- **Seria dokumentów:** opis checkboxa „zbiorczy Z-PZ” — operator zamyka nośnik, nie dzień kalendarzowy
+
 ## 2026-06-08 — Z-PZ schema sync (fix 500 orders/stock-documents)
 
 - **`backend/db/z_pz_schema.py`**: `ensure_z_pz_schema()` — jawna, idempotentna migracja kolumn Z-PZ (PG + SQLite)

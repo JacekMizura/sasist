@@ -9,7 +9,6 @@ from backend.schemas.wms_return import WmsReturnFinalizeLineIn
 from backend.services.returns.errors import RmzFinalizeError
 from backend.services.returns.rmz_finalize_service import finalize_rmz_return
 from backend.services.returns.rmz_line_split_service import assert_rmz_editable
-from backend.services.rmz_return_receipt_service import _find_or_create_collective_z_pz
 
 
 class TestRmzEditableGuard(unittest.TestCase):
@@ -66,9 +65,9 @@ class TestFinalizeRollback(unittest.TestCase):
 class TestCollectiveIntegrityRecovery(unittest.TestCase):
     """Unique index collision → retry find (race between two operators)."""
 
-    @patch("backend.services.rmz_return_receipt_service._create_z_pz_shell")
-    @patch("backend.services.rmz_return_receipt_service._find_collective_z_pz_for_today")
-    @patch("backend.services.rmz_return_receipt_service.acquire_collective_z_pz_lock")
+    @patch("backend.services.returns.collective_z_pz_service.create_collective_z_pz_shell")
+    @patch("backend.services.returns.collective_z_pz_service.find_active_collective_z_pz")
+    @patch("backend.services.returns.collective_z_pz_service.acquire_collective_z_pz_lock")
     def test_integrity_error_falls_back_to_existing_doc(
         self,
         mock_lock,
@@ -76,6 +75,8 @@ class TestCollectiveIntegrityRecovery(unittest.TestCase):
         mock_create,
     ) -> None:
         from sqlalchemy.exc import IntegrityError
+
+        from backend.services.returns.collective_z_pz_service import find_or_create_collective_z_pz
 
         db = MagicMock()
         rmz = MagicMock()
@@ -91,7 +92,7 @@ class TestCollectiveIntegrityRecovery(unittest.TestCase):
         mock_find.side_effect = [None, existing]
         mock_create.side_effect = IntegrityError("INSERT", {}, Exception("unique"))
 
-        doc = _find_or_create_collective_z_pz(db, rmz, series=series)
+        doc = find_or_create_collective_z_pz(db, rmz, series=series)
         self.assertIs(doc, existing)
         self.assertEqual(mock_find.call_count, 2)
         mock_lock.assert_called_once()

@@ -146,42 +146,62 @@ def _ensure_stock_document_return_links_table(engine: Engine) -> bool:
     return True
 
 
+def _migrate_collective_z_pz_open_status(engine: Engine) -> None:
+    """Legacy daily draft shells → OPEN (operator-close lifecycle)."""
+    if not has_table(engine, "stock_documents"):
+        return
+    with engine.begin() as conn:
+        if _dialect(engine) == "postgresql":
+            conn.execute(
+                text(
+                    """
+                    UPDATE stock_documents
+                    SET status = 'OPEN'
+                    WHERE document_type = 'Z_PZ'
+                      AND is_collective_return_receipt = TRUE
+                      AND status = 'draft'
+                      AND relocation_status = 'OPEN'
+                    """
+                )
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    UPDATE stock_documents
+                    SET status = 'OPEN'
+                    WHERE document_type = 'Z_PZ'
+                      AND is_collective_return_receipt = 1
+                      AND status = 'draft'
+                      AND relocation_status = 'OPEN'
+                    """
+                )
+            )
+
+
 def _ensure_collective_z_pz_unique_index(engine: Engine) -> None:
     if not has_table(engine, "stock_documents"):
         return
     cols = set(get_table_column_names(engine, "stock_documents"))
-    index_cols = {
-        "tenant_id",
-        "warehouse_id",
-        "document_type",
-        "collective_business_date",
-        "is_collective_return_receipt",
-        "status",
-        "relocation_status",
-    }
-    if not index_cols.issubset(cols):
-        logger.info(
-            "[z_pz.schema] skip_collective_index missing_cols=%s dialect=%s",
-            sorted(index_cols - cols),
-            _dialect(engine),
-        )
+    if "status" not in cols or "is_collective_return_receipt" not in cols:
         return
+    _migrate_collective_z_pz_open_status(engine)
+    with engine.begin() as conn:
+        conn.execute(text("DROP INDEX IF EXISTS ux_stock_documents_collective_z_pz_daily"))
     if _dialect(engine) == "postgresql":
         sql = """
-            CREATE UNIQUE INDEX IF NOT EXISTS ux_stock_documents_collective_z_pz_daily
-            ON stock_documents (tenant_id, warehouse_id, document_type, collective_business_date)
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_stock_documents_collective_z_pz_open
+            ON stock_documents (tenant_id, warehouse_id, document_series_id)
             WHERE is_collective_return_receipt = TRUE
-              AND status = 'draft'
-              AND relocation_status = 'OPEN'
+              AND status = 'OPEN'
               AND document_type = 'Z_PZ'
         """
     else:
         sql = """
-            CREATE UNIQUE INDEX IF NOT EXISTS ux_stock_documents_collective_z_pz_daily
-            ON stock_documents (tenant_id, warehouse_id, document_type, collective_business_date)
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_stock_documents_collective_z_pz_open
+            ON stock_documents (tenant_id, warehouse_id, document_series_id)
             WHERE is_collective_return_receipt = 1
-              AND status = 'draft'
-              AND relocation_status = 'OPEN'
+              AND status = 'OPEN'
               AND document_type = 'Z_PZ'
         """
     with engine.begin() as conn:

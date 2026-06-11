@@ -391,6 +391,29 @@ class OrderLookupHit(BaseModel):
     matched_return_id: Optional[int] = None
 
 
+class ActiveZPzRead(BaseModel):
+    """Aktywny (OPEN) zbiorczy dokument Z-PZ — jeden nośnik zwrotów."""
+
+    stock_document_id: int
+    document_number: str
+    document_type: str = "Z_PZ"
+    status: str = "OPEN"
+    line_count: int = 0
+    unit_sum: float = 0.0
+    created_at: Optional[datetime] = None
+    warehouse_id: Optional[int] = None
+    barcode_value: str
+    detail_path: str
+
+
+class ActiveZPzCloseRead(BaseModel):
+    stock_document_id: int
+    document_number: str
+    status: str = "CLOSED"
+    line_count: int = 0
+    unit_sum: float = 0.0
+
+
 ReturnsMode = Literal["simple", "two_step", "advanced"]
 
 

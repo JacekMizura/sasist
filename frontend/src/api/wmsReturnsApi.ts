@@ -1,6 +1,8 @@
 import api from "./axios";
 
 import type {
+  ActiveZPzCloseRead,
+  ActiveZPzRead,
   CustomerInsightsRead,
   OrderLookupHit,
   ReturnStatusRead,
@@ -363,6 +365,32 @@ export async function getWmsCustomerInsights(
       tenant_id: tenantId,
       ...(email ? { email } : {}),
       ...(external_id && !email ? { external_id } : {}),
+    },
+  });
+  return res.data;
+}
+
+export async function getActiveCollectiveZPz(opts: {
+  tenantId: number;
+  warehouseId: number;
+}): Promise<ActiveZPzRead | null> {
+  const res = await api.get<ActiveZPzRead | null>("wms/returns/active-z-pz", {
+    params: {
+      tenant_id: opts.tenantId,
+      warehouse_id: opts.warehouseId,
+    },
+  });
+  return res.data ?? null;
+}
+
+export async function closeActiveCollectiveZPz(opts: {
+  tenantId: number;
+  warehouseId: number;
+}): Promise<ActiveZPzCloseRead> {
+  const res = await api.post<ActiveZPzCloseRead>("wms/returns/active-z-pz/close", null, {
+    params: {
+      tenant_id: opts.tenantId,
+      warehouse_id: opts.warehouseId,
     },
   });
   return res.data;

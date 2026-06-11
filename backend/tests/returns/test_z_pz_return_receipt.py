@@ -118,13 +118,13 @@ class TestStockDocumentIdsForRmz(unittest.TestCase):
 
 
 class TestCollectiveDocumentLookup(unittest.TestCase):
-    def test_collective_filters_by_warehouse_and_today(self) -> None:
-        from backend.services.rmz_return_receipt_service import _find_collective_z_pz_for_today
+    def test_collective_filters_by_open_status(self) -> None:
+        from backend.services.returns.collective_z_pz_service import find_active_collective_z_pz
 
         db = MagicMock()
         doc = MagicMock()
         db.query.return_value.filter.return_value.order_by.return_value.first.return_value = doc
-        hit = _find_collective_z_pz_for_today(
+        hit = find_active_collective_z_pz(
             db,
             tenant_id=1,
             warehouse_id=2,
@@ -181,18 +181,16 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
     @patch("backend.services.rmz_return_receipt_service._append_rmz_lines_to_document")
     @patch("backend.services.rmz_return_receipt_service.recompute_putaway_status_for_document")
     @patch("backend.services.rmz_return_receipt_service._patch_damage_entries_with_stock_links")
-    @patch("backend.services.rmz_return_receipt_service._create_z_pz_shell")
-    @patch("backend.services.rmz_return_receipt_service._find_collective_z_pz_for_today")
+    @patch("backend.services.rmz_return_receipt_service._find_or_create_collective_z_pz")
     @patch("backend.services.rmz_return_receipt_service._find_existing_document_for_rmz")
     @patch("backend.services.rmz_return_receipt_service._resolve_z_pz_series")
     @patch("backend.services.rmz_return_receipt_service._rmz_lines_already_posted")
-    def test_collective_reuses_daily_document(
+    def test_collective_reuses_active_document(
         self,
         mock_posted,
         mock_series,
         mock_existing,
-        mock_find_collective,
-        mock_create,
+        mock_find_or_create,
         mock_patch_damage,
         mock_recompute,
         mock_append,
@@ -210,7 +208,7 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
         mock_posted.return_value = False
         collective_doc = MagicMock()
         collective_doc.id = 501
-        mock_find_collective.return_value = collective_doc
+        mock_find_or_create.return_value = collective_doc
         db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
             self._accepted_line()
         ]
@@ -219,7 +217,7 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
         doc = ensure_rmz_return_receipt_document(db, rmz)
 
         self.assertIs(doc, collective_doc)
-        mock_create.assert_not_called()
+        mock_find_or_create.assert_called_once()
         mock_link.assert_called_once()
         mock_append.assert_called_once()
 
@@ -228,7 +226,7 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
     @patch("backend.services.rmz_return_receipt_service.recompute_putaway_status_for_document")
     @patch("backend.services.rmz_return_receipt_service._patch_damage_entries_with_stock_links")
     @patch("backend.services.rmz_return_receipt_service._create_z_pz_shell")
-    @patch("backend.services.rmz_return_receipt_service._find_collective_z_pz_for_today")
+    @patch("backend.services.rmz_return_receipt_service._find_or_create_collective_z_pz")
     @patch("backend.services.rmz_return_receipt_service._find_existing_document_for_rmz")
     @patch("backend.services.rmz_return_receipt_service._resolve_z_pz_series")
     @patch("backend.services.rmz_return_receipt_service._rmz_lines_already_posted")
@@ -237,7 +235,7 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
         mock_posted,
         mock_series,
         mock_existing,
-        mock_find_collective,
+        mock_find_or_create,
         mock_create,
         mock_patch_damage,
         mock_recompute,
@@ -265,7 +263,7 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
         doc = ensure_rmz_return_receipt_document(db, rmz)
 
         self.assertIs(doc, new_doc)
-        mock_find_collective.assert_not_called()
+        mock_find_or_create.assert_not_called()
         mock_create.assert_called_once()
         _, kwargs = mock_create.call_args
         self.assertFalse(kwargs.get("collective"))
@@ -274,8 +272,7 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
     @patch("backend.services.rmz_return_receipt_service._append_rmz_lines_to_document")
     @patch("backend.services.rmz_return_receipt_service.recompute_putaway_status_for_document")
     @patch("backend.services.rmz_return_receipt_service._patch_damage_entries_with_stock_links")
-    @patch("backend.services.rmz_return_receipt_service._create_z_pz_shell")
-    @patch("backend.services.rmz_return_receipt_service._find_collective_z_pz_for_today")
+    @patch("backend.services.rmz_return_receipt_service._find_or_create_collective_z_pz")
     @patch("backend.services.rmz_return_receipt_service._find_existing_document_for_rmz")
     @patch("backend.services.rmz_return_receipt_service._resolve_z_pz_series")
     @patch("backend.services.rmz_return_receipt_service._rmz_lines_already_posted")
@@ -284,8 +281,7 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
         mock_posted,
         mock_series,
         mock_existing,
-        mock_find_collective,
-        mock_create,
+        mock_find_or_create,
         mock_patch_damage,
         mock_recompute,
         mock_append,
@@ -300,10 +296,9 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
         mock_series.return_value = series
         mock_existing.return_value = None
         mock_posted.return_value = False
-        mock_find_collective.return_value = None
         created = MagicMock()
         created.id = 1
-        mock_create.return_value = created
+        mock_find_or_create.return_value = created
         db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
             self._accepted_line()
         ]
@@ -312,7 +307,7 @@ class TestEnsureRmzReturnReceiptDocument(unittest.TestCase):
         ensure_rmz_return_receipt_document(db, self._rmz(wh_id=1))
         ensure_rmz_return_receipt_document(db, self._rmz(wh_id=2, rmz_id=101))
 
-        wh_ids = {c.kwargs["warehouse_id"] for c in mock_find_collective.call_args_list}
+        wh_ids = {c.args[1].warehouse_id for c in mock_find_or_create.call_args_list}
         self.assertEqual(wh_ids, {1, 2})
 
     @patch("backend.services.rmz_return_receipt_service._ensure_return_link")

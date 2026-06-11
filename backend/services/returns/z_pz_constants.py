@@ -5,6 +5,10 @@ from __future__ import annotations
 # DB value — UI label „Z-PZ”
 Z_PZ = "Z_PZ"
 
+# Collective Z-PZ lifecycle (stock_documents.status)
+Z_PZ_STATUS_OPEN = "OPEN"
+Z_PZ_STATUS_CLOSED = "CLOSED"
+
 # Legacy aliases kept for putaway / queries on older rows
 PZ_RT = "PZ_RT"
 RETURN_RECEIPT = "RETURN_RECEIPT"

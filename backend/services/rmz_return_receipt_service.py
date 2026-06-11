@@ -12,7 +12,6 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models.document_series import DocumentSeries
@@ -35,9 +34,8 @@ from .document_number_service import (
     assign_series_number_to_stock_document,
     require_warehouse_series,
 )
-from .returns.collective_z_pz_lock import (
-    acquire_collective_z_pz_lock,
-    dialect_supports_for_update,
+from .returns.collective_z_pz_service import (
+    find_or_create_collective_z_pz,
 )
 from .returns.z_pz_constants import (
     DISPOSITION_OUTLET_B,
@@ -47,6 +45,7 @@ from .returns.z_pz_constants import (
     RETURN_RECEIPT,
     RETURN_RECEIPT_DOCUMENT_TYPES,
     Z_PZ,
+    Z_PZ_STATUS_OPEN,
 )
 
 logger = logging.getLogger(__name__)
@@ -410,20 +409,16 @@ def _find_collective_z_pz_for_today(
     business_date: Optional[date] = None,
     for_update: bool = False,
 ) -> Optional[StockDocument]:
-    biz_day = business_date or datetime.utcnow().date()
-    q = db.query(StockDocument).filter(
-        StockDocument.tenant_id == int(tenant_id),
-        StockDocument.warehouse_id == int(warehouse_id),
-        StockDocument.document_type == Z_PZ,
-        StockDocument.document_series_id == str(series_id),
-        StockDocument.status == "draft",
-        StockDocument.relocation_status == "OPEN",
-        StockDocument.is_collective_return_receipt.is_(True),
-        StockDocument.collective_business_date == biz_day,
+    """Legacy name — finds active (OPEN) collective Z-PZ, not limited by calendar day."""
+    from .returns.collective_z_pz_service import find_active_collective_z_pz
+
+    return find_active_collective_z_pz(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        series_id=series_id,
+        for_update=for_update,
     )
-    if for_update and dialect_supports_for_update(db):
-        q = q.with_for_update()
-    return q.order_by(StockDocument.id.desc()).first()
 
 
 def _find_or_create_collective_z_pz(
@@ -432,47 +427,7 @@ def _find_or_create_collective_z_pz(
     *,
     series: DocumentSeries,
 ) -> StockDocument:
-    tenant_id = int(rmz.tenant_id)
-    wh_id = int(rmz.warehouse_id)
-    business_date = datetime.utcnow().date()
-    acquire_collective_z_pz_lock(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=wh_id,
-        business_date=business_date,
-    )
-    existing = _find_collective_z_pz_for_today(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=wh_id,
-        series_id=str(series.id),
-        business_date=business_date,
-        for_update=True,
-    )
-    if existing is not None:
-        return existing
-
-    try:
-        with db.begin_nested():
-            return _create_z_pz_shell(
-                db,
-                rmz,
-                series=series,
-                collective=True,
-                business_date=business_date,
-            )
-    except IntegrityError:
-        hit = _find_collective_z_pz_for_today(
-            db,
-            tenant_id=tenant_id,
-            warehouse_id=wh_id,
-            series_id=str(series.id),
-            business_date=business_date,
-            for_update=True,
-        )
-        if hit is not None:
-            return hit
-        raise
+    return find_or_create_collective_z_pz(db, rmz, series=series)
 
 
 def _create_z_pz_shell(
@@ -494,7 +449,7 @@ def _create_z_pz_shell(
         rmz_id=None if collective else int(rmz.id),
         warehouse_id=int(rmz.warehouse_id),
         location_id=None,
-        status="draft",
+        status=Z_PZ_STATUS_OPEN if collective else "draft",
         receiving_status="DONE",
         putaway_status="NOT_STARTED",
         relocation_status="OPEN",

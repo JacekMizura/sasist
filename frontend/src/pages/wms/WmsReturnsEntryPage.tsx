@@ -18,6 +18,7 @@ import type { ReturnStatusBrief, WmsReturnListItem } from "../../types/wmsReturn
 import { wmsReturnShowsFreshIncomingBadge } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "./wmsRoutes";
+import { WmsActiveZPzPanel } from "./WmsActiveZPzPanel";
 import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
 import { formatWmsListDate } from "./wmsListFormatters";
 
@@ -561,6 +562,7 @@ export default function WmsReturnsEntryPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [returnPanelEntered, setReturnPanelEntered] = useState(false);
   const [savedReturnFlash, setSavedReturnFlash] = useState<string | null>(null);
+  const [activeZPzRefreshKey, setActiveZPzRefreshKey] = useState(0);
   
   const preselectSig = useRef<string | null>(null);
   const searchRef = useRef<(overrideQ?: string) => Promise<void>>(async () => {});
@@ -696,6 +698,7 @@ export default function WmsReturnsEntryPage() {
     }
     if (!msg?.trim()) return;
     setSavedReturnFlash(msg.trim());
+    setActiveZPzRefreshKey((k) => k + 1);
     const t = window.setTimeout(() => setSavedReturnFlash(null), 4500);
     return () => window.clearTimeout(t);
   }, [location.pathname, location.key]);
@@ -955,6 +958,16 @@ export default function WmsReturnsEntryPage() {
             {savedReturnFlash}
           </div>
         ) : null}
+
+        <WmsActiveZPzPanel
+          warehouseId={warehouseId}
+          refreshKey={activeZPzRefreshKey}
+          onClosed={(documentNumber) => {
+            setSavedReturnFlash(`Zamknięto dokument ${documentNumber}. Nośnik trafi do rozlokowania.`);
+            setActiveZPzRefreshKey((k) => k + 1);
+            window.setTimeout(() => setSavedReturnFlash(null), 4500);
+          }}
+        />
 
         <div className={showScanIdle ? "flex flex-1 items-center justify-center w-full" : "w-full px-4 md:px-6 pt-4 md:pt-6"}>
           
