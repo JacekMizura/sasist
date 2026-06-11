@@ -6,6 +6,8 @@ export const WMS_ROUTES = {
   /** Ekran startowy / launcher trybów WMS (pełna strona, nie modal). */
   menu: "/wms/menu",
   returns: "/wms/returns",
+  /** Nowy zwrot — wybór produktów dla zamówienia (pełny ekran, bez sidebara). */
+  returnsCreate: (orderId: number | string) => `/wms/returns/create/${orderId}`,
   /** Grid processing for one RMZ session. */
   returnsProcess: (returnId: number | string) => `/wms/returns/process/${returnId}`,
   complaintsProcess: (complaintId: number | string) => `/wms/returns/complaints/${complaintId}`,

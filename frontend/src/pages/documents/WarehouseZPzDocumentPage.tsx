@@ -7,6 +7,7 @@ import { DocumentsSectionShell } from "./DocumentsSectionShell";
 import { WarehouseZPzDocumentDetail } from "./WarehouseZPzDocumentDetail";
 import { warehouseDocumentListStatus } from "./warehouseDocumentsUi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 
 type Props = {
   documentId: number;
@@ -58,7 +59,9 @@ export function WarehouseZPzDocumentPage({ documentId }: Props) {
     </Link>
   );
 
-  const title = detail?.document_number?.trim() || (loading ? "Wczytywanie…" : `Z-PZ #${documentId}`);
+  const title =
+    displayWarehouseDocumentNumber(detail?.document_number) ||
+    (loading ? "Wczytywanie…" : `Z-PZ #${documentId}`);
 
   return (
     <DocumentsSectionShell

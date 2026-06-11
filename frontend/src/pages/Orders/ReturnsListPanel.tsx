@@ -35,6 +35,7 @@ import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "../wms/wmsRoutes";
 import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/PanelBulkStatusConfirmModal";
 import { PanelListDenseProductCell } from "../../components/panelList/PanelListDenseProductCell";
 import { firstProductImageUrl } from "../../components/panelList/ProductListItem";
@@ -1072,7 +1073,7 @@ export default function ReturnsListPanel() {
                                       toggleOne(String(r.id), (e.nativeEvent as MouseEvent).shiftKey ?? false)
                                     }
                                     className={panelListDenseCheckboxInputClass}
-                                    aria-label={`Zaznacz zwrot ${r.rmz_number}`}
+                                    aria-label={`Zaznacz zwrot ${displayWarehouseDocumentNumber(r.rmz_number) || r.rmz_number}`}
                                   />
                                 </td>
                                 <td className={operationalActionsColumnCellClass} onClick={(e) => e.stopPropagation()}>
@@ -1127,7 +1128,7 @@ export default function ReturnsListPanel() {
                                       }}
                                       className="w-fit text-left text-sm font-semibold text-blue-600 hover:underline"
                                     >
-                                      #{r.rmz_number}
+                                      #{displayWarehouseDocumentNumber(r.rmz_number) || r.rmz_number}
                                     </button>
                                     {r.warehouse_document_id != null && r.warehouse_document_number ? (
                                       <Link
@@ -1135,7 +1136,7 @@ export default function ReturnsListPanel() {
                                         className="text-xs font-medium text-[#41546a] hover:underline"
                                         onClick={(e) => e.stopPropagation()}
                                       >
-                                        {r.warehouse_document_number}
+                                        {displayWarehouseDocumentNumber(r.warehouse_document_number)}
                                       </Link>
                                     ) : null}
                                     <ReturnsListRowStatusBadges r={r} />

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { StockDocumentRead } from "../../api/stockDocumentsApi";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
-import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { ExternalStatusBadge } from "./documentsBadges";
 import type { BusinessDocStatus } from "./warehouseDocumentsUi";
 
@@ -66,7 +66,7 @@ export function WarehouseZPzDocumentDetail({
   layout = "embedded",
   backLink,
 }: Props) {
-  const docNumber = (detail.document_number || "").trim() || `#${detail.id}`;
+  const docNumber = displayWarehouseDocumentNumber(detail.document_number) || `#${detail.id}`;
   const currency = detail.currency || "PLN";
 
   let lineCount = 0;
@@ -187,7 +187,7 @@ export function WarehouseZPzDocumentDetail({
                       const ean = (it.product_ean || "").trim() || "—";
                       const decision = (it.return_decision_label || "").trim() || "—";
                       const rmzId = it.source_rmz_id;
-                      const rmzNum = (it.source_rmz_number || "").trim();
+                      const rmzNum = displayWarehouseDocumentNumber(it.source_rmz_number) || (it.source_rmz_number || "").trim();
                       return (
                         <tr key={it.id} className="hover:bg-slate-50/80">
                           <td className="max-w-[220px] px-4 py-3 font-medium text-slate-900">{name}</td>

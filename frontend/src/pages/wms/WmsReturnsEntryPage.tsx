@@ -5,7 +5,6 @@ import { useLocation, useNavigate, Link } from "react-router-dom";
 import api from "../../api/axios";
 import { listComplaints } from "../../api/complaintsApi";
 import {
-  createWmsReturn,
   listWmsReturnsForOrder,
   lookupOrdersForWms,
   normalizeWmsReturnsSearchQuery,
@@ -19,7 +18,7 @@ import { wmsReturnShowsFreshIncomingBadge } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { WmsActiveZPzPanel } from "./WmsActiveZPzPanel";
-import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { formatWmsListDate } from "./wmsListFormatters";
 
 type OrderItemRow = {
@@ -529,7 +528,8 @@ export default function WmsReturnsEntryPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
 
-  const [q, setQ] = useState("");
+  const [trackingQ, setTrackingQ] = useState("");
+  const [searchQ, setSearchQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [hits, setHits] = useState<
     {
@@ -545,11 +545,6 @@ export default function WmsReturnsEntryPage() {
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [orderLoadErr, setOrderLoadErr] = useState<string | null>(null);
 
-  const [qtyByItem, setQtyByItem] = useState<Record<number, number>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [createReturnErr, setCreateReturnErr] = useState<string | null>(null);
-  const [newReturnType, setNewReturnType] = useState<"RMA" | "UNCLAIMED">("RMA");
-
   const [orderReturns, setOrderReturns] = useState<WmsReturnListItem[]>([]);
   const [orderReturnsLoading, setOrderReturnsLoading] = useState(false);
   const [orderReturnsErr, setOrderReturnsErr] = useState<string | null>(null);
@@ -559,18 +554,15 @@ export default function WmsReturnsEntryPage() {
   const [queueFilter, setQueueFilter] = useState<WmsReturnsQueueFilter>("all");
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [highlightReturnId, setHighlightReturnId] = useState<number | null>(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [returnPanelEntered, setReturnPanelEntered] = useState(false);
   const [savedReturnFlash, setSavedReturnFlash] = useState<string | null>(null);
   const [activeZPzRefreshKey, setActiveZPzRefreshKey] = useState(0);
-  
+
   const preselectSig = useRef<string | null>(null);
   const searchRef = useRef<(overrideQ?: string) => Promise<void>>(async () => {});
+  const trackingInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const firstHitButtonRef = useRef<HTMLButtonElement | null>(null);
   const firstQueueTileRef = useRef<HTMLButtonElement | null>(null);
-  const firstQtyInputRef = useRef<HTMLInputElement | null>(null);
-  const createFormSectionRef = useRef<HTMLElement | null>(null);
 
   const { registerScanHandler, setActiveDocument } = useWmsScanner();
   
@@ -579,7 +571,7 @@ export default function WmsReturnsEntryPage() {
     registerScanHandler((ean) => {
       const code = ean.trim();
       if (!code) return;
-      setQ(code);
+      setTrackingQ(code);
       void searchRef.current(code);
     });
     return () => {
@@ -633,23 +625,17 @@ export default function WmsReturnsEntryPage() {
 
   const applyOrderData = useCallback((data: OrderDetail) => {
     setSelectedOrder(data);
-    const init: Record<number, number> = {};
-    for (const it of data.items) {
-      init[it.id] = 0;
-    }
-    setQtyByItem(init);
     setOrderLoadErr(null);
   }, []);
 
   const loadOrderById = useCallback(
-    async (orderId: number, opts?: { highlightReturnId?: number | null; openCreateFormAfterLoad?: boolean }) => {
+    async (orderId: number, opts?: { highlightReturnId?: number | null }) => {
       if (!Number.isFinite(orderId) || orderId <= 0) return;
       setOrderLoadErr(null);
       setOrderReturns([]);
       setOrderReturnsErr(null);
       setOrderComplaints([]);
       setOrderComplaintsErr(null);
-      setShowCreateForm(false);
       try {
         const or = await api.get<OrderDetail>(`orders/${orderId}/`);
         applyOrderData(or.data);
@@ -662,28 +648,23 @@ export default function WmsReturnsEntryPage() {
         if (rid != null && Number.isFinite(rid) && rid > 0) {
           setHighlightReturnId(rid);
         }
-        if (opts?.openCreateFormAfterLoad) {
-          setCreateReturnErr(null);
-          setShowCreateForm(true);
-        }
       } catch {
         setSelectedOrder(null);
         setOrderReturns([]);
         setOrderLoadErr("Nie znaleziono zamówienia.");
       }
     },
-    [applyOrderData, loadReturnsForOrder, loadComplaintsForOrder]
+    [applyOrderData, loadReturnsForOrder, loadComplaintsForOrder],
   );
 
   useEffect(() => {
-    const st = location.state as { preselectOrderId?: number; openReturnCreateForm?: boolean } | null;
+    const st = location.state as { preselectOrderId?: number; highlightReturnId?: number } | null;
     const pid = st?.preselectOrderId;
-    const openReturnCreateForm = Boolean(st?.openReturnCreateForm);
     if (pid == null || !Number.isFinite(pid) || pid <= 0) return;
-    const sig = `${String(location.key)}:${pid}:${openReturnCreateForm ? "1" : "0"}`;
+    const sig = `${String(location.key)}:${pid}:${st?.highlightReturnId ?? ""}`;
     if (preselectSig.current === sig) return;
     preselectSig.current = sig;
-    void loadOrderById(pid, { openCreateFormAfterLoad: openReturnCreateForm }).finally(() => {
+    void loadOrderById(pid, { highlightReturnId: st?.highlightReturnId }).finally(() => {
       navigate(".", { replace: true, state: {} });
     });
   }, [location.key, location.state, loadOrderById, navigate]);
@@ -717,10 +698,84 @@ export default function WmsReturnsEntryPage() {
     }
   }, [highlightReturnId, orderReturnsLoading, orderReturns]);
 
-  const firstReturnQtyRowIndex = useMemo(() => {
-    if (!selectedOrder) return -1;
-    return selectedOrder.items.findIndex((x) => x.quantity > 0);
-  }, [selectedOrder]);
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => {
+      trackingInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, []);
+
+  const runLookup = useCallback(
+    async (rawInput: string) => {
+      const raw = rawInput.trim();
+      if (!raw) return;
+
+      setLoading(true);
+      setErr(null);
+      setOrderLoadErr(null);
+
+      try {
+        const query = normalizeWmsReturnsSearchQuery(raw);
+        if (!query) {
+          setHits([]);
+          setSelectedOrder(null);
+          setErr("Brak wyników dla podanego zapytania.");
+          return;
+        }
+
+        const data = await lookupOrdersForWms(query, DAMAGE_TENANT_ID, warehouseId);
+
+        if (data.length === 0) {
+          setHits([]);
+          setSelectedOrder(null);
+          setErr("Brak wyników dla podanego zapytania.");
+          return;
+        }
+
+        setErr(null);
+
+        if (data.length === 1) {
+          setHits([]);
+          const hit = data[0];
+          const rid =
+            hit.matched_return_id != null && Number.isFinite(hit.matched_return_id) ? hit.matched_return_id : null;
+          await loadOrderById(hit.id, { highlightReturnId: rid });
+          return;
+        }
+
+        setHits(data);
+        setSelectedOrder(null);
+        window.requestAnimationFrame(() => firstHitButtonRef.current?.focus());
+      } catch {
+        setErr("Nie udało się wyszukać.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [warehouseId, loadOrderById],
+  );
+
+  const searchByTracking = useCallback(
+    async (overrideQ?: string) => {
+      const raw = (overrideQ ?? trackingQ).trim();
+      if (!raw) return;
+      await runLookup(raw);
+    },
+    [trackingQ, runLookup],
+  );
+
+  const search = useCallback(
+    async (overrideQ?: string) => {
+      const raw = (overrideQ ?? searchQ).trim();
+      if (!raw) return;
+      await runLookup(raw);
+    },
+    [searchQ, runLookup],
+  );
+
+  useEffect(() => {
+    searchRef.current = searchByTracking;
+  }, [searchByTracking]);
 
   const mergedQueueTiles = useMemo(() => {
     const ret: MergedQueueEntry[] = orderReturns.map((r) => ({
@@ -743,23 +798,10 @@ export default function WmsReturnsEntryPage() {
   }, [orderReturns, orderComplaints, queueFilter]);
 
   useEffect(() => {
-    setQueueFilter("all");
-  }, [selectedOrder?.id]);
-
-  useEffect(() => {
-    const id = window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, []);
-
-  useEffect(() => {
     if (!selectedOrder || orderReturnsLoading || orderComplaintsLoading || orderReturnsErr || orderComplaintsErr) return;
     const id = window.requestAnimationFrame(() => {
       if (mergedQueueTiles.length > 0) {
         firstQueueTileRef.current?.focus();
-      } else if (showCreateForm && firstReturnQtyRowIndex >= 0) {
-        firstQtyInputRef.current?.focus();
       }
     });
     return () => window.cancelAnimationFrame(id);
@@ -772,130 +814,16 @@ export default function WmsReturnsEntryPage() {
     orderReturns,
     orderComplaints,
     mergedQueueTiles,
-    showCreateForm,
-    firstReturnQtyRowIndex,
   ]);
 
-  const search = useCallback(
-    async (overrideQ?: string) => {
-      const raw = (overrideQ ?? q).trim();
-      if (!raw) return;
-
-      console.log("returns lookup start", raw);
-      setLoading(true);
-      setErr(null);
-      setOrderLoadErr(null);
-
-      try {
-        const query = normalizeWmsReturnsSearchQuery(raw);
-        if (!query) {
-          setHits([]);
-          setSelectedOrder(null);
-          setErr("Brak zamówienia dla podanego numeru lub kodu.");
-          return;
-        }
-
-        const data = await lookupOrdersForWms(query, DAMAGE_TENANT_ID, warehouseId);
-        console.log("returns lookup response", data);
-
-        if (data.length === 0) {
-          setHits([]);
-          setSelectedOrder(null);
-          setErr("Brak zamówienia dla podanego numeru lub kodu.");
-          return;
-        }
-
-        setErr(null);
-
-        if (data.length === 1) {
-          setHits([]);
-          const hit = data[0];
-          const rid =
-            hit.matched_return_id != null && Number.isFinite(hit.matched_return_id)
-              ? hit.matched_return_id
-              : null;
-          await loadOrderById(hit.id, { highlightReturnId: rid });
-          return;
-        }
-
-        setHits(data);
-        setSelectedOrder(null);
-        window.requestAnimationFrame(() => firstHitButtonRef.current?.focus());
-      } catch (error) {
-        console.error("returns lookup failed", error);
-        setErr("Nie udało się wyszukać zamówienia.");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [q, warehouseId, loadOrderById],
-  );
-
   useEffect(() => {
-    searchRef.current = search;
-  }, [search]);
+    setQueueFilter("all");
+  }, [selectedOrder?.id]);
 
-  const linesForCreate = useMemo(() => {
-    if (!selectedOrder) return [];
-    return selectedOrder.items
-      .filter((it) => (qtyByItem[it.id] ?? 0) > 0)
-      .map((it) => ({
-        order_item_id: it.id,
-        product_id: it.product.id,
-        quantity: Math.min(Math.max(1, Math.floor(qtyByItem[it.id] ?? 0)), it.quantity),
-      }));
-  }, [selectedOrder, qtyByItem]);
-
-  const createReturn = async () => {
-    if (!selectedOrder || linesForCreate.length === 0) return;
-    setSubmitting(true);
-    setCreateReturnErr(null);
-    try {
-      const r = await createWmsReturn({
-        tenant_id: DAMAGE_TENANT_ID,
-        order_id: selectedOrder.id,
-        return_type: newReturnType,
-        lines: linesForCreate,
-      });
-      await Promise.all([
-        loadReturnsForOrder(selectedOrder.id),
-        loadComplaintsForOrder(selectedOrder.id, selectedOrder.warehouse_id ?? warehouseId),
-      ]);
-      setShowCreateForm(false);
-      setHighlightReturnId(r.id);
-      const init: Record<number, number> = {};
-      for (const it of selectedOrder.items) {
-        init[it.id] = 0;
-      }
-      setQtyByItem(init);
-      window.requestAnimationFrame(() => firstQueueTileRef.current?.focus());
-    } catch (e: unknown) {
-      let msg = "Nie udało się utworzyć zwrotu.";
-      if (typeof e === "object" && e !== null && "response" in e) {
-        const data = (e as { response?: { data?: { detail?: unknown } } }).response?.data;
-        const d = data?.detail;
-        if (typeof d === "string" && d.trim()) msg = d.trim();
-        else if (Array.isArray(d)) {
-          const parts = d
-            .map((row) =>
-              typeof row === "object" && row !== null && "msg" in row
-                ? String((row as { msg: unknown }).msg).trim()
-                : String(row),
-            )
-            .filter((s) => s.length > 0);
-          if (parts.length) msg = parts.join(" ");
-        }
-      }
-      setCreateReturnErr(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const setQty = (itemId: number, value: number, max: number) => {
-    const v = Math.max(0, Math.min(max, Math.floor(value)));
-    setQtyByItem((prev) => ({ ...prev, [itemId]: v }));
-  };
+  const openNewReturnForm = useCallback(() => {
+    if (!selectedOrder) return;
+    navigate(WMS_ROUTES.returnsCreate(selectedOrder.id));
+  }, [navigate, selectedOrder]);
 
   const hasReturns = orderReturns.length > 0;
   const hasComplaints = orderComplaints.length > 0;
@@ -912,37 +840,6 @@ export default function WmsReturnsEntryPage() {
     [selectedOrder?.addresses_json],
   );
 
-  const openNewReturnForm = useCallback(() => {
-    setCreateReturnErr(null);
-    setShowCreateForm(true);
-  }, []);
-
-  const closeCreateFormPanel = useCallback(() => {
-    setShowCreateForm(false);
-    setCreateReturnErr(null);
-  }, []);
-
-  useEffect(() => {
-    if (!showCreateForm) {
-      setReturnPanelEntered(false);
-      return;
-    }
-    setReturnPanelEntered(false);
-    const id = window.requestAnimationFrame(() => {
-      setReturnPanelEntered(true);
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [showCreateForm]);
-
-  useEffect(() => {
-    if (!showCreateForm) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeCreateFormPanel();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showCreateForm, closeCreateFormPanel]);
-
   const showScanIdle = !selectedOrder && hits.length === 0 && !loading && !orderLoadErr;
 
   return (
@@ -958,16 +855,6 @@ export default function WmsReturnsEntryPage() {
             {savedReturnFlash}
           </div>
         ) : null}
-
-        <WmsActiveZPzPanel
-          warehouseId={warehouseId}
-          refreshKey={activeZPzRefreshKey}
-          onClosed={(documentNumber) => {
-            setSavedReturnFlash(`Zamknięto dokument ${documentNumber}. Nośnik trafi do rozlokowania.`);
-            setActiveZPzRefreshKey((k) => k + 1);
-            window.setTimeout(() => setSavedReturnFlash(null), 4500);
-          }}
-        />
 
         <div className={showScanIdle ? "flex flex-1 items-center justify-center w-full" : "w-full px-4 md:px-6 pt-4 md:pt-6"}>
           
@@ -989,10 +876,24 @@ export default function WmsReturnsEntryPage() {
               </>
             )}
 
-            <div className={`relative mx-auto w-full ${showScanIdle ? "max-w-md mb-8" : "w-full"}`}>
-              <svg 
-                className="absolute left-4 top-1/2 z-10 -translate-y-1/2 text-slate-400 h-5 w-5" 
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden
+            {!showScanIdle && (
+              <h2 className="mb-4 text-xl font-black tracking-tight text-slate-900 md:text-2xl">
+                Skanowanie zwrotu
+              </h2>
+            )}
+
+            <p className={`mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500 ${showScanIdle ? "sr-only" : ""}`}>
+              Skan listu
+            </p>
+            <div className={`relative mx-auto w-full ${showScanIdle ? "max-w-md mb-4" : "mb-4"}`}>
+              <svg
+                className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                aria-hidden
               >
                 <path d="M4 7V5a1 1 0 0 1 1-1h2" />
                 <path d="M4 17v2a1 1 0 0 0 1 1h2" />
@@ -1004,12 +905,12 @@ export default function WmsReturnsEntryPage() {
                 <path d="M16 7v10" />
               </svg>
               <input
-                id="wms-returns-scan-input"
-                ref={searchInputRef}
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
+                id="wms-returns-tracking-input"
+                ref={trackingInputRef}
+                value={trackingQ}
+                onChange={(e) => setTrackingQ(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") void search();
+                  if (e.key === "Enter") void searchByTracking();
                 }}
                 disabled={loading}
                 placeholder="Zeskanuj list przewozowy"
@@ -1021,24 +922,53 @@ export default function WmsReturnsEntryPage() {
               />
             </div>
 
-            {showScanIdle && (
-              <button
-                type="button"
-                className="mx-auto flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-6 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-500/10 active:bg-slate-100"
-                onClick={() => searchInputRef.current?.focus()}
+            <p className="mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Wyszukiwarka</p>
+            <div className={`relative mx-auto w-full ${showScanIdle ? "max-w-md mb-4" : "mb-2"}`}>
+              <svg
+                className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
+                viewBox="0 0 512 512"
+                fill="currentColor"
+                aria-hidden
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" className="h-4 w-4 text-slate-400">
-                  <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
-                </svg>
-                Wpisz numer i naciśnij Enter
-              </button>
-            )}
+                <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z" />
+              </svg>
+              <input
+                id="wms-returns-search-input"
+                ref={searchInputRef}
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void search();
+                }}
+                disabled={loading}
+                placeholder="Szukaj zamówienia, RMZ, telefonu, emaila, SKU lub EAN"
+                className={`w-full rounded-xl border-2 border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
+                  showScanIdle ? "h-14 pl-12 pr-4" : "h-11 pl-11 pr-4"
+                }`}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
 
-            {err ? <p className="mt-3 text-center text-sm text-rose-600">{err}</p> : null}
+            {err ? <p className="mt-1 text-center text-sm text-rose-600">{err}</p> : null}
             {!showScanIdle && orderLoadErr ? (
-              <p className="mt-3 text-center text-sm text-rose-600">{orderLoadErr}</p>
+              <p className="mt-1 text-center text-sm text-rose-600">{orderLoadErr}</p>
             ) : null}
-            {loading ? <p className="mt-3 text-center text-sm font-medium text-slate-500">Szukam…</p> : null}
+            {loading ? <p className="mt-1 text-center text-sm font-medium text-slate-500">Szukam…</p> : null}
+          </div>
+
+          <div className={`mx-auto w-full ${showScanIdle ? "max-w-md px-4" : "max-w-xl px-0"}`}>
+            <WmsActiveZPzPanel
+              warehouseId={warehouseId}
+              refreshKey={activeZPzRefreshKey}
+              onClosed={(documentNumber) => {
+                setSavedReturnFlash(
+                  `Zamknięto dokument ${displayWarehouseDocumentNumber(documentNumber)}. Nośnik trafi do rozlokowania.`,
+                );
+                setActiveZPzRefreshKey((k) => k + 1);
+                window.setTimeout(() => setSavedReturnFlash(null), 4500);
+              }}
+            />
           </div>
 
           {!showScanIdle && (
@@ -1181,7 +1111,7 @@ export default function WmsReturnsEntryPage() {
                                 >
                                   <WmsListCardTile
                                     variant="return"
-                                    idLine={r.rmz_number}
+                                    idLine={displayWarehouseDocumentNumber(r.rmz_number) || r.rmz_number}
                                     metaLines={retContent.metaLines}
                                     bodyLine={retContent.bodyLine}
                                     isCompleted={retDone}
@@ -1199,7 +1129,7 @@ export default function WmsReturnsEntryPage() {
                                       className="mt-1 inline-flex max-w-full truncate text-xs font-medium text-[#41546a] underline-offset-2 hover:underline"
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      {r.warehouse_document_number}
+                                      {displayWarehouseDocumentNumber(r.warehouse_document_number)}
                                     </Link>
                                   ) : null}
                                 </div>
@@ -1249,146 +1179,6 @@ export default function WmsReturnsEntryPage() {
           )}
         </div>
       </main>
-
-      {/* Wyjeżdżający panel - "Nowy Zwrot" */}
-      {showCreateForm && selectedOrder && (
-        <div
-          className="fixed inset-0 z-50 flex justify-end"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="wms-return-panel-title"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
-            aria-label="Zamknij panel"
-            onClick={closeCreateFormPanel}
-          />
-          <aside
-            ref={createFormSectionRef}
-            className={`relative z-10 flex h-full w-full max-w-[400px] flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out ${
-              returnPanelEntered ? "translate-x-0" : "translate-x-full"
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
-              <h2 id="wms-return-panel-title" className="text-base font-semibold text-slate-900">
-                Nowy zwrot
-              </h2>
-              <button
-                type="button"
-                className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                aria-label="Zamknij"
-                onClick={closeCreateFormPanel}
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form
-              className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (linesForCreate.length === 0 || submitting) return;
-                void createReturn();
-              }}
-            >
-              <p className="text-left text-sm leading-relaxed text-slate-600">
-                Ustal ilości do zwrotu (nie więcej niż w zamówieniu). Po zapisie dokument RMZ pojawi się na liście obok.
-              </p>
-              <div>
-                <label className="mb-1 block text-left text-xs font-semibold text-slate-600">
-                  Rodzaj zwrotu
-                </label>
-                <select
-                  value={newReturnType}
-                  onChange={(e) => setNewReturnType(e.target.value as "RMA" | "UNCLAIMED")}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="RMA">Zwrot</option>
-                  <option value="UNCLAIMED">Nieodebrane</option>
-                </select>
-              </div>
-              {createReturnErr ? (
-                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
-                  {createReturnErr}
-                </p>
-              ) : null}
-              <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
-                {selectedOrder.items.map((it, ii) => {
-                  const p = it.product;
-                  const imgRaw = (p.image_url || "").trim();
-                  const imgSrc = imgRaw ? resolveDamageMediaUrl(imgRaw) : "";
-                  const ean = (p.ean || "").trim();
-                  const skuLine = ((p.sku || "").trim() || (p.symbol || "").trim()) || "";
-                  const noOrderQty = it.quantity <= 0;
-                  return (
-                    <div
-                      key={it.id}
-                      className={`flex w-full items-center gap-3 rounded-xl border p-3 shadow-sm ${
-                        noOrderQty
-                          ? "cursor-not-allowed border-slate-200 bg-slate-100/80 opacity-60"
-                          : "border-slate-100 bg-slate-50/80"
-                      }`}
-                    >
-                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-50 ring-1 ring-slate-200/80">
-                        {imgSrc ? (
-                          <img src={imgSrc} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-slate-400" aria-hidden>
-                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={1.5}
-                                d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3A1.5 1.5 0 0 0 1.5 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008H12V8.25Z"
-                              />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1 text-left">
-                        <div className="break-words text-sm font-bold leading-snug text-slate-900">{p.name ?? "—"}</div>
-                        <div className="mt-0.5 text-sm text-slate-500">EAN: {ean || "—"}</div>
-                        <div className="text-sm text-slate-500">SKU: {skuLine || "—"}</div>
-                        <div className="mt-0.5 text-xs text-slate-500">
-                          W zamów.: <span className="tabular-nums font-medium text-slate-600">{it.quantity}</span>
-                          {noOrderQty ? (
-                            <span className="ml-1 font-semibold text-amber-800"> — brak w zamówieniu</span>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1 self-center">
-                        <span className="text-xs font-semibold text-slate-600">Do zwrotu</span>
-                        <input
-                          ref={ii === firstReturnQtyRowIndex ? firstQtyInputRef : undefined}
-                          type="number"
-                          min={0}
-                          max={it.quantity}
-                          value={qtyByItem[it.id] ?? 0}
-                          onChange={(e) => setQty(it.id, Number(e.target.value), it.quantity)}
-                          disabled={noOrderQty || submitting}
-                          aria-disabled={noOrderQty || submitting}
-                          title={noOrderQty ? "Pozycja z ilością 0 w zamówieniu — nie można zwrócić" : undefined}
-                          className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-2 text-center text-base tabular-nums text-slate-900 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <button
-                type="submit"
-                disabled={linesForCreate.length === 0 || submitting}
-                className="w-full shrink-0 rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-md transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Dodaj zwrot
-              </button>
-            </form>
-          </aside>
-        </div>
-      )}
     </div>
   );
 }

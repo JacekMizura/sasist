@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { closeActiveCollectiveZPz, getActiveCollectiveZPz, getWmsReturnsModeSettings } from "../../api/wmsReturnsApi";
 import { printZPzLabel } from "../../api/zPzLabelPrintApi";
 import type { ActiveZPzRead } from "../../types/wmsReturn";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { formatWmsListDate } from "./wmsListFormatters";
 
@@ -92,55 +93,50 @@ export function WmsActiveZPzPanel({ warehouseId, refreshKey = 0, onClosed }: Pro
   const createdLabel = formatWmsListDate(doc.created_at ?? null);
   const unitSum = Math.round(doc.unit_sum * 100) / 100;
   const rmzCount = doc.rmz_count ?? 0;
+  const docNumber = displayWarehouseDocumentNumber(doc.document_number);
 
   return (
-    <section
-      className="mx-auto mb-2 w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
-      aria-label="Aktywny dokument zwrotów"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="truncate font-mono text-sm font-bold text-slate-900">{doc.document_number}</span>
-            <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800">
-              AKTYWNY
-            </span>
+    <section className="mx-auto mb-4 w-full max-w-xl" aria-label="Aktywny dokument zwrotów">
+      <h2 className="mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Aktywny dokument zwrotów</h2>
+      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="truncate font-mono text-sm font-bold text-slate-900">{docNumber}</span>
+              <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800">
+                AKTYWNY
+              </span>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] leading-snug text-slate-600 sm:grid-cols-3">
+              <div>
+                <dt className="text-[10px] font-semibold uppercase text-slate-400">RMZ</dt>
+                <dd className="font-semibold tabular-nums text-slate-800">{rmzCount}</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] font-semibold uppercase text-slate-400">Pozycje</dt>
+                <dd className="font-semibold tabular-nums text-slate-800">{doc.line_count}</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] font-semibold uppercase text-slate-400">Sztuki</dt>
+                <dd className="font-semibold tabular-nums text-slate-800">{unitSum}</dd>
+              </div>
+              <div className="col-span-2 sm:col-span-3">
+                <dt className="text-[10px] font-semibold uppercase text-slate-400">Data utworzenia</dt>
+                <dd className="tabular-nums">{createdLabel || "—"}</dd>
+              </div>
+            </dl>
           </div>
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] leading-snug text-slate-600">
-            <div>
-              <dt className="sr-only">Liczba RMZ</dt>
-              <dd>
-                RMZ: <span className="font-semibold tabular-nums text-slate-800">{rmzCount}</span>
-              </dd>
-            </div>
-            <div>
-              <dt className="sr-only">Liczba pozycji</dt>
-              <dd>
-                Pozycje: <span className="font-semibold tabular-nums text-slate-800">{doc.line_count}</span>
-              </dd>
-            </div>
-            <div>
-              <dt className="sr-only">Liczba sztuk</dt>
-              <dd>
-                Sztuki: <span className="font-semibold tabular-nums text-slate-800">{unitSum}</span>
-              </dd>
-            </div>
-            <div>
-              <dt className="sr-only">Data utworzenia</dt>
-              <dd className="tabular-nums">{createdLabel || "—"}</dd>
-            </div>
-          </dl>
+          <button
+            type="button"
+            disabled={closing}
+            onClick={() => void handleClose()}
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-slate-800 px-3 text-[11px] font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
+          >
+            {closing ? "…" : "Zamknij dokument"}
+          </button>
         </div>
-        <button
-          type="button"
-          disabled={closing}
-          onClick={() => void handleClose()}
-          className="inline-flex h-7 shrink-0 items-center justify-center rounded-md bg-slate-800 px-2.5 text-[11px] font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
-        >
-          {closing ? "…" : "Zamknij dokument"}
-        </button>
+        {err ? <p className="mt-1.5 text-[11px] text-rose-700">{err}</p> : null}
       </div>
-      {err ? <p className="mt-1.5 text-[11px] text-rose-700">{err}</p> : null}
     </section>
   );
 }

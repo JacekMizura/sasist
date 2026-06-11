@@ -24,6 +24,7 @@ import { coercePhotoUrlForDamageEntry, createDamageEntry } from "../../api/damag
 import { uploadDamageImageFile } from "../../api/damageUploadApi";
 import { formatRelativeAgo } from "../../utils/formatRelativeAgo";
 import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import {
   finalizeLineFromProcess,
   finalizeLineFromRead,
@@ -756,7 +757,7 @@ export default function ReturnsReturnDetailPage() {
           whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
         );
         setData(updated);
-        const docNo = (updated.warehouse_document_number || "").trim();
+        const docNo = displayWarehouseDocumentNumber(updated.warehouse_document_number);
         setFinalizeSuccessMsg(
           docNo ? `Zwrot zakończony. Utworzono dokument ${docNo}` : "Zwrot zakończony",
         );
@@ -953,7 +954,7 @@ export default function ReturnsReturnDetailPage() {
           Zwroty
         </Link>
         <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-        <span className="font-medium text-slate-600">{data.rmz_number}</span>
+        <span className="font-medium text-slate-600">{displayWarehouseDocumentNumber(data.rmz_number) || data.rmz_number}</span>
       </nav>
 
       <div className={panelDetailPageSectionSpacingClass}>
@@ -967,7 +968,7 @@ export default function ReturnsReturnDetailPage() {
         ) : null}
 
         <PanelDetailEntityHeader
-          title={<>Zwrot {data.rmz_number}</>}
+          title={<>Zwrot {displayWarehouseDocumentNumber(data.rmz_number) || data.rmz_number}</>}
           status={data.ui_status ?? null}
           meta={
             <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-slate-500">
@@ -1001,7 +1002,7 @@ export default function ReturnsReturnDetailPage() {
                     to={WMS_ROUTES.putawayPz(data.warehouse_document_id)}
                     className="font-medium text-[#41546a] hover:underline"
                   >
-                    {data.warehouse_document_number}
+                    {displayWarehouseDocumentNumber(data.warehouse_document_number)}
                   </Link>
                 </>
               ) : null}

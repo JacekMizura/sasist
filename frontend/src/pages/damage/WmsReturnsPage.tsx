@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import axios from "axios";
 import QRCode from "qrcode";
@@ -101,6 +102,7 @@ import api from "../../api/axios";
 import { printReturnLabel } from "../../api/returnLabelPrintApi";
 import { wmsPhotoUploadClient } from "../../api/wmsPhotoUploadClient";
 import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { getPublicBaseUrl } from "../../config/publicUrl";
 import { DAMAGE_TENANT_ID } from "./damageShared";
 import {
@@ -3525,13 +3527,18 @@ export default function WmsReturnsPage() {
       }
 
       try {
-        const docNo = (finalReturn.warehouse_document_number || "").trim();
+        const docNo = displayWarehouseDocumentNumber(finalReturn.warehouse_document_number);
         const toastMsg = docNo
           ? `Zwrot zakończony. Utworzono dokument ${docNo}`
           : "Zwrot zakończony";
-        sessionStorage.setItem("wms_returns_saved_toast", toastMsg);
+        toast.success(toastMsg);
+        try {
+          sessionStorage.setItem("wms_returns_saved_toast", toastMsg);
+        } catch {
+          /* quota / private mode */
+        }
       } catch {
-        /* quota / private mode */
+        toast.success("Zwrot zakończony");
       }
       navigate(WMS_ROUTES.returns, {
         replace: true,
@@ -3912,7 +3919,9 @@ export default function WmsReturnsPage() {
               </div>
 
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 sm:text-sm">
-                <span className="text-base font-bold tabular-nums text-blue-600">{wmsReturn?.rmz_number?.trim() || "—"}</span>
+                <span className="text-base font-bold tabular-nums text-blue-600">
+                  {displayWarehouseDocumentNumber(wmsReturn?.rmz_number) || wmsReturn?.rmz_number?.trim() || "—"}
+                </span>
                 <span className="text-slate-300" aria-hidden>
                   ·
                 </span>

@@ -1,5 +1,6 @@
 import type { StockDocumentListRow, StockDocumentRead } from "@/api/stockDocumentsApi";
 import { documentCreatedByLabel } from "@/utils/documentCreatedBy";
+import { displayWarehouseDocumentNumber } from "@/utils/warehouseDocumentNumberDisplay";
 import type { WarehouseDocType } from "./warehouseDocumentConfigs";
 
 export type DocumentSeriesBrief = {
@@ -22,7 +23,9 @@ export function seriesCode(row: {
 }
 
 export function documentDisplayNumber(row: { document_number?: string | null; id: number }): string {
-  return (row.document_number || "").trim() || `#${row.id}`;
+  const raw = (row.document_number || "").trim();
+  if (raw) return displayWarehouseDocumentNumber(raw);
+  return `#${row.id}`;
 }
 
 export function totalQuantity(row: StockDocumentListRow): number {

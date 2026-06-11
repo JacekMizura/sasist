@@ -1645,6 +1645,94 @@ def _wms_returns_orders_lookup_search(
             if o is not None:
                 merge_hit(o, int(ret_row.id))
 
+    if term:
+        term_low = term.lower()
+        like_term = f"%{term}%"
+
+        cust_orders = (
+            base_wh.outerjoin(Customer, Customer.id == Order.customer_id)
+            .filter(
+                or_(
+                    Customer.first_name.ilike(like_term),
+                    Customer.last_name.ilike(like_term),
+                    Customer.email.ilike(like_term),
+                    Order.addresses_json.ilike(like_term),
+                    Order.import_metadata_json.ilike(like_term),
+                    Order.number.ilike(like_term),
+                    Order.external_id.ilike(like_term),
+                )
+            )
+            .limit(15)
+            .all()
+        )
+        if not cust_orders:
+            cust_orders = (
+                base_tenant.outerjoin(Customer, Customer.id == Order.customer_id)
+                .filter(
+                    or_(
+                        Customer.first_name.ilike(like_term),
+                        Customer.last_name.ilike(like_term),
+                        Customer.email.ilike(like_term),
+                        Order.addresses_json.ilike(like_term),
+                        Order.import_metadata_json.ilike(like_term),
+                        Order.number.ilike(like_term),
+                        Order.external_id.ilike(like_term),
+                    )
+                )
+                .limit(15)
+                .all()
+            )
+        for o in cust_orders:
+            merge_hit(o, None)
+
+        sku_orders = (
+            base_wh.join(OrderItem, OrderItem.order_id == Order.id)
+            .join(Product, Product.id == OrderItem.product_id)
+            .filter(
+                or_(
+                    Product.sku.ilike(like_term),
+                    Product.ean.ilike(like_term),
+                    Product.symbol.ilike(like_term),
+                )
+            )
+            .limit(15)
+            .all()
+        )
+        if not sku_orders:
+            sku_orders = (
+                base_tenant.join(OrderItem, OrderItem.order_id == Order.id)
+                .join(Product, Product.id == OrderItem.product_id)
+                .filter(
+                    or_(
+                        Product.sku.ilike(like_term),
+                        Product.ean.ilike(like_term),
+                        Product.symbol.ilike(like_term),
+                    )
+                )
+                .limit(15)
+                .all()
+            )
+        for o in sku_orders:
+            merge_hit(o, None)
+
+        ret_rows = (
+            db.query(WmsOrderReturn)
+            .filter(
+                WmsOrderReturn.tenant_id == tenant_id,
+                WmsOrderReturn.deleted_at.is_(None),
+                or_(
+                    WmsOrderReturn.rmz_number.ilike(like_term),
+                    WmsOrderReturn.external_id.ilike(like_term),
+                ),
+            )
+            .limit(10)
+            .all()
+        )
+        for ret_row in ret_rows:
+            o = base_tenant.filter(Order.id == ret_row.order_id).first()
+            if o is not None:
+                merge_hit(o, int(ret_row.id))
+
     if hits:
         return sorted(hits.values(), key=lambda h: h.id)
 
