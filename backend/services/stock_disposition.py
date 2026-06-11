@@ -34,18 +34,18 @@ def stock_disposition_for_document_line(item: Any | None) -> str:
 
 
 def stock_disposition_display_badge(code: str) -> str | None:
-    """Short badge for product inventory rows (e.g. OUTLET_B → [B])."""
+    """Operator-facing badge for product inventory rows (location + state)."""
     c = normalize_stock_disposition(code)
     if c == DEFAULT_STOCK_DISPOSITION:
-        return None
+        return "(A)"
     if c == STOCK_DISPOSITION_OUTLET_B:
-        return "[B]"
+        return "(USZKODZONY)"
     if c == STOCK_DISPOSITION_SERVICE_C:
-        return "[C]"
+        return "(REKLAMACJA)"
     if c == STOCK_DISPOSITION_REJECTED_STOCK:
-        return "[X]"
+        return "(ODRZUCONY)"
     if c == STOCK_DISPOSITION_QUARANTINE:
-        return "[Q]"
+        return "(KWARANTANNA)"
     if c == STOCK_DISPOSITION_SCRAP:
-        return "[S]"
-    return f"[{c[:8]}]"
+        return "(ZŁOM)"
+    return f"({c[:12]})"

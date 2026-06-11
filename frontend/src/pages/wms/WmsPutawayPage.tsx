@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Clock, RotateCcw, MapPin, Package, User, ScanLine } from "lucide-react";
+import { Clock, MapPin, Package, User, ScanLine } from "lucide-react";
 import api from "../../api/axios";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
@@ -22,7 +22,6 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
   const docNumber = row.number?.trim() || `PZ #${row.id}`;
   const activityIso = row.updated_at?.trim() ? row.updated_at : row.created_at;
 
-  const isReturn = docNumber.toUpperCase().includes("Z-PZ");
   const receivingInProgress = String(row.receiving_status ?? "").toUpperCase() !== "DONE";
   const carrierCount = row.carrier_count ?? 0;
   const totalPut = row.total_putaway ?? 0;
@@ -40,25 +39,21 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
     >
       {/* Top: Icon & Title & Badges */}
       <div className="flex items-start gap-4 mb-5">
-        <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border group-hover:scale-105 transition-transform ${
-          isReturn ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-        }`}>
-          {isReturn ? <RotateCcw size={24} strokeWidth={2.5} /> : <MapPin size={24} strokeWidth={2.5} />}
+        <div className="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border bg-emerald-50 text-emerald-600 border-emerald-100 group-hover:scale-105 transition-transform">
+          <MapPin size={24} strokeWidth={2.5} />
         </div>
         <div className="flex flex-col items-start pt-0.5 gap-2 min-w-0">
           <h3 className="text-lg font-black text-slate-900 leading-none truncate w-full" title={docNumber}>
             {docNumber}
           </h3>
           <div className="flex flex-wrap gap-1.5">
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-              isReturn ? 'bg-rose-50 text-rose-700 border-rose-200/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
-            }`}>
-              {isReturn ? "Zwrot" : "Do rozlokowania PZ"}
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border bg-emerald-50 text-emerald-700 border-emerald-200/60">
+              Do rozlokowania PZ
             </span>
             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
               receivingInProgress ? 'bg-amber-50 text-amber-700 border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
             }`}>
-              {receivingInProgress ? "W trakcie przyjęcia" : "Gotowe do rozlokowania PZ"}
+              {receivingInProgress ? "W trakcie przyjęcia" : "Gotowe do rozlokowania"}
             </span>
           </div>
         </div>
@@ -108,7 +103,7 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
         
         <div className="relative w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
           <div 
-            className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ease-out ${isReturn ? 'bg-rose-500' : 'bg-emerald-500'}`}
+            className="absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ease-out bg-emerald-500"
             style={{ width: `${progressPct}%` }}
           />
         </div>

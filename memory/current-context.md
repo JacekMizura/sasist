@@ -1,6 +1,12 @@
 # Current context
 
-## WMS returns finalize (2026-06-08)
+## WMS returns Z-PZ → putaway (2026-06-08)
+- Flow: RMZ finalize → Z-PZ (dock receipt) → **Rozlokowanie PZ** → lokalizacja + `stock_disposition`
+- Collective Z-PZ (`status=OPEN`) trafia do kolejki rozlokowania bez ręcznego zamknięcia nośnika
+- `doc_allows_wms_putaway` / `recompute_putaway_status_for_document` obsługują Z-PZ OPEN/CLOSED/draft
+- Auto-close `relocation_status=DONE` pominięty dla collective OPEN (nowe linie RMZ resetują OPEN)
+- Etykiety stanu w lokalizacjach produktu: (A), (USZKODZONY), (REKLAMACJA)
+
 - **Jedno SSOT:** `POST /wms/returns/id/{id}/finalize` (alias: `/wms/returns/{id}/finalize`) — OMS i WMS ten sam endpoint
 - Dokument **Z-PZ** (`Z_PZ`); zbiorczy: advisory lock + partial unique index
 - Po finalize: `warehouse_document_id` → edycja zablokowana (API + UI)

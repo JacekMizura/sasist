@@ -44,11 +44,13 @@ from .wms_mm_transfer_service import _allocate_fifo_from_source
 from .stock_document_service import (
     MAX_RECEIVED_QUANTITY,
     build_stock_document_read,
+    doc_allows_wms_putaway,
     ensure_pz_document_warehouse_resolved,
     is_stock_document_item_wm_material,
     maybe_auto_assign_single_warehouse_on_pz,
     recompute_putaway_status_for_document,
     recalculate_wms_document_completion,
+    wms_putaway_queue_statuses,
     _putaway_allocations_by_line_id,
 )
 from .document_creator_service import batch_load_app_users
@@ -114,7 +116,7 @@ def _load_putaway_pz_docs_with_lines(
     - at least one line with received_quantity > 0 (filtered when building list rows),
     - relocation not finalized (OPEN),
     - putaway not fully closed on document (NOT_STARTED / IN_PROGRESS / DONE until relocation ends).
-    Includes office-accepted posted PZ and draft PZ from WMS receiving flow.
+    Includes office-accepted posted PZ, draft PZ from WMS receiving, and Z-PZ (OPEN/CLOSED).
     """
     q = db.query(StockDocument).filter(
         StockDocument.tenant_id == tenant_id,
@@ -122,7 +124,7 @@ def _load_putaway_pz_docs_with_lines(
         StockDocument.receiving_status.in_(("IN_PROGRESS", "DONE")),
         StockDocument.putaway_status.in_(("NOT_STARTED", "IN_PROGRESS", "DONE")),
         StockDocument.relocation_status != "DONE",
-        StockDocument.status.in_(("draft", "posted", "CLOSED")),
+        StockDocument.status.in_(wms_putaway_queue_statuses()),
     )
     for f in extra_filters:
         q = q.filter(f)
@@ -143,13 +145,7 @@ def _load_putaway_pz_docs_with_lines(
 
 
 def _doc_allows_putaway(doc: StockDocument) -> bool:
-    dt = str(doc.document_type or "").strip().upper()
-    st = str(doc.status or "").strip().lower()
-    if dt == "MM":
-        return st == "draft"
-    if dt in ("PZ", "Z_PZ", "PZ_RT"):
-        return st in ("draft", "posted", "CLOSED")
-    return False
+    return doc_allows_wms_putaway(doc)
 
 
 def _normalize_location_uuid(value: object) -> str | None:
@@ -1594,7 +1590,8 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
     doc.relocation_status = "DONE"
     doc.updated_at = datetime.utcnow()
     rs = str(getattr(doc, "receiving_status", "") or "").strip().upper()
-    if rs == "DONE" and str(getattr(doc, "status", "") or "").strip().lower() == "draft":
+    st = str(getattr(doc, "status", "") or "").strip().upper()
+    if rs == "DONE" and st in ("DRAFT", "CLOSED"):
         doc.status = "zakonczone"
 
     _sync_po_from_pz(db, tenant_id, document_id)

@@ -657,7 +657,9 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
         .order_by(StockDocumentItem.id.asc())
         .all()
     )
-    recompute_putaway_status_for_document(doc, all_items)
+    if str(getattr(doc, "relocation_status", "") or "").strip().upper() == "DONE":
+        doc.relocation_status = "OPEN"
+    recompute_putaway_status_for_document(doc, all_items, db)
     doc.updated_at = datetime.utcnow()
     _link_rmz_to_document(db, rmz, doc, collective=collective)
     _patch_damage_entries_with_stock_links(db, lines, int(doc.id))

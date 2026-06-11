@@ -555,6 +555,45 @@ def _doc_status_lower(doc: StockDocument) -> str:
     return str(getattr(doc, "status", "") or "").lower()
 
 
+def _doc_type_upper(doc: StockDocument) -> str:
+    return str(getattr(doc, "document_type", "") or "").strip().upper()
+
+
+def is_z_pz_collective_open(doc: StockDocument) -> bool:
+    """Collective Z-PZ still accepting RMZ lines — relocation must not auto-close."""
+    return (
+        _doc_type_upper(doc) == "Z_PZ"
+        and bool(getattr(doc, "is_collective_return_receipt", False))
+        and _doc_status_lower(doc) == "open"
+    )
+
+
+def doc_allows_wms_putaway(doc: StockDocument) -> bool:
+    """Whether WMS putaway / relocation execution is allowed for this document."""
+    dt = _doc_type_upper(doc)
+    st = str(getattr(doc, "status", "") or "").strip().upper()
+    if dt == "MM":
+        return st == "DRAFT"
+    if dt in ("Z_PZ", "PZ_RT", "RETURN_RECEIPT"):
+        return st in ("DRAFT", "OPEN", "CLOSED", "POSTED", "ZAKONCZONE")
+    if dt == "PZ":
+        return st in ("DRAFT", "POSTED", "ZAKONCZONE")
+    return False
+
+
+def doc_allows_putaway_status_recompute(doc: StockDocument) -> bool:
+    """Same lifecycle gate as putaway execution — keeps putaway_status in sync for Z-PZ OPEN/CLOSED."""
+    dt = _doc_type_upper(doc)
+    if dt not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM"):
+        return False
+    return doc_allows_wms_putaway(doc)
+
+
+def wms_putaway_queue_statuses() -> tuple[str, ...]:
+    """stock_documents.status values eligible for the WMS PZ putaway list."""
+    return ("draft", "posted", "CLOSED", "OPEN", "zakonczone")
+
+
 def is_stock_document_cancelled(doc: StockDocument) -> bool:
     return _doc_status_lower(doc) in _CANCELLED_STATUS_TOKENS
 
@@ -655,9 +694,8 @@ def recompute_putaway_status_for_document(
     item_rows: List[StockDocumentItem],
     db: Session | None = None,
 ) -> None:
-    """Draft PZ / MM: NOT_STARTED | IN_PROGRESS | DONE from lines (received > 0)."""
-    dt = str(getattr(doc, "document_type", "") or "")
-    if dt not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM") or str(getattr(doc, "status", "") or "") != "draft":
+    """PZ / Z-PZ / MM: NOT_STARTED | IN_PROGRESS | DONE from lines (received > 0)."""
+    if not doc_allows_putaway_status_recompute(doc):
         return
     eps = 1e-5
     candidates = [
@@ -742,12 +780,12 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
         changed = True
 
     rls_before = str(getattr(doc, "relocation_status", "") or "").strip().upper()
-    if full_recv and full_put and rls_before != "DONE":
+    if full_recv and full_put and rls_before != "DONE" and not is_z_pz_collective_open(doc):
         doc.relocation_status = "DONE"
         changed = True
 
     st_before = _doc_status_lower(doc)
-    if full_recv and full_put and st_before == "draft":
+    if full_recv and full_put and st_before in ("draft", "closed"):
         doc.status = "zakonczone"
         changed = True
 

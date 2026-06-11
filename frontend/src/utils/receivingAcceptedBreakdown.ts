@@ -18,8 +18,8 @@ function isSaleableLine(it: StockDocumentItemRead): boolean {
 function damagedLabel(it: StockDocumentItemRead): string {
   const d = (it.stock_disposition ?? "").trim().toUpperCase();
   if (d === "REJECTED_STOCK" || d === "SCRAP") return "USZKODZONE";
-  if (d === "OUTLET_B") return "Outlet B";
-  if (d === "SERVICE_C") return "Serwis C";
+  if (d === "OUTLET_B") return "USZKODZONY";
+  if (d === "SERVICE_C") return "REKLAMACJA";
   if (d === "QUARANTINE") return "Kwarantanna";
   return d ? d.replace(/_/g, " ") : "USZKODZONE";
 }
