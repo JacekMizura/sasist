@@ -3540,7 +3540,6 @@ export default function WmsReturnsPage({
       setDirtyLineIds({});
       setGridUnlockEditByLineId({});
       setDamageSaveError(null);
-      setWmsReturn(finalReturn);
 
       try {
         window.dispatchEvent(new Event("wms-returns-list-refresh"));
@@ -3548,25 +3547,33 @@ export default function WmsReturnsPage({
         /* ignore */
       }
 
+      const returnIdForHighlight =
+        finalReturn.id != null && Number.isFinite(Number(finalReturn.id)) && Number(finalReturn.id) > 0
+          ? Math.floor(Number(finalReturn.id))
+          : null;
+      const orderIdForNav =
+        orderIdForList != null && Number.isFinite(Number(orderIdForList)) && Number(orderIdForList) > 0
+          ? Math.floor(Number(orderIdForList))
+          : null;
+
       try {
         const docNo = displayWarehouseDocumentNumber(finalReturn.warehouse_document_number);
         const toastMsg = docNo
           ? `Zwrot zakończony. Utworzono dokument ${docNo}`
           : "Zwrot zakończony";
         toast.success(toastMsg);
-        try {
-          sessionStorage.setItem("wms_returns_saved_toast", toastMsg);
-        } catch {
-          /* quota / private mode */
-        }
       } catch {
         toast.success("Zwrot zakończony");
       }
+
       navigate(WMS_ROUTES.returns, {
         replace: true,
         state:
-          orderIdForList != null && Number.isFinite(Number(orderIdForList)) && Number(orderIdForList) > 0
-            ? { preselectOrderId: Math.floor(Number(orderIdForList)) }
+          orderIdForNav != null
+            ? {
+                preselectOrderId: orderIdForNav,
+                ...(returnIdForHighlight != null ? { highlightReturnId: returnIdForHighlight } : {}),
+              }
             : undefined,
       });
     } catch (e) {
@@ -4211,7 +4218,7 @@ export default function WmsReturnsPage({
       </div>
 
       <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col overflow-hidden px-4 pb-4">
-        <div className={`flex h-full min-h-0 flex-1 flex-col ${isFinished ? "pointer-events-none select-none opacity-60" : ""}`}>
+        <div className="flex h-full min-h-0 flex-1 flex-col">
         {sessionLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center text-sm text-slate-600 shadow-sm">
             Ładowanie zwrotu…
@@ -5342,17 +5349,6 @@ export default function WmsReturnsPage({
           </div>
         )}
         </div>
-        {isFinished ? (
-          <div
-            className="absolute inset-0 z-[90] flex items-center justify-center bg-slate-900/50 p-6"
-            role="status"
-            aria-live="polite"
-          >
-            <p className="max-w-lg text-center text-2xl font-black uppercase tracking-wide text-white drop-shadow-md">
-              ZWROT ZAKOŃCZONY
-            </p>
-          </div>
-        ) : null}
       </div>
 
       

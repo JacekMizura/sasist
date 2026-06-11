@@ -1189,8 +1189,6 @@ export default function WmsReturnsEntryPage() {
                     </div>
                   </div>
 
-                  <div className={SCAN_COLUMN}>{zPzPanel}</div>
-
                   <div>
                     <h2 className="mb-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
                       Zwroty / Reklamacje
