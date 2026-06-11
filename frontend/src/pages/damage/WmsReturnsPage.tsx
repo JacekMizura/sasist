@@ -4273,7 +4273,7 @@ export default function WmsReturnsPage() {
             Nie udało się wczytać pozycji zamówienia. Wróć do zamówienia i spróbuj ponownie.
           </div>
         ) : (
-          <div className="grid h-full min-h-0 flex-1 grid-cols-[minmax(16rem,22%)_minmax(0,1fr)] gap-2 xl:grid-cols-[minmax(18rem,24%)_minmax(0,1fr)] xl:gap-3">
+          <div className="grid h-full min-h-0 flex-1 grid-cols-[minmax(18rem,26%)_minmax(0,1fr)] gap-2 lg:grid-cols-[minmax(20rem,28%)_minmax(0,1fr)] xl:grid-cols-[minmax(22rem,30%)_minmax(0,1fr)] xl:gap-3">
             <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
               <div className="flex max-h-[36%] min-h-[7rem] shrink-0 flex-col overflow-hidden">
                 <RmzPendingItemsPanel
@@ -4294,7 +4294,7 @@ export default function WmsReturnsPage() {
                 disabled={isFinished}
               />
             </div>
-            <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border border-slate-200 bg-white">
+            <section className="flex min-h-0 min-w-0 flex-col overflow-y-auto border border-slate-200 bg-white">
               {lineSeeds.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center p-10 text-center text-slate-500">
                   <p className="text-sm font-medium">Kliknij produkt w sekcji „DO DODANIA”, aby rozpocząć obsługę.</p>
@@ -4313,7 +4313,7 @@ export default function WmsReturnsPage() {
                     );
                   }
                   return (
-                    <div className="flex h-full min-h-0 w-full flex-1 flex-col p-3 lg:p-4">
+                    <div className="flex w-full flex-col p-3 lg:p-4">
                       {lines.map((ln) => {
                         const c = ln.candidate;
                         const qty = Math.floor(c.availableQuantity);
@@ -4501,7 +4501,7 @@ export default function WmsReturnsPage() {
                           <div
                             id={`rmz-grid-card-${ln.lineId}`}
                             key={ln.lineId}
-                            className={`relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl transition ${highlightCardLineId === ln.lineId ? "ring-4 ring-blue-300" : ""} ${cardBorderClass}`}
+                            className={`relative flex w-full flex-col overflow-hidden rounded-xl transition ${highlightCardLineId === ln.lineId ? "ring-4 ring-blue-300" : ""} ${cardBorderClass}`}
                           >
                             {showChangeDecisionBtn ? (
                               <button
@@ -4565,93 +4565,92 @@ export default function WmsReturnsPage() {
                                 {topRightDecisionBadgeText}
                               </span>
                             ) : null}
-                            <div className="relative flex h-[min(380px,34vh)] min-h-[200px] w-full shrink-0 items-center justify-center bg-slate-50">
-                              {imgSrc ? (
-                                <img src={imgSrc} alt="" className="max-h-full max-w-full object-contain p-3" />
-                              ) : (
-                                <div className="text-center text-base font-medium text-slate-400">Brak zdjęcia</div>
-                              )}
-                              {qty > 1 ? (
-                                <span className="absolute left-2 top-2 z-10 rounded-full bg-slate-900/85 px-2.5 py-1 text-xs font-bold text-white">
-                                  x{qty}
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-                              <div className="flex shrink-0 flex-col gap-1.5 px-4 pb-2 pt-3 lg:px-6">
-                                <h3 className="text-lg font-bold leading-snug text-slate-900 lg:text-xl">{c.productName}</h3>
-                                <p className="text-sm font-medium tracking-wide text-slate-500">
-                                  EAN: <span className="tabular-nums text-slate-600">{ean}</span>
+                            <div className="flex shrink-0 gap-4 border-b border-slate-100 px-4 py-3 lg:px-5">
+                              <div className="relative flex h-[200px] w-[200px] shrink-0 items-center justify-center bg-white">
+                                {imgSrc ? (
+                                  <img src={imgSrc} alt="" className="max-h-[200px] max-w-[200px] object-contain" />
+                                ) : (
+                                  <span className="text-sm text-slate-400">Brak zdjęcia</span>
+                                )}
+                                {qty > 1 ? (
+                                  <span className="absolute left-1 top-1 z-10 rounded-full bg-slate-900/85 px-2.5 py-1 text-xs font-bold text-white">
+                                    x{qty}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-bold leading-snug text-slate-900 lg:text-lg">{c.productName}</h3>
+                                <p className="mt-1 text-sm text-slate-600">
+                                  EAN: <span className="font-medium tabular-nums">{ean}</span>
                                   <span className="mx-1.5 text-slate-300" aria-hidden>
                                     •
                                   </span>
-                                  SKU: <span className="font-semibold text-slate-600">{sku}</span>
+                                  SKU: <span className="font-semibold">{sku}</span>
                                 </p>
-                                <div className="flex flex-col gap-1 pt-0.5">
-                                  <div className="flex flex-wrap gap-1.5">
-                                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-emerald-900">
-                                      OK: {acceptedN}
-                                    </span>
-                                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-amber-950">
-                                      B: {damagedBn}
-                                    </span>
-                                    <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold tabular-nums text-amber-950">
-                                      C: {damagedCn}
-                                    </span>
-                                    <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-rose-900">
-                                      ODRZ: {rejectedN}
-                                    </span>
-                                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-slate-800">
-                                      POZ: {pendingN}
-                                    </span>
-                                  </div>
-                                  {savedDamageEntries.length > 0 ? (
-                                    <div className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-lg border border-dashed border-amber-200/80 bg-white/80 px-2 py-2">
-                                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                                        Uszkodzone sztuki
-                                      </p>
-                                      {savedDamageEntries.map((ent, ei) => {
-                                        const reason = damageEntryReasonSummary(ent.damage_type, dmgReasons);
-                                        const pc = ent.photo_urls?.length ?? 0;
-                                        const noteLine = ent.note?.trim();
-                                        const operator = ent.operator_name?.trim() || "operator";
-                                        const when = ent.created_at ? formatOrderDetailDate(ent.created_at) : "—";
-                                        return (
-                                          <div
-                                            key={`${ent.id}-${ei}`}
-                                            className="rounded-md border border-amber-200 bg-amber-50/80 px-2 py-2 text-[11px] text-amber-950"
-                                          >
-                                            <div className="font-bold uppercase tracking-wide text-slate-900">
-                                              Uszkodzony {ent.condition} · #{ei + 1}
-                                            </div>
-                                            <div className="mt-0.5 tabular-nums">{reason || "Brak wskazanej przyczyny"}</div>
-                                            {noteLine ? <div className="mt-0.5 text-slate-700">{noteLine}</div> : null}
-                                            <div className="mt-1 text-slate-600">
-                                              {pc} {pc === 1 ? "zdjęcie" : "zdjęć"} · {when} · {operator}
-                                            </div>
-                                            {pc > 0 ? (
-                                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                                {(ent.photo_urls ?? []).slice(0, 6).map((u, pi) => (
-                                                  <img
-                                                    key={`${u}-${pi}`}
-                                                    src={resolveDamageMediaUrl(u)}
-                                                    alt=""
-                                                    className="h-10 w-10 rounded border border-amber-200 object-cover"
-                                                  />
-                                                ))}
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : null}
-                                  <p className="text-[11px] font-semibold tabular-nums text-slate-600">
-                                    Rozliczono {checkedCount} / {qty} szt.
-                                  </p>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-emerald-900">
+                                    OK: {acceptedN}
+                                  </span>
+                                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-amber-950">
+                                    B: {damagedBn}
+                                  </span>
+                                  <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold tabular-nums text-amber-950">
+                                    C: {damagedCn}
+                                  </span>
+                                  <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-rose-900">
+                                    ODRZ: {rejectedN}
+                                  </span>
+                                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-slate-800">
+                                    POZ: {pendingN}
+                                  </span>
                                 </div>
+                                <p className="mt-2 text-xs font-semibold tabular-nums text-slate-600">
+                                  Rozliczono {checkedCount} / {qty} szt.
+                                </p>
+                                {savedDamageEntries.length > 0 ? (
+                                  <div className="mt-2 max-h-40 space-y-2 overflow-y-auto rounded-lg border border-dashed border-amber-200/80 bg-white px-2 py-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                      Uszkodzone sztuki
+                                    </p>
+                                    {savedDamageEntries.map((ent, ei) => {
+                                      const reason = damageEntryReasonSummary(ent.damage_type, dmgReasons);
+                                      const pc = ent.photo_urls?.length ?? 0;
+                                      const noteLine = ent.note?.trim();
+                                      const operator = ent.operator_name?.trim() || "operator";
+                                      const when = ent.created_at ? formatOrderDetailDate(ent.created_at) : "—";
+                                      return (
+                                        <div
+                                          key={`${ent.id}-${ei}`}
+                                          className="rounded-md border border-amber-200 bg-amber-50/80 px-2 py-2 text-[11px] text-amber-950"
+                                        >
+                                          <div className="font-bold uppercase tracking-wide text-slate-900">
+                                            Uszkodzony {ent.condition} · #{ei + 1}
+                                          </div>
+                                          <div className="mt-0.5 tabular-nums">{reason || "Brak wskazanej przyczyny"}</div>
+                                          {noteLine ? <div className="mt-0.5 text-slate-700">{noteLine}</div> : null}
+                                          <div className="mt-1 text-slate-600">
+                                            {pc} {pc === 1 ? "zdjęcie" : "zdjęć"} · {when} · {operator}
+                                          </div>
+                                          {pc > 0 ? (
+                                            <div className="mt-1.5 flex flex-wrap gap-1">
+                                              {(ent.photo_urls ?? []).slice(0, 6).map((u, pi) => (
+                                                <img
+                                                  key={`${u}-${pi}`}
+                                                  src={resolveDamageMediaUrl(u)}
+                                                  alt=""
+                                                  className="h-10 w-10 rounded border border-amber-200 object-cover"
+                                                />
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : null}
                               </div>
-
+                            </div>
+                            <div className="relative flex min-w-0 flex-col">
                               <div
                                 className={`grid transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none ${
                                   showDamagedEditor ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
@@ -4989,7 +4988,7 @@ export default function WmsReturnsPage() {
                               </div>
                             ) : null}
                             <div
-                              className={`mt-auto flex shrink-0 flex-col gap-2 px-4 pb-4 pt-2 lg:px-6 lg:pb-5 ${showDamagedEditor || showRejectEditor ? "invisible pointer-events-none select-none" : ""}`}
+                              className={`flex shrink-0 flex-col gap-2 border-t border-slate-100 px-4 pb-4 pt-3 lg:px-5 ${showDamagedEditor || showRejectEditor ? "invisible pointer-events-none select-none" : ""}`}
                               aria-hidden={showDamagedEditor || showRejectEditor ? true : undefined}
                             >
                                 {inQtyPick ? (
