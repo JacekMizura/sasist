@@ -23,6 +23,9 @@ export type WmsReceivingPzListRow = {
   creation_source?: string;
   supplier_name?: string;
   created_by?: DocumentCreatedByRead;
+  /** stock_documents.document_type — PZ | Z_PZ | … */
+  document_type?: string;
+  is_return_receipt?: boolean;
 };
 
 export type WmsCreateReceivingPzBody = {

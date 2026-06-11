@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock
 
+from backend.services.delivery_pz_service import warehouse_document_display_number
 from backend.services.stock_disposition import (
     STOCK_DISPOSITION_OUTLET_B,
     STOCK_DISPOSITION_SALEABLE,
@@ -68,6 +70,14 @@ class TestDispositionDisplay(unittest.TestCase):
         self.assertEqual(stock_disposition_display_badge(STOCK_DISPOSITION_SALEABLE), "(A)")
         self.assertEqual(stock_disposition_display_badge(STOCK_DISPOSITION_OUTLET_B), "(USZKODZONY)")
         self.assertEqual(stock_disposition_display_badge(STOCK_DISPOSITION_SERVICE_C), "(REKLAMACJA)")
+
+
+class TestZPzDisplayNumber(unittest.TestCase):
+    def test_fallback_number_uses_z_pz_prefix(self) -> None:
+        num = warehouse_document_display_number("Z_PZ", datetime(2026, 3, 1), 42)
+        self.assertEqual(num, "Z-PZ-2026-0042")
+        num_pz = warehouse_document_display_number("PZ", datetime(2026, 3, 1), 42)
+        self.assertEqual(num_pz, "PZ-2026-0042")
 
 
 class TestPutawayListFilter(unittest.TestCase):

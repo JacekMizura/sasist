@@ -1,5 +1,10 @@
 # Current context
 
+## WMS Z-PZ putaway gate sync (2026-06-08)
+- Root cause: lista używała backend `doc_allows_wms_putaway` (Z_PZ status OPEN/CLOSED), ekran szczegółów wymagał `status === draft` dla nie-PZ → blokada rozlokowania
+- Fix: wspólna bramka FE `putawayDocumentGates.ts` = backend; karty listy Z-PZ (badge, numer z `document_number`); etykiety jakości linii (A/B/C) w rozlokowaniu
+- Backend list row: `document_type`, `is_return_receipt`; numer preferuje `stock_documents.document_number`; fallback `Z-PZ-YYYY-NNNN`
+
 ## WMS complaints UI aligned with RMZ (2026-06-08)
 - `WmsComplaintDetailPage`: two-column layout (280–320px sidebar + workspace), header jak RMZ
 - Komponenty: `frontend/src/pages/wms/complaints/*` — sidebar pozycji, workspace, uploader (dysk/kamera/QR/kolektor + drag&drop + usuwanie)

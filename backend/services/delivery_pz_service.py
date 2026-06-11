@@ -36,7 +36,10 @@ def warehouse_document_display_number(document_type: str, created_at: datetime, 
     dt = str(document_type or "PZ").strip().upper()
     if dt == "MM":
         return mm_display_number(created_at, doc_id)
-    if dt in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"):
+    if dt == "Z_PZ":
+        y = created_at.year if created_at else datetime.utcnow().year
+        return f"Z-PZ-{y}-{doc_id:04d}"
+    if dt in ("PZ", "PZ_RT", "RETURN_RECEIPT"):
         return pz_display_number(created_at, doc_id)
     y = created_at.year if created_at else datetime.utcnow().year
     return f"{dt}-{y}-{doc_id:04d}"

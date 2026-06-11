@@ -33,7 +33,12 @@ import {
 } from "./putawayLineUtils";
 import { sumPutawayProgress } from "./putawayProgressUtils";
 import { useWmsPutawayPzScan } from "./useWmsPutawayPzScan";
-import { isDamagedStockDisposition } from "../../utils/receivingAcceptedBreakdown";
+import { putawayLineQualityBadge } from "./putawayLineQualityBadge";
+import {
+  putawayCardsEnabled as computePutawayCardsEnabled,
+  docAllowsWmsPutaway,
+  isReturnReceiptDocumentType,
+} from "./putawayDocumentGates";
 import { putawayRelocationAudit } from "../../utils/putawayLineAudit";
 import { mePutawayOperatorDisplayName } from "../../utils/putawayOperatorDisplay";
 import { useAuth } from "../../context/AuthContext";
@@ -78,7 +83,7 @@ function PutawayLineCard({
   const pct = denom > 0 ? Math.min(100, Math.round((put / denom) * 100)) : 0;
   const allocations = it.putaway_allocations ?? [];
   const relocationAudit = putawayRelocationAudit(it, adminNameById);
-  const damaged = isDamagedStockDisposition(it.stock_disposition);
+  const qualityBadge = putawayLineQualityBadge(it);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -129,11 +134,13 @@ function PutawayLineCard({
             {it.product_name || `Produkt #${it.product_id}`}
           </h3>
           
-          {damaged && (
-            <span className="inline-flex mb-2 rounded bg-rose-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-rose-900 ring-1 ring-rose-200/80">
-              USZKODZONE
+          {qualityBadge ? (
+            <span
+              className={`inline-flex mb-2 rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide ${qualityBadge.className}`}
+            >
+              {qualityBadge.label}
             </span>
-          )}
+          ) : null}
 
           <div className="space-y-1">
             {showSku && <p className="text-[11px] font-mono text-slate-500 truncate"><span className="text-slate-400/80 mr-1">SKU:</span>{skuRaw}</p>}
@@ -272,7 +279,6 @@ export default function WmsPutawayPzPage() {
     try {
       const d = await fetchWmsRelocationHubDocument(tenantId, pzId, { mmFlow: isMmFlow });
       const relDone = String(d.relocation_status ?? "").toUpperCase() === "DONE";
-      const st = String(d.status ?? "").toLowerCase();
       const docIsMm = isMmStockDocumentType(d.document_type);
       if (isMmFlow && !docIsMm) {
         setErr("Ten adres dotyczy przesunięć magazynowych (PM), nie PZ.");
@@ -286,8 +292,7 @@ export default function WmsPutawayPzPage() {
         setLocations([]);
         return;
       }
-      const isPz = String(d.document_type ?? "").toUpperCase() === "PZ";
-      const putawayAllowed = isPz ? st === "draft" || st === "posted" : st === "draft";
+      const putawayAllowed = docAllowsWmsPutaway(d.document_type, d.status);
       if (relDone) {
         setErr(ui.alreadyDone);
       } else if (!putawayAllowed) {
@@ -344,7 +349,8 @@ export default function WmsPutawayPzPage() {
 
   const receivingDone = !!doc && String(doc.receiving_status ?? "").toUpperCase() === "DONE";
   const relocationOpen = !!doc && String(doc.relocation_status ?? "OPEN").toUpperCase() !== "DONE";
-  const putawayCardsEnabled = !!doc && relocationOpen && (String(doc.document_type ?? "").toUpperCase() === "PZ" ? ["draft", "posted"].includes(String(doc.status ?? "").toLowerCase()) : String(doc.status ?? "").toLowerCase() === "draft");
+  const putawayCardsEnabled = !!doc && computePutawayCardsEnabled(doc.document_type, doc.status, doc.relocation_status);
+  const isReturnReceiptDoc = !!doc && isReturnReceiptDocumentType(doc.document_type);
 
   const sortedPutawayLines = useMemo(() => {
     if (!doc?.items?.length) return [];
@@ -352,7 +358,10 @@ export default function WmsPutawayPzPage() {
   }, [doc?.items]);
 
   const displayPz = doc
-    ? wmsRelocationDocLabel(doc.document_type, doc.created_at, doc.id, { forceMm: isMmFlow })
+    ? wmsRelocationDocLabel(doc.document_type, doc.created_at, doc.id, {
+        forceMm: isMmFlow,
+        documentNumber: doc.document_number,
+      })
     : `${ui.docKind} #${pzId}`;
 
   const putawayProgress = useMemo(
@@ -500,8 +509,12 @@ export default function WmsPutawayPzPage() {
               <h2 className="truncate text-lg font-black leading-none tracking-tight text-slate-900 sm:text-xl">
                 {displayPz}
               </h2>
-              <span className="inline-flex rounded bg-cyan-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-cyan-900">
-                {ui.docKind}
+              <span
+                className={`inline-flex rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${
+                  isReturnReceiptDoc ? "bg-indigo-100 text-indigo-900" : "bg-cyan-100 text-cyan-900"
+                }`}
+              >
+                {isReturnReceiptDoc ? "Z-PZ" : ui.docKind}
               </span>
               {!isMmFlow && !receivingDone ? (
                 <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-900">
@@ -514,7 +527,9 @@ export default function WmsPutawayPzPage() {
                 </span>
               ) : null}
             </div>
-            <div className="text-[11px] font-bold text-slate-500 mt-0.5">{ui.flowName}</div>
+            <div className="text-[11px] font-bold text-slate-500 mt-0.5">
+              {isReturnReceiptDoc ? "Rozlokowanie Z-PZ (zwrot RMZ)" : ui.flowName}
+            </div>
           </div>
         </div>
 

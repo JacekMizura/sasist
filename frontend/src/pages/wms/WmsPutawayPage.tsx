@@ -7,8 +7,10 @@ import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPage
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
 import { listWmsPutawayPz, type WmsReceivingPzListRow } from "../../api/wmsReceivingApi";
 import { WMS_RECEIVING_UPDATED_EVENT, WMS_RELOCATION_FINALIZED_EVENT, WMS_ROUTES } from "./wmsRoutes";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { formatRelativeUpdatePl, formatWmsListDate } from "./wmsListFormatters";
+import { isReturnReceiptDocumentType } from "./putawayDocumentGates";
 
 type Tenant = { id: number; name: string };
 
@@ -19,7 +21,8 @@ function fmtQty(n: number) {
 }
 
 function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId: number }) {
-  const docNumber = row.number?.trim() || `PZ #${row.id}`;
+  const isReturnReceipt = row.is_return_receipt === true || isReturnReceiptDocumentType(row.document_type);
+  const docNumber = displayWarehouseDocumentNumber(row.number) || row.number?.trim() || (isReturnReceipt ? `Z-PZ #${row.id}` : `PZ #${row.id}`);
   const activityIso = row.updated_at?.trim() ? row.updated_at : row.created_at;
 
   const receivingInProgress = String(row.receiving_status ?? "").toUpperCase() !== "DONE";
@@ -39,7 +42,13 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
     >
       {/* Top: Icon & Title & Badges */}
       <div className="flex items-start gap-4 mb-5">
-        <div className="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border bg-emerald-50 text-emerald-600 border-emerald-100 group-hover:scale-105 transition-transform">
+        <div
+          className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border group-hover:scale-105 transition-transform ${
+            isReturnReceipt
+              ? "bg-indigo-50 text-indigo-700 border-indigo-100"
+              : "bg-emerald-50 text-emerald-600 border-emerald-100"
+          }`}
+        >
           <MapPin size={24} strokeWidth={2.5} />
         </div>
         <div className="flex flex-col items-start pt-0.5 gap-2 min-w-0">
@@ -47,8 +56,19 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
             {docNumber}
           </h3>
           <div className="flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border bg-emerald-50 text-emerald-700 border-emerald-200/60">
-              Do rozlokowania PZ
+            {isReturnReceipt ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border bg-indigo-50 text-indigo-800 border-indigo-200/60">
+                Z-PZ · zwrot RMZ
+              </span>
+            ) : null}
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                isReturnReceipt
+                  ? "bg-indigo-50/80 text-indigo-700 border-indigo-200/60"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+              }`}
+            >
+              {isReturnReceipt ? "Do rozlokowania Z-PZ" : "Do rozlokowania PZ"}
             </span>
             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
               receivingInProgress ? 'bg-amber-50 text-amber-700 border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'

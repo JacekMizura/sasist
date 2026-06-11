@@ -751,9 +751,12 @@ def build_wms_pz_list_row(
         created = datetime.utcnow()
     if updated is None:
         updated = created
+    stored_num = str(getattr(d, "document_number", None) or "").strip()
+    dt = str(getattr(d, "document_type", None) or "PZ").strip().upper()
+    number = stored_num or warehouse_document_display_number(dt, created, d.id)
     return WmsReceivingPzListRow(
         id=d.id,
-        number=warehouse_document_display_number(str(getattr(d, "document_type", None) or "PZ"), created, d.id),
+        number=number,
         status=str(getattr(d, "status", None) or "draft"),
         created_at=created,
         updated_at=updated,
@@ -769,6 +772,8 @@ def build_wms_pz_list_row(
         putaway_target_quantity=put_target,
         creation_source=_creation_source_label(d),
         supplier_name=(supplier_name or "").strip(),
+        document_type=dt,
+        is_return_receipt=dt in ("Z_PZ", "PZ_RT", "RETURN_RECEIPT"),
         created_by=created_by_read_for_document(d, users_by_id),
     )
 

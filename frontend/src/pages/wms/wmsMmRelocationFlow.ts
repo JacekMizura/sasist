@@ -3,6 +3,8 @@ import { getWmsPutawayPzDocument } from "../../api/wmsPutawayApi";
 import type { StockDocumentRead } from "../../api/stockDocumentsApi";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { pmDisplayLabel, pzDisplayLabel } from "./putawayFormat";
+import { isReturnReceiptDocumentType } from "./putawayDocumentGates";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 
 /** True when URL is the dedicated PM/MM transfer completion flow (not PZ putaway). */
 export function isWmsMmRelocationPath(pathname: string): boolean {
@@ -17,10 +19,16 @@ export function wmsRelocationDocLabel(
   documentType: string | undefined | null,
   createdAt: string | undefined,
   docId: number,
-  opts?: { forceMm?: boolean },
+  opts?: { forceMm?: boolean; documentNumber?: string | null },
 ): string {
   if (opts?.forceMm || isMmStockDocumentType(documentType)) {
     return pmDisplayLabel(createdAt, docId);
+  }
+  const stored = (opts?.documentNumber ?? "").trim();
+  if (stored) return displayWarehouseDocumentNumber(stored);
+  if (isReturnReceiptDocumentType(documentType)) {
+    const y = createdAt ? new Date(createdAt).getFullYear() : new Date().getFullYear();
+    return `Z-PZ-${y}-${String(docId).padStart(4, "0")}`;
   }
   return pzDisplayLabel(createdAt, docId);
 }

@@ -579,7 +579,9 @@ def suggest_putaway_location(db: Session, tenant_id: int, item_id: int) -> WmsPu
     if not doc:
         raise ValueError("Dokument nie znaleziony")
     if not _doc_allows_putaway(doc):
-        raise ValueError("Rozlokowanie dostępne dla PZ (draft/posted) oraz MM (draft)")
+        raise ValueError(
+            "Rozlokowanie dostępne dla PZ (draft/posted), Z-PZ (open/closed) oraz MM (draft)"
+        )
     if str(getattr(doc, "relocation_status", "") or "").strip().upper() == "DONE":
         raise ValueError("Rozlokowanie zakończone dla tej PZ")
     if float(row.received_quantity or 0) <= 1e-9:
@@ -762,7 +764,9 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
     if not doc:
         raise ValueError("Dokument nie znaleziony")
     if not _doc_allows_putaway(doc):
-        raise ValueError("Rozlokowanie dostępne dla PZ (draft/posted) oraz MM (draft)")
+        raise ValueError(
+            "Rozlokowanie dostępne dla PZ (draft/posted), Z-PZ (open/closed) oraz MM (draft)"
+        )
     if str(getattr(doc, "relocation_status", "") or "").strip().upper() == "DONE":
         raise ValueError("Rozlokowanie zakończone dla tej PZ")
     if float(row.received_quantity or 0) <= 1e-9 or row.product_id is None:
@@ -1144,7 +1148,9 @@ def patch_wms_putaway_item(
     if not doc:
         raise ValueError("Dokument nie znaleziony")
     if not _doc_allows_putaway(doc):
-        raise ValueError("Rozlokowanie dostępne dla PZ (draft/posted) oraz MM (draft)")
+        raise ValueError(
+            "Rozlokowanie dostępne dla PZ (draft/posted), Z-PZ (open/closed) oraz MM (draft)"
+        )
     if str(getattr(doc, "relocation_status", "") or "").strip().upper() == "DONE":
         raise ValueError("Rozlokowanie zakończone — edycja zablokowana")
     ensure_pz_document_warehouse_resolved(db, doc)

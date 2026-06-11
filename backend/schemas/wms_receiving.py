@@ -185,6 +185,8 @@ class WmsReceivingPzListRow(BaseModel):
     putaway_target_quantity: float = 0.0
     creation_source: str = "PANEL"
     supplier_name: str = ""
+    document_type: str = "PZ"
+    is_return_receipt: bool = False
     created_by: DocumentCreatedByRead = Field(default_factory=DocumentCreatedByRead)
 
 
