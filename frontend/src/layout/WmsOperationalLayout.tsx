@@ -14,7 +14,7 @@ import WmsTopBar from "./WmsTopBar";
  */
 function WmsLayoutChrome() {
   return (
-    <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-white">
+    <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-slate-50/50">
       <div className="shrink-0" style={{ zIndex: WMS_Z.topNav }}>
         <WmsTopBar />
       </div>

@@ -27,13 +27,13 @@ const TabLink = memo(function TabLink({ tab, active }: { tab: WmsTabConfigItem; 
       to={tab.path}
       title={tab.label}
       className={[
-        "inline-flex h-full shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors sm:px-4",
+        "inline-flex h-full shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-1 text-sm font-medium transition-colors sm:px-4",
         active
-          ? "border-slate-900 text-slate-900"
-          : "border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-800",
+          ? "border-orange-500 bg-orange-50/70 text-slate-800"
+          : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700",
       ].join(" ")}
     >
-      <Icon size={18} strokeWidth={2} aria-hidden className={active ? "text-slate-800" : "text-slate-400"} />
+      <Icon size={18} strokeWidth={2} aria-hidden className={active ? "text-orange-500" : "text-slate-400"} />
       <span className="max-w-[8rem] truncate sm:max-w-none">{tab.label}</span>
     </NavLink>
   );
@@ -84,7 +84,7 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
 
   if (tabs.length === 0) {
     return (
-      <span className="inline-flex h-full items-center px-3 text-sm text-slate-400">
+      <span className="inline-flex h-full items-center px-4 text-sm text-slate-400">
         Przypnij moduły w menu startowym
       </span>
     );
