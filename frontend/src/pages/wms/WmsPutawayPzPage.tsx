@@ -34,11 +34,8 @@ import {
 import { sumPutawayProgress } from "./putawayProgressUtils";
 import { useWmsPutawayPzScan } from "./useWmsPutawayPzScan";
 import { putawayLineQualityBadge } from "./putawayLineQualityBadge";
-import {
-  putawayCardsEnabled as computePutawayCardsEnabled,
-  docAllowsWmsPutaway,
-  isReturnReceiptDocumentType,
-} from "./putawayDocumentGates";
+import { isReturnReceiptDocumentType, putawayCardsEnabled as computePutawayCardsEnabled } from "./putawayDocumentGates";
+import { logPutawayDocumentRefresh, putawayDocumentGateError } from "./putawayDocumentStateDebug";
 import { putawayRelocationAudit } from "../../utils/putawayLineAudit";
 import { mePutawayOperatorDisplayName } from "../../utils/putawayOperatorDisplay";
 import { useAuth } from "../../context/AuthContext";
@@ -250,10 +247,29 @@ export default function WmsPutawayPzPage() {
   const { user } = useAuth();
   const operatorDisplayName = useMemo(() => mePutawayOperatorDisplayName(user), [user]);
   const deepLinkConsumedRef = useRef<number | null>(null);
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     docRef.current = doc;
   }, [doc]);
+
+  const applyDocumentSnapshot = useCallback(
+    (next: StockDocumentRead, source: string, endpoint: string) => {
+      logPutawayDocumentRefresh(next, source, endpoint);
+      setDoc(next);
+      const docIsMm = isMmStockDocumentType(next.document_type);
+      if (isMmFlow && !docIsMm) {
+        setErr("Ten adres dotyczy przesunięć magazynowych (PM), nie PZ.");
+        return;
+      }
+      if (!isMmFlow && docIsMm) {
+        setErr("Dokument PM/MM — użyj modułu przesunięć magazynowych.");
+        return;
+      }
+      setErr(putawayDocumentGateError(next, ui));
+    },
+    [isMmFlow, ui],
+  );
 
   useEffect(() => {
     void fetchUsers()
@@ -268,62 +284,69 @@ export default function WmsPutawayPzPage() {
       .catch(() => {});
   }, []);
 
-  const load = useCallback(async () => {
-    if (!Number.isFinite(pzId) || pzId < 1) {
-      setErr(ui.invalidDoc);
-      setDoc(null);
-      setLoading(false);
-      return;
-    }
-    setErr(null);
-    try {
-      const d = await fetchWmsRelocationHubDocument(tenantId, pzId, { mmFlow: isMmFlow });
-      const relDone = String(d.relocation_status ?? "").toUpperCase() === "DONE";
-      const docIsMm = isMmStockDocumentType(d.document_type);
-      if (isMmFlow && !docIsMm) {
-        setErr("Ten adres dotyczy przesunięć magazynowych (PM), nie PZ.");
+  const load = useCallback(
+    async (source: string) => {
+      if (!Number.isFinite(pzId) || pzId < 1) {
+        setErr(ui.invalidDoc);
         setDoc(null);
-        setLocations([]);
+        setLoading(false);
         return;
       }
-      if (!isMmFlow && docIsMm) {
-        setErr("Dokument PM/MM — użyj modułu przesunięć magazynowych.");
+      const seq = ++loadSeqRef.current;
+      const endpoint = isMmFlow ? `GET /wms/mm/relocation/${pzId}` : `GET /wms/putaway/pz/${pzId}`;
+      try {
+        const d = await fetchWmsRelocationHubDocument(tenantId, pzId, { mmFlow: isMmFlow });
+        if (seq !== loadSeqRef.current) return;
+
+        logPutawayDocumentRefresh(d, source, endpoint);
+
+        const docIsMm = isMmStockDocumentType(d.document_type);
+        if (isMmFlow && !docIsMm) {
+          setErr("Ten adres dotyczy przesunięć magazynowych (PM), nie PZ.");
+          setDoc(null);
+          setLocations([]);
+          return;
+        }
+        if (!isMmFlow && docIsMm) {
+          setErr("Dokument PM/MM — użyj modułu przesunięć magazynowych.");
+          setDoc(null);
+          setLocations([]);
+          return;
+        }
+
+        setDoc(d);
+        setErr(putawayDocumentGateError(d, ui));
+
+        if (d.warehouse_id) {
+          const locs = await getWarehouseLocations(d.warehouse_id);
+          if (seq !== loadSeqRef.current) return;
+          setLocations(locs);
+        } else {
+          setLocations([]);
+        }
+      } catch {
+        if (seq !== loadSeqRef.current) return;
+        setErr(ui.loadFailed);
         setDoc(null);
         setLocations([]);
-        return;
+      } finally {
+        if (seq === loadSeqRef.current) {
+          setLoading(false);
+        }
       }
-      const putawayAllowed = docAllowsWmsPutaway(d.document_type, d.status);
-      if (relDone) {
-        setErr(ui.alreadyDone);
-      } else if (!putawayAllowed) {
-        setErr(ui.notAllowed);
-      } else {
-        setErr(null);
-      }
-      setDoc(d);
-      if (d.warehouse_id) {
-        setLocations(await getWarehouseLocations(d.warehouse_id));
-      } else {
-        setLocations([]);
-      }
-    } catch {
-      setErr(ui.loadFailed);
-      setDoc(null);
-      setLocations([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantId, pzId, isMmFlow, ui]);
+    },
+    [tenantId, pzId, isMmFlow, ui],
+  );
 
   useEffect(() => {
     setLoading(true);
-    void load();
+    void load("mount");
   }, [load, location.key]);
 
   useEffect(() => {
     if (!Number.isFinite(pzId) || pzId < 1) return;
     const t = window.setInterval(() => {
-      void load();
+      void load("poll");
     }, POLL_MS);
     return () => window.clearInterval(t);
   }, [load, pzId]);
@@ -332,12 +355,12 @@ export default function WmsPutawayPzPage() {
     const onReceivingUpdated = (ev: Event) => {
       const d = (ev as CustomEvent<{ tenantId?: number; pzId?: number }>).detail;
       if (!d || d.tenantId !== tenantId || d.pzId !== pzId) return;
-      void load();
+      void load("event:wms-receiving-updated");
     };
     const onMmUpdated = (ev: Event) => {
       const d = (ev as CustomEvent<{ tenantId?: number }>).detail;
       if (!d || d.tenantId !== tenantId) return;
-      void load();
+      void load("event:wms-mm-updated");
     };
     if (isMmFlow) {
       window.addEventListener(WMS_MM_UPDATED_EVENT, onMmUpdated);
@@ -402,7 +425,7 @@ export default function WmsPutawayPzPage() {
     tenantId,
     pzId,
     doc,
-    setDoc,
+    setDoc: (next) => applyDocumentSnapshot(next, "patch:carrier-bulk", "PATCH /wms/putaway/carrier-bulk"),
     lines: sortedPutawayLines,
     locations,
     putawayEnabled: putawayCardsEnabled,

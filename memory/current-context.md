@@ -8,7 +8,12 @@
 - API: `PATCH /physical-receipt-mode`, `POST .../warehouse-receive`; lista filtr `physical_receipt_mode`
 - WMS UI: radio „Sposób obsługi towaru”; direct-service ukrywa akcje magazynowe
 
-## WMS Z-PZ putaway gate sync (2026-06-08)
+## WMS putaway PZ banner flicker (2026-06-08)
+- Ekran `WmsPutawayPzPage`: odświeżenia = mount, poll 4s, `WMS_RECEIVING_UPDATED_EVENT`, patch carrier-bulk (`PATCH /wms/putaway/carrier-bulk`); brak React Query/SWR
+- Jeden endpoint dokumentu PZ: `GET /wms/putaway/pz/{id}` → `get_stock_document_read` / `build_stock_document_read`
+- Miganie czerwonego komunikatu: **UI bug** — `setErr(null)` na początku każdego `load()` czyściło banner na czas requestu (co 4s poll); naprawione + `loadSeqRef`, wspólna bramka `putawayDocumentGateError`
+- Debug: `[WMS_PUTAWAY_DOC_REFRESH]` w konsoli (DEV lub `localStorage wms.putaway.debug=1`) — `document_id`, `status`, `relocation_status`, `can_putaway`, `source`, `endpoint`
+
 - Root cause: lista używała backend `doc_allows_wms_putaway` (Z_PZ status OPEN/CLOSED), ekran szczegółów wymagał `status === draft` dla nie-PZ → blokada rozlokowania
 - Fix: wspólna bramka FE `putawayDocumentGates.ts` = backend; karty listy Z-PZ (badge, numer z `document_number`); etykiety jakości linii (A/B/C) w rozlokowaniu
 - Backend list row: `document_type`, `is_return_receipt`; numer preferuje `stock_documents.document_number`; fallback `Z-PZ-YYYY-NNNN`
