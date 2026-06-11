@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, Link } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import api from "../../api/axios";
 import { listComplaints } from "../../api/complaintsApi";
@@ -13,7 +13,7 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import type { ComplaintListItem } from "../../types/complaint";
 import { complaintRowStatusPresentation, normalizeComplaintStatus } from "../../types/complaint";
-import type { ReturnStatusBrief, WmsReturnListItem } from "../../types/wmsReturn";
+import type { OrderLookupHit, ReturnStatusBrief, WmsReturnListItem } from "../../types/wmsReturn";
 import { wmsReturnShowsFreshIncomingBadge } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "./wmsRoutes";
@@ -120,10 +120,6 @@ function complaintQueuePositionSummary(c: ComplaintListItem): string {
   return `${n} pozycji reklamacyjnych`;
 }
 
-function orderDocSubtitle(sales_document_number?: string | null): string | null {
-  const doc = (sales_document_number || "").trim();
-  return doc ? `Dok. sprz.: ${doc}` : null;
-}
 
 function headerCustomerFromOrder(o: OrderDetail): string {
   const a = (o.first_name || "").trim();
@@ -326,12 +322,45 @@ const KNOWN_SOURCE_LABEL: Record<string, string> = {
   bricklink: "Bricklink",
 };
 
-// Funkcja dodana z powrotem - formator daty zamówienia
 function formatOrderTileDate(iso?: string | null): string {
   if (!iso?.trim()) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("pl-PL", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+type OrderSearchPreview = {
+  id: number;
+  orderLabel: string;
+  customer: string;
+  source: string;
+  date: string;
+  matchedReturnId: number | null;
+};
+
+function orderSearchPreviewFromDetail(o: OrderDetail, hit: OrderLookupHit): OrderSearchPreview {
+  return {
+    id: hit.id,
+    orderLabel: `#${(o.number ?? "").trim() || o.id}`,
+    customer: headerCustomerFromOrder(o),
+    source: normalizeOrderSourceDisplay(o.source),
+    date: formatOrderTileDate(o.order_date ?? o.created_at ?? null),
+    matchedReturnId:
+      hit.matched_return_id != null && Number.isFinite(hit.matched_return_id) ? hit.matched_return_id : null,
+  };
+}
+
+function orderSearchPreviewFallback(hit: OrderLookupHit): OrderSearchPreview {
+  const num = (hit.number ?? "").trim();
+  return {
+    id: hit.id,
+    orderLabel: num ? `#${num.replace(/^#/, "")}` : `#${hit.id}`,
+    customer: "—",
+    source: "—",
+    date: "—",
+    matchedReturnId:
+      hit.matched_return_id != null && Number.isFinite(hit.matched_return_id) ? hit.matched_return_id : null,
+  };
 }
 
 function pickAddrStr(obj: Record<string, unknown> | undefined, keys: string[]): string | null {
@@ -531,15 +560,9 @@ export default function WmsReturnsEntryPage() {
   const [trackingQ, setTrackingQ] = useState("");
   const [searchQ, setSearchQ] = useState("");
   const [loading, setLoading] = useState(false);
-  const [hits, setHits] = useState<
-    {
-      id: number;
-      number?: string | null;
-      status?: string | null;
-      external_id?: string | null;
-      sales_document_number?: string | null;
-    }[]
-  >([]);
+  const [hits, setHits] = useState<OrderLookupHit[]>([]);
+  const [hitPreviews, setHitPreviews] = useState<OrderSearchPreview[]>([]);
+  const [hitPreviewsLoading, setHitPreviewsLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
@@ -777,6 +800,35 @@ export default function WmsReturnsEntryPage() {
     searchRef.current = searchByTracking;
   }, [searchByTracking]);
 
+  useEffect(() => {
+    if (hits.length === 0) {
+      setHitPreviews([]);
+      setHitPreviewsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setHitPreviewsLoading(true);
+    void (async () => {
+      const rows = await Promise.all(
+        hits.map(async (hit) => {
+          try {
+            const or = await api.get<OrderDetail>(`orders/${hit.id}/`);
+            return orderSearchPreviewFromDetail(or.data, hit);
+          } catch {
+            return orderSearchPreviewFallback(hit);
+          }
+        }),
+      );
+      if (!cancelled) {
+        setHitPreviews(rows);
+        setHitPreviewsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hits]);
+
   const mergedQueueTiles = useMemo(() => {
     const ret: MergedQueueEntry[] = orderReturns.map((r) => ({
       kind: "return",
@@ -842,166 +894,157 @@ export default function WmsReturnsEntryPage() {
 
   const showScanIdle = !selectedOrder && hits.length === 0 && !loading && !orderLoadErr;
 
+  const WORK_LAYOUT = "mx-auto w-full max-w-[1400px]";
+
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-white text-slate-800 antialiased">
-
-      {/* Main Container */}
       <main className="flex w-full flex-1 flex-col overflow-y-auto bg-white custom-scrollbar">
         {savedReturnFlash ? (
           <div
             role="status"
-            className="mx-auto mt-4 w-full max-w-xl rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-center text-sm font-semibold text-emerald-900 shadow-sm"
+            className={`${WORK_LAYOUT} mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm`}
           >
             {savedReturnFlash}
           </div>
         ) : null}
 
-        <div className={showScanIdle ? "flex flex-1 items-center justify-center w-full" : "w-full px-4 md:px-6 pt-4 md:pt-6"}>
-          
-          <div className={showScanIdle ? "flex w-full max-w-2xl flex-col items-center justify-center p-4 text-center md:p-8 -mt-10" : "mx-auto mb-6 w-full max-w-xl"}>
-            
-            {showScanIdle && (
-              <>
-                <div className="relative mb-6 h-24 w-24 md:h-32 md:w-32">
-                  <div className="absolute inset-0 animate-[pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] rounded-full bg-blue-50"></div>
-                  <div className="absolute inset-2 flex items-center justify-center rounded-full border-2 border-dashed border-blue-200 bg-white">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" className="h-10 w-10 text-blue-500 md:h-12 md:w-12">
-                      <path d="M256 0c-12.8 0-24.8 5.6-33 15L64 185l-44.5 13.9C7.8 202.5 0 212.8 0 224V448c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V224c0-11.2-7.8-21.5-19.5-25.1L448 185 289 15c-8.2-9.4-20.2-15-33-15zM64 220l41.6-13.1L256 31.5l150.4 175.4L448 220v36H64V220zm416 76H320v44c0 24.3-19.7 44-44 44H236c-24.3 0-44-19.7-44-44V296H64V448c0 8.8 7.2 16 16 16H432c8.8 0 16-7.2 16-16V296z"/>
-                    </svg>
-                  </div>
+        <div className={`${WORK_LAYOUT} w-full px-4 pb-8 pt-4 md:px-6 md:pt-6`}>
+          <section className="mb-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm md:p-6">
+            <h2 className="mb-4 text-left text-xl font-black tracking-tight text-slate-900 md:text-2xl">
+              Skanowanie zwrotu
+            </h2>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Skan listu</p>
+                <div className="relative w-full">
+                  <svg
+                    className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    aria-hidden
+                  >
+                    <path d="M4 7V5a1 1 0 0 1 1-1h2" />
+                    <path d="M4 17v2a1 1 0 0 0 1 1h2" />
+                    <path d="M16 4h2a1 1 0 0 1 1 1v2" />
+                    <path d="M16 20h2a1 1 0 0 0 1-1v-2" />
+                    <path d="M7 8v8" />
+                    <path d="M10 7v10" />
+                    <path d="M13 8v8" />
+                    <path d="M16 7v10" />
+                  </svg>
+                  <input
+                    id="wms-returns-tracking-input"
+                    ref={trackingInputRef}
+                    value={trackingQ}
+                    onChange={(e) => setTrackingQ(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void searchByTracking();
+                    }}
+                    disabled={loading}
+                    placeholder="Zeskanuj list przewozowy"
+                    className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
                 </div>
-                <h2 className="mb-8 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
-                  Skanowanie zwrotu
-                </h2>
-              </>
-            )}
+              </div>
 
-            {!showScanIdle && (
-              <h2 className="mb-4 text-xl font-black tracking-tight text-slate-900 md:text-2xl">
-                Skanowanie zwrotu
+              <div>
+                <p className="mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Wyszukiwarka</p>
+                <div className="relative w-full">
+                  <svg
+                    className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
+                    viewBox="0 0 512 512"
+                    fill="currentColor"
+                    aria-hidden
+                  >
+                    <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z" />
+                  </svg>
+                  <input
+                    id="wms-returns-search-input"
+                    ref={searchInputRef}
+                    value={searchQ}
+                    onChange={(e) => setSearchQ(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void search();
+                    }}
+                    disabled={loading}
+                    placeholder="Szukaj zamówienia, RMZ, telefonu, emaila, SKU lub EAN"
+                    className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {err ? <p className="mt-3 text-left text-sm text-rose-600">{err}</p> : null}
+            {orderLoadErr ? <p className="mt-3 text-left text-sm text-rose-600">{orderLoadErr}</p> : null}
+            {loading ? <p className="mt-3 text-left text-sm font-medium text-slate-500">Szukam…</p> : null}
+
+            <div className="mt-4 border-t border-slate-200/80 pt-4">
+              <WmsActiveZPzPanel
+                warehouseId={warehouseId}
+                refreshKey={activeZPzRefreshKey}
+                onClosed={(documentNumber) => {
+                  setSavedReturnFlash(
+                    `Zamknięto dokument ${displayWarehouseDocumentNumber(documentNumber)}. Nośnik trafi do rozlokowania.`,
+                  );
+                  setActiveZPzRefreshKey((k) => k + 1);
+                  window.setTimeout(() => setSavedReturnFlash(null), 4500);
+                }}
+              />
+            </div>
+          </section>
+
+          {hits.length > 0 && !selectedOrder ? (
+            <div className="mb-8 w-full">
+              <h2 className="mb-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                Wyniki wyszukiwania
               </h2>
-            )}
-
-            <p className={`mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500 ${showScanIdle ? "sr-only" : ""}`}>
-              Skan listu
-            </p>
-            <div className={`relative mx-auto w-full ${showScanIdle ? "max-w-md mb-4" : "mb-4"}`}>
-              <svg
-                className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                aria-hidden
-              >
-                <path d="M4 7V5a1 1 0 0 1 1-1h2" />
-                <path d="M4 17v2a1 1 0 0 0 1 1h2" />
-                <path d="M16 4h2a1 1 0 0 1 1 1v2" />
-                <path d="M16 20h2a1 1 0 0 0 1-1v-2" />
-                <path d="M7 8v8" />
-                <path d="M10 7v10" />
-                <path d="M13 8v8" />
-                <path d="M16 7v10" />
-              </svg>
-              <input
-                id="wms-returns-tracking-input"
-                ref={trackingInputRef}
-                value={trackingQ}
-                onChange={(e) => setTrackingQ(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void searchByTracking();
-                }}
-                disabled={loading}
-                placeholder="Zeskanuj list przewozowy"
-                className={`w-full rounded-xl border-2 border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
-                  showScanIdle ? "h-14 pl-12 pr-4" : "h-11 pl-11 pr-4"
-                }`}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-
-            <p className="mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Wyszukiwarka</p>
-            <div className={`relative mx-auto w-full ${showScanIdle ? "max-w-md mb-4" : "mb-2"}`}>
-              <svg
-                className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
-                viewBox="0 0 512 512"
-                fill="currentColor"
-                aria-hidden
-              >
-                <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z" />
-              </svg>
-              <input
-                id="wms-returns-search-input"
-                ref={searchInputRef}
-                value={searchQ}
-                onChange={(e) => setSearchQ(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void search();
-                }}
-                disabled={loading}
-                placeholder="Szukaj zamówienia, RMZ, telefonu, emaila, SKU lub EAN"
-                className={`w-full rounded-xl border-2 border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
-                  showScanIdle ? "h-14 pl-12 pr-4" : "h-11 pl-11 pr-4"
-                }`}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-
-            {err ? <p className="mt-1 text-center text-sm text-rose-600">{err}</p> : null}
-            {!showScanIdle && orderLoadErr ? (
-              <p className="mt-1 text-center text-sm text-rose-600">{orderLoadErr}</p>
-            ) : null}
-            {loading ? <p className="mt-1 text-center text-sm font-medium text-slate-500">Szukam…</p> : null}
-          </div>
-
-          <div className={`mx-auto w-full ${showScanIdle ? "max-w-md px-4" : "max-w-xl px-0"}`}>
-            <WmsActiveZPzPanel
-              warehouseId={warehouseId}
-              refreshKey={activeZPzRefreshKey}
-              onClosed={(documentNumber) => {
-                setSavedReturnFlash(
-                  `Zamknięto dokument ${displayWarehouseDocumentNumber(documentNumber)}. Nośnik trafi do rozlokowania.`,
-                );
-                setActiveZPzRefreshKey((k) => k + 1);
-                window.setTimeout(() => setSavedReturnFlash(null), 4500);
-              }}
-            />
-          </div>
-
-          {!showScanIdle && (
-            <div className="mx-auto w-full max-w-5xl">
-              {hits.length > 0 && !selectedOrder && (
-                <ul className="mb-8 w-full space-y-2">
-                  {hits.map((h, hi) => {
-                    const sub = orderDocSubtitle(h.sales_document_number);
-                    return (
-                      <li key={h.id}>
-                        <button
-                          type="button"
-                          ref={hi === 0 ? firstHitButtonRef : undefined}
-                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm outline-none transition hover:border-slate-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#41546a]/35"
-                          onClick={() =>
-                            void loadOrderById(h.id, {
-                              highlightReturnId:
-                                h.matched_return_id != null && Number.isFinite(h.matched_return_id)
-                                  ? h.matched_return_id
-                                  : undefined,
-                            })
-                          }
-                        >
-                          <span className="text-base font-semibold text-slate-900">{h.number ?? `#${h.id}`}</span>
-                          {sub ? <span className="truncate text-xs text-slate-500">{sub}</span> : null}
-                        </button>
-                      </li>
-                    );
-                  })}
+              {hitPreviewsLoading ? (
+                <p className="text-sm text-slate-500">Wczytywanie wyników…</p>
+              ) : (
+                <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {hitPreviews.map((preview, hi) => (
+                    <li key={preview.id}>
+                      <button
+                        type="button"
+                        ref={hi === 0 ? firstHitButtonRef : undefined}
+                        className="flex w-full flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm outline-none transition hover:border-slate-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#41546a]/35 sm:flex-row sm:items-center"
+                        onClick={() =>
+                          void loadOrderById(preview.id, {
+                            highlightReturnId: preview.matchedReturnId ?? undefined,
+                          })
+                        }
+                      >
+                        <div className="min-w-[7rem] shrink-0">
+                          <div className="text-xl font-bold tabular-nums text-slate-900">{preview.orderLabel}</div>
+                          <div className="text-sm tabular-nums text-slate-500">{preview.date}</div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-base font-semibold text-slate-900">{preview.customer}</div>
+                          <div className="truncate text-sm text-slate-500">{preview.source}</div>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               )}
+            </div>
+          ) : null}
 
-              {selectedOrder && (
+          {showScanIdle ? (
+            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+              Zeskanuj list przewozowy lub wyszukaj zamówienie, aby rozpocząć obsługę zwrotu.
+            </p>
+          ) : null}
+
+          {selectedOrder ? (
                 <div className="mb-8 w-full space-y-6">
                   <div className="flex w-full flex-col gap-4 rounded-xl border-2 border-slate-200/90 bg-white p-4 shadow-md sm:flex-row sm:items-center sm:gap-0">
                     <div className="flex shrink-0 flex-col text-left">
@@ -1123,15 +1166,6 @@ export default function WmsReturnsEntryPage() {
                                     onActivate={() => navigate(WMS_ROUTES.returnsProcess(r.id))}
                                     tileRef={idx === 0 ? firstQueueTileRef : undefined}
                                   />
-                                  {r.warehouse_document_id != null && r.warehouse_document_number ? (
-                                    <Link
-                                      to={WMS_ROUTES.putawayPz(r.warehouse_document_id)}
-                                      className="mt-1 inline-flex max-w-full truncate text-xs font-medium text-[#41546a] underline-offset-2 hover:underline"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {displayWarehouseDocumentNumber(r.warehouse_document_number)}
-                                    </Link>
-                                  ) : null}
                                 </div>
                               );
                             }
@@ -1174,9 +1208,7 @@ export default function WmsReturnsEntryPage() {
                     ) : null}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+          ) : null}
         </div>
       </main>
     </div>

@@ -96,7 +96,7 @@ export function WmsActiveZPzPanel({ warehouseId, refreshKey = 0, onClosed }: Pro
   const docNumber = displayWarehouseDocumentNumber(doc.document_number);
 
   return (
-    <section className="mx-auto mb-4 w-full max-w-xl" aria-label="Aktywny dokument zwrotów">
+    <section className="w-full" aria-label="Aktywny dokument zwrotów">
       <h2 className="mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Aktywny dokument zwrotów</h2>
       <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
         <div className="flex items-start justify-between gap-2">
