@@ -3948,7 +3948,7 @@ export default function WmsReturnsPage() {
 
   return (
 
-    <div className="flex h-[calc(100dvh-4rem)] min-h-0 w-full flex-col overflow-hidden bg-slate-50/80">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-0 w-full max-w-none flex-col overflow-hidden bg-slate-50/80">
       {printLabelToast ? (
         <div
           className="fixed bottom-6 left-1/2 z-[200] max-w-md -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-900 shadow-lg"
@@ -4007,7 +4007,7 @@ export default function WmsReturnsPage() {
         </div>
       ) : null}
       <canvas ref={canvasRef} className="hidden" aria-hidden />
-      <div className="w-full shrink-0 border-b border-slate-200 bg-white px-4 py-2 lg:px-5">
+      <div className="w-full max-w-none shrink-0 border-b border-slate-200 bg-white px-3 py-2 lg:px-4">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
           <Link
             to={WMS_ROUTES.returns}
@@ -4235,7 +4235,7 @@ export default function WmsReturnsPage() {
         ) : null}
       </div>
 
-      <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 pb-3 pt-2 lg:px-5">
+      <div className="relative flex h-full min-h-0 w-full max-w-none flex-1 flex-col overflow-hidden px-2 pb-2 pt-1 lg:px-3">
         <div className="flex h-full min-h-0 flex-1 flex-col">
         {sessionLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center text-sm text-slate-600 shadow-sm">
@@ -4273,8 +4273,8 @@ export default function WmsReturnsPage() {
             Nie udało się wczytać pozycji zamówienia. Wróć do zamówienia i spróbuj ponownie.
           </div>
         ) : (
-          <div className="flex h-full min-h-0 flex-1 gap-3 lg:gap-4">
-            <div className="flex h-full min-h-0 w-[24%] min-w-[260px] max-w-[400px] shrink-0 flex-col gap-2">
+          <div className="grid h-full min-h-0 flex-1 grid-cols-[minmax(16rem,22%)_minmax(0,1fr)] gap-2 xl:grid-cols-[minmax(18rem,24%)_minmax(0,1fr)] xl:gap-3">
+            <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
               <div className="flex max-h-[36%] min-h-[7rem] shrink-0 flex-col overflow-hidden">
                 <RmzPendingItemsPanel
                   items={pendingAddItems}
@@ -4294,7 +4294,7 @@ export default function WmsReturnsPage() {
                 disabled={isFinished}
               />
             </div>
-            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border border-slate-200 bg-white">
               {lineSeeds.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center p-10 text-center text-slate-500">
                   <p className="text-sm font-medium">Kliknij produkt w sekcji „DO DODANIA”, aby rozpocząć obsługę.</p>
@@ -4313,7 +4313,7 @@ export default function WmsReturnsPage() {
                     );
                   }
                   return (
-                    <div className="flex h-full min-h-0 w-full flex-1 flex-col p-4 lg:p-6">
+                    <div className="flex h-full min-h-0 w-full flex-1 flex-col p-3 lg:p-4">
                       {lines.map((ln) => {
                         const c = ln.candidate;
                         const qty = Math.floor(c.availableQuantity);
@@ -4565,9 +4565,9 @@ export default function WmsReturnsPage() {
                                 {topRightDecisionBadgeText}
                               </span>
                             ) : null}
-                            <div className="relative flex h-[min(420px,38vh)] min-h-[280px] w-full shrink-0 items-center justify-center bg-slate-50">
+                            <div className="relative flex h-[min(380px,34vh)] min-h-[200px] w-full shrink-0 items-center justify-center bg-slate-50">
                               {imgSrc ? (
-                                <img src={imgSrc} alt="" className="max-h-full max-w-full object-contain p-4" />
+                                <img src={imgSrc} alt="" className="max-h-full max-w-full object-contain p-3" />
                               ) : (
                                 <div className="text-center text-base font-medium text-slate-400">Brak zdjęcia</div>
                               )}
@@ -4578,8 +4578,8 @@ export default function WmsReturnsPage() {
                               ) : null}
                             </div>
                             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-                              <div className="flex shrink-0 flex-col gap-2 px-5 pb-3 pt-4 lg:px-8">
-                                <h3 className="text-xl font-bold leading-snug text-slate-900 lg:text-2xl">{c.productName}</h3>
+                              <div className="flex shrink-0 flex-col gap-1.5 px-4 pb-2 pt-3 lg:px-6">
+                                <h3 className="text-lg font-bold leading-snug text-slate-900 lg:text-xl">{c.productName}</h3>
                                 <p className="text-sm font-medium tracking-wide text-slate-500">
                                   EAN: <span className="tabular-nums text-slate-600">{ean}</span>
                                   <span className="mx-1.5 text-slate-300" aria-hidden>
@@ -4989,7 +4989,7 @@ export default function WmsReturnsPage() {
                               </div>
                             ) : null}
                             <div
-                              className={`mt-auto flex shrink-0 flex-col gap-3 px-5 pb-5 pt-2 lg:px-8 lg:pb-6 ${showDamagedEditor || showRejectEditor ? "invisible pointer-events-none select-none" : ""}`}
+                              className={`mt-auto flex shrink-0 flex-col gap-2 px-4 pb-4 pt-2 lg:px-6 lg:pb-5 ${showDamagedEditor || showRejectEditor ? "invisible pointer-events-none select-none" : ""}`}
                               aria-hidden={showDamagedEditor || showRejectEditor ? true : undefined}
                             >
                                 {inQtyPick ? (
@@ -5078,7 +5078,7 @@ export default function WmsReturnsPage() {
                                     <button
                                       type="button"
                                       disabled={cardLocked || lineSplitSaving}
-                                      className="min-h-[68px] w-full rounded-xl bg-emerald-600 text-xl font-extrabold tracking-wide text-white shadow-sm hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 lg:text-2xl"
+                                      className="h-14 w-full rounded-xl bg-emerald-600 text-lg font-extrabold tracking-wide text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                                       onClick={() => handleGridDecision(ln.lineId, "accepted")}
                                     >
                                       {lineSplitSaving ? "Zapisywanie…" : "PRZYJĘTY"}
@@ -5086,7 +5086,7 @@ export default function WmsReturnsPage() {
                                     <button
                                       type="button"
                                       disabled={cardLocked || lineSplitSaving}
-                                      className="min-h-[68px] w-full rounded-xl bg-amber-600 text-xl font-extrabold tracking-wide text-white shadow-sm hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60 lg:text-2xl"
+                                      className="h-14 w-full rounded-xl bg-amber-600 text-lg font-extrabold tracking-wide text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
                                       onClick={() => handleGridDecision(ln.lineId, "damaged")}
                                     >
                                       USZKODZONY
@@ -5094,7 +5094,7 @@ export default function WmsReturnsPage() {
                                     <button
                                       type="button"
                                       disabled={cardLocked || lineSplitSaving}
-                                      className="min-h-[68px] w-full rounded-xl bg-rose-600 text-xl font-extrabold tracking-wide text-white shadow-sm hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60 lg:text-2xl"
+                                      className="h-14 w-full rounded-xl bg-rose-600 text-lg font-extrabold tracking-wide text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
                                       onClick={() => handleGridDecision(ln.lineId, "rejected")}
                                     >
                                       ODRZUCONY
@@ -5104,7 +5104,7 @@ export default function WmsReturnsPage() {
                                   <button
                                     type="button"
                                     disabled
-                                    className="min-h-[68px] w-full cursor-default rounded-xl border-2 border-green-400 bg-green-100 text-xl font-extrabold tracking-wide text-green-900 opacity-100 lg:text-2xl"
+                                    className="h-14 w-full cursor-default rounded-xl border-2 border-green-400 bg-green-100 text-lg font-extrabold tracking-wide text-green-900 opacity-100"
                                   >
                                     ✓ PRZYJĘTY
                                   </button>
@@ -5112,7 +5112,7 @@ export default function WmsReturnsPage() {
                                   <button
                                     type="button"
                                     disabled
-                                    className="min-h-[68px] w-full cursor-default rounded-xl border-2 border-orange-500 bg-orange-200 text-xl font-extrabold tracking-wide text-orange-900 opacity-100 lg:text-2xl"
+                                    className="h-14 w-full cursor-default rounded-xl border-2 border-orange-500 bg-orange-200 text-lg font-extrabold tracking-wide text-orange-900 opacity-100"
                                   >
                                     USZKODZONY
                                   </button>
@@ -5120,7 +5120,7 @@ export default function WmsReturnsPage() {
                                   <button
                                     type="button"
                                     disabled
-                                    className="min-h-[68px] w-full cursor-default rounded-xl border-2 border-red-400 bg-red-100 text-xl font-extrabold tracking-wide text-red-900 opacity-100 lg:text-2xl"
+                                    className="h-14 w-full cursor-default rounded-xl border-2 border-red-400 bg-red-100 text-lg font-extrabold tracking-wide text-red-900 opacity-100"
                                   >
                                     ✓ ODRZUCONY
                                   </button>

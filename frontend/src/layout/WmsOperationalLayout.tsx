@@ -19,7 +19,7 @@ function WmsLayoutChrome() {
         <WmsTopBar />
       </div>
       <ScanFeedbackOverlay />
-      <main className="min-h-0 w-full flex-1 overflow-y-auto bg-white">
+      <main className="min-h-0 w-full max-w-none flex-1 overflow-y-auto bg-slate-50/50">
         <Outlet />
       </main>
     </div>
