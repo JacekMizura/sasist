@@ -895,6 +895,7 @@ export default function WmsReturnsEntryPage() {
   const showScanIdle = !selectedOrder && hits.length === 0 && !loading && !orderLoadErr;
 
   const WORK_LAYOUT = "mx-auto w-full max-w-[1400px]";
+  const SCAN_COLUMN = "mx-auto w-full max-w-md";
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-white text-slate-800 antialiased">
@@ -909,14 +910,31 @@ export default function WmsReturnsEntryPage() {
         ) : null}
 
         <div className={`${WORK_LAYOUT} w-full px-4 pb-8 pt-4 md:px-6 md:pt-6`}>
-          <section className="mb-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm md:p-6">
-            <h2 className="mb-4 text-left text-xl font-black tracking-tight text-slate-900 md:text-2xl">
+          <div className={`${SCAN_COLUMN} flex flex-col items-center text-center ${showScanIdle ? "py-6 md:py-10" : "mb-6"}`}>
+            {showScanIdle ? (
+              <div className="relative mb-6 h-24 w-24 md:h-32 md:w-32">
+                <div className="absolute inset-0 animate-[pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] rounded-full bg-blue-50" />
+                <div className="absolute inset-2 flex items-center justify-center rounded-full border-2 border-dashed border-blue-200 bg-white">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 512 512"
+                    fill="currentColor"
+                    className="h-10 w-10 text-blue-500 md:h-12 md:w-12"
+                    aria-hidden
+                  >
+                    <path d="M256 0c-12.8 0-24.8 5.6-33 15L64 185l-44.5 13.9C7.8 202.5 0 212.8 0 224V448c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V224c0-11.2-7.8-21.5-19.5-25.1L448 185 289 15c-8.2-9.4-20.2-15-33-15zM64 220l41.6-13.1L256 31.5l150.4 175.4L448 220v36H64V220zm416 76H320v44c0 24.3-19.7 44-44 44H236c-24.3 0-44-19.7-44-44V296H64V448c0 8.8 7.2 16 16 16H432c8.8 0 16-7.2 16-16V296z" />
+                  </svg>
+                </div>
+              </div>
+            ) : null}
+
+            <h2 className={`font-black tracking-tight text-slate-900 ${showScanIdle ? "mb-8 text-2xl md:text-3xl" : "mb-4 text-xl md:text-2xl"}`}>
               Skanowanie zwrotu
             </h2>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="w-full space-y-4 text-left">
               <div>
-                <p className="mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Skan listu</p>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Skan listu</p>
                 <div className="relative w-full">
                   <svg
                     className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
@@ -946,7 +964,9 @@ export default function WmsReturnsEntryPage() {
                     }}
                     disabled={loading}
                     placeholder="Zeskanuj list przewozowy"
-                    className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                    className={`w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
+                      showScanIdle ? "h-14 pl-12" : "h-11"
+                    }`}
                     autoComplete="off"
                     spellCheck={false}
                   />
@@ -954,7 +974,7 @@ export default function WmsReturnsEntryPage() {
               </div>
 
               <div>
-                <p className="mb-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Wyszukiwarka</p>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Wyszukiwarka</p>
                 <div className="relative w-full">
                   <svg
                     className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
@@ -974,19 +994,19 @@ export default function WmsReturnsEntryPage() {
                     }}
                     disabled={loading}
                     placeholder="Szukaj zamówienia, RMZ, telefonu, emaila, SKU lub EAN"
-                    className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                    className={`w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
+                      showScanIdle ? "h-14 pl-12" : "h-11"
+                    }`}
                     autoComplete="off"
                     spellCheck={false}
                   />
                 </div>
               </div>
-            </div>
 
-            {err ? <p className="mt-3 text-left text-sm text-rose-600">{err}</p> : null}
-            {orderLoadErr ? <p className="mt-3 text-left text-sm text-rose-600">{orderLoadErr}</p> : null}
-            {loading ? <p className="mt-3 text-left text-sm font-medium text-slate-500">Szukam…</p> : null}
+              {err ? <p className="text-sm text-rose-600">{err}</p> : null}
+              {orderLoadErr ? <p className="text-sm text-rose-600">{orderLoadErr}</p> : null}
+              {loading ? <p className="text-sm font-medium text-slate-500">Szukam…</p> : null}
 
-            <div className="mt-4 border-t border-slate-200/80 pt-4">
               <WmsActiveZPzPanel
                 warehouseId={warehouseId}
                 refreshKey={activeZPzRefreshKey}
@@ -999,7 +1019,7 @@ export default function WmsReturnsEntryPage() {
                 }}
               />
             </div>
-          </section>
+          </div>
 
           {hits.length > 0 && !selectedOrder ? (
             <div className="mb-8 w-full">
@@ -1036,12 +1056,6 @@ export default function WmsReturnsEntryPage() {
                 </ul>
               )}
             </div>
-          ) : null}
-
-          {showScanIdle ? (
-            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
-              Zeskanuj list przewozowy lub wyszukaj zamówienie, aby rozpocząć obsługę zwrotu.
-            </p>
           ) : null}
 
           {selectedOrder ? (
