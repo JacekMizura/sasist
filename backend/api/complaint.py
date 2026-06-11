@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import traceback
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -95,8 +96,15 @@ ALL_PROCESS: frozenset[str] = frozenset(PROCESS_MAIN) | PROCESS_TERMINALS
 RESOLUTION_ALLOWED_STATUSES: frozenset[str] = frozenset({"ZAAKCEPTOWANA", "ODRZUCONA"})
 OPEN_RESPONSE_DEADLINE_STATUSES: frozenset[str] = frozenset(set(PROCESS_MAIN))
 
-def _complaint_deadline_urgency_order():
-    """Sort: overdue first, then soonest deadline; terminal / no deadline last (SQLite julianday)."""
+def _db_dialect_name(db: Session) -> str:
+    bind = db.get_bind()
+    if bind is not None:
+        return str(getattr(bind.dialect, "name", "") or "sqlite")
+    return "sqlite"
+
+
+def _complaint_deadline_urgency_order(*, dialect_name: str = "sqlite"):
+    """Sort: overdue first, then soonest deadline; terminal / no deadline last."""
     eff = func.coalesce(
         func.nullif(func.trim(func.coalesce(Complaint.status, "")), ""),
         "NOWE",
@@ -108,14 +116,20 @@ def _complaint_deadline_urgency_order():
         (Complaint.response_deadline < func.current_timestamp(), 0),
         else_=1,
     )
+    if dialect_name == "postgresql":
+        days_until_deadline = cast(
+            func.date(Complaint.response_deadline) - func.current_date(),
+            Integer,
+        )
+    else:
+        days_until_deadline = cast(
+            func.julianday(func.date(Complaint.response_deadline)) - func.julianday("now"),
+            Integer,
+        )
     days_remain = case(
         (is_terminal, 999999),
         (Complaint.response_deadline.is_(None), 999999),
-        else_=cast(
-            func.julianday(func.date(Complaint.response_deadline))
-            - func.julianday("now"),
-            Integer,
-        ),
+        else_=days_until_deadline,
     )
     return (
         bucket.asc(),
@@ -123,6 +137,22 @@ def _complaint_deadline_urgency_order():
         Complaint.created_at.desc(),
         Complaint.id.desc(),
     )
+
+
+def _compile_query_sql_for_log(query) -> str:
+    """Best-effort SQL string for error logs (may fail on exotic queries)."""
+    try:
+        bind = query.session.get_bind() if hasattr(query, "session") else None
+        dialect = bind.dialect if bind is not None else None
+        stmt = query.statement if hasattr(query, "statement") else query
+        return str(
+            stmt.compile(
+                dialect=dialect,
+                compile_kwargs={"literal_binds": False},
+            )
+        )
+    except Exception as compile_exc:
+        return f"<sql compile failed: {type(compile_exc).__name__}: {compile_exc}>"
 
 COMPLAINT_RESPONSE_DEADLINE_DAYS = 14
 
@@ -1135,52 +1165,71 @@ def list_complaints(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
-    _apply_due_response_deadlines(db, tenant_id, warehouse_id)
-    query = (
-        db.query(Complaint)
-        .options(
-            joinedload(Complaint.order),
-            joinedload(Complaint.lines).joinedload(ComplaintLine.order_item).joinedload(OrderItem.product),
+    try:
+        _apply_due_response_deadlines(db, tenant_id, warehouse_id)
+        query = (
+            db.query(Complaint)
+            .options(
+                joinedload(Complaint.order),
+                joinedload(Complaint.lines).joinedload(ComplaintLine.order_item).joinedload(OrderItem.product),
+            )
+            .filter(_tenant_warehouse_active(tenant_id, warehouse_id))
         )
-        .filter(_tenant_warehouse_active(tenant_id, warehouse_id))
-    )
-    if status and str(status).strip():
-        raw = str(status).strip().upper()
-        if raw not in ALL_PROCESS:
-            raise HTTPException(status_code=400, detail="Invalid complaint list status filter")
-        if raw == "NOWE":
-            query = query.filter(or_(Complaint.status.is_(None), Complaint.status == "", Complaint.status == "NOWE"))
-        else:
-            query = query.filter(Complaint.status == raw)
-
-    if q and q.strip():
-        term = f"%{q.strip()}%"
-        query = query.filter(or_(Complaint.title.ilike(term), Complaint.reference_code.ilike(term)))
-
-    total = query.count()
-
-    norm_sort = (sort_by or "").strip().lower()
-    if norm_sort == "deadline_urgency":
-        query = query.order_by(*_complaint_deadline_urgency_order())
-    else:
-        known_cols = {
-            "id": Complaint.id,
-            "title": Complaint.title,
-            "created_at": Complaint.created_at,
-        }
-        if norm_sort not in known_cols:
-            query = query.order_by(nullslast(desc(Complaint.created_at)), desc(Complaint.id))
-        else:
-            sort_col = known_cols[norm_sort]
-            if (sort_dir or "desc").lower() == "asc":
-                query = query.order_by(sort_col.asc(), Complaint.id.asc())
+        if status and str(status).strip():
+            raw = str(status).strip().upper()
+            if raw not in ALL_PROCESS:
+                raise HTTPException(status_code=400, detail="Invalid complaint list status filter")
+            if raw == "NOWE":
+                query = query.filter(or_(Complaint.status.is_(None), Complaint.status == "", Complaint.status == "NOWE"))
             else:
-                query = query.order_by(nullslast(desc(sort_col)), desc(Complaint.id))
+                query = query.filter(Complaint.status == raw)
 
-    rows: List[Complaint] = query.offset(offset).limit(limit).all()
-    out = [_list_read(c, db) for c in rows]
-    response.headers["X-Total-Count"] = str(total)
-    return out
+        if q and q.strip():
+            term = f"%{q.strip()}%"
+            query = query.filter(or_(Complaint.title.ilike(term), Complaint.reference_code.ilike(term)))
+
+        dialect_name = _db_dialect_name(db)
+        norm_sort = (sort_by or "").strip().lower()
+        if norm_sort == "deadline_urgency":
+            query = query.order_by(*_complaint_deadline_urgency_order(dialect_name=dialect_name))
+        else:
+            known_cols = {
+                "id": Complaint.id,
+                "title": Complaint.title,
+                "created_at": Complaint.created_at,
+            }
+            if norm_sort not in known_cols:
+                query = query.order_by(nullslast(desc(Complaint.created_at)), desc(Complaint.id))
+            else:
+                sort_col = known_cols[norm_sort]
+                if (sort_dir or "desc").lower() == "asc":
+                    query = query.order_by(sort_col.asc(), Complaint.id.asc())
+                else:
+                    query = query.order_by(nullslast(desc(sort_col)), desc(Complaint.id))
+
+        total = query.count()
+        rows: List[Complaint] = query.offset(offset).limit(limit).all()
+        out = [_list_read(c, db) for c in rows]
+        response.headers["X-Total-Count"] = str(total)
+        return out
+    except HTTPException:
+        raise
+    except Exception as exc:
+        sql_text = _compile_query_sql_for_log(query) if "query" in locals() else "<query not built>"
+        logger.error(
+            "[complaints.list] failed tenant_id=%s warehouse_id=%s sort_by=%s sort_dir=%s "
+            "limit=%s offset=%s exception_type=%s sql=%s traceback=%s",
+            tenant_id,
+            warehouse_id,
+            sort_by,
+            sort_dir,
+            limit,
+            offset,
+            type(exc).__name__,
+            sql_text,
+            traceback.format_exc(),
+        )
+        raise HTTPException(status_code=500, detail="Nie udało się wczytać listy reklamacji.") from exc
 
 
 _PHOTO_KIND_AUDIT: dict[str, tuple[str, str]] = {
