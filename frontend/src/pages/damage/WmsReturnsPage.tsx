@@ -947,13 +947,27 @@ function moneyPln(v: number): string {
   return `${(Number.isFinite(v) ? v : 0).toFixed(2)} zł`;
 }
 
-export default function WmsReturnsPage() {
+export type WmsReturnsPageProps = {
+  embeddedReturnId?: number;
+  initialReturn?: WmsReturnRead | null;
+  embeddedOrderId?: number;
+};
+
+export default function WmsReturnsPage({
+  embeddedReturnId,
+  initialReturn = null,
+  embeddedOrderId,
+}: WmsReturnsPageProps = {}) {
   const { returnId } = useParams<{ returnId: string }>();
   const navigate = useNavigate();
-  const rid = Number(returnId);
+  const rid = embeddedReturnId ?? Number(returnId);
 
-  const [wmsReturn, setWmsReturn] = useState<WmsReturnRead | null>(null);
-  const [sessionLoading, setSessionLoading] = useState(true);
+  const [wmsReturn, setWmsReturn] = useState<WmsReturnRead | null>(
+    initialReturn != null && embeddedReturnId != null && initialReturn.id === embeddedReturnId ? initialReturn : null,
+  );
+  const [sessionLoading, setSessionLoading] = useState(
+    !(initialReturn != null && embeddedReturnId != null && initialReturn.id === embeddedReturnId),
+  );
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
   const [sessionRetryKey, setSessionRetryKey] = useState(0);
   const [orderNumber, setOrderNumber] = useState<string>("");
@@ -1286,8 +1300,16 @@ export default function WmsReturnsPage() {
   }, [isFinished, stopCamera]);
 
   useEffect(() => {
+    if (initialReturn != null && initialReturn.id === rid) {
+      setWmsReturn(initialReturn);
+      setSessionLoading(false);
+      setSessionLoadError(null);
+      return;
+    }
     if (!Number.isFinite(rid) || rid <= 0) {
-      navigate(WMS_ROUTES.returns, { replace: true });
+      if (embeddedReturnId == null) {
+        navigate(WMS_ROUTES.returns, { replace: true });
+      }
       return;
     }
     let cancelled = false;
@@ -1315,7 +1337,7 @@ export default function WmsReturnsPage() {
     return () => {
       cancelled = true;
     };
-  }, [rid, navigate, sessionRetryKey]);
+  }, [rid, navigate, sessionRetryKey, embeddedReturnId, initialReturn]);
 
   useEffect(() => {
     if (!Number.isFinite(rid) || rid <= 0) return;

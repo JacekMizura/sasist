@@ -899,7 +899,7 @@ export default function WmsReturnsEntryPage() {
 
   const openNewReturnForm = useCallback(() => {
     if (!selectedOrder) return;
-    navigate(WMS_ROUTES.returnsCreate(selectedOrder.id));
+    navigate(WMS_ROUTES.returnsOrderSession(selectedOrder.id));
   }, [navigate, selectedOrder]);
 
   const openManualSearch = useCallback(() => {
