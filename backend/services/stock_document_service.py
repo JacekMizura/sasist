@@ -22,6 +22,7 @@ from ..models.receiving_scan_log import ReceivingScanLog
 from ..models.receiving_document_carrier import ReceivingDocumentCarrier
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.warehouse_carrier import WarehouseCarrier
+from ..models.wms_order_return import WmsOrderReturn
 from ..models.supplier import Supplier
 from ..models.tenant_warehouse import TenantWarehouse
 from .tenant_default_warehouse import (
@@ -1002,6 +1003,17 @@ def _receiving_scan_logs_to_reads(
     return out
 
 
+def _z_pz_return_decision_label(raw: Optional[str]) -> Optional[str]:
+    u = (raw or "").strip().upper()
+    if u == "ACCEPTED":
+        return "A"
+    if u == "DAMAGED_B":
+        return "B"
+    if u == "DAMAGED_C":
+        return "C"
+    return None
+
+
 def _item_row_to_read(
     row: StockDocumentItem,
     p: Optional[Product],
@@ -1021,6 +1033,10 @@ def _item_row_to_read(
     wms_line_source: Optional[str] = None,
     serial_numbers: Optional[List[str]] = None,
     serial_range_label: Optional[str] = None,
+    source_rmz_id: Optional[int] = None,
+    source_rmz_number: Optional[str] = None,
+    return_decision: Optional[str] = None,
+    return_decision_label: Optional[str] = None,
 ) -> StockDocumentItemRead:
     o = float(row.ordered_quantity or 0)
     r = float(row.received_quantity or 0)
@@ -1113,6 +1129,10 @@ def _item_row_to_read(
         wms_line_source=wms_line_source,
         serial_numbers=list(serial_numbers or []),
         serial_range_label=serial_range_label,
+        source_rmz_id=source_rmz_id,
+        source_rmz_number=(source_rmz_number or "").strip() or None,
+        return_decision=(return_decision or "").strip() or None,
+        return_decision_label=return_decision_label,
     )
 
 
@@ -1236,6 +1256,33 @@ def build_stock_document_read(
 
     serials_by_line = list_serials_for_document_lines(db, [int(r.id) for r in visible_rows])
 
+    rmz_number_by_id: Dict[int, str] = {}
+    if dt_b == "Z_PZ":
+        rmz_ids = {
+            int(getattr(r, "source_rmz_id"))
+            for r in visible_rows
+            if getattr(r, "source_rmz_id", None) is not None
+        }
+        if rmz_ids:
+            for ret in db.query(WmsOrderReturn).filter(WmsOrderReturn.id.in_(rmz_ids)).all():
+                num = (getattr(ret, "rmz_number", None) or "").strip()
+                if num:
+                    rmz_number_by_id[int(ret.id)] = num
+
+    def _zpz_item_extras(row: StockDocumentItem) -> dict[str, Any]:
+        if dt_b != "Z_PZ":
+            return {}
+        sid = getattr(row, "source_rmz_id", None)
+        sid_i = int(sid) if sid is not None else None
+        rd_raw = getattr(row, "return_decision", None)
+        rd_s = (str(rd_raw).strip() if rd_raw is not None else "") or None
+        return {
+            "source_rmz_id": sid_i,
+            "source_rmz_number": rmz_number_by_id.get(sid_i) if sid_i is not None else None,
+            "return_decision": rd_s,
+            "return_decision_label": _z_pz_return_decision_label(rd_s),
+        }
+
     item_reads: List[StockDocumentItemRead] = []
     for row in visible_rows:
         p = prod_by_id.get(row.product_id) if row.product_id is not None else None
@@ -1292,6 +1339,7 @@ def build_stock_document_read(
                     wms_line_source=str(wms_source).strip() if wms_source else None,
                     serial_numbers=sn_list,
                     serial_range_label=sn_range,
+                    **_zpz_item_extras(row),
                 )
             )
         else:
@@ -1316,6 +1364,7 @@ def build_stock_document_read(
                     wms_line_source=str(wms_source).strip() if wms_source else None,
                     serial_numbers=sn_list,
                     serial_range_label=sn_range,
+                    **_zpz_item_extras(row),
                 )
             )
 
@@ -1438,6 +1487,11 @@ def build_stock_document_read(
             prefix=series_brief.get("prefix"),
         )
 
+    doc_status_u = str(getattr(doc, "status", "") or "").strip().upper()
+    closed_at_val: Optional[datetime] = None
+    if doc_status_u == "CLOSED":
+        closed_at_val = getattr(doc, "updated_at", None) or doc.created_at
+
     return StockDocumentRead(
         id=doc.id,
         tenant_id=doc.tenant_id,
@@ -1482,6 +1536,7 @@ def build_stock_document_read(
         can_cancel=cc,
         created_at=doc.created_at,
         updated_at=getattr(doc, "updated_at", None) or doc.created_at,
+        closed_at=closed_at_val,
         created_by=created_by_read_for_document(
             doc,
             batch_load_app_users(

@@ -39,6 +39,7 @@ def _wh(
         "prefix": (prefix or sub).strip().upper(),
         "name": name or f"{sub} — domyślna",
         "warehouse_effect": True,
+        "padding_length": 0,
     }
     if print_template_id is not None:
         spec["print_template_id"] = int(print_template_id)

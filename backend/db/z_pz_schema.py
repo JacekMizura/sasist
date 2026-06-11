@@ -205,7 +205,7 @@ def _migrate_z_pz_series_padding(engine: Engine) -> None:
                 """
                 UPDATE document_series
                 SET padding_length = 0
-                WHERE subtype = 'Z_PZ' AND COALESCE(padding_length, 6) = 6
+                WHERE series_type = 'WAREHOUSE' AND COALESCE(padding_length, 6) != 0
                 """
             )
         )

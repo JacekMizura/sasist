@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Numeracja magazynowa bez paddingu + widok Z-PZ (Sellasist)
+
+- **Numeracja:** wszystkie serie WAREHOUSE (PZ, MM, WZ, RW, PW, ZD, Z-PZ) + RMZ bez wiodących zer; migracja `padding_length=0`; `_next_rmz_number` → `RMZ-2026-1`
+- **API read Z-PZ:** pozycje z `return_decision_label` (A/B/C), `source_rmz_id`, `source_rmz_number`; nagłówek `closed_at` przy CLOSED
+- **Frontend:** dedykowany `WarehouseZPzDocumentDetail` w modalu dokumentów magazynowych (nagłówek + tabela pozycji + link do RMZ)
+
 ## 2026-06-08 — Z-PZ poprawki: panel, numeracja, lista, auto-druk
 
 - **Panel WMS:** kompaktowy kafelek (numer, AKTYWNY, pozycje/sztuki, data, Zamknij)

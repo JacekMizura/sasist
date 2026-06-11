@@ -170,6 +170,22 @@ class StockDocumentItemRead(BaseModel):
         default=None,
         description="Skrót zakresu seriali np. SN-001 → SN-005.",
     )
+    source_rmz_id: Optional[int] = Field(
+        default=None,
+        description="Źródłowy zwrot RMZ (linie Z-PZ).",
+    )
+    source_rmz_number: Optional[str] = Field(
+        default=None,
+        description="Numer RMZ do wyświetlenia (np. RMZ-2026-1).",
+    )
+    return_decision: Optional[str] = Field(
+        default=None,
+        description="Decyzja zwrotu: ACCEPTED | DAMAGED_B | DAMAGED_C.",
+    )
+    return_decision_label: Optional[str] = Field(
+        default=None,
+        description="Etykieta decyzji zwrotu dla operatora: A | B | C.",
+    )
 
     @computed_field
     @property
@@ -348,6 +364,10 @@ class StockDocumentRead(BaseModel):
     can_cancel: bool = False
     created_at: datetime
     updated_at: datetime
+    closed_at: Optional[datetime] = Field(
+        default=None,
+        description="Data zamknięcia dokumentu (Z-PZ CLOSED → updated_at).",
+    )
     created_by: DocumentCreatedByRead = Field(default_factory=DocumentCreatedByRead)
     # Flat list: one row per (product × batch × expiry) line on the PZ — not grouped by product.
     items: List[StockDocumentItemRead] = Field(default_factory=list)

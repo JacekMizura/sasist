@@ -138,6 +138,10 @@ export type StockDocumentItemRead = {
   wms_line_source?: string | null;
   serial_numbers?: string[];
   serial_range_label?: string | null;
+  source_rmz_id?: number | null;
+  source_rmz_number?: string | null;
+  return_decision?: string | null;
+  return_decision_label?: string | null;
 };
 
 export type StockDocumentLinkedSaleDocumentRead = {
@@ -195,6 +199,7 @@ export type StockDocumentRead = {
   can_cancel?: boolean;
   created_at: string;
   updated_at?: string;
+  closed_at?: string | null;
   created_by?: DocumentCreatedByRead;
   items: StockDocumentItemRead[];
   receiving_carriers?: ReceivingPzCarrierRead[];

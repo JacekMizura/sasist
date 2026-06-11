@@ -76,7 +76,7 @@ def _repair_operational_series_row(row: DocumentSeries, spec: dict) -> bool:
         changed = True
     if hasattr(row, "padding_length") and "padding_length" in spec:
         want_pad = int(spec.get("padding_length") or 0)
-        if int(getattr(row, "padding_length", None) or 6) != want_pad:
+        if int(getattr(row, "padding_length", None) or 0) != want_pad:
             row.padding_length = want_pad
             changed = True
     if hasattr(row, "print_template_id") and spec.get("print_template_id") is not None:
@@ -291,13 +291,35 @@ def repair_receipt_series_padding_all(db: Session) -> int:
     return changed
 
 
+def repair_warehouse_series_padding_all(db: Session) -> int:
+    """Force padding_length=0 on legacy WAREHOUSE series (PZ/MM/WZ/… without leading zeros)."""
+    rows = (
+        db.query(DocumentSeries)
+        .filter(DocumentSeries.series_type == "WAREHOUSE")
+        .all()
+    )
+    changed = 0
+    for row in rows:
+        if not hasattr(row, "padding_length"):
+            continue
+        if int(getattr(row, "padding_length", None) or 0) != 0:
+            row.padding_length = 0
+            row.updated_at = datetime.utcnow()
+            changed += 1
+    if changed:
+        db.commit()
+        logger.info("[document_series.repair] warehouse padding_length=0 rows_updated=%s", changed)
+    return changed
+
+
 def seed_default_document_series(db: Session) -> int:
     """Create default series for every tenant↔warehouse link. Returns rows created."""
     try:
         repair_receipt_series_padding_all(db)
+        repair_warehouse_series_padding_all(db)
     except Exception:
         db.rollback()
-        logger.exception("[document_series.repair] receipt padding repair failed")
+        logger.exception("[document_series.repair] series padding repair failed")
     total = 0
     for tenant_id, warehouse_id in _tenant_warehouse_pairs(db):
         total += ensure_default_document_series(db, tenant_id, warehouse_id)

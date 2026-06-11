@@ -430,7 +430,7 @@ def _next_rmz_number(db: Session, tenant_id: int, warehouse_id: int) -> str:
             max_n = max(max_n, n)
         except (ValueError, IndexError):
             pass
-    return f"{prefix}{max_n + 1:05d}"
+    return f"{prefix}{max_n + 1}"
 
 
 def _parse_lines(raw: str) -> List[dict]:
