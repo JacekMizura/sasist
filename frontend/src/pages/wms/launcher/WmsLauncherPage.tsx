@@ -21,6 +21,17 @@ import { useWmsLauncherBadges } from "./useWmsLauncherBadges";
 
 const DEFAULT_DESCRIPTION = "Moduł operacyjny";
 
+const GRID_GAP_PX = 24;
+const GRID_H_PADDING_PX = 80;
+
+function estimateGridColumnCount(viewportWidth: number): number {
+  const available = Math.max(0, viewportWidth - GRID_H_PADDING_PX);
+  const minColPx = 26 * 16;
+  return Math.max(1, Math.floor((available + GRID_GAP_PX) / (minColPx + GRID_GAP_PX)));
+}
+
+const LAUNCHER_GRID_CLASS = "grid grid-cols-[repeat(auto-fill,minmax(26rem,1fr))] gap-5 xl:gap-6";
+
 function sortTilesForLauncher(tiles: WmsTabConfigItem[], pinnedIds: string[]): WmsTabConfigItem[] {
   const order = new Map(pinnedIds.map((id, i) => [id, i]));
   return [...tiles].sort((a, b) => {
@@ -205,11 +216,8 @@ export default function WmsLauncherPage() {
   );
 
   const columnCount = useCallback(() => {
-    if (typeof window === "undefined") return 4;
-    const w = window.innerWidth;
-    if (w < 640) return 2;
-    if (w < 1024) return 3;
-    return 4;
+    if (typeof window === "undefined") return 5;
+    return estimateGridColumnCount(window.innerWidth);
   }, []);
 
   useEffect(() => {
@@ -319,15 +327,15 @@ export default function WmsLauncherPage() {
   };
 
   return (
-    <div className="min-h-full bg-white">
-      <div className="mx-auto w-full max-w-[1600px] px-3 py-3 sm:px-5 sm:py-4">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
+    <div className="min-h-full bg-slate-50/50">
+      <div className="w-full px-6 py-5 lg:px-8 lg:py-6 xl:px-10">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="relative min-w-0 max-w-2xl flex-1">
             <Search
-              size={14}
+              size={20}
               strokeWidth={2}
               aria-hidden
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
             />
             <input
               ref={searchRef}
@@ -336,34 +344,29 @@ export default function WmsLauncherPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Szukaj modułu…"
               aria-label="Szukaj modułu WMS"
-              className="h-8 w-full rounded-lg border border-slate-200/90 bg-slate-50/50 pl-8 pr-14 text-xs text-slate-800 placeholder:text-slate-400 transition-colors focus:border-[#5a4fcf]/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5a4fcf]/10"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-16 text-sm text-slate-800 placeholder:text-slate-400 shadow-sm transition-colors focus:border-orange-400/60 focus:outline-none focus:ring-2 focus:ring-orange-400/15"
             />
-            <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400 sm:inline">
+            <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-400 lg:inline">
               /
             </kbd>
           </div>
-          <span className="hidden shrink-0 text-[10px] text-slate-400 lg:inline">
+          <span className="hidden shrink-0 text-xs text-slate-400 xl:inline">
             ↑↓←→ · Enter · Esc
           </span>
         </div>
 
         {displayTiles.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 px-5 py-10 text-center">
-            <p className="text-xs font-medium text-slate-600">
+          <div className="rounded-xl border border-dashed border-slate-200 bg-white px-8 py-14 text-center">
+            <p className="text-sm font-medium text-slate-600">
               {sortedTiles.length === 0 ? "Brak modułów WMS dla tego użytkownika." : "Brak wyników wyszukiwania."}
             </p>
           </div>
         ) : (
-          <div
-            role="list"
-            tabIndex={0}
-            onKeyDown={onGridKeyDown}
-            className="space-y-2.5 focus:outline-none"
-          >
+          <div role="list" tabIndex={0} onKeyDown={onGridKeyDown} className="space-y-6 focus:outline-none">
             {pinnedTiles.length > 0 ? (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onPinnedDragEnd}>
                 <SortableContext items={pinnedTiles.map((t) => t.id)} strategy={rectSortingStrategy}>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-4">
+                  <div className={LAUNCHER_GRID_CLASS}>
                     {pinnedTiles.map((tab, i) => renderTile(tab, i, true))}
                   </div>
                 </SortableContext>
@@ -371,12 +374,7 @@ export default function WmsLauncherPage() {
             ) : null}
 
             {unpinnedTiles.length > 0 ? (
-              <div
-                className={[
-                  "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-4",
-                  pinnedTiles.length > 0 ? "pt-0.5" : "",
-                ].join(" ")}
-              >
+              <div className={[LAUNCHER_GRID_CLASS, pinnedTiles.length > 0 ? "pt-1" : ""].join(" ")}>
                 {unpinnedTiles.map((tab, i) => renderTile(tab, pinnedTiles.length + i, false))}
               </div>
             ) : null}
