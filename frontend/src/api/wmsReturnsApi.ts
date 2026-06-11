@@ -29,6 +29,49 @@ export function normalizeWmsReturnsSearchQuery(raw: string): string {
   return t;
 }
 
+/** Walidacja ręcznej wyszukiwarki zamówień (UX) — bez SKU, EAN, RMZ, e-mail. */
+export function wmsReturnsManualSearchValidationError(raw: string): string | null {
+  const q = normalizeWmsReturnsSearchQuery(raw);
+  if (!q) {
+    return "Wpisz numer zamówienia, imię, nazwisko, telefon lub numer listu przewozowego.";
+  }
+
+  if (q.includes("@")) {
+    return "Wyszukiwarka nie obsługuje adresu e-mail — podaj numer zamówienia, telefon lub dane klienta.";
+  }
+
+  if (/^RMZ[\s\-#]/i.test(q) || /^WS[\s\-#]/i.test(q) || /\bRMZ[-#]/i.test(q)) {
+    return "Wyszukiwarka służy do znajdowania zamówień — nie numerów RMZ.";
+  }
+
+  if (/^\d{8}$/.test(q) || /^\d{12,14}$/.test(q)) {
+    return "Wyszukiwarka nie obsługuje kodów EAN.";
+  }
+
+  const phoneDigits = q.replace(/\D/g, "");
+  if (phoneDigits.length >= 9 && phoneDigits.length <= 15 && /^[\d\s+\-().]+$/.test(q)) {
+    return null;
+  }
+
+  if (/^[\p{L}\s\-'.]+$/u.test(q) && q.replace(/\s+/g, " ").trim().length >= 2) {
+    return null;
+  }
+
+  if (/^\d{1,12}$/.test(q)) {
+    return null;
+  }
+
+  if (/^[A-Za-z0-9\-]{6,}$/.test(q)) {
+    return null;
+  }
+
+  if (/^[A-Za-z0-9\-_]{3,15}$/.test(q)) {
+    return "Wyszukiwarka nie obsługuje SKU — podaj numer zamówienia, listu lub dane klienta.";
+  }
+
+  return "Nie rozpoznano zapytania — użyj numeru listu, zamówienia, imienia, nazwiska lub telefonu.";
+}
+
 export async function lookupOrdersForWms(
   q: string,
   tenantId: number,
