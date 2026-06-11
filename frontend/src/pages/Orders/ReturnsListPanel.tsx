@@ -1129,6 +1129,15 @@ export default function ReturnsListPanel() {
                                     >
                                       #{r.rmz_number}
                                     </button>
+                                    {r.warehouse_document_id != null && r.warehouse_document_number ? (
+                                      <Link
+                                        to={`/wms/putaway/${r.warehouse_document_id}`}
+                                        className="text-xs font-medium text-[#41546a] hover:underline"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {r.warehouse_document_number}
+                                      </Link>
+                                    ) : null}
                                     <ReturnsListRowStatusBadges r={r} />
                                   </div>
                                 </td>

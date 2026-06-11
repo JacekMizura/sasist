@@ -2347,6 +2347,22 @@ def finalize_wms_return(
     return _serialize_return_read(db, row)
 
 
+@router.post("/{return_id:int}/finalize", response_model=WmsReturnRead)
+def finalize_wms_return_short_path(
+    return_id: int,
+    body: WmsReturnFinalizeBody,
+    tenant_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ.",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Alias bez segmentu /id/ — ten sam atomowy finalize co /wms/returns/id/{id}/finalize."""
+    return finalize_wms_return(return_id, body, tenant_id, warehouse_id, db)
+
+
 @returns_id_router.post("/{return_id:int}/commit-wms", response_model=WmsReturnRead)
 def commit_wms_return_workflow(
     return_id: int,

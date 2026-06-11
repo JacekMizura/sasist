@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ChevronRight, Home, List } from "lucide-react";
 
@@ -6,9 +6,7 @@ import api from "../../api/axios";
 import {
   getWmsReturn,
   getWmsReturnsModeSettings,
-  processWmsReturnLine,
-  processWmsReturnLineSplit,
-  processWmsReturnRefund,
+  finalizeWmsReturn,
 } from "../../api/wmsReturnsApi";
 import { getReturnUiStatusSummary } from "../../api/returnUiStatusApi";
 import { getOfficeReturnModuleConfig } from "../../api/returnModuleConfigApi";
@@ -16,6 +14,7 @@ import type {
   ReturnUiMainGroup,
   ReturnUiStatusPanelSummary,
   ReturnStatusBrief,
+  WmsReturnFinalizeLineIn,
   WmsReturnLineDamageEntryRead,
   WmsReturnLineRead,
   WmsReturnRead,
@@ -25,6 +24,15 @@ import { coercePhotoUrlForDamageEntry, createDamageEntry } from "../../api/damag
 import { uploadDamageImageFile } from "../../api/damageUploadApi";
 import { formatRelativeAgo } from "../../utils/formatRelativeAgo";
 import { resolveDamageMediaUrl } from "../../utils/resolveDamageMediaUrl";
+import {
+  finalizeLineFromProcess,
+  finalizeLineFromRead,
+  finalizeLineFromSplit,
+  isFinalizeLineComplete,
+  isRmzLineFullyResolved,
+  mergeLineReadFromDraft,
+} from "../../utils/rmzFinalizePayload";
+import { WMS_ROUTES } from "../wms/wmsRoutes";
 import {
   decodeRmzDamageTypePayload,
   encodeRmzDamageTypePayload,
@@ -505,6 +513,22 @@ export default function ReturnsReturnDetailPage() {
   const [commDraft, setCommDraft] = useState("");
   const [commEntries, setCommEntries] = useState<CommEntry[]>([]);
   const [moduleCfg, setModuleCfg] = useState<ReturnModuleConfigDto | null>(null);
+  const [lineDrafts, setLineDrafts] = useState<Record<number, WmsReturnFinalizeLineIn>>({});
+  const [finalizeSaving, setFinalizeSaving] = useState(false);
+  const [finalizeSuccessMsg, setFinalizeSuccessMsg] = useState<string | null>(null);
+
+  const applyLineDraft = useCallback((draft: WmsReturnFinalizeLineIn) => {
+    setLineDrafts((prev) => ({ ...prev, [draft.order_item_id]: draft }));
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        lines: prev.lines.map((ln) =>
+          ln.order_item_id === draft.order_item_id ? mergeLineReadFromDraft(ln, draft) : ln,
+        ),
+      };
+    });
+  }, []);
 
   useEffect(() => {
     if (!Number.isFinite(rid) || rid <= 0) {
@@ -532,6 +556,13 @@ export default function ReturnsReturnDetailPage() {
         setData(r);
         setPanelSummary(summary);
         setWmsSettings(settings);
+        const drafts: Record<number, WmsReturnFinalizeLineIn> = {};
+        for (const ln of r.lines) {
+          if (isRmzLineFullyResolved(ln)) {
+            drafts[ln.order_item_id] = finalizeLineFromRead(ln);
+          }
+        }
+        setLineDrafts(drafts);
         try {
           const ord = await api.get<OrderDetailLite>(`/orders/${r.order_id}/`);
           if (!cancelled) setOrderLite(ord.data);
@@ -675,6 +706,75 @@ export default function ReturnsReturnDetailPage() {
     return { left: n.left, right: n.right };
   }, [moduleCfg?.detail_layout]);
 
+  const allLinesReady = useMemo(() => {
+    if (!data) return false;
+    return (
+      data.lines.length > 0 &&
+      data.lines.every((ln) => {
+        const draft = lineDrafts[ln.order_item_id];
+        return draft != null && isFinalizeLineComplete(draft, Number(ln.quantity) || 0);
+      }) &&
+      refundProposal.unresolvedDamagedBlocks === 0
+    );
+  }, [data, lineDrafts, refundProposal.unresolvedDamagedBlocks]);
+
+  const runFinalizeReturn = useCallback(
+    async (refundOpts?: {
+      refundShipping: boolean;
+      refundShippingAmount: number;
+      productsValue: number;
+    }) => {
+      if (!data || finalizeSaving) return;
+      const whId = data.warehouse_id;
+      const lines = data.lines.map((ln) => {
+        const draft = lineDrafts[ln.order_item_id];
+        if (!draft) throw new Error("Brak draftu linii");
+        return draft;
+      });
+      const enableRefund = Boolean(wmsSettings?.enable_refund);
+      const shipAmt = refundOpts?.refundShipping ? refundOpts.refundShippingAmount : 0;
+      const amt = refundOpts?.productsValue ?? refundProposal.productsValue;
+      setFinalizeSaving(true);
+      setErr(null);
+      setLineErr(null);
+      try {
+        const updated = await finalizeWmsReturn(
+          rid,
+          DAMAGE_TENANT_ID,
+          {
+            lines,
+            process_refund: enableRefund,
+            refund: enableRefund
+              ? {
+                  refund_type: amt > 0 || shipAmt > 0 ? "PARTIAL" : "NONE",
+                  refund_amount: Number.isFinite(amt) && amt > 0 ? amt : null,
+                  refund_shipping: Boolean(refundOpts?.refundShipping),
+                  refund_shipping_amount: shipAmt > 0 ? shipAmt : null,
+                  decided_by: "panel",
+                }
+              : null,
+          },
+          whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
+        );
+        setData(updated);
+        const docNo = (updated.warehouse_document_number || "").trim();
+        setFinalizeSuccessMsg(
+          docNo ? `Zwrot zakończony. Utworzono dokument ${docNo}` : "Zwrot zakończony",
+        );
+        setRefundOpen(false);
+      } catch (e: unknown) {
+        const msg =
+          e && typeof e === "object" && "response" in e && e.response && typeof e.response === "object" && "data" in e.response && e.response.data && typeof e.response.data === "object" && "detail" in e.response.data
+            ? String((e.response as { data: { detail?: string } }).data.detail)
+            : "Nie udało się sfinalizować zwrotu.";
+        setErr(msg);
+      } finally {
+        setFinalizeSaving(false);
+      }
+    },
+    [data, finalizeSaving, lineDrafts, refundProposal.productsValue, rid, wmsSettings?.enable_refund],
+  );
+
   if (loading) {
     return (
       <div className="flex min-h-[30vh] items-center gap-2 text-sm text-slate-500">
@@ -701,7 +801,7 @@ export default function ReturnsReturnDetailPage() {
 
   const refund = data.refund;
   const orderDeliveryAmount = Math.max(0, Number(data.shipping_cost) || 0);
-  const terminal = isRmzTerminal(data.status);
+  const terminal = isRmzTerminal(data.status) || data.warehouse_document_id != null;
   const rel = formatRelativeAgo(data.created_at);
   const cust = [data.first_name?.trim(), data.last_name?.trim()].filter(Boolean).join(" ") || "—";
   const srcDisp = normalizeOrderSourceDisplay(data.source);
@@ -711,8 +811,30 @@ export default function ReturnsReturnDetailPage() {
   const linesSection = (
     <div className="min-w-0 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm ring-1 ring-slate-900/5">
       <header className="border-b border-slate-200 bg-slate-50/80 px-3 py-2.5">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-800">Produkty w zwrocie</h2>
-        <p className="mt-0.5 text-[11px] text-slate-600">Przyjęte, uszkodzone lub odrzucone — zapis na linię.</p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-800">Produkty w zwrocie</h2>
+            <p className="mt-0.5 text-[11px] text-slate-600">
+              Rozstrzygnij pozycje lokalnie, potem zapisz cały zwrot jednym krokiem (Z-PZ + status).
+            </p>
+          </div>
+          {!terminal && allLinesReady ? (
+            <button
+              type="button"
+              disabled={finalizeSaving}
+              onClick={() => {
+                if (wmsSettings?.enable_refund) {
+                  openRefundModal();
+                } else {
+                  void runFinalizeReturn();
+                }
+              }}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+            >
+              {finalizeSaving ? "Zapisywanie…" : "Zapisz zwrot"}
+            </button>
+          ) : null}
+        </div>
       </header>
       {lineErr ? <div className="border-b border-gray-200 bg-red-50 px-3 py-1.5 text-sm text-red-800">{lineErr}</div> : null}
       <div>
@@ -735,16 +857,8 @@ export default function ReturnsReturnDetailPage() {
               setLineErr(null);
               setLineSavingOi(ln.order_item_id);
               try {
-                const updated = await processWmsReturnLine(rid, ln.order_item_id, DAMAGE_TENANT_ID, payload);
-                setErr(null);
-                setData(updated);
-              } catch (e: unknown) {
-                const msg =
-                  e && typeof e === "object" && "response" in e && e.response && typeof e.response === "object" && "data" in e.response && e.response.data && typeof e.response.data === "object" && "detail" in e.response.data
-                    ? String((e.response as { data: { detail?: string } }).data.detail)
-                    : "Nie udało się zapisać decyzji.";
-                setLineErr(msg);
-                throw e;
+                const lineQty = Math.max(1, Math.floor(Number(ln.quantity) || 1));
+                applyLineDraft(finalizeLineFromProcess(ln.order_item_id, ln.product_id, lineQty, payload));
               } finally {
                 setLineSavingOi(null);
               }
@@ -753,15 +867,7 @@ export default function ReturnsReturnDetailPage() {
               setLineErr(null);
               setLineSavingOi(ln.order_item_id);
               try {
-                const updated = await processWmsReturnLineSplit(rid, ln.order_item_id, DAMAGE_TENANT_ID, payload);
-                setErr(null);
-                setData(updated);
-              } catch (e: unknown) {
-                const msg =
-                  e && typeof e === "object" && "response" in e && e.response && typeof e.response === "object" && "data" in e.response && e.response.data && typeof e.response.data === "object" && "detail" in e.response.data
-                    ? String((e.response as { data: { detail?: string } }).data.detail)
-                    : "Nie udało się zapisać podziału ilości.";
-                setLineErr(msg);
+                applyLineDraft(finalizeLineFromSplit(ln.order_item_id, payload));
               } finally {
                 setLineSavingOi(null);
               }
@@ -855,6 +961,11 @@ export default function ReturnsReturnDetailPage() {
         {err ? (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>
         ) : null}
+        {finalizeSuccessMsg ? (
+          <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+            {finalizeSuccessMsg}
+          </div>
+        ) : null}
 
         <PanelDetailEntityHeader
           title={<>Zwrot {data.rmz_number}</>}
@@ -882,6 +993,19 @@ export default function ReturnsReturnDetailPage() {
                   #{data.order_id}
                 </Link>
               </span>
+              {data.warehouse_document_id != null && data.warehouse_document_number ? (
+                <>
+                  <span className="text-slate-300" aria-hidden>
+                    ·
+                  </span>
+                  <Link
+                    to={WMS_ROUTES.putawayPz(data.warehouse_document_id)}
+                    className="font-medium text-[#41546a] hover:underline"
+                  >
+                    {data.warehouse_document_number}
+                  </Link>
+                </>
+              ) : null}
             </p>
           }
           actions={
@@ -1035,17 +1159,11 @@ export default function ReturnsReturnDetailPage() {
                     try {
                       const amt = refundProposal.productsValue;
                       const shipAmt = refundShipping ? parseFloat(refundShippingAmount.replace(",", ".")) : 0;
-                      const updated = await processWmsReturnRefund(rid, DAMAGE_TENANT_ID, {
-                        refund_type: amt > 0 || (refundShipping && shipAmt > 0) ? "PARTIAL" : "NONE",
-                        refund_amount: Number.isFinite(amt) && amt > 0 ? amt : null,
-                        refund_shipping: refundShipping,
-                        refund_shipping_amount: refundShipping && Number.isFinite(shipAmt) ? shipAmt : null,
-                        decided_by: "panel",
+                      await runFinalizeReturn({
+                        productsValue: amt,
+                        refundShipping,
+                        refundShippingAmount: Number.isFinite(shipAmt) ? shipAmt : 0,
                       });
-                      setData(updated);
-                      setRefundOpen(false);
-                    } catch {
-                      setErr("Nie udało się zapisać zwrotu.");
                     } finally {
                       setRefundSubmitting(false);
                     }
@@ -1209,8 +1327,8 @@ function LineOperationsCard({
   const rowShellClass = rmzLineRowShellClass(rowTone);
 
   const disable = terminal || saving;
-  /** Po zamknięciu pełnego rozliczenia linii (split zapisany do końca) — tylko podgląd grup. */
-  const splitInputsLocked = multiQty && Boolean(line.processed_at);
+  /** Po sfinalizowaniu RMZ (Z-PZ) — tylko podgląd. */
+  const splitInputsLocked = multiQty && terminal;
   const btnOnOk = "bg-emerald-600 text-white ring-1 ring-emerald-700";
   const btnOnDmg = "bg-amber-600 text-white ring-1 ring-amber-700";
   const btnOnRej = "bg-red-600 text-white ring-1 ring-red-700";
