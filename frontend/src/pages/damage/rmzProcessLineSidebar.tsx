@@ -27,13 +27,13 @@ function statusStyles(status: RmzLineSidebarStatus, selected: boolean) {
   if (selected) return "border-blue-500 bg-white shadow-md z-10";
   switch (status) {
     case "accepted":
-      return "border-emerald-200 bg-emerald-50/80 hover:border-emerald-300";
+      return "border-emerald-200 bg-white hover:border-emerald-400";
     case "damaged":
-      return "border-amber-200 bg-amber-50/80 hover:border-amber-300";
+      return "border-amber-200 bg-white hover:border-amber-400";
     case "rejected":
-      return "border-rose-200 bg-rose-50/80 hover:border-rose-300";
+      return "border-rose-200 bg-white hover:border-rose-400";
     case "mixed":
-      return "border-slate-200 bg-slate-50 hover:border-slate-300";
+      return "border-slate-200 bg-white hover:border-slate-400";
     default:
       return "border-slate-100 bg-white hover:border-slate-300";
   }
@@ -64,7 +64,7 @@ export function RmzProcessLineSidebar({
           <ListOrdered size={16} aria-hidden />
           OBSŁUGA POZYCJI
         </div>
-        <span className="rounded bg-slate-100 px-2 py-1 text-xs font-bold tabular-nums text-slate-600">
+        <span className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold tabular-nums text-slate-600">
           {resolvedCount} / {totalCount} rozstrzyg.
         </span>
       </div>

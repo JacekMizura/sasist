@@ -39,7 +39,7 @@ export function RmzPendingItemsPanel({ items, addingOrderItemId, disabled = fals
                   type="button"
                   disabled={disabled || busy || addingOrderItemId != null}
                   onClick={() => onAdd(item)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/90 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition hover:border-blue-300 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
                     {img ? (
