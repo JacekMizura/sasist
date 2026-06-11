@@ -1,5 +1,10 @@
 # Current context
 
+## WMS complaints UI aligned with RMZ (2026-06-08)
+- `WmsComplaintDetailPage`: two-column layout (280–320px sidebar + workspace), header jak RMZ
+- Komponenty: `frontend/src/pages/wms/complaints/*` — sidebar pozycji, workspace, uploader (dysk/kamera/QR/kolektor + drag&drop + usuwanie)
+- Workflow: duże przyciski decyzji (weryfikacja, naprawa, wymiana, odrzucenie, zwrot, uznana) → `patchComplaintLine` / `patchComplaintStatus` / `updateLineOperation`
+
 ## WMS returns Z-PZ → putaway (2026-06-08)
 - Flow: RMZ finalize → Z-PZ (dock receipt) → **Rozlokowanie PZ** → lokalizacja + `stock_disposition`
 - Collective Z-PZ (`status=OPEN`) trafia do kolejki rozlokowania bez ręcznego zamknięcia nośnika
