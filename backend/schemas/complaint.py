@@ -164,6 +164,8 @@ class ComplaintLineRead(BaseModel):
     defects: List[Dict[str, str]] = Field(default_factory=list)
     #: Notatka magazynowa (WMS)
     note_warehouse: Optional[str] = None
+    #: Linia Z-PZ utworzona po odbiorze fizycznym towaru
+    warehouse_receipt_posted: bool = False
 
 
 class ComplaintWmsUpdateItem(BaseModel):
@@ -424,6 +426,9 @@ class ComplaintRead(BaseModel):
     resolution_amount: Optional[float] = None
     resolution_currency: Optional[str] = None
     documents: List[ComplaintDocumentRead] = Field(default_factory=list)
+    warehouse_document_id: Optional[int] = None
+    warehouse_document_type: Optional[str] = None
+    warehouse_document_number: Optional[str] = None
 
 
 def complaint_photo_url_dedupe_key(url: str) -> str:

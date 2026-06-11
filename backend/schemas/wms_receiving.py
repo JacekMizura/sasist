@@ -187,6 +187,8 @@ class WmsReceivingPzListRow(BaseModel):
     supplier_name: str = ""
     document_type: str = "PZ"
     is_return_receipt: bool = False
+    has_rmz_source: bool = False
+    has_complaint_source: bool = False
     created_by: DocumentCreatedByRead = Field(default_factory=DocumentCreatedByRead)
 
 

@@ -162,6 +162,19 @@ class StockDocumentItem(Base):
     )
     #: Decyzja zwrotu przy finalizacji RMZ: ACCEPTED | DAMAGED_B | DAMAGED_C.
     return_decision = Column(String(24), nullable=True, index=True)
+    #: Reklamacja źródłowa (Z-PZ — ten sam dokument co RMZ).
+    source_complaint_id = Column(
+        Integer,
+        ForeignKey("complaints.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source_complaint_line_id = Column(
+        Integer,
+        ForeignKey("complaint_lines.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     #: Sugestia WMS: przyjęcie na wskazany nośnik (operator może zignorować i przyjąć luzem).
     suggested_warehouse_carrier_id = Column(

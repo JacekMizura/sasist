@@ -92,6 +92,15 @@ class Complaint(Base):
     logistics_expected_return_date = Column(Date, nullable=True)
     logistics_in_service_since = Column(DateTime, nullable=True)
 
+    #: Powiązany dokument magazynowy Z-PZ (przyjęcie towaru reklamacyjnego).
+    warehouse_document_id = Column(
+        Integer,
+        ForeignKey("stock_documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    warehouse_document_type = Column(String(32), nullable=True)
+
     tenant = relationship("Tenant")
     warehouse = relationship("Warehouse")
     order = relationship("Order", foreign_keys=[order_id])

@@ -22,6 +22,17 @@ function fmtQty(n: number) {
 
 function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId: number }) {
   const isReturnReceipt = row.is_return_receipt === true || isReturnReceiptDocumentType(row.document_type);
+  const hasRmz = row.has_rmz_source === true;
+  const hasComplaint = row.has_complaint_source === true;
+  const sourceBadge = hasComplaint && !hasRmz
+    ? "Z-PZ · Reklamacja"
+    : hasRmz && !hasComplaint
+      ? "Z-PZ · Zwrot"
+      : hasRmz && hasComplaint
+        ? "Z-PZ · Zwrot + Reklamacja"
+        : isReturnReceipt
+          ? "Z-PZ · zwrot RMZ"
+          : null;
   const docNumber = displayWarehouseDocumentNumber(row.number) || row.number?.trim() || (isReturnReceipt ? `Z-PZ #${row.id}` : `PZ #${row.id}`);
   const activityIso = row.updated_at?.trim() ? row.updated_at : row.created_at;
 
@@ -56,9 +67,9 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
             {docNumber}
           </h3>
           <div className="flex flex-wrap gap-1.5">
-            {isReturnReceipt ? (
+            {isReturnReceipt && sourceBadge ? (
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border bg-indigo-50 text-indigo-800 border-indigo-200/60">
-                Z-PZ · zwrot RMZ
+                {sourceBadge}
               </span>
             ) : null}
             <span

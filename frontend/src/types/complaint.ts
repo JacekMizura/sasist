@@ -140,6 +140,7 @@ export type ComplaintLineDetail = {
   defects?: { id: string; name: string }[];
   /** Notatka magazynowa zapisana z WMS (inspection). */
   note_warehouse?: string | null;
+  warehouse_receipt_posted?: boolean;
 };
 
 export type ComplaintListItem = {
@@ -253,6 +254,9 @@ export type ComplaintDetail = {
   resolution_amount?: number | null;
   resolution_currency?: string | null;
   documents?: ComplaintDocumentItem[];
+  warehouse_document_id?: number | null;
+  warehouse_document_type?: string | null;
+  warehouse_document_number?: string | null;
 };
 
 export type ComplaintStatusSummaryDto = {

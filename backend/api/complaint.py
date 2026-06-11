@@ -24,6 +24,7 @@ from ..models.complaint_document import ComplaintDocument
 from ..models.complaint_line import ComplaintLine
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from ..models.stock_document import StockDocument
 from ..schemas.complaint import (
     ALLOWED_FINANCIAL_DECISIONS,
     ALLOWED_OPERATIONAL_DECISIONS,
@@ -64,6 +65,11 @@ from ..services.complaint_documents_sync import (
     maybe_sync_rma_on_lines,
     regenerate_complaint_documents as run_regenerate_complaint_documents,
 )
+from ..services.complaints.complaint_receipt_service import (
+    complaint_line_receipt_posted,
+    receive_complaint_line_at_warehouse,
+    sync_complaint_line_disposition_from_decision,
+)
 from .order import build_order_read
 from ..services.complaint_image_upload import (
     save_complaint_image,
@@ -75,6 +81,20 @@ from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/complaints", tags=["Complaints"])
+
+
+def _complaint_warehouse_document_number(db: Session, doc_id: Optional[int]) -> Optional[str]:
+    if doc_id is None:
+        return None
+    doc = db.query(StockDocument).filter(StockDocument.id == int(doc_id)).first()
+    if doc is None:
+        return None
+    num = str(getattr(doc, "document_number", None) or "").strip()
+    if num:
+        return num
+    dt = str(getattr(doc, "document_type", None) or "Z_PZ").strip().upper()
+    label = "Z-PZ" if dt == "Z_PZ" else dt
+    return f"{label} #{int(doc.id)}"
 
 
 def complaint_panel_warehouse_id(
@@ -883,6 +903,7 @@ def build_complaint_read(db: Session, c: Complaint) -> ComplaintRead:
                 defect_ids=line_defect_ids,
                 defects=_defect_objs(line_defect_ids),
                 note_warehouse=(str(getattr(line, "note_warehouse", None) or "").strip() or None),
+                warehouse_receipt_posted=complaint_line_receipt_posted(db, int(line.id)),
             )
         )
         if product_name_first is None and nm:
@@ -1067,6 +1088,16 @@ def build_complaint_read(db: Session, c: Complaint) -> ComplaintRead:
         ),
         resolution_currency=(str(getattr(c, "resolution_currency", None) or "").strip() or None),
         documents=docs_out,
+        warehouse_document_id=(
+            int(getattr(c, "warehouse_document_id"))
+            if getattr(c, "warehouse_document_id", None) is not None
+            else None
+        ),
+        warehouse_document_type=(str(getattr(c, "warehouse_document_type", None) or "").strip() or None),
+        warehouse_document_number=_complaint_warehouse_document_number(
+            db,
+            getattr(c, "warehouse_document_id", None),
+        ),
     )
 
 
@@ -2014,6 +2045,15 @@ def patch_complaint_line(
             "Pozycja reklamacji — zmiana: " + ", ".join(changed_bits) + ".",
             meta=meta,
         )
+    if decision_changed:
+        try:
+            sync_complaint_line_disposition_from_decision(db, line, complaint=c)
+        except Exception:
+            logger.exception(
+                "complaint disposition sync failed complaint_id=%s line_id=%s",
+                complaint_id,
+                line_id,
+            )
     settle_after = (
         getattr(line, "settlement_type", None),
         getattr(line, "settlement_amount", None),
@@ -2061,6 +2101,77 @@ def patch_complaint_line(
     )
     assert c is not None
     return build_complaint_read(db, c)
+
+
+@router.post("/{complaint_id}/lines/{line_id}/warehouse-receive", response_model=ComplaintRead)
+def receive_complaint_line_warehouse(
+    complaint_id: int,
+    line_id: int,
+    tenant_id: int = Query(...),
+    warehouse_id: int = Depends(complaint_panel_warehouse_id),
+    db: Session = Depends(get_db),
+):
+    """Fizyczny odbiór towaru reklamacyjnego — linia Z-PZ (QUARANTINE), wspólna kolejka rozlokowania."""
+    _apply_due_response_deadlines(db, tenant_id, warehouse_id)
+    c = (
+        db.query(Complaint)
+        .options(
+            joinedload(Complaint.order),
+            joinedload(Complaint.lines).joinedload(ComplaintLine.order_item).joinedload(OrderItem.product),
+        )
+        .filter(
+            Complaint.id == complaint_id,
+            _tenant_warehouse_active(tenant_id, warehouse_id),
+        )
+        .first()
+    )
+    if not c or getattr(c, "deleted_at", None) is not None:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    line = next((ln for ln in (c.lines or []) if ln.id == line_id), None)
+    if line is None:
+        raise HTTPException(status_code=404, detail="Complaint line not found")
+
+    ls = _norm_logistics_status(getattr(c, "logistics_status", None))
+    if ls not in ("WAITING_FOR_ITEM", "RECEIVED", ""):
+        raise HTTPException(
+            status_code=400,
+            detail="Przyjęcie magazynowe możliwe tylko gdy reklamacja oczekuje na towar lub towar został odebrany.",
+        )
+
+    try:
+        doc = receive_complaint_line_at_warehouse(db, c, line)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if ls == "WAITING_FOR_ITEM":
+        c.logistics_status = "RECEIVED"
+    append_complaint_audit_event(
+        db,
+        complaint_id,
+        "warehouse_receive",
+        "Przyjęto towar reklamacyjny do magazynu (Z-PZ).",
+        meta={
+            "complaint_line_id": line_id,
+            "stock_document_id": int(doc.id),
+            "document_number": _complaint_warehouse_document_number(db, int(doc.id)),
+        },
+    )
+    db.add(c)
+    db.add(line)
+    db.commit()
+
+    refreshed = (
+        db.query(Complaint)
+        .options(
+            joinedload(Complaint.order),
+            joinedload(Complaint.lines).joinedload(ComplaintLine.order_item).joinedload(OrderItem.product),
+        )
+        .filter(Complaint.id == complaint_id, _tenant_warehouse_active(tenant_id, warehouse_id))
+        .first()
+    )
+    if not refreshed:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    return build_complaint_read(db, refreshed)
 
 
 @router.patch("/{complaint_id}/logistics", response_model=ComplaintRead)

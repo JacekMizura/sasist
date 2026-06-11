@@ -7,6 +7,7 @@ import {
   getComplaint,
   patchComplaintLine,
   patchComplaintStatus,
+  receiveComplaintLineWarehouse,
   updateLineOperation,
   uploadComplaintPanelPhotos,
   wmsUpdateComplaintItems,
@@ -20,6 +21,7 @@ import {
 } from "../../types/complaint";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WMS_ROUTES } from "./wmsRoutes";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { ComplaintProcessLineSidebar } from "./complaints/ComplaintProcessLineSidebar";
 import {
   ComplaintWmsLineWorkspace,
@@ -78,6 +80,7 @@ export default function WmsComplaintDetailPage() {
   const [toastText, setToastText] = useState<string | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState(false);
+  const [receiveBusyLineId, setReceiveBusyLineId] = useState<number | null>(null);
   const [saveComplaintConfirmOpen, setSaveComplaintConfirmOpen] = useState(false);
   const [noteByLine, setNoteByLine] = useState<Record<number, string>>({});
 
@@ -291,10 +294,13 @@ export default function WmsComplaintDetailPage() {
       try {
         let next: ComplaintDetail = data;
         if (action === "verification") {
+          if (!line.warehouse_receipt_posted) {
+            next = await receiveComplaintLineWarehouse(data.id, line.id, DAMAGE_TENANT_ID, warehouseId);
+          }
           try {
             next = await updateLineOperation(line.id, DAMAGE_TENANT_ID, warehouseId, "WAREHOUSE_RECEIVED");
           } catch {
-            // operation may already be advanced — continue with status
+            // operation chain may require decision first — warehouse receipt is the primary step
           }
           const cur = normalizeComplaintStatus(next.status);
           if (cur === "NOWE" || cur === "OCZEKIWANIE_NA_PRODUKT") {
@@ -330,6 +336,27 @@ export default function WmsComplaintDetailPage() {
         showToast(msg, 3000);
       } finally {
         setDecisionBusy(false);
+      }
+    },
+    [data, showToast, warehouseId],
+  );
+
+  const handleWarehouseReceive = useCallback(
+    async (line: ComplaintLineDetail) => {
+      if (data == null || line.warehouse_receipt_posted) return;
+      setReceiveBusyLineId(line.id);
+      try {
+        const next = await receiveComplaintLineWarehouse(data.id, line.id, DAMAGE_TENANT_ID, warehouseId);
+        setData(next);
+        showToast("Przyjęto towar — utworzono linię Z-PZ");
+      } catch (e) {
+        const msg =
+          axios.isAxiosError(e) && typeof e.response?.data === "object" && e.response.data && "detail" in e.response.data
+            ? String((e.response.data as { detail: unknown }).detail)
+            : "Nie udało się przyjąć towaru do magazynu.";
+        showToast(msg, 3000);
+      } finally {
+        setReceiveBusyLineId(null);
       }
     },
     [data, showToast, warehouseId],
@@ -430,6 +457,17 @@ export default function WmsComplaintDetailPage() {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Źródło</p>
                   <p className="mt-0.5 font-medium text-slate-900">{sourceLabel}</p>
                 </div>
+                {data.warehouse_document_id != null && data.warehouse_document_number ? (
+                  <div className="min-w-0 sm:col-span-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Powiązany dokument</p>
+                    <Link
+                      to={WMS_ROUTES.putawayPz(data.warehouse_document_id)}
+                      className="mt-0.5 inline-flex font-bold tabular-nums text-indigo-700 hover:underline"
+                    >
+                      {displayWarehouseDocumentNumber(data.warehouse_document_number)}
+                    </Link>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -479,6 +517,7 @@ export default function WmsComplaintDetailPage() {
                   uploading={uploadingLineId === activeLine.id}
                   uploadMessage={uploadMsgByLine[activeLine.id] ?? null}
                   decisionBusy={decisionBusy}
+                  receiveBusy={receiveBusyLineId === activeLine.id}
                   phoneSession={phoneUploadSession}
                   onNoteChange={(value) => {
                     setNoteByLine((prev) => ({ ...prev, [activeLine.id]: value }));
@@ -493,6 +532,7 @@ export default function WmsComplaintDetailPage() {
                   onPhonePhotos={handlePhonePhotos}
                   onPhoneSessionChange={setPhoneUploadSession}
                   onDecision={(action) => void applyDecision(activeLine, action)}
+                  onWarehouseReceive={() => void handleWarehouseReceive(activeLine)}
                 />
               )}
             </section>

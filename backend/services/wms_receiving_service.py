@@ -754,6 +754,8 @@ def build_wms_pz_list_row(
     stored_num = str(getattr(d, "document_number", None) or "").strip()
     dt = str(getattr(d, "document_type", None) or "PZ").strip().upper()
     number = stored_num or warehouse_document_display_number(dt, created, d.id)
+    has_rmz = any(getattr(x, "source_rmz_id", None) for x in lines)
+    has_complaint = any(getattr(x, "source_complaint_id", None) for x in lines)
     return WmsReceivingPzListRow(
         id=d.id,
         number=number,
@@ -774,6 +776,8 @@ def build_wms_pz_list_row(
         supplier_name=(supplier_name or "").strip(),
         document_type=dt,
         is_return_receipt=dt in ("Z_PZ", "PZ_RT", "RETURN_RECEIPT"),
+        has_rmz_source=bool(has_rmz),
+        has_complaint_source=bool(has_complaint),
         created_by=created_by_read_for_document(d, users_by_id),
     )
 

@@ -112,21 +112,22 @@ def get_active_collective_z_pz_summary(
     return summarize_collective_z_pz(db, doc)
 
 
-def create_collective_z_pz_shell(
+def create_collective_z_pz_shell_for_warehouse(
     db: Session,
-    rmz: WmsOrderReturn,
     *,
+    tenant_id: int,
+    warehouse_id: int,
     series: DocumentSeries,
 ) -> StockDocument:
     now = datetime.utcnow()
     doc = StockDocument(
-        tenant_id=int(rmz.tenant_id),
+        tenant_id=int(tenant_id),
         document_type=Z_PZ,
         document_series_id=str(series.id),
         supplier_id=None,
         delivery_id=None,
         rmz_id=None,
-        warehouse_id=int(rmz.warehouse_id),
+        warehouse_id=int(warehouse_id),
         location_id=None,
         status=Z_PZ_STATUS_OPEN,
         receiving_status="DONE",
@@ -151,20 +152,33 @@ def create_collective_z_pz_shell(
     return doc
 
 
-def find_or_create_collective_z_pz(
+def create_collective_z_pz_shell(
     db: Session,
     rmz: WmsOrderReturn,
     *,
     series: DocumentSeries,
 ) -> StockDocument:
-    tenant_id = int(rmz.tenant_id)
-    wh_id = int(rmz.warehouse_id)
+    return create_collective_z_pz_shell_for_warehouse(
+        db,
+        tenant_id=int(rmz.tenant_id),
+        warehouse_id=int(rmz.warehouse_id),
+        series=series,
+    )
+
+
+def find_or_create_collective_z_pz_for_warehouse(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    series: DocumentSeries,
+) -> StockDocument:
     series_id = str(series.id)
-    acquire_collective_z_pz_lock(db, tenant_id=tenant_id, warehouse_id=wh_id)
+    acquire_collective_z_pz_lock(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     existing = find_active_collective_z_pz(
         db,
-        tenant_id=tenant_id,
-        warehouse_id=wh_id,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
         series_id=series_id,
         for_update=True,
     )
@@ -173,18 +187,37 @@ def find_or_create_collective_z_pz(
 
     try:
         with db.begin_nested():
-            return create_collective_z_pz_shell(db, rmz, series=series)
+            return create_collective_z_pz_shell_for_warehouse(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                series=series,
+            )
     except IntegrityError:
         hit = find_active_collective_z_pz(
             db,
-            tenant_id=tenant_id,
-            warehouse_id=wh_id,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
             series_id=series_id,
             for_update=True,
         )
         if hit is not None:
             return hit
         raise
+
+
+def find_or_create_collective_z_pz(
+    db: Session,
+    rmz: WmsOrderReturn,
+    *,
+    series: DocumentSeries,
+) -> StockDocument:
+    return find_or_create_collective_z_pz_for_warehouse(
+        db,
+        tenant_id=int(rmz.tenant_id),
+        warehouse_id=int(rmz.warehouse_id),
+        series=series,
+    )
 
 
 def close_active_collective_z_pz(

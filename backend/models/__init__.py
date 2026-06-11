@@ -37,6 +37,7 @@ from .warehouse_carrier import (  # noqa: F401 — before stock_document (FK fro
 )
 from .stock_document import StockDocument, StockDocumentItem  # noqa: F401
 from .stock_document_return_link import StockDocumentReturnLink  # noqa: F401
+from .stock_document_complaint_link import StockDocumentComplaintLink  # noqa: F401
 from .receiving_document_carrier import ReceivingDocumentCarrier  # noqa: F401 — after StockDocument
 from .receiving_scan_log import ReceivingScanLog  # noqa: F401
 from .stock_item_location import StockItemLocation  # noqa: F401

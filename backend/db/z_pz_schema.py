@@ -22,7 +22,7 @@ from .schema_introspection import (
 
 logger = logging.getLogger(__name__)
 
-Z_PZ_SCHEMA_VERSION = "2026.06.08.5"
+Z_PZ_SCHEMA_VERSION = "2026.06.08.6"
 
 # Startup verification — primary Z-PZ columns (user-facing contract).
 Z_PZ_VERIFY_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -30,6 +30,8 @@ Z_PZ_VERIFY_COLUMNS: tuple[tuple[str, str], ...] = (
     ("stock_documents", "is_collective_return_receipt"),
     ("stock_documents", "collective_business_date"),
     ("stock_document_items", "source_rmz_id"),
+    ("stock_document_items", "source_complaint_id"),
+    ("stock_document_items", "source_complaint_line_id"),
     ("stock_document_items", "return_decision"),
 )
 
@@ -37,6 +39,8 @@ Z_PZ_VERIFY_COLUMNS: tuple[tuple[str, str], ...] = (
 Z_PZ_EXTENDED_VERIFY: tuple[tuple[str, str], ...] = (
     ("wms_order_returns", "warehouse_document_id"),
     ("wms_order_returns", "warehouse_document_type"),
+    ("complaints", "warehouse_document_id"),
+    ("complaints", "warehouse_document_type"),
     ("document_series", "collective_return_receipt"),
 )
 
@@ -86,6 +90,22 @@ def _column_specs() -> tuple[_ColumnSpec, ...]:
             "ALTER TABLE stock_document_items ADD COLUMN return_decision VARCHAR(24)",
         ),
         _ColumnSpec(
+            "stock_document_items",
+            "source_complaint_id",
+            "ALTER TABLE stock_document_items ADD COLUMN source_complaint_id INTEGER "
+            "REFERENCES complaints(id) ON DELETE SET NULL",
+            "ALTER TABLE stock_document_items ADD COLUMN source_complaint_id INTEGER "
+            "REFERENCES complaints(id) ON DELETE SET NULL",
+        ),
+        _ColumnSpec(
+            "stock_document_items",
+            "source_complaint_line_id",
+            "ALTER TABLE stock_document_items ADD COLUMN source_complaint_line_id INTEGER "
+            "REFERENCES complaint_lines(id) ON DELETE SET NULL",
+            "ALTER TABLE stock_document_items ADD COLUMN source_complaint_line_id INTEGER "
+            "REFERENCES complaint_lines(id) ON DELETE SET NULL",
+        ),
+        _ColumnSpec(
             "wms_order_returns",
             "warehouse_document_id",
             "ALTER TABLE wms_order_returns ADD COLUMN warehouse_document_id INTEGER "
@@ -98,6 +118,20 @@ def _column_specs() -> tuple[_ColumnSpec, ...]:
             "warehouse_document_type",
             "ALTER TABLE wms_order_returns ADD COLUMN warehouse_document_type VARCHAR(32)",
             "ALTER TABLE wms_order_returns ADD COLUMN warehouse_document_type VARCHAR(32)",
+        ),
+        _ColumnSpec(
+            "complaints",
+            "warehouse_document_id",
+            "ALTER TABLE complaints ADD COLUMN warehouse_document_id INTEGER "
+            "REFERENCES stock_documents(id) ON DELETE SET NULL",
+            "ALTER TABLE complaints ADD COLUMN warehouse_document_id INTEGER "
+            "REFERENCES stock_documents(id) ON DELETE SET NULL",
+        ),
+        _ColumnSpec(
+            "complaints",
+            "warehouse_document_type",
+            "ALTER TABLE complaints ADD COLUMN warehouse_document_type VARCHAR(32)",
+            "ALTER TABLE complaints ADD COLUMN warehouse_document_type VARCHAR(32)",
         ),
         _ColumnSpec(
             "document_series",
@@ -140,6 +174,21 @@ def _add_column_if_missing(engine: Engine, spec: _ColumnSpec) -> bool:
         "[z_pz.schema] added_column table=%s column=%s dialect=%s",
         spec.table,
         spec.column,
+        _dialect(engine),
+    )
+    return True
+
+
+def _ensure_stock_document_complaint_links_table(engine: Engine) -> bool:
+    if has_table(engine, "stock_document_complaint_links"):
+        return False
+    from ..models.stock_document_complaint_link import StockDocumentComplaintLink
+
+    ddl = str(CreateTable(StockDocumentComplaintLink.__table__).compile(dialect=engine.dialect))
+    with engine.begin() as conn:
+        conn.execute(text(ddl))
+    logger.info(
+        "[z_pz.schema] created_table table=stock_document_complaint_links dialect=%s",
         _dialect(engine),
     )
     return True
@@ -240,6 +289,24 @@ def _ensure_collective_z_pz_unique_index(engine: Engine) -> None:
         conn.execute(text(sql))
 
 
+def _ensure_complaints_warehouse_indexes(engine: Engine) -> None:
+    if not has_table(engine, "complaints"):
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_complaints_warehouse_document_id "
+                "ON complaints(warehouse_document_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_stock_document_items_source_complaint_line_id "
+                "ON stock_document_items(source_complaint_line_id)"
+            )
+        )
+
+
 def _ensure_wms_order_returns_indexes(engine: Engine) -> None:
     if not has_table(engine, "wms_order_returns"):
         return
@@ -280,17 +347,27 @@ def ensure_z_pz_schema(engine: Engine) -> int:
         raise
 
     try:
+        if _ensure_stock_document_complaint_links_table(engine):
+            added += 1
+    except Exception:
+        logger.exception("[z_pz.schema] complaint_links_table_failed dialect=%s", _dialect(engine))
+        raise
+
+    try:
         _migrate_z_pz_series_padding(engine)
         _ensure_collective_z_pz_unique_index(engine)
         _ensure_wms_order_returns_indexes(engine)
+        _ensure_complaints_warehouse_indexes(engine)
     except Exception:
         logger.exception("[z_pz.schema] index_ensure_failed dialect=%s", _dialect(engine))
         # Non-fatal — index requires full stock_documents header; columns are the hard gate.
 
     # ORM sync for indexes/FKs on link table + any drift on related models.
     try:
+        from ..models.complaint import Complaint
         from ..models.document_series import DocumentSeries
         from ..models.stock_document import StockDocument, StockDocumentItem
+        from ..models.stock_document_complaint_link import StockDocumentComplaintLink
         from ..models.stock_document_return_link import StockDocumentReturnLink
         from ..models.wms_order_return import WmsOrderReturn
 
@@ -298,8 +375,10 @@ def ensure_z_pz_schema(engine: Engine) -> int:
             StockDocument,
             StockDocumentItem,
             WmsOrderReturn,
+            Complaint,
             DocumentSeries,
             StockDocumentReturnLink,
+            StockDocumentComplaintLink,
         ):
             if has_table(engine, model.__tablename__):
                 try:
@@ -341,6 +420,8 @@ def verify_z_pz_schema(engine: Engine, *, include_extended: bool = True) -> list
             missing.append(f"{table}.{column}")
     if not has_table(engine, "stock_document_return_links"):
         missing.append("stock_document_return_links (table missing)")
+    if not has_table(engine, "stock_document_complaint_links"):
+        missing.append("stock_document_complaint_links (table missing)")
     if include_extended:
         for table, column in Z_PZ_EXTENDED_VERIFY:
             if not has_table(engine, table):
@@ -372,6 +453,15 @@ def log_z_pz_schema_verification(engine: Engine) -> list[str]:
         logger.error(line)
     else:
         line = "[Z_PZ_SCHEMA] stock_document_return_links=OK"
+        print(line, flush=True)
+        logger.info(line)
+
+    if not has_table(engine, "stock_document_complaint_links"):
+        line = "[Z_PZ_SCHEMA] stock_document_complaint_links=MISSING"
+        print(line, flush=True)
+        logger.error(line)
+    else:
+        line = "[Z_PZ_SCHEMA] stock_document_complaint_links=OK"
         print(line, flush=True)
         logger.info(line)
 

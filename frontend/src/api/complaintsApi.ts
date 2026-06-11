@@ -287,7 +287,22 @@ export async function patchComplaintLine(
   const res = await api.patch<ComplaintDetail>(`/complaints/${complaintId}/lines/${lineId}`, body, {
     params: complaintQueryParams(tenantId, warehouseId),
   });
-  return res.data;
+  return normalizeComplaintDetail(res.data);
+}
+
+/** Fizyczny odbiór towaru reklamacyjnego — linia Z-PZ (QUARANTINE). */
+export async function receiveComplaintLineWarehouse(
+  complaintId: number,
+  lineId: number,
+  tenantId: number,
+  warehouseId: number | undefined,
+): Promise<ComplaintDetail> {
+  const res = await api.post<ComplaintDetail>(
+    `/complaints/${complaintId}/lines/${lineId}/warehouse-receive`,
+    {},
+    { params: complaintQueryParams(tenantId, warehouseId) },
+  );
+  return normalizeComplaintDetail(res.data);
 }
 
 /** Operacja fizyczna pozycji reklamacji — PATCH /complaint-lines/:id/operation */

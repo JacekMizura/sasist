@@ -27,6 +27,7 @@ type Props = {
   uploading: boolean;
   uploadMessage: string | null;
   decisionBusy: boolean;
+  receiveBusy?: boolean;
   phoneSession: PhoneUploadSessionState | null;
   onNoteChange: (value: string) => void;
   onUploadFiles: (files: FileList | File[]) => void | Promise<void>;
@@ -34,6 +35,7 @@ type Props = {
   onPhonePhotos: (lineId: number, freshRefs: string[]) => void;
   onPhoneSessionChange: (session: PhoneUploadSessionState | null) => void;
   onDecision: (action: ComplaintWmsDecisionAction) => void | Promise<void>;
+  onWarehouseReceive?: () => void | Promise<void>;
 };
 
 function fmtDate(iso?: string | null): string {
@@ -142,6 +144,7 @@ export function ComplaintWmsLineWorkspace({
   uploading,
   uploadMessage,
   decisionBusy,
+  receiveBusy = false,
   phoneSession,
   onNoteChange,
   onUploadFiles,
@@ -149,6 +152,7 @@ export function ComplaintWmsLineWorkspace({
   onPhonePhotos,
   onPhoneSessionChange,
   onDecision,
+  onWarehouseReceive,
 }: Props) {
   const imgSrc = line.product_image_url ? resolveDamageMediaUrl(line.product_image_url) : "";
   const complaintStatus = normalizeComplaintStatus(data.status);
@@ -256,6 +260,22 @@ export function ComplaintWmsLineWorkspace({
             phoneSession={phoneSession}
             onPhoneSessionChange={onPhoneSessionChange}
           />
+        </div>
+
+        <div className="space-y-2 border-t border-slate-100 px-4 py-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Przyjęcie magazynowe</p>
+          {line.warehouse_receipt_posted ? (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+              Towar przyjęty — linia Z-PZ utworzona
+            </p>
+          ) : (
+            <DecisionButton
+              label="TOWAR OTRZYMANY"
+              tone="emerald"
+              disabled={receiveBusy || decisionBusy}
+              onClick={() => void onWarehouseReceive?.()}
+            />
+          )}
         </div>
 
         <div className="space-y-2 border-t border-slate-100 px-4 py-4">

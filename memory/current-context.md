@@ -1,5 +1,12 @@
 # Current context
 
+## Complaint → Z-PZ integration (2026-06-08)
+- Reklamacje używają tego samego Z-PZ / rozlokowania co RMZ — bez R_PZ i osobnych kolejek
+- Schema: `stock_document_items.source_complaint_id/line_id`, `StockDocumentComplaintLink`, `complaints.warehouse_document_id`
+- Serwis: `backend/services/complaints/complaint_receipt_service.py` — odbiór → QUARANTINE; decyzja → SALEABLE/OUTLET_B/SERVICE_C/REJECTED_STOCK
+- API: `POST /complaints/{id}/lines/{line_id}/warehouse-receive`; `ComplaintRead.warehouse_document_*`; disposition sync w `patch_complaint_line`
+- WMS UI: przycisk „TOWAR OTRZYMANY”, link Z-PZ; lista rozlokowania: badge Zwrot / Reklamacja / oba
+
 ## WMS Z-PZ putaway gate sync (2026-06-08)
 - Root cause: lista używała backend `doc_allows_wms_putaway` (Z_PZ status OPEN/CLOSED), ekran szczegółów wymagał `status === draft` dla nie-PZ → blokada rozlokowania
 - Fix: wspólna bramka FE `putawayDocumentGates.ts` = backend; karty listy Z-PZ (badge, numer z `document_number`); etykiety jakości linii (A/B/C) w rozlokowaniu
