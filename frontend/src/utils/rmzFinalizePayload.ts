@@ -121,7 +121,7 @@ export function finalizeLineFromRead(ln: WmsReturnLineRead): WmsReturnFinalizeLi
     accepted_qty: Math.max(0, Number(ln.accepted_qty) || 0),
     damaged_qty: damaged,
     damaged_b_qty: Math.max(0, Number(ln.damaged_b_qty) || 0),
-    damaged_c_qty: Math.max(0, Number(ln.damaged_c_qty) || 0,
+    damaged_c_qty: Math.max(0, Number(ln.damaged_c_qty) || 0),
     rejected_qty: Math.max(0, Number(ln.rejected_qty) || 0),
     condition: ln.condition ?? null,
     photo_urls: Array.isArray(ln.photo_urls) ? ln.photo_urls : undefined,

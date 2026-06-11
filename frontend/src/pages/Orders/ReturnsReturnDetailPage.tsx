@@ -245,7 +245,6 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { ReturnModuleConfigDto } from "../../types/returnModuleConfig";
 import type { ReturnDetailSectionId } from "../../constants/returnModuleDetailSections";
 import { normalizeReturnDetailLayout } from "../../utils/returnDetailLayout";
-import { WMS_ROUTES } from "../wms/wmsRoutes";
 import { PanelDetailEntityHeader } from "../../components/panelDetail/PanelDetailEntityHeader";
 import {
   panelDetailAsideColClass,
