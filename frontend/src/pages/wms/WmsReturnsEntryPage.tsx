@@ -877,6 +877,22 @@ export default function WmsReturnsEntryPage() {
     navigate(WMS_ROUTES.returnsCreate(selectedOrder.id));
   }, [navigate, selectedOrder]);
 
+  const backToSearch = useCallback(() => {
+    setSelectedOrder(null);
+    setOrderLoadErr(null);
+    setOrderReturns([]);
+    setOrderReturnsErr(null);
+    setOrderComplaints([]);
+    setOrderComplaintsErr(null);
+    setHighlightReturnId(null);
+    setHits([]);
+    setHitPreviews([]);
+    setErr(null);
+    setTrackingQ("");
+    setSearchQ("");
+    window.requestAnimationFrame(() => trackingInputRef.current?.focus());
+  }, []);
+
   const hasReturns = orderReturns.length > 0;
   const hasComplaints = orderComplaints.length > 0;
   const listLoading = orderReturnsLoading || orderComplaintsLoading;
@@ -910,157 +926,167 @@ export default function WmsReturnsEntryPage() {
         ) : null}
 
         <div className={`${WORK_LAYOUT} w-full px-4 pb-8 pt-4 md:px-6 md:pt-6`}>
-          <div className={`${SCAN_COLUMN} flex flex-col items-center text-center ${showScanIdle ? "py-6 md:py-10" : "mb-6"}`}>
-            {showScanIdle ? (
-              <div className="relative mb-6 h-24 w-24 md:h-32 md:w-32">
-                <div className="absolute inset-0 animate-[pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] rounded-full bg-blue-50" />
-                <div className="absolute inset-2 flex items-center justify-center rounded-full border-2 border-dashed border-blue-200 bg-white">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 512 512"
-                    fill="currentColor"
-                    className="h-10 w-10 text-blue-500 md:h-12 md:w-12"
-                    aria-hidden
-                  >
-                    <path d="M256 0c-12.8 0-24.8 5.6-33 15L64 185l-44.5 13.9C7.8 202.5 0 212.8 0 224V448c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V224c0-11.2-7.8-21.5-19.5-25.1L448 185 289 15c-8.2-9.4-20.2-15-33-15zM64 220l41.6-13.1L256 31.5l150.4 175.4L448 220v36H64V220zm416 76H320v44c0 24.3-19.7 44-44 44H236c-24.3 0-44-19.7-44-44V296H64V448c0 8.8 7.2 16 16 16H432c8.8 0 16-7.2 16-16V296z" />
-                  </svg>
-                </div>
-              </div>
-            ) : null}
-
-            <h2 className={`font-black tracking-tight text-slate-900 ${showScanIdle ? "mb-8 text-2xl md:text-3xl" : "mb-4 text-xl md:text-2xl"}`}>
-              Skanowanie zwrotu
-            </h2>
-
-            <div className="w-full space-y-4 text-left">
-              <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Skan listu</p>
-                <div className="relative w-full">
-                  <svg
-                    className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.75"
-                    strokeLinecap="round"
-                    aria-hidden
-                  >
-                    <path d="M4 7V5a1 1 0 0 1 1-1h2" />
-                    <path d="M4 17v2a1 1 0 0 0 1 1h2" />
-                    <path d="M16 4h2a1 1 0 0 1 1 1v2" />
-                    <path d="M16 20h2a1 1 0 0 0 1-1v-2" />
-                    <path d="M7 8v8" />
-                    <path d="M10 7v10" />
-                    <path d="M13 8v8" />
-                    <path d="M16 7v10" />
-                  </svg>
-                  <input
-                    id="wms-returns-tracking-input"
-                    ref={trackingInputRef}
-                    value={trackingQ}
-                    onChange={(e) => setTrackingQ(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void searchByTracking();
-                    }}
-                    disabled={loading}
-                    placeholder="Zeskanuj list przewozowy"
-                    className={`w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
-                      showScanIdle ? "h-14 pl-12" : "h-11"
-                    }`}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Wyszukiwarka</p>
-                <div className="relative w-full">
-                  <svg
-                    className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
-                    viewBox="0 0 512 512"
-                    fill="currentColor"
-                    aria-hidden
-                  >
-                    <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z" />
-                  </svg>
-                  <input
-                    id="wms-returns-search-input"
-                    ref={searchInputRef}
-                    value={searchQ}
-                    onChange={(e) => setSearchQ(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void search();
-                    }}
-                    disabled={loading}
-                    placeholder="Szukaj zamówienia, RMZ, telefonu, emaila, SKU lub EAN"
-                    className={`w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
-                      showScanIdle ? "h-14 pl-12" : "h-11"
-                    }`}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </div>
-              </div>
-
-              {err ? <p className="text-sm text-rose-600">{err}</p> : null}
-              {orderLoadErr ? <p className="text-sm text-rose-600">{orderLoadErr}</p> : null}
-              {loading ? <p className="text-sm font-medium text-slate-500">Szukam…</p> : null}
-
-              <WmsActiveZPzPanel
-                warehouseId={warehouseId}
-                refreshKey={activeZPzRefreshKey}
-                onClosed={(documentNumber) => {
-                  setSavedReturnFlash(
-                    `Zamknięto dokument ${displayWarehouseDocumentNumber(documentNumber)}. Nośnik trafi do rozlokowania.`,
-                  );
-                  setActiveZPzRefreshKey((k) => k + 1);
-                  window.setTimeout(() => setSavedReturnFlash(null), 4500);
-                }}
-              />
-            </div>
-          </div>
-
-          {hits.length > 0 && !selectedOrder ? (
-            <div className="mb-8 w-full">
-              <h2 className="mb-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
-                Wyniki wyszukiwania
-              </h2>
-              {hitPreviewsLoading ? (
-                <p className="text-sm text-slate-500">Wczytywanie wyników…</p>
-              ) : (
-                <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  {hitPreviews.map((preview, hi) => (
-                    <li key={preview.id}>
-                      <button
-                        type="button"
-                        ref={hi === 0 ? firstHitButtonRef : undefined}
-                        className="flex w-full flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm outline-none transition hover:border-slate-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#41546a]/35 sm:flex-row sm:items-center"
-                        onClick={() =>
-                          void loadOrderById(preview.id, {
-                            highlightReturnId: preview.matchedReturnId ?? undefined,
-                          })
-                        }
+          {!selectedOrder ? (
+            <>
+              <div className={`${SCAN_COLUMN} flex flex-col items-center text-center ${showScanIdle ? "py-6 md:py-10" : "mb-6"}`}>
+                {showScanIdle ? (
+                  <div className="relative mb-6 h-24 w-24 md:h-32 md:w-32">
+                    <div className="absolute inset-0 animate-[pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] rounded-full bg-blue-50" />
+                    <div className="absolute inset-2 flex items-center justify-center rounded-full border-2 border-dashed border-blue-200 bg-white">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 512 512"
+                        fill="currentColor"
+                        className="h-10 w-10 text-blue-500 md:h-12 md:w-12"
+                        aria-hidden
                       >
-                        <div className="min-w-[7rem] shrink-0">
-                          <div className="text-xl font-bold tabular-nums text-slate-900">{preview.orderLabel}</div>
-                          <div className="text-sm tabular-nums text-slate-500">{preview.date}</div>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-base font-semibold text-slate-900">{preview.customer}</div>
-                          <div className="truncate text-sm text-slate-500">{preview.source}</div>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : null}
+                        <path d="M256 0c-12.8 0-24.8 5.6-33 15L64 185l-44.5 13.9C7.8 202.5 0 212.8 0 224V448c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V224c0-11.2-7.8-21.5-19.5-25.1L448 185 289 15c-8.2-9.4-20.2-15-33-15zM64 220l41.6-13.1L256 31.5l150.4 175.4L448 220v36H64V220zm416 76H320v44c0 24.3-19.7 44-44 44H236c-24.3 0-44-19.7-44-44V296H64V448c0 8.8 7.2 16 16 16H432c8.8 0 16-7.2 16-16V296z" />
+                      </svg>
+                    </div>
+                  </div>
+                ) : null}
 
-          {selectedOrder ? (
-                <div className="mb-8 w-full space-y-6">
-                  <div className="flex w-full flex-col gap-4 rounded-xl border-2 border-slate-200/90 bg-white p-4 shadow-md sm:flex-row sm:items-center sm:gap-0">
+                <h2 className={`font-black tracking-tight text-slate-900 ${showScanIdle ? "mb-8 text-2xl md:text-3xl" : "mb-4 text-xl md:text-2xl"}`}>
+                  Skanowanie zwrotu
+                </h2>
+
+                <div className="w-full space-y-4 text-left">
+                  <div>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Skan listu</p>
+                    <div className="relative w-full">
+                      <svg
+                        className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        aria-hidden
+                      >
+                        <path d="M4 7V5a1 1 0 0 1 1-1h2" />
+                        <path d="M4 17v2a1 1 0 0 0 1 1h2" />
+                        <path d="M16 4h2a1 1 0 0 1 1 1v2" />
+                        <path d="M16 20h2a1 1 0 0 0 1-1v-2" />
+                        <path d="M7 8v8" />
+                        <path d="M10 7v10" />
+                        <path d="M13 8v8" />
+                        <path d="M16 7v10" />
+                      </svg>
+                      <input
+                        id="wms-returns-tracking-input"
+                        ref={trackingInputRef}
+                        value={trackingQ}
+                        onChange={(e) => setTrackingQ(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void searchByTracking();
+                        }}
+                        disabled={loading}
+                        placeholder="Zeskanuj list przewozowy"
+                        className={`w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
+                          showScanIdle ? "h-14 pl-12" : "h-11"
+                        }`}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Wyszukiwarka</p>
+                    <div className="relative w-full">
+                      <svg
+                        className="absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400"
+                        viewBox="0 0 512 512"
+                        fill="currentColor"
+                        aria-hidden
+                      >
+                        <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 456.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z" />
+                      </svg>
+                      <input
+                        id="wms-returns-search-input"
+                        ref={searchInputRef}
+                        value={searchQ}
+                        onChange={(e) => setSearchQ(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void search();
+                        }}
+                        disabled={loading}
+                        placeholder="Szukaj zamówienia, RMZ, telefonu, emaila, SKU lub EAN"
+                        className={`w-full rounded-xl border-2 border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 ${
+                          showScanIdle ? "h-14 pl-12" : "h-11"
+                        }`}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                  </div>
+
+                  {err ? <p className="text-sm text-rose-600">{err}</p> : null}
+                  {orderLoadErr ? <p className="text-sm text-rose-600">{orderLoadErr}</p> : null}
+                  {loading ? <p className="text-sm font-medium text-slate-500">Szukam…</p> : null}
+
+                  <WmsActiveZPzPanel
+                    warehouseId={warehouseId}
+                    refreshKey={activeZPzRefreshKey}
+                    onClosed={(documentNumber) => {
+                      setSavedReturnFlash(
+                        `Zamknięto dokument ${displayWarehouseDocumentNumber(documentNumber)}. Nośnik trafi do rozlokowania.`,
+                      );
+                      setActiveZPzRefreshKey((k) => k + 1);
+                      window.setTimeout(() => setSavedReturnFlash(null), 4500);
+                    }}
+                  />
+                </div>
+              </div>
+
+              {hits.length > 0 ? (
+                <div className="mb-8 w-full">
+                  <h2 className="mb-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Wyniki wyszukiwania
+                  </h2>
+                  {hitPreviewsLoading ? (
+                    <p className="text-sm text-slate-500">Wczytywanie wyników…</p>
+                  ) : (
+                    <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {hitPreviews.map((preview, hi) => (
+                        <li key={preview.id}>
+                          <button
+                            type="button"
+                            ref={hi === 0 ? firstHitButtonRef : undefined}
+                            className="flex w-full flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm outline-none transition hover:border-slate-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#41546a]/35 sm:flex-row sm:items-center"
+                            onClick={() =>
+                              void loadOrderById(preview.id, {
+                                highlightReturnId: preview.matchedReturnId ?? undefined,
+                              })
+                            }
+                          >
+                            <div className="min-w-[7rem] shrink-0">
+                              <div className="text-xl font-bold tabular-nums text-slate-900">{preview.orderLabel}</div>
+                              <div className="text-sm tabular-nums text-slate-500">{preview.date}</div>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-base font-semibold text-slate-900">{preview.customer}</div>
+                              <div className="truncate text-sm text-slate-500">{preview.source}</div>
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="mb-8 w-full space-y-6">
+              <button
+                type="button"
+                onClick={backToSearch}
+                className="inline-flex items-center text-sm font-semibold text-slate-600 transition hover:text-slate-900"
+              >
+                ← Wróć do wyszukiwania
+              </button>
+
+              <div className="flex w-full flex-col gap-4 rounded-xl border-2 border-slate-200/90 bg-white p-4 shadow-md sm:flex-row sm:items-center sm:gap-0">
                     <div className="flex shrink-0 flex-col text-left">
                       <div className="text-2xl font-bold tabular-nums text-slate-900">
                         #{selectedOrder.number ?? selectedOrder.id}
@@ -1222,7 +1248,7 @@ export default function WmsReturnsEntryPage() {
                     ) : null}
                   </div>
                 </div>
-          ) : null}
+          )}
         </div>
       </main>
     </div>
