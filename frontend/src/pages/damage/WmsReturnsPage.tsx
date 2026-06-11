@@ -116,6 +116,8 @@ import {
   type RmzDamageTypeId,
 } from "./rmzDamageTypes";
 import { WMS_REJECT_OTHER_ID, wmsRejectReasonSelectOptions } from "./wmsRejectReasons";
+import { RmzProcessLineSidebar } from "./rmzProcessLineSidebar";
+import { resolveRmzLineSidebarStatus } from "./rmzLineSidebarStatus";
 
 /** Max images per damage line (aligned with API). */
 const MAX_DAMAGE_PHOTOS = 15;
@@ -2391,6 +2393,29 @@ export default function WmsReturnsPage() {
     };
   }, [lineSeeds, unitRowsByLineId]);
 
+  const rmzSidebarItems = useMemo(
+    () =>
+      displayLines.map((ln) => {
+        const seed = lineSeedByLineId.get(ln.lineId);
+        const qty = Math.max(0, Math.floor(seed?.candidate.availableQuantity ?? 0));
+        const rows = unitRowsByLineId[ln.lineId] ?? [];
+        const { status } = resolveRmzLineSidebarStatus(qty, rows);
+        return {
+          lineId: ln.lineId,
+          productName: ln.candidate.productName,
+          imageUrl: ln.candidate.imageUrl ?? null,
+          qty,
+          status,
+        };
+      }),
+    [displayLines, lineSeedByLineId, unitRowsByLineId],
+  );
+
+  const visibleSidebarItems = useMemo(() => {
+    if (!hideResolvedProducts) return rmzSidebarItems;
+    return rmzSidebarItems.filter((item) => item.status === "pending" || item.status === "mixed");
+  }, [rmzSidebarItems, hideResolvedProducts]);
+
   const saveSplitForLine = useCallback(
     async (
       lineId: string,
@@ -2715,9 +2740,9 @@ export default function WmsReturnsPage() {
       setActiveLineId(null);
       return;
     }
-    if (activeLineId == null) return;
-    const exists = displayLines.some((l) => l.lineId === activeLineId);
-    if (!exists) setActiveLineId(null);
+    if (activeLineId == null || !displayLines.some((l) => l.lineId === activeLineId)) {
+      setActiveLineId(displayLines[0]!.lineId);
+    }
   }, [displayLines, activeLineId]);
 
   const activeLine = useMemo(
@@ -3789,7 +3814,7 @@ export default function WmsReturnsPage() {
 
   return (
 
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-[#f8f9fa]">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-white">
       {printLabelToast ? (
         <div
           className="fixed bottom-6 left-1/2 z-[200] max-w-md -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-900 shadow-lg"
@@ -3848,7 +3873,8 @@ export default function WmsReturnsPage() {
         </div>
       ) : null}
       <canvas ref={canvasRef} className="hidden" aria-hidden />
-      <div className="border-b border-slate-200 bg-white px-6 py-3">
+      <div className="mx-auto w-full max-w-[1400px] shrink-0 px-4 pt-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-6 lg:items-start">
           <div className="min-w-0 flex items-start gap-3 lg:col-span-1">
             <Link
@@ -3886,7 +3912,7 @@ export default function WmsReturnsPage() {
               </div>
 
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 sm:text-sm">
-                <span className="font-medium tabular-nums text-slate-600">{wmsReturn?.rmz_number?.trim() || "—"}</span>
+                <span className="text-base font-bold tabular-nums text-blue-600">{wmsReturn?.rmz_number?.trim() || "—"}</span>
                 <span className="text-slate-300" aria-hidden>
                   ·
                 </span>
@@ -4117,7 +4143,7 @@ export default function WmsReturnsPage() {
             <button
               type="button"
               disabled={sessionLoading || gridLoading || !allLinesFullyResolved || saveChangesLoading || isFinished}
-              className="min-h-14 w-full max-w-[15rem] rounded-lg bg-green-600 px-5 text-base font-bold text-white shadow-lg shadow-green-900/20 hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:min-h-[3.5rem] sm:text-lg lg:max-w-none lg:self-end lg:min-w-[14rem]"
+              className="min-h-14 w-full max-w-[15rem] rounded-lg bg-[#56b36a] px-5 text-base font-bold text-white shadow-sm hover:bg-[#4a9e5b] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:min-h-[3.5rem] sm:text-lg lg:max-w-none lg:self-end lg:min-w-[14rem]"
               onClick={() => void handleSaveDirtyLines()}
               title={
                 allLinesFullyResolved
@@ -4146,14 +4172,15 @@ export default function WmsReturnsPage() {
               className="h-10 w-full max-w-[15rem] rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 lg:max-w-none lg:self-end lg:px-6"
               title="Ustaw OK dla pozycji bez decyzji (lokalnie, do zapisu)."
             >
-              Przyjmij wszystko
+              Przyjmij wszystko (Szybka akcja)
             </button>
           </div>
         </div>
+        </div>
       </div>
 
-      <div className="relative w-full min-h-0 flex-1 overflow-auto">
-        <div className={isFinished ? "pointer-events-none select-none opacity-60" : ""}>
+      <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col overflow-hidden px-4 pb-4">
+        <div className={`flex h-full min-h-0 flex-1 flex-col ${isFinished ? "pointer-events-none select-none opacity-60" : ""}`}>
         {sessionLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center text-sm text-slate-600 shadow-sm">
             Ładowanie zwrotu…
@@ -4194,70 +4221,33 @@ export default function WmsReturnsPage() {
             Nie udało się wczytać pozycji zamówienia. Wróć do zamówienia i spróbuj ponownie.
           </div>
         ) : (
-          <div className="w-full">
-            <div className="sticky top-0 z-10 border-b border-slate-200/90 bg-[#f8f9fa]/95 px-4 py-3 backdrop-blur-[6px]">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm font-semibold text-slate-800">
-                    <span>Obsługa pozycji</span>
-                    <span className="tabular-nums text-slate-600">
-                      {returnsProgress.resolvedUnits} / {returnsProgress.totalUnits} rozstrzygniętych
-                    </span>
-                  </div>
-                  <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200 shadow-inner">
-                    <div
-                      className="h-full rounded-full bg-[#41546a] transition-[width] duration-500 ease-out motion-reduce:transition-none"
-                      style={{
-                        width:
-                          returnsProgress.totalUnits > 0
-                            ? `${Math.min(100, (returnsProgress.resolvedUnits / returnsProgress.totalUnits) * 100)}%`
-                            : "0%",
-                      }}
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                    <span>
-                      <span className="font-bold tabular-nums text-slate-900">{returnsProgress.unresolvedUnits}</span> bez decyzji
-                    </span>
-                    <span className="text-emerald-800">
-                      <span className="font-bold tabular-nums">{returnsProgress.accepted}</span> OK
-                    </span>
-                    <span className="text-amber-900">
-                      <span className="font-bold tabular-nums">{returnsProgress.damaged}</span> uszkodzone
-                    </span>
-                    <span className="text-rose-800">
-                      <span className="font-bold tabular-nums">{returnsProgress.rejected}</span> odrzucone
-                    </span>
-                  </div>
-                </div>
-                <label className="flex shrink-0 cursor-pointer items-center gap-2 self-start rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm select-none hover:bg-slate-50 lg:self-center">
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 shrink-0 rounded border-slate-400"
-                    checked={hideResolvedProducts}
-                    disabled={isFinished}
-                    onChange={(e) => setHideResolvedProducts(e.target.checked)}
-                  />
-                  Ukryj rozstrzygnięte
-                </label>
-              </div>
-            </div>
-            <section className="w-full">
+          <div className="flex h-full min-h-0 flex-1 gap-4">
+            <RmzProcessLineSidebar
+              items={visibleSidebarItems}
+              selectedLineId={activeLineId}
+              resolvedCount={returnsProgress.resolvedUnits}
+              totalCount={returnsProgress.totalUnits}
+              hideResolved={hideResolvedProducts}
+              onToggleHideResolved={setHideResolvedProducts}
+              onSelect={setActiveLineId}
+              disabled={isFinished}
+            />
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
               {leftViewMode === "grid" ? (
                 (() => {
-                  const lineFullySavedResolved = (ln: ReturnLineModel) => {
-                    const seed = lineSeedByLineId.get(ln.lineId);
-                    const q = Math.max(0, Math.floor(seed?.candidate.availableQuantity ?? 0));
-                    const rowList = unitRowsByLineId[ln.lineId] ?? [];
-                    const checked = rowList.filter((r) => r.decision != null).length;
-                    const processed = checked >= q && q > 0;
-                    const dirty = !!dirtyLineIds[ln.lineId];
-                    const unlocked = !!gridUnlockEditByLineId[ln.lineId];
-                    return processed && !dirty && !unlocked;
-                  };
-                  const lines = hideResolvedProducts ? displayLines.filter((ln) => !lineFullySavedResolved(ln)) : displayLines;
+                  const workspaceLineId = activeLineId;
+                  const lines = workspaceLineId
+                    ? displayLines.filter((ln) => ln.lineId === workspaceLineId)
+                    : [];
+                  if (lines.length === 0) {
+                    return (
+                      <div className="flex flex-1 flex-col items-center justify-center p-10 text-slate-500">
+                        <p className="text-sm font-medium">Wybierz produkt z listy, aby rozpocząć ocenę stanu.</p>
+                      </div>
+                    );
+                  }
                   return (
-                    <div className="grid w-full auto-rows-fr grid-cols-1 gap-5 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid w-full auto-rows-fr grid-cols-1 gap-5 p-4">
                       {lines.map((ln) => {
                         const c = ln.candidate;
                         const qty = Math.floor(c.availableQuantity);
