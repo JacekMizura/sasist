@@ -271,7 +271,7 @@ export function ProductDecisionsEditor({
                 checked={row.creates_stock_document === true}
                 onChange={(e) => updateRow(row, { creates_stock_document: e.target.checked })}
               />
-              <span>PZ_RT — przyjęcie na magazyn przy zamknięciu RMZ</span>
+              <span>Z-PZ — PZ zwrotna (przyjęcie ze zwrotów RMZ)</span>
             </label>
           ) : null}
         </div>

@@ -1435,7 +1435,7 @@ def finish_wms_receiving_pz(
     if doc.status != "draft":
         raise ValueError("Only draft documents can be edited")
     dt_up = str(doc.document_type or "").strip().upper()
-    if dt_up not in ("PZ", "PZ_RT", "RETURN_RECEIPT"):
+    if dt_up not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"):
         raise ValueError("Not a PZ document")
     ensure_pz_document_warehouse_resolved(db, doc)
     ensure_default_pz_receiving_location_if_missing(db, doc)

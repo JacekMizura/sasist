@@ -316,7 +316,7 @@ def get_stock_document(
     if current_user is not None and current_user.id is not None and getattr(read, "warehouse_id", None) is not None:
         dtype = str(getattr(read, "document_type", "") or "").upper()
         receiving_status = str(getattr(read, "receiving_status", "") or "").upper()
-        if dtype in {"PZ", "PZ_RT", "RETURN_RECEIPT"} and receiving_status != "DONE":
+        if dtype in {"PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"} and receiving_status != "DONE":
             total = sum(float(getattr(it, "ordered_quantity", 0) or 0) for it in read.items or [])
             done = sum(float(getattr(it, "received_quantity", 0) or 0) for it in read.items or [])
             touch_wms_operation_session(

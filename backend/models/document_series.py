@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -104,6 +104,9 @@ class DocumentSeries(Base):
     last_number_period = Column(String(16), nullable=True)
 
     notes = Column(Text, nullable=True)
+
+    #: Z-PZ only: gdy True — jeden dokument Z-PZ na dzień, dopisywanie pozycji ze wszystkich RMZ.
+    collective_return_receipt = Column(Boolean, nullable=False, default=False, server_default=text("0"))
 
     company_name = Column(String(256), nullable=True)
     company_street = Column(String(256), nullable=True)

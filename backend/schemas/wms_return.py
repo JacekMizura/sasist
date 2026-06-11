@@ -360,7 +360,15 @@ class WmsReturnRead(BaseModel):
     )
     stock_document_ids: List[int] = Field(
         default_factory=list,
-        description="Powiązane dokumenty magazynowe PZ_RT utworzone po rozliczeniu RMZ.",
+        description="Powiązane dokumenty Z-PZ / PZ_RT utworzone po finalizacji RMZ.",
+    )
+    warehouse_document_id: Optional[int] = Field(
+        default=None,
+        description="Główny dokument magazynowy Z-PZ powiązany z tym RMZ.",
+    )
+    warehouse_document_type: Optional[str] = Field(
+        default=None,
+        description="Typ dokumentu magazynowego (np. Z_PZ).",
     )
 
 

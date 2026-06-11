@@ -752,7 +752,22 @@ def ensure_wms_order_returns_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN created_at DATETIME"))
         if "return_type" not in columns:
             conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN return_type VARCHAR(24) NOT NULL DEFAULT 'RMA'"))
+        if "warehouse_document_id" not in columns:
+            conn.execute(
+                text(
+                    "ALTER TABLE wms_order_returns ADD COLUMN warehouse_document_id INTEGER "
+                    "REFERENCES stock_documents(id) ON DELETE SET NULL"
+                )
+            )
+        if "warehouse_document_type" not in columns:
+            conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN warehouse_document_type VARCHAR(32)"))
 
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_wms_order_returns_warehouse_document_id "
+                "ON wms_order_returns(warehouse_document_id)"
+            )
+        )
         conn.execute(
             text("CREATE INDEX IF NOT EXISTS ix_wms_order_returns_external_id ON wms_order_returns(external_id)")
         )
@@ -3955,6 +3970,7 @@ def ensure_document_series_extended_columns(engine: Engine) -> None:
             ("is_default", false_bool),
             ("is_active", true_bool),
             ("last_number_period", "VARCHAR(16)"),
+            ("collective_return_receipt", false_bool),
         ]
         for col, typ in additions:
             if col not in cols:
@@ -6003,6 +6019,25 @@ def ensure_workforce_user_groups_schema(engine: Engine) -> None:
         "[schema.workforce_groups] user_groups ensured dialect=%s",
         engine.dialect.name,
     )
+
+
+def ensure_z_pz_return_receipt_columns(engine: Engine) -> None:
+    """Z-PZ: RMZ linkage columns on stock documents / lines."""
+    with engine.connect() as conn:
+        if _table_exists(conn, "stock_documents"):
+            cols = _table_column_names(conn, "stock_documents")
+            if "source_rmz_ids_json" not in cols:
+                conn.execute(text("ALTER TABLE stock_documents ADD COLUMN source_rmz_ids_json TEXT"))
+        if _table_exists(conn, "stock_document_items"):
+            cols = _table_column_names(conn, "stock_document_items")
+            if "source_rmz_id" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE stock_document_items ADD COLUMN source_rmz_id INTEGER "
+                        "REFERENCES wms_order_returns(id) ON DELETE SET NULL"
+                    )
+                )
+        conn.commit()
 
 
 def ensure_return_product_decisions_creates_stock_document_column(engine: Engine) -> None:

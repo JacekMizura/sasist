@@ -118,6 +118,7 @@ function dtoToWrite(d: DocumentSeriesDto): DocumentSeriesWritePayload {
     is_default: d.is_default ?? false,
     is_active: d.is_active ?? true,
     notes: d.notes,
+    collective_return_receipt: d.collective_return_receipt ?? false,
     company_name: d.company_name,
     company_street: d.company_street ?? null,
     company_house_number: d.company_house_number ?? null,
@@ -482,6 +483,23 @@ export default function DocumentSeriesEditPage() {
                 />
                 Efekt magazynowy (ruchy stanów / WMS)
               </label>
+              {draft.type === "WAREHOUSE" && draft.subtype === "Z_PZ" ? (
+                <label className="flex items-start gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={draft.collective_return_receipt ?? false}
+                    onChange={(e) => setField("collective_return_receipt", e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium">Zbiorczy dokument dla zwrotów</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">
+                      Wszystkie produkty przyjęte ze zwrotów trafiają do jednego Z-PZ na dzień zamiast osobnego
+                      dokumentu dla każdego RMZ.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
               <label className="flex items-center gap-2 text-sm text-slate-800">
                 <input
                   type="checkbox"

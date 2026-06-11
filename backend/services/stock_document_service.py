@@ -656,7 +656,7 @@ def recompute_putaway_status_for_document(
 ) -> None:
     """Draft PZ / MM: NOT_STARTED | IN_PROGRESS | DONE from lines (received > 0)."""
     dt = str(getattr(doc, "document_type", "") or "")
-    if dt not in ("PZ", "PZ_RT", "RETURN_RECEIPT", "MM") or str(getattr(doc, "status", "") or "") != "draft":
+    if dt not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM") or str(getattr(doc, "status", "") or "") != "draft":
         return
     eps = 1e-5
     candidates = [
@@ -700,7 +700,7 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
     if not doc:
         return False
     dt = str(getattr(doc, "document_type", "") or "").strip().upper()
-    if dt not in ("PZ", "PZ_RT", "RETURN_RECEIPT", "MM"):
+    if dt not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM"):
         return False
     if is_stock_document_cancelled(doc):
         return False
@@ -1133,7 +1133,7 @@ def build_stock_document_read(
     force_visible_item_ids: Optional[set[int]] = None,
 ) -> StockDocumentRead:
     dt_b = str(getattr(doc, "document_type", "") or "").strip().upper()
-    if dt_b in ("PZ", "PZ_RT", "RETURN_RECEIPT", "MM") and _doc_status_lower(doc) in ("draft", "zakonczone"):
+    if dt_b in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM") and _doc_status_lower(doc) in ("draft", "zakonczone"):
         if recalculate_wms_document_completion(db, int(doc.tenant_id), int(doc.id)):
             db.flush()
             db.refresh(doc)
@@ -1552,7 +1552,7 @@ def patch_stock_document_items(
         raise ValueError("Anulowany dokument nie może być edytowany")
     if doc.status != "draft":
         raise ValueError("Only draft documents can be edited")
-    if str(doc.document_type or "").strip().upper() in ("PZ", "PZ_RT", "RETURN_RECEIPT"):
+    if str(doc.document_type or "").strip().upper() in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"):
         ensure_pz_document_warehouse_resolved(db, doc)
 
     rows: List[StockDocumentItem] = (
@@ -1573,7 +1573,7 @@ def patch_stock_document_items(
         delta = new_r - old_received.get(row.id, 0.0)
         if delta > 1e-9:
             append_receipt_operation(db, doc, row, delta)
-    if str(doc.document_type or "").strip().upper() in ("PZ", "PZ_RT", "RETURN_RECEIPT"):
+    if str(doc.document_type or "").strip().upper() in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"):
         bump_receiving_in_progress_if_new(doc)
         recompute_putaway_status_for_document(doc, rows, db)
         recalculate_wms_document_completion(db, tenant_id, document_id)

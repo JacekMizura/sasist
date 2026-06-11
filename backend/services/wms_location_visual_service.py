@@ -73,6 +73,8 @@ def _document_display_label(doc: StockDocument) -> str:
 
 def _document_type_short(doc: StockDocument) -> str:
     dt = str(getattr(doc, "document_type", None) or "PZ").strip().upper()
+    if dt == "Z_PZ":
+        return "Z-PZ"
     if dt in ("PZ", "PZ_RT", "RETURN_RECEIPT"):
         return "PZ"
     return dt

@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, text
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, text
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -13,7 +13,7 @@ class StockDocument(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    # PZ = przyjęcie towaru; PZ_RT / RETURN_RECEIPT = zwrot z RMZ (do VARCHAR(32) w SQLite / Postgres).
+    # PZ = przyjęcie towaru; Z_PZ = PZ zwrotna (RMZ); PZ_RT / RETURN_RECEIPT = legacy zwrot z RMZ.
     document_type = Column(String(32), nullable=False, default="PZ", index=True)
     document_series_id = Column(String(36), ForeignKey("document_series.id", ondelete="SET NULL"), nullable=True, index=True)
     document_number = Column(String(128), nullable=True, index=True)
@@ -74,6 +74,9 @@ class StockDocument(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_by_user_name = Column(String(256), nullable=True)
+
+    #: Z-PZ zbiorczy: lista źródłowych RMZ (JSON array of int ids).
+    source_rmz_ids_json = Column(Text, nullable=True)
 
     rmz_return = relationship("WmsOrderReturn", foreign_keys=[rmz_id])
     created_by_user = relationship("AppUser", foreign_keys=[created_by_user_id])
@@ -145,6 +148,13 @@ class StockDocumentItem(Base):
     )
     #: Powiązanie z wpisem uszkodzenia RMZ (`damage_entries_json[].id`) albo syntetyczne dla odrzutu.
     rmz_damage_entry_id = Column(String(96), nullable=True, index=True)
+    #: RMZ źródłowy (wymagane przy Z-PZ zbiorczym; opcjonalnie przy pojedynczym).
+    source_rmz_id = Column(
+        Integer,
+        ForeignKey("wms_order_returns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     #: Sugestia WMS: przyjęcie na wskazany nośnik (operator może zignorować i przyjąć luzem).
     suggested_warehouse_carrier_id = Column(

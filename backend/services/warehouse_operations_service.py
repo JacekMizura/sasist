@@ -1289,7 +1289,7 @@ def _queue_counts(db: Session, *, tenant_id: int, warehouse_id: int) -> tuple[li
         .filter(
             StockDocument.tenant_id == tenant_id,
             StockDocument.warehouse_id == warehouse_id,
-            StockDocument.document_type.in_(["PZ", "PZ_RT", "RETURN_RECEIPT", "MM"]),
+            StockDocument.document_type.in_(["PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM"]),
             StockDocument.receiving_status.in_(["NEW", "IN_PROGRESS"]),
         )
         .scalar()

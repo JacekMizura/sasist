@@ -118,7 +118,7 @@ def _load_putaway_pz_docs_with_lines(
     """
     q = db.query(StockDocument).filter(
         StockDocument.tenant_id == tenant_id,
-        StockDocument.document_type.in_(("PZ", "PZ_RT", "RETURN_RECEIPT")),
+        StockDocument.document_type.in_(("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT")),
         StockDocument.receiving_status.in_(("IN_PROGRESS", "DONE")),
         StockDocument.putaway_status.in_(("NOT_STARTED", "IN_PROGRESS", "DONE")),
         StockDocument.relocation_status != "DONE",
@@ -147,7 +147,7 @@ def _doc_allows_putaway(doc: StockDocument) -> bool:
     st = str(doc.status or "").strip().lower()
     if dt == "MM":
         return st == "draft"
-    if dt in ("PZ", "PZ_RT"):
+    if dt in ("PZ", "Z_PZ", "PZ_RT"):
         return st in ("draft", "posted")
     return False
 
@@ -471,7 +471,7 @@ def backfill_stock_item_locations_if_needed(db: Session) -> None:
         .join(StockDocument, StockDocument.id == StockDocumentItem.document_id)
         .filter(
             StockDocument.status == "draft",
-            StockDocument.document_type.in_(("PZ", "PZ_RT", "RETURN_RECEIPT")),
+            StockDocument.document_type.in_(("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT")),
             StockDocumentItem.quantity_putaway > 1e-6,
         )
         .all()
@@ -1558,7 +1558,7 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
     )
     if not doc:
         raise ValueError("Dokument nie znaleziony")
-    if str(doc.document_type or "").strip().upper() not in ("PZ", "PZ_RT", "RETURN_RECEIPT", "MM"):
+    if str(doc.document_type or "").strip().upper() not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM"):
         raise ValueError("Tylko dokument PZ / PZ_RT / RETURN_RECEIPT lub MM")
     if str(getattr(doc, "relocation_status", "") or "").strip().upper() == "DONE":
         raise ValueError("Rozlokowanie już zakończone")

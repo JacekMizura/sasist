@@ -1,18 +1,20 @@
-"""RMZ → PZ_RT: przyjęcie magazynowe po zamknięciu zwrotu (refund / rozliczenie biura).
+"""RMZ → Z-PZ (PZ zwrotna): przyjęcie magazynowe przy finalizacji zwrotu.
 
-Idempotentnie tworzy jeden dokument ``PZ_RT`` na RMZ, linkuje linie z jednostkami uszkodzeń
-oraz natychmiast księguje RECEIPT (towar na lokacji przyjęcia), kolejka rozłożenia jak PZ.
+- ACCEPTED / DAMAGED → linie Z-PZ + RECEIPT (kolejka rozlokowania jak PZ)
+- REJECTED → brak ruchu magazynowego
+- Seria Z-PZ: tryb zbiorczy (jeden dokument / dzień) lub osobny dokument / RMZ
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime
-from typing import Dict, List, Optional, Sequence
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
+from ..models.document_series import DocumentSeries
 from ..models.order_item import OrderItem
 from ..models.product import Product
 from ..models.return_module_config import ReturnProductDecision
@@ -31,19 +33,30 @@ from .document_number_service import (
     assign_series_number_to_stock_document,
     require_warehouse_series,
 )
+from .returns.z_pz_constants import (
+    DISPOSITION_OUTLET_B,
+    DISPOSITION_SALEABLE,
+    DISPOSITION_SERVICE_C,
+    PZ_RT,
+    RETURN_RECEIPT,
+    RETURN_RECEIPT_DOCUMENT_TYPES,
+    Z_PZ,
+)
 
 logger = logging.getLogger(__name__)
 
-PZ_RT = "PZ_RT"
-RETURN_RECEIPT = "RETURN_RECEIPT"
-RETURN_RECEIPT_DOCUMENT_TYPES = frozenset({PZ_RT, RETURN_RECEIPT})
+# Re-export for legacy imports
+__all__ = [
+    "Z_PZ",
+    "PZ_RT",
+    "RETURN_RECEIPT",
+    "RETURN_RECEIPT_DOCUMENT_TYPES",
+    "ensure_rmz_return_receipt_document",
+    "ensure_rmz_return_receipt_after_refund",
+    "parse_reject_reason_id_from_damage_type",
+    "rejection_creates_stock_document",
+]
 
-DISPOSITION_SALEABLE = "SALEABLE"
-DISPOSITION_OUTLET_B = "OUTLET_B"
-DISPOSITION_SERVICE_C = "SERVICE_C"
-DISPOSITION_REJECTED_STOCK = "REJECTED_STOCK"
-
-# Wbudowane kody WMS (wmsRejectReasons.tsx) — gdy brak wpisu w konfiguracji modułu zwrotów.
 _BUILTIN_REJECT_CREATES_STOCK: Dict[str, bool] = {
     "order_wrong_product": True,
     "order_missing_in_pack": True,
@@ -71,6 +84,37 @@ def _parse_damage_entries_json(raw: object) -> List[dict]:
     except Exception:
         return []
     return [x for x in data if isinstance(x, dict)] if isinstance(data, list) else []
+
+
+def _parse_source_rmz_ids(raw: object) -> List[int]:
+    if raw is None:
+        return []
+    s = str(raw).strip()
+    if not s:
+        return []
+    try:
+        data = json.loads(s)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    out: List[int] = []
+    for x in data:
+        try:
+            v = int(x)
+        except (TypeError, ValueError):
+            continue
+        if v >= 1 and v not in out:
+            out.append(v)
+    return out
+
+
+def _register_rmz_on_document(doc: StockDocument, rmz_id: int) -> None:
+    ids = _parse_source_rmz_ids(getattr(doc, "source_rmz_ids_json", None))
+    rid = int(rmz_id)
+    if rid not in ids:
+        ids.append(rid)
+        doc.source_rmz_ids_json = json.dumps(ids, ensure_ascii=False)
 
 
 def parse_reject_reason_id_from_damage_type(damage_type: Optional[str], decision: Optional[str]) -> Optional[str]:
@@ -141,8 +185,10 @@ def _planned_stock_counts_for_line(
     tenant_id: int,
     warehouse_id: int,
     ln: RMZLine,
+    *,
+    include_rejected: bool = False,
 ) -> Tuple[int, List[Tuple[str, str]], int]:
-    """accepted units, list of (damage_entry_key, B|C) per physical damaged unit, rejected units eligible for stock."""
+    """accepted units, damaged (entry_key, B|C) pairs, rejected stock units (ignored for Z-PZ by default)."""
     aq = int(ln.accepted_qty or 0)
     rq_raw = int(ln.rejected_qty or 0)
     reason_id = parse_reject_reason_id_from_damage_type(
@@ -150,7 +196,7 @@ def _planned_stock_counts_for_line(
         ln.decision,
     )
     rej_stock_n = 0
-    if rq_raw > 0 and rejection_creates_stock_document(db, tenant_id, warehouse_id, reason_id):
+    if include_rejected and rq_raw > 0 and rejection_creates_stock_document(db, tenant_id, warehouse_id, reason_id):
         rej_stock_n = rq_raw
 
     damaged_pairs: List[Tuple[str, str]] = []
@@ -182,86 +228,160 @@ def _planned_stock_counts_for_line(
 
 def _any_planned_lines(db: Session, tenant_id: int, warehouse_id: int, lines: Sequence[RMZLine]) -> bool:
     for ln in lines:
-        aq, dmg, rj = _planned_stock_counts_for_line(db, tenant_id, warehouse_id, ln)
-        if aq > 0 or dmg or rj > 0:
+        aq, dmg, _rj = _planned_stock_counts_for_line(db, tenant_id, warehouse_id, ln, include_rejected=False)
+        if aq > 0 or dmg:
             return True
     return False
 
 
-def assign_return_receipt_document_number(db: Session, doc: StockDocument) -> Optional[str]:
-    """Numeracja PZ_RT — preferuje serię PZ_RT (prefiks PZR), fallback ZW / PZ."""
+def _resolve_z_pz_series(db: Session, tenant_id: int, warehouse_id: int) -> DocumentSeries:
+    for subtype in (Z_PZ, "PZ_RT", "ZW"):
+        try:
+            return require_warehouse_series(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                subtype=subtype,
+            )
+        except DocumentSeriesOperationalError:
+            continue
+    raise DocumentSeriesOperationalError(
+        document_type=Z_PZ,
+        message="Brak aktywnej serii dokumentów Z-PZ (Z_PZ)",
+    )
+
+
+def assign_return_receipt_document_number(
+    db: Session,
+    doc: StockDocument,
+    *,
+    series: Optional[DocumentSeries] = None,
+) -> Optional[str]:
     from ..models.warehouse import Warehouse
+
+    if str(getattr(doc, "document_number", None) or "").strip():
+        return str(doc.document_number)
 
     tenant_id = int(doc.tenant_id)
     wh_id = int(doc.warehouse_id)
     wh = db.query(Warehouse).filter(Warehouse.id == wh_id).first()
     wh_code = str(getattr(wh, "code", None) or "").strip() or None
-    if getattr(doc, "document_number", None):
-        return str(doc.document_number)
-    for subtype in ("PZ_RT", "ZW", "PZ"):
+
+    if series is None:
         try:
-            series = require_warehouse_series(
-                db,
-                tenant_id=tenant_id,
-                warehouse_id=wh_id,
-                subtype=subtype,
-            )
-            number = assign_series_number_to_stock_document(
-                db, doc, series, warehouse_code=wh_code
-            )
-            logger.info(
-                "[PZ_RT] assigned number doc_id=%s number=%s series_subtype=%s",
-                doc.id,
-                number,
-                subtype,
-            )
-            return number
+            series = _resolve_z_pz_series(db, tenant_id, wh_id)
         except DocumentSeriesOperationalError:
-            continue
-    logger.warning(
-        "[PZ_RT] no document series for return receipt tenant_id=%s warehouse_id=%s",
-        tenant_id,
-        wh_id,
-    )
+            series = None
+
+    if series is not None:
+        number = assign_series_number_to_stock_document(db, doc, series, warehouse_code=wh_code)
+        logger.info("[Z-PZ] assigned number doc_id=%s number=%s series=%s", doc.id, number, series.subtype)
+        return number
+
+    logger.warning("[Z-PZ] no document series tenant_id=%s warehouse_id=%s", tenant_id, wh_id)
     return None
 
 
-def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Optional[StockDocument]:
-    """
-    Tworzy lub zwraca istniejący PZ_RT dla RMZ. Wykonuje RECEIPT na lokacji przyjęcia i ustawia receiving=DONE.
-    """
+def _rmz_lines_already_posted(db: Session, document_id: int, rmz_id: int) -> bool:
+    hit = (
+        db.query(StockDocumentItem.id)
+        .filter(
+            StockDocumentItem.document_id == int(document_id),
+            StockDocumentItem.source_rmz_id == int(rmz_id),
+        )
+        .first()
+    )
+    return hit is not None
+
+
+def _find_existing_document_for_rmz(db: Session, rmz: WmsOrderReturn) -> Optional[StockDocument]:
     tenant_id = int(rmz.tenant_id)
     wh_id = int(rmz.warehouse_id)
+    rid = int(rmz.id)
 
-    existing = (
+    wh_doc_id = getattr(rmz, "warehouse_document_id", None)
+    if wh_doc_id:
+        doc = (
+            db.query(StockDocument)
+            .filter(
+                StockDocument.id == int(wh_doc_id),
+                StockDocument.tenant_id == tenant_id,
+                StockDocument.document_type.in_(tuple(RETURN_RECEIPT_DOCUMENT_TYPES)),
+            )
+            .first()
+        )
+        if doc is not None:
+            return doc
+
+    doc = (
         db.query(StockDocument)
         .filter(
             StockDocument.tenant_id == tenant_id,
-            StockDocument.rmz_id == int(rmz.id),
+            StockDocument.rmz_id == rid,
             StockDocument.document_type.in_(tuple(RETURN_RECEIPT_DOCUMENT_TYPES)),
         )
         .first()
     )
-    if existing is not None:
-        if not str(getattr(existing, "document_number", None) or "").strip():
-            assign_return_receipt_document_number(db, existing)
-        logger.info("[PZ_RT] already exists rmz_id=%s doc_id=%s", rmz.id, existing.id)
-        return existing
+    if doc is not None:
+        return doc
 
-    lines = db.query(RMZLine).filter(RMZLine.rmz_id == rmz.id).order_by(RMZLine.id.asc()).all()
-    if not lines or not _any_planned_lines(db, tenant_id, wh_id, lines):
-        logger.info("[PZ_RT] skip — no inbound quantities rmz_id=%s", rmz.id)
-        return None
+    line_doc = (
+        db.query(StockDocument)
+        .join(StockDocumentItem, StockDocumentItem.document_id == StockDocument.id)
+        .filter(
+            StockDocument.tenant_id == tenant_id,
+            StockDocument.warehouse_id == wh_id,
+            StockDocument.document_type.in_(tuple(RETURN_RECEIPT_DOCUMENT_TYPES)),
+            StockDocumentItem.source_rmz_id == rid,
+        )
+        .first()
+    )
+    return line_doc
 
+
+def _find_collective_z_pz_for_today(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    series_id: str,
+) -> Optional[StockDocument]:
     now = datetime.utcnow()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    return (
+        db.query(StockDocument)
+        .filter(
+            StockDocument.tenant_id == int(tenant_id),
+            StockDocument.warehouse_id == int(warehouse_id),
+            StockDocument.document_type == Z_PZ,
+            StockDocument.document_series_id == str(series_id),
+            StockDocument.status == "draft",
+            StockDocument.relocation_status == "OPEN",
+            StockDocument.created_at >= day_start,
+            StockDocument.created_at < day_end,
+        )
+        .order_by(StockDocument.id.desc())
+        .first()
+    )
 
+
+def _create_z_pz_shell(
+    db: Session,
+    rmz: WmsOrderReturn,
+    *,
+    series: DocumentSeries,
+    collective: bool,
+) -> StockDocument:
+    now = datetime.utcnow()
     doc = StockDocument(
-        tenant_id=tenant_id,
-        document_type=PZ_RT,
+        tenant_id=int(rmz.tenant_id),
+        document_type=Z_PZ,
+        document_series_id=str(series.id),
         supplier_id=None,
         delivery_id=None,
-        rmz_id=int(rmz.id),
-        warehouse_id=wh_id,
+        rmz_id=None if collective else int(rmz.id),
+        warehouse_id=int(rmz.warehouse_id),
         location_id=None,
         status="draft",
         receiving_status="DONE",
@@ -269,13 +389,31 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
         relocation_status="OPEN",
         created_at=now,
         updated_at=now,
+        source_rmz_ids_json=json.dumps([int(rmz.id)], ensure_ascii=False) if collective else None,
     )
     db.add(doc)
     db.flush()
-
     ensure_pz_document_warehouse_resolved(db, doc)
     ensure_default_pz_receiving_location_if_missing(db, doc)
+    assign_return_receipt_document_number(db, doc, series=series)
+    logger.info(
+        "[Z-PZ] created shell rmz_id=%s doc_id=%s collective=%s number=%s",
+        rmz.id,
+        doc.id,
+        collective,
+        getattr(doc, "document_number", None),
+    )
+    return doc
 
+
+def _append_rmz_lines_to_document(
+    db: Session,
+    doc: StockDocument,
+    rmz: WmsOrderReturn,
+    lines: Sequence[RMZLine],
+) -> List[StockDocumentItem]:
+    tenant_id = int(rmz.tenant_id)
+    wh_id = int(rmz.warehouse_id)
     item_rows: List[StockDocumentItem] = []
 
     def add_line(
@@ -303,6 +441,7 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
             return_disposition=disposition,
             stock_disposition=disposition,
             rmz_damage_entry_id=(rmz_damage_entry_id[:96] if rmz_damage_entry_id else None),
+            source_rmz_id=int(rmz.id),
         )
         db.add(row)
         db.flush()
@@ -313,10 +452,12 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
         pid = int(ln.product_id)
         p = db.query(Product).filter(Product.id == pid, Product.tenant_id == tenant_id).first()
         if not p:
-            raise ValueError(f"PZ_RT: produkt {pid} nie znaleziony dla tenant_id={tenant_id}")
+            raise ValueError(f"Z-PZ: produkt {pid} nie znaleziony dla tenant_id={tenant_id}")
         unit_price, vat = _order_item_pricing(db, int(ln.order_item_id))
 
-        aq, damaged_pairs, rej_stock_n = _planned_stock_counts_for_line(db, tenant_id, wh_id, ln)
+        aq, damaged_pairs, _rej = _planned_stock_counts_for_line(
+            db, tenant_id, wh_id, ln, include_rejected=False
+        )
         if aq > 0:
             add_line(
                 product_id=pid,
@@ -338,29 +479,19 @@ def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Opti
                 vat_rate=vat,
             )
 
-        if rej_stock_n > 0:
-            for i in range(rej_stock_n):
-                add_line(
-                    product_id=pid,
-                    qty=1.0,
-                    disposition=DISPOSITION_REJECTED_STOCK,
-                    rmz_damage_entry_id=f"reject-{int(ln.id)}-{i}",
-                    purchase_price_net=unit_price,
-                    vat_rate=vat,
-                )
+    return item_rows
 
-    recompute_putaway_status_for_document(doc, item_rows)
-    doc.updated_at = datetime.utcnow()
-    assign_return_receipt_document_number(db, doc)
 
-    _patch_damage_entries_with_stock_links(db, lines, doc.id)
-    db.flush()
-    logger.info("[PZ_RT] created rmz_id=%s doc_id=%s lines=%s", rmz.id, doc.id, len(item_rows))
-    return doc
+def _link_rmz_to_document(db: Session, rmz: WmsOrderReturn, doc: StockDocument, *, collective: bool) -> None:
+    rmz.warehouse_document_id = int(doc.id)
+    rmz.warehouse_document_type = Z_PZ
+    if collective:
+        _register_rmz_on_document(doc, int(rmz.id))
+    elif doc.rmz_id is None:
+        doc.rmz_id = int(rmz.id)
 
 
 def _patch_damage_entries_with_stock_links(db: Session, lines: Sequence[RMZLine], document_id: int) -> None:
-    """Uzupełnia ``damage_entries_json`` o powiązanie z dokumentem (wpisy qty=1)."""
     sdi_rows = (
         db.query(StockDocumentItem)
         .filter(StockDocumentItem.document_id == int(document_id))
@@ -375,6 +506,8 @@ def _patch_damage_entries_with_stock_links(db: Session, lines: Sequence[RMZLine]
         by_eid = {str(x.get("id") or "").strip(): x for x in raw_list if str(x.get("id") or "").strip()}
         for sdi in sdi_rows:
             if int(sdi.product_id or 0) != int(ln.product_id):
+                continue
+            if int(getattr(sdi, "source_rmz_id", 0) or 0) not in (0, int(ln.rmz_id or 0)):
                 continue
             key = (getattr(sdi, "rmz_damage_entry_id", None) or "").strip()
             if not key or "__" in key:
@@ -396,6 +529,69 @@ def _patch_damage_entries_with_stock_links(db: Session, lines: Sequence[RMZLine]
             changed = True
         if changed:
             ln.damage_entries_json = json.dumps(raw_list, ensure_ascii=False)
+
+
+def ensure_rmz_return_receipt_document(db: Session, rmz: WmsOrderReturn) -> Optional[StockDocument]:
+    """
+    Tworzy lub dopisuje do Z-PZ (PZ zwrotna) przy finalizacji RMZ.
+    REJECTED nie generuje ruchów magazynowych.
+    """
+    tenant_id = int(rmz.tenant_id)
+    wh_id = int(rmz.warehouse_id)
+    rid = int(rmz.id)
+
+    existing = _find_existing_document_for_rmz(db, rmz)
+    if existing is not None:
+        if _rmz_lines_already_posted(db, int(existing.id), rid):
+            _link_rmz_to_document(
+                db,
+                rmz,
+                existing,
+                collective=bool(getattr(existing, "source_rmz_ids_json", None)),
+            )
+            if not str(getattr(existing, "document_number", None) or "").strip():
+                assign_return_receipt_document_number(db, existing)
+            logger.info("[Z-PZ] idempotent rmz_id=%s doc_id=%s", rid, existing.id)
+            return existing
+
+    lines = db.query(RMZLine).filter(RMZLine.rmz_id == rid).order_by(RMZLine.id.asc()).all()
+    if not lines or not _any_planned_lines(db, tenant_id, wh_id, lines):
+        logger.info("[Z-PZ] skip — no ACCEPTED/DAMAGED quantities rmz_id=%s", rid)
+        return None
+
+    series = _resolve_z_pz_series(db, tenant_id, wh_id)
+    collective = bool(getattr(series, "collective_return_receipt", False))
+
+    doc: StockDocument
+    if collective:
+        doc = _find_collective_z_pz_for_today(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=wh_id,
+            series_id=str(series.id),
+        ) or _create_z_pz_shell(db, rmz, series=series, collective=True)
+    else:
+        doc = _create_z_pz_shell(db, rmz, series=series, collective=False)
+
+    if _rmz_lines_already_posted(db, int(doc.id), rid):
+        _link_rmz_to_document(db, rmz, doc, collective=collective)
+        logger.info("[Z-PZ] lines already on doc rmz_id=%s doc_id=%s", rid, doc.id)
+        return doc
+
+    item_rows = _append_rmz_lines_to_document(db, doc, rmz, lines)
+    all_items = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == int(doc.id))
+        .order_by(StockDocumentItem.id.asc())
+        .all()
+    )
+    recompute_putaway_status_for_document(doc, all_items)
+    doc.updated_at = datetime.utcnow()
+    _link_rmz_to_document(db, rmz, doc, collective=collective)
+    _patch_damage_entries_with_stock_links(db, lines, int(doc.id))
+    db.flush()
+    logger.info("[Z-PZ] posted rmz_id=%s doc_id=%s new_lines=%s source_rmz=%s", rid, doc.id, len(item_rows), doc.source_rmz_ids_json)
+    return doc
 
 
 def ensure_rmz_return_receipt_after_refund(db: Session, rmz: WmsOrderReturn) -> None:

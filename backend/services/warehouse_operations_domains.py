@@ -297,7 +297,7 @@ def build_inbound_overview(
         .filter(
             StockDocument.tenant_id == int(tenant_id),
             StockDocument.warehouse_id == int(warehouse_id),
-            StockDocument.document_type.in_(["PZ", "PZ_RT", "RETURN_RECEIPT"]),
+            StockDocument.document_type.in_(["PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"]),
             StockDocument.receiving_status.in_(["NEW", "IN_PROGRESS"]),
         )
         .order_by(StockDocument.created_at.asc())

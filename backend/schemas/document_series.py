@@ -17,6 +17,7 @@ DocumentSeriesSubtype = Literal[
     "RW",
     "PW",
     "RESERVATION",
+    "Z_PZ",
     "CORRECTION",
 ]
 DeleteMode = Literal["ALWAYS_DELETE", "ASK"]
@@ -31,7 +32,7 @@ def _allowed_subtypes(series_type: str) -> set[str]:
     if t == "SALE":
         return {"INVOICE", "RECEIPT"}
     if t == "WAREHOUSE":
-        return {"WZ", "PZ", "MM", "RW", "PW", "RESERVATION"}
+        return {"WZ", "PZ", "Z_PZ", "MM", "RW", "PW", "RESERVATION"}
     if t == "CORRECTION":
         return {"CORRECTION"}
     return set()
@@ -88,6 +89,10 @@ class DocumentSeriesBase(BaseModel):
     is_default: bool = False
     is_active: bool = True
     notes: Optional[str] = None
+    collective_return_receipt: bool = Field(
+        default=False,
+        description="Z-PZ: jeden zbiorczy dokument na dzień zamiast osobnego Z-PZ per RMZ.",
+    )
     company_name: Optional[str] = Field(None, max_length=256)
     company_street: Optional[str] = Field(None, max_length=256)
     company_house_number: Optional[str] = Field(None, max_length=32)

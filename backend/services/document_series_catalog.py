@@ -69,6 +69,19 @@ def _sale(
 
 OPERATIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
     _wh("PZ", name="PZ — przyjęcia"),
+    {
+        "series_type": "WAREHOUSE",
+        "subtype": "Z_PZ",
+        "operational_code": "Z-PZ",
+        "prefix": "Z-PZ",
+        "name": "Z-PZ — PZ zwrotna (RMZ)",
+        "numbering_format": "{PREFIX}-{YEAR}-{NUMBER}",
+        "yearly_reset": True,
+        "monthly_reset": False,
+        "warehouse_effect": True,
+        "padding_length": 6,
+        "is_default": True,
+    },
     _wh("WZ", name="WZ — wydania", print_template_id=3),
     _wh("MM", name="MM — przesunięcia magazynowe"),
     _wh("RW", name="RW — rozchód wewnętrzny"),
@@ -94,9 +107,9 @@ OPERATIONAL_CORRECTION_SERIES: list[OperationalSeriesSpec] = [
     },
 ]
 
-# Optional — not auto-seeded unless extended; catalog knows routes for UI when configured.
+# Optional — legacy / extended warehouse series (not auto-seeded with bootstrap set).
 OPTIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
-    _wh("PZ_RT", name="PZ zwrot RMZ", prefix="PZR"),
+    _wh("PZ_RT", name="PZ zwrot RMZ (legacy)", prefix="PZR"),
     _wh("ZWZ", name="ZWZ — zwrot zewnętrzny"),
     _wh("INW", name="INW — inwentaryzacja"),
     _wh("RK", name="RK — korekta magazynowa"),

@@ -10,6 +10,7 @@ export type DocumentSeriesSubtype =
   | "RW"
   | "PW"
   | "RESERVATION"
+  | "Z_PZ"
   | "CORRECTION";
 export type DeleteMode = "ALWAYS_DELETE" | "ASK";
 export type VatSource = "FROM_ORDER" | "FROM_LINES" | "MANUAL" | "FIXED";
@@ -65,6 +66,8 @@ export type DocumentSeriesDto = {
   is_default: boolean;
   is_active: boolean;
   notes: string | null;
+  /** Z-PZ: zbiorczy dokument zwrotów (jeden Z-PZ / dzień). */
+  collective_return_receipt?: boolean;
   company_name: string | null;
   company_street: string | null;
   company_house_number: string | null;
@@ -143,6 +146,7 @@ export function createDefaultDocumentSeriesWrite(): DocumentSeriesWritePayload {
     is_default: false,
     is_active: true,
     notes: null,
+    collective_return_receipt: false,
     company_name: null,
     company_street: null,
     company_house_number: null,
@@ -162,7 +166,7 @@ export function createDefaultDocumentSeriesWrite(): DocumentSeriesWritePayload {
 
 export function subtypesForDocumentSeriesType(t: DocumentSeriesType): DocumentSeriesSubtype[] {
   if (t === "SALE") return ["INVOICE", "RECEIPT"];
-  if (t === "WAREHOUSE") return ["WZ", "PZ", "MM", "RW", "PW", "RESERVATION"];
+  if (t === "WAREHOUSE") return ["WZ", "PZ", "Z_PZ", "MM", "RW", "PW", "RESERVATION"];
   return ["CORRECTION"];
 }
 

@@ -182,8 +182,10 @@ export type WmsReturnRead = {
   /** Z API — preferuj zamiast heurystyki po `status.type` (spójność z blokadą zapisu). */
   workflow_finished?: boolean;
   workflow_editable?: boolean;
-  /** Dokumenty PZ_RT powiązane z RMZ (zwrot na magazyn). */
+  /** Dokumenty Z-PZ powiązane z RMZ (PZ zwrotna). */
   stock_document_ids?: number[];
+  warehouse_document_id?: number | null;
+  warehouse_document_type?: string | null;
 };
 
 export type WmsReturnCreate = {

@@ -43,6 +43,7 @@ _VALID_SUBTYPES = {
     "RW",
     "PW",
     "RESERVATION",
+    "Z_PZ",
     "CORRECTION",
 }
 _VALID_DELETE_MODES = {"ALWAYS_DELETE", "ASK"}
@@ -142,6 +143,7 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         is_default=bool(getattr(row, "is_default", False)),
         is_active=bool(getattr(row, "is_active", True)),
         notes=row.notes,
+        collective_return_receipt=bool(getattr(row, "collective_return_receipt", False)),
         company_name=row.company_name,
         company_street=getattr(row, "company_street", None),
         company_house_number=getattr(row, "company_house_number", None),
@@ -312,6 +314,8 @@ def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
     if hasattr(row, "is_active"):
         row.is_active = bool(body.is_active)
     row.notes = body.notes
+    if hasattr(row, "collective_return_receipt"):
+        row.collective_return_receipt = bool(getattr(body, "collective_return_receipt", False))
     row.company_name = body.company_name
     row.company_street = body.company_street
     row.company_house_number = body.company_house_number

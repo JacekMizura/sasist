@@ -132,6 +132,7 @@ from .db.schema_upgrade import (
     ensure_stock_documents_relocation_status_column,
     ensure_stock_documents_mm_location_columns,
     ensure_stock_documents_return_receipt_schema,
+    ensure_z_pz_return_receipt_columns,
     ensure_stock_operations_unit_price_net_column,
     migrate_inventory_lot_unique_sqlite,
     ensure_inventory_stock_disposition_columns,
@@ -947,6 +948,7 @@ try:
     ensure_stock_documents_updated_at_column(engine)
     migrate_stock_documents_nullable_warehouse_location(engine)
     ensure_stock_documents_return_receipt_schema(engine)
+    ensure_z_pz_return_receipt_columns(engine)
     ensure_stock_document_items_return_receipt_columns(engine)
     ensure_stock_document_items_stock_disposition_column(engine)
     ensure_return_product_decisions_creates_stock_document_column(engine)
@@ -1233,6 +1235,7 @@ def _upgrade_schema_background() -> None:
         ensure_stock_documents_updated_at_column(engine)
         migrate_stock_documents_nullable_warehouse_location(engine)
         ensure_stock_documents_return_receipt_schema(engine)
+    ensure_z_pz_return_receipt_columns(engine)
         ensure_stock_document_items_return_receipt_columns(engine)
         ensure_stock_document_items_stock_disposition_column(engine)
         ensure_return_product_decisions_creates_stock_document_column(engine)

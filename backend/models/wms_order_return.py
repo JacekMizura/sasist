@@ -35,6 +35,15 @@ class WmsOrderReturn(Base):
     #: Archiwizacja zwrotu (linie RMZ/refund kasowane w serwisie); NULL = aktywny.
     deleted_at = Column(DateTime, nullable=True, index=True)
 
+    #: Powiązany dokument magazynowy Z-PZ utworzony przy finalizacji zwrotu.
+    warehouse_document_id = Column(
+        Integer,
+        ForeignKey("stock_documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    warehouse_document_type = Column(String(32), nullable=True, index=True)
+
     order = relationship("Order", foreign_keys=[order_id])
     return_status = relationship("ReturnStatus", foreign_keys=[status_id])
     ui_status = relationship("ReturnUiStatus", foreign_keys=[ui_status_id])

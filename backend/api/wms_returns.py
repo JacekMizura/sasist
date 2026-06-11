@@ -25,7 +25,7 @@ from ..models.return_ui_status import ReturnUiStatus
 from ..models.return_status import ReturnStatus
 from ..models.wms_order_return import WmsOrderReturn
 from ..models.wms_rmz_line import RMZLine
-from ..models.stock_document import StockDocument
+from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.wms_refund import WmsRefund
 from ..models.wms_settings import WmsSettings
 from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
@@ -142,13 +142,28 @@ def _parse_damage_entries_raw(raw: object) -> List[dict]:
     return [x for x in data if isinstance(x, dict)] if isinstance(data, list) else []
 
 def _stock_document_ids_for_rmz(db: Session, rmz_id: int) -> List[int]:
-    rows = (
+    ids: set[int] = set()
+    rmz = db.query(WmsOrderReturn).filter(WmsOrderReturn.id == int(rmz_id)).first()
+    if rmz is not None and getattr(rmz, "warehouse_document_id", None):
+        ids.add(int(rmz.warehouse_document_id))
+
+    for row in (
         db.query(StockDocument.id)
         .filter(StockDocument.rmz_id == int(rmz_id))
         .order_by(StockDocument.id.asc())
         .all()
-    )
-    return [int(r[0]) for r in rows]
+    ):
+        ids.add(int(row[0]))
+
+    for row in (
+        db.query(StockDocumentItem.document_id)
+        .filter(StockDocumentItem.source_rmz_id == int(rmz_id))
+        .distinct()
+        .all()
+    ):
+        ids.add(int(row[0]))
+
+    return sorted(ids)
 
 
 def _optional_positive_int(raw: object) -> Optional[int]:
@@ -1196,6 +1211,8 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
         workflow_finished=terminal,
         workflow_editable=not terminal,
         stock_document_ids=_stock_document_ids_for_rmz(db, row.id),
+        warehouse_document_id=getattr(row, "warehouse_document_id", None),
+        warehouse_document_type=(str(getattr(row, "warehouse_document_type", None) or "").strip() or None),
     )
 
 
@@ -2459,7 +2476,7 @@ def commit_wms_return_workflow(
     ),
     db: Session = Depends(get_db),
 ):
-    """Finalize WMS receiving: validate lines → PZ_RT stock receipt → workflow transition."""
+    """Finalize WMS receiving: validate lines → Z-PZ stock receipt → workflow transition."""
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     logger.info(
         "[returns.finalize.start] return_id=%s tenant_id=%s warehouse_id=%s",
