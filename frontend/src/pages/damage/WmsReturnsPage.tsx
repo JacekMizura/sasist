@@ -3948,7 +3948,7 @@ export default function WmsReturnsPage() {
 
   return (
 
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-white">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-0 w-full flex-col overflow-hidden bg-slate-50/80">
       {printLabelToast ? (
         <div
           className="fixed bottom-6 left-1/2 z-[200] max-w-md -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-900 shadow-lg"
@@ -4007,240 +4007,173 @@ export default function WmsReturnsPage() {
         </div>
       ) : null}
       <canvas ref={canvasRef} className="hidden" aria-hidden />
-      <div className="mx-auto w-full max-w-[1400px] shrink-0 px-4 pt-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-6 lg:items-start">
-          <div className="min-w-0 flex items-start gap-3 lg:col-span-1">
-            <Link
-              to={WMS_ROUTES.returns}
-              state={wmsReturn ? { preselectOrderId: wmsReturn.order_id } : undefined}
-              className="mt-1 shrink-0 self-start rounded px-1 text-lg leading-none text-slate-500 outline-none ring-slate-200 hover:text-slate-700 focus-visible:ring-2"
-              title="Wróć do listy RMZ"
-            >
-              ←
-            </Link>
-            <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <div className="flex min-w-0 items-center">
-                <button
-                  type="button"
-                  disabled={headerOrderDisplay === "—" || isFinished}
-                  title="Szczegóły/zamówienie"
-                  className="min-w-0 shrink cursor-pointer border-0 bg-transparent p-0 text-left text-2xl font-bold leading-tight tracking-tight text-slate-900 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#41546a]/50 disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline sm:text-3xl"
-                  onClick={() => setOrderDetailsModalOpen(true)}
-                >
-                  {headerOrderDisplay}
-                </button>
-                {wmsReturn ? (
-                  <span className={`ml-2 shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${returnHeaderBadgeClass}`}>
-                    {returnHeaderBadgeLabel}
-                  </span>
-                ) : null}
-                {wmsReturn && wmsSettings && !wmsSettings.enable_refund ? (
-                  <span
-                    className="ml-2 max-w-[14rem] shrink-0 truncate rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
-                    title="Zwrot środków — rozliczenie w panelu biura"
-                  >
-                    Zwrot środków — w biurze
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 sm:text-sm">
-                <span className="text-base font-bold tabular-nums text-blue-600">
-                  {displayWarehouseDocumentNumber(wmsReturn?.rmz_number) || wmsReturn?.rmz_number?.trim() || "—"}
-                </span>
-                <span className="text-slate-300" aria-hidden>
-                  ·
-                </span>
-                {wmsReturn?.ui_status?.name ? (
-                  <span
-                    className="inline-flex max-w-full items-center gap-1 rounded-md border border-slate-200/80 px-1.5 py-0.5 text-[11px] font-semibold leading-snug sm:text-xs"
-                    style={panelStatusRichPreviewStyle(wmsReturn.ui_status)}
-                  >
-                    {wmsReturn.ui_status.image_url ? (
-                      <img
-                        src={wmsReturn.ui_status.image_url}
-                        alt=""
-                        className="h-3.5 w-3.5 shrink-0 rounded object-contain sm:h-4 sm:w-4"
-                      />
-                    ) : null}
-                    <span className="font-semibold text-slate-600">Panel:</span>
-                    <span className="min-w-0 truncate">{wmsReturn.ui_status.name}</span>
-                  </span>
-                ) : null}
-                <span className="text-slate-300" aria-hidden>
-                  ·
-                </span>
-                <button
-                  type="button"
-                  disabled={sessionLoading || !wmsReturn}
-                  title="Statystyki klienta — zamówienia i zwroty"
-                  className="max-w-[min(100%,16rem)] truncate border-0 bg-transparent p-0 text-left text-inherit underline-offset-2 hover:text-slate-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#41546a]/40 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50 sm:max-w-xs"
-                  onClick={() => setCustomerInsightsModalOpen(true)}
-                >
-                  {customerHeaderLabel}
-                </button>
-                {customerInsightsPeekLoading ? (
-                  <span className="inline-flex max-w-full shrink-0 items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-                    Statystyki…
-                  </span>
-                ) : customerInsightsPeek ? (
-                  <button
-                    type="button"
-                    disabled={sessionLoading || !wmsReturn}
-                    title={`${customerInsightsPeek.risk_label} — kliknij po więcej`}
-                    className={`inline-flex max-w-full shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums shadow-sm transition ${customerReturnPeekBadgeSurfaceClass(customerInsightsPeek.risk_tier)} disabled:cursor-not-allowed disabled:opacity-50`}
-                    onClick={() => setCustomerInsightsModalOpen(true)}
-                  >
-                    <span aria-hidden>⚠</span>
-                    <span className="min-w-0 truncate">
-                      {(customerInsightsPeek.return_rate * 100).toLocaleString("pl-PL", {
-                        maximumFractionDigits: 0,
-                      })}
-                      % zwrotów
-                    </span>
-                  </button>
-                ) : null}
-                <span className="text-slate-300" aria-hidden>
-                  ·
-                </span>
-                <span className="text-slate-500">{orderSourceDisplay || "—"}</span>
-              </div>
-
-              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
-                {headerPhone ? (
-                  <button
-                    type="button"
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-0 py-0.5 text-left hover:border-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isFinished}
-                    onClick={() => setSellasistCallModalOpen(true)}
-                  >
-                    <span aria-hidden className="select-none">
-                      📞
-                    </span>
-                    <span className="font-medium tabular-nums text-slate-800">{headerPhone}</span>
-                  </button>
-                ) : (
-                  <span className="inline-flex items-center gap-2 text-slate-500">
-                    <span aria-hidden>📞</span>
-                    <span>—</span>
-                  </span>
-                )}
-                <span className="hidden h-4 w-px bg-slate-200 sm:block" aria-hidden />
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <span className="shrink-0 text-slate-500">Email:</span>
-                  {headerEmail ? (
-                    <a
-                      className="min-w-0 truncate font-medium text-slate-800 underline-offset-2 hover:underline"
-                      href={`mailto:${headerEmail}`}
-                    >
-                      {headerEmail}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
-                <span>
-                  Dokument: <span className="font-semibold text-slate-800">{salesDocumentNumber || "—"}</span>
-                </span>
-                <span className="text-slate-300" aria-hidden>
-                  ·
-                </span>
-                <span>
-                  Ilość sztuk: <span className="font-semibold tabular-nums text-slate-800">{totalUnits}</span>
-                </span>
-              </div>
-
-              <div className="flex max-w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-                <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
-                  Status
-                  <select
-                    className="max-w-full min-w-[12rem] rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100"
-                    disabled={isFinished || sessionLoading || panelUiStatusSaving || !(panelUiSummary?.groups?.length)}
-                    value={pendingPanelUiSubStatusId === "" ? "" : String(pendingPanelUiSubStatusId)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setPendingPanelUiSubStatusId(v === "" ? "" : Math.floor(Number(v)));
-                    }}
-                  >
-                    <option value="">— bez etykiety —</option>
-                    {(panelUiSummary?.groups ?? []).map((block) => (
-                      <optgroup key={block.main_group} label={PANEL_UI_GROUP_LABELS[block.main_group]}>
-                        {block.sub_statuses.map((s) => (
-                          <option key={s.id} value={String(s.id)}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  disabled={isFinished || sessionLoading || panelUiStatusSaving || panelUiStatusSaveDisabled}
-                  className="h-fit w-fit rounded-lg bg-[#41546a] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#364556] disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => void savePanelReturnUiStatus()}
-                >
-                  {panelUiStatusSaving ? "Zapisywanie…" : "Zapisz status"}
-                </button>
-              </div>
-              {panelUiStatusesError ? <p className="text-xs font-medium text-amber-800">{panelUiStatusesError}</p> : null}
-            </div>
-          </div>
-
-          <div className="flex min-w-0 flex-col items-center justify-center lg:col-span-1">
-            {wmsSettings && !wmsSettings.enable_refund ? (
-              <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-center text-xs leading-relaxed text-slate-600 shadow-sm">
-                Zwrot środków rozliczany w panelu biura.
-              </div>
-            ) : (
-            <div
-              className={`w-full max-w-sm rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-4 shadow-sm ${isFinished ? "opacity-60" : ""}`}
-              title="Zwrot kosztów dostawy do klienta"
-            >
-              <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">Zwrot kosztów dostawy</p>
-              <p className="mb-2 text-center text-[11px] leading-snug text-slate-600">
-                Sztuki: <span className="font-bold tabular-nums text-slate-800">{totalUnits}</span>
-                {" na zwrocie · "}
-                <span className="font-bold tabular-nums text-slate-800">{orderQtySumForFullReturn}</span>
-                {" w zamówieniu"}
-              </p>
-              {isFullReturn ? (
-                <p className="mb-3 text-center text-[11px] font-medium leading-snug text-emerald-800">
-                  Pełny zwrot — zwrot kosztów dostawy domyślnie włączony.
-                </p>
-              ) : (
-                <p className="mb-3 text-center text-[11px] font-medium leading-snug text-amber-900">
-                  Niepełny zwrot — włączenie zwrotu kosztów dostawy wymaga świadomego potwierdzenia.
-                </p>
-              )}
-              <label
-                className={`flex flex-wrap items-center justify-center gap-3 text-sm text-slate-800 ${isFinished || orderShippingRefundMeta.displayMissing ? "cursor-not-allowed" : "cursor-pointer"}`}
+      <div className="w-full shrink-0 border-b border-slate-200 bg-white px-4 py-2 lg:px-5">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
+          <Link
+            to={WMS_ROUTES.returns}
+            state={wmsReturn ? { preselectOrderId: wmsReturn.order_id } : undefined}
+            className="shrink-0 rounded px-1 text-base leading-none text-slate-500 hover:text-slate-800"
+            title="Wróć do listy RMZ"
+          >
+            ←
+          </Link>
+          <button
+            type="button"
+            disabled={headerOrderDisplay === "—" || isFinished}
+            title="Szczegóły zamówienia"
+            className="shrink-0 border-0 bg-transparent p-0 text-base font-bold tabular-nums text-slate-900 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+            onClick={() => setOrderDetailsModalOpen(true)}
+          >
+            {headerOrderDisplay}
+          </button>
+          {wmsReturn ? (
+            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${returnHeaderBadgeClass}`}>
+              {returnHeaderBadgeLabel}
+            </span>
+          ) : null}
+          <span className="text-slate-300" aria-hidden>
+            |
+          </span>
+          <span className="shrink-0 text-sm font-bold tabular-nums text-blue-700">
+            {displayWarehouseDocumentNumber(wmsReturn?.rmz_number) || wmsReturn?.rmz_number?.trim() || "—"}
+          </span>
+          {wmsReturn?.ui_status?.name ? (
+            <>
+              <span className="text-slate-300" aria-hidden>
+                |
+              </span>
+              <span
+                className="inline-flex max-w-[12rem] shrink-0 items-center gap-1 truncate rounded border border-slate-200/80 px-1.5 py-0.5 text-[11px] font-semibold"
+                style={panelStatusRichPreviewStyle(wmsReturn.ui_status)}
               >
-                {orderShippingRefundMeta.displayMissing ? (
-                  <span className="text-center text-sm font-medium text-slate-500">Brak kosztu dostawy</span>
-                ) : (
-                  <span className="inline-flex items-baseline gap-1">
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={refundShippingAmount}
-                      disabled={isFinished || !refundShipping}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        if (!Number.isFinite(v)) return;
-                        setRefundShippingAmount(Math.max(0, v));
-                      }}
-                      className="w-[6rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-base font-bold tabular-nums outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100"
-                      aria-label="Kwota zwrotu kosztów dostawy"
-                    />
-                    <span className="font-semibold text-slate-600">zł</span>
-                  </span>
-                )}
+                {wmsReturn.ui_status.name}
+              </span>
+            </>
+          ) : null}
+          <span className="text-slate-300" aria-hidden>
+            |
+          </span>
+          <button
+            type="button"
+            disabled={sessionLoading || !wmsReturn}
+            title="Statystyki klienta"
+            className="max-w-[14rem] shrink-0 truncate border-0 bg-transparent p-0 text-sm font-medium text-slate-800 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50"
+            onClick={() => setCustomerInsightsModalOpen(true)}
+          >
+            {customerHeaderLabel}
+          </button>
+          {customerInsightsPeek && !customerInsightsPeekLoading ? (
+            <button
+              type="button"
+              disabled={sessionLoading || !wmsReturn}
+              title={customerInsightsPeek.risk_label}
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums ${customerReturnPeekBadgeSurfaceClass(customerInsightsPeek.risk_tier)}`}
+              onClick={() => setCustomerInsightsModalOpen(true)}
+            >
+              {(customerInsightsPeek.return_rate * 100).toLocaleString("pl-PL", { maximumFractionDigits: 0 })}% zwrotów
+            </button>
+          ) : null}
+          <span className="text-slate-300" aria-hidden>
+            |
+          </span>
+          {headerPhone ? (
+            <button
+              type="button"
+              className="shrink-0 border-0 bg-transparent p-0 text-sm tabular-nums text-slate-800 hover:underline disabled:opacity-60"
+              disabled={isFinished}
+              onClick={() => setSellasistCallModalOpen(true)}
+            >
+              {headerPhone}
+            </button>
+          ) : (
+            <span className="text-sm text-slate-400">—</span>
+          )}
+          <span className="text-slate-300" aria-hidden>
+            |
+          </span>
+          {headerEmail ? (
+            <a className="max-w-[16rem] shrink truncate text-sm text-slate-800 hover:underline" href={`mailto:${headerEmail}`}>
+              {headerEmail}
+            </a>
+          ) : (
+            <span className="text-sm text-slate-400">—</span>
+          )}
+          <span className="text-slate-300" aria-hidden>
+            |
+          </span>
+          <span className="shrink-0 text-sm text-slate-600">
+            Dok. <span className="font-semibold text-slate-900">{salesDocumentNumber || "—"}</span>
+          </span>
+          <span className="text-slate-300" aria-hidden>
+            |
+          </span>
+          <span className="shrink-0 text-sm text-slate-600">
+            Szt. <span className="font-semibold tabular-nums text-slate-900">{totalUnits}</span>
+          </span>
+          <span className="hidden text-sm text-slate-500 xl:inline">
+            <span className="text-slate-300" aria-hidden>
+              {" "}
+              |{" "}
+            </span>
+            {orderSourceDisplay || "—"}
+          </span>
+
+          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+              <span className="hidden lg:inline">Status</span>
+              <select
+                className="max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-900 disabled:bg-slate-100"
+                disabled={isFinished || sessionLoading || panelUiStatusSaving || !(panelUiSummary?.groups?.length)}
+                value={pendingPanelUiSubStatusId === "" ? "" : String(pendingPanelUiSubStatusId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPendingPanelUiSubStatusId(v === "" ? "" : Math.floor(Number(v)));
+                }}
+              >
+                <option value="">— status —</option>
+                {(panelUiSummary?.groups ?? []).map((block) => (
+                  <optgroup key={block.main_group} label={PANEL_UI_GROUP_LABELS[block.main_group]}>
+                    {block.sub_statuses.map((s) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={isFinished || sessionLoading || panelUiStatusSaving || panelUiStatusSaveDisabled}
+              className="rounded-md bg-slate-700 px-2.5 py-1 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+              onClick={() => void savePanelReturnUiStatus()}
+            >
+              {panelUiStatusSaving ? "…" : "Status"}
+            </button>
+            {wmsSettings && !wmsSettings.enable_refund ? (
+              <span className="hidden text-[10px] text-slate-500 2xl:inline">Zwrot w biurze</span>
+            ) : (
+              <label
+                className={`inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs ${isFinished || orderShippingRefundMeta.displayMissing ? "opacity-60" : "cursor-pointer"}`}
+                title="Zwrot kosztów dostawy"
+              >
+                <span className="font-semibold text-slate-600">Dostawa</span>
+                {!orderShippingRefundMeta.displayMissing ? (
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={refundShippingAmount}
+                    disabled={isFinished || !refundShipping}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isFinite(v)) return;
+                      setRefundShippingAmount(Math.max(0, v));
+                    }}
+                    className="w-14 rounded border border-slate-200 bg-white px-1 py-0.5 text-center text-xs font-bold tabular-nums disabled:bg-slate-100"
+                    aria-label="Kwota zwrotu dostawy"
+                  />
+                ) : null}
                 <input
                   type="checkbox"
                   checked={refundShipping}
@@ -4258,28 +4191,31 @@ export default function WmsReturnsPage() {
                     }
                     setShippingPartialConfirmOpen(true);
                   }}
-                  className="h-5 w-5 shrink-0 rounded border-slate-300 disabled:cursor-not-allowed"
-                  aria-label="Włącz zwrot kosztów dostawy"
+                  className="h-4 w-4 rounded border-slate-300"
+                  aria-label="Zwrot kosztów dostawy"
                 />
               </label>
-            </div>
             )}
-          </div>
-
-          <div className="flex w-full flex-col items-end gap-2 lg:col-span-1">
             <button
               type="button"
               disabled={isFinished}
-              title="Korespondencja (Allegro, e-mail, notatki)"
-              className="h-10 w-full max-w-[15rem] rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 lg:max-w-none lg:self-end lg:px-6"
+              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
               onClick={() => setCorrespondenceModalOpen(true)}
             >
-              💬 KORESPONDENCJA
+              Korespondencja
+            </button>
+            <button
+              type="button"
+              disabled={isFinished || displayLines.length < 1}
+              onClick={acceptAllLocal}
+              className="hidden rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50 xl:inline"
+            >
+              Przyjmij wszystko
             </button>
             <button
               type="button"
               disabled={sessionLoading || gridLoading || !allLinesFullyResolved || saveChangesLoading || isFinished}
-              className="min-h-14 w-full max-w-[15rem] rounded-lg bg-[#56b36a] px-5 text-base font-bold text-white shadow-sm hover:bg-[#4a9e5b] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:min-h-[3.5rem] sm:text-lg lg:max-w-none lg:self-end lg:min-w-[14rem]"
+              className="min-h-9 rounded-md bg-[#56b36a] px-4 py-1.5 text-sm font-bold text-white hover:bg-[#4a9e5b] disabled:opacity-50"
               onClick={() => void handleSaveDirtyLines()}
               title={
                 allLinesFullyResolved
@@ -4289,33 +4225,17 @@ export default function WmsReturnsPage() {
                   : "Uzupełnij decyzje dla wszystkich pozycji"
               }
             >
-              {saveChangesLoading ? (
-                <span className="inline-flex items-center justify-center gap-2">
-                  <span
-                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
-                    aria-hidden
-                  />
-                  Zapisywanie…
-                </span>
-              ) : (
-                "ZAPISZ"
-              )}
-            </button>
-            <button
-              type="button"
-              disabled={isFinished || displayLines.length < 1}
-              onClick={acceptAllLocal}
-              className="h-10 w-full max-w-[15rem] rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 lg:max-w-none lg:self-end lg:px-6"
-              title="Ustaw OK dla pozycji bez decyzji (lokalnie, do zapisu)."
-            >
-              Przyjmij wszystko (Szybka akcja)
+              {saveChangesLoading ? "Zapisywanie…" : "ZAPISZ"}
             </button>
           </div>
         </div>
-        </div>
+        {panelUiStatusesError ? <p className="mt-1 text-[11px] font-medium text-amber-800">{panelUiStatusesError}</p> : null}
+        {wmsReturn && wmsSettings && !wmsSettings.enable_refund ? (
+          <p className="mt-1 text-[11px] text-slate-500">Zwrot środków — rozliczenie w panelu biura.</p>
+        ) : null}
       </div>
 
-      <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col overflow-hidden px-4 pb-4">
+      <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 pb-3 pt-2 lg:px-5">
         <div className="flex h-full min-h-0 flex-1 flex-col">
         {sessionLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center text-sm text-slate-600 shadow-sm">
@@ -4353,14 +4273,16 @@ export default function WmsReturnsPage() {
             Nie udało się wczytać pozycji zamówienia. Wróć do zamówienia i spróbuj ponownie.
           </div>
         ) : (
-          <div className="flex h-full min-h-0 flex-1 gap-4">
-            <div className="flex w-[380px] shrink-0 flex-col gap-3 min-h-0">
-              <RmzPendingItemsPanel
-                items={pendingAddItems}
-                addingOrderItemId={addingOrderItemId}
-                disabled={isFinished}
-                onAdd={(item) => void handleAddPendingItem(item)}
-              />
+          <div className="flex h-full min-h-0 flex-1 gap-3 lg:gap-4">
+            <div className="flex h-full min-h-0 w-[24%] min-w-[260px] max-w-[400px] shrink-0 flex-col gap-2">
+              <div className="flex max-h-[36%] min-h-[7rem] shrink-0 flex-col overflow-hidden">
+                <RmzPendingItemsPanel
+                  items={pendingAddItems}
+                  addingOrderItemId={addingOrderItemId}
+                  disabled={isFinished}
+                  onAdd={(item) => void handleAddPendingItem(item)}
+                />
+              </div>
               <RmzProcessLineSidebar
                 items={visibleSidebarItems}
                 selectedLineId={activeLineId}
@@ -4372,7 +4294,7 @@ export default function WmsReturnsPage() {
                 disabled={isFinished}
               />
             </div>
-            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               {lineSeeds.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center p-10 text-center text-slate-500">
                   <p className="text-sm font-medium">Kliknij produkt w sekcji „DO DODANIA”, aby rozpocząć obsługę.</p>
@@ -4391,7 +4313,7 @@ export default function WmsReturnsPage() {
                     );
                   }
                   return (
-                    <div className="grid w-full auto-rows-fr grid-cols-1 gap-5 p-4">
+                    <div className="flex h-full min-h-0 w-full flex-1 flex-col p-4 lg:p-6">
                       {lines.map((ln) => {
                         const c = ln.candidate;
                         const qty = Math.floor(c.availableQuantity);
@@ -4579,7 +4501,7 @@ export default function WmsReturnsPage() {
                           <div
                             id={`rmz-grid-card-${ln.lineId}`}
                             key={ln.lineId}
-                            className={`relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl transition ${highlightCardLineId === ln.lineId ? "ring-4 ring-blue-300" : ""} ${cardBorderClass}`}
+                            className={`relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl transition ${highlightCardLineId === ln.lineId ? "ring-4 ring-blue-300" : ""} ${cardBorderClass}`}
                           >
                             {showChangeDecisionBtn ? (
                               <button
@@ -4643,11 +4565,11 @@ export default function WmsReturnsPage() {
                                 {topRightDecisionBadgeText}
                               </span>
                             ) : null}
-                            <div className="relative flex h-[180px] w-full shrink-0 items-center justify-center bg-white rounded-t-lg">
+                            <div className="relative flex h-[min(420px,38vh)] min-h-[280px] w-full shrink-0 items-center justify-center bg-slate-50">
                               {imgSrc ? (
-                                <img src={imgSrc} alt="" className="max-h-full max-w-full object-contain bg-white p-2" />
+                                <img src={imgSrc} alt="" className="max-h-full max-w-full object-contain p-4" />
                               ) : (
-                                <div className="text-center text-sm font-medium text-slate-400">Brak zdjęcia</div>
+                                <div className="text-center text-base font-medium text-slate-400">Brak zdjęcia</div>
                               )}
                               {qty > 1 ? (
                                 <span className="absolute left-2 top-2 z-10 rounded-full bg-slate-900/85 px-2.5 py-1 text-xs font-bold text-white">
@@ -4655,10 +4577,10 @@ export default function WmsReturnsPage() {
                                 </span>
                               ) : null}
                             </div>
-                            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                              <div className="flex shrink-0 flex-col gap-1.5 px-4 pb-2 pt-4">
-                                <h3 className="line-clamp-2 min-h-[36px] text-base font-bold text-slate-900">{c.productName}</h3>
-                                <p className="text-xs font-medium tracking-wide text-slate-500">
+                            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+                              <div className="flex shrink-0 flex-col gap-2 px-5 pb-3 pt-4 lg:px-8">
+                                <h3 className="text-xl font-bold leading-snug text-slate-900 lg:text-2xl">{c.productName}</h3>
+                                <p className="text-sm font-medium tracking-wide text-slate-500">
                                   EAN: <span className="tabular-nums text-slate-600">{ean}</span>
                                   <span className="mx-1.5 text-slate-300" aria-hidden>
                                     •
@@ -5067,7 +4989,7 @@ export default function WmsReturnsPage() {
                               </div>
                             ) : null}
                             <div
-                              className={`mt-auto flex shrink-0 flex-col gap-3 p-4 pt-0 ${showDamagedEditor || showRejectEditor ? "invisible pointer-events-none select-none" : ""}`}
+                              className={`mt-auto flex shrink-0 flex-col gap-3 px-5 pb-5 pt-2 lg:px-8 lg:pb-6 ${showDamagedEditor || showRejectEditor ? "invisible pointer-events-none select-none" : ""}`}
                               aria-hidden={showDamagedEditor || showRejectEditor ? true : undefined}
                             >
                                 {inQtyPick ? (
@@ -5156,7 +5078,7 @@ export default function WmsReturnsPage() {
                                     <button
                                       type="button"
                                       disabled={cardLocked || lineSplitSaving}
-                                      className="h-14 w-full text-lg rounded-xl bg-emerald-600 font-extrabold tracking-wide text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="min-h-[68px] w-full rounded-xl bg-emerald-600 text-xl font-extrabold tracking-wide text-white shadow-sm hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 lg:text-2xl"
                                       onClick={() => handleGridDecision(ln.lineId, "accepted")}
                                     >
                                       {lineSplitSaving ? "Zapisywanie…" : "PRZYJĘTY"}
@@ -5164,7 +5086,7 @@ export default function WmsReturnsPage() {
                                     <button
                                       type="button"
                                       disabled={cardLocked || lineSplitSaving}
-                                      className="h-14 w-full text-lg rounded-xl bg-amber-600 font-extrabold tracking-wide text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="min-h-[68px] w-full rounded-xl bg-amber-600 text-xl font-extrabold tracking-wide text-white shadow-sm hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60 lg:text-2xl"
                                       onClick={() => handleGridDecision(ln.lineId, "damaged")}
                                     >
                                       USZKODZONY
@@ -5172,7 +5094,7 @@ export default function WmsReturnsPage() {
                                     <button
                                       type="button"
                                       disabled={cardLocked || lineSplitSaving}
-                                      className="h-14 w-full text-lg rounded-xl bg-rose-600 font-extrabold tracking-wide text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="min-h-[68px] w-full rounded-xl bg-rose-600 text-xl font-extrabold tracking-wide text-white shadow-sm hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60 lg:text-2xl"
                                       onClick={() => handleGridDecision(ln.lineId, "rejected")}
                                     >
                                       ODRZUCONY
@@ -5182,7 +5104,7 @@ export default function WmsReturnsPage() {
                                   <button
                                     type="button"
                                     disabled
-                                    className="h-14 w-full cursor-default text-lg rounded-xl border-2 border-green-400 bg-green-100 font-extrabold tracking-wide text-green-900 opacity-100"
+                                    className="min-h-[68px] w-full cursor-default rounded-xl border-2 border-green-400 bg-green-100 text-xl font-extrabold tracking-wide text-green-900 opacity-100 lg:text-2xl"
                                   >
                                     ✓ PRZYJĘTY
                                   </button>
@@ -5190,7 +5112,7 @@ export default function WmsReturnsPage() {
                                   <button
                                     type="button"
                                     disabled
-                                    className="h-14 w-full cursor-default text-lg rounded-xl border-2 border-orange-500 bg-orange-200 font-extrabold tracking-wide text-orange-900 opacity-100"
+                                    className="min-h-[68px] w-full cursor-default rounded-xl border-2 border-orange-500 bg-orange-200 text-xl font-extrabold tracking-wide text-orange-900 opacity-100 lg:text-2xl"
                                   >
                                     USZKODZONY
                                   </button>
@@ -5198,7 +5120,7 @@ export default function WmsReturnsPage() {
                                   <button
                                     type="button"
                                     disabled
-                                    className="h-14 w-full cursor-default text-lg rounded-xl border-2 border-red-400 bg-red-100 font-extrabold tracking-wide text-red-900 opacity-100"
+                                    className="min-h-[68px] w-full cursor-default rounded-xl border-2 border-red-400 bg-red-100 text-xl font-extrabold tracking-wide text-red-900 opacity-100 lg:text-2xl"
                                   >
                                     ✓ ODRZUCONY
                                   </button>

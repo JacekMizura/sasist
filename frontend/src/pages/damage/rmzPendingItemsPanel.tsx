@@ -21,7 +21,7 @@ type Props = {
 
 export function RmzPendingItemsPanel({ items, addingOrderItemId, disabled = false, onAdd }: Props) {
   return (
-    <section className="flex max-h-[42vh] min-h-[140px] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+    <section className="flex h-full min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
         <PackagePlus size={16} className="text-slate-700" aria-hidden />
         <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900">DO DODANIA</h2>
