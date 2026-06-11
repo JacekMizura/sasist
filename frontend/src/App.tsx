@@ -170,7 +170,7 @@ import WmsPhoneUploadPage from "./pages/wms/WmsPhoneUploadPage"
 import WmsComplaintDetailPage from "./pages/wms/WmsComplaintDetailPage"
 import WmsReturnsPage from "./pages/damage/WmsReturnsPage"
 import WmsReturnsEntryPage from "./pages/wms/WmsReturnsEntryPage"
-import WmsReturnSessionPage, { WmsReturnCreateLegacyRedirect } from "./pages/wms/WmsReturnSessionPage"
+import { WmsReturnsOrderLegacyRedirect } from "./pages/wms/wmsReturnsLegacyRedirects"
 import OfficeDamagesPage from "./pages/damage/OfficeDamagesPage"
 import OfficeDamageReportsPage from "./pages/damage/OfficeDamageReportsPage"
 import BundlesPage from "./pages/Assortment/BundlesPage"
@@ -364,8 +364,8 @@ export const router = createBrowserRouter(
         <Route index element={<Navigate to="menu" replace />} />
         <Route path="menu" element={<WmsMenuPage />} />
         <Route path="returns" element={<WmsReturnsEntryPage />} />
-        <Route path="returns/order/:orderId" element={<WmsReturnSessionPage />} />
-        <Route path="returns/create/:orderId" element={<WmsReturnCreateLegacyRedirect />} />
+        <Route path="returns/order/:orderId" element={<WmsReturnsOrderLegacyRedirect />} />
+        <Route path="returns/create/:orderId" element={<WmsReturnsOrderLegacyRedirect />} />
         <Route path="returns/process/:returnId" element={<WmsReturnsPage />} />
         <Route path="returns/complaints/:complaintId" element={<WmsComplaintDetailPage />} />
         {/* Kanoniczny URL zgodny z segmentem API ``/wms/receiving/pz/...``; starszy ``/wms/receiving/:id`` zostaje dla zakładek. */}

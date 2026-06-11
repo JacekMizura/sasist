@@ -10,10 +10,12 @@ import { uploadDamageImageFile } from "../../api/damageUploadApi";
 import { coercePhotoUrlForDamageEntry, createDamageEntry } from "../../api/damageReportsApi";
 import { getReturnUiStatusSummary, patchReturnRmzUiStatus } from "../../api/returnUiStatusApi";
 import {
+  addWmsReturnLine,
   getWmsCustomerInsights,
   getWmsReturn,
   getWmsReturnsModeSettings,
   finalizeWmsReturn,
+  listWmsReturnsForOrder,
   processWmsReturnLine,
   processWmsReturnLineSplit,
 } from "../../api/wmsReturnsApi";
@@ -30,6 +32,7 @@ import type {
   WmsReturnLineDamageEntryRead,
   WmsReturnLineProcess,
   WmsReturnLineRead,
+  WmsReturnListItem,
   WmsReturnRead,
   WmsSettingsRead,
 } from "../../types/wmsReturn";
@@ -70,6 +73,20 @@ function wmsReturnGridLineIdFromApiLine(line: WmsReturnLineRead, rowIndex: numbe
     return `rmzl-${Math.floor(Number(rawId))}`;
   }
   return `ln-oi-${line.order_item_id}-r${rowIndex}`;
+}
+
+function sumReturnedQtyByOrderItem(returns: WmsReturnListItem[]): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const ret of returns) {
+    const rows = ret.lines && ret.lines.length > 0 ? ret.lines : [];
+    for (const row of rows) {
+      const oi = row.order_item_id;
+      const q = Number(row.quantity);
+      if (oi == null || !Number.isFinite(oi) || !Number.isFinite(q) || q <= 0) continue;
+      map.set(oi, (map.get(oi) ?? 0) + Math.floor(q));
+    }
+  }
+  return map;
 }
 
 function customerInsightsRiskCardClass(tier: CustomerRiskTier): string {
@@ -119,6 +136,7 @@ import {
 } from "./rmzDamageTypes";
 import { WMS_REJECT_OTHER_ID, wmsRejectReasonSelectOptions } from "./wmsRejectReasons";
 import { RmzProcessLineSidebar } from "./rmzProcessLineSidebar";
+import { RmzPendingItemsPanel, type RmzPendingAddItem } from "./rmzPendingItemsPanel";
 import { resolveRmzLineSidebarStatus } from "./rmzLineSidebarStatus";
 
 /** Max images per damage line (aligned with API). */
@@ -947,33 +965,22 @@ function moneyPln(v: number): string {
   return `${(Number.isFinite(v) ? v : 0).toFixed(2)} zł`;
 }
 
-export type WmsReturnsPageProps = {
-  embeddedReturnId?: number;
-  initialReturn?: WmsReturnRead | null;
-  embeddedOrderId?: number;
-};
-
-export default function WmsReturnsPage({
-  embeddedReturnId,
-  initialReturn = null,
-  embeddedOrderId,
-}: WmsReturnsPageProps = {}) {
+export default function WmsReturnsPage() {
   const { returnId } = useParams<{ returnId: string }>();
   const navigate = useNavigate();
-  const rid = embeddedReturnId ?? Number(returnId);
+  const rid = Number(returnId);
 
-  const [wmsReturn, setWmsReturn] = useState<WmsReturnRead | null>(
-    initialReturn != null && embeddedReturnId != null && initialReturn.id === embeddedReturnId ? initialReturn : null,
-  );
-  const [sessionLoading, setSessionLoading] = useState(
-    !(initialReturn != null && embeddedReturnId != null && initialReturn.id === embeddedReturnId),
-  );
+  const [wmsReturn, setWmsReturn] = useState<WmsReturnRead | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
   const [sessionRetryKey, setSessionRetryKey] = useState(0);
   const [orderNumber, setOrderNumber] = useState<string>("");
   const [customerDisplay, setCustomerDisplay] = useState<string>("—");
   /** Pełna odpowiedź `GET orders/:id/` — bez dodatkowego requestu przy modalu szczegółów. */
   const [orderDetailCached, setOrderDetailCached] = useState<OrderDetailForReturn | null>(null);
+  const [orderReturnsForQuota, setOrderReturnsForQuota] = useState<WmsReturnListItem[]>([]);
+  const [addingOrderItemId, setAddingOrderItemId] = useState<number | null>(null);
+  const selectOrderItemAfterAddRef = useRef<number | null>(null);
   const [orderDetailsModalOpen, setOrderDetailsModalOpen] = useState(false);
   const [wmsSettings, setWmsSettings] = useState<WmsSettingsRead | null>(null);
 
@@ -1300,16 +1307,8 @@ export default function WmsReturnsPage({
   }, [isFinished, stopCamera]);
 
   useEffect(() => {
-    if (initialReturn != null && initialReturn.id === rid) {
-      setWmsReturn(initialReturn);
-      setSessionLoading(false);
-      setSessionLoadError(null);
-      return;
-    }
     if (!Number.isFinite(rid) || rid <= 0) {
-      if (embeddedReturnId == null) {
-        navigate(WMS_ROUTES.returns, { replace: true });
-      }
+      navigate(WMS_ROUTES.returns, { replace: true });
       return;
     }
     let cancelled = false;
@@ -1337,7 +1336,7 @@ export default function WmsReturnsPage({
     return () => {
       cancelled = true;
     };
-  }, [rid, navigate, sessionRetryKey, embeddedReturnId, initialReturn]);
+  }, [rid, navigate, sessionRetryKey]);
 
   useEffect(() => {
     if (!Number.isFinite(rid) || rid <= 0) return;
@@ -1440,6 +1439,26 @@ export default function WmsReturnsPage({
   }, [wmsReturn?.ui_status?.id, wmsReturn?.id]);
 
   useEffect(() => {
+    const orderId = wmsReturn?.order_id;
+    if (orderId == null || !Number.isFinite(Number(orderId)) || Number(orderId) <= 0) {
+      setOrderReturnsForQuota([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await listWmsReturnsForOrder(Math.floor(Number(orderId)), DAMAGE_TENANT_ID);
+        if (!cancelled) setOrderReturnsForQuota(rows);
+      } catch {
+        if (!cancelled) setOrderReturnsForQuota([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [wmsReturn?.order_id, wmsReturn?.id]);
+
+  useEffect(() => {
     if (!wmsReturn) {
       setLineSeeds([]);
       setLineOverrides({});
@@ -1519,6 +1538,15 @@ export default function WmsReturnsPage({
           })),
         );
         setLineSeeds(seeds);
+        const pickOi = selectOrderItemAfterAddRef.current;
+        if (pickOi != null) {
+          const idx = wmsReturn.lines.findIndex((ln) => ln.order_item_id === pickOi);
+          if (idx >= 0) {
+            setActiveLineId(wmsReturnGridLineIdFromApiLine(wmsReturn.lines[idx]!, idx));
+            setLeftViewMode("grid");
+          }
+          selectOrderItemAfterAddRef.current = null;
+        }
         const ship = resolveOrderShippingCostForRefund(od);
         setRefundShippingAmount(ship.amount);
       } catch {
@@ -2439,6 +2467,76 @@ export default function WmsReturnsPage({
     if (!hideResolvedProducts) return rmzSidebarItems;
     return rmzSidebarItems.filter((item) => item.status === "pending" || item.status === "mixed");
   }, [rmzSidebarItems, hideResolvedProducts]);
+
+  const pendingAddItems = useMemo((): RmzPendingAddItem[] => {
+    if (!orderDetailCached || !wmsReturn || isFinished) return [];
+    const inCurrentRmz = new Set(wmsReturn.lines.map((ln) => ln.order_item_id));
+    const returnedByItem = sumReturnedQtyByOrderItem(orderReturnsForQuota);
+    return orderDetailCached.items
+      .filter((it) => !inCurrentRmz.has(it.id))
+      .map((it) => {
+        const ordered = Math.max(0, Math.floor(it.quantity));
+        const returned = returnedByItem.get(it.id) ?? 0;
+        const remaining = Math.max(0, ordered - returned);
+        const p = it.product;
+        const imgRaw = (p.image_url || "").trim();
+        return {
+          orderItemId: it.id,
+          productId: p.id,
+          productName: (p.name || "").trim() || `Produkt #${p.id}`,
+          imageUrl: imgRaw || null,
+          orderQuantity: ordered,
+          returnedQuantity: returned,
+          remainingQuantity: remaining,
+        };
+      })
+      .filter((row) => row.remainingQuantity > 0);
+  }, [orderDetailCached, wmsReturn, isFinished, orderReturnsForQuota]);
+
+  const handleAddPendingItem = useCallback(
+    async (item: RmzPendingAddItem) => {
+      if (isFinished || addingOrderItemId != null) return;
+      const whId = wmsReturn?.warehouse_id;
+      if (whId == null || !Number.isFinite(Number(whId))) {
+        setDamageSaveError("Brak skonfigurowanego magazynu.");
+        return;
+      }
+      setAddingOrderItemId(item.orderItemId);
+      setDamageSaveError(null);
+      try {
+        const updated = await addWmsReturnLine(
+          rid,
+          DAMAGE_TENANT_ID,
+          {
+            order_item_id: item.orderItemId,
+            product_id: item.productId,
+            quantity: item.remainingQuantity,
+          },
+          Number(whId),
+        );
+        selectOrderItemAfterAddRef.current = item.orderItemId;
+        setWmsReturn(updated);
+        if (wmsReturn?.order_id != null) {
+          try {
+            const rows = await listWmsReturnsForOrder(wmsReturn.order_id, DAMAGE_TENANT_ID);
+            setOrderReturnsForQuota(rows);
+          } catch {
+            /* quota refresh best-effort */
+          }
+        }
+      } catch (e) {
+        let msg = "Nie udało się dodać pozycji do RMZ.";
+        if (axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object") {
+          const detail = (e.response.data as { detail?: unknown }).detail;
+          if (typeof detail === "string" && detail.trim()) msg = detail.trim();
+        }
+        setDamageSaveError(msg);
+      } finally {
+        setAddingOrderItemId(null);
+      }
+    },
+    [addingOrderItemId, isFinished, rid, wmsReturn?.order_id, wmsReturn?.warehouse_id],
+  );
 
   const saveSplitForLine = useCallback(
     async (
@@ -4250,28 +4348,36 @@ export default function WmsReturnsPage({
           <div className="rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center text-sm text-slate-600 shadow-sm">
             Ładowanie pozycji…
           </div>
-        ) : wmsReturn.lines.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center text-sm text-slate-700 shadow-sm">
-            Ten zwrot nie zawiera pozycji do obsługi.
-          </div>
-        ) : lineSeeds.length === 0 ? (
+        ) : !orderDetailCached ? (
           <div className="rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center text-sm text-slate-700 shadow-sm">
             Nie udało się wczytać pozycji zamówienia. Wróć do zamówienia i spróbuj ponownie.
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-1 gap-4">
-            <RmzProcessLineSidebar
-              items={visibleSidebarItems}
-              selectedLineId={activeLineId}
-              resolvedCount={returnsProgress.resolvedUnits}
-              totalCount={returnsProgress.totalUnits}
-              hideResolved={hideResolvedProducts}
-              onToggleHideResolved={setHideResolvedProducts}
-              onSelect={setActiveLineId}
-              disabled={isFinished}
-            />
+            <div className="flex w-[380px] shrink-0 flex-col gap-3 min-h-0">
+              <RmzPendingItemsPanel
+                items={pendingAddItems}
+                addingOrderItemId={addingOrderItemId}
+                disabled={isFinished}
+                onAdd={(item) => void handleAddPendingItem(item)}
+              />
+              <RmzProcessLineSidebar
+                items={visibleSidebarItems}
+                selectedLineId={activeLineId}
+                resolvedCount={returnsProgress.resolvedUnits}
+                totalCount={returnsProgress.totalUnits}
+                hideResolved={hideResolvedProducts}
+                onToggleHideResolved={setHideResolvedProducts}
+                onSelect={setActiveLineId}
+                disabled={isFinished}
+              />
+            </div>
             <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-              {leftViewMode === "grid" ? (
+              {lineSeeds.length === 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center p-10 text-center text-slate-500">
+                  <p className="text-sm font-medium">Dodaj produkt z sekcji „Do dodania”, aby rozpocząć obsługę.</p>
+                </div>
+              ) : leftViewMode === "grid" ? (
                 (() => {
                   const workspaceLineId = activeLineId;
                   const lines = workspaceLineId

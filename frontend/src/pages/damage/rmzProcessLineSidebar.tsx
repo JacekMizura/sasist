@@ -58,7 +58,7 @@ export function RmzProcessLineSidebar({
   disabled = false,
 }: Props) {
   return (
-    <aside className="flex w-[380px] shrink-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+    <aside className="flex min-h-0 flex-1 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-slate-200 p-4">
         <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-900">
           <ListOrdered size={16} aria-hidden />

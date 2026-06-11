@@ -1,10 +1,12 @@
 import type { Ref } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import api from "../../api/axios";
 import { listComplaints } from "../../api/complaintsApi";
 import {
+  createWmsReturn,
   listWmsReturnsForOrder,
   lookupOrdersAdvancedForWms,
   lookupOrdersForWms,
@@ -17,6 +19,8 @@ import { complaintRowStatusPresentation, normalizeComplaintStatus } from "../../
 import type { OrderLookupHit, ReturnStatusBrief, WmsReturnListItem } from "../../types/wmsReturn";
 import { wmsReturnShowsFreshIncomingBadge } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
+import { formatWmsListDate } from "./wmsListFormatters";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { WmsActiveZPzPanel } from "./WmsActiveZPzPanel";
 import {
@@ -28,8 +32,6 @@ import {
   wmsReturnsAdvancedSearchHasCriteria,
   type WmsReturnsAdvancedSearchFilters,
 } from "./wmsReturnsAdvancedSearchTypes";
-import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
-import { formatWmsListDate } from "./wmsListFormatters";
 
 type OrderItemRow = {
   id: number;
@@ -592,6 +594,7 @@ export default function WmsReturnsEntryPage() {
   const [queueFilter, setQueueFilter] = useState<WmsReturnsQueueFilter>("all");
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [highlightReturnId, setHighlightReturnId] = useState<number | null>(null);
+  const [creatingReturn, setCreatingReturn] = useState(false);
   const [savedReturnFlash, setSavedReturnFlash] = useState<string | null>(null);
   const [activeZPzRefreshKey, setActiveZPzRefreshKey] = useState(0);
 
@@ -926,10 +929,30 @@ export default function WmsReturnsEntryPage() {
     setQueueFilter("all");
   }, [selectedOrder?.id]);
 
-  const openNewReturnForm = useCallback(() => {
-    if (!selectedOrder) return;
-    navigate(WMS_ROUTES.returnsOrderSession(selectedOrder.id));
-  }, [navigate, selectedOrder]);
+  const openNewReturnForm = useCallback(async () => {
+    if (!selectedOrder || creatingReturn) return;
+    setCreatingReturn(true);
+    try {
+      const created = await createWmsReturn({
+        tenant_id: DAMAGE_TENANT_ID,
+        order_id: selectedOrder.id,
+        return_type: "RMA",
+        lines: [],
+      });
+      const label = displayWarehouseDocumentNumber(created.rmz_number) || created.rmz_number || `RMZ #${created.id}`;
+      toast.success(`Utworzono zwrot ${label}`);
+      navigate(WMS_ROUTES.returnsProcess(created.id));
+    } catch (err: unknown) {
+      let msg = "Nie udało się utworzyć zwrotu.";
+      if (typeof err === "object" && err !== null && "response" in err) {
+        const d = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+        if (typeof d === "string" && d.trim()) msg = d.trim();
+      }
+      toast.error(msg);
+    } finally {
+      setCreatingReturn(false);
+    }
+  }, [creatingReturn, navigate, selectedOrder]);
 
   const backToStart = useCallback(() => {
     setScreen("start");
@@ -1140,11 +1163,11 @@ export default function WmsReturnsEntryPage() {
                     <div className="flex items-center sm:ml-auto">
                       <button
                         type="button"
-                        disabled={listLoading}
+                        disabled={listLoading || creatingReturn}
                         className="h-12 w-full rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                        onClick={openNewReturnForm}
+                        onClick={() => void openNewReturnForm()}
                       >
-                        + Nowy zwrot
+                        {creatingReturn ? "Tworzenie…" : "+ Nowy zwrot"}
                       </button>
                     </div>
                   </div>

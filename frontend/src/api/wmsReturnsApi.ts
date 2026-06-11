@@ -6,6 +6,7 @@ import type {
   CustomerInsightsRead,
   OrderLookupHit,
   ReturnStatusRead,
+  WmsReturnAddLineBody,
   WmsReturnCreate,
   WmsReturnLineProcess,
   WmsReturnLineSplitProcess,
@@ -264,7 +265,24 @@ export async function listAllWmsReturns(args: {
 }
 
 export async function createWmsReturn(body: WmsReturnCreate): Promise<WmsReturnRead> {
-  const res = await api.post<WmsReturnRead>("wms/returns/", body);
+  const res = await api.post<WmsReturnRead>("wms/returns/", {
+    ...body,
+    lines: body.lines ?? [],
+  });
+  return res.data;
+}
+
+export async function addWmsReturnLine(
+  returnId: number,
+  tenantId: number,
+  body: WmsReturnAddLineBody,
+  warehouseId?: number | null,
+): Promise<WmsReturnRead> {
+  const params: Record<string, string | number> = { tenant_id: tenantId };
+  if (warehouseId != null && Number.isFinite(Number(warehouseId)) && Number(warehouseId) > 0) {
+    params.warehouse_id = Number(warehouseId);
+  }
+  const res = await api.post<WmsReturnRead>(`wms/returns/id/${returnId}/lines`, body, { params });
   return res.data;
 }
 

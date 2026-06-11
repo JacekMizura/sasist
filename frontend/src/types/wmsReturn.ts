@@ -198,7 +198,13 @@ export type WmsReturnCreate = {
   warehouse_id?: number;
   order_id: number;
   return_type?: "RMA" | "UNCLAIMED";
-  lines: { order_item_id: number; product_id: number; quantity: number }[];
+  lines?: { order_item_id: number; product_id: number; quantity: number }[];
+};
+
+export type WmsReturnAddLineBody = {
+  order_item_id: number;
+  product_id: number;
+  quantity: number;
 };
 
 export type ReturnStatusRead = ReturnStatusBrief & {

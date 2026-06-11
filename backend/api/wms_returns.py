@@ -35,6 +35,7 @@ from ..schemas.wms_return import (
     OrderLookupHit,
     ReturnStatusBrief,
     ReturnUiStatusBrief,
+    WmsReturnAddLineIn,
     WmsReturnCreate,
     WmsReturnListItem,
     WmsReturnLineListPreview,
@@ -2274,16 +2275,13 @@ def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
     if body.warehouse_id is not None and int(body.warehouse_id) != wh_id:
         raise HTTPException(status_code=400, detail="warehouse_id does not match order warehouse")
 
-    if not body.lines:
-        raise HTTPException(status_code=400, detail="At least one line required")
-
     seed_default_statuses_session(db, body.tenant_id, wh_id)
     start_rs = get_by_transition_key(db, body.tenant_id, wh_id, "start")
     if start_rs is None:
         raise HTTPException(status_code=500, detail="Default return statuses missing")
 
     lines_out: List[dict] = []
-    for line in body.lines:
+    for line in body.lines or []:
         oi = (
             db.query(OrderItem)
             .filter(
@@ -2353,6 +2351,116 @@ def create_wms_return(body: WmsReturnCreate, db: Session = Depends(get_db)):
     row = _load_rmz(db, row.id, body.tenant_id, wh_id)
     if not row:
         raise HTTPException(status_code=500, detail="Failed to load created return")
+    return _serialize_return_read(db, row)
+
+
+def _sum_returned_qty_for_order_item(
+    db: Session,
+    tenant_id: int,
+    order_id: int,
+    order_item_id: int,
+    *,
+    exclude_rmz_id: Optional[int] = None,
+) -> int:
+    q = (
+        db.query(func.coalesce(func.sum(RMZLine.quantity), 0))
+        .join(WmsOrderReturn, WmsOrderReturn.id == RMZLine.rmz_id)
+        .filter(
+            WmsOrderReturn.tenant_id == tenant_id,
+            WmsOrderReturn.order_id == order_id,
+            WmsOrderReturn.deleted_at.is_(None),
+            RMZLine.order_item_id == order_item_id,
+        )
+    )
+    if exclude_rmz_id is not None:
+        q = q.filter(WmsOrderReturn.id != int(exclude_rmz_id))
+    total = q.scalar()
+    try:
+        return max(0, int(float(total or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+@returns_id_router.post("/{return_id:int}/lines", response_model=WmsReturnRead)
+def add_wms_return_line(
+    return_id: int,
+    body: WmsReturnAddLineIn,
+    tenant_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ.",
+    ),
+    db: Session = Depends(get_db),
+) -> WmsReturnRead:
+    """Dodaj pozycję do istniejącego RMZ (operacyjny ekran obsługi)."""
+    wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
+    row = _load_rmz(db, return_id, tenant_id, wh_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Return not found")
+    _raise_if_rmz_not_editable(row)
+
+    existing = (
+        db.query(RMZLine)
+        .filter(RMZLine.rmz_id == row.id, RMZLine.order_item_id == body.order_item_id)
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="Pozycja zamówienia jest już w tym RMZ.")
+
+    oi = (
+        db.query(OrderItem)
+        .filter(OrderItem.id == body.order_item_id, OrderItem.order_id == row.order_id)
+        .first()
+    )
+    if not oi:
+        raise HTTPException(status_code=400, detail=f"Order item {body.order_item_id} not in order {row.order_id}")
+    if int(oi.product_id) != int(body.product_id):
+        raise HTTPException(status_code=400, detail=f"Product mismatch for order_item {body.order_item_id}")
+
+    ordered = max(0, int(float(oi.quantity or 0)))
+    already = _sum_returned_qty_for_order_item(
+        db,
+        tenant_id,
+        int(row.order_id),
+        int(body.order_item_id),
+        exclude_rmz_id=int(row.id),
+    )
+    remaining = max(0, ordered - already)
+    if remaining <= 0:
+        raise HTTPException(status_code=400, detail="Brak dostępnej ilości do zwrotu dla tej pozycji.")
+    if int(body.quantity) > remaining:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Quantity {body.quantity} exceeds remaining {remaining} for order line",
+        )
+
+    db.add(
+        RMZLine(
+            rmz_id=row.id,
+            order_item_id=int(body.order_item_id),
+            product_id=int(body.product_id),
+            quantity=float(body.quantity),
+            decision=None,
+            condition=None,
+            photo_urls=None,
+        )
+    )
+
+    parsed = _parse_lines(row.lines_json)
+    parsed.append(
+        {
+            "order_item_id": int(body.order_item_id),
+            "product_id": int(body.product_id),
+            "quantity": int(body.quantity),
+        }
+    )
+    row.lines_json = json.dumps(parsed)
+    db.commit()
+
+    row = _load_rmz(db, return_id, tenant_id, wh_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Return not found")
     return _serialize_return_read(db, row)
 
 

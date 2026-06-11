@@ -6,11 +6,7 @@ export const WMS_ROUTES = {
   /** Ekran startowy / launcher trybów WMS (pełna strona, nie modal). */
   menu: "/wms/menu",
   returns: "/wms/returns",
-  /** Nowy zwrot — jeden ekran: draft + obsługa RMZ (bez osobnego widoku tworzenia). */
-  returnsOrderSession: (orderId: number | string) => `/wms/returns/order/${orderId}`,
-  /** @deprecated Użyj `returnsOrderSession`. */
-  returnsCreate: (orderId: number | string) => `/wms/returns/order/${orderId}`,
-  /** Grid processing for one RMZ session. */
+  /** Grid processing for one RMZ session (tworzenie + obsługa). */
   returnsProcess: (returnId: number | string) => `/wms/returns/process/${returnId}`,
   complaintsProcess: (complaintId: number | string) => `/wms/returns/complaints/${complaintId}`,
   picking: "/wms/picking",

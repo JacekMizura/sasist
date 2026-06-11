@@ -215,7 +215,13 @@ class WmsReturnCreate(BaseModel):
     warehouse_id: Optional[int] = None
     order_id: int
     return_type: Optional[Literal["RMA", "UNCLAIMED"]] = "RMA"
-    lines: List[WmsReturnLineIn]
+    lines: List[WmsReturnLineIn] = Field(default_factory=list)
+
+
+class WmsReturnAddLineIn(BaseModel):
+    order_item_id: int
+    product_id: int
+    quantity: int = Field(ge=1)
 
 
 class WmsReturnLineDamageEntryRead(BaseModel):
