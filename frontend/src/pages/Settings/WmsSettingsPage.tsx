@@ -107,7 +107,7 @@ const radioLabelClass =
 const radioInputClass = "h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:ring-blue-500 bg-white cursor-pointer";
 
 const WMS_SETTINGS_TABS = [
-  { id: "common", label: "Ustawienia wspólne" },
+  { id: "common", label: "Stany magazynowe" },
   { id: "packing", label: "Pakowanie" },
   { id: "picking", label: "Zbieranie" },
   { id: "direct_sales", label: "Sprzedaż bezpośrednia" },
