@@ -61,8 +61,10 @@ export type DirectSaleSession = {
 };
 
 export type DirectSaleProductSearchHit = {
+  offer_id: number | null;
   product_id: number;
   name: string;
+  stock_disposition: string | null;
   sku: string | null;
   ean: string | null;
   catalog_number: string | null;
@@ -178,8 +180,10 @@ export function normalizeDirectSaleSession(raw: unknown): DirectSaleSession {
 export function normalizeProductSearchHit(raw: unknown): DirectSaleProductSearchHit {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
+    offer_id: numOrNull(r.offer_id),
     product_id: num(r.product_id),
     name: safeDisplay(r.name, "Produkt"),
+    stock_disposition: strOrNull(r.stock_disposition),
     sku: strOrNull(r.sku),
     ean: strOrNull(r.ean),
     catalog_number: strOrNull(r.catalog_number),

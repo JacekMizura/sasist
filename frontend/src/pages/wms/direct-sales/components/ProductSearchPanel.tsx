@@ -12,7 +12,7 @@ type Props = {
   search: SearchState;
   busy: boolean;
   error: string | null;
-  onAddProduct: (productId: number, sourceLocationId?: number | null) => void;
+  onAddProduct: (productId: number, sourceLocationId?: number | null, offerId?: number | null) => void;
   onScanCode: (code: string) => void;
 };
 
@@ -61,7 +61,7 @@ export function ProductSearchPanel({ session, search, busy, error, onAddProduct,
 
   const pickHit = useCallback(
     (hit: DirectSaleProductSearchHit) => {
-      onAddProduct(hit.product_id, hit.preferred_location_id);
+      onAddProduct(hit.product_id, hit.preferred_location_id, hit.offer_id);
       search.clear();
       inputRef.current?.focus();
     },

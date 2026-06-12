@@ -42,6 +42,7 @@ import { RetailLabel } from "../../components/products/RetailLabel";
 import { WarehouseFormCard as Card } from "../../components/products/WarehouseFormCard";
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
 import { ProductManufacturingPanel } from "../Production/ProductManufacturingPanel";
+import { ProductSalesOffersSection } from "./ProductSalesOffersSection";
 import { listCompositionsForProduct } from "../../api/compositionApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
@@ -2758,15 +2759,15 @@ export function ProductEditModal({
                 ) : null}
 
                 {activeTab === "offers" && (
-                  <div className="w-full xl:max-w-4xl space-y-12">
-                    <section>
-                      <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Aktywne oferty i warianty</h3>
-                      <div className="rounded border border-dashed border-slate-300 bg-slate-50 py-16 text-center">
-                        <p className="text-slate-500 font-medium">Moduł wariantowania w przygotowaniu.</p>
-                        <p className="text-slate-400 text-sm mt-1">Tutaj pojawią się powiązane oferty z marketplace'ów i powiązania SKU.</p>
-                      </div>
-                    </section>
-                  </div>
+                  isNew || product?.id == null || tenantId == null ? (
+                    <p className="text-sm text-slate-500">Zapisz produkt, aby zarządzać ofertami sprzedażowymi.</p>
+                  ) : (
+                    <ProductSalesOffersSection
+                      productId={product.id}
+                      tenantId={tenantId}
+                      warehouseId={warehouse?.id ?? null}
+                    />
+                  )
                 )}
 
                 {activeTab === "labelSheet" && (

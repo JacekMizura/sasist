@@ -60,6 +60,11 @@ function HitRow({
         ) : null}
         
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          {hit.stock_disposition && hit.stock_disposition !== "SALEABLE" ? (
+            <span className="bg-amber-50 border border-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide">
+              {hit.stock_disposition}
+            </span>
+          ) : null}
           {hit.preferred_location_code ? (
             <span className="bg-blue-50 border border-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide shadow-sm">
               {hit.preferred_location_code}

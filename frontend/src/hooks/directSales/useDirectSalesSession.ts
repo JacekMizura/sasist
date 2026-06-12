@@ -250,7 +250,7 @@ export function useDirectSalesSession({
   );
 
   const addByProductId = useCallback(
-    async (productId: number, sourceLocationId?: number | null) => {
+    async (productId: number, sourceLocationId?: number | null, offerId?: number | null) => {
       if (warehouseId == null) return;
       setBusy(true);
       setError(null);
@@ -263,6 +263,7 @@ export function useDirectSalesSession({
           sessionId: sess.id,
           productId,
           quantity: 1,
+          offerId: offerId ?? undefined,
         });
         if (sourceLocationId != null && sourceLocationId > 0) {
           await patchDirectSaleLine({

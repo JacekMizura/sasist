@@ -14,7 +14,7 @@ type Props = {
   session: DirectSaleSession | null;
   search: SearchState;
   busy: boolean;
-  onAddProduct: (productId: number, sourceLocationId?: number | null) => void;
+  onAddProduct: (productId: number, sourceLocationId?: number | null, offerId?: number | null) => void;
   onScanCode: (code: string) => void;
 };
 
@@ -36,7 +36,7 @@ export function ProductSearchPanel({
     (hit: DirectSaleProductSearchHit) => {
       const productId = Number(hit.product_id);
       if (!Number.isFinite(productId) || productId < 1) return;
-      onAddProduct(productId, hit.preferred_location_id ?? null);
+      onAddProduct(productId, hit.preferred_location_id ?? null, hit.offer_id);
       search.clear();
       inputRef.current?.focus();
     },

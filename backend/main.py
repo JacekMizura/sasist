@@ -137,6 +137,7 @@ from .db.schema_upgrade import (
     migrate_inventory_lot_unique_sqlite,
     ensure_inventory_stock_disposition_columns,
     ensure_stock_disposition_stage2_columns,
+    ensure_product_sales_offers_schema,
     ensure_stock_document_items_stock_disposition_column,
     ensure_stock_document_items_stock_disposition_column,
     ensure_stock_operations_stock_disposition_column,
@@ -231,6 +232,7 @@ from .api.shipping_methods import router as shipping_methods_router
 from .api.cartons import router as cartons_router
 from .api.packaging_materials import router as packaging_materials_router
 from .api.product import router as product_router
+from .api.product_sales_offers import router as product_sales_offers_router
 from .api.bundle import router as bundle_router
 from .api.compositions import router as compositions_router
 from .api.production import router as production_router
@@ -1002,6 +1004,7 @@ try:
     migrate_inventory_lot_unique_sqlite(engine)
     ensure_inventory_stock_disposition_columns(engine)
     ensure_stock_disposition_stage2_columns(engine)
+    ensure_product_sales_offers_schema(engine)
     ensure_warehouse_sqlite_schema_stabilization(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_stock_lot_and_inventory_sqlite failed at import")
@@ -1361,6 +1364,7 @@ def _upgrade_schema_background() -> None:
         migrate_inventory_lot_unique_sqlite(engine)
         ensure_inventory_stock_disposition_columns(engine)
         ensure_stock_disposition_stage2_columns(engine)
+        ensure_product_sales_offers_schema(engine)
         ensure_stock_reservation_lot_columns(engine)
         ensure_pick_task_lot_columns(engine)
         ensure_pick_lot_columns(engine)
@@ -1644,6 +1648,7 @@ _API_ROUTERS = (
     warehouses_router,
     tenant_warehouse_router,
     product_router,
+    product_sales_offers_router,
     bundle_router,
     compositions_router,
     production_router,

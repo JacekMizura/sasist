@@ -7,6 +7,7 @@ export type { DirectSalesScope } from "../api/directSalesQueryParams";
 export type AddDirectSalesProductRequest = {
   product_id: number;
   quantity: number;
+  offer_id?: number | null;
 };
 
 export type SetDirectSalesCustomerRequest = {
@@ -17,6 +18,7 @@ export type AddDirectSalesProductParams = DirectSalesScope & {
   sessionId: number;
   productId: number;
   quantity?: number;
+  offerId?: number | null;
   /** Applied via line patch after add — not sent on add-product body. */
   sourceLocationId?: number | null;
 };

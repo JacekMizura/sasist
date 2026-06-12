@@ -23,5 +23,8 @@ export function mapAddDirectSalesProductBody(params: AddDirectSalesProductParams
   return {
     product_id: Math.trunc(productId),
     quantity: Math.max(1, Math.trunc(quantity)),
+    ...(params.offerId != null && Number(params.offerId) > 0
+      ? { offer_id: Math.trunc(Number(params.offerId)) }
+      : {}),
   };
 }

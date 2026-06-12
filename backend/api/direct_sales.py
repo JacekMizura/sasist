@@ -373,6 +373,7 @@ def post_session_scan(
             code=body.code,
             quantity=body.quantity,
             source_location_id=body.source_location_id,
+            offer_id=body.offer_id,
         )
         if _operator_id(user) and not sess.operator_user_id:
             sess.operator_user_id = _operator_id(user)
@@ -430,6 +431,7 @@ def post_session_add_product(
             sess,
             product_id=body.product_id,
             quantity=float(body.quantity),
+            offer_id=body.offer_id,
         )
         if _operator_id(user) and not sess.operator_user_id:
             sess.operator_user_id = _operator_id(user)

@@ -82,6 +82,12 @@ class DirectSaleSessionLine(Base):
         index=True,
     )
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_sales_offer_id = Column(
+        Integer,
+        ForeignKey("product_sales_offers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     quantity = Column(Float, nullable=False, default=1.0)
     unit_price = Column(Float, nullable=True)
     line_discount_type = Column(String(16), nullable=True)

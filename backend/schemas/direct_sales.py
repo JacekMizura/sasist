@@ -44,8 +44,10 @@ class DirectSaleSessionLineRead(BaseModel):
 
 
 class DirectSaleProductSearchHit(BaseModel):
+    offer_id: int | None = None
     product_id: int
     name: str
+    stock_disposition: str | None = None
     sku: str | None = None
     ean: str | None = None
     catalog_number: str | None = None
@@ -144,6 +146,7 @@ class DirectSaleScanBody(BaseModel):
     code: str = Field(..., min_length=1, description="EAN / SKU / internal scan")
     quantity: float = Field(1.0, gt=0)
     source_location_id: int | None = None
+    offer_id: int | None = Field(default=None, ge=1, description="Required when product has multiple offers")
 
 
 class DirectSaleScanResponse(BaseModel):

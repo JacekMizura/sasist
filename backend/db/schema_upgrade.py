@@ -7571,4 +7571,5 @@ def _migrate_recipes_to_compositions(engine: Engine) -> None:
 
 
 from .stock_disposition_stage2_schema import ensure_stock_disposition_stage2_columns  # noqa: E402
+from .product_sales_offers_schema import ensure_product_sales_offers_schema  # noqa: E402
 

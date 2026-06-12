@@ -23,6 +23,7 @@ from .customer_crm import CustomerCrmEvent, CustomerNote  # noqa: F401
 from .gus_lookup_cache import GusLookupCache, GusNipCache  # noqa: F401
 from .product import Product
 from .product_barcode import ProductBarcode  # noqa: F401 — after Product
+from .product_sales_offer import ProductSalesOffer  # noqa: F401 — after Product
 from .supplier_product import SupplierProduct  # noqa: F401 - after Product & Supplier
 from .inbound_delivery import InboundDelivery, DeliveryItem  # noqa: F401
 from .purchase_order import PurchaseOrder, PurchaseOrderItem  # noqa: F401

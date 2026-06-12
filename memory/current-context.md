@@ -1,5 +1,18 @@
 # Current context
 
+## Product sales offers Etap 3A — minimal internal layer (2026-06-08)
+- Tabela `product_sales_offers` + FK: `order_items.product_sales_offer_id`, `direct_sale_session_lines.product_sales_offer_id`
+- Unikalność aktywnej oferty per `(tenant, product, stock_disposition)` — rozszerzalne (OUTLET_C, REFURBISHED)
+- **Cena:** `sale_price_net` nullable → fallback do `Product.sale_price` (`effective_offer_sale_price_net` / `uses_product_price`)
+- **Dostępność SSOT:** `offer_available_qty()` → puli z oferty, bez cross-pool (outlet ≠ SALEABLE)
+- **Outlet placeholders (3B+):** `outlet_damage_class`, `outlet_damage_reasons_json`, `outlet_description` (nullable, bez UI)
+- API: `GET/POST/PATCH/DELETE /products/{id}/sales-offers`, `GET /sales-offers/search`
+- Zamówienia: `OrderCreateLine.offer_id` → snapshot `offer_name_snapshot` + `required_stock_disposition` z oferty
+- Direct sale: auto-wybór przy 1 aktywnej ofercie; `offer_id` w add-product/scan; wyszukiwarka = 1 wiersz / oferta
+- UI: zakładka **Oferty** w `ProductEditModal` → `ProductSalesOffersSection`; OMS picker przy >1 ofercie
+- Backfill: `python -m backend.scripts.backfill_product_sales_offers [--tenant-id N] [--dry-run]`
+- Test E2E: `backend/tests/product_sales_offers/test_outlet_offer_stock_isolation.py` (SALEABLE=100, OUTLET_B=1, qty=2 → błąd)
+
 ## Stock disposition Etap 2 — reservation / pick by pool (2026-06-08)
 - Kolumny: `order_items.required_stock_disposition`, `stock_reservations.stock_disposition`, `pick_tasks.stock_disposition`
 - Schema: `stock_disposition_stage2_schema.ensure_stock_disposition_stage2_columns`

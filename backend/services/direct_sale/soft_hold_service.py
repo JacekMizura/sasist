@@ -13,7 +13,7 @@ from .direct_sale.constants import (
     RESERVATION_KIND_SOFT_HOLD,
     soft_hold_expires_at,
 )
-from ..stock_disposition import DEFAULT_STOCK_DISPOSITION
+from ..stock_disposition import DEFAULT_STOCK_DISPOSITION, normalize_stock_disposition
 from ..operational_sales_events import emit_operational_sales_event
 from ..warehouse_inventory_movement_service import (
     BUCKET_RESERVED,
@@ -35,6 +35,7 @@ def create_soft_hold_for_scan(
     sess: DirectSaleSession,
     line: DirectSaleSessionLine,
     performed_by_user_id: int | None = None,
+    stock_disposition: str | None = None,
 ) -> StockReservation | None:
     if not soft_hold_enabled():
         return None
@@ -45,6 +46,7 @@ def create_soft_hold_for_scan(
         return None
 
     expires = soft_hold_expires_at()
+    sd = normalize_stock_disposition(stock_disposition or DEFAULT_STOCK_DISPOSITION)
     res: StockReservation | None = None
     if sess.order_id:
         res = StockReservation(
@@ -57,7 +59,7 @@ def create_soft_hold_for_scan(
             expires_at=expires,
             direct_sale_session_id=int(sess.id),
             reservation_kind=RESERVATION_KIND_SOFT_HOLD,
-            stock_disposition=DEFAULT_STOCK_DISPOSITION,
+            stock_disposition=sd,
         )
         db.add(res)
         db.flush()
@@ -89,6 +91,7 @@ def create_soft_hold_for_scan(
                     "qty": qty,
                     "expires_at": expires.isoformat(),
                     "kind": RESERVATION_KIND_SOFT_HOLD,
+                    "stock_disposition": sd,
                 }
             },
             ensure_ascii=False,

@@ -118,7 +118,7 @@ export function DirectSalesLayout({ terminal }: Props) {
             session={session}
             search={productSearch}
             busy={sessionState.busy}
-            onAddProduct={(id, loc) => void sessionState.addByProductId(id, loc)}
+            onAddProduct={(id, loc, offerId) => void sessionState.addByProductId(id, loc, offerId)}
             onScanCode={(code) => void sessionState.addByCode(code)}
           />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 lg:px-6">

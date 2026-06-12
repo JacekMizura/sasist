@@ -74,6 +74,15 @@ class OrderItem(Base):
         index=True,
     )
 
+    #: Etap 3A: źródłowa oferta sprzedażowa (nullable dla legacy/import).
+    product_sales_offer_id = Column(
+        Integer,
+        ForeignKey("product_sales_offers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    offer_name_snapshot = Column(String(512), nullable=True)
+
     #: Ilość „spakowana” na stanowisku pakowania WMS (osobno od zbierania / Pick).
     packing_quantity_packed = Column(Integer, nullable=False, server_default=text("0"), default=0)
 

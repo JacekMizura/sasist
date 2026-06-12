@@ -5,6 +5,11 @@ import api from "../../api/axios";
 import { patchComplaintLine, updateLineOperation } from "../../api/complaintsApi";
 import { createOrder } from "../../api/ordersApi";
 import {
+  dispositionOfferLabel,
+  listProductSalesOffers,
+  type ProductSalesOfferRead,
+} from "../../api/productSalesOffersApi";
+import {
   getCustomer,
   listCustomers,
   type CustomerAddressDto,
@@ -49,7 +54,15 @@ type SearchHit =
   | { type: "bundle"; bundle: CatalogBundle };
 
 type LineRow =
-  | { lineKey: string; kind: "product"; product: CatalogProduct; quantity: number; unit_price: number }
+  | {
+      lineKey: string;
+      kind: "product";
+      product: CatalogProduct;
+      offerId?: number;
+      offerLabel?: string;
+      quantity: number;
+      unit_price: number;
+    }
   | { lineKey: string; kind: "bundle"; bundle: CatalogBundle; quantity: number; unit_price: number };
 
 const PAYMENT_METHOD_PRESETS = ["przelew", "pobranie", "BLIK", "karta", "gotówka"] as const;
@@ -121,6 +134,10 @@ export default function CreateOrderPage() {
   const [shipping_country, setShipping_country] = useState("");
   const [shipSameAsBilling, setShipSameAsBilling] = useState(true);
   const [lines, setLines] = useState<LineRow[]>([]);
+  const [offerPicker, setOfferPicker] = useState<{
+    product: CatalogProduct;
+    offers: ProductSalesOfferRead[];
+  } | null>(null);
 
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState<SearchHit[]>([]);
@@ -418,39 +435,86 @@ export default function CreateOrderPage() {
     [customerShippingAddresses],
   );
 
-  const addSearchHit = useCallback((hit: SearchHit) => {
-    if (hit.type === "product") {
-      const p = hit.product;
-      const price = p.sale_price != null && Number.isFinite(p.sale_price) ? Number(p.sale_price) : 0;
-      const key = `p-${p.id}`;
-      setLines((prev) => {
-        const i = prev.findIndex((x) => x.lineKey === key);
-        if (i >= 0) {
-          const next = [...prev];
-          const row = next[i];
-          if (row.kind === "product") next[i] = { ...row, quantity: row.quantity + 1 };
-          return next;
-        }
-        return [...prev, { lineKey: key, kind: "product", product: p, quantity: 1, unit_price: price }];
-      });
-    } else {
-      const b = hit.bundle;
-      const price = b.sale_price != null && Number.isFinite(b.sale_price) ? Number(b.sale_price) : 0;
-      const key = `b-${b.id}`;
-      setLines((prev) => {
-        const i = prev.findIndex((x) => x.lineKey === key);
-        if (i >= 0) {
-          const next = [...prev];
-          const row = next[i];
-          if (row.kind === "bundle") next[i] = { ...row, quantity: row.quantity + 1 };
-          return next;
-        }
-        return [...prev, { lineKey: key, kind: "bundle", bundle: b, quantity: 1, unit_price: price }];
-      });
-    }
-    setSearchQ("");
-    setSearchResults([]);
+  const addProductLine = useCallback((p: CatalogProduct, offer?: ProductSalesOfferRead) => {
+    const priceRaw =
+      offer?.effective_sale_price_net != null && Number.isFinite(offer.effective_sale_price_net)
+        ? Number(offer.effective_sale_price_net)
+        : p.sale_price != null && Number.isFinite(p.sale_price)
+          ? Number(p.sale_price)
+          : 0;
+    const key = offer ? `o-${offer.id}` : `p-${p.id}`;
+    const offerLabel = offer
+      ? `${offer.name} (${dispositionOfferLabel(offer.stock_disposition)})`
+      : undefined;
+    setLines((prev) => {
+      const i = prev.findIndex((x) => x.lineKey === key);
+      if (i >= 0) {
+        const next = [...prev];
+        const row = next[i];
+        if (row.kind === "product") next[i] = { ...row, quantity: row.quantity + 1 };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          lineKey: key,
+          kind: "product",
+          product: p,
+          offerId: offer?.id,
+          offerLabel,
+          quantity: 1,
+          unit_price: priceRaw,
+        },
+      ];
+    });
   }, []);
+
+  const addSearchHit = useCallback(
+    (hit: SearchHit) => {
+      if (hit.type === "bundle") {
+        const b = hit.bundle;
+        const price = b.sale_price != null && Number.isFinite(b.sale_price) ? Number(b.sale_price) : 0;
+        const key = `b-${b.id}`;
+        setLines((prev) => {
+          const i = prev.findIndex((x) => x.lineKey === key);
+          if (i >= 0) {
+            const next = [...prev];
+            const row = next[i];
+            if (row.kind === "bundle") next[i] = { ...row, quantity: row.quantity + 1 };
+            return next;
+          }
+          return [...prev, { lineKey: key, kind: "bundle", bundle: b, quantity: 1, unit_price: price }];
+        });
+        setSearchQ("");
+        setSearchResults([]);
+        return;
+      }
+      const p = hit.product;
+      void listProductSalesOffers({
+        tenantId: apiTenantId,
+        productId: p.id,
+        warehouseId,
+      })
+        .then((res) => {
+          const active = (res.offers ?? []).filter((o) => o.active);
+          if (active.length > 1) {
+            setOfferPicker({ product: p, offers: active });
+            setSearchQ("");
+            setSearchResults([]);
+            return;
+          }
+          addProductLine(p, active[0]);
+          setSearchQ("");
+          setSearchResults([]);
+        })
+        .catch(() => {
+          addProductLine(p);
+          setSearchQ("");
+          setSearchResults([]);
+        });
+    },
+    [addProductLine, apiTenantId, warehouseId],
+  );
 
   const setQty = useCallback((lineKey: string, qty: number) => {
     const q = Math.floor(qty);
@@ -522,7 +586,9 @@ export default function CreateOrderPage() {
         shipping_country: shipCountry.trim() || null,
         items: lines.map((l) =>
           l.kind === "product"
-            ? { product_id: l.product.id, quantity: l.quantity, unit_price: l.unit_price }
+            ? l.offerId
+              ? { offer_id: l.offerId, quantity: l.quantity, unit_price: l.unit_price }
+              : { product_id: l.product.id, quantity: l.quantity, unit_price: l.unit_price }
             : { bundle_id: l.bundle.id, quantity: l.quantity, unit_price: l.unit_price },
         ),
         shipping_method_id: shippingMethodId.trim() || null,
@@ -1060,6 +1126,9 @@ export default function CreateOrderPage() {
                         ) : (
                           <>
                             <div className="font-medium text-slate-800">{l.product.name}</div>
+                            {l.offerLabel ? (
+                              <div className="text-xs font-medium text-amber-800">{l.offerLabel}</div>
+                            ) : null}
                             <div className="text-xs text-slate-500">
                               {l.product.ean || "—"} · {l.product.symbol || l.product.sku || "—"}
                             </div>
@@ -1250,6 +1319,43 @@ export default function CreateOrderPage() {
           </Link>
         </div>
       </form>
+      {offerPicker ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">Wybierz ofertę</h3>
+            <p className="mt-1 text-sm text-slate-600">{offerPicker.product.name}</p>
+            <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto">
+              {offerPicker.offers.map((o) => (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
+                    onClick={() => {
+                      addProductLine(offerPicker.product, o);
+                      setOfferPicker(null);
+                    }}
+                  >
+                    <div className="font-medium text-slate-900">{o.name}</div>
+                    <div className="text-xs text-slate-500">
+                      {dispositionOfferLabel(o.stock_disposition)} · dostępne: {o.available_qty}
+                      {o.effective_sale_price_net != null
+                        ? ` · ${o.effective_sale_price_net.toFixed(2)} zł`
+                        : ""}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="mt-4 text-sm font-medium text-slate-600 hover:text-slate-900"
+              onClick={() => setOfferPicker(null)}
+            >
+              Anuluj
+            </button>
+          </div>
+        </div>
+      ) : null}
       </div>
     </div>
   );

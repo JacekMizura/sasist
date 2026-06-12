@@ -129,7 +129,8 @@ class OrderItemRead(BaseModel):
     #: Z ``metadata_json.oms_replacement`` — ilości sprzed zamiany (widok historii w panelu).
     oms_replacement_original_quantity: Optional[int] = None
     oms_replacement_transferred_quantity: Optional[int] = None
-    #: Pula magazynowa do rezerwacji / pickingu (Etap 2 — UI domyślnie SALEABLE).
+    product_sales_offer_id: Optional[int] = None
+    offer_name_snapshot: Optional[str] = None
     required_stock_disposition: str = "SALEABLE"
 
     class Config:
@@ -510,6 +511,7 @@ class OrderRead(BaseModel):
 class OrderCreateLine(BaseModel):
     product_id: Optional[int] = Field(default=None, ge=1)
     bundle_id: Optional[int] = Field(default=None, ge=1)
+    offer_id: Optional[int] = Field(default=None, ge=1, description="Sales offer (Etap 3A)")
     quantity: int = Field(..., ge=1)
     required_stock_disposition: Optional[str] = Field(
         default=None,
@@ -531,10 +533,13 @@ class OrderCreateLine(BaseModel):
 
     @model_validator(mode="after")
     def _exactly_one_catalog_ref(self) -> "OrderCreateLine":
+        has_offer = self.offer_id is not None and int(self.offer_id) > 0
         has_p = self.product_id is not None
         has_b = self.bundle_id is not None
-        if has_p == has_b:
-            raise ValueError("Each line must set exactly one of product_id or bundle_id")
+        if has_offer and (has_p or has_b):
+            raise ValueError("offer_id cannot be combined with product_id or bundle_id")
+        if not has_offer and has_p == has_b:
+            raise ValueError("Each line must set exactly one of product_id, bundle_id, or offer_id")
         return self
 
 
@@ -677,6 +682,7 @@ class OrderAddLineBody(BaseModel):
 
     product_id: Optional[int] = Field(None, ge=1)
     bundle_id: Optional[int] = Field(None, ge=1)
+    offer_id: Optional[int] = Field(default=None, ge=1, description="Sales offer (Etap 3A)")
     quantity: int = Field(1, ge=1)
     required_stock_disposition: Optional[str] = Field(
         default=None,
@@ -699,8 +705,12 @@ class OrderAddLineBody(BaseModel):
     def _exactly_one_catalog_line(self) -> "OrderAddLineBody":
         has_p = self.product_id is not None and int(self.product_id) > 0
         has_b = self.bundle_id is not None and int(self.bundle_id) > 0
-        if has_p == has_b:
-            raise ValueError("Ustaw dokładnie jedno z pól: product_id lub bundle_id")
+        has_o = self.offer_id is not None and int(self.offer_id) > 0
+        refs = sum(1 for x in (has_p, has_b, has_o) if x)
+        if refs != 1:
+            raise ValueError("Ustaw dokładnie jedno z pól: product_id, bundle_id lub offer_id")
+        if has_o and (has_p or has_b):
+            raise ValueError("offer_id cannot be combined with product_id or bundle_id")
         return self
 
 

@@ -1427,6 +1427,8 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
                 is_bundle_parent=True,
                 parent_bundle_order_item_id=None,
                 required_stock_disposition=r.required_stock_disposition,
+                product_sales_offer_id=r.product_sales_offer_id,
+                offer_name_snapshot=r.offer_name,
             )
             db.add(oi)
             db.flush()
@@ -1451,6 +1453,8 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
             is_bundle_parent=False,
             parent_bundle_order_item_id=pb_id,
             required_stock_disposition=r.required_stock_disposition,
+            product_sales_offer_id=r.product_sales_offer_id,
+            offer_name_snapshot=r.offer_name,
         )
         db.add(oi)
 
@@ -1723,6 +1727,8 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
                 oms_replacement_original_quantity=rep_oq,
                 oms_replacement_transferred_quantity=rep_tq,
                 required_stock_disposition=resolve_order_item_required_disposition(item),
+                product_sales_offer_id=getattr(item, "product_sales_offer_id", None),
+                offer_name_snapshot=getattr(item, "offer_name_snapshot", None),
             )
         )
 
@@ -2305,6 +2311,8 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                     is_bundle_parent=True,
                     parent_bundle_order_item_id=None,
                     required_stock_disposition=r.required_stock_disposition,
+                    product_sales_offer_id=r.product_sales_offer_id,
+                    offer_name_snapshot=r.offer_name,
                 )
                 db.add(oi)
                 db.flush()
@@ -2328,38 +2336,52 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 is_bundle_parent=False,
                 parent_bundle_order_item_id=pb_id,
                 required_stock_disposition=r.required_stock_disposition,
+                product_sales_offer_id=r.product_sales_offer_id,
+                offer_name_snapshot=r.offer_name,
             )
             db.add(oi)
         db.flush()
         _recompute_order_value_and_volume(order, db)
         db.commit()
     else:
-        assert body.product_id is not None
+        wh_id = int(order.warehouse_id or 1)
+        try:
+            merged = resolve_order_create_lines(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=wh_id,
+                raw_lines=[body],
+                check_bundle_stock=True,
+            )
+        except BundleExplosionError as e:
+            raise HTTPException(status_code=400, detail=e.detail)
+        if len(merged) != 1:
+            raise HTTPException(status_code=400, detail="Invalid catalog line resolution")
+        resolved = merged[0]
         product = (
             db.query(Product)
-            .filter(Product.id == int(body.product_id), Product.tenant_id == int(order.tenant_id))
+            .filter(Product.id == int(resolved.product_id), Product.tenant_id == int(order.tenant_id))
             .first()
         )
         if not product:
             raise HTTPException(status_code=400, detail="Product not found for this tenant")
-        resolved = explode_product_line(
-            product=product,
-            quantity=qty,
-            line_unit_price_override=body.unit_price,
-            required_stock_disposition=req_disp,
+        existing_q = db.query(OrderItem).filter(
+            OrderItem.order_id == order.id,
+            OrderItem.product_id == product.id,
+            OrderItem.source_bundle_id.is_(None),
+            OrderItem.bundle_instance_id.is_(None),
+            OrderItem.parent_bundle_order_item_id.is_(None),
         )
-        existing = (
-            db.query(OrderItem)
-            .filter(
-                OrderItem.order_id == order.id,
-                OrderItem.product_id == product.id,
-                OrderItem.source_bundle_id.is_(None),
-                OrderItem.bundle_instance_id.is_(None),
-                OrderItem.parent_bundle_order_item_id.is_(None),
-                OrderItem.required_stock_disposition == req_disp,
+        if resolved.product_sales_offer_id is not None:
+            existing_q = existing_q.filter(
+                OrderItem.product_sales_offer_id == int(resolved.product_sales_offer_id)
             )
-            .first()
-        )
+        else:
+            existing_q = existing_q.filter(
+                OrderItem.required_stock_disposition == resolved.required_stock_disposition,
+                OrderItem.product_sales_offer_id.is_(None),
+            )
+        existing = existing_q.first()
         vat_opt = float(body.vat_percent) if body.vat_percent is not None else None
         vat_final: Optional[float] = vat_opt if vat_opt is not None else resolved.vat_percent
         if existing:
@@ -2398,6 +2420,8 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 is_bundle_parent=False,
                 parent_bundle_order_item_id=None,
                 required_stock_disposition=resolved.required_stock_disposition,
+                product_sales_offer_id=resolved.product_sales_offer_id,
+                offer_name_snapshot=resolved.offer_name,
             )
             db.add(oi)
         db.flush()

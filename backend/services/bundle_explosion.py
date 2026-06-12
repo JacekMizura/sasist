@@ -57,6 +57,9 @@ class ResolvedOrderLine:
     is_bundle_parent: bool = False
     #: Pula magazynowa do rezerwacji / pickingu (Etap 2).
     required_stock_disposition: str = DEFAULT_STOCK_DISPOSITION
+    #: Etap 3A — źródłowa oferta (nullable dla legacy).
+    product_sales_offer_id: Optional[int] = None
+    offer_name: Optional[str] = None
 
 
 def vat_percent_from_product(product: Product) -> Optional[float]:
@@ -314,6 +317,8 @@ def explode_product_line(
     quantity: int,
     line_unit_price_override: Optional[float],
     required_stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+    product_sales_offer_id: Optional[int] = None,
+    offer_name: Optional[str] = None,
 ) -> ResolvedOrderLine:
     unit = float(line_unit_price_override) if line_unit_price_override is not None else _sale_unit(product)
     tot = round(unit * quantity, 2)
@@ -337,16 +342,18 @@ def explode_product_line(
         metadata_json=meta_str,
         vat_percent=vp,
         required_stock_disposition=normalize_stock_disposition(required_stock_disposition),
+        product_sales_offer_id=int(product_sales_offer_id) if product_sales_offer_id is not None else None,
+        offer_name=(str(offer_name).strip()[:512] if offer_name and str(offer_name).strip() else None),
     )
 
 
 def merge_resolved_lines(lines: list[ResolvedOrderLine]) -> list[ResolvedOrderLine]:
     """
-    Merge rows that share (product_id, source_bundle_id, bundle_instance_id, is_bundle_parent, required_stock_disposition).
-    Nagłówki zestawów nigdy nie są łączone z komponentami (różny fragment klucza).
+    Merge rows that share (product_id, source_bundle_id, bundle_instance_id, is_bundle_parent,
+    required_stock_disposition, product_sales_offer_id).
     """
-    buckets: dict[tuple[int, Any, Any, bool, str], ResolvedOrderLine] = {}
-    order_keys: list[tuple[int, Any, Any, bool, str]] = []
+    buckets: dict[tuple[int, Any, Any, bool, str, Any], ResolvedOrderLine] = {}
+    order_keys: list[tuple[int, Any, Any, bool, str, Any]] = []
     for row in lines:
         key = (
             row.product_id,
@@ -354,6 +361,7 @@ def merge_resolved_lines(lines: list[ResolvedOrderLine]) -> list[ResolvedOrderLi
             row.bundle_instance_id,
             row.is_bundle_parent,
             normalize_stock_disposition(row.required_stock_disposition),
+            int(row.product_sales_offer_id) if row.product_sales_offer_id is not None else None,
         )
         if key not in buckets:
             buckets[key] = row
@@ -378,6 +386,8 @@ def merge_resolved_lines(lines: list[ResolvedOrderLine]) -> list[ResolvedOrderLi
                 vat_percent=merged_vat,
                 is_bundle_parent=cur.is_bundle_parent,
                 required_stock_disposition=cur.required_stock_disposition,
+                product_sales_offer_id=cur.product_sales_offer_id,
+                offer_name=cur.offer_name or row.offer_name,
             )
     return [buckets[k] for k in order_keys]
 
@@ -424,24 +434,40 @@ def validate_merged_stock(
     warehouse_id: int,
     lines: list[ResolvedOrderLine],
 ) -> None:
-    need: dict[tuple[int, str], int] = {}
+    need_by_offer: dict[int, int] = {}
+    need_by_disp: dict[tuple[int, str], int] = {}
     for r in lines:
         if r.is_bundle_parent:
             continue
+        qty = int(r.quantity)
+        if getattr(r, "product_sales_offer_id", None) is not None:
+            oid = int(r.product_sales_offer_id)
+            need_by_offer[oid] = need_by_offer.get(oid, 0) + qty
+            continue
         disp = normalize_stock_disposition(r.required_stock_disposition)
         key = (int(r.product_id), disp)
-        need[key] = need.get(key, 0) + int(r.quantity)
+        need_by_disp[key] = need_by_disp.get(key, 0) + qty
     short = []
-    for (pid, disp), n in need.items():
+    from .product_sales_offers import assert_offer_quantity_available, offer_available_qty
+    from .product_sales_offers.errors import OfferStockUnavailableError
+
+    for oid, n in need_by_offer.items():
+        try:
+            assert_offer_quantity_available(
+                db,
+                offer=oid,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                quantity=float(n),
+            )
+        except OfferStockUnavailableError as exc:
+            short.append(str(exc.detail))
+    for (pid, disp), n in need_by_disp.items():
         avail = available_stock_for_disposition(db, tenant_id, warehouse_id, pid, disp)
         if avail + 1e-9 < n:
-            short.append((pid, disp, n, avail))
+            short.append(f"product_id={pid} disposition={disp} need={n} available={avail:.0f}")
     if short:
-        parts = [
-            f"product_id={pid} disposition={disp} need={n} available={avail:.0f}"
-            for pid, disp, n, avail in short
-        ]
-        raise BundleExplosionError("Insufficient stock for bundle / order lines: " + "; ".join(parts))
+        raise BundleExplosionError("Insufficient stock for bundle / order lines: " + "; ".join(short))
 
 
 def resolve_order_create_lines(
@@ -455,11 +481,19 @@ def resolve_order_create_lines(
     """
     raw_lines: validated OrderCreateLine-like objects with product_id XOR bundle_id.
     """
+    from .product_sales_offers import (
+        disposition_for_offer,
+        get_default_offer_for_product,
+        resolve_effective_offer_price,
+        resolve_offer_for_order_line,
+    )
+    from .product_sales_offers.crud_service import ensure_default_offer_for_product
+
     exploded: list[ResolvedOrderLine] = []
     for line in raw_lines:
         qty = int(line.quantity)
-        req_disp = disposition_for_new_order_line(getattr(line, "required_stock_disposition", None))
         if getattr(line, "bundle_id", None) is not None:
+            req_disp = disposition_for_new_order_line(getattr(line, "required_stock_disposition", None))
             exploded.extend(
                 explode_bundle_line(
                     db,
@@ -470,19 +504,52 @@ def resolve_order_create_lines(
                     required_stock_disposition=req_disp,
                 )
             )
-        else:
-            pid = int(line.product_id)
-            p = db.query(Product).filter(Product.id == pid, Product.tenant_id == tenant_id).first()
+            continue
+
+        offer_id_raw = getattr(line, "offer_id", None)
+        if offer_id_raw is not None and int(offer_id_raw) > 0:
+            offer = resolve_offer_for_order_line(db, tenant_id=tenant_id, offer_id=int(offer_id_raw))
+            p = db.query(Product).filter(Product.id == int(offer.product_id), Product.tenant_id == tenant_id).first()
             if not p:
-                raise BundleExplosionError(f"Unknown product_id or wrong tenant: {pid}")
+                raise BundleExplosionError(f"Unknown product for offer: {offer.product_id}")
+            unit_override = line.unit_price
+            if unit_override is None:
+                eff = resolve_effective_offer_price(db, offer)
+                unit_override = eff
             exploded.append(
                 explode_product_line(
                     product=p,
                     quantity=qty,
-                    line_unit_price_override=line.unit_price,
-                    required_stock_disposition=req_disp,
+                    line_unit_price_override=unit_override,
+                    required_stock_disposition=disposition_for_offer(offer),
+                    product_sales_offer_id=int(offer.id),
+                    offer_name=str(offer.name),
                 )
             )
+            continue
+
+        pid = int(line.product_id)
+        p = db.query(Product).filter(Product.id == pid, Product.tenant_id == tenant_id).first()
+        if not p:
+            raise BundleExplosionError(f"Unknown product_id or wrong tenant: {pid}")
+        offer = get_default_offer_for_product(db, tenant_id=tenant_id, product_id=pid)
+        if offer is None:
+            offer = ensure_default_offer_for_product(db, product=p)
+            db.flush()
+        req_disp = disposition_for_offer(offer)
+        unit_override = line.unit_price
+        if unit_override is None:
+            unit_override = resolve_effective_offer_price(db, offer)
+        exploded.append(
+            explode_product_line(
+                product=p,
+                quantity=qty,
+                line_unit_price_override=unit_override,
+                required_stock_disposition=req_disp,
+                product_sales_offer_id=int(offer.id),
+                offer_name=str(offer.name),
+            )
+        )
     merged = merge_resolved_lines(exploded)
     if check_bundle_stock:
         validate_merged_stock(db, tenant_id=tenant_id, warehouse_id=warehouse_id, lines=merged)

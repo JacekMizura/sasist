@@ -136,6 +136,7 @@ def add_product_to_session(
     product_id: int,
     quantity: float = 1.0,
     source_location_id: int | None = None,
+    offer_id: int | None = None,
 ) -> tuple[DirectSaleSessionLine, list[dict]]:
     return session_add_product_line(
         db,
@@ -143,4 +144,5 @@ def add_product_to_session(
         product_id=int(product_id),
         quantity=float(quantity),
         source_location_id=source_location_id,
+        offer_id=offer_id,
     )
