@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
 from ...models.stock_reservation import StockReservation
-from .direct_sale.constants import (
+from .constants import (
     RESERVATION_KIND_SOFT_HOLD,
     soft_hold_expires_at,
 )
