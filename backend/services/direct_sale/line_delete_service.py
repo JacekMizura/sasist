@@ -14,7 +14,7 @@ from ..reservations.lifecycle_service import (
     release_reservation,
     reservation_lifecycle_state,
 )
-from ..direct_sale.constants import RESERVATION_STATUS_ACTIVE
+from .constants import RESERVATION_STATUS_ACTIVE
 from ..warehouse_inventory_movement_service import (
     BUCKET_SELLABLE,
     MOVEMENT_UNRESERVATION,
