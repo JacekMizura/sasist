@@ -125,6 +125,7 @@ export type ProductForm = {
   unallocated_quantity?: number;
   reserved_quantity?: number;
   available_quantity?: number;
+  disposition_stock?: import("../../types/productDispositionStock").ProductDispositionStock;
   orientation_type?: "any" | "upright" | "no_stack";
   shape_type?: "box" | "cylinder";
   stack_compressible?: boolean;
@@ -2367,6 +2368,7 @@ export function ProductEditModal({
                           unallocatedStockDisplay={inventoryBreakdown?.unallocated ?? null}
                           reservedDisplay={inventoryBreakdown?.reserved ?? null}
                           availableDisplay={inventoryBreakdown?.available ?? null}
+                          dispositionStock={product?.disposition_stock ?? null}
                           inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
                           showInventoryLink
                           emptyLocationsMessage={magazynEmptyLocationsMessage}

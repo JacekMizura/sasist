@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { MagazynInventoryLine, magazynInventoryRowReactKey, type MagazynInvRowDisplay } from "./MagazynInventoryLine";
+import { ProductDispositionStockSummary } from "./ProductDispositionStockSummary";
 import { WarehouseFormCard } from "./WarehouseFormCard";
+import type { ProductDispositionStock } from "../../types/productDispositionStock";
 
 const fieldLabel = "block text-sm font-medium text-slate-700 mb-1";
 const inputClass = "w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-400";
@@ -17,6 +19,8 @@ export type ProductWarehouseStockPanelProps = {
   /** When set with `availableDisplay`, shows three-line summary (carton). Omit for classic product copy. */
   reservedDisplay?: string | null;
   availableDisplay?: string | null;
+  /** Etap 1 disposition breakdown — when set, replaces legacy single-line stock in product panel. */
+  dispositionStock?: ProductDispositionStock | null;
   inventoryRows: MagazynInvRowDisplay[];
   onEditTraceability?: (row: MagazynInvRowDisplay) => void;
   traceabilityEditDisabled?: boolean;
@@ -38,6 +42,7 @@ export function ProductWarehouseStockPanel({
   unallocatedStockDisplay,
   reservedDisplay,
   availableDisplay,
+  dispositionStock,
   inventoryRows,
   onEditTraceability,
   traceabilityEditDisabled = false,
@@ -49,10 +54,36 @@ export function ProductWarehouseStockPanel({
   const showBreakdown =
     totalStockDisplay != null && allocatedStockDisplay != null && unallocatedStockDisplay != null;
 
+  const showDisposition = dispositionStock != null;
+
   return (
     <div className="space-y-6">
       <WarehouseFormCard title="Stan magazynowy">
-        {showBreakdown ? (
+        {showDisposition ? (
+          <div className="space-y-3">
+            <ProductDispositionStockSummary
+              variant="panel"
+              disposition={dispositionStock}
+              reservedQuantity={
+                reservedDisplay != null && reservedDisplay !== ""
+                  ? Number(reservedDisplay)
+                  : undefined
+              }
+            />
+            {totalStockDisplay != null && allocatedStockDisplay != null && unallocatedStockDisplay != null ? (
+              <div className="border-t border-slate-100 pt-3 space-y-1 text-xs text-slate-600">
+                <p>
+                  Na lokalizacjach:{" "}
+                  <span className="font-semibold tabular-nums text-slate-800">{allocatedStockDisplay} szt.</span>
+                </p>
+                <p>
+                  Nieprzypisane:{" "}
+                  <span className="font-semibold tabular-nums text-slate-800">{unallocatedStockDisplay} szt.</span>
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : showBreakdown ? (
           <div className="space-y-2 text-sm text-slate-700">
             <p>
               Stan całkowity:{" "}

@@ -1,5 +1,13 @@
 # Current context
 
+## Stock disposition Etap 1 — read-only aggregation (2026-06-08)
+- SSOT rozbicia pul: `product_disposition_snapshot_service.py` → `disposition_stock` na API produktu i WMS view
+- Pola: `saleable_qty`, `outlet_qty`, `service_qty`, `quarantine_qty`, `scrap_qty`, `rejected_qty`, `physical_qty`, `saleable_available_qty`
+- Legacy bez zmian: `stock_quantity`, `available_quantity`, `reserved_quantity`
+- UI „Dostępne” = `saleable_qty`; przy rezerwacji: „Zarezerwowane” + „Po rezerwacji” (saleable_available_qty)
+- Lista produktów: Dostępne + Fizycznie widoczne bez hover; panel magazynowy + WMS preview rozbicie pul
+- Przygotowanie Etap 2: `CANONICAL_PRODUCT_STOCK_DISPOSITIONS` + komentarz pod `OrderItem.required_stock_disposition`
+
 ## Complaint → Z-PZ integration (2026-06-08)
 - Reklamacje używają tego samego Z-PZ / rozlokowania co RMZ — bez R_PZ i osobnych kolejek
 - `physical_receipt_mode`: **WAREHOUSE** (Z-PZ+QUARANTINE+putaway) | **SERVICE_FORWARD** (Z-PZ+SERVICE_C, bez putaway) | **DIRECT_SERVICE** (brak Z-PZ/ruchów)

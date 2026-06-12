@@ -1,4 +1,6 @@
 import api from "./axios";
+import type { ProductDispositionStock } from "../types/productDispositionStock";
+import { parseDispositionStock } from "../types/productDispositionStock";
 
 export type WmsProductViewLocationApi = {
   location_id: number;
@@ -6,6 +8,8 @@ export type WmsProductViewLocationApi = {
   quantity: number;
   badge: string;
   location_type: string | null;
+  stock_disposition?: string | null;
+  disposition_badge?: string | null;
 };
 
 export type WmsProductViewLogisticsApi = {
@@ -34,6 +38,7 @@ export type WmsProductViewResponseApi = {
   sku: string | null;
   image: string | null;
   total_stock: number;
+  disposition_stock?: ProductDispositionStock;
   locations: WmsProductViewLocationApi[];
   logistics: WmsProductViewLogisticsApi;
   package: WmsProductViewPackageApi;
@@ -47,5 +52,9 @@ export async function getWmsProductView(
   const res = await api.get<WmsProductViewResponseApi>(`/wms/products/${productId}/view`, {
     params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
-  return res.data;
+  const data = res.data;
+  return {
+    ...data,
+    disposition_stock: parseDispositionStock(data.disposition_stock) ?? data.disposition_stock,
+  };
 }

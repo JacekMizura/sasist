@@ -1926,6 +1926,7 @@ def get_products(
             p,
             warehouse_id=warehouse_id,
             log_tag="product.list.stock",
+            include_disposition_stock=False,
         )
         stock_qty = int(d.get("stock_quantity") or 0)
         avg = avg_map.get(p.id)
@@ -1944,6 +1945,13 @@ def get_products(
         else:
             d["days_of_stock"] = None
         items.append(d)
+
+    if items and tenant_id is not None:
+        from ..services.product_inventory_display_service import attach_disposition_stock_to_product_dicts
+
+        attach_disposition_stock_to_product_dicts(
+            db, tenant_id=int(tenant_id), warehouse_id=warehouse_id, product_dicts=items
+        )
 
     if default_supplier_id is not None and items:
         _attach_supplier_offers_to_product_dicts(db, items, rows, default_supplier_id)

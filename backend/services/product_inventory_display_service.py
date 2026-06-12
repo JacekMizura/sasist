@@ -22,6 +22,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from sqlalchemy.orm import Session
 
 from ..models.product import Product
+from .product_disposition_snapshot_service import (
+    disposition_snapshots_for_products,
+    empty_disposition_stock_dict,
+    get_product_disposition_stock,
+)
 from .product_inventory_snapshot_service import inventory_snapshots_for_products, visible_on_hand_by_product
 
 logger = logging.getLogger(__name__)
@@ -195,6 +200,7 @@ def get_product_inventory_display_snapshot(
             "unallocated_quantity": 0,
             "reserved_quantity": 0,
             "available_quantity": 0,
+            "disposition_stock": empty_disposition_stock_dict(),
             "locations": [],
             "inventory": [],
             "locations_load_incomplete": False,
@@ -211,16 +217,40 @@ def get_product_inventory_display_snapshot(
     allocated = _allocated_quantity_from_rows(locations, inventory)
     unallocated = max(0, stock - allocated)
     ops = _inventory_operational_metrics(db, tenant_id=tid, product_id=pid, warehouse_id=warehouse_id, on_hand=stock)
+    disposition = get_product_disposition_stock(
+        db, product_id=pid, tenant_id=tid, warehouse_id=warehouse_id
+    )
     return {
         "stock_quantity": stock,
         "location_allocated_quantity": allocated,
         "unallocated_quantity": unallocated,
         "reserved_quantity": ops["reserved_quantity"],
         "available_quantity": ops["available_quantity"],
+        "disposition_stock": disposition,
         "locations": locations,
         "inventory": inventory,
         "locations_load_incomplete": bool(locations_data_failed),
     }
+
+
+def attach_disposition_stock_to_product_dicts(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    product_dicts: Sequence[dict[str, Any]],
+) -> None:
+    """Batch attach ``disposition_stock`` (list endpoint — avoids N+1)."""
+    pids = [int(d["id"]) for d in product_dicts if d.get("id") is not None]
+    if not pids:
+        return
+    disp_map = disposition_snapshots_for_products(db, int(tenant_id), warehouse_id, pids)
+    empty = empty_disposition_stock_dict()
+    for d in product_dicts:
+        pid = d.get("id")
+        if pid is None:
+            continue
+        d["disposition_stock"] = disp_map.get(int(pid), empty)
 
 
 def apply_inventory_display_to_dict(
@@ -231,6 +261,7 @@ def apply_inventory_display_to_dict(
     warehouse_id: Optional[int] = None,
     log_tag: Optional[str] = None,
     locations_data_failed: bool = False,
+    include_disposition_stock: bool = True,
 ) -> None:
     """Mutates *out* with stock_quantity, locations, inventory from shared snapshot."""
     snap = get_product_inventory_display_snapshot(
@@ -245,6 +276,8 @@ def apply_inventory_display_to_dict(
     out["unallocated_quantity"] = snap["unallocated_quantity"]
     out["reserved_quantity"] = snap["reserved_quantity"]
     out["available_quantity"] = snap["available_quantity"]
+    if include_disposition_stock:
+        out["disposition_stock"] = snap.get("disposition_stock") or empty_disposition_stock_dict()
     out["locations"] = snap["locations"]
     out["inventory"] = snap["inventory"]
     if snap.get("locations_load_incomplete"):

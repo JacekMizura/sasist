@@ -7,6 +7,11 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from .inventory_damage_trace import InventoryDamageTraceOut
+from .product_disposition_stock import ProductDispositionStockOut
+
+
+class WmsProductDispositionStock(ProductDispositionStockOut):
+    """WMS product view — same disposition breakdown as product API."""
 
 
 class WmsProductViewLocation(BaseModel):
@@ -47,6 +52,10 @@ class WmsProductViewResponse(BaseModel):
     sku: Optional[str] = None
     image: Optional[str] = Field(None, description="URL zdjęcia produktu")
     total_stock: float = Field(..., ge=0)
+    disposition_stock: WmsProductDispositionStock = Field(
+        default_factory=WmsProductDispositionStock,
+        description="Physical qty per disposition pool (additive; total_stock unchanged)",
+    )
     locations: list[WmsProductViewLocation] = Field(default_factory=list)
     logistics: WmsProductViewLogistics
     package: WmsProductViewPackage

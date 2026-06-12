@@ -46,6 +46,8 @@ def test_list_and_detail_stock_parity_for_st001(db):
     snap = get_product_inventory_display_snapshot(db, product_id=pid, tenant_id=tid)
     assert snap["stock_quantity"] == list_stock
     assert snap["locations"] == list_locs
+    disp = snap.get("disposition_stock") or {}
+    assert float(disp.get("physical_qty") or 0) == pytest.approx(float(list_stock), abs=0.01)
 
 
 def test_location_entries_include_id_and_code(db):

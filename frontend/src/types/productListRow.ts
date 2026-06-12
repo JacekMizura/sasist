@@ -1,4 +1,5 @@
 import type { AssignedLocation } from "./warehouse";
+import type { ProductDispositionStock } from "./productDispositionStock";
 
 /** Normalized product row shared by list + edit page fetch (types only — safe for api/ imports). */
 export type ProductListRow = {
@@ -65,6 +66,7 @@ export type ProductListRow = {
   unallocated_quantity?: number;
   reserved_quantity?: number;
   available_quantity?: number;
+  disposition_stock?: ProductDispositionStock;
   inventory_value?: number | null;
   average_purchase_price?: number | null;
   current_cost?: {

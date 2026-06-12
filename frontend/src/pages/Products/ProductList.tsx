@@ -22,6 +22,7 @@ import { useTranslation } from "../../locales";
 import { LocationTypeBadge } from "../../components/warehouse/LocationTypeBadge";
 import { getManufacturer } from "../../api/manufacturersApi";
 import { mapProductListRow, type ProductListRow } from "./productListMapper";
+import { ProductDispositionStockSummary } from "../../components/products/ProductDispositionStockSummary";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   formatResolvedSalePrice,
@@ -1174,16 +1175,25 @@ export default function ProductList() {
         );
       case "stock":
         return (
-          <td key={`${p.id}-${col}`} className={`${listSellasistTableBodyCellGrid} text-right`}>
-            <span
-              className={`text-sm tabular-nums ${
-                typeof p.stock_quantity === "number" && p.stock_quantity === 0
-                  ? "font-semibold text-red-600"
-                  : "text-slate-800"
-              }`}
-            >
-              {typeof p.stock_quantity === "number" ? `${p.stock_quantity} szt.` : "0 szt."}
-            </span>
+          <td key={`${p.id}-${col}`} className={`${listSellasistTableBodyCellGrid} align-top`}>
+            {p.disposition_stock ? (
+              <ProductDispositionStockSummary
+                variant="list"
+                disposition={p.disposition_stock}
+                reservedQuantity={p.reserved_quantity}
+              />
+            ) : (
+              <div className="text-right text-sm tabular-nums text-slate-800">
+                <p>
+                  <span className="text-slate-500">Dostępne:</span>{" "}
+                  {typeof p.stock_quantity === "number" ? p.stock_quantity : 0}
+                </p>
+                <p className="text-slate-600">
+                  <span className="text-slate-500">Fizycznie:</span>{" "}
+                  {typeof p.stock_quantity === "number" ? p.stock_quantity : 0}
+                </p>
+              </div>
+            )}
           </td>
         );
       case "inventory_value":

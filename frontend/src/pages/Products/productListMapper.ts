@@ -1,5 +1,6 @@
 import type { AssignedLocation } from "../../types/warehouse";
 import type { ProductListRow } from "../../types/productListRow";
+import { parseDispositionStock } from "../../types/productDispositionStock";
 
 export type { ProductListRow };
 
@@ -44,6 +45,7 @@ export function mapProductListRow(p: Record<string, unknown>): ProductListRow {
     unallocated_quantity: p.unallocated_quantity != null ? Number(p.unallocated_quantity) : undefined,
     reserved_quantity: p.reserved_quantity != null ? Number(p.reserved_quantity) : undefined,
     available_quantity: p.available_quantity != null ? Number(p.available_quantity) : undefined,
+    disposition_stock: parseDispositionStock(p.disposition_stock),
     inventory_value: invVal,
     average_purchase_price: avgPur,
     current_cost:

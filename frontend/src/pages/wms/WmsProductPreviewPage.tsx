@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { getWmsProductView, type WmsProductViewResponseApi } from "../../api/wmsProductViewApi";
+import { ProductDispositionStockSummary } from "../../components/products/ProductDispositionStockSummary";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -145,11 +146,17 @@ export default function WmsProductPreviewPage() {
                 </div>
               </div>
               <div className="border-t border-indigo-200 bg-indigo-50 px-4 py-5 sm:px-6">
-                <p className="text-center text-xs font-bold uppercase tracking-[0.2em] text-indigo-800">Stan całkowity</p>
-                <p className="mt-1 text-center text-4xl font-black tabular-nums text-indigo-950 sm:text-5xl">
-                  {fmtQty(data.total_stock)}
-                </p>
-                <p className="mt-1 text-center text-sm font-medium text-indigo-900/80">szt. w magazynie</p>
+                {data.disposition_stock ? (
+                  <ProductDispositionStockSummary variant="wms" disposition={data.disposition_stock} />
+                ) : (
+                  <>
+                    <p className="text-center text-xs font-bold uppercase tracking-[0.2em] text-indigo-800">Stan całkowity</p>
+                    <p className="mt-1 text-center text-4xl font-black tabular-nums text-indigo-950 sm:text-5xl">
+                      {fmtQty(data.total_stock)}
+                    </p>
+                    <p className="mt-1 text-center text-sm font-medium text-indigo-900/80">szt. w magazynie</p>
+                  </>
+                )}
               </div>
             </header>
 

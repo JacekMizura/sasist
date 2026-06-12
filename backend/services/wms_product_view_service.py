@@ -8,6 +8,7 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
 from ..schemas.wms_product_view import (
+    WmsProductDispositionStock,
     WmsProductViewLocation,
     WmsProductViewLogistics,
     WmsProductViewPackage,
@@ -15,6 +16,7 @@ from ..schemas.wms_product_view import (
 )
 from .inventory_damage_trace_service import inventory_damage_trace_out
 from .legacy_import_inventory_display_filter import should_hide_legacy_csv_import_inventory_location
+from .product_disposition_snapshot_service import get_product_disposition_stock
 
 
 def _location_badge(loc_type: str | None, location_type: str | None) -> str:
@@ -69,8 +71,6 @@ def build_wms_product_view(
     )
     if not p:
         return None
-
-    qty_sum = func.coalesce(func.sum(Inventory.quantity), 0.0).label("qty")
 
     inv_rows = (
         db.query(Inventory, Location)
@@ -153,6 +153,14 @@ def build_wms_product_view(
         carton_height_cm=round(float(p.carton_height_cm), 2) if p.carton_height_cm is not None else None,
     )
 
+    disp_raw = get_product_disposition_stock(
+        db,
+        product_id=int(product_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
+    disposition_stock = WmsProductDispositionStock(**disp_raw)
+
     return WmsProductViewResponse(
         product_id=int(p.id),
         name=str(p.name or "").strip() or f"Produkt #{p.id}",
@@ -160,6 +168,7 @@ def build_wms_product_view(
         sku=sku,
         image=(p.image_url or "").strip() or None,
         total_stock=round(total, 4),
+        disposition_stock=disposition_stock,
         locations=loc_items,
         logistics=logistics,
         package=package,
