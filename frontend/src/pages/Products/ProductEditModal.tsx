@@ -1872,7 +1872,7 @@ export function ProductEditModal({
                               <input
                                 type="number" min={0} step={0.01} readOnly
                                 value={volume === "" ? "" : typeof volume === "number" ? round2(volume) : volume}
-                                className={`${inputClass} font-semibold text-slate-700 bg-slate-50 cursor-not-allowed ${hasVolumeOverflow ? "border-red-400 bg-red-50 text-red-700" : ""}`}
+                                className={`${inputClass} font-semibold text-slate-700 bg-slate-50 cursor-not-allowed`}
                               />
                             </div>
                             <div>

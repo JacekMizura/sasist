@@ -545,6 +545,7 @@ export const router = createBrowserRouter(
                     <Route path=":documentId" element={<DocumentsSalesDetailPage />} />
                   </Route>
                   <Route path="correcting" element={<DocumentsCorrectingPage />} />
+                  <Route path="corrections" element={<Navigate to="/documents/correcting" replace />} />
                   <Route path="returns" element={<Navigate to="/documents/correcting" replace />} />
                   <Route path="warehouse" element={<Outlet />}>
                     <Route index element={<Navigate to="pz" replace />} />
@@ -566,7 +567,16 @@ export const router = createBrowserRouter(
                     }
                   />
                   <Route path="field-templates" element={<Navigate to="/documents/custom-fields" replace />} />
-                  <Route path="ksef" element={<DocumentsPlaceholderPage title="Konta KSeF" />} />
+                  <Route
+                    path="ksef"
+                    element={
+                      <DocumentsPlaceholderPage
+                        title="Konta KSeF"
+                        hintLabel="Powrót do serii dokumentów"
+                        hintTo="/documents/series"
+                      />
+                    }
+                  />
                 </Route>
                 <Route path="import" element={<Navigate to="/settings/import" replace />} />
                 <Route path="import/history" element={<Navigate to="/settings/import?panel=history" replace />} />

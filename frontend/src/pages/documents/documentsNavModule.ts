@@ -1,11 +1,17 @@
-import { DOCUMENTS_NAV_SECTIONS, type DocumentsNavSection } from "./documentsNavConfig";
+import {
+  DOCUMENTS_CORRECTIONS_SIDEBAR,
+  DOCUMENTS_NAV_SECTIONS,
+  DOCUMENTS_SALES_SIDEBAR,
+  DOCUMENTS_SETTINGS_SIDEBAR,
+  DOCUMENTS_WAREHOUSE_SIDEBAR_STATIC,
+  type DocumentsNavSection,
+} from "./documentsNavConfig";
 import { DOCUMENTS_TAB_ITEMS, activeDocumentsTabPath } from "./documentsTabConfig";
 
-export type DocumentNavModule = "SALES" | "CORRECTION" | "WAREHOUSE" | "OTHER";
+export type DocumentNavModule = "SALES" | "CORRECTION" | "WAREHOUSE" | "SETTINGS" | "OTHER";
 
 /**
  * Aktywny „moduł” dokumentów wg ścieżki (zgodnie z główną zakładką Dokumenty).
- * `/documents/corrections` traktowane jak korekty, jeśli kiedyś pojawi się taka trasa.
  */
 export function getCurrentDocumentModule(pathname: string): DocumentNavModule {
   const p = (pathname.replace(/\/+$/, "") || pathname).toLowerCase();
@@ -14,11 +20,21 @@ export function getCurrentDocumentModule(pathname: string): DocumentNavModule {
     p === "/documents/correcting" ||
     p.startsWith("/documents/correcting/") ||
     p === "/documents/corrections" ||
-    p.startsWith("/documents/corrections/")
+    p.startsWith("/documents/corrections/") ||
+    p === "/documents/returns" ||
+    p.startsWith("/documents/returns/")
   ) {
     return "CORRECTION";
   }
   if (p === "/documents/warehouse" || p.startsWith("/documents/warehouse/")) return "WAREHOUSE";
+  if (
+    p.startsWith("/documents/series") ||
+    p.startsWith("/documents/exports") ||
+    p.startsWith("/documents/custom-fields") ||
+    p.startsWith("/documents/ksef")
+  ) {
+    return "SETTINGS";
+  }
   return "OTHER";
 }
 
@@ -33,16 +49,16 @@ export function getDocumentsSidebarSections(pathname: string): DocumentsNavSecti
   const mod = getCurrentDocumentModule(pathname);
 
   if (mod === "SALES") {
-    const sec = DOCUMENTS_NAV_SECTIONS.find((s) => s.title === "Sprzedaż");
-    return sec ? [{ title: "Sprzedaż", items: [...sec.items] }] : [];
+    return [{ title: DOCUMENTS_SALES_SIDEBAR.title, items: [...DOCUMENTS_SALES_SIDEBAR.items] }];
   }
   if (mod === "CORRECTION") {
-    const sec = DOCUMENTS_NAV_SECTIONS.find((s) => s.title === "Korekty");
-    return sec ? [{ title: "Korekty", items: [...sec.items] }] : [];
+    return [{ title: DOCUMENTS_CORRECTIONS_SIDEBAR.title, items: [...DOCUMENTS_CORRECTIONS_SIDEBAR.items] }];
   }
   if (mod === "WAREHOUSE") {
-    const sec = DOCUMENTS_NAV_SECTIONS.find((s) => s.title === "Magazynowe");
-    return sec ? [{ title: "Magazyn", items: [...sec.items] }] : [];
+    return [{ title: DOCUMENTS_WAREHOUSE_SIDEBAR_STATIC.title, items: [...DOCUMENTS_WAREHOUSE_SIDEBAR_STATIC.items] }];
+  }
+  if (mod === "SETTINGS") {
+    return [{ title: DOCUMENTS_SETTINGS_SIDEBAR.title, items: [...DOCUMENTS_SETTINGS_SIDEBAR.items] }];
   }
 
   const tabRoot = activeDocumentsTabPath(pathname);

@@ -50,6 +50,9 @@ function DocumentsLayoutInner() {
     });
   }, [catalog?.items]);
 
+  const operationTabs = tabItems.filter((t) => t.group !== "settings");
+  const settingsTabs = tabItems.filter((t) => t.group === "settings");
+
   useEffect(() => {
     if (!pathname.startsWith("/documents")) return;
     if (pathname.startsWith("/documents/series")) {
@@ -107,12 +110,27 @@ function DocumentsLayoutInner() {
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div className="shrink-0 border-b border-slate-200 bg-white px-5 pt-4">
-                <TabsNav
-                  items={tabItems}
-                  variant="underline"
-                  className="w-full gap-8 overflow-x-auto [-webkit-overflow-scrolling:touch]"
-                  aria-label="Dokumenty — zakładki"
-                />
+                <div className="flex w-full flex-wrap items-end gap-x-6 gap-y-2">
+                  <TabsNav
+                    items={operationTabs}
+                    variant="underline"
+                    className="min-w-0 flex-1 gap-8 overflow-x-auto border-b-0 [-webkit-overflow-scrolling:touch]"
+                    aria-label="Dokumenty — operacje"
+                  />
+                  {settingsTabs.length > 0 ? (
+                    <div className="flex min-w-0 items-end gap-3 border-l border-slate-200 pl-4">
+                      <span className="hidden pb-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 lg:inline">
+                        Ustawienia
+                      </span>
+                      <TabsNav
+                        items={settingsTabs}
+                        variant="underline"
+                        className="min-w-0 gap-6 overflow-x-auto border-b-0 [-webkit-overflow-scrolling:touch]"
+                        aria-label="Dokumenty — ustawienia"
+                      />
+                    </div>
+                  ) : null}
+                </div>
               </div>
               <main className="min-h-0 flex-1 overflow-auto bg-white p-5">
                 <Outlet />

@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
-import { DOCUMENTS_NAV_SECTIONS } from "../pages/documents/documentsNavConfig";
+import { DOCUMENTS_MAIN_FLYOUT_SECTIONS } from "../pages/documents/documentsNavConfig";
 import { navGroupHasActivePath } from "./navActive";
 
 export type NavFlyoutLinkConfig = {
@@ -274,7 +274,7 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
     id: "documents",
     label: UI_STRINGS.navigation.documentsCategory,
     Icon: FolderOpen,
-    flyoutSections: DOCUMENTS_NAV_SECTIONS.map((sec) => ({
+    flyoutSections: DOCUMENTS_MAIN_FLYOUT_SECTIONS.map((sec) => ({
       title: sec.title,
       items: sec.items.map((i) => ({ path: i.path, label: i.label, Icon: i.Icon })),
     })),
