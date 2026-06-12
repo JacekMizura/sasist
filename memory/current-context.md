@@ -1,5 +1,14 @@
 # Current context
 
+## Inventory management policy Etap 3B (2026-06-08)
+- `wms_settings.inventory_management_mode`: `DOCUMENTS_ONLY` | `HYBRID` (default) | `EXTERNAL_INVENTORY` (model/API only — no UI/logic)
+- SSOT: `inventory_management_policy_service.py` — `get_inventory_management_mode`, `can_manual_adjust_stock`, gates
+- HYBRID manual correction: `POST /wms/inventory/manual-adjustment` → RK doc + `StockOperation` + `upsert_dock_inventory_for_loose_receipt` / FIFO issue
+- Blocked paths: `POST /inventory/`, product `stock_quantity` update (both modes — HYBRID wymusza audytowaną korektę)
+- UI: WMS Settings → Ustawienia wspólne → Polityka aktualizacji stanów; produkt → „Korekta stanu” (HYBRID only)
+- Schema: `inventory_management_policy_schema.ensure_inventory_management_policy_schema`
+- Tests: `backend/tests/inventory_management/test_inventory_management_policy.py`
+
 ## Product sales offers Etap 3A — minimal internal layer (2026-06-08)
 - Tabela `product_sales_offers` + FK: `order_items.product_sales_offer_id`, `direct_sale_session_lines.product_sales_offer_id`
 - Unikalność aktywnej oferty per `(tenant, product, stock_disposition)` — rozszerzalne (OUTLET_C, REFURBISHED)

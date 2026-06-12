@@ -3212,6 +3212,28 @@ def update_product(
             },
         )
 
+    if body.stock_quantity is not None:
+        from ..services.inventory_management_policy_service import (
+            InventoryManagementPolicyError,
+            assert_no_unaudited_inventory_write,
+        )
+        from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
+
+        try:
+            wh_id = resolve_tenant_default_warehouse_id(db, int(product.tenant_id))
+            assert_no_unaudited_inventory_write(
+                db,
+                tenant_id=int(product.tenant_id),
+                warehouse_id=int(wh_id),
+            )
+        except InventoryManagementPolicyError as exc:
+            raise HTTPException(status_code=400, detail={"message": str(exc), "code": exc.code}) from exc
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Brak skonfigurowanego magazynu — nie można zmienić stanu magazynowego produktu.",
+            ) from None
+
     if body.name is not None:
         product.name = (body.name or "").strip()
     if body.tenant_id is not None:

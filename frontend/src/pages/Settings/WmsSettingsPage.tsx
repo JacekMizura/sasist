@@ -34,6 +34,7 @@ import {
 } from "../../modules/wmsSettings/directSales/DirectSalesSettingsPanel";
 import WmsPackingSettingsPanel, { type WmsPackingSettingsPanelHandle } from "./WmsPackingSettingsPanel";
 import WmsReturnsSettingsPanel from "./WmsReturnsSettingsPanel";
+import WmsInventoryManagementSettingsPanel from "./WmsInventoryManagementSettingsPanel";
 import WmsSmartMatchingSettingsPanel from "./WmsSmartMatchingSettingsPanel";
 import WmsThreeDMatchingSettingsPanel from "./WmsThreeDMatchingSettingsPanel";
 import StickySaveBar from "./StickySaveBar";
@@ -2714,6 +2715,9 @@ export default function WmsSettingsPage() {
               <div className={activeTab === "returns" ? "block" : "hidden"} aria-hidden={activeTab !== "returns"}>
                 <WmsReturnsSettingsPanel warehouseId={warehouseIdTop} />
               </div>
+              <div className={activeTab === "common" ? "block" : "hidden"} aria-hidden={activeTab !== "common"}>
+                <WmsInventoryManagementSettingsPanel warehouseId={warehouseIdTop} />
+              </div>
               <div className={activeTab === "smart_matching" ? "block" : "hidden"} aria-hidden={activeTab !== "smart_matching"}>
                 <WmsSmartMatchingSettingsPanel warehouseId={warehouseIdTop} sectionNavObserve={activeTab === "smart_matching"} />
               </div>
@@ -2724,6 +2728,7 @@ export default function WmsSettingsPage() {
               activeTab !== "packing" &&
               activeTab !== "direct_sales" &&
               activeTab !== "returns" &&
+              activeTab !== "common" &&
               activeTab !== "smart_matching" &&
               activeTab !== "three_d_matching" ? (
                 <div className="w-full">

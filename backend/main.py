@@ -138,6 +138,7 @@ from .db.schema_upgrade import (
     ensure_inventory_stock_disposition_columns,
     ensure_stock_disposition_stage2_columns,
     ensure_product_sales_offers_schema,
+    ensure_inventory_management_policy_schema,
     ensure_stock_document_items_stock_disposition_column,
     ensure_stock_document_items_stock_disposition_column,
     ensure_stock_operations_stock_disposition_column,
@@ -293,6 +294,7 @@ from .api.complaint_line import router as complaint_line_router
 from .api.complaint_shipment import router as complaint_shipment_router
 from .api.return_statuses import router as return_statuses_router
 from .api.wms_settings import router as wms_settings_router
+from .api.inventory_management_policy_api import router as inventory_management_policy_router
 from .api.order_statuses import router as order_statuses_router
 from .api.document_series import router as document_series_router
 from .api.wms_picking_config import router as wms_picking_config_router
@@ -1005,6 +1007,7 @@ try:
     ensure_inventory_stock_disposition_columns(engine)
     ensure_stock_disposition_stage2_columns(engine)
     ensure_product_sales_offers_schema(engine)
+    ensure_inventory_management_policy_schema(engine)
     ensure_warehouse_sqlite_schema_stabilization(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_stock_lot_and_inventory_sqlite failed at import")
@@ -1365,6 +1368,7 @@ def _upgrade_schema_background() -> None:
         ensure_inventory_stock_disposition_columns(engine)
         ensure_stock_disposition_stage2_columns(engine)
         ensure_product_sales_offers_schema(engine)
+        ensure_inventory_management_policy_schema(engine)
         ensure_stock_reservation_lot_columns(engine)
         ensure_pick_task_lot_columns(engine)
         ensure_pick_lot_columns(engine)
@@ -1701,6 +1705,7 @@ _API_ROUTERS = (
     reports_router,
     damage_reports_router,
     wms_settings_router,
+    inventory_management_policy_router,
     order_statuses_router,
     document_series_router,
     wms_picking_config_router,

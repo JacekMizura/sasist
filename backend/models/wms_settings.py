@@ -29,6 +29,9 @@ class WmsSettings(Base):
     z_pz_print_label_on_close = Column(Boolean, nullable=False, default=False)
     z_pz_label_template_id = Column(Integer, nullable=True)
 
+    # DOCUMENTS_ONLY | HYBRID | EXTERNAL_INVENTORY (reserved — not active in UI)
+    inventory_management_mode = Column(String(32), nullable=False, default="HYBRID")
+
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 

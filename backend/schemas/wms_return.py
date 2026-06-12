@@ -422,6 +422,7 @@ class ActiveZPzCloseRead(BaseModel):
 
 
 ReturnsMode = Literal["simple", "two_step", "advanced"]
+InventoryManagementMode = Literal["DOCUMENTS_ONLY", "HYBRID", "EXTERNAL_INVENTORY"]
 
 
 class WmsSettingsRead(BaseModel):
@@ -433,6 +434,7 @@ class WmsSettingsRead(BaseModel):
     enable_refund: bool = False
     z_pz_print_label_on_close: bool = False
     z_pz_label_template_id: Optional[int] = None
+    inventory_management_mode: InventoryManagementMode = "HYBRID"
 
 
 class WmsSettingsUpsert(BaseModel):

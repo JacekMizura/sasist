@@ -41,6 +41,8 @@ import { ProductLogisticsPackagingMatchingSection } from "../../components/produ
 import { RetailLabel } from "../../components/products/RetailLabel";
 import { WarehouseFormCard as Card } from "../../components/products/WarehouseFormCard";
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
+import { ProductStockCorrectionModal } from "../../components/products/ProductStockCorrectionModal";
+import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
 import { ProductManufacturingPanel } from "../Production/ProductManufacturingPanel";
 import { ProductSalesOffersSection } from "./ProductSalesOffersSection";
 import { listCompositionsForProduct } from "../../api/compositionApi";
@@ -385,6 +387,8 @@ export function ProductEditModal({
   const [positions, setPositions] = useState<SelectablePosition[]>([]);
   const [layoutLoading, setLayoutLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [canManualAdjustStock, setCanManualAdjustStock] = useState(false);
+  const [stockCorrectionOpen, setStockCorrectionOpen] = useState(false);
 
   const [tenantId, setTenantId] = useState<number | null>(product?.tenant_id ?? null);
   const [name, setName] = useState(product?.name ?? "");
@@ -1168,6 +1172,36 @@ export function ProductEditModal({
   useEffect(() => {
     fetchLayout();
   }, [fetchLayout]);
+
+  useEffect(() => {
+    if (isNew || tenantId == null || warehouse?.id == null) {
+      setCanManualAdjustStock(false);
+      return;
+    }
+    let cancelled = false;
+    void getInventoryManagementSettings({ tenantId, warehouseId: warehouse.id })
+      .then((s) => {
+        if (!cancelled) setCanManualAdjustStock(Boolean(s.can_manual_adjust_stock));
+      })
+      .catch(() => {
+        if (!cancelled) setCanManualAdjustStock(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNew, tenantId, warehouse?.id]);
+
+  const reloadProductAfterStockCorrection = useCallback(async () => {
+    if (!product?.id || tenantId == null) return;
+    try {
+      const params: Record<string, number> = { tenant_id: tenantId };
+      if (warehouse?.id) params.warehouse_id = warehouse.id;
+      const res = await api.get<ProductForm>(`/products/${product.id}/`, { params });
+      onSave(res.data);
+    } catch {
+      /* parent list may refresh on next navigation */
+    }
+  }, [onSave, product?.id, tenantId, warehouse?.id]);
 
   useEffect(() => {
     if (!focusPlanLocations || isNew || layoutLoading) return;
@@ -2371,11 +2405,25 @@ export function ProductEditModal({
                           availableDisplay={inventoryBreakdown?.available ?? null}
                           dispositionStock={product?.disposition_stock ?? null}
                           inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
-                          showInventoryLink
+                          showInventoryLink={!isNew}
+                          canManualAdjustStock={canManualAdjustStock}
+                          onManualAdjustClick={() => setStockCorrectionOpen(true)}
                           emptyLocationsMessage={magazynEmptyLocationsMessage}
                           onEditTraceability={isNew ? undefined : (row) => setTraceEditRow(row)}
                           traceabilityEditDisabled={saving}
                         />
+                        {!isNew && product?.id && tenantId != null && warehouse?.id ? (
+                          <ProductStockCorrectionModal
+                            open={stockCorrectionOpen}
+                            onClose={() => setStockCorrectionOpen(false)}
+                            onSuccess={() => void reloadProductAfterStockCorrection()}
+                            tenantId={tenantId}
+                            warehouseId={warehouse.id}
+                            productId={product.id}
+                            productName={product.name}
+                            inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
+                          />
+                        ) : null}
                       </section>
 
                       <section>

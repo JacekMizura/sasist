@@ -28,6 +28,7 @@ from ..schemas.wms_packing_settings import (
 from ..schemas.wms_return import ReturnsMode, WmsSettingsRead, WmsSettingsSave, WmsSettingsUpsert
 from ..schemas.wms_picking_shortage_settings import WmsPickingShortageSettingsRead, WmsPickingShortageSettingsSave
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
+from ..services.inventory_management_policy_service import normalize_inventory_management_mode
 from ..schemas.direct_sales_settings import DirectSalesSettingsRead, DirectSalesSettingsSave
 from ..services.direct_sales_settings_service import (
     resolve_direct_sales_settings,
@@ -102,6 +103,9 @@ def _row_to_read(row: WmsSettings) -> WmsSettingsRead:
         enable_refund=bool(row.enable_refund),
         z_pz_print_label_on_close=bool(getattr(row, "z_pz_print_label_on_close", False)),
         z_pz_label_template_id=getattr(row, "z_pz_label_template_id", None),
+        inventory_management_mode=normalize_inventory_management_mode(
+            getattr(row, "inventory_management_mode", None)
+        ),
     )
 
 

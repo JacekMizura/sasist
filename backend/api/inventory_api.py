@@ -26,6 +26,10 @@ from ..schemas.inventory import (
 from ..services.inventory_lot_keys import NO_EXPIRY_SENTINEL, normalize_batch_number, storage_expiry_date
 from ..services.stock_disposition import normalize_stock_disposition
 from ..services.inventory_operational_location_filter import exclude_location_from_operational_inventory_list
+from ..services.inventory_management_policy_service import (
+    InventoryManagementPolicyError,
+    assert_no_unaudited_inventory_write,
+)
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 logger = logging.getLogger(__name__)
@@ -239,6 +243,15 @@ def list_inventory(
 @router.post("/", response_model=InventoryUnitRead, status_code=201)
 def create_inventory_unit(body: InventoryCreate, db: Session = Depends(get_db)):
     """Create or update stock: insert new row (no upsert; use existing stock row if same keys)."""
+    try:
+        assert_no_unaudited_inventory_write(
+            db,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(body.warehouse_id),
+        )
+    except InventoryManagementPolicyError as exc:
+        raise HTTPException(status_code=400, detail={"message": str(exc), "code": exc.code}) from exc
+
     lot_bn = normalize_batch_number(body.batch)
     lot_ed = storage_expiry_date(bool(body.expiration_date), body.expiration_date)
     sd = normalize_stock_disposition(getattr(body, "stock_disposition", None))

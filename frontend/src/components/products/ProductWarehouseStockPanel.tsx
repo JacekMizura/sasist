@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { MagazynInventoryLine, magazynInventoryRowReactKey, type MagazynInvRowDisplay } from "./MagazynInventoryLine";
 import { ProductDispositionStockSummary } from "./ProductDispositionStockSummary";
 import { WarehouseFormCard } from "./WarehouseFormCard";
@@ -25,6 +24,9 @@ export type ProductWarehouseStockPanelProps = {
   onEditTraceability?: (row: MagazynInvRowDisplay) => void;
   traceabilityEditDisabled?: boolean;
   showInventoryLink?: boolean;
+  /** When true, shows active „Korekta stanu” button (HYBRID). */
+  canManualAdjustStock?: boolean;
+  onManualAdjustClick?: () => void;
   editorSlot?: ReactNode;
   /** Override empty-state copy for the locations card (default: product wording). */
   emptyLocationsMessage?: string;
@@ -47,6 +49,8 @@ export function ProductWarehouseStockPanel({
   onEditTraceability,
   traceabilityEditDisabled = false,
   showInventoryLink = false,
+  canManualAdjustStock = false,
+  onManualAdjustClick,
   editorSlot,
   emptyLocationsMessage = "Brak stanu magazynowego",
 }: ProductWarehouseStockPanelProps) {
@@ -139,16 +143,21 @@ export function ProductWarehouseStockPanel({
             </span>
           </p>
         )}
-        {showInventoryLink ? (
-          <Link
-            to="/inventory"
+        {showInventoryLink && canManualAdjustStock ? (
+          <button
+            type="button"
+            onClick={onManualAdjustClick}
             className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
           >
-            Zarządzaj stanem
-          </Link>
+            Korekta stanu
+          </button>
         ) : null}
         {showInventoryLink ? (
-          <p className="text-xs text-slate-500">Zmiany ilości wyłącznie przez operacje magazynowe.</p>
+          <p className="text-xs text-slate-500">
+            {canManualAdjustStock
+              ? "Korekta tworzy dokument RK z pełnym audytem operacji."
+              : "Stany aktualizuj wyłącznie dokumentami magazynowymi (tryb: tylko dokumenty)."}
+          </p>
         ) : null}
         {editorSlot ? <div className="border-t border-slate-100 pt-3">{editorSlot}</div> : null}
       </WarehouseFormCard>
