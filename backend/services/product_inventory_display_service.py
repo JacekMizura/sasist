@@ -27,6 +27,7 @@ from .product_disposition_snapshot_service import (
     empty_disposition_stock_dict,
     get_product_disposition_stock,
 )
+from .commercial_availability_service import commercial_snapshots_for_products, empty_commercial_snapshot, get_commercial_availability_snapshot
 from .product_inventory_snapshot_service import inventory_snapshots_for_products, visible_on_hand_by_product
 
 logger = logging.getLogger(__name__)
@@ -201,6 +202,8 @@ def get_product_inventory_display_snapshot(
             "reserved_quantity": 0,
             "available_quantity": 0,
             "disposition_stock": empty_disposition_stock_dict(),
+            "commercially_sellable_qty": 0.0,
+            "sales_blocked_qty": 0.0,
             "locations": [],
             "inventory": [],
             "locations_load_incomplete": False,
@@ -220,6 +223,11 @@ def get_product_inventory_display_snapshot(
     disposition = get_product_disposition_stock(
         db, product_id=pid, tenant_id=tid, warehouse_id=warehouse_id
     )
+    commercial = empty_commercial_snapshot()
+    if warehouse_id is not None:
+        commercial = get_commercial_availability_snapshot(
+            db, tenant_id=tid, warehouse_id=int(warehouse_id), product_id=pid
+        )
     return {
         "stock_quantity": stock,
         "location_allocated_quantity": allocated,
@@ -227,6 +235,8 @@ def get_product_inventory_display_snapshot(
         "reserved_quantity": ops["reserved_quantity"],
         "available_quantity": ops["available_quantity"],
         "disposition_stock": disposition,
+        "commercially_sellable_qty": float(commercial.get("commercially_sellable_qty") or 0.0),
+        "sales_blocked_qty": float(commercial.get("sales_blocked_qty") or 0.0),
         "locations": locations,
         "inventory": inventory,
         "locations_load_incomplete": bool(locations_data_failed),
@@ -245,12 +255,21 @@ def attach_disposition_stock_to_product_dicts(
     if not pids:
         return
     disp_map = disposition_snapshots_for_products(db, int(tenant_id), warehouse_id, pids)
+    commercial_map = (
+        commercial_snapshots_for_products(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), product_ids=pids)
+        if warehouse_id is not None
+        else {}
+    )
     empty = empty_disposition_stock_dict()
+    empty_commercial = empty_commercial_snapshot()
     for d in product_dicts:
         pid = d.get("id")
         if pid is None:
             continue
         d["disposition_stock"] = disp_map.get(int(pid), empty)
+        comm = commercial_map.get(int(pid), empty_commercial)
+        d["commercially_sellable_qty"] = float(comm.get("commercially_sellable_qty") or 0.0)
+        d["sales_blocked_qty"] = float(comm.get("sales_blocked_qty") or 0.0)
 
 
 def apply_inventory_display_to_dict(
@@ -278,6 +297,8 @@ def apply_inventory_display_to_dict(
     out["available_quantity"] = snap["available_quantity"]
     if include_disposition_stock:
         out["disposition_stock"] = snap.get("disposition_stock") or empty_disposition_stock_dict()
+    out["commercially_sellable_qty"] = float(snap.get("commercially_sellable_qty") or 0.0)
+    out["sales_blocked_qty"] = float(snap.get("sales_blocked_qty") or 0.0)
     out["locations"] = snap["locations"]
     out["inventory"] = snap["inventory"]
     if snap.get("locations_load_incomplete"):

@@ -463,6 +463,17 @@ def validate_merged_stock(
         except OfferStockUnavailableError as exc:
             short.append(str(exc.detail))
     for (pid, disp), n in need_by_disp.items():
+        sd = normalize_stock_disposition(disp)
+        if sd == DEFAULT_STOCK_DISPOSITION:
+            from .commercial_availability_service import (
+                COMMERCIAL_STOCK_UNAVAILABLE_MSG,
+                commercially_sellable_qty,
+            )
+
+            avail = commercially_sellable_qty(db, tenant_id, warehouse_id, pid)
+            if avail + 1e-9 < n:
+                short.append(COMMERCIAL_STOCK_UNAVAILABLE_MSG)
+                continue
         avail = available_stock_for_disposition(db, tenant_id, warehouse_id, pid, disp)
         if avail + 1e-9 < n:
             short.append(f"product_id={pid} disposition={disp} need={n} available={avail:.0f}")

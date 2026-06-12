@@ -1067,7 +1067,12 @@ export default function DocumentsWarehousePage() {
                   <div ref={docLinesRef}>
                     <WarehouseDocumentLinesSection
                       detail={detail}
+                      tenantId={tenantId}
                       isWzDetail={isWzDetail}
+                      showPurchaseSalesBlock={isPzDetail}
+                      onSalesBlockUpdated={() => {
+                        if (detailId != null) void openDetail(detailId);
+                      }}
                       lineEditEnabled={lineEditEnabled}
                       inputClass={inputClass}
                       receivedByLineId={receivedByLineId}

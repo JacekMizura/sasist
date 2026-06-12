@@ -57,5 +57,15 @@ class WmsProductViewResponse(BaseModel):
         description="Physical qty per disposition pool (additive; total_stock unchanged)",
     )
     locations: list[WmsProductViewLocation] = Field(default_factory=list)
+    commercially_sellable_qty: float = Field(
+        0,
+        ge=0,
+        description="saleable_available_qty minus effective purchase-line sales blocks",
+    )
+    sales_blocked_qty: float = Field(
+        0,
+        ge=0,
+        description="Effective sales block total for this product in warehouse",
+    )
     logistics: WmsProductViewLogistics
     package: WmsProductViewPackage

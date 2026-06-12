@@ -67,6 +67,8 @@ export type ProductListRow = {
   reserved_quantity?: number;
   available_quantity?: number;
   disposition_stock?: ProductDispositionStock;
+  commercially_sellable_qty?: number;
+  sales_blocked_qty?: number;
   inventory_value?: number | null;
   average_purchase_price?: number | null;
   current_cost?: {

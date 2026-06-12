@@ -1,0 +1,35 @@
+"""Reason codes for purchase-line sales block (commercial overlay)."""
+
+from __future__ import annotations
+
+from typing import FrozenSet
+
+SALES_BLOCK_REASON_PRICE_DISPUTE = "PRICE_DISPUTE"
+SALES_BLOCK_REASON_VAT_DISPUTE = "VAT_DISPUTE"
+SALES_BLOCK_REASON_MISSING_INVOICE = "MISSING_INVOICE"
+SALES_BLOCK_REASON_PURCHASE_REVIEW = "PURCHASE_REVIEW"
+SALES_BLOCK_REASON_OTHER = "OTHER"
+
+SALES_BLOCK_REASON_CODES: FrozenSet[str] = frozenset(
+    {
+        SALES_BLOCK_REASON_PRICE_DISPUTE,
+        SALES_BLOCK_REASON_VAT_DISPUTE,
+        SALES_BLOCK_REASON_MISSING_INVOICE,
+        SALES_BLOCK_REASON_PURCHASE_REVIEW,
+        SALES_BLOCK_REASON_OTHER,
+    }
+)
+
+SALES_BLOCK_REASON_LABELS: dict[str, str] = {
+    SALES_BLOCK_REASON_PRICE_DISPUTE: "Spór cenowy",
+    SALES_BLOCK_REASON_VAT_DISPUTE: "Spór VAT",
+    SALES_BLOCK_REASON_MISSING_INVOICE: "Brak faktury",
+    SALES_BLOCK_REASON_PURCHASE_REVIEW: "Oczekiwanie na akceptację zakupów",
+    SALES_BLOCK_REASON_OTHER: "Inne",
+}
+
+COMMERCIAL_STOCK_UNAVAILABLE_MSG = (
+    "Brak dostępnej ilości handlowej. Część stanu została zablokowana przez dział zakupów."
+)
+
+PURCHASE_PZ_DOCUMENT_TYPE = "PZ"

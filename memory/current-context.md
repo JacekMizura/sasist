@@ -1,5 +1,15 @@
 # Current context
 
+## Purchase PZ sales block MVP (2026-06-08)
+- Overlay handlowy na `stock_document_items` (tylko PZ zakupowe): `sales_blocked_qty`, `sales_block_reason_code`, `sales_block_note`, `sales_blocked_at/by`
+- SSOT projekcji: `commercial_availability_service.py` — `effective_sales_block` z wirtualną konsumpcją LIFO po ISSUE; **bez zmian inventory/putaway/MM/pick**
+- `commercially_sellable_qty` = `saleable_available_qty` − effective block (nowe pole API produktu / WMS view; `disposition_stock` bez zmian)
+- Gate: OMS (`validate_merged_stock`), `offer_available_qty`, fala (`wave_service` commercial_remaining)
+- API: `PATCH /stock-documents/{id}/lines/{line_id}/sales-block`
+- UI: PZ w Dokumenty magazynowe → panel „Blokada sprzedaży”; produkt → dostępne handlowo / zablokowane
+- Schema: `purchase_sales_block_schema.ensure_purchase_sales_block_schema`
+- Tests: `backend/tests/purchase_sales_block/test_commercial_availability.py` (5/5)
+
 ## Inventory management policy Etap 3B (2026-06-08)
 - `wms_settings.inventory_management_mode`: `DOCUMENTS_ONLY` | `HYBRID` (default) | `EXTERNAL_INVENTORY` (model/API only — no UI/logic)
 - SSOT: `inventory_management_policy_service.py` — `get_inventory_management_mode`, `can_manual_adjust_stock`, gates

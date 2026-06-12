@@ -52,6 +52,7 @@ from .inventory_serial_service import list_serials_for_document_lines, serial_ra
 from .stock_disposition import stock_disposition_for_document_line
 from .stock_operation_receipt_service import append_receipt_operation, backfill_receipt_gap_for_line
 from .receipt_line_visuals import ReceiptLineVisuals, resolve_receipt_line_visuals
+from .purchase_sales_block_service import sales_block_line_projection
 from .wm_catalog_stock_service import apply_wm_catalog_receive_delta, update_wm_catalog_last_purchase_metadata
 from .location_badge import batch_location_storage_types, wms_location_badge_kind
 from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_stock_document_id
@@ -1081,6 +1082,14 @@ def _item_row_to_read(
     source_rmz_number: Optional[str] = None,
     return_decision: Optional[str] = None,
     return_decision_label: Optional[str] = None,
+    sales_blocked_qty: float = 0.0,
+    sales_block_effective_qty: float = 0.0,
+    sales_block_reason_code: Optional[str] = None,
+    sales_block_reason_label: Optional[str] = None,
+    sales_block_note: Optional[str] = None,
+    sales_blocked_at=None,
+    sales_blocked_by_user_id: Optional[int] = None,
+    line_commercial_available_qty: float = 0.0,
 ) -> StockDocumentItemRead:
     o = float(row.ordered_quantity or 0)
     r = float(row.received_quantity or 0)
@@ -1177,6 +1186,14 @@ def _item_row_to_read(
         source_rmz_number=(source_rmz_number or "").strip() or None,
         return_decision=(return_decision or "").strip() or None,
         return_decision_label=return_decision_label,
+        sales_blocked_qty=float(sales_blocked_qty or 0),
+        sales_block_effective_qty=float(sales_block_effective_qty or 0),
+        sales_block_reason_code=sales_block_reason_code,
+        sales_block_reason_label=sales_block_reason_label,
+        sales_block_note=sales_block_note,
+        sales_blocked_at=sales_blocked_at,
+        sales_blocked_by_user_id=sales_blocked_by_user_id,
+        line_commercial_available_qty=float(line_commercial_available_qty or 0),
     )
 
 
@@ -1327,6 +1344,17 @@ def build_stock_document_read(
             "return_decision_label": _z_pz_return_decision_label(rd_s),
         }
 
+    def _sales_block_item_extras(row: StockDocumentItem) -> dict[str, Any]:
+        if dt_b != "PZ":
+            return {}
+        return sales_block_line_projection(
+            db,
+            tenant_id=int(doc.tenant_id),
+            warehouse_id=getattr(doc, "warehouse_id", None),
+            doc=doc,
+            line=row,
+        )
+
     item_reads: List[StockDocumentItemRead] = []
     for row in visible_rows:
         p = prod_by_id.get(row.product_id) if row.product_id is not None else None
@@ -1384,6 +1412,7 @@ def build_stock_document_read(
                     serial_numbers=sn_list,
                     serial_range_label=sn_range,
                     **_zpz_item_extras(row),
+                    **_sales_block_item_extras(row),
                 )
             )
         else:
@@ -1409,6 +1438,7 @@ def build_stock_document_read(
                     serial_numbers=sn_list,
                     serial_range_label=sn_range,
                     **_zpz_item_extras(row),
+                    **_sales_block_item_extras(row),
                 )
             )
 

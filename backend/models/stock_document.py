@@ -192,6 +192,17 @@ class StockDocumentItem(Base):
     )
     #: Pozycja dodana w WMS spoza importu PZ: WMS_SCAN | WMS_MANUAL.
     wms_line_source = Column(String(32), nullable=True, index=True)
+    #: Blokada handlowa — qty z tej linii PZ niedopuszczona do sprzedaży (overlay, bez zmiany inventory).
+    sales_blocked_qty = Column(Float, nullable=False, default=0, server_default=text("0"))
+    sales_block_reason_code = Column(String(64), nullable=True, index=True)
+    sales_block_note = Column(Text, nullable=True)
+    sales_blocked_at = Column(DateTime, nullable=True)
+    sales_blocked_by_user_id = Column(
+        Integer,
+        ForeignKey("app_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     document = relationship("StockDocument", back_populates="items", foreign_keys=[document_id])
     delivery_item = relationship("DeliveryItem", foreign_keys=[delivery_item_id])

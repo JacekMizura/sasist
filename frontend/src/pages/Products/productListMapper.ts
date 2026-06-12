@@ -46,6 +46,9 @@ export function mapProductListRow(p: Record<string, unknown>): ProductListRow {
     reserved_quantity: p.reserved_quantity != null ? Number(p.reserved_quantity) : undefined,
     available_quantity: p.available_quantity != null ? Number(p.available_quantity) : undefined,
     disposition_stock: parseDispositionStock(p.disposition_stock),
+    commercially_sellable_qty:
+      p.commercially_sellable_qty != null ? Number(p.commercially_sellable_qty) : undefined,
+    sales_blocked_qty: p.sales_blocked_qty != null ? Number(p.sales_blocked_qty) : undefined,
     inventory_value: invVal,
     average_purchase_price: avgPur,
     current_cost:

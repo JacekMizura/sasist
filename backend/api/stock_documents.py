@@ -32,6 +32,7 @@ from ..schemas.stock_document import (
     StockDocumentListRow,
     StockDocumentRead,
 )
+from ..schemas.purchase_sales_block import PatchPurchaseSalesBlockBody
 from ..services.stock_document_pdf_service import build_stock_document_pdf_bytes
 from ..services.stock_document_hard_delete_service import hard_delete_stock_document
 from ..services.document_creator_service import batch_load_app_users, created_by_read_for_document
@@ -50,6 +51,7 @@ from ..services.stock_document_service import (
     resolve_document_series_brief,
     set_stock_document_receiving_target,
 )
+from ..services.purchase_sales_block_service import PurchaseSalesBlockError, patch_purchase_line_sales_block
 from ..services.document_series_seed_service import ensure_default_document_series
 from ..services.wms_audit_service import touch_wms_operation_session
 
@@ -349,6 +351,28 @@ def patch_stock_document_lines(
         return patch_stock_document_items(db, tenant_id, document_id, body)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/{document_id}/lines/{line_id}/sales-block", response_model=StockDocumentRead)
+def patch_stock_document_line_sales_block(
+    document_id: int,
+    line_id: int,
+    body: PatchPurchaseSalesBlockBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    try:
+        return patch_purchase_line_sales_block(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            line_id=line_id,
+            body=body,
+            user=user,
+        )
+    except PurchaseSalesBlockError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.patch("/{document_id}/receiving-target", response_model=StockDocumentRead)

@@ -1,5 +1,7 @@
+import { Fragment } from "react";
 import type { StockDocumentItemRead, StockDocumentRead } from "../../api/stockDocumentsApi";
 import { AppStatCard } from "../../components/app-shell/AppStatCard";
+import { PurchaseSalesBlockLinePanel } from "../../components/purchasing/PurchaseSalesBlockLinePanel";
 import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
@@ -52,7 +54,10 @@ function fmtVatRate(rate: number): string {
 
 type Props = {
   detail: StockDocumentRead;
+  tenantId: number;
   isWzDetail: boolean;
+  showPurchaseSalesBlock?: boolean;
+  onSalesBlockUpdated?: () => void;
   lineEditEnabled: boolean;
   inputClass: string;
   receivedByLineId: Record<number, string>;
@@ -67,7 +72,10 @@ type Props = {
 
 export function WarehouseDocumentLinesSection({
   detail,
+  tenantId,
   isWzDetail,
+  showPurchaseSalesBlock = false,
+  onSalesBlockUpdated,
   lineEditEnabled,
   inputClass,
   receivedByLineId,
@@ -119,20 +127,33 @@ export function WarehouseDocumentLinesSection({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {detail.items.map((it) => (
-                  <LineRow
-                    key={it.id}
-                    it={it}
-                    isWzDetail={isWzDetail}
-                    lineEditEnabled={lineEditEnabled}
-                    inputClass={inputClass}
-                    receivedRaw={receivedByLineId[it.id]}
-                    suggestedCarrier={suggestedCarrierBarcodeByLineId[it.id]}
-                    onReceivedChange={onReceivedChange}
-                    onSuggestedCarrierChange={onSuggestedCarrierChange}
-                    onAssignCarrier={onAssignCarrier}
-                    onCreateCarrier={onCreateCarrier}
-                    onClearCarrier={onClearCarrier}
-                  />
+                  <Fragment key={it.id}>
+                    <LineRow
+                      it={it}
+                      isWzDetail={isWzDetail}
+                      lineEditEnabled={lineEditEnabled}
+                      inputClass={inputClass}
+                      receivedRaw={receivedByLineId[it.id]}
+                      suggestedCarrier={suggestedCarrierBarcodeByLineId[it.id]}
+                      onReceivedChange={onReceivedChange}
+                      onSuggestedCarrierChange={onSuggestedCarrierChange}
+                      onAssignCarrier={onAssignCarrier}
+                      onCreateCarrier={onCreateCarrier}
+                      onClearCarrier={onClearCarrier}
+                    />
+                    {showPurchaseSalesBlock && it.product_id != null ? (
+                      <tr className="bg-amber-50/20">
+                        <td colSpan={isWzDetail ? 11 : 12} className="px-4 pb-4 pt-0">
+                          <PurchaseSalesBlockLinePanel
+                            tenantId={tenantId}
+                            documentId={detail.id}
+                            line={it}
+                            onUpdated={() => onSalesBlockUpdated?.()}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

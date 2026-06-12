@@ -142,6 +142,14 @@ export type StockDocumentItemRead = {
   source_rmz_number?: string | null;
   return_decision?: string | null;
   return_decision_label?: string | null;
+  sales_blocked_qty?: number;
+  sales_block_effective_qty?: number;
+  sales_block_reason_code?: string | null;
+  sales_block_reason_label?: string | null;
+  sales_block_note?: string | null;
+  sales_blocked_at?: string | null;
+  sales_blocked_by_user_id?: number | null;
+  line_commercial_available_qty?: number;
 };
 
 export type StockDocumentLinkedSaleDocumentRead = {

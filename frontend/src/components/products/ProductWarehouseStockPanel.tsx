@@ -20,6 +20,8 @@ export type ProductWarehouseStockPanelProps = {
   availableDisplay?: string | null;
   /** Etap 1 disposition breakdown — when set, replaces legacy single-line stock in product panel. */
   dispositionStock?: ProductDispositionStock | null;
+  commerciallySellableQty?: number | null;
+  salesBlockedQty?: number | null;
   inventoryRows: MagazynInvRowDisplay[];
   onEditTraceability?: (row: MagazynInvRowDisplay) => void;
   traceabilityEditDisabled?: boolean;
@@ -45,6 +47,8 @@ export function ProductWarehouseStockPanel({
   reservedDisplay,
   availableDisplay,
   dispositionStock,
+  commerciallySellableQty,
+  salesBlockedQty,
   inventoryRows,
   onEditTraceability,
   traceabilityEditDisabled = false,
@@ -74,6 +78,29 @@ export function ProductWarehouseStockPanel({
                   : undefined
               }
             />
+            {commerciallySellableQty != null || (salesBlockedQty != null && salesBlockedQty > 0) ? (
+              <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-2 text-sm space-y-1">
+                <p className="text-slate-700">
+                  Dostępne handlowo:{" "}
+                  <span className="font-semibold tabular-nums text-emerald-800">
+                    {commerciallySellableQty != null
+                      ? new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 }).format(
+                          commerciallySellableQty,
+                        )
+                      : "—"}{" "}
+                    szt.
+                  </span>
+                </p>
+                {salesBlockedQty != null && salesBlockedQty > 0 ? (
+                  <p className="text-slate-700">
+                    Zablokowane sprzedażowo:{" "}
+                    <span className="font-semibold tabular-nums text-amber-900">
+                      {new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 }).format(salesBlockedQty)} szt.
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {totalStockDisplay != null && allocatedStockDisplay != null && unallocatedStockDisplay != null ? (
               <div className="border-t border-slate-100 pt-3 space-y-1 text-xs text-slate-600">
                 <p>

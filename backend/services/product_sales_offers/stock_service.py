@@ -53,7 +53,16 @@ def offer_available_qty(
     )
 
     if sd == DEFAULT_STOCK_DISPOSITION:
-        return float(snap.get("saleable_available_qty") or 0.0)
+        from ..commercial_availability_service import commercially_sellable_qty
+
+        return float(
+            commercially_sellable_qty(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                product_id=pid,
+            )
+        )
 
     key = disposition_on_hand_key(sd)
     on_hand = float(snap.get(key) or 0.0)
@@ -85,7 +94,21 @@ def assert_offer_quantity_available(
         warehouse_id=int(warehouse_id),
     )
     if avail + 1e-9 < need:
+        from ..commercial_availability_service import (
+            COMMERCIAL_STOCK_UNAVAILABLE_MSG,
+            effective_sales_block_for_product,
+        )
+
         sd = normalize_stock_disposition(row.stock_disposition)
+        if sd == DEFAULT_STOCK_DISPOSITION:
+            block = effective_sales_block_for_product(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                product_id=int(row.product_id),
+            )
+            if block > 1e-9:
+                raise OfferStockUnavailableError(COMMERCIAL_STOCK_UNAVAILABLE_MSG)
         raise OfferStockUnavailableError(
             f"Brak dostępności w puli {sd}: wymagane {need:g}, dostępne {avail:g} "
             f"(product_id={int(row.product_id)}, offer_id={int(row.id)})."

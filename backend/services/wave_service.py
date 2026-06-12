@@ -25,7 +25,12 @@ from ..models.warehouse import Bin
 from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority, is_pickable
 from .inventory_allocation_service import allocate_inventory_slices_fefo_pick_path
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
-from .stock_disposition import resolve_order_item_required_disposition
+from .commercial_availability_service import commercially_sellable_qty
+from .stock_disposition import (
+    STOCK_DISPOSITION_SALEABLE,
+    normalize_stock_disposition,
+    resolve_order_item_required_disposition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -317,11 +322,28 @@ def create_wave(
     )
     # Virtual picker position along the warehouse pick path (pick_sequence). Advances as we assign picks.
     current_pick_sequence = 0
+    commercial_remaining: dict[int, float] = {}
     for oi in order_items:
         need = float(oi.quantity)
         if need <= 0:
             continue
         req_disp = resolve_order_item_required_disposition(oi)
+        sd_norm = normalize_stock_disposition(req_disp)
+        if sd_norm == STOCK_DISPOSITION_SALEABLE:
+            pid = int(oi.product_id)
+            if pid not in commercial_remaining:
+                commercial_remaining[pid] = commercially_sellable_qty(
+                    db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), product_id=pid
+                )
+            if commercial_remaining[pid] + 1e-9 < need:
+                logger.warning(
+                    "Commercial sales block: order_item order_id=%s product_id=%s qty=%s avail=%s",
+                    oi.order_id,
+                    oi.product_id,
+                    need,
+                    commercial_remaining[pid],
+                )
+                continue
         slices, next_sequence = allocate_inventory_slices_fefo_pick_path(
             db,
             tenant_id,
@@ -368,6 +390,10 @@ def create_wave(
             db.add(task)
             db.flush()
             db.add(PickWaveTask(wave_id=pick_wave.id, pick_task_id=task.id))
+            if sd_norm == STOCK_DISPOSITION_SALEABLE:
+                commercial_remaining[int(oi.product_id)] = max(
+                    0.0, commercial_remaining.get(int(oi.product_id), 0.0) - float(slice_qty)
+                )
 
     db.commit()
     db.refresh(wave)

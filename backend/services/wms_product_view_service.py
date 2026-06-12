@@ -160,6 +160,14 @@ def build_wms_product_view(
         warehouse_id=int(warehouse_id),
     )
     disposition_stock = WmsProductDispositionStock(**disp_raw)
+    from .commercial_availability_service import get_commercial_availability_snapshot
+
+    commercial = get_commercial_availability_snapshot(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        product_id=int(product_id),
+    )
 
     return WmsProductViewResponse(
         product_id=int(p.id),
@@ -169,6 +177,8 @@ def build_wms_product_view(
         image=(p.image_url or "").strip() or None,
         total_stock=round(total, 4),
         disposition_stock=disposition_stock,
+        commercially_sellable_qty=float(commercial.get("commercially_sellable_qty") or 0.0),
+        sales_blocked_qty=float(commercial.get("sales_blocked_qty") or 0.0),
         locations=loc_items,
         logistics=logistics,
         package=package,

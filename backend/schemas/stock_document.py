@@ -186,6 +186,26 @@ class StockDocumentItemRead(BaseModel):
         default=None,
         description="Etykieta decyzji zwrotu dla operatora: A | B | C.",
     )
+    sales_blocked_qty: float = Field(
+        0,
+        ge=0,
+        description="Qty blocked from sale by purchasing (raw line value).",
+    )
+    sales_block_effective_qty: float = Field(
+        0,
+        ge=0,
+        description="Effective sales block after virtual line consumption (LIFO).",
+    )
+    sales_block_reason_code: Optional[str] = None
+    sales_block_reason_label: Optional[str] = None
+    sales_block_note: Optional[str] = None
+    sales_blocked_at: Optional[datetime] = None
+    sales_blocked_by_user_id: Optional[int] = None
+    line_commercial_available_qty: float = Field(
+        0,
+        ge=0,
+        description="received_quantity minus effective sales block for this line.",
+    )
 
     @computed_field
     @property
