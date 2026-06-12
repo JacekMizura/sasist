@@ -22,6 +22,8 @@ export type ProductWarehouseStockPanelProps = {
   dispositionStock?: ProductDispositionStock | null;
   commerciallySellableQty?: number | null;
   salesBlockedQty?: number | null;
+  /** Sum of commercially_sellable_qty across network-participating warehouses (product detail only). */
+  networkCommerciallySellableQty?: number | null;
   inventoryRows: MagazynInvRowDisplay[];
   onEditTraceability?: (row: MagazynInvRowDisplay) => void;
   traceabilityEditDisabled?: boolean;
@@ -49,6 +51,7 @@ export function ProductWarehouseStockPanel({
   dispositionStock,
   commerciallySellableQty,
   salesBlockedQty,
+  networkCommerciallySellableQty,
   inventoryRows,
   onEditTraceability,
   traceabilityEditDisabled = false,
@@ -89,7 +92,7 @@ export function ProductWarehouseStockPanel({
             {commerciallySellableQty != null || (salesBlockedQty != null && salesBlockedQty > 0) ? (
               <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-2 text-sm space-y-1">
                 <p className="text-slate-700">
-                  Dostępne handlowo:{" "}
+                  Dostępne handlowo (magazyn bieżący):{" "}
                   <span className="font-semibold tabular-nums text-emerald-800">
                     {commerciallySellableQty != null
                       ? new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 }).format(
@@ -107,6 +110,22 @@ export function ProductWarehouseStockPanel({
                     </span>
                   </p>
                 ) : null}
+              </div>
+            ) : null}
+            {networkCommerciallySellableQty != null ? (
+              <div className="rounded-lg border border-cyan-200/80 bg-cyan-50/40 px-3 py-2 text-sm">
+                <p className="text-slate-700">
+                  Dostępne handlowo (sieć):{" "}
+                  <span className="font-semibold tabular-nums text-cyan-900">
+                    {new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 }).format(
+                      networkCommerciallySellableQty,
+                    )}{" "}
+                    szt.
+                  </span>
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Suma magazynów uwzględnianych w stanie sieciowym online.
+                </p>
               </div>
             ) : null}
             {totalStockDisplay != null && allocatedStockDisplay != null && unallocatedStockDisplay != null ? (

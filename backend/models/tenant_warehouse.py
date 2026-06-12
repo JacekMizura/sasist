@@ -5,7 +5,7 @@ Join table for many-to-many: Tenant <-> Warehouse.
 Supports roles (owner | client | operator) and is_default per tenant.
 """
 
-from sqlalchemy import Column, String, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, Column, String, Integer, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -28,6 +28,11 @@ class TenantWarehouse(Base, BaseModelMixin):
     )
     role = Column(String(20), nullable=False, default="operator")  # owner | client | operator
     is_default = Column(Integer, nullable=False, default=0)  # 1 = default warehouse for this tenant
+
+    # Multi-WH foundation: per-tenant view of warehouse in network ATP / future sourcing.
+    participates_in_network_stock = Column(Boolean, nullable=False, default=True)
+    fulfillment_eligible = Column(Boolean, nullable=False, default=True)
+    fulfillment_priority = Column(Integer, nullable=False, default=100)  # lower = higher priority
 
     __table_args__ = (UniqueConstraint("tenant_id", "warehouse_id", name="uq_tenant_warehouse"),)
 

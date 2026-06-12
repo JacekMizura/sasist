@@ -22,6 +22,15 @@ export type TenantWarehouseAssignment = {
   warehouse_id: number;
   role: string;
   is_default: boolean;
+  participates_in_network_stock?: boolean;
+  fulfillment_eligible?: boolean;
+  fulfillment_priority?: number;
+};
+
+export type TenantWarehouseAssignmentUpdate = {
+  participates_in_network_stock?: boolean;
+  fulfillment_eligible?: boolean;
+  fulfillment_priority?: number;
 };
 
 export const ASSIGNMENT_ROLE_LABELS: Record<string, string> = {
@@ -60,8 +69,15 @@ export const warehouseService = {
     warehouse_id: number;
     role?: string;
     is_default?: boolean;
+    participates_in_network_stock?: boolean;
+    fulfillment_eligible?: boolean;
+    fulfillment_priority?: number;
   }) {
     return api.post<TenantWarehouseAssignment>("/tenant-warehouses/", data);
+  },
+
+  updateAssignment(assignmentId: number, data: TenantWarehouseAssignmentUpdate) {
+    return api.patch<TenantWarehouseAssignment>(`/tenant-warehouses/${assignmentId}`, data);
   },
 
   listTenants() {

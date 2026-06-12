@@ -128,6 +128,7 @@ export type ProductForm = {
   available_quantity?: number;
   disposition_stock?: import("../../types/productDispositionStock").ProductDispositionStock;
   commercially_sellable_qty?: number;
+  network_commercially_sellable_qty?: number;
   sales_blocked_qty?: number;
   orientation_type?: "any" | "upright" | "no_stack";
   shape_type?: "box" | "cylinder";
@@ -2283,6 +2284,7 @@ export function ProductEditModal({
                           dispositionStock={product?.disposition_stock ?? null}
                           commerciallySellableQty={product?.commercially_sellable_qty ?? null}
                           salesBlockedQty={product?.sales_blocked_qty ?? null}
+                          networkCommerciallySellableQty={product?.network_commercially_sellable_qty ?? null}
                           inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
                           showInventoryLink={!isNew}
                           canManualAdjustStock={canManualAdjustStock}

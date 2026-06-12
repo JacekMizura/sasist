@@ -251,6 +251,24 @@ def build_product_detail_payload(
         out["locations_load_incomplete"] = True
         degraded_reason = degraded_reason or "inventory_display"
 
+    def _attach_network_atp() -> None:
+        from ..services.network_commercial_availability_service import network_commercially_sellable_qty
+
+        out["network_commercially_sellable_qty"] = network_commercially_sellable_qty(
+            db,
+            tenant_id=tid,
+            product_id=pid,
+        )
+
+    if not _run_detail_stage(
+        product_id=pid,
+        tenant_id=tid,
+        stage="network_commercial_atp",
+        fn=_attach_network_atp,
+    ):
+        out["network_commercially_sellable_qty"] = 0.0
+        degraded_reason = degraded_reason or "network_commercial_atp"
+
     if degraded_reason:
         out["detail_degraded"] = True
         out["detail_degraded_reason"] = degraded_reason

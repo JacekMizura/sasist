@@ -7574,4 +7574,5 @@ from .stock_disposition_stage2_schema import ensure_stock_disposition_stage2_col
 from .product_sales_offers_schema import ensure_product_sales_offers_schema  # noqa: E402
 from .inventory_management_policy_schema import ensure_inventory_management_policy_schema  # noqa: E402
 from .purchase_sales_block_schema import ensure_purchase_sales_block_schema  # noqa: E402
+from .tenant_warehouse_fulfillment_schema import ensure_tenant_warehouse_fulfillment_schema  # noqa: E402
 

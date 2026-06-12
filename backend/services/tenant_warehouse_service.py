@@ -28,6 +28,10 @@ class TenantWarehouseService:
         warehouse_id: int,
         role: str = "operator",
         is_default: bool = False,
+        *,
+        participates_in_network_stock: bool = True,
+        fulfillment_eligible: bool = True,
+        fulfillment_priority: int = 100,
     ) -> TenantWarehouse:
         tenant = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
@@ -57,6 +61,9 @@ class TenantWarehouseService:
             warehouse_id=warehouse_id,
             role=role,
             is_default=1 if is_default else 0,
+            participates_in_network_stock=participates_in_network_stock,
+            fulfillment_eligible=fulfillment_eligible,
+            fulfillment_priority=int(fulfillment_priority),
         )
         self.db.add(tw)
         self.db.commit()
@@ -70,3 +77,20 @@ class TenantWarehouseService:
         self.db.delete(tw)
         self.db.commit()
         return True
+
+    def update_assignment(self, assignment_id: int, **fields) -> TenantWarehouse:
+        tw = self.db.query(TenantWarehouse).filter(TenantWarehouse.id == int(assignment_id)).first()
+        if not tw:
+            raise ValueError("Assignment not found")
+        if "participates_in_network_stock" in fields and fields["participates_in_network_stock"] is not None:
+            tw.participates_in_network_stock = bool(fields["participates_in_network_stock"])
+        if "fulfillment_eligible" in fields and fields["fulfillment_eligible"] is not None:
+            tw.fulfillment_eligible = bool(fields["fulfillment_eligible"])
+        if "fulfillment_priority" in fields and fields["fulfillment_priority"] is not None:
+            tw.fulfillment_priority = int(fields["fulfillment_priority"])
+        self.db.commit()
+        self.db.refresh(tw)
+        return tw
+
+    def get_assignment(self, assignment_id: int) -> TenantWarehouse | None:
+        return self.db.query(TenantWarehouse).filter(TenantWarehouse.id == int(assignment_id)).first()

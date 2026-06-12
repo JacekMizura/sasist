@@ -186,6 +186,11 @@ export default function CompanySettingsPage() {
   const [assignIsDefault, setAssignIsDefault] = useState(false);
   const [editWh, setEditWh] = useState<Warehouse | null>(null);
   const [editWhName, setEditWhName] = useState("");
+  const [editWhAssignmentId, setEditWhAssignmentId] = useState<number | null>(null);
+  const [editParticipatesNetwork, setEditParticipatesNetwork] = useState(true);
+  const [editFulfillmentEligible, setEditFulfillmentEligible] = useState(true);
+  const [editFulfillmentPriority, setEditFulfillmentPriority] = useState(100);
+  const [editWhSaving, setEditWhSaving] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setErr(null);
@@ -311,6 +316,19 @@ export default function CompanySettingsPage() {
   const tenantById = (id: number) => tenants.find((t) => t.id === id)?.name ?? `ID ${id}`;
   const warehouseById = (id: number) => warehouses.find((w) => w.id === id)?.name ?? `ID ${id}`;
 
+  const assignmentForTenantWarehouse = (warehouseId: number) =>
+    assignments.find((a) => a.tenant_id === TENANT_ID && a.warehouse_id === warehouseId) ?? null;
+
+  const openWarehouseEdit = (w: Warehouse) => {
+    const assignment = assignmentForTenantWarehouse(w.id);
+    setEditWh(w);
+    setEditWhName(w.name);
+    setEditWhAssignmentId(assignment?.id ?? null);
+    setEditParticipatesNetwork(assignment?.participates_in_network_stock ?? true);
+    setEditFulfillmentEligible(assignment?.fulfillment_eligible ?? true);
+    setEditFulfillmentPriority(assignment?.fulfillment_priority ?? 100);
+  };
+
   const defaultTenantsForWarehouse = (wid: number) =>
     assignments.filter((a) => a.warehouse_id === wid && a.is_default).map((a) => tenantById(a.tenant_id));
 
@@ -360,17 +378,32 @@ export default function CompanySettingsPage() {
     }
   };
 
-  const saveWarehouseName = async () => {
-    if (!editWh) return;
+  const saveWarehouseEdit = async () => {
+    if (!editWh || editWhSaving) return;
     const nm = editWhName.trim();
     if (!nm) return;
+    const priority = Number(editFulfillmentPriority);
+    if (!Number.isFinite(priority) || priority < 1) {
+      toast.error("Priorytet realizacji musi być liczbą ≥ 1.");
+      return;
+    }
+    setEditWhSaving(true);
     try {
       await warehouseService.updateWarehouse(editWh.id, { name: nm });
-      setEditWh(null);
+      if (editWhAssignmentId != null) {
+        await warehouseService.updateAssignment(editWhAssignmentId, {
+          participates_in_network_stock: editParticipatesNetwork,
+          fulfillment_eligible: editFulfillmentEligible,
+          fulfillment_priority: Math.round(priority),
+        });
+      }
+      closeWarehouseEdit();
       toast.success("Zaktualizowano magazyn.");
       await loadStructure();
     } catch {
-      toast.error("Nie udało się zapisać nazwy magazynu.");
+      toast.error("Nie udało się zapisać magazynu.");
+    } finally {
+      setEditWhSaving(false);
     }
   };
 
@@ -583,10 +616,7 @@ export default function CompanySettingsPage() {
                           </div>
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditWh(w);
-                              setEditWhName(w.name);
-                            }}
+                            onClick={() => openWarehouseEdit(w)}
                             className="shrink-0 rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
                             title="Edytuj"
                           >
@@ -859,22 +889,83 @@ export default function CompanySettingsPage() {
 
       {editWh ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">Edycja magazynu</h3>
             <p className="mt-1 text-sm text-slate-500">ID {editWh.id}</p>
             <label className="mt-4 block">
               <span className={lab}>Nazwa</span>
               <input className={inp} value={editWhName} onChange={(e) => setEditWhName(e.target.value)} />
             </label>
+
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <h4 className="text-sm font-bold text-slate-900">Sprzedaż i realizacja</h4>
+              {editWhAssignmentId == null ? (
+                <p className="mt-2 text-sm text-amber-800">
+                  Brak przypisania magazynu do bieżącej firmy — ustawienia sieciowe zapiszesz po dodaniu przypisania w
+                  zakładce „Firmy i przypisania”.
+                </p>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-cyan-600"
+                      checked={editParticipatesNetwork}
+                      onChange={(e) => setEditParticipatesNetwork(e.target.checked)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-slate-800">Uwzględniaj w stanie sieciowym</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        Magazyn uczestniczy w puli dostępnej online.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-cyan-600"
+                      checked={editFulfillmentEligible}
+                      onChange={(e) => setEditFulfillmentEligible(e.target.checked)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-slate-800">Magazyn może realizować zamówienia</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        Magazyn może zostać wybrany przez silnik sourcingu.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="block">
+                    <span className={lab}>Priorytet realizacji</span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      className={inp}
+                      value={editFulfillmentPriority}
+                      onChange={(e) => setEditFulfillmentPriority(Number(e.target.value) || 1)}
+                    />
+                    <span className="mt-1 block text-xs text-slate-500">Niższa wartość oznacza wyższy priorytet.</span>
+                  </label>
+                </div>
+              )}
+            </div>
+
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={() => setEditWh(null)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+              <button
+                type="button"
+                onClick={closeWarehouseEdit}
+                disabled={editWhSaving}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
                 Anuluj
               </button>
               <button
                 type="button"
-                onClick={() => void saveWarehouseName()}
-                className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+                onClick={() => void saveWarehouseEdit()}
+                disabled={editWhSaving}
+                className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-50"
               >
+                {editWhSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                 Zapisz
               </button>
             </div>

@@ -1,5 +1,15 @@
 # Current context
 
+## Multi-WH foundation — network ATP + fulfillment flags (2026-06-08)
+- Pola na **`TenantWarehouse`** (per tenant+magazyn): `participates_in_network_stock`, `fulfillment_eligible`, `fulfillment_priority` (default 100)
+- SSOT ATP sieci: `network_commercial_availability_service.py` → `network_commercially_sellable_qty` = suma `commercially_sellable_qty` po WH z flagą sieciową
+- API: `GET/POST /tenant-warehouses/` rozszerzone; **`PATCH /tenant-warehouses/{id}`** — ustawienia sprzedaży/realizacji
+- Produkt: `network_commercially_sellable_qty` tylko na **`GET /products/{id}/`** (karta, zakładka Magazyn); lista bez zmian
+- UI: Ustawienia → Firma → Magazyny → edycja → „Sprzedaż i realizacja”
+- Schema: `tenant_warehouse_fulfillment_schema.ensure_tenant_warehouse_fulfillment_schema`
+- Tests: `backend/tests/network_stock/test_network_commercial_availability.py` (3/3)
+- **Bez zmian:** Order, Wave, PickTask, StockReservation, WZ, RecoveryWorkflow, sourcing
+
 ## Purchase PZ sales block MVP (2026-06-08)
 - Overlay handlowy na `stock_document_items` (tylko PZ zakupowe): `sales_blocked_qty`, `sales_block_reason_code`, `sales_block_note`, `sales_blocked_at/by`
 - SSOT projekcji: `commercial_availability_service.py` — `effective_sales_block` z wirtualną konsumpcją LIFO po ISSUE; **bez zmian inventory/putaway/MM/pick**

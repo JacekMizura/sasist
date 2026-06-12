@@ -31,7 +31,7 @@ export default function InventoryLayout() {
           title="Inwentaryzacja magazynowa"
           actions={primaryAction}
           breadcrumbs={[
-            { label: "Magazyn", to: "/inventory" },
+            { label: "Magazyn" },
             { label: "Inwentaryzacja" },
           ]}
           className="space-y-2"
