@@ -515,6 +515,15 @@ def _append_rmz_lines_to_document(
         db.add(row)
         db.flush()
         append_receipt_operation(db, doc, row, float(qty))
+        from .wms_putaway_service import sync_dock_inventory_from_document_line
+
+        sync_dock_inventory_from_document_line(
+            db,
+            tenant_id=tenant_id,
+            doc=doc,
+            line=row,
+            quantity=float(qty),
+        )
         item_rows.append(row)
 
     for ln in lines:

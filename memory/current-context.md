@@ -8,7 +8,11 @@
 - API: `PATCH /physical-receipt-mode`, `POST .../warehouse-receive`; lista filtr `physical_receipt_mode`
 - WMS UI: radio „Sposób obsługi towaru”; direct-service ukrywa akcje magazynowe
 
-## WMS putaway PZ banner flicker (2026-06-08)
+## WMS putaway dock vs document qty (2026-06-08)
+- PATCH `/wms/putaway/{item_id}` → `patch_wms_putaway_item` → `_transfer_from_dock_to_location` rzuca „Brak wystarczającej ilości w lokacji przyjęcia” gdy `Inventory` w docku < qty, mimo `received_quantity - quantity_putaway > 0`
+- Kolejka rozlokowania bazuje na polach dokumentu; Z-PZ/RMA ustawia `location_id` (DOCK) ale `append_receipt_operation` nie tworzy `Inventory` (tylko `StockOperation` + movement log)
+- Fix: `sync_dock_inventory_from_document_line` przy Z-PZ receipt (RMZ + complaint); `_ensure_dock_inventory_for_putaway` + retry w `_transfer_from_dock_to_location`; SSOT pozostałości = `_document_line_putaway_remaining`
+
 - Ekran `WmsPutawayPzPage`: odświeżenia = mount, poll 4s, `WMS_RECEIVING_UPDATED_EVENT`, patch carrier-bulk (`PATCH /wms/putaway/carrier-bulk`); brak React Query/SWR
 - Jeden endpoint dokumentu PZ: `GET /wms/putaway/pz/{id}` → `get_stock_document_read` / `build_stock_document_read`
 - Miganie czerwonego komunikatu: **UI bug** — `setErr(null)` na początku każdego `load()` czyściło banner na czas requestu (co 4s poll); naprawione + `loadSeqRef`, wspólna bramka `putawayDocumentGateError`

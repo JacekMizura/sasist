@@ -304,6 +304,15 @@ def receive_complaint_line_at_warehouse(
 
     if mode == PHYSICAL_RECEIPT_MODE_WAREHOUSE:
         append_receipt_operation(db, doc, row, float(qty))
+        from ..wms_putaway_service import sync_dock_inventory_from_document_line
+
+        sync_dock_inventory_from_document_line(
+            db,
+            tenant_id=tenant_id,
+            doc=doc,
+            line=row,
+            quantity=float(qty),
+        )
     else:
         apply_service_forward_logistics(complaint)
 

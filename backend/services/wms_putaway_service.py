@@ -176,6 +176,65 @@ def _effective_putaway_quantity(db: Session, row: StockDocumentItem) -> float:
     return sum_ops if sum_ops > 1e-9 else col_put
 
 
+def _document_line_putaway_remaining(db: Session, row: StockDocumentItem) -> float:
+    """Remaining qty to put away — document line is SSOT for PZ / Z-PZ / PZ_RT."""
+    rec = float(row.received_quantity or 0)
+    if rec <= 1e-9:
+        return 0.0
+    return max(0.0, rec - _effective_putaway_quantity(db, row))
+
+
+_PUTAWAY_QTY_EPS = 1e-5
+
+
+def sync_dock_inventory_from_document_line(
+    db: Session,
+    *,
+    tenant_id: int,
+    doc: StockDocument,
+    line: StockDocumentItem,
+    quantity: float,
+    from_carrier_id: int | None = None,
+) -> None:
+    """
+    Materialize receiving-dock inventory from document line truth.
+    Used when receipt posted received_quantity without dock Inventory (Z-PZ finalize, complaint receipt).
+    """
+    dock_id = getattr(doc, "location_id", None)
+    wh_id = int(getattr(doc, "warehouse_id", 0) or 0)
+    if dock_id is None or wh_id <= 0 or getattr(line, "product_id", None) is None:
+        return
+    if quantity <= _PUTAWAY_QTY_EPS:
+        return
+    bn, ed_store = dock_lot_keys_for_pz_line(line)
+    sd = stock_disposition_for_document_line(line)
+    if from_carrier_id is not None:
+        upsert_dock_inventory_for_carrier_receipt(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wh_id,
+            location_id=int(dock_id),
+            product_id=int(line.product_id),
+            carrier_id=int(from_carrier_id),
+            add_qty=float(quantity),
+            batch_number=bn,
+            expiry_date=ed_store,
+            stock_disposition=sd,
+        )
+    else:
+        upsert_dock_inventory_for_loose_receipt(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=wh_id,
+            location_id=int(dock_id),
+            product_id=int(line.product_id),
+            add_qty=float(quantity),
+            batch_number=bn,
+            expiry_date=ed_store,
+            stock_disposition=sd,
+        )
+
+
 def _sum_dock_inventory(
     db: Session,
     *,
@@ -222,8 +281,8 @@ def _ensure_dock_inventory_for_putaway(
     Align dock inventory with the PZ line (source of truth for putaway availability).
     Backfills the receiving dock when stock was posted on the line but not on inventory.
     """
-    line_remaining = max(0.0, float(row.received_quantity or 0) - _effective_putaway_quantity(db, row))
-    if quantity > line_remaining + 1e-9:
+    line_remaining = _document_line_putaway_remaining(db, row)
+    if quantity > line_remaining + _PUTAWAY_QTY_EPS:
         raise ValueError("Przekroczono pozostałą ilość do rozlokowania na tej pozycji PZ")
     avail = _sum_dock_inventory(
         db,
@@ -236,42 +295,22 @@ def _ensure_dock_inventory_for_putaway(
         sd=sd,
         from_carrier_id=from_carrier_id,
     )
-    if avail + 1e-9 >= quantity:
+    if avail + _PUTAWAY_QTY_EPS >= quantity:
         return
     shortfall = quantity - avail
-    max_backfill = max(0.0, line_remaining - avail)
-    if shortfall > max_backfill + 1e-9:
-        shortfall = max_backfill
-    if shortfall <= 1e-9:
+    if shortfall > line_remaining + _PUTAWAY_QTY_EPS:
+        shortfall = line_remaining
+    if shortfall <= _PUTAWAY_QTY_EPS:
         return
-    wh_id = int(doc.warehouse_id or 0)
-    if wh_id <= 0:
-        return
-    if from_carrier_id is not None:
-        upsert_dock_inventory_for_carrier_receipt(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=wh_id,
-            location_id=int(dock_id),
-            product_id=int(row.product_id),
-            carrier_id=int(from_carrier_id),
-            add_qty=float(shortfall),
-            batch_number=bn,
-            expiry_date=ed_store,
-            stock_disposition=sd,
-        )
-    else:
-        upsert_dock_inventory_for_loose_receipt(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=wh_id,
-            location_id=int(dock_id),
-            product_id=int(row.product_id),
-            add_qty=float(shortfall),
-            batch_number=bn,
-            expiry_date=ed_store,
-            stock_disposition=sd,
-        )
+    sync_dock_inventory_from_document_line(
+        db,
+        tenant_id=int(tenant_id),
+        doc=doc,
+        line=row,
+        quantity=float(shortfall),
+        from_carrier_id=from_carrier_id,
+    )
+    db.flush()
 
 
 def _transfer_from_dock_to_location(
@@ -308,10 +347,26 @@ def _transfer_from_dock_to_location(
         src_q = src_q.filter(Inventory.carrier_id.is_(None))
     src_rows = src_q.order_by(Inventory.expiry_date.asc(), Inventory.id.asc()).all()
     tot = sum(float(x.quantity or 0) for x in src_rows)
-    if tot + 1e-9 < remaining:
-        line_remaining = max(0.0, float(row.received_quantity or 0) - _effective_putaway_quantity(db, row))
-        if line_remaining + 1e-9 < remaining:
+    if tot + _PUTAWAY_QTY_EPS < remaining:
+        line_remaining = _document_line_putaway_remaining(db, row)
+        if line_remaining + _PUTAWAY_QTY_EPS < remaining:
             raise ValueError("Przekroczono pozostałą ilość do rozlokowania na tej pozycji PZ")
+        # Document line still has qty to put away — materialize dock stock from line truth, then retry.
+        _ensure_dock_inventory_for_putaway(
+            db,
+            tenant_id=tenant_id,
+            row=row,
+            doc=doc,
+            dock_id=int(dock_id),
+            quantity=float(remaining),
+            from_carrier_id=from_carrier_id,
+            bn=bn,
+            ed_store=ed_store,
+            sd=sd,
+        )
+        src_rows = src_q.order_by(Inventory.expiry_date.asc(), Inventory.id.asc()).all()
+        tot = sum(float(x.quantity or 0) for x in src_rows)
+    if tot + _PUTAWAY_QTY_EPS < remaining:
         hint_parts: list[str] = []
         if (bn or "").strip():
             hint_parts.append(f"partia {(bn or '').strip()}")
