@@ -138,13 +138,14 @@ export function ProductLikePageLayout<T extends string>({
   const isPage = variant === "page";
   const modernHero = (statCards?.length ?? 0) > 0;
   const showRail = !hideTabs && !hideVerticalRail;
+  const topToolbarSticky = isPage && saveInHeader;
 
   const formShellClass = isPage
     ? `flex flex-col ${productLikeFormNumberReset}`
     : `flex min-h-0 flex-1 flex-col overflow-hidden bg-white ${productLikeFormNumberReset}`;
 
   const bodyRowClass = isPage
-    ? "flex w-full flex-col lg:flex-row lg:items-stretch"
+    ? "flex w-full flex-col lg:flex-row lg:items-start"
     : "flex min-h-0 w-full flex-1 flex-col overflow-hidden lg:flex-row lg:items-stretch";
 
   const mainColClass = isPage
@@ -161,10 +162,34 @@ export function ProductLikePageLayout<T extends string>({
 
   const headerShellClass = [
     "shrink-0 border-b border-slate-200 bg-white",
-    stickyHeader ? "sticky top-0 z-40" : "",
+    stickyHeader && !topToolbarSticky ? "sticky top-0 z-40" : "",
   ]
     .filter(Boolean)
     .join(" ");
+
+  const breadcrumbNav =
+    breadcrumbs && breadcrumbs.length > 0 ? (
+      <nav className="flex min-w-0 flex-wrap items-center gap-1 text-sm text-slate-500" aria-label="Breadcrumb">
+        {breadcrumbs.map((crumb, idx) => (
+          <span key={`${crumb.label}-${idx}`} className="inline-flex items-center gap-1">
+            {idx > 0 ? <span className="text-slate-300">/</span> : null}
+            {crumb.href || crumb.onClick ? (
+              crumb.href ? (
+                <a href={crumb.href} className="hover:text-blue-600">
+                  {crumb.label}
+                </a>
+              ) : (
+                <button type="button" onClick={crumb.onClick} className="hover:text-blue-600">
+                  {crumb.label}
+                </button>
+              )
+            ) : (
+              <span className="font-medium text-slate-900">{crumb.label}</span>
+            )}
+          </span>
+        ))}
+      </nav>
+    ) : null;
 
   const saveButton = showSaveButton ? (
     <button
@@ -177,34 +202,28 @@ export function ProductLikePageLayout<T extends string>({
     </button>
   ) : null;
 
+  const headerActionCluster =
+    headerActions || (saveInHeader && saveButton) ? (
+      <div className="flex shrink-0 items-center gap-2">
+        {headerActions}
+        {saveInHeader ? saveButton : null}
+      </div>
+    ) : null;
+
   const shell = (
     <form onSubmit={onSubmit} className={formShellClass}>
       {headerPrefix}
 
+      {topToolbarSticky && (breadcrumbNav || headerActionCluster) ? (
+        <div className="sticky top-0 z-50 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.04)] sm:px-6 lg:px-8">
+          <div className="min-w-0 flex-1">{breadcrumbNav}</div>
+          {headerActionCluster}
+        </div>
+      ) : null}
+
       <div className={headerShellClass}>
-        {breadcrumbs && breadcrumbs.length > 0 ? (
-          <div className="border-b border-slate-100 px-4 py-2.5 sm:px-6 lg:px-8">
-            <nav className="flex flex-wrap items-center gap-1 text-sm text-slate-500" aria-label="Breadcrumb">
-              {breadcrumbs.map((crumb, idx) => (
-                <span key={`${crumb.label}-${idx}`} className="inline-flex items-center gap-1">
-                  {idx > 0 ? <span className="text-slate-300">/</span> : null}
-                  {crumb.href || crumb.onClick ? (
-                    crumb.href ? (
-                      <a href={crumb.href} className="hover:text-blue-600">
-                        {crumb.label}
-                      </a>
-                    ) : (
-                      <button type="button" onClick={crumb.onClick} className="hover:text-blue-600">
-                        {crumb.label}
-                      </button>
-                    )
-                  ) : (
-                    <span className="font-medium text-slate-900">{crumb.label}</span>
-                  )}
-                </span>
-              ))}
-            </nav>
-          </div>
+        {!topToolbarSticky && breadcrumbNav ? (
+          <div className="border-b border-slate-100 px-4 py-2.5 sm:px-6 lg:px-8">{breadcrumbNav}</div>
         ) : null}
 
         <div className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:px-8 lg:py-6">
@@ -278,19 +297,18 @@ export function ProductLikePageLayout<T extends string>({
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start lg:flex-col lg:items-end">
-            {modernHero && statCards ? (
-              <div className="flex flex-wrap gap-2 sm:justify-end lg:justify-start">
-                {statCards.map((card) => (
-                  <StatCard key={card.label} card={card} />
-                ))}
-              </div>
-            ) : null}
+          {modernHero && statCards ? (
+            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end lg:justify-end">
+              {statCards.map((card) => (
+                <StatCard key={card.label} card={card} />
+              ))}
+            </div>
+          ) : !saveInHeader && (headerActions || showSaveButton) ? (
             <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 pt-3 sm:border-t-0 sm:pt-0 lg:justify-end">
               {headerActions}
-              {saveInHeader ? saveButton : null}
+              {!saveInHeader && showSaveButton ? saveButton : null}
             </div>
-          </div>
+          ) : null}
         </div>
 
         {!hideTabs ? (
@@ -323,7 +341,13 @@ export function ProductLikePageLayout<T extends string>({
       <div className={bodyRowClass}>
         <div className="contents">
           <div className={mainColClass}>
-            <div className={isPage ? productLikeTabPanelPaddingClass : `overflow-y-auto ${productLikeTabPanelPaddingClass}`}>
+            <div
+              className={
+                isPage
+                  ? "w-full px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-5 lg:px-8"
+                  : `overflow-y-auto ${productLikeTabPanelPaddingClass}`
+              }
+            >
               {children}
             </div>
           </div>

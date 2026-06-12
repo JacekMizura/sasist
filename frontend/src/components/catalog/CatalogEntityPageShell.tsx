@@ -21,20 +21,18 @@ export function CatalogEntityPageShell({
 }: CatalogEntityPageShellProps) {
   return (
     <PageLayout omitCard fullBleed>
-      <div className="mx-auto w-full max-w-screen-2xl min-w-0 font-sans text-base antialiased">
-        {loading ? (
-          <div className={CARD_SHELL}>
-            <div className="flex min-h-[40vh] items-center justify-center gap-2 px-4 py-16 text-slate-500">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
-              {loadingLabel}
-            </div>
+      {loading ? (
+        <div className={CARD_SHELL}>
+          <div className="flex min-h-[40vh] items-center justify-center gap-2 px-4 py-16 text-slate-500">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+            {loadingLabel}
           </div>
-        ) : error ? (
-          <div className={`${CARD_SHELL} p-4 sm:p-6`}>{error}</div>
-        ) : (
-          <div className={CARD_SHELL}>{children}</div>
-        )}
-      </div>
+        </div>
+      ) : error ? (
+        <div className={`${CARD_SHELL} p-4 sm:p-6`}>{error}</div>
+      ) : (
+        <div className={CARD_SHELL}>{children}</div>
+      )}
     </PageLayout>
   );
 }
