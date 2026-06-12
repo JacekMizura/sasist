@@ -1,5 +1,16 @@
 # Current context
 
+## Stock disposition Etap 2 — reservation / pick by pool (2026-06-08)
+- Kolumny: `order_items.required_stock_disposition`, `stock_reservations.stock_disposition`, `pick_tasks.stock_disposition`
+- Schema: `stock_disposition_stage2_schema.ensure_stock_disposition_stage2_columns`
+- SSOT alokacji: `inventory_allocation_service` (FEFO + `reserved_qty_at_lot` per disposition)
+- Fala / rezerwacje / PickTask: `wave_service` z `resolve_order_item_required_disposition`
+- Picking consume: `consume_inventory_fifo_slices(..., stock_disposition=...)`, WMS pick z `OrderItem`
+- `saleable_available_qty` = `saleable_qty` − rezerwacje ze `stock_disposition=SALEABLE` (dokładne)
+- OMS UI: bez selektora OUTLET; API `OrderCreateLine.required_stock_disposition` (backend akceptuje OUTLET_B)
+- Direct sale / import / reklamacje: domyślnie SALEABLE
+- Pre-deploy: `python -m backend.scripts.audit_stock_disposition_stage2` (blokuje przy aktywnych falach/pickach)
+
 ## Stock disposition Etap 1 — read-only aggregation (2026-06-08)
 - SSOT rozbicia pul: `product_disposition_snapshot_service.py` → `disposition_stock` na API produktu i WMS view
 - Pola: `saleable_qty`, `outlet_qty`, `service_qty`, `quarantine_qty`, `scrap_qty`, `rejected_qty`, `physical_qty`, `saleable_available_qty`

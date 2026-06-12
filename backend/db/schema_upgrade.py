@@ -7569,3 +7569,6 @@ def _migrate_recipes_to_compositions(engine: Engine) -> None:
     finally:
         db.close()
 
+
+from .stock_disposition_stage2_schema import ensure_stock_disposition_stage2_columns  # noqa: E402
+

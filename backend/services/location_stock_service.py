@@ -114,6 +114,7 @@ def build_location_stock(
             StockReservation.tenant_id == tid,
             StockReservation.product_id == pid,
             StockReservation.status == "reserved",
+            StockReservation.stock_disposition == "SALEABLE",
         )
         .group_by(StockReservation.location_id)
         .all()

@@ -12,12 +12,43 @@ STOCK_DISPOSITION_REJECTED_STOCK = "REJECTED_STOCK"
 STOCK_DISPOSITION_QUARANTINE = "QUARANTINE"
 STOCK_DISPOSITION_SCRAP = "SCRAP"
 
+# Future outlet / refurb pools (Etap 3+ — not reservable in Etap 2 MVP).
+STOCK_DISPOSITION_OUTLET_C = "OUTLET_C"
+STOCK_DISPOSITION_REFURBISHED = "REFURBISHED"
+
 DEFAULT_STOCK_DISPOSITION = STOCK_DISPOSITION_SALEABLE
+
+# Order lines may reserve/pick only from these pools (Etap 2).
+RESERVABLE_STOCK_DISPOSITIONS: frozenset[str] = frozenset(
+    {
+        STOCK_DISPOSITION_SALEABLE,
+        STOCK_DISPOSITION_OUTLET_B,
+    }
+)
 
 
 def normalize_stock_disposition(raw: Any | None) -> str:
     s = ("" if raw is None else str(raw)).strip().upper()
     return s if s else DEFAULT_STOCK_DISPOSITION
+
+
+def assert_reservable_disposition(code: str) -> str:
+    """Validate disposition for order line / reservation creation."""
+    c = normalize_stock_disposition(code)
+    if c not in RESERVABLE_STOCK_DISPOSITIONS:
+        allowed = ", ".join(sorted(RESERVABLE_STOCK_DISPOSITIONS))
+        raise ValueError(f"Disposition {c!r} is not reservable (allowed: {allowed}).")
+    return c
+
+
+def resolve_order_item_required_disposition(order_item: Any | None) -> str:
+    raw = getattr(order_item, "required_stock_disposition", None) if order_item is not None else None
+    return normalize_stock_disposition(raw)
+
+
+def disposition_for_new_order_line(raw: Any | None = None) -> str:
+    """API / import default — validates reservable pool."""
+    return assert_reservable_disposition(normalize_stock_disposition(raw))
 
 
 def stock_disposition_for_document_line(item: Any | None) -> str:

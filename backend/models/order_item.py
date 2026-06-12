@@ -65,6 +65,15 @@ class OrderItem(Base):
 
     quantity = Column(Integer, nullable=False)
 
+    #: Wymagana pula magazynowa do rezerwacji / pickingu (Etap 2).
+    required_stock_disposition = Column(
+        String(32),
+        nullable=False,
+        default="SALEABLE",
+        server_default=text("'SALEABLE'"),
+        index=True,
+    )
+
     #: Ilość „spakowana” na stanowisku pakowania WMS (osobno od zbierania / Pick).
     packing_quantity_packed = Column(Integer, nullable=False, server_default=text("0"), default=0)
 

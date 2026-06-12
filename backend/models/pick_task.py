@@ -50,6 +50,7 @@ class PickTask(Base, BaseModelMixin):
         index=True,
     )
     status = Column(String(20), nullable=False, default="waiting")  # waiting | picking | picked
+    stock_disposition = Column(String(32), nullable=True, index=True)
 
     tenant = relationship("Tenant", back_populates="pick_tasks")
     order = relationship("Order", back_populates="pick_tasks")

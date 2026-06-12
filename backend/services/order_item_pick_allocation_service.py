@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..models.location import Location
 from ..models.order_item_pick_allocation import OrderItemPickAllocation
 from ..models.pick import Pick
+from .stock_disposition import DEFAULT_STOCK_DISPOSITION, normalize_stock_disposition
 
 SENTINEL_EXPIRY = date(9999, 12, 31)
 
@@ -38,6 +39,7 @@ def consume_inventory_fifo_slices(
     product_id: int,
     location_id: int,
     quantity: float,
+    stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> list[PickLotSlice]:
     """FIFO by expiry then id — returns slices actually consumed."""
     from ..models.inventory import Inventory
@@ -45,6 +47,7 @@ def consume_inventory_fifo_slices(
     qty = float(quantity or 0)
     if qty <= 1e-12:
         return []
+    sd = normalize_stock_disposition(stock_disposition)
     rows = (
         db.query(Inventory)
         .filter(
@@ -52,6 +55,7 @@ def consume_inventory_fifo_slices(
             Inventory.warehouse_id == int(warehouse_id),
             Inventory.product_id == int(product_id),
             Inventory.location_id == int(location_id),
+            Inventory.stock_disposition == sd,
             Inventory.quantity > 0,
         )
         .order_by(Inventory.expiry_date.asc(), Inventory.id.asc())

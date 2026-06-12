@@ -129,6 +129,8 @@ class OrderItemRead(BaseModel):
     #: Z ``metadata_json.oms_replacement`` — ilości sprzed zamiany (widok historii w panelu).
     oms_replacement_original_quantity: Optional[int] = None
     oms_replacement_transferred_quantity: Optional[int] = None
+    #: Pula magazynowa do rezerwacji / pickingu (Etap 2 — UI domyślnie SALEABLE).
+    required_stock_disposition: str = "SALEABLE"
 
     class Config:
         from_attributes = True
@@ -509,10 +511,23 @@ class OrderCreateLine(BaseModel):
     product_id: Optional[int] = Field(default=None, ge=1)
     bundle_id: Optional[int] = Field(default=None, ge=1)
     quantity: int = Field(..., ge=1)
+    required_stock_disposition: Optional[str] = Field(
+        default=None,
+        description="Pula magazynowa (domyślnie SALEABLE; backend akceptuje OUTLET_B)",
+    )
     unit_price: Optional[float] = Field(
         None,
         description="Override unit price: for products = sale line; for bundles = price per one bundle",
     )
+
+    @field_validator("required_stock_disposition")
+    @classmethod
+    def _validate_required_stock_disposition(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not str(v).strip():
+            return None
+        from ..services.stock_disposition import disposition_for_new_order_line
+
+        return disposition_for_new_order_line(v)
 
     @model_validator(mode="after")
     def _exactly_one_catalog_ref(self) -> "OrderCreateLine":
@@ -663,9 +678,22 @@ class OrderAddLineBody(BaseModel):
     product_id: Optional[int] = Field(None, ge=1)
     bundle_id: Optional[int] = Field(None, ge=1)
     quantity: int = Field(1, ge=1)
+    required_stock_disposition: Optional[str] = Field(
+        default=None,
+        description="Pula magazynowa (domyślnie SALEABLE; backend akceptuje OUTLET_B)",
+    )
     unit_price: Optional[float] = Field(None, description="Override unit price; default from product sale_price")
     unit: Optional[str] = Field(None, max_length=32)
     vat_percent: Optional[float] = Field(None, ge=0, le=100)
+
+    @field_validator("required_stock_disposition")
+    @classmethod
+    def _validate_required_stock_disposition(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not str(v).strip():
+            return None
+        from ..services.stock_disposition import disposition_for_new_order_line
+
+        return disposition_for_new_order_line(v)
 
     @model_validator(mode="after")
     def _exactly_one_catalog_line(self) -> "OrderAddLineBody":

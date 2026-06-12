@@ -1,9 +1,9 @@
 """
 Read-only aggregation of ``inventory`` quantities by ``stock_disposition``.
 
-Etap 1: presentation only — reservations remain global (see ``saleable_available_qty``).
-Etap 2+: ``OrderItem.required_stock_disposition`` will target a pool from
-``CANONICAL_PRODUCT_STOCK_DISPOSITIONS``; extend reservation/pick filters, not this SSOT shape.
+Etap 2: ``saleable_available_qty`` = ``saleable_qty`` minus reserved qty where
+``stock_reservations.stock_disposition = SALEABLE`` (same visibility as on-hand).
+``OrderItem.required_stock_disposition`` selects pool for reservation/pick — not this aggregation shape.
 """
 
 from __future__ import annotations
@@ -11,12 +11,14 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Dict, Optional, Sequence, Tuple
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..models.inventory import Inventory
 from ..models.location import Location
+from ..models.stock_reservation import StockReservation
 from .legacy_import_inventory_display_filter import should_hide_legacy_csv_import_inventory_location
-from .product_inventory_snapshot_service import _nz, _reserved_by_product
+from .product_inventory_snapshot_service import _nz
 from .stock_disposition import (
     DEFAULT_STOCK_DISPOSITION,
     STOCK_DISPOSITION_OUTLET_B,
@@ -127,6 +129,35 @@ def _on_hand_by_disposition_visible(
     return {pid: {k: _nz(v) for k, v in buckets.items()} for pid, buckets in acc.items()}
 
 
+def _reserved_by_product_and_disposition(
+    db: Session,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    product_ids: Sequence[int],
+    stock_disposition: str,
+) -> Dict[int, float]:
+    """Sum active reservations for ``product_id`` filtered by ``stock_disposition``."""
+    sd = normalize_stock_disposition(stock_disposition)
+    q = (
+        db.query(
+            StockReservation.product_id,
+            func.coalesce(func.sum(StockReservation.quantity), 0.0),
+        )
+        .join(Location, Location.id == StockReservation.location_id)
+        .filter(
+            StockReservation.tenant_id == int(tenant_id),
+            StockReservation.status == "reserved",
+            StockReservation.stock_disposition == sd,
+        )
+    )
+    if warehouse_id is not None:
+        q = q.filter(Location.warehouse_id == int(warehouse_id))
+    if product_ids:
+        q = q.filter(StockReservation.product_id.in_(tuple(int(x) for x in product_ids)))
+    rows = q.group_by(StockReservation.product_id).all()
+    return {int(pid): _nz(float(qty or 0)) for pid, qty in rows}
+
+
 def disposition_snapshots_for_products(
     db: Session,
     tenant_id: int,
@@ -149,7 +180,13 @@ def disposition_snapshots_for_products(
         chunk = pids[off : off + _CHUNK]
         part_disp = _on_hand_by_disposition_visible(db, tenant_id, warehouse_id, chunk)
         disposition_map.update(part_disp)
-        part_res = _reserved_by_product(db, tenant_id, warehouse_id, chunk)
+        part_res = _reserved_by_product_and_disposition(
+            db,
+            tenant_id,
+            warehouse_id,
+            chunk,
+            STOCK_DISPOSITION_SALEABLE,
+        )
         reserved_map.update(part_res)
 
     out: Dict[int, Dict[str, float]] = {}

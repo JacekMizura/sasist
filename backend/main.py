@@ -136,6 +136,7 @@ from .db.schema_upgrade import (
     ensure_stock_operations_unit_price_net_column,
     migrate_inventory_lot_unique_sqlite,
     ensure_inventory_stock_disposition_columns,
+    ensure_stock_disposition_stage2_columns,
     ensure_stock_document_items_stock_disposition_column,
     ensure_stock_document_items_stock_disposition_column,
     ensure_stock_operations_stock_disposition_column,
@@ -1000,6 +1001,7 @@ try:
     ensure_stock_document_item_lot_columns(engine)
     migrate_inventory_lot_unique_sqlite(engine)
     ensure_inventory_stock_disposition_columns(engine)
+    ensure_stock_disposition_stage2_columns(engine)
     ensure_warehouse_sqlite_schema_stabilization(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_stock_lot_and_inventory_sqlite failed at import")
@@ -1358,6 +1360,7 @@ def _upgrade_schema_background() -> None:
         ensure_stock_document_item_lot_columns(engine)
         migrate_inventory_lot_unique_sqlite(engine)
         ensure_inventory_stock_disposition_columns(engine)
+        ensure_stock_disposition_stage2_columns(engine)
         ensure_stock_reservation_lot_columns(engine)
         ensure_pick_task_lot_columns(engine)
         ensure_pick_lot_columns(engine)

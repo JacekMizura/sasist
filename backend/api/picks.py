@@ -156,7 +156,10 @@ def complete_pick(
 
     t_bn = getattr(task, "batch_number", "") or ""
     t_ed = getattr(task, "expiry_date", None) or NO_EXPIRY_SENTINEL
-    # Find reservation (order, product, location, lot, status=reserved)
+    from ..services.stock_disposition import DEFAULT_STOCK_DISPOSITION, normalize_stock_disposition
+
+    req_disp = normalize_stock_disposition(getattr(task, "stock_disposition", None) or DEFAULT_STOCK_DISPOSITION)
+    # Find reservation (order, product, location, lot, disposition, status=reserved)
     reservation = (
         db.query(StockReservation)
         .filter(
@@ -165,6 +168,7 @@ def complete_pick(
             StockReservation.location_id == task.location_id,
             StockReservation.batch_number == t_bn,
             StockReservation.expiry_date == t_ed,
+            StockReservation.stock_disposition == req_disp,
             StockReservation.status == "reserved",
             StockReservation.tenant_id == tenant_id,
         )
@@ -173,7 +177,7 @@ def complete_pick(
     if not reservation or float(reservation.quantity) < qty:
         raise HTTPException(status_code=400, detail="Reservation not found or insufficient")
 
-    # Inventory row (tenant, product, warehouse from order, location)
+    # Inventory row (tenant, product, warehouse from order, location, disposition)
     stock = (
         db.query(Inventory)
         .filter(
@@ -183,6 +187,7 @@ def complete_pick(
             Inventory.location_id == task.location_id,
             Inventory.batch_number == t_bn,
             Inventory.expiry_date == t_ed,
+            Inventory.stock_disposition == req_disp,
         )
         .first()
     )

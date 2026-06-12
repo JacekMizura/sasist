@@ -21,6 +21,7 @@ from .issue_plan_service import IssueAllocation
 from .errors import DirectSaleError
 from ..order_item_pick_allocation_service import SENTINEL_EXPIRY, consume_inventory_fifo_slices
 from ..operational_sales_events import emit_operational_sales_event
+from ..stock_disposition import DEFAULT_STOCK_DISPOSITION
 from ..warehouse_inventory_movement_service import (
     BUCKET_RESERVED,
     BUCKET_SELLABLE,
@@ -51,6 +52,7 @@ def create_reservations_for_order(
             expires_at=expires,
             direct_sale_session_id=int(sess.id),
             reservation_kind=kind,
+            stock_disposition=DEFAULT_STOCK_DISPOSITION,
         )
         db.add(res)
         db.flush()
@@ -140,6 +142,7 @@ def issue_stock_for_allocations(
                 product_id=int(alloc.product_id),
                 location_id=int(alloc.location_id),
                 quantity=float(alloc.quantity),
+                stock_disposition=DEFAULT_STOCK_DISPOSITION,
             )
         except ValueError as exc:
             raise DirectSaleError(str(exc), code="insufficient_stock", http_status=409) from exc

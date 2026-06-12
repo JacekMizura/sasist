@@ -64,6 +64,7 @@ from .order_item_pick_allocation_service import (
     log_pick_allocation_debug,
     persist_pick_allocation,
 )
+from .inventory_allocation_service import required_disposition_for_order_item
 from .order_fulfillment_recompute import (
     compute_line_missing_qty,
     line_closed_for_picking_finalize,
@@ -311,6 +312,7 @@ def _decrement_inventory_for_wms_pick(
     wid = int(pick.warehouse_id or 0)
     if wid <= 0:
         raise ValueError("Brak warehouse_id na rekordzie Pick — nie można zaktualizować stanu.")
+    req_disp = required_disposition_for_order_item(db, getattr(pick, "order_item_id", None))
     slices = consume_inventory_fifo_slices(
         db,
         tenant_id=tid,
@@ -318,6 +320,7 @@ def _decrement_inventory_for_wms_pick(
         product_id=int(pick.product_id),
         location_id=int(pick.location_id),
         quantity=qty,
+        stock_disposition=req_disp,
     )
     return _apply_pick_lot_slices(db, pick, slices, performed_by=performed_by, picked_at=picked_at)
 

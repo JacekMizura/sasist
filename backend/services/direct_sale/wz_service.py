@@ -23,6 +23,7 @@ from ..operational_sales_events import emit_operational_sales_event
 from ..stock_document_service import compute_pz_line_financial_totals
 from ..order_item_pick_allocation_service import SENTINEL_EXPIRY, consume_inventory_fifo_slices
 from ..sale_warehouse_series_service import resolve_wz_series_for_sale_series
+from ..stock_disposition import DEFAULT_STOCK_DISPOSITION
 from ..stock_operation_issue_service import append_issue_operation
 from ..warehouse_inventory_movement_service import (
     BUCKET_RESERVED,
@@ -66,6 +67,7 @@ def _create_wz_reservations(
             expires_at=expires,
             direct_sale_session_id=int(sess.id),
             reservation_kind=kind,
+            stock_disposition=DEFAULT_STOCK_DISPOSITION,
         )
         db.add(res)
         db.flush()
@@ -150,6 +152,7 @@ def _issue_wz_allocations(
                 product_id=int(alloc.product_id),
                 location_id=int(alloc.location_id),
                 quantity=float(alloc.quantity),
+                stock_disposition=DEFAULT_STOCK_DISPOSITION,
             )
         except ValueError as exc:
             raise DirectSaleError(str(exc), code="insufficient_stock", http_status=409) from exc

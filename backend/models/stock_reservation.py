@@ -7,7 +7,7 @@ Pick: decrease stock.quantity and set status to picked.
 
 from datetime import date, datetime
 
-from sqlalchemy import Column, Date, DateTime, Integer, Float, ForeignKey, String
+from sqlalchemy import Column, Date, DateTime, Integer, Float, ForeignKey, String, text
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -52,6 +52,13 @@ class StockReservation(Base, BaseModelMixin):
         index=True,
     )
     reservation_kind = Column(String(24), nullable=True)
+    stock_disposition = Column(
+        String(32),
+        nullable=False,
+        default="SALEABLE",
+        server_default=text("'SALEABLE'"),
+        index=True,
+    )
 
     tenant = relationship("Tenant", back_populates="stock_reservations")
     order = relationship("Order", back_populates="stock_reservations")

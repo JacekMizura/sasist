@@ -23,7 +23,9 @@ from ..models.product import Product
 from ..models.location import Location
 from ..models.warehouse import Bin
 from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority, is_pickable
+from .inventory_allocation_service import allocate_inventory_slices_fefo_pick_path
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
+from .stock_disposition import resolve_order_item_required_disposition
 
 logger = logging.getLogger(__name__)
 
@@ -121,100 +123,6 @@ EFFECTIVE_SEQ_UNSEQUENCED = 999999
 def _effective_pick_sequence(pick_sequence: int | None) -> int:
     """Return effective sequence for ordering; unsequenced locations sort after all sequenced."""
     return pick_sequence if pick_sequence is not None else EFFECTIVE_SEQ_UNSEQUENCED
-
-
-def _reserved_qty_at_lot(
-    db: Session,
-    tenant_id: int,
-    product_id: int,
-    location_id: int,
-    batch_number: str,
-    expiry_date,
-) -> float:
-    r = (
-        db.query(func.coalesce(func.sum(StockReservation.quantity), 0))
-        .filter(
-            StockReservation.tenant_id == tenant_id,
-            StockReservation.product_id == product_id,
-            StockReservation.location_id == location_id,
-            StockReservation.batch_number == batch_number,
-            StockReservation.expiry_date == expiry_date,
-            StockReservation.status == "reserved",
-        )
-        .scalar()
-    )
-    return float(r or 0)
-
-
-def allocate_inventory_slices_fefo_pick_path(
-    db: Session,
-    tenant_id: int,
-    product_id: int,
-    warehouse_id: int,
-    need: float,
-    current_pick_sequence: int,
-) -> tuple[list[tuple[Inventory, float]], int]:
-    """
-    Allocate `need` across inventory rows: FEFO (expiry_date asc), then pick path order.
-    May return multiple (row, qty) slices from different lots/locations.
-    """
-    if need <= 0:
-        return ([], current_pick_sequence)
-    stock_rows = (
-        db.query(Inventory, Location.pick_sequence, Bin.storage_type)
-        .join(Location, Inventory.location_id == Location.id)
-        .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
-        .filter(
-            Inventory.tenant_id == tenant_id,
-            Inventory.product_id == product_id,
-            Inventory.warehouse_id == warehouse_id,
-            Inventory.quantity > 0,
-            or_(
-                Bin.id.is_(None),
-                Bin.storage_type.is_(None),
-                ~func.lower(Bin.storage_type).in_(tuple(NON_PICKABLE_STORAGE_TYPE_ALIASES)),
-            ),
-        )
-        .all()
-    )
-    candidates: list[tuple[Inventory, int | None, str | None]] = []
-    for row, pick_sequence, storage_type in stock_rows:
-        bn = getattr(row, "batch_number", "") or ""
-        ed = getattr(row, "expiry_date", None) or NO_EXPIRY_SENTINEL
-        reserved = _reserved_qty_at_lot(db, tenant_id, product_id, row.location_id, bn, ed)
-        if float(row.quantity) - reserved <= 0:
-            continue
-        candidates.append((row, pick_sequence, storage_type))
-    if not candidates:
-        return ([], current_pick_sequence)
-    best_priority = min(get_storage_priority(item[2]) or EFFECTIVE_SEQ_UNSEQUENCED for item in candidates)
-    candidates = [c for c in candidates if (get_storage_priority(c[2]) or EFFECTIVE_SEQ_UNSEQUENCED) == best_priority]
-    candidates.sort(
-        key=lambda item: (
-            getattr(item[0], "expiry_date", None) or NO_EXPIRY_SENTINEL,
-            _effective_pick_sequence(item[1]),
-            item[0].location_id,
-            item[0].id,
-        )
-    )
-    remaining = float(need)
-    slices: list[tuple[Inventory, float]] = []
-    next_seq_out = current_pick_sequence
-    for row, pick_sequence, _storage_type in candidates:
-        if remaining <= 1e-9:
-            break
-        bn = getattr(row, "batch_number", "") or ""
-        ed = getattr(row, "expiry_date", None) or NO_EXPIRY_SENTINEL
-        reserved = _reserved_qty_at_lot(db, tenant_id, product_id, row.location_id, bn, ed)
-        avail = float(row.quantity) - reserved
-        if avail <= 0:
-            continue
-        take = min(remaining, avail)
-        slices.append((row, take))
-        remaining -= take
-        if pick_sequence is not None:
-            next_seq_out = pick_sequence
-    return (slices, next_seq_out)
 
 
 def _get_order_locations_sets(
@@ -413,8 +321,15 @@ def create_wave(
         need = float(oi.quantity)
         if need <= 0:
             continue
+        req_disp = resolve_order_item_required_disposition(oi)
         slices, next_sequence = allocate_inventory_slices_fefo_pick_path(
-            db, tenant_id, oi.product_id, warehouse_id, need, current_pick_sequence
+            db,
+            tenant_id,
+            oi.product_id,
+            warehouse_id,
+            need,
+            current_pick_sequence,
+            stock_disposition=req_disp,
         )
         if not slices or sum(s[1] for s in slices) + 1e-9 < need:
             logger.warning(
@@ -435,6 +350,7 @@ def create_wave(
                 status="reserved",
                 batch_number=bn,
                 expiry_date=ed,
+                stock_disposition=req_disp,
             )
             db.add(res)
             db.flush()
@@ -447,6 +363,7 @@ def create_wave(
                 status="waiting",
                 batch_number=bn,
                 expiry_date=ed,
+                stock_disposition=req_disp,
             )
             db.add(task)
             db.flush()

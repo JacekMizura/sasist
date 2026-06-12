@@ -9,10 +9,11 @@ from sqlalchemy.orm import Session
 
 from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
 from ...models.stock_reservation import StockReservation
-from .constants import (
+from .direct_sale.constants import (
     RESERVATION_KIND_SOFT_HOLD,
     soft_hold_expires_at,
 )
+from ..stock_disposition import DEFAULT_STOCK_DISPOSITION
 from ..operational_sales_events import emit_operational_sales_event
 from ..warehouse_inventory_movement_service import (
     BUCKET_RESERVED,
@@ -56,6 +57,7 @@ def create_soft_hold_for_scan(
             expires_at=expires,
             direct_sale_session_id=int(sess.id),
             reservation_kind=RESERVATION_KIND_SOFT_HOLD,
+            stock_disposition=DEFAULT_STOCK_DISPOSITION,
         )
         db.add(res)
         db.flush()

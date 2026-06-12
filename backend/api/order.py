@@ -70,6 +70,7 @@ from ..services.recovery_workflow_service import apply_fulfillment_state_from_re
 from ..services.wms_recovery_pick_service import ensure_recovery_pick_task
 from ..services.order_fulfillment_state import touch_picking_in_progress
 from ..services.wms_packing_service import apply_order_selected_carton, get_oms_order_wms_fulfillment_card
+from ..services.stock_disposition import disposition_for_new_order_line, resolve_order_item_required_disposition
 from ..utils.order_shipping_display import order_shipping_display
 
 
@@ -1425,6 +1426,7 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
                 vat_percent=r.vat_percent,
                 is_bundle_parent=True,
                 parent_bundle_order_item_id=None,
+                required_stock_disposition=r.required_stock_disposition,
             )
             db.add(oi)
             db.flush()
@@ -1448,6 +1450,7 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
             vat_percent=r.vat_percent,
             is_bundle_parent=False,
             parent_bundle_order_item_id=pb_id,
+            required_stock_disposition=r.required_stock_disposition,
         )
         db.add(oi)
 
@@ -1719,6 +1722,7 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
                 oms_line_status=str(ols).strip() if ols and str(ols).strip() else None,
                 oms_replacement_original_quantity=rep_oq,
                 oms_replacement_transferred_quantity=rep_tq,
+                required_stock_disposition=resolve_order_item_required_disposition(item),
             )
         )
 
@@ -2265,6 +2269,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Order not found")
     qty = int(body.quantity)
     unit_str = (body.unit or "").strip() or None
+    req_disp = disposition_for_new_order_line(getattr(body, "required_stock_disposition", None))
 
     if body.bundle_id is not None:
         try:
@@ -2274,6 +2279,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 bundle_id=int(body.bundle_id),
                 bundle_order_qty=qty,
                 line_unit_price_override=body.unit_price,
+                required_stock_disposition=req_disp,
             )
             merged = merge_resolved_lines(raw_lines)
         except BundleExplosionError as e:
@@ -2298,6 +2304,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                     bundle_instance_id=r.bundle_instance_id,
                     is_bundle_parent=True,
                     parent_bundle_order_item_id=None,
+                    required_stock_disposition=r.required_stock_disposition,
                 )
                 db.add(oi)
                 db.flush()
@@ -2320,6 +2327,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 bundle_instance_id=r.bundle_instance_id,
                 is_bundle_parent=False,
                 parent_bundle_order_item_id=pb_id,
+                required_stock_disposition=r.required_stock_disposition,
             )
             db.add(oi)
         db.flush()
@@ -2338,6 +2346,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
             product=product,
             quantity=qty,
             line_unit_price_override=body.unit_price,
+            required_stock_disposition=req_disp,
         )
         existing = (
             db.query(OrderItem)
@@ -2347,6 +2356,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 OrderItem.source_bundle_id.is_(None),
                 OrderItem.bundle_instance_id.is_(None),
                 OrderItem.parent_bundle_order_item_id.is_(None),
+                OrderItem.required_stock_disposition == req_disp,
             )
             .first()
         )
@@ -2387,6 +2397,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 metadata_json=resolved.metadata_json,
                 is_bundle_parent=False,
                 parent_bundle_order_item_id=None,
+                required_stock_disposition=resolved.required_stock_disposition,
             )
             db.add(oi)
         db.flush()
@@ -2721,6 +2732,7 @@ def patch_order_item_line(
             replaced_from_order_item_id=int(item.id),
             replaced_from_product_name=old_name[:255] if old_name else None,
             metadata_json=json.dumps(meta_new_item, ensure_ascii=False),
+            required_stock_disposition=resolve_order_item_required_disposition(item),
         )
         db.add(new_item)
         # Rekordy Pick dla nowej linii powstają przy zbieraniu (wózek + alokacja lokalizacji), nie tutaj.

@@ -31,6 +31,7 @@ from ..config import product_refactor_flags as pr_flags
 from ..services.shipping_method_service import get_or_create_shipping_method_for_label
 from ..services.order_default_new_panel_status import assign_default_new_panel_status_to_order
 from ..services.bundle_explosion import BundleExplosionError, explode_bundle_line, merge_resolved_lines
+from ..services.stock_disposition import DEFAULT_STOCK_DISPOSITION
 
 logger = logging.getLogger(__name__)
 
@@ -2108,6 +2109,7 @@ class ImportService:
                                 bundle_instance_id=r.bundle_instance_id,
                                 is_bundle_parent=True,
                                 parent_bundle_order_item_id=None,
+                                required_stock_disposition=DEFAULT_STOCK_DISPOSITION,
                             )
                             self.db.add(oi)
                             self.db.flush()
@@ -2134,6 +2136,7 @@ class ImportService:
                                 bundle_instance_id=r.bundle_instance_id,
                                 is_bundle_parent=False,
                                 parent_bundle_order_item_id=pb_id,
+                                required_stock_disposition=DEFAULT_STOCK_DISPOSITION,
                             )
                             self.db.add(oi)
                     items_added += len(merged_bundle)
@@ -2166,6 +2169,7 @@ class ImportService:
                         list_price=agg.get("list_price"),
                         vat_percent=agg.get("vat_percent"),
                         metadata_json=meta_str,
+                        required_stock_disposition=DEFAULT_STOCK_DISPOSITION,
                     )
                 )
                 items_added += 1

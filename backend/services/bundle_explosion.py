@@ -15,6 +15,11 @@ from sqlalchemy.orm import Session, joinedload
 from ..models.bundle import Bundle, BundleItem
 from ..models.inventory import Inventory
 from ..models.product import Product
+from .stock_disposition import (
+    DEFAULT_STOCK_DISPOSITION,
+    disposition_for_new_order_line,
+    normalize_stock_disposition,
+)
 
 
 class BundleExplosionError(Exception):
@@ -50,6 +55,8 @@ class ResolvedOrderLine:
     vat_percent: Optional[float] = None
     #: Nagłówek zestawu (komercja); komponenty mają False i zerowe ``total_price`` w DB.
     is_bundle_parent: bool = False
+    #: Pula magazynowa do rezerwacji / pickingu (Etap 2).
+    required_stock_disposition: str = DEFAULT_STOCK_DISPOSITION
 
 
 def vat_percent_from_product(product: Product) -> Optional[float]:
@@ -170,6 +177,7 @@ def explode_bundle_line(
     bundle_id: int,
     bundle_order_qty: int,
     line_unit_price_override: Optional[float],
+    required_stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> list[ResolvedOrderLine]:
     """
     Jedna linia katalogowa zestawu → nagłówek komercyjny + komponenty operacyjne (ta sama instancja UUID).
@@ -222,6 +230,7 @@ def explode_bundle_line(
         metadata_json=parent_meta,
         vat_percent=parent_vat,
         is_bundle_parent=True,
+        required_stock_disposition=normalize_stock_disposition(required_stock_disposition),
     )
 
     if weight_sum > 0:
@@ -230,6 +239,7 @@ def explode_bundle_line(
         n = len(weights)
         allocations = [tt / n] * n if n else []
 
+    req_disp = normalize_stock_disposition(required_stock_disposition)
     child_lines: list[ResolvedOrderLine] = []
     disp_rounded: list[float] = []
     for i, (bi, line_qty, _w) in enumerate(weights):
@@ -261,6 +271,7 @@ def explode_bundle_line(
                 metadata_json=meta,
                 vat_percent=pvat,
                 is_bundle_parent=False,
+                required_stock_disposition=req_disp,
             )
         )
 
@@ -291,6 +302,7 @@ def explode_bundle_line(
             metadata_json=meta_fix,
             vat_percent=last.vat_percent,
             is_bundle_parent=False,
+            required_stock_disposition=req_disp,
         )
 
     return [parent_line] + child_lines
@@ -301,6 +313,7 @@ def explode_product_line(
     product: Product,
     quantity: int,
     line_unit_price_override: Optional[float],
+    required_stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> ResolvedOrderLine:
     unit = float(line_unit_price_override) if line_unit_price_override is not None else _sale_unit(product)
     tot = round(unit * quantity, 2)
@@ -323,18 +336,25 @@ def explode_product_line(
         bundle_instance_id=None,
         metadata_json=meta_str,
         vat_percent=vp,
+        required_stock_disposition=normalize_stock_disposition(required_stock_disposition),
     )
 
 
 def merge_resolved_lines(lines: list[ResolvedOrderLine]) -> list[ResolvedOrderLine]:
     """
-    Merge rows that share (product_id, source_bundle_id, bundle_instance_id, is_bundle_parent).
+    Merge rows that share (product_id, source_bundle_id, bundle_instance_id, is_bundle_parent, required_stock_disposition).
     Nagłówki zestawów nigdy nie są łączone z komponentami (różny fragment klucza).
     """
-    buckets: dict[tuple[int, Any, Any, bool], ResolvedOrderLine] = {}
-    order_keys: list[tuple[int, Any, Any, bool]] = []
+    buckets: dict[tuple[int, Any, Any, bool, str], ResolvedOrderLine] = {}
+    order_keys: list[tuple[int, Any, Any, bool, str]] = []
     for row in lines:
-        key = (row.product_id, row.source_bundle_id, row.bundle_instance_id, row.is_bundle_parent)
+        key = (
+            row.product_id,
+            row.source_bundle_id,
+            row.bundle_instance_id,
+            row.is_bundle_parent,
+            normalize_stock_disposition(row.required_stock_disposition),
+        )
         if key not in buckets:
             buckets[key] = row
             order_keys.append(key)
@@ -357,11 +377,34 @@ def merge_resolved_lines(lines: list[ResolvedOrderLine]) -> list[ResolvedOrderLi
                 metadata_json=cur.metadata_json or row.metadata_json,
                 vat_percent=merged_vat,
                 is_bundle_parent=cur.is_bundle_parent,
+                required_stock_disposition=cur.required_stock_disposition,
             )
     return [buckets[k] for k in order_keys]
 
 
+def available_stock_for_disposition(
+    db: Session,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+) -> float:
+    sd = normalize_stock_disposition(stock_disposition)
+    q = (
+        db.query(func.coalesce(func.sum(Inventory.quantity), 0))
+        .filter(
+            Inventory.tenant_id == tenant_id,
+            Inventory.warehouse_id == warehouse_id,
+            Inventory.product_id == product_id,
+            Inventory.stock_disposition == sd,
+        )
+        .scalar()
+    )
+    return float(q or 0)
+
+
 def available_stock(db: Session, tenant_id: int, warehouse_id: int, product_id: int) -> float:
+    """Legacy helper — sums all dispositions (prefer ``available_stock_for_disposition``)."""
     q = (
         db.query(func.coalesce(func.sum(Inventory.quantity), 0))
         .filter(
@@ -381,16 +424,23 @@ def validate_merged_stock(
     warehouse_id: int,
     lines: list[ResolvedOrderLine],
 ) -> None:
-    need: dict[int, int] = {}
+    need: dict[tuple[int, str], int] = {}
     for r in lines:
-        need[r.product_id] = need.get(r.product_id, 0) + int(r.quantity)
+        if r.is_bundle_parent:
+            continue
+        disp = normalize_stock_disposition(r.required_stock_disposition)
+        key = (int(r.product_id), disp)
+        need[key] = need.get(key, 0) + int(r.quantity)
     short = []
-    for pid, n in need.items():
-        avail = available_stock(db, tenant_id, warehouse_id, pid)
+    for (pid, disp), n in need.items():
+        avail = available_stock_for_disposition(db, tenant_id, warehouse_id, pid, disp)
         if avail + 1e-9 < n:
-            short.append((pid, n, avail))
+            short.append((pid, disp, n, avail))
     if short:
-        parts = [f"product_id={pid} need={n} available={avail:.0f}" for pid, n, avail in short]
+        parts = [
+            f"product_id={pid} disposition={disp} need={n} available={avail:.0f}"
+            for pid, disp, n, avail in short
+        ]
         raise BundleExplosionError("Insufficient stock for bundle / order lines: " + "; ".join(parts))
 
 
@@ -408,6 +458,7 @@ def resolve_order_create_lines(
     exploded: list[ResolvedOrderLine] = []
     for line in raw_lines:
         qty = int(line.quantity)
+        req_disp = disposition_for_new_order_line(getattr(line, "required_stock_disposition", None))
         if getattr(line, "bundle_id", None) is not None:
             exploded.extend(
                 explode_bundle_line(
@@ -416,6 +467,7 @@ def resolve_order_create_lines(
                     bundle_id=int(line.bundle_id),
                     bundle_order_qty=qty,
                     line_unit_price_override=line.unit_price,
+                    required_stock_disposition=req_disp,
                 )
             )
         else:
@@ -428,6 +480,7 @@ def resolve_order_create_lines(
                     product=p,
                     quantity=qty,
                     line_unit_price_override=line.unit_price,
+                    required_stock_disposition=req_disp,
                 )
             )
     merged = merge_resolved_lines(exploded)
