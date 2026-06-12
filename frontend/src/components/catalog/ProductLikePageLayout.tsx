@@ -140,7 +140,7 @@ export function ProductLikePageLayout<T extends string>({
   const showRail = !hideTabs && !hideVerticalRail;
 
   const formShellClass = isPage
-    ? `flex flex-col bg-white ${productLikeFormNumberReset}`
+    ? `flex flex-col ${productLikeFormNumberReset}`
     : `flex min-h-0 flex-1 flex-col overflow-hidden bg-white ${productLikeFormNumberReset}`;
 
   const bodyRowClass = isPage
@@ -148,7 +148,7 @@ export function ProductLikePageLayout<T extends string>({
     : "flex min-h-0 w-full flex-1 flex-col overflow-hidden lg:flex-row lg:items-stretch";
 
   const mainColClass = isPage
-    ? "flex min-w-0 flex-1 flex-col pb-8"
+    ? "flex min-w-0 flex-col"
     : "flex min-w-0 flex-1 flex-col overflow-hidden";
 
   const asideClass = isPage
@@ -370,7 +370,7 @@ export function ProductLikePageLayout<T extends string>({
   );
 
   if (isPage) {
-    return <div className="w-full min-w-0 bg-white">{shell}</div>;
+    return shell;
   }
 
   return (
