@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from .inventory_damage_trace import InventoryDamageTraceOut
+
 
 class WarehouseCarrierGroupRead(BaseModel):
     id: int
@@ -121,6 +123,10 @@ class WarehouseCarrierItemRead(BaseModel):
     serial_number: Optional[str] = None
     quantity: float = 0.0
     warehouse_stock_id: Optional[int] = None
+    stock_disposition: Optional[str] = None
+    disposition_badge: Optional[str] = None
+    damage_class: Optional[str] = None
+    damage_trace: Optional[InventoryDamageTraceOut] = None
 
 
 class WarehouseCarrierDetailRead(WarehouseCarrierRead):

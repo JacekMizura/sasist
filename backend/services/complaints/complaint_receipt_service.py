@@ -313,6 +313,23 @@ def receive_complaint_line_at_warehouse(
             line=row,
             quantity=float(qty),
         )
+        if doc.location_id is not None:
+            from ..inventory_damage_trace_service import materialize_damage_trace_on_dock_inventory
+            from ..inventory_lot_keys import dock_lot_keys_for_pz_line
+            from ..stock_disposition import stock_disposition_for_document_line
+
+            bn, ed = dock_lot_keys_for_pz_line(row)
+            materialize_damage_trace_on_dock_inventory(
+                db,
+                tenant_id=tenant_id,
+                row=row,
+                doc=doc,
+                dock_id=int(doc.location_id),
+                bn=bn,
+                ed_store=ed,
+                sd=stock_disposition_for_document_line(row),
+                from_carrier_id=None,
+            )
     else:
         apply_service_forward_logistics(complaint)
 

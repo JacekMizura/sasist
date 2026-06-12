@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from .inventory_damage_trace import InventoryDamageTraceOut
+
 
 class WmsProductViewLocation(BaseModel):
     location_id: int = Field(..., ge=1)
@@ -13,6 +15,10 @@ class WmsProductViewLocation(BaseModel):
     quantity: float = Field(..., ge=0)
     badge: str = Field(..., description="PICK, OVERSTOCK, FLOOR, STORAGE, …")
     location_type: Optional[str] = Field(None, description="NORMAL, PICK_START, …")
+    stock_disposition: Optional[str] = None
+    disposition_badge: Optional[str] = None
+    damage_class: Optional[str] = None
+    damage_trace: Optional[InventoryDamageTraceOut] = None
 
 
 class WmsProductViewLogistics(BaseModel):

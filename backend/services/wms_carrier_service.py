@@ -22,6 +22,7 @@ from ..models.warehouse_carrier import (
     WarehouseCarrierItem,
     WarehouseCarrierLog,
 )
+from .inventory_damage_trace_service import inventory_damage_trace_out
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL, expiry_for_api, normalize_batch_number
 from ..schemas.wms_carriers import (
     WarehouseCarrierAddItemsBody,
@@ -246,8 +247,8 @@ def _carrier_items_from_inventory(db: Session, tenant_id: int, carrier_id: int) 
         .order_by(Inventory.product_id, Inventory.batch_number, Inventory.expiry_date, Inventory.id)
         .all()
     )
-    groups: dict[tuple[int, str, object], dict] = defaultdict(
-        lambda: {"qty": 0.0, "inv_id": None, "p": None, "bn": "", "ed": NO_EXPIRY_SENTINEL}
+    groups: dict[tuple[int, str, object, str, str | None], dict] = defaultdict(
+        lambda: {"qty": 0.0, "inv_id": None, "p": None, "bn": "", "ed": NO_EXPIRY_SENTINEL, "trace": None}
     )
     for inv, p in inv_rows:
         pid = int(inv.product_id)
@@ -255,22 +256,26 @@ def _carrier_items_from_inventory(db: Session, tenant_id: int, carrier_id: int) 
             continue
         bn = normalize_batch_number(getattr(inv, "batch_number", None))
         ed = getattr(inv, "expiry_date", None) or NO_EXPIRY_SENTINEL
-        key = (pid, bn, ed)
+        sd = str(getattr(inv, "stock_disposition", None) or "SALEABLE").strip().upper()
+        dmg = (getattr(inv, "damage_class", None) or "").strip().upper() or None
+        key = (pid, bn, ed, sd, dmg)
         g = groups[key]
         g["qty"] += float(inv.quantity or 0)
         if g["inv_id"] is None:
             g["inv_id"] = int(inv.id)
+            g["trace"] = inventory_damage_trace_out(db, inv)
         g["p"] = p
         g["bn"] = bn
         g["ed"] = ed
 
-    for (pid, bn, ed), g in sorted(groups.items(), key=lambda x: (x[0][0], x[0][1], str(x[0][2]))):
+    for (pid, bn, ed, sd, dmg), g in sorted(groups.items(), key=lambda x: (x[0][0], x[0][1], str(x[0][2]), x[0][3], x[0][4] or "")):
         if g["qty"] <= 1e-9 or g["p"] is None:
             continue
         synthetic_id += 1
         p = g["p"]
         sku, ean, img = _product_media(p)
         row_id = int(g["inv_id"]) if g["inv_id"] is not None else synthetic_id
+        trace = g.get("trace")
         items.append(
             WarehouseCarrierItemRead(
                 id=row_id,
@@ -284,6 +289,10 @@ def _carrier_items_from_inventory(db: Session, tenant_id: int, carrier_id: int) 
                 serial_number=None,
                 quantity=float(g["qty"]),
                 warehouse_stock_id=int(g["inv_id"]) if g["inv_id"] is not None else None,
+                stock_disposition=trace.stock_disposition if trace else sd,
+                disposition_badge=trace.disposition_badge if trace else None,
+                damage_class=trace.damage_class if trace else dmg,
+                damage_trace=trace,
             )
         )
 

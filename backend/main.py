@@ -137,6 +137,7 @@ from .db.schema_upgrade import (
     migrate_inventory_lot_unique_sqlite,
     ensure_inventory_stock_disposition_columns,
     ensure_stock_document_items_stock_disposition_column,
+    ensure_stock_document_items_stock_disposition_column,
     ensure_stock_operations_stock_disposition_column,
     ensure_stock_reservation_lot_columns,
     ensure_pick_task_lot_columns,
@@ -1310,6 +1311,12 @@ def _upgrade_schema_background() -> None:
         ensure_z_pz_return_receipt_columns(engine)
     except Exception:
         logging.getLogger(__name__).exception("ensure_z_pz_return_receipt_columns failed at startup")
+    try:
+        from .db.inventory_damage_trace_schema import ensure_inventory_damage_trace_columns
+
+        ensure_inventory_damage_trace_columns(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_inventory_damage_trace_columns failed at startup")
     try:
         ensure_stock_document_items_return_receipt_columns(engine)
         ensure_stock_document_items_stock_disposition_column(engine)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..models.inventory import Inventory
@@ -14,6 +13,7 @@ from ..schemas.wms_product_view import (
     WmsProductViewPackage,
     WmsProductViewResponse,
 )
+from .inventory_damage_trace_service import inventory_damage_trace_out
 from .legacy_import_inventory_display_filter import should_hide_legacy_csv_import_inventory_location
 
 
@@ -72,59 +72,52 @@ def build_wms_product_view(
 
     qty_sum = func.coalesce(func.sum(Inventory.quantity), 0.0).label("qty")
 
-    rows = (
-        db.query(
-            Location.id,
-            Location.name,
-            Location.type,
-            Location.location_type,
-            Location.pick_sequence,
-            Location.location_uuid,
-            qty_sum,
-        )
-        .join(Inventory, Inventory.location_id == Location.id)
+    inv_rows = (
+        db.query(Inventory, Location)
+        .join(Location, Location.id == Inventory.location_id)
         .filter(
             Inventory.tenant_id == int(tenant_id),
             Inventory.warehouse_id == int(warehouse_id),
             Inventory.product_id == int(product_id),
+            Inventory.quantity > 0,
             Location.warehouse_id == int(warehouse_id),
             Location.is_active.is_(True),
         )
-        .group_by(
-            Location.id,
-            Location.name,
-            Location.type,
-            Location.location_type,
-            Location.pick_sequence,
-            Location.location_uuid,
-        )
+        .order_by(Location.pick_sequence.asc(), Location.name.asc(), Inventory.id.asc())
         .all()
     )
 
-    seq_map = {int(r[0]): r[4] for r in rows}
     loc_items: list[WmsProductViewLocation] = []
     total = 0.0
-    for lid, name, loc_type, loc_loc_type, _pick_seq, loc_uuid, qty in rows:
+    seq_map: dict[int, int | None] = {}
+    for inv, loc in inv_rows:
         if should_hide_legacy_csv_import_inventory_location(
-            loc_name=str(name or ""),
-            loc_type=str(loc_type) if loc_type is not None else None,
-            location_type=str(loc_loc_type) if loc_loc_type is not None else None,
-            location_uuid=str(loc_uuid) if loc_uuid is not None else None,
+            loc_name=str(loc.name or ""),
+            loc_type=str(loc.type) if loc.type is not None else None,
+            location_type=str(loc.location_type) if loc.location_type is not None else None,
+            location_uuid=str(loc.location_uuid) if loc.location_uuid is not None else None,
         ):
             continue
-        q = float(qty or 0)
+        q = float(inv.quantity or 0)
         total += q
-        code = (name or "").strip() or f"LOC-{lid}"
+        lid = int(loc.id)
+        seq_map[lid] = loc.pick_sequence
+        code = (loc.name or "").strip() or f"LOC-{lid}"
+        trace = inventory_damage_trace_out(db, inv)
         loc_items.append(
             WmsProductViewLocation(
-                location_id=int(lid),
+                location_id=lid,
                 code=code,
                 quantity=round(q, 4),
                 badge=_location_badge(
-                    str(loc_type) if loc_type is not None else None,
-                    str(loc_loc_type) if loc_loc_type is not None else None,
+                    str(loc.type) if loc.type is not None else None,
+                    str(loc.location_type) if loc.location_type is not None else None,
                 ),
-                location_type=str(loc_loc_type).strip() if loc_loc_type else None,
+                location_type=str(loc.location_type).strip() if loc.location_type else None,
+                stock_disposition=trace.stock_disposition if trace else getattr(inv, "stock_disposition", None),
+                disposition_badge=trace.disposition_badge if trace else None,
+                damage_class=trace.damage_class if trace else getattr(inv, "damage_class", None),
+                damage_trace=trace,
             )
         )
 
@@ -133,6 +126,7 @@ def build_wms_product_view(
             1 if seq_map.get(x.location_id) is None else 0,
             seq_map.get(x.location_id) if seq_map.get(x.location_id) is not None else 10**9,
             x.code.lower(),
+            str(x.stock_disposition or ""),
         )
     )
 

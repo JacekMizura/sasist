@@ -138,6 +138,12 @@ export function mapProductListRow(p: Record<string, unknown>): ProductListRow {
               typeof row.location_uuid === "string" && row.location_uuid.trim() !== "" ? row.location_uuid.trim() : null,
             stock_disposition: sdRaw !== "" ? sdRaw : null,
             disposition_badge: dbRaw !== "" ? dbRaw : null,
+            damage_class:
+              row.damage_class != null && String(row.damage_class).trim() !== "" ? String(row.damage_class).trim() : null,
+            damage_trace:
+              row.damage_trace != null && typeof row.damage_trace === "object"
+                ? (row.damage_trace as import("../../types/inventoryDamageTrace").InventoryDamageTrace)
+                : null,
             warehouse_carrier_id:
               row.warehouse_carrier_id != null && Number(row.warehouse_carrier_id) > 0
                 ? Number(row.warehouse_carrier_id)

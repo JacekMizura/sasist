@@ -1,4 +1,5 @@
 import api from "./axios";
+import type { InventoryDamageTrace } from "../types/inventoryDamageTrace";
 
 export type LocationVisualWarehouse = { id: number; name: string };
 
@@ -57,6 +58,11 @@ export type LocationVisualProduct = {
   name?: string | null;
   image_url?: string | null;
   quantity: number;
+  stock_disposition?: string | null;
+  disposition_badge?: string | null;
+  damage_class?: string | null;
+  damage_trace?: InventoryDamageTrace | null;
+  row_key?: string | null;
 };
 
 export type LocationVisualOccupancy = {

@@ -35,13 +35,22 @@ def stock_disposition_for_document_line(item: Any | None) -> str:
 
 def stock_disposition_display_badge(code: str) -> str | None:
     """Operator-facing badge for product inventory rows (location + state)."""
-    c = normalize_stock_disposition(code)
+    return damaged_inventory_badge_label(normalize_stock_disposition(code), None)
+
+
+def damaged_inventory_badge_label(
+    stock_disposition: str | None,
+    damage_class: str | None = None,
+) -> str | None:
+    """Location badge: USZKODZONY B / USZKODZONY C / USZKODZONY / (A) / …"""
+    cls = (damage_class or "").strip().upper()
+    if cls in ("B", "C"):
+        return f"USZKODZONY {cls}"
+    c = normalize_stock_disposition(stock_disposition)
+    if c == STOCK_DISPOSITION_OUTLET_B or c == STOCK_DISPOSITION_SERVICE_C:
+        return "USZKODZONY"
     if c == DEFAULT_STOCK_DISPOSITION:
         return "(A)"
-    if c == STOCK_DISPOSITION_OUTLET_B:
-        return "(USZKODZONY)"
-    if c == STOCK_DISPOSITION_SERVICE_C:
-        return "(REKLAMACJA)"
     if c == STOCK_DISPOSITION_REJECTED_STOCK:
         return "(ODRZUCONY)"
     if c == STOCK_DISPOSITION_QUARANTINE:

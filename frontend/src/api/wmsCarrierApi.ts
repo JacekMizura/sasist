@@ -1,4 +1,5 @@
 import api from "./axios";
+import type { InventoryDamageTrace } from "../types/inventoryDamageTrace";
 
 export type WarehouseCarrierGroupRead = {
   id: number;
@@ -46,6 +47,10 @@ export type WarehouseCarrierItemRead = {
   serial_number?: string | null;
   quantity: number;
   warehouse_stock_id?: number | null;
+  stock_disposition?: string | null;
+  disposition_badge?: string | null;
+  damage_class?: string | null;
+  damage_trace?: InventoryDamageTrace | null;
 };
 
 export type WarehouseCarrierDetailRead = WarehouseCarrierRead & {

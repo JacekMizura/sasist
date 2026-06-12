@@ -7,6 +7,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from .inventory_damage_trace import InventoryDamageTraceOut
+
 
 class LocationVisualWarehouseOut(BaseModel):
     id: int
@@ -68,6 +70,11 @@ class LocationVisualProductOut(BaseModel):
     name: Optional[str] = None
     image_url: Optional[str] = None
     quantity: float = 0
+    stock_disposition: Optional[str] = None
+    disposition_badge: Optional[str] = None
+    damage_class: Optional[str] = None
+    damage_trace: Optional[InventoryDamageTraceOut] = None
+    row_key: Optional[str] = Field(default=None, description="Unique key when same SKU split by disposition")
 
 
 class LocationVisualOccupancyOut(BaseModel):

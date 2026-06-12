@@ -23,8 +23,8 @@ export function putawayLineQualityBadge(it: StockDocumentItemRead): PutawayLineQ
   }
   if (rd === "C") {
     return {
-      label: "REKLAMACJA (C)",
-      className: "bg-orange-100 text-orange-950 ring-1 ring-orange-200/80",
+      label: "USZKODZONY C",
+      className: "bg-red-100 text-red-950 ring-1 ring-red-300/80",
     };
   }
 
@@ -38,14 +38,14 @@ export function putawayLineQualityBadge(it: StockDocumentItemRead): PutawayLineQ
   if (isDamagedStockDisposition(disp)) {
     if (disp === "OUTLET_B") {
       return {
-        label: "USZKODZONY (B)",
-        className: "bg-amber-100 text-amber-950 ring-1 ring-amber-200/80",
+        label: "USZKODZONY B",
+        className: "bg-amber-100 text-amber-950 ring-1 ring-amber-300/80",
       };
     }
     if (disp === "SERVICE_C") {
       return {
-        label: "REKLAMACJA (C)",
-        className: "bg-orange-100 text-orange-950 ring-1 ring-orange-200/80",
+        label: "USZKODZONY C",
+        className: "bg-red-100 text-red-950 ring-1 ring-red-300/80",
       };
     }
     return {

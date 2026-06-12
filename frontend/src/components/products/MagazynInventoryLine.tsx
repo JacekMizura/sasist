@@ -1,4 +1,6 @@
 import { Pencil } from "lucide-react";
+import { DamageDispositionBadge } from "../inventory/DamageDispositionBadge";
+import type { InventoryDamageTrace } from "../../types/inventoryDamageTrace";
 import { StorageTypeIcon } from "../../utils/storageTypeIcons";
 import { getStorageTypeStyle, normalizeStorageType } from "../../utils/storageTypes";
 import { CarrierBadge } from "../warehouse/carriers/CarrierBadge";
@@ -18,8 +20,10 @@ export type MagazynInvRowDisplay = {
   location_uuid?: string | null;
   /** Canonical warehouse bucket e.g. SALEABLE, OUTLET_B */
   stock_disposition?: string | null;
-  /** Short badge from API e.g. [B], [C] */
+  /** Short badge from API e.g. USZKODZONY B */
   disposition_badge?: string | null;
+  damage_class?: string | null;
+  damage_trace?: InventoryDamageTrace | null;
   warehouse_carrier_id?: number | null;
   carrier_code?: string | null;
   carrier_barcode?: string | null;
@@ -159,14 +163,6 @@ export function MagazynInventoryLine({ row, onEditTraceability, editDisabled }: 
     (row.serial_range_label || "").trim() ||
     (row.serial_numbers?.length ? row.serial_numbers.join(", ") : "");
   const sdNorm = (row.stock_disposition ?? "").trim();
-  let badge = (row.disposition_badge ?? "").trim();
-  if (!badge) {
-    const fb = fallbackBadgeFromDisposition(sdNorm);
-    if (fb) badge = fb;
-  }
-  const variant = dispositionVariant(row.stock_disposition, badge || null);
-  const humanLabel = dispositionHumanLabel(variant, sdNorm);
-  const badgeClass = badge || humanLabel ? dispositionBadgeClass(variant === "saleable" ? "other" : variant) : "";
   const carrierLabel =
     (row.carrier_code || "").trim() ||
     (row.carrier_barcode || "").trim() ||
@@ -178,7 +174,7 @@ export function MagazynInventoryLine({ row, onEditTraceability, editDisabled }: 
   const titleParts = [
     row.location_code,
     carrierLabel || undefined,
-    badge || undefined,
+    row.damage_trace?.disposition_badge || row.disposition_badge || undefined,
     row.batch,
     expDisp,
     serialLabel || undefined,
@@ -200,7 +196,12 @@ export function MagazynInventoryLine({ row, onEditTraceability, editDisabled }: 
             <strong className="font-mono text-base font-semibold leading-snug" style={{ color: base.text }}>
               {row.location_code}
             </strong>
-            {humanLabel ? <span className={badgeClass}>{humanLabel}</span> : badge ? <span className={badgeClass}>{badge}</span> : null}
+            <DamageDispositionBadge
+              stockDisposition={row.stock_disposition}
+              damageClass={row.damage_class}
+              dispositionBadge={row.disposition_badge}
+              damageTrace={row.damage_trace}
+            />
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-1">
             {row.batch ? (

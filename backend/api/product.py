@@ -64,11 +64,13 @@ from ..models.stock_operation import (
 from ..models.wms_product_warehouse_operation import WmsProductWarehouseOperation
 from ..services.delete_service import delete_products_bulk
 from ..services.randomize_locations_service import randomize_product_locations
+from ..services.inventory_damage_trace_service import inventory_damage_trace_dict
 from ..services.inventory_lot_keys import NO_EXPIRY_SENTINEL, normalize_batch_number
 from ..services.stock_disposition import (
     DEFAULT_STOCK_DISPOSITION,
     normalize_stock_disposition,
     stock_disposition_display_badge,
+    damaged_inventory_badge_label,
 )
 from ..services.legacy_import_inventory_display_filter import should_hide_legacy_csv_import_inventory_location
 from ..services.product_cost_service import calculate_product_margin
@@ -1149,7 +1151,9 @@ def _inventory_payload_for_product_ids(
         ed = getattr(r, "expiry_date", None) or NO_EXPIRY_SENTINEL
         sd_raw = getattr(r, "stock_disposition", None)
         sd = normalize_stock_disposition(sd_raw)
-        disp_badge = stock_disposition_display_badge(sd)
+        dmg_fields = inventory_damage_trace_dict(db, r)
+        dmg_class = (getattr(r, "damage_class", None) or dmg_fields.get("damage_class") or "").strip().upper() or None
+        disp_badge = dmg_fields.get("disposition_badge") or damaged_inventory_badge_label(sd, dmg_class)
         batch_out = bn or None
         expiry_out: str | None
         if isinstance(ed, date) and ed >= NO_EXPIRY_SENTINEL:
@@ -1176,6 +1180,8 @@ def _inventory_payload_for_product_ids(
             "location_uuid": u if u else None,
             "stock_disposition": sd,
             "disposition_badge": disp_badge,
+            "damage_class": dmg_class,
+            "damage_trace": dmg_fields.get("damage_trace"),
             "warehouse_carrier_id": int(cid) if cid is not None else None,
             "carrier_code": carrier_code,
             "carrier_barcode": carrier_barcode,
@@ -1195,6 +1201,8 @@ def _inventory_payload_for_product_ids(
             "location_uuid": u if u else None,
             "stock_disposition": sd,
             "disposition_badge": disp_badge,
+            "damage_class": dmg_class,
+            "damage_trace": dmg_fields.get("damage_trace"),
             "warehouse_carrier_id": int(cid) if cid is not None else None,
             "carrier_code": carrier_code,
             "carrier_barcode": carrier_barcode,

@@ -1,4 +1,5 @@
 import type { WarehouseCarrierItemRead } from "../../../api/wmsCarrierApi";
+import { DamageDispositionBadge } from "../../inventory/DamageDispositionBadge";
 import { formatExpiryDatePl } from "../../../pages/wms/putawayFormat";
 import { CarrierProductThumb } from "./CarrierProductThumb";
 
@@ -66,6 +67,7 @@ export function CarrierItemsTable({ items }: { items: WarehouseCarrierItemRead[]
             <th className="px-2 py-2">Partia</th>
             <th className="px-2 py-2">Ważność</th>
             <th className="px-2 py-2">Seryjny</th>
+            <th className="px-2 py-2">Stan</th>
             <th className="px-2 py-2 text-right">Ilość</th>
           </tr>
         </thead>
@@ -92,6 +94,14 @@ export function CarrierItemsTable({ items }: { items: WarehouseCarrierItemRead[]
                   <ExpiryCell iso={it.expiry_date} />
                 </td>
                 <td className="px-2 py-2 font-mono text-[13px] text-violet-900">{serial}</td>
+                <td className="px-2 py-2">
+                  <DamageDispositionBadge
+                    stockDisposition={it.stock_disposition}
+                    damageClass={it.damage_class}
+                    dispositionBadge={it.disposition_badge}
+                    damageTrace={it.damage_trace}
+                  />
+                </td>
                 <td className="px-2 py-2 text-right text-[17px] font-black tabular-nums text-slate-900">
                   {it.quantity}
                 </td>

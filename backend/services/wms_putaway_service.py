@@ -35,6 +35,11 @@ from .inventory_carrier_ops import (
     upsert_dock_inventory_for_carrier_receipt,
     upsert_dock_inventory_for_loose_receipt,
 )
+from .inventory_damage_trace_service import (
+    apply_damage_trace_from_document_line_to_inventory,
+    copy_damage_trace_between_inventory,
+    materialize_damage_trace_on_dock_inventory,
+)
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL, dock_lot_keys_for_pz_line, normalize_batch_number
 from .stock_disposition import normalize_stock_disposition, stock_disposition_for_document_line
 from .location_badge import batch_location_storage_types, wms_location_badge_kind
@@ -55,6 +60,10 @@ from .stock_document_service import (
 )
 from .document_creator_service import batch_load_app_users
 from .wms_receiving_service import build_wms_pz_list_row
+from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_stock_document_id
+from .slotting import recalculate_location_occupancy, suggest_putaway_locations as slotting_suggest_putaway_locations, validate_putaway_assignment
+from .slotting.capacity_service import calculate_location_capacity, location_volume_capacity_dm3
+from .slotting.slotting_models import STRATEGY_CONSOLIDATE_SKU
 
 
 def _stamp_putaway_line_last_audit(
@@ -71,10 +80,6 @@ def _stamp_putaway_line_last_audit(
     row.putaway_last_location_type = wms_location_badge_kind(loc)
     row.putaway_last_admin_id = int(performed_by.id)
     row.putaway_last_quantity = float(quantity_increment)
-from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_stock_document_id
-from .slotting import recalculate_location_occupancy, suggest_putaway_locations as slotting_suggest_putaway_locations, validate_putaway_assignment
-from .slotting.capacity_service import calculate_location_capacity, location_volume_capacity_dm3
-from .slotting.slotting_models import STRATEGY_CONSOLIDATE_SKU
 
 
 def _sync_po_from_pz(db: Session, tenant_id: int, doc_id: int) -> None:
@@ -233,6 +238,17 @@ def sync_dock_inventory_from_document_line(
             expiry_date=ed_store,
             stock_disposition=sd,
         )
+    materialize_damage_trace_on_dock_inventory(
+        db,
+        tenant_id=int(tenant_id),
+        row=line,
+        doc=doc,
+        dock_id=int(dock_id),
+        bn=bn,
+        ed_store=ed_store,
+        sd=sd,
+        from_carrier_id=from_carrier_id,
+    )
 
 
 def _sum_dock_inventory(
@@ -403,24 +419,26 @@ def _transfer_from_dock_to_location(
             dest_q = dest_q.filter(Inventory.carrier_id.is_(None))
         inv_to = dest_q.first()
         if inv_to:
+            if not getattr(inv_to, "damage_class", None):
+                copy_damage_trace_between_inventory(inv, inv_to)
             inv_to.quantity = float(inv_to.quantity or 0) + take
             inv_to.location_uuid = loc_uuid
             db.add(inv_to)
         else:
-            db.add(
-                Inventory(
-                    tenant_id=tenant_id,
-                    product_id=row.product_id,
-                    warehouse_id=doc.warehouse_id,
-                    location_id=int(target_location_id),
-                    carrier_id=int(to_carrier_id) if to_carrier_id is not None else None,
-                    location_uuid=loc_uuid,
-                    quantity=take,
-                    batch_number=bn,
-                    expiry_date=ed_store,
-                    stock_disposition=sd,
-                )
+            inv_to = Inventory(
+                tenant_id=tenant_id,
+                product_id=row.product_id,
+                warehouse_id=doc.warehouse_id,
+                location_id=int(target_location_id),
+                carrier_id=int(to_carrier_id) if to_carrier_id is not None else None,
+                location_uuid=loc_uuid,
+                quantity=take,
+                batch_number=bn,
+                expiry_date=ed_store,
+                stock_disposition=sd,
             )
+            copy_damage_trace_between_inventory(inv, inv_to)
+            db.add(inv_to)
         remaining -= take
 
 
@@ -1348,24 +1366,25 @@ def patch_wms_putaway_item(
             .first()
         )
         if inv:
+            apply_damage_trace_from_document_line_to_inventory(db, inv=inv, line=row)
             inv.quantity = float(inv.quantity or 0) + q
             inv.location_uuid = loc_uuid
             db.add(inv)
         else:
-            db.add(
-                Inventory(
-                    tenant_id=tenant_id,
-                    product_id=row.product_id,
-                    warehouse_id=doc.warehouse_id,
-                    location_id=body.location_id,
-                    carrier_id=int(to_carrier_id) if to_carrier_id is not None else None,
-                    location_uuid=loc_uuid,
-                    quantity=q,
-                    batch_number=bn,
-                    expiry_date=ed_store,
-                    stock_disposition=sd,
-                )
+            inv = Inventory(
+                tenant_id=tenant_id,
+                product_id=row.product_id,
+                warehouse_id=doc.warehouse_id,
+                location_id=body.location_id,
+                carrier_id=int(to_carrier_id) if to_carrier_id is not None else None,
+                location_uuid=loc_uuid,
+                quantity=q,
+                batch_number=bn,
+                expiry_date=ed_store,
+                stock_disposition=sd,
             )
+            apply_damage_trace_from_document_line_to_inventory(db, inv=inv, line=row)
+            db.add(inv)
 
     moved_carrier_id = carrier_pk or (line_carrier_id if detach_from_carrier else None)
     if moved_carrier_id and dock_id is not None:

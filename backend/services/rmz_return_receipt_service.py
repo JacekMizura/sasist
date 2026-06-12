@@ -28,6 +28,9 @@ from ..services.stock_document_service import (
     recompute_putaway_status_for_document,
 )
 from ..services.stock_operation_receipt_service import append_receipt_operation
+from .inventory_damage_trace_service import materialize_damage_trace_on_dock_inventory
+from .inventory_lot_keys import dock_lot_keys_for_pz_line
+from .stock_disposition import stock_disposition_for_document_line
 from ..utils.product_vat import product_vat_rate_percent
 from .document_number_service import (
     DocumentSeriesOperationalError,
@@ -524,6 +527,19 @@ def _append_rmz_lines_to_document(
             line=row,
             quantity=float(qty),
         )
+        if doc.location_id is not None:
+            bn, ed = dock_lot_keys_for_pz_line(row)
+            materialize_damage_trace_on_dock_inventory(
+                db,
+                tenant_id=tenant_id,
+                row=row,
+                doc=doc,
+                dock_id=int(doc.location_id),
+                bn=bn,
+                ed_store=ed,
+                sd=stock_disposition_for_document_line(row),
+                from_carrier_id=None,
+            )
         item_rows.append(row)
 
     for ln in lines:

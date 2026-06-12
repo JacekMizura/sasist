@@ -24,6 +24,7 @@ from ..models.stock_operation import (
 )
 from ..models.warehouse import Bin, Rack, Warehouse, WarehouseLayout
 from ..models.warehouse_carrier import WarehouseCarrier, WarehouseCarrierLog
+from ..schemas.inventory_damage_trace import InventoryDamageTraceOut
 from ..schemas.wms_location_visual import (
     LocationVisualBinOut,
     LocationVisualCarrierOut,
@@ -37,6 +38,7 @@ from ..schemas.wms_location_visual import (
     LocationVisualZoneOut,
 )
 from .document_number_service import stock_document_display_label
+from .inventory_damage_trace_service import inventory_damage_trace_out
 from .location_badge import batch_location_storage_types, wms_location_badge_kind
 from .location_label_parse import parse_location
 from .wms_carrier_service import _carrier_items_from_inventory, _carrier_stats, carrier_operation_label
@@ -191,26 +193,33 @@ def _products_at_location(db: Session, *, tenant_id: int, location_id: int) -> l
             Inventory.location_id == int(location_id),
             Inventory.quantity > 0,
         )
+        .order_by(Inventory.product_id, Inventory.stock_disposition, Inventory.damage_class, Inventory.id)
         .all()
     )
-    grouped: dict[int, dict[str, Any]] = {}
+    out: list[LocationVisualProductOut] = []
     for inv, prod in rows:
-        pid = int(prod.id)
         qty = float(inv.quantity or 0)
-        if pid not in grouped:
-            grouped[pid] = {
-                "product_id": pid,
-                "sku": (prod.sku or "").strip() or None,
-                "name": (prod.name or "").strip() or None,
-                "image_url": (getattr(prod, "image_url", None) or "").strip() or None,
-                "quantity": qty,
-            }
-        else:
-            grouped[pid]["quantity"] += qty
-    return [
-        LocationVisualProductOut(**v)
-        for v in sorted(grouped.values(), key=lambda x: (-float(x["quantity"]), int(x["product_id"])))
-    ]
+        trace = inventory_damage_trace_out(db, inv)
+        sd = trace.stock_disposition if trace else (getattr(inv, "stock_disposition", None) or "SALEABLE")
+        badge = trace.disposition_badge if trace else None
+        dmg_class = trace.damage_class if trace else (getattr(inv, "damage_class", None) or None)
+        row_key = f"{int(prod.id)}:{sd}:{dmg_class or ''}:{int(inv.id)}"
+        out.append(
+            LocationVisualProductOut(
+                product_id=int(prod.id),
+                sku=(prod.sku or "").strip() or None,
+                name=(prod.name or "").strip() or None,
+                image_url=(getattr(prod, "image_url", None) or "").strip() or None,
+                quantity=qty,
+                stock_disposition=sd,
+                disposition_badge=badge,
+                damage_class=dmg_class,
+                damage_trace=trace,
+                row_key=row_key,
+            )
+        )
+    out.sort(key=lambda x: (-float(x.quantity), int(x.product_id), str(x.stock_disposition or "")))
+    return out
 
 
 def build_location_visual_context(
@@ -347,6 +356,11 @@ def build_location_visual_context(
                 name=it.product_name,
                 image_url=it.product_image_url,
                 quantity=float(it.quantity or 0),
+                stock_disposition=it.stock_disposition,
+                disposition_badge=it.disposition_badge,
+                damage_class=it.damage_class,
+                damage_trace=it.damage_trace,
+                row_key=f"{it.product_id}:{it.stock_disposition}:{it.damage_class}:{it.id}",
             )
             for it in items
         ]

@@ -7,7 +7,7 @@ Inventory belongsTo Tenant, Product, Location; Tenant hasMany Inventory.
 
 from datetime import date
 
-from sqlalchemy import Column, Date, Integer, Float, ForeignKey, String, text
+from sqlalchemy import Column, Date, DateTime, Integer, Float, ForeignKey, String, text
 from sqlalchemy.orm import relationship
 from ..database import Base
 from .base import BaseModelMixin
@@ -55,6 +55,24 @@ class Inventory(Base, BaseModelMixin):
         nullable=False,
         default="SALEABLE",
         server_default=text("'SALEABLE'"),
+        index=True,
+    )
+    #: Źródłowa linia Z-PZ / PZ — traceability uszkodzeń po rozlokowaniu.
+    source_document_line_id = Column(
+        Integer,
+        ForeignKey("stock_document_items.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    damage_class = Column(String(8), nullable=True, index=True)
+    damage_reason_codes_json = Column(String, nullable=True)
+    damage_reason_labels_json = Column(String, nullable=True)
+    damage_source_reference = Column(String(64), nullable=True, index=True)
+    damage_decided_at = Column(DateTime, nullable=True)
+    damage_decided_by_user_id = Column(
+        Integer,
+        ForeignKey("app_users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 

@@ -1,4 +1,5 @@
 import type { LocationVisualProduct } from "../../../api/wmsLocationVisualApi";
+import { DamageDispositionBadge } from "../../inventory/DamageDispositionBadge";
 import { CarrierProductThumb } from "../carriers/CarrierProductThumb";
 
 type Props = {
@@ -43,14 +44,23 @@ export function LocationPreviewCarrierContents({
           <ul className="space-y-2">
             {products.map((p) => {
               const name = (p.name || p.sku || "").trim() || `#${p.product_id}`;
+              const rowKey = p.row_key || String(p.product_id);
               return (
                 <li
-                  key={p.product_id}
+                  key={rowKey}
                   className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5"
                 >
                   <CarrierProductThumb imageUrl={p.image_url} alt={name} size="xl" />
                   <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-sm font-medium leading-snug text-slate-900">{name}</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="line-clamp-2 text-sm font-medium leading-snug text-slate-900">{name}</p>
+                      <DamageDispositionBadge
+                        stockDisposition={p.stock_disposition}
+                        damageClass={p.damage_class}
+                        dispositionBadge={p.disposition_badge}
+                        damageTrace={p.damage_trace}
+                      />
+                    </div>
                     <p className="mt-0.5 font-mono text-xs text-slate-500">{p.sku || "—"}</p>
                   </div>
                   <div className="shrink-0 text-right">

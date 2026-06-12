@@ -8,6 +8,14 @@
 - API: `PATCH /physical-receipt-mode`, `POST .../warehouse-receive`; lista filtr `physical_receipt_mode`
 - WMS UI: radio „Sposób obsługi towaru”; direct-service ukrywa akcje magazynowe
 
+## Inventory damage trace after putaway (2026-06-08)
+- `inventory` rozszerzone o: `source_document_line_id`, `damage_class`, `damage_reason_*_json`, `damage_source_reference`, `damage_decided_at/by`
+- SSOT budowania: `inventory_damage_trace_service.build_damage_trace_from_document_line()` z `StockDocumentItem` + RMZ `damage_entries_json` / complaint line
+- Materializacja: RMZ/complaint receipt → dock inventory; putaway `_transfer_from_dock_to_location` kopiuje trace na lokację docelową
+- Badge: `USZKODZONY B` (żółty) / `USZKODZONY C` (czerwony) / fallback `USZKODZONY` bez klasy
+- API `damage_trace` w: `GET /products/{id}`, `GET /wms/locations/{id}/visual-context`, `GET /wms/carriers/{id}`, `GET /wms/products/{id}/view`
+- FE: `DamageDispositionBadge` + tooltip (klasa, powody, źródło RMZ/REK, data, operator)
+
 ## WMS putaway dock vs document qty (2026-06-08)
 - PATCH `/wms/putaway/{item_id}` → `patch_wms_putaway_item` → `_transfer_from_dock_to_location` rzuca „Brak wystarczającej ilości w lokacji przyjęcia” gdy `Inventory` w docku < qty, mimo `received_quantity - quantity_putaway > 0`
 - Kolejka rozlokowania bazuje na polach dokumentu; Z-PZ/RMA ustawia `location_id` (DOCK) ale `append_receipt_operation` nie tworzy `Inventory` (tylko `StockOperation` + movement log)

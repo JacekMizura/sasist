@@ -68,8 +68,8 @@ class TestZPzPutawayGates(unittest.TestCase):
 class TestDispositionDisplay(unittest.TestCase):
     def test_operator_labels(self) -> None:
         self.assertEqual(stock_disposition_display_badge(STOCK_DISPOSITION_SALEABLE), "(A)")
-        self.assertEqual(stock_disposition_display_badge(STOCK_DISPOSITION_OUTLET_B), "(USZKODZONY)")
-        self.assertEqual(stock_disposition_display_badge(STOCK_DISPOSITION_SERVICE_C), "(REKLAMACJA)")
+        self.assertEqual(stock_disposition_display_badge(STOCK_DISPOSITION_OUTLET_B), "USZKODZONY")
+        self.assertEqual(stock_disposition_display_badge(STOCK_DISPOSITION_SERVICE_C), "USZKODZONY")
 
 
 class TestZPzDisplayNumber(unittest.TestCase):
