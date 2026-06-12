@@ -66,18 +66,26 @@ export function ProductWarehouseStockPanel({
 
   return (
     <div className="space-y-6">
-      <WarehouseFormCard title="Stan magazynowy">
+      <WarehouseFormCard title="Stan fizyczny">
         {showDisposition ? (
           <div className="space-y-3">
-            <ProductDispositionStockSummary
-              variant="panel"
-              disposition={dispositionStock}
-              reservedQuantity={
-                reservedDisplay != null && reservedDisplay !== ""
-                  ? Number(reservedDisplay)
-                  : undefined
-              }
-            />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <ProductDispositionStockSummary
+                variant="panel"
+                disposition={dispositionStock}
+                reservedQuantity={
+                  reservedDisplay != null && reservedDisplay !== ""
+                    ? Number(reservedDisplay)
+                    : undefined
+                }
+              />
+              <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-2">
+                <span className="text-sm font-medium text-slate-800">Fizycznie:</span>
+                <span className="font-bold tabular-nums text-slate-900">
+                  {physicalStockDisplay != null ? `${physicalStockDisplay} szt.` : "—"}
+                </span>
+              </div>
+            </div>
             {commerciallySellableQty != null || (salesBlockedQty != null && salesBlockedQty > 0) ? (
               <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-2 text-sm space-y-1">
                 <p className="text-slate-700">
@@ -174,7 +182,7 @@ export function ProductWarehouseStockPanel({
           <button
             type="button"
             onClick={onManualAdjustClick}
-            className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+            className="mt-4 w-full inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
           >
             Korekta stanu
           </button>
@@ -189,7 +197,7 @@ export function ProductWarehouseStockPanel({
         {editorSlot ? <div className="border-t border-slate-100 pt-3">{editorSlot}</div> : null}
       </WarehouseFormCard>
 
-      <WarehouseFormCard title="Lokalizacje">
+      <WarehouseFormCard title="Lokalizacje (inventory)">
         {inventoryRows.length === 0 ? (
           <p className="text-sm text-slate-600">{emptyLocationsMessage}</p>
         ) : (

@@ -5,7 +5,7 @@ export const productLikeFieldLabelClass = "mb-1.5 block text-sm font-medium text
 export const productLikeInputClass =
   "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm leading-tight text-slate-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
-export const productLikeTabPanelPaddingClass = "py-8 px-4 sm:px-6 lg:px-8 w-full";
+export const productLikeTabPanelPaddingClass = "w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-8";
 
 export const productLikeSectionTitleClass = "mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2";
 
@@ -65,8 +65,53 @@ export function productLikeRailBtnClass(active: boolean): string {
   }`;
 }
 
-export function productLikeTabBtnClass(active: boolean): string {
-  return `shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors -mb-px ${
-    active ? "border-slate-800 text-slate-900" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
+export function productLikeTabBtnClass(active: boolean, withIcon = false): string {
+  const layout = withIcon ? "inline-flex items-center gap-2" : "";
+  return `${layout} shrink-0 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2.5 text-sm font-medium transition-colors -mb-px ${
+    active
+      ? "border-blue-600 bg-blue-50/40 text-blue-700"
+      : "border-transparent text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
   }`;
+}
+
+export function productLikeStatCardClass(variant: "slate" | "blue" | "green" | "orange" = "slate"): string {
+  switch (variant) {
+    case "blue":
+      return "rounded-xl border border-slate-200 bg-slate-50 p-3 min-w-[100px]";
+    case "green":
+      return "rounded-xl border border-green-100 bg-green-50 p-3 min-w-[120px]";
+    case "orange":
+      return "rounded-xl border border-orange-100 bg-orange-50 p-3 min-w-[100px]";
+    default:
+      return "rounded-xl border border-slate-200 bg-white p-3 min-w-[100px]";
+  }
+}
+
+export function productLikeStatCardLabelClass(variant: "slate" | "blue" | "green" | "orange" = "slate"): string {
+  switch (variant) {
+    case "green":
+      return "text-xs font-medium text-green-700 mb-1";
+    case "orange":
+      return "text-xs font-medium text-orange-700 mb-1";
+    default:
+      return "text-xs font-medium text-slate-500 mb-1";
+  }
+}
+
+export function productLikeStatCardValueClass(variant: "slate" | "blue" | "green" | "orange" = "slate"): string {
+  switch (variant) {
+    case "blue":
+      return "text-lg font-bold tabular-nums text-blue-600";
+    case "green":
+      return "text-lg font-bold tabular-nums text-green-700";
+    case "orange":
+      return "text-lg font-bold tabular-nums text-orange-700";
+    default:
+      return "text-lg font-bold tabular-nums text-slate-900";
+  }
+}
+
+export function productLikeStatCardSubClass(variant: "slate" | "blue" | "green" | "orange" = "slate"): string {
+  void variant;
+  return "text-xs mt-0.5 text-green-600";
 }

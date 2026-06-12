@@ -21,8 +21,8 @@ export function CatalogEntityPageShell({
 }: CatalogEntityPageShellProps) {
   return (
     <PageLayout omitCard fullBleed>
-      <div className="w-full bg-slate-100 pb-8 pt-2 font-sans text-base antialiased">
-        <div className="w-full max-w-none px-2 sm:px-3 lg:px-4">
+      <div className="w-full bg-white pb-8 pt-2 font-sans text-base antialiased">
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           {loading ? (
             <div className={CARD_SHELL}>
               <div className="flex min-h-[40vh] items-center justify-center gap-2 px-4 py-16 text-slate-500">

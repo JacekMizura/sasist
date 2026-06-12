@@ -18,6 +18,7 @@ import {
   Truck,
   Warehouse,
   Wrench,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { error as logError, log } from "../../utils/logger";
@@ -52,7 +53,7 @@ import {
   ProductLikePageLayout,
   productLikeFieldLabelClass,
   productLikeInputClass,
-  type ProductLikeMetaChip,
+  type ProductLikeStatCard,
 } from "../../components/catalog";
 import {
   buildProductMetadataJson,
@@ -1580,30 +1581,49 @@ export function ProductEditModal({
   const fieldLabel = productLikeFieldLabelClass;
   const inputClass = productLikeInputClass;
 
-  const productMetaChips = useMemo((): ProductLikeMetaChip[] => {
-    const chips: ProductLikeMetaChip[] = [
-      { label: "Podmiot", value: tenantDisplay, title: tenantDisplay !== "—" ? tenantDisplay : undefined },
+  const productStatCards = useMemo((): ProductLikeStatCard[] => {
+    const stockLabel =
+      physicalStockDisplay != null && physicalStockDisplay !== "—" ? `${physicalStockDisplay} szt.` : "—";
+    return [
+      { label: "Stan magazynu", value: stockLabel, variant: "blue" },
+      {
+        label: "Cena netto",
+        value: formatMoneyZlDisplay(pricingDisplay.saleNet, "brak ceny"),
+        subValue: `Brutto: ${formatMoneyZlDisplay(pricingDisplay.saleGross, "brak danych")}`,
+        variant: "green",
+      },
+      {
+        label: "Marża",
+        value: (
+          <span className="inline-flex items-center gap-1">
+            {pricingDisplay.marginLabel}
+            <TrendingUp className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+          </span>
+        ),
+        variant: "orange",
+      },
     ];
-    if (!isNew && product?.id != null) {
-      chips.push({ label: "ID", value: product.id });
-    }
-    chips.push(
-      { label: "SKU", value: (symbol ?? "").trim() || "—" },
-      { label: "EAN", value: (ean ?? "").trim() || "—" },
-      { label: "Stan", value: physicalStockDisplay ?? "—", variant: "blue" },
-      { label: "Netto", value: formatMoneyZlDisplay(pricingDisplay.saleNet, "brak ceny"), variant: "emerald" },
-      { label: "Brutto", value: formatMoneyZlDisplay(pricingDisplay.saleGross, "brak danych"), variant: "emerald" },
-      { label: "VAT", value: pricingDisplay.vatLabel },
-      { label: "Marża", value: pricingDisplay.marginLabel },
-    );
-    return chips;
-  }, [tenantDisplay, isNew, product?.id, symbol, ean, physicalStockDisplay, pricingDisplay]);
+  }, [physicalStockDisplay, pricingDisplay]);
 
   const shell = (
     <>
       <ProductLikePageLayout
         variant={isPage ? "page" : "modal"}
         onModalClose={onClose}
+        stickyHeader={!isPage}
+        hideVerticalRail={isPage}
+        showTabIcons={isPage}
+        saveInHeader={isPage}
+        saveLabel="Zapisz zmiany"
+        hideModeLabel={isPage}
+        breadcrumbs={
+          isPage
+            ? [
+                { label: "Katalog produktów", onClick: () => navigate("/products") },
+                { label: isNew ? "Nowy produkt" : "Edycja produktu" },
+              ]
+            : undefined
+        }
         headerPrefix={
           <input
             ref={headerGalleryInputRef}
@@ -1627,7 +1647,13 @@ export function ProductEditModal({
           ) : undefined
         }
         imageUrl={sidebarPreviewUrl}
-        metaChips={productMetaChips}
+        statCards={productStatCards}
+        productIdentifiers={{
+          tenantLabel: tenantDisplay !== "—" ? tenantDisplay : undefined,
+          productId: !isNew && product?.id != null ? product.id : undefined,
+          sku: symbol,
+          ean,
+        }}
         headerActions={
           <>
             <button
@@ -2245,12 +2271,9 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "warehouse" && (
-                  <div className="grid grid-cols-1 xl:grid-cols-3 items-start gap-10 lg:gap-12">
-                    {/* Kolumna 1: Magazyn */}
-                    <div className="space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
-                        <ProductWarehouseStockPanel
+                  <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3 lg:gap-8">
+                    <div className="space-y-6">
+                      <ProductWarehouseStockPanel
                           physicalStockDisplay={physicalStockDisplay}
                           totalStockDisplay={inventoryBreakdown?.total ?? physicalStockDisplay}
                           allocatedStockDisplay={inventoryBreakdown?.allocated ?? null}
@@ -2280,11 +2303,13 @@ export function ProductEditModal({
                             inventoryRows={magazynInventoryRows as MagazynInvRowDisplay[]}
                           />
                         ) : null}
-                      </section>
 
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Powiadomienia i alarmy</h3>
-                        <div className="rounded border border-amber-200 bg-amber-50 p-5 space-y-4">
+                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="border-b border-slate-100 px-5 py-4">
+                          <h3 className="font-semibold text-slate-800">Powiadomienia i alarmy</h3>
+                        </div>
+                        <div className="p-5">
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-4">
                           <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-amber-900">
                             <input
                               type="checkbox"
@@ -2313,12 +2338,15 @@ export function ProductEditModal({
                               />
                             </div>
                           )}
+                          </div>
                         </div>
                       </section>
 
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Poziomy uzupełniania w strefach</h3>
-                        <div className="space-y-8">
+                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="border-b border-slate-100 px-5 py-4">
+                          <h3 className="font-semibold text-slate-800">Poziomy uzupełniania w strefach</h3>
+                        </div>
+                        <div className="space-y-8 p-5">
                           <div>
                             <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">Strefa Kompletacji (Pick-face)</h4>
                             <div className="grid grid-cols-1 gap-5">
@@ -2386,11 +2414,12 @@ export function ProductEditModal({
                       </section>
                     </div>
 
-                    {/* Kolumna 2: Magazynowanie */}
-                    <div className="space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Produkt (Sztuka)</h3>
-                        <div className="space-y-5 rounded border border-slate-200 p-5 bg-slate-50/50">
+                    <div className="space-y-6">
+                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="border-b border-slate-100 px-5 py-4">
+                          <h3 className="font-semibold text-slate-800">Magazynowanie: Produkt (Sztuka)</h3>
+                        </div>
+                        <div className="space-y-5 p-5">
                           <div>
                             <label className={fieldLabel}>Wymagana orientacja</label>
                             <select value={orientationType} onChange={(e) => setOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
@@ -2462,9 +2491,11 @@ export function ProductEditModal({
                         </div>
                       </section>
 
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Magazynowanie: Karton</h3>
-                        <div className="space-y-5 rounded border border-indigo-100 p-5 bg-indigo-50/10 shadow-sm">
+                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="border-b border-slate-100 px-5 py-4">
+                          <h3 className="font-semibold text-slate-800">Magazynowanie: Karton</h3>
+                        </div>
+                        <div className="space-y-5 p-5">
                           <div>
                             <label className={fieldLabel}>Wymagana orientacja kartonu</label>
                             <select value={cartonOrientationType} onChange={(e) => setCartonOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
@@ -2537,16 +2568,19 @@ export function ProductEditModal({
                       </section>
                     </div>
 
-                    {/* Kolumna 3: Logistyka i dopasowanie (Wywolanie istniejacego komponentu) */}
-                    <div className="space-y-12">
-                      <section>
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Dopasowanie opakowań (Wysyłka)</h3>
+                    <div className="space-y-6">
+                      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="border-b border-slate-100 px-5 py-4">
+                          <h3 className="font-semibold text-slate-800">Dopasowanie opakowań (Wysyłka)</h3>
+                        </div>
+                        <div className="p-5">
                         <ProductLogisticsPackagingMatchingSection
                           productId={product?.id ?? null}
                           tenantId={tenantId}
                           dimensionsComplete={productDimensions != null}
                           isNew={isNew}
                         />
+                        </div>
                       </section>
                     </div>
                   </div>
