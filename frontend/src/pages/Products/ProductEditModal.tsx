@@ -32,10 +32,7 @@ import {
 } from "../../api/supplierProductLinksApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { productCreatedInWms } from "../../utils/wmsProductMeta";
-import type { AssignedLocation, LayoutState, StorageType } from "../../types/warehouse";
-import { LocationPicker } from "../../components/warehouse/LocationPicker";
-import { getPositionsFromLayoutRacks, positionFitsDimensions } from "../../components/warehouse/warehouseUtils";
-import type { SelectablePosition } from "../../components/warehouse/warehouseUtils";
+import type { AssignedLocation } from "../../types/warehouse";
 import { ProductWarehouseMovementsPanel } from "./ProductWarehouseMovementsPanel";
 import { ProductLogisticsPackagingMatchingSection } from "../../components/products/ProductLogisticsPackagingMatchingSection";
 import { RetailLabel } from "../../components/products/RetailLabel";
@@ -254,17 +251,6 @@ function parseProductUi(meta: unknown): {
   };
 }
 
-function normalizeAssignedForCompare(loc: AssignedLocation[]): string {
-  return JSON.stringify(
-    [...loc]
-      .map((a) => ({
-        locationUUID: String(a.locationUUID ?? "").trim(),
-        quantity: Number(a.quantity) || 0,
-      }))
-      .sort((a, b) => a.locationUUID.localeCompare(b.locationUUID)),
-  );
-}
-
 function isStockQuantityWriteBlockedError(data: unknown): boolean {
   if (data == null || typeof data !== "object") return false;
   const root = data as { detail?: unknown };
@@ -360,7 +346,6 @@ type ProductEditModalProps = {
   tenants: Tenant[];
   onSave: (p: ProductForm) => void;
   onClose: () => void;
-  focusPlanLocations?: boolean;
   variant?: "modal" | "page";
   initialTab?: TabId;
   scrollToWmsValidation?: boolean;
@@ -373,7 +358,6 @@ export function ProductEditModal({
   tenants,
   onSave,
   onClose,
-  focusPlanLocations = false,
   variant = "modal",
   initialTab,
   scrollToWmsValidation = false,
@@ -386,8 +370,6 @@ export function ProductEditModal({
   const { warehouse } = useWarehouse();
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "basic");
   const [productionTabVisible, setProductionTabVisible] = useState(initialTab === "production");
-  const [positions, setPositions] = useState<SelectablePosition[]>([]);
-  const [layoutLoading, setLayoutLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [canManualAdjustStock, setCanManualAdjustStock] = useState(false);
   const [stockCorrectionOpen, setStockCorrectionOpen] = useState(false);
@@ -439,9 +421,6 @@ export function ProductEditModal({
   );
 
   const [image_url, setImageUrl] = useState(product?.image_url ?? "");
-  const [assignedLocations, setAssignedLocations] = useState<AssignedLocation[]>(product?.assignedLocations ?? []);
-  const initialAssignedSnapshotRef = useRef<string>(normalizeAssignedForCompare(product?.assignedLocations ?? []));
-  const planLocationsSectionRef = useRef<HTMLElement | null>(null);
   const headerGalleryInputRef = useRef<HTMLInputElement>(null);
   const [labelTemplateId, setLabelTemplateId] = useState<number | null>(product?.label_template_id ?? null);
   const [purchasePrice, setPurchasePrice] = useState<number | "">(product?.purchase_price ?? "");
@@ -766,27 +745,6 @@ export function ProductEditModal({
     typeof length === "number" && typeof width === "number" && typeof height === "number" && length > 0 && width > 0 && height > 0
       ? { depthCm: length, widthCm: width, heightCm: height }
       : undefined;
-  const productVolumeDm3 = typeof volume === "number" && volume > 0 ? volume : undefined;
-
-  const hasDimensionMismatch =
-    productDimensions &&
-    assignedLocations.some((a) => {
-      const pos = positions.find((p) => p.locationUUID === a.locationUUID);
-      return pos != null && !positionFitsDimensions(pos, productDimensions);
-    });
-  const hasVolumeOverflow =
-    productVolumeDm3 != null &&
-    assignedLocations.some((a) => {
-      const pos = positions.find((p) => p.locationUUID === a.locationUUID);
-      const capacity = pos?.capacityDm3;
-      if (capacity == null) return false;
-      return a.quantity * productVolumeDm3 > capacity;
-    });
-
-  const placementDirty = useMemo(
-    () => normalizeAssignedForCompare(assignedLocations) !== initialAssignedSnapshotRef.current,
-    [assignedLocations],
-  );
 
   useEffect(() => {
     if (product != null) {
@@ -800,9 +758,6 @@ export function ProductEditModal({
       setWeight(product.weight ?? "");
       setVolume(product.volume != null ? round2(Number(product.volume)) : "");
       setImageUrl(product.image_url ?? "");
-      const al = product.assignedLocations ?? [];
-      setAssignedLocations(al);
-      initialAssignedSnapshotRef.current = normalizeAssignedForCompare(al);
       setLabelTemplateId(product.label_template_id ?? null);
       setPurchasePrice(product.purchase_price ?? "");
       setExtraCostPackagingNet(product.extra_cost_packaging_net ?? 0);
@@ -897,8 +852,6 @@ export function ProductEditModal({
       setRequireRecvMasterCartonDims(Boolean(product.require_recv_master_carton_dims));
       setRequireRecvMasterCartonWeight(Boolean(product.require_recv_master_carton_weight));
     } else {
-      setAssignedLocations([]);
-      initialAssignedSnapshotRef.current = normalizeAssignedForCompare([]);
       setPurchasePrice("");
       setExtraCostPackagingNet(0);
       setExtraCostCommissionPercent(0);
@@ -1135,46 +1088,6 @@ export function ProductEditModal({
     });
   }, []);
 
-  const fetchLayout = useCallback(async () => {
-    if (!warehouse?.id) {
-      setPositions([]);
-      setLayoutLoading(false);
-      return;
-    }
-    setLayoutLoading(true);
-    try {
-      const res = await api.get("/warehouse/layout", {
-        params: { tenant_id: 1, warehouse_id: warehouse.id },
-      });
-      const layoutData = res.data?.layout ?? res.data;
-      const rawRacks = layoutData?.racks ?? [];
-      const layoutState: LayoutState = {
-        layout_id: layoutData?.layout_id ?? null,
-        warehouse_id: layoutData?.warehouse_id ?? null,
-        warehouse_name: layoutData?.warehouse_name ?? "",
-        name: layoutData?.name ?? "",
-        grid_cols: layoutData?.grid_cols ?? 0,
-        grid_rows: layoutData?.grid_rows ?? 0,
-        building_width_m: layoutData?.building_width_m,
-        building_depth_m: layoutData?.building_depth_m,
-        building_height_m: layoutData?.building_height_m,
-        racks: [],
-        aisles: [],
-        visual_elements: [],
-        row_containers: layoutData?.row_containers ?? [],
-      };
-      setPositions(getPositionsFromLayoutRacks(rawRacks, layoutState));
-    } catch {
-      setPositions([]);
-    } finally {
-      setLayoutLoading(false);
-    }
-  }, [warehouse?.id]);
-
-  useEffect(() => {
-    fetchLayout();
-  }, [fetchLayout]);
-
   useEffect(() => {
     if (isNew || tenantId == null || warehouse?.id == null) {
       setCanManualAdjustStock(false);
@@ -1205,14 +1118,6 @@ export function ProductEditModal({
     }
   }, [onSave, product?.id, tenantId, warehouse?.id]);
 
-  useEffect(() => {
-    if (!focusPlanLocations || isNew || layoutLoading) return;
-    setActiveTab("warehouse");
-    const id = window.setTimeout(() => {
-      planLocationsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }, 280);
-    return () => window.clearTimeout(id);
-  }, [focusPlanLocations, isNew, layoutLoading, product?.id]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isNew && (tenantId == null || tenantId < 1)) {
@@ -1258,18 +1163,6 @@ export function ProductEditModal({
     }
     setSaving(true);
     try {
-      const enriched =
-        assignedLocations.length > 0
-          ? assignedLocations.map((a) => {
-              const pos = positions.find((p) => p.locationUUID === a.locationUUID);
-              return {
-                locationUUID: a.locationUUID,
-                quantity: a.quantity,
-                locationAddress: pos?.locationAddress ?? (a as AssignedLocation & { locationAddress?: string }).locationAddress ?? a.locationUUID,
-                storageType: pos?.storageType ?? (a as AssignedLocation & { storageType?: StorageType }).storageType,
-              };
-            })
-          : undefined;
       const len = parseDecimal(length);
       const wid = parseDecimal(width);
       const hei = parseDecimal(height);
@@ -1301,7 +1194,6 @@ export function ProductEditModal({
         weight: wgt != null ? round3(wgt) : undefined,
         volume: vol != null ? round2(vol) : undefined,
         image_url: mainImgResolved,
-        assignedLocations: enriched,
         label_template_id: labelTemplateId ?? undefined,
         purchase_price: purchasePriceVal ?? null,
         extra_cost_packaging_net: parseNumber(extraCostPackagingNet) ?? 0,
@@ -1382,7 +1274,6 @@ export function ProductEditModal({
         volume_dm3: parseNumber(volume) ?? undefined,
         image_url: mainImgResolved,
         tenant_id: tenantId,
-        assigned_locations: enriched ?? assignedLocations,
         label_template_id: labelTemplateId ?? undefined,
         purchase_price: parseNumber(purchasePrice) ?? undefined,
         extra_cost_packaging_net: parseNumber(extraCostPackagingNet) ?? 0,
@@ -1437,8 +1328,6 @@ export function ProductEditModal({
         body.metadata_json = metaStr;
       }
 
-      const snapshotForSubmit = normalizeAssignedForCompare(enriched ?? assignedLocations);
-      const placementChangedOnSave = snapshotForSubmit !== initialAssignedSnapshotRef.current;
       log("Payload:", payload);
 
       if (isNew) {
@@ -1502,9 +1391,6 @@ export function ProductEditModal({
           return;
         }
         const res = await api.put(`/products/${productId}/`, body, { params: { tenant_id: tenantId } });
-        if (placementChangedOnSave) {
-          toast.success("Zaktualizowano powiązania lokacji. Stan fizyczny pozostaje bez zmian.");
-        }
         const d = res.data as Record<string, unknown> | undefined;
         onSave({
           ...payload,
@@ -2362,40 +2248,6 @@ export function ProductEditModal({
                   <div className="grid grid-cols-1 xl:grid-cols-3 items-start gap-10 lg:gap-12">
                     {/* Kolumna 1: Magazyn */}
                     <div className="space-y-12">
-                      <section ref={planLocationsSectionRef} className="scroll-mt-8">
-                        <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Lokalizacje magazynowe</h3>
-                        {placementDirty ? (
-                          <div role="status" className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                            <span className="font-semibold">Uwaga:</span> Zmiana przypisań nie wpływa na fizyczny stan w WMS, służy jedynie logice układania towaru.
-                          </div>
-                        ) : null}
-                        
-                        {layoutLoading ? (
-                          <div className="py-8 text-center text-slate-500 rounded border border-dashed border-slate-300">
-                            Ładowanie planu magazynu…
-                          </div>
-                        ) : positions.length === 0 ? (
-                          <div className="py-8 text-center text-slate-500 rounded border border-dashed border-slate-300 bg-slate-50">
-                            {warehouse?.id ? "Brak regałów w obecnym magazynie." : "Wybierz główny magazyn z górnego paska aplikacji."}
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            <LocationPicker
-                              positions={positions}
-                              value={assignedLocations}
-                              onChange={setAssignedLocations}
-                              productDimensions={productDimensions}
-                              productVolumeDm3={productVolumeDm3}
-                            />
-                            {hasDimensionMismatch ? (
-                              <p className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-                                Wymiary produktu przekraczają limity co najmniej jednej z przypisanych lokalizacji!
-                              </p>
-                            ) : null}
-                          </div>
-                        )}
-                      </section>
-
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Stan fizyczny</h3>
                         <ProductWarehouseStockPanel

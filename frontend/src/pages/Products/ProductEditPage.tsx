@@ -174,7 +174,6 @@ export default function ProductEditPage() {
       <ProductEditModal
               variant="page"
               tenants={tenants}
-              focusPlanLocations={false}
               initialTab={initialTab}
               scrollToWmsValidation={tabParam === "wms-validation"}
               listStockHint={
