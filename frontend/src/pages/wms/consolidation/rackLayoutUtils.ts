@@ -153,7 +153,7 @@ export function levelsToGrid(levels: RackGridLevel[]): {
           level.level_index,
           seg.segment_index,
           level.is_segmented,
-          seg.slot_label ?? seg.effective_slot_label,
+          seg.slot_label,
         ),
       });
     }

@@ -216,6 +216,8 @@ export default function ConsolidationRacksDashboardPage() {
                     onSegmentClick={(cell) => {
                       const dash = cell.segmentId != null ? dashboardBySegmentId.get(cell.segmentId) : undefined;
                       setPanel({
+                        segmentId: cell.segmentId,
+                        rackName: rack.rack_name,
                         shelfLabel: dash?.shelf_label ?? cell.shelfLabel,
                         slotLabel: dash?.slot_label ?? cell.slotLabel,
                         columnName: cell.columnName,
@@ -230,6 +232,7 @@ export default function ConsolidationRacksDashboardPage() {
                         capacityOverflow: cell.capacityOverflow ?? dash?.capacity_overflow,
                         dimensionEstimated: cell.dimensionEstimated ?? dash?.dimension_estimated,
                         estimatedItemsCount: cell.estimatedItemsCount ?? dash?.estimated_items_count,
+                        readOnly: true,
                       });
                     }}
                   />

@@ -163,13 +163,15 @@ export default function RackConfigurator({ onRackAdded }: RackConfiguratorProps)
                 compact
                 onSegmentClick={(cell) =>
                   setPreviewPanel({
+                    rackName: name.trim() || "RK-01",
                     shelfLabel: cell.shelfLabel,
                     slotLabel: cell.slotLabel,
                     columnName: cell.columnName,
                     rowNumber: cell.rowNumber,
-                    statusLabel: "Wolny (podgląd)",
+                    statusLabel: "Wolny (podgląd przed zapisem)",
                     orderId: null,
                     orderNumber: null,
+                    readOnly: true,
                   })
                 }
               />

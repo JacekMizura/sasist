@@ -123,6 +123,11 @@ export default function ConsolidationRackGrid({
                       {!compact && (
                         <span className="mt-0.5 font-mono text-[9px] opacity-70">{shelfLabel}</span>
                       )}
+                      {(cell.capacity_dm3 ?? dash?.capacity_dm3) != null ? (
+                        <span className="mt-0.5 font-mono text-[8px] opacity-60 tabular-nums">
+                          {(cell.capacity_dm3 ?? dash?.capacity_dm3)!.toFixed(0)} dm³
+                        </span>
+                      ) : null}
                       {(cell.order_number ?? dash?.order_number) ? (
                         <span className="mt-1 truncate max-w-full text-[10px] font-semibold">
                           {cell.order_number ?? dash?.order_number}

@@ -1,5 +1,12 @@
 # Current context
 
+## P5.8D — Rack segment config UX (/carts/racks) (2026-06-08)
+- Panel boczny po kliknięciu segmentu: nazwa (`slot_label`), wymiary mm, auto pojemność dm³, podgląd skanu RK-XX/nazwa
+- Zapis: istniejące `PATCH /racks/segments/{id}/` (bez nowych endpointów)
+- Walidacja FE: >0, max 10000 mm; brak wymiarów OK
+- Zajęte półki: podgląd dopasowania P5.8C (objętość, %, overflow, estimated warning) + edycja nadal możliwa
+- Dashboard regałów: panel read-only; konfigurator: edycja (`readOnly !== true` + `segmentId` + `onSave`)
+
 ## P5.8C — Soft capacity-aware shelf allocation (2026-06-08)
 - **Bez twardych blokad** — NO_FREE tylko gdy brak wolnych półek (nie przez pojemność)
 - Flow: wolne segmenty → capacity score → P5.7 ranking → wybór

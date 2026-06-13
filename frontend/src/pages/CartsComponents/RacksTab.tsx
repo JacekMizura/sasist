@@ -10,6 +10,7 @@ import ConsolidationRackGrid from "../wms/consolidation/ConsolidationRackGrid";
 import ConsolidationRackSegmentPanel, {
   type SegmentPanelData,
   type SegmentSavePayload,
+  type SegmentSaveResult,
 } from "../wms/consolidation/ConsolidationRackSegmentPanel";
 import { rackOccupancyStats, type RackGridLevel } from "../wms/consolidation/rackLayoutUtils";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -20,6 +21,71 @@ type Rack = {
   name: string;
   levels: RackGridLevel[];
 };
+
+type ApiSegment = RackGridLevel["segments"][number];
+
+function segmentToPanel(
+  rackName: string,
+  cell: {
+    segmentId?: number;
+    shelfLabel: string;
+    slotLabel: string;
+    slotLabelCustom?: string | null;
+    columnName: string | null;
+    rowNumber: number;
+    orderId: number | null;
+    orderNumber: string | null;
+    fillPercent?: number;
+    lengthMm?: number | null;
+    widthMm?: number | null;
+    heightMm?: number | null;
+    capacityDm3?: number | null;
+    orderVolumeDm3?: number | null;
+    utilizationPercent?: number | null;
+    capacityOverflow?: boolean;
+    dimensionEstimated?: boolean;
+    estimatedItemsCount?: number;
+  },
+  seg?: ApiSegment,
+): SegmentPanelData {
+  return {
+    segmentId: cell.segmentId,
+    rackName,
+    shelfLabel: cell.shelfLabel,
+    slotLabel: cell.slotLabel,
+    effectiveSlotLabel: seg?.effective_slot_label ?? cell.slotLabel,
+    columnName: cell.columnName,
+    rowNumber: cell.rowNumber,
+    statusLabel: cell.orderId != null ? "Zajęty" : "Wolny",
+    orderId: cell.orderId,
+    orderNumber: cell.orderNumber,
+    fillPercent: cell.fillPercent,
+    slotLabelCustom: seg?.slot_label ?? cell.slotLabelCustom ?? null,
+    lengthMm: seg?.length_mm ?? cell.lengthMm,
+    widthMm: seg?.width_mm ?? cell.widthMm,
+    heightMm: seg?.height_mm ?? cell.heightMm,
+    capacityDm3: seg?.capacity_dm3 ?? cell.capacityDm3,
+    orderVolumeDm3: seg?.order_volume_dm3 ?? cell.orderVolumeDm3,
+    utilizationPercent: seg?.utilization_percent ?? cell.utilizationPercent,
+    capacityOverflow: seg?.capacity_overflow ?? cell.capacityOverflow,
+    dimensionEstimated: seg?.dimension_estimated ?? cell.dimensionEstimated,
+    estimatedItemsCount: seg?.estimated_items_count ?? cell.estimatedItemsCount,
+    readOnly: false,
+  };
+}
+
+function findSegmentInRacks(racks: Rack[], segmentId: number): { rack: Rack; seg: ApiSegment; level: RackGridLevel } | null {
+  for (const rack of racks) {
+    for (const level of rack.levels ?? []) {
+      for (const seg of level.segments ?? []) {
+        if (seg.id === segmentId) {
+          return { rack, seg, level };
+        }
+      }
+    }
+  }
+  return null;
+}
 
 export default function RacksTab() {
   const { warehouse } = useWarehouse();
@@ -51,11 +117,16 @@ export default function RacksTab() {
   }, [fetchRacks]);
 
   const handleSegmentSave = useCallback(
-    async (segmentId: number, payload: SegmentSavePayload) => {
-      await api.patch(`/racks/segments/${segmentId}/`, payload);
-      await fetchRacks();
+    async (segmentId: number, payload: SegmentSavePayload): Promise<SegmentSaveResult> => {
+      const { data } = await api.patch<SegmentSaveResult>(`/racks/segments/${segmentId}/`, payload);
+      const nextRacks = await api.get("/racks/", {
+        params: { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId },
+      });
+      const list: Rack[] = Array.isArray(nextRacks.data) ? nextRacks.data : [];
+      setRacks(list);
+      return data;
     },
-    [fetchRacks],
+    [warehouseId],
   );
 
   const rackStats = useMemo(
@@ -77,7 +148,11 @@ export default function RacksTab() {
     <div className={cartsPageShellClass}>
       <CartsListPageHeader
         title="Regały kompletacyjne"
-        description={warehouse?.name ? `Magazyn: ${warehouse.name}` : undefined}
+        description={
+          warehouse?.name
+            ? `Magazyn: ${warehouse.name}. Kliknij półkę (A1, B2…), aby ustawić nazwę i wymiary.`
+            : "Kliknij półkę (A1, B2…), aby ustawić nazwę i wymiary."
+        }
       />
       <RackConfigurator onRackAdded={fetchRacks} />
 
@@ -91,7 +166,7 @@ export default function RacksTab() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="font-mono text-xl font-bold text-slate-900">{rack.name}</h2>
-                    <p className="mt-1 text-sm text-slate-500">Układ fizyczny regału</p>
+                    <p className="mt-1 text-sm text-slate-500">Kliknij segment, aby skonfigurować nazwę i pojemność</p>
                   </div>
                   <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
                     <div>
@@ -117,30 +192,10 @@ export default function RacksTab() {
                 <ConsolidationRackGrid
                   rackName={rack.name}
                   levels={rack.levels ?? []}
-                  onSegmentClick={(cell) =>
-                    setPanel({
-                      segmentId: cell.segmentId,
-                      shelfLabel: cell.shelfLabel,
-                      slotLabel: cell.slotLabel,
-                      columnName: cell.columnName,
-                      rowNumber: cell.rowNumber,
-                      statusLabel: cell.orderId != null ? "Zajęty" : "Wolny",
-                      orderId: cell.orderId,
-                      orderNumber: cell.orderNumber,
-                      fillPercent: cell.fillPercent,
-                      slotLabelCustom: cell.slotLabelCustom,
-                      lengthMm: cell.lengthMm,
-                      widthMm: cell.widthMm,
-                      heightMm: cell.heightMm,
-                      capacityDm3: cell.capacityDm3,
-                      orderVolumeDm3: cell.orderVolumeDm3,
-                      utilizationPercent: cell.utilizationPercent,
-                      capacityOverflow: cell.capacityOverflow,
-                      dimensionEstimated: cell.dimensionEstimated,
-                      estimatedItemsCount: cell.estimatedItemsCount,
-                      readOnly: false,
-                    })
-                  }
+                  onSegmentClick={(cell) => {
+                    const hit = cell.segmentId != null ? findSegmentInRacks(racks, cell.segmentId) : null;
+                    setPanel(segmentToPanel(rack.name, cell, hit?.seg));
+                  }}
                 />
                 <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-slate-600">
                   <span className="inline-flex items-center gap-1">
@@ -149,6 +204,7 @@ export default function RacksTab() {
                   <span className="inline-flex items-center gap-1">
                     <span className="h-3 w-3 rounded border border-orange-400 bg-orange-50" /> Zajęty
                   </span>
+                  <span className="text-slate-500">· Kliknij półkę, aby edytować nazwę (TV-01) i wymiary</span>
                 </div>
               </div>
             </section>
