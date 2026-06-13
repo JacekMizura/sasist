@@ -1,5 +1,12 @@
 # Current context
 
+## P5.8 — Consolidation rack control tower (2026-06-08)
+- Warstwa monitoringu dla kierownika/lidera — bez zmian w konsolidacji/MM/pick/pack
+- API: `GET /wms/consolidation-racks/control-tower` — zajęte półki + KPI + alerty + brakujące pozycje
+- Sort: EXCEPTION → READY_TO_PACK → STAGING; alerty SLA RTTP >30/>60 min, MRR, EXCEPTION + nierozwiązane P5.2
+- UI: `/wms/consolidation-racks/control-tower` (link z mapy regałów)
+- Tests: `test_consolidation_control_tower.py` (11/11)
+
 ## P5.7 — Smart consolidation shelf allocation (2026-06-08)
 - Operator nie wybiera półki — `start_consolidation_staging` wywołuje `allocate_consolidation_shelf()` (P5.3–P5.5 bez zmian)
 - Kolejność: wolne segmenty → magazyn docelowy planu → regał z aktywnym STAGING → najniższy poziom → opcj. `packing_proximity_rank`/`sort_order` na regale → segment_index

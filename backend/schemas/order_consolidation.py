@@ -240,3 +240,61 @@ class ConsolidationRackDashboardOut(BaseModel):
     warehouse_id: int
     racks: List[ConsolidationRackDashboardRow] = Field(default_factory=list)
     summary: ConsolidationRackDashboardSummary
+
+
+class ConsolidationControlTowerMissingItem(BaseModel):
+    plan_item_id: int
+    product_id: int
+    product_name: str
+    source_warehouse_id: int
+    source_warehouse_name: Optional[str] = None
+    status: str
+
+
+class ConsolidationControlTowerAlert(BaseModel):
+    code: str
+    severity: str
+    label: str
+    alert_id: Optional[int] = None
+
+
+class ConsolidationControlTowerShelfRow(BaseModel):
+    segment_id: int
+    shelf_label: str
+    order_id: int
+    order_number: Optional[str] = None
+    customer_name: Optional[str] = None
+    plan_id: Optional[int] = None
+    plan_status: Optional[str] = None
+    order_status: Optional[str] = None
+    target_warehouse_id: int
+    target_warehouse_name: Optional[str] = None
+    state: str
+    sort_tier: int = 3
+    occupied_since: Optional[str] = None
+    occupied_minutes: Optional[int] = None
+    occupied_label: Optional[str] = None
+    ready_to_pack_since: Optional[str] = None
+    ready_to_pack_minutes: Optional[int] = None
+    ready_to_pack_label: Optional[str] = None
+    mm_progress_label: Optional[str] = None
+    local_progress_label: Optional[str] = None
+    total_progress_label: Optional[str] = None
+    missing_items: List[ConsolidationControlTowerMissingItem] = Field(default_factory=list)
+    alerts: List[ConsolidationControlTowerAlert] = Field(default_factory=list)
+    unresolved_alert_count: int = 0
+
+
+class ConsolidationControlTowerKpi(BaseModel):
+    total_segments: int = 0
+    free_count: int = 0
+    occupied_count: int = 0
+    ready_to_pack_count: int = 0
+    exception_count: int = 0
+    avg_occupation_minutes: float = 0.0
+
+
+class ConsolidationControlTowerOut(BaseModel):
+    warehouse_id: int
+    kpi: ConsolidationControlTowerKpi
+    shelves: List[ConsolidationControlTowerShelfRow] = Field(default_factory=list)

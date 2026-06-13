@@ -16,6 +16,7 @@ from ..schemas.order_consolidation import (
     ConsolidationPlanListRow,
     ConsolidationPlanRead,
     ConsolidationRackDashboardOut,
+    ConsolidationControlTowerOut,
     ConsolidationStagingQueueOut,
     ConsolidationStagingQueueRow,
     ConsolidationSummaryOut,
@@ -24,6 +25,7 @@ from ..schemas.order_consolidation import (
     StartStagingResponse,
 )
 from ..services.order_consolidation.alert_service import list_consolidation_alerts
+from ..services.order_consolidation.control_tower_service import build_consolidation_control_tower
 from ..services.order_consolidation.rack_dashboard_service import build_consolidation_rack_dashboard
 from ..services.order_consolidation.staging_service import (
     ConsolidationStagingError,
@@ -163,3 +165,19 @@ def get_consolidation_racks_dashboard(
         warehouse_id=int(warehouse_id),
     )
     return ConsolidationRackDashboardOut(**payload)
+
+
+@router.get("/consolidation-racks/control-tower", response_model=ConsolidationControlTowerOut)
+def get_consolidation_racks_control_tower(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    """P5.8 — supervisor control tower for occupied consolidation shelves (read-only)."""
+    payload = build_consolidation_control_tower(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
+    return ConsolidationControlTowerOut(**payload)

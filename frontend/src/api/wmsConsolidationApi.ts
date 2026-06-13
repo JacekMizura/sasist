@@ -297,3 +297,69 @@ export async function fetchConsolidationRacksDashboard(
   });
   return data;
 }
+
+export type ConsolidationControlTowerMissingItem = {
+  plan_item_id: number;
+  product_id: number;
+  product_name: string;
+  source_warehouse_id: number;
+  source_warehouse_name: string | null;
+  status: string;
+};
+
+export type ConsolidationControlTowerAlert = {
+  code: string;
+  severity: string;
+  label: string;
+  alert_id?: number | null;
+};
+
+export type ConsolidationControlTowerShelf = {
+  segment_id: number;
+  shelf_label: string;
+  order_id: number;
+  order_number: string | null;
+  customer_name: string | null;
+  plan_id: number | null;
+  plan_status: string | null;
+  order_status: string | null;
+  target_warehouse_id: number;
+  target_warehouse_name: string | null;
+  state: string;
+  sort_tier: number;
+  occupied_since: string | null;
+  occupied_minutes: number | null;
+  occupied_label: string | null;
+  ready_to_pack_since: string | null;
+  ready_to_pack_minutes: number | null;
+  ready_to_pack_label: string | null;
+  mm_progress_label: string | null;
+  local_progress_label: string | null;
+  total_progress_label: string | null;
+  missing_items: ConsolidationControlTowerMissingItem[];
+  alerts: ConsolidationControlTowerAlert[];
+  unresolved_alert_count: number;
+};
+
+export type ConsolidationControlTower = {
+  warehouse_id: number;
+  kpi: {
+    total_segments: number;
+    free_count: number;
+    occupied_count: number;
+    ready_to_pack_count: number;
+    exception_count: number;
+    avg_occupation_minutes: number;
+  };
+  shelves: ConsolidationControlTowerShelf[];
+};
+
+export async function fetchConsolidationRacksControlTower(
+  tenantId: number,
+  warehouseId: number,
+): Promise<ConsolidationControlTower> {
+  const { data } = await api.get<ConsolidationControlTower>("/wms/consolidation-racks/control-tower", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return data;
+}

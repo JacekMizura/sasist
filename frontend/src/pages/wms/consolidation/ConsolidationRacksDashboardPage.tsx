@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, LayoutGrid, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, LayoutGrid, Loader2, RefreshCw, TowerControl } from "lucide-react";
 
 import {
   fetchConsolidationRacksDashboard,
@@ -147,15 +147,24 @@ export default function ConsolidationRacksDashboardPage() {
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Konsolidacje
         </Link>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden />
-          Odśwież
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to={WMS_ROUTES.consolidationRacksControlTower}
+            className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
+          >
+            <TowerControl className="h-3.5 w-3.5" aria-hidden />
+            Control Tower
+          </Link>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden />
+            Odśwież
+          </button>
+        </div>
       </div>
 
       <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
