@@ -11,8 +11,30 @@ export type RackLevelPayload = {
   level_index: number;
   name: string;
   is_segmented: boolean;
-  segments: Array<{ segment_index: number; order_id: null; fill_percent: number }>;
+  segments: Array<{
+    segment_index: number;
+    order_id: null;
+    fill_percent: number;
+    slot_label?: string | null;
+    length_mm?: number | null;
+    width_mm?: number | null;
+    height_mm?: number | null;
+  }>;
 };
+
+export type SegmentDimensionDefaults = {
+  length_mm?: number | null;
+  width_mm?: number | null;
+  height_mm?: number | null;
+  slot_label?: string | null;
+};
+
+/** Draft overrides keyed by `${colIndex}-${segmentIndex}` before rack is saved. */
+export type DraftSegmentOverrides = Record<string, SegmentDimensionDefaults>;
+
+function draftSegmentKey(colIndex: number, segmentIndex: number): string {
+  return `${colIndex}-${segmentIndex}`;
+}
 
 export function columnLetter(colIndex: number): string {
   return String.fromCharCode(65 + colIndex);
@@ -47,7 +69,12 @@ export function computeShelfLabel(
 }
 
 /** Wizard: liczba kolumn × liczba rzędów → payload levels dla POST /racks/ */
-export function buildLevelsFromGrid(rowCount: number, colCount: number): RackLevelPayload[] {
+export function buildLevelsFromGrid(
+  rowCount: number,
+  colCount: number,
+  defaults?: SegmentDimensionDefaults,
+  overrides?: DraftSegmentOverrides,
+): RackLevelPayload[] {
   const rows = Math.max(1, Math.min(20, rowCount));
   const cols = Math.max(1, Math.min(26, colCount));
   const levels: RackLevelPayload[] = [];
@@ -56,11 +83,19 @@ export function buildLevelsFromGrid(rowCount: number, colCount: number): RackLev
       level_index: col,
       name: columnLetter(col),
       is_segmented: rows > 1,
-      segments: Array.from({ length: rows }, (_, row) => ({
-        segment_index: row,
-        order_id: null,
-        fill_percent: 0,
-      })),
+      segments: Array.from({ length: rows }, (_, row) => {
+        const key = draftSegmentKey(col, row);
+        const o = overrides?.[key];
+        return {
+          segment_index: row,
+          order_id: null,
+          fill_percent: 0,
+          slot_label: o?.slot_label ?? defaults?.slot_label ?? null,
+          length_mm: o?.length_mm ?? defaults?.length_mm ?? null,
+          width_mm: o?.width_mm ?? defaults?.width_mm ?? null,
+          height_mm: o?.height_mm ?? defaults?.height_mm ?? null,
+        };
+      }),
     });
   }
   return levels;
@@ -122,6 +157,34 @@ export type RackGridLevel = {
     estimated_items_count?: number;
   }>;
 };
+
+/** Podgląd siatki w kreatorze (bez id segmentów). */
+export function buildPreviewLevelsFromGrid(
+  rowCount: number,
+  colCount: number,
+  defaults?: SegmentDimensionDefaults,
+  overrides?: DraftSegmentOverrides,
+): RackGridLevel[] {
+  return buildLevelsFromGrid(rowCount, colCount, defaults, overrides).map((lv) => ({
+    level_index: lv.level_index,
+    name: lv.name,
+    is_segmented: lv.is_segmented,
+    segments: lv.segments.map((s) => ({
+      segment_index: s.segment_index,
+      order_id: null,
+      slot_label: s.slot_label,
+      length_mm: s.length_mm,
+      width_mm: s.width_mm,
+      height_mm: s.height_mm,
+      capacity_dm3:
+        s.length_mm && s.width_mm && s.height_mm
+          ? Math.round((s.length_mm * s.width_mm * s.height_mm) / 1_000_000 * 100) / 100
+          : null,
+    })),
+  }));
+}
+
+export { draftSegmentKey };
 
 /** Normalizuje levels API → siatka [row][col] (rzędy × kolumny). */
 export function levelsToGrid(levels: RackGridLevel[]): {

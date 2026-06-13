@@ -55,6 +55,8 @@ type Props = {
   segment: SegmentPanelData | null;
   onClose: () => void;
   onSave?: (segmentId: number, payload: SegmentSavePayload) => Promise<SegmentSaveResult | void>;
+  /** Kreator regału — zapis lokalny przed POST /racks/ */
+  onDraftSave?: (payload: SegmentSavePayload) => void | Promise<void>;
 };
 
 function computeCapacityDm3(
@@ -90,7 +92,7 @@ function parseDimensionInput(raw: string): { value: number | null; error: string
   return { value: n, error: null };
 }
 
-export default function ConsolidationRackSegmentPanel({ segment, onClose, onSave }: Props) {
+export default function ConsolidationRackSegmentPanel({ segment, onClose, onSave, onDraftSave }: Props) {
   const [slotLabel, setSlotLabel] = useState("");
   const [lengthMm, setLengthMm] = useState("");
   const [widthMm, setWidthMm] = useState("");
@@ -99,7 +101,9 @@ export default function ConsolidationRackSegmentPanel({ segment, onClose, onSave
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const canEdit = Boolean(segment?.segmentId && onSave && segment.readOnly !== true);
+  const canEdit = Boolean(
+    segment?.readOnly !== true && ((segment?.segmentId && onSave) || onDraftSave),
+  );
 
   useEffect(() => {
     if (!segment) return;
@@ -152,23 +156,33 @@ export default function ConsolidationRackSegmentPanel({ segment, onClose, onSave
     return Object.keys(next).length === 0;
   };
 
+  const buildPayload = (): SegmentSavePayload => {
+    const l = parseDimensionInput(lengthMm);
+    const w = parseDimensionInput(widthMm);
+    const h = parseDimensionInput(heightMm);
+    const custom = slotLabel.trim();
+    const defaultLabel = defaultSlotLabel(segment);
+    return {
+      slot_label: !custom || custom === defaultLabel ? null : custom,
+      length_mm: l.value,
+      width_mm: w.value,
+      height_mm: h.value,
+    };
+  };
+
   const handleSave = async () => {
-    if (!segment.segmentId || !onSave) return;
     if (!validateForm()) return;
     setSaving(true);
     setError(null);
     try {
-      const l = parseDimensionInput(lengthMm);
-      const w = parseDimensionInput(widthMm);
-      const h = parseDimensionInput(heightMm);
-      const custom = slotLabel.trim();
-      const defaultLabel = defaultSlotLabel(segment);
-      await onSave(segment.segmentId, {
-        slot_label: !custom || custom === defaultLabel ? null : custom,
-        length_mm: l.value,
-        width_mm: w.value,
-        height_mm: h.value,
-      });
+      const payload = buildPayload();
+      if (onDraftSave) {
+        await onDraftSave(payload);
+        onClose();
+        return;
+      }
+      if (!segment.segmentId || !onSave) return;
+      await onSave(segment.segmentId, payload);
       onClose();
     } catch (err: unknown) {
       const msg =
@@ -217,7 +231,15 @@ export default function ConsolidationRackSegmentPanel({ segment, onClose, onSave
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               {segment.segmentId
                 ? "Tryb podglądu — edycja dostępna w konfiguratorze regałów (/carts/racks)."
-                : "Utwórz regał, aby skonfigurować nazwy i wymiary półek."}
+                : "Edycja niedostępna w tym widoku."}
+            </p>
+          ) : onDraftSave ? (
+            <p className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900">
+              Zmiany zapiszesz lokalnie — zostaną utworzone wraz z regałem.
+            </p>
+          ) : segment.orderId != null ? (
+            <p className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-900">
+              Segment zajęty — możesz zmienić nazwę i wymiary, ale nie przypisanie zamówienia.
             </p>
           ) : null}
 

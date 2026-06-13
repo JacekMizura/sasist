@@ -1,5 +1,15 @@
 # Current context
 
+## P5.10 — Refaktor UX regałów kompletacyjnych (lista + edytor) (2026-06-08)
+- **Frontend-only** — bez zmian DB / API / P5.3–P5.9
+- `/carts/racks` — lista tabeli (nazwa, segmenty, wolne/zajęte, %, magazyn; akcje Podgląd→WMS, Edytuj, Usuń)
+- `/carts/racks/new` — kreator dwukolumnowy (dane + układ + domyślne wymiary | siatka interaktywna)
+- `/carts/racks/:id` — edycja (nazwa regału PUT, segmenty PATCH; układ siatki read-only po utworzeniu)
+- Draft overrides segmentów przed POST (klik siatki → panel → `onDraftSave`)
+- `/wms/consolidation-racks` — bez zmian (operacyjny dashboard)
+- Pliki: `ConsolidationRacksListPage`, `ConsolidationRackEditorPage`, `consolidationRackPanelUtils`; routing `racks/*` w `App.tsx` + `CartsRacks.tsx`
+- Usunięto monolityczne `RacksTab` / `RackConfigurator`
+
 ## P5.8D — Rack segment config UX (/carts/racks) (2026-06-08)
 - Panel boczny po kliknięciu segmentu: nazwa (`slot_label`), wymiary mm, auto pojemność dm³, podgląd skanu RK-XX/nazwa
 - Zapis: istniejące `PATCH /racks/segments/{id}/` (bez nowych endpointów)

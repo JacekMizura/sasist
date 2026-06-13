@@ -758,7 +758,7 @@ export const router = createBrowserRouter(
                   <Route path="carriers/:id" element={<WarehouseCarrierDetailPage />} />
                   <Route path="bulk" element={<CartsBulk />} />
                   <Route path="baskets" element={<CartsBaskets />} />
-                  <Route path="racks" element={<CartsRacks />} />
+                  <Route path="racks/*" element={<CartsRacks />} />
                   <Route path="zones" element={<CartsZones />} />
                 </Route>
                 <Route path="changelog" element={<Changelog />} />
